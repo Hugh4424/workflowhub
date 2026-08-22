@@ -25,6 +25,97 @@ function facts(stage, overrides = {}) {
   }));
 }
 
+function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
+  const taskId = "task";
+  const tree = "a".repeat(40);
+  const materialRevision = `revision-${"b".repeat(64)}`;
+  const sourceDigest = "c".repeat(64);
+  const records = new Map();
+  const proofRef = "quality/evidence/ac-proof.json";
+  const proofRaw = "current AC proof\n";
+  records.set(proofRef, proofRaw);
+  const leafRef = "quality/evidence/ac-leaf.json";
+  const leafValue = {
+    schema_version: "acceptance-evidence.v1",
+    acceptance_criterion_id: "AC-001",
+    result: buildResult,
+    refs: [{ ref: proofRef, sha256: sha256(proofRaw) }],
+    snapshot_tree: tree,
+    source_digest: sourceDigest,
+  };
+  const leafRaw = `${JSON.stringify(leafValue)}\n`;
+  records.set(leafRef, leafRaw);
+  const buildFactRef = "quality/facts/build-ac.json";
+  records.set(buildFactRef, `${JSON.stringify({
+    schema_version: "quality-fact.v1",
+    fact_id: "build-ac-fact",
+    task_id: taskId,
+    stage: "build-code",
+    material_revision: materialRevision,
+    snapshot_tree: tree,
+    kind: "acceptance_criterion",
+    subject: "AC-001",
+    status: buildResult === "pass" ? "passed" : "failed",
+    evidence: [{ ref: leafRef, sha256: sha256(leafRaw), evidence_type: "acceptance_evidence" }],
+    recorded_at: "2026-08-22T00:00:00.000Z",
+  })}\n`);
+  if (includeVerify) {
+    if (buildResult !== "pass") {
+      const verifyLeaf = { ...leafValue, result: "pass" };
+      records.set(leafRef, `${JSON.stringify(verifyLeaf)}\n`);
+    }
+    const sourceRef = "quality/evidence/verify-source.json";
+    const sourceRaw = "verify source\n";
+    records.set(sourceRef, sourceRaw);
+    const verifyLeafRaw = records.get(leafRef);
+    const verify = {
+      schema_version: "quality-verify.v1",
+      task_id: taskId,
+      stage: "verify-code",
+      status: "passed",
+      source_digest: sourceDigest,
+      material_digest: materialRevision.slice("revision-".length),
+      material_revision: materialRevision,
+      snapshot_tree: tree,
+      evidence_ref: sourceRef,
+      evidence_hash: sha256(sourceRaw),
+      criteria: [{
+        acceptance_criterion_id: "AC-001",
+        result: "pass",
+        status: "passed",
+        source_digest: sourceDigest,
+        acceptance_leaf: { ref: leafRef, sha256: sha256(verifyLeafRaw) },
+        nested_evidence: [{ ref: proofRef, sha256: sha256(proofRaw) }],
+        scenario: "当前场景执行并读取结果",
+        oracle: "结果符合当前验收",
+        actual_outcome: "当前实现返回了符合预期的结果",
+        evidence_type: "structured_observation",
+        coverage_limits: ["仅覆盖当前夹具"],
+        exceptions: ["无"],
+        implementation_anchor: { id: "impl", path: "src/app.mjs", start_line: 1, end_line: 2, role: "implementation" },
+        verification_anchor: { id: "test", path: "tests/app.test.mjs", start_line: 1, end_line: 2, role: "verification" },
+      }],
+    };
+    records.set("quality/verify.json", `${JSON.stringify(verify)}\n`);
+  }
+  const read = (ref) => {
+    const raw = records.get(ref);
+    if (raw === undefined) {
+      const error = new Error("missing");
+      error.code = "ENOENT";
+      throw error;
+    }
+    return raw;
+  };
+  return {
+    taskId,
+    tree,
+    materialRevision,
+    refs: [...records.keys()].filter((ref) => ref.startsWith("quality/facts/")),
+    read,
+  };
+}
+
 describe("status is derived from current quality facts", () => {
   it("does not consume an accepted/current pointer or caller status", () => {
     const result = deriveStageCompletion("build-spec", facts("build-spec"));
@@ -191,6 +282,45 @@ describe("status is derived from current quality facts", () => {
     });
     expect(result.status).toBe("not_released");
     expect(result.reasons).toContain("acceptance_result:AC-001_identity_conflict:snapshot_tree");
+  });
+
+  it("uses verify AC leaves once when build-code facts agree, and exposes disagreement", () => {
+    const same = productAcFixture({ buildResult: "pass", includeVerify: true });
+    const sameResult = deriveCurrentProductRelease({
+      task_id: same.taskId,
+      read: same.read,
+      refs: same.refs,
+      snapshot_tree: same.tree,
+      material_revision: same.materialRevision,
+      expected_acceptance_ids: ["AC-001"],
+      evaluate_freshness: () => ({ status: "current", authenticated: true }),
+    });
+    expect(sameResult.reasons).not.toContain("acceptance_result_conflicting:AC-001");
+
+    const different = productAcFixture({ buildResult: "fail", includeVerify: true });
+    const differentResult = deriveCurrentProductRelease({
+      task_id: different.taskId,
+      read: different.read,
+      refs: different.refs,
+      snapshot_tree: different.tree,
+      material_revision: different.materialRevision,
+      expected_acceptance_ids: ["AC-001"],
+      evaluate_freshness: () => ({ status: "current", authenticated: true }),
+    });
+    expect(differentResult.reasons).toContain("acceptance_result_conflicting:AC-001");
+
+    const buildOnly = productAcFixture({ buildResult: "pass", includeVerify: false });
+    const buildOnlyResult = deriveCurrentProductRelease({
+      task_id: buildOnly.taskId,
+      read: buildOnly.read,
+      refs: buildOnly.refs,
+      snapshot_tree: buildOnly.tree,
+      material_revision: buildOnly.materialRevision,
+      expected_acceptance_ids: ["AC-001"],
+      evaluate_freshness: () => ({ status: "current", authenticated: true }),
+    });
+    expect(buildOnlyResult.status).toBe("not_released");
+    expect(buildOnlyResult.reasons).toContain("verify_confirmation_missing");
   });
 
   it("does not release from a partial or ambiguous AC result set", () => {
