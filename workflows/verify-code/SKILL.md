@@ -44,6 +44,23 @@ verify-code 只审查代码，不做材料审计、AC 覆盖审计或证据树�
 verify-code 不在 verify-code
 中改写材料，`tasks.md` 任务卡既有 `执行状态填写区` 除外。`spec.md` → build-spec；`plan.md`/`tasks.md` → build-plan。
 
+## Conditional UI consumer alignment
+
+For `ui_applicability=ui`, consume the existing
+`frontend-component-quality` Component Quality Map and the UI Contract through
+the real entrypoint. Check each real consumer, state owner, typed ViewModel,
+CSS/token owner, `story_or_test_update`, compatibility boundary, and the browser/state facts that were
+actually produced. A missing design source, consumer, browser, fixture,
+viewport, or screenshot is reported as `unknown`, `unavailable`, or `N/A +
+reason`; it is not silently treated as visual completion and is not a gate.
+
+`design-alignment.mjs` is the sole projection for this check. A design gap may
+return an `unknown` alignment with a recoverable handoff and
+`continuation_allowed=true`; verify-code does not create a UI stage, fifth
+material, review controller, or public command. Non-UI tasks retain the
+existing code-review path and record UI facts as not applicable.
+No new stage or no gate is introduced by this alignment check.
+
 ## 审查依赖
 
 直接使用 `skill-deps.yaml` 声明的两个依赖：

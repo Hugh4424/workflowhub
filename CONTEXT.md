@@ -171,6 +171,13 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 **组件所有权（component ownership）**：
 一个组件在一个阶段中唯一归属于阶段执行或审查执行的责任边界。
 
+**UI phase/task 交付合同**：
+
+UI 范围的 plan/task 必须把 component action、real consumer、state owner、typed ViewModel、
+CSS/token owner、fixture、viewport、browser、a11y、performance、screenshot 和 coverage
+limits 写清。真实浏览器执行只在 build-code/verify-code 发生；没有 route 时记录 `N/A — reason`，
+blocked/unknown 必须保留 failure reason，不把截图或浏览器通过当作普遍 gate。
+
 **3rd-review**：
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
 

@@ -138,7 +138,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 28b5a84373d6c74b1702e7d8e68401ec4dff7c5cdeeed501b58735c835b69e98
+    local_bundle_hash: 8a7818d3ca709189365f98c31018c45b887eec7a9a726d5bad9d3e067df0f594
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -154,7 +154,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 1353493d1456088113b94ed0695c525f91ad8e3b46c374420cda3e4f34707096
+    local_bundle_hash: b34612c84a06c1461f05514d6875e63ed107fc79de2205029a98687bba76d945
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -244,7 +244,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 077e6e0f93cff0f62a9f580a655fe95e43451e6c01af0c67365917efefaa1406
+    local_bundle_hash: e15f394d4ac400c6e033c91da7989fdaad0404aac2b07d3cf2ebe2806e623cc8
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -272,7 +272,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b58fa8faa2308a07db13cda40f4fb19e96e53ec6284130eaa072c308d869f95c
+    local_bundle_hash: 3f2b062246db6efda0e1cd3a125307a391a05cef47ca6bcb20a13ebeb8f16833
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -496,7 +496,7 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 96710249d3bd90473d20a065209660a4aeb7e42670bfff3833afb07b168f4618
+    local_bundle_hash: d7a22976c9d19dd148099815c498dca417440f54025fcfd17a85d9aa405e5b0c
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: build-code 对真实前端改动执行状态、交互和 UI 测试策略
@@ -504,7 +504,7 @@ skills:
     standalone: true
     used_by_stages: [build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/frontend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md" }]
-    local_changes: 保留状态/交互维度；不把截图或 browser pass 变成普遍 gate
+    local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；截图或 browser pass 不变成普遍 gate；delete-condition 为 frontend-testing 退役且无阶段引用
     dependency_closure: []
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -524,17 +524,68 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 285a0178c2f43845398f9d1a1a0f3f3cbbd286a0980cebadae7b070ed8f8c7bb
+    local_bundle_hash: ab74c470d8444edbaab78b4773f5f9daed76afc8a96f910c42a3bb77dda4db64
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
     used_by_stages: []
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "285a0178c2f43845398f9d1a1a0f3f3cbbd286a0980cebadae7b070ed8f8c7bb", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
-    local_changes: 搬入完整闭包；去个人绝对路径；按 repo-relative manifest 调用
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "ab74c470d8444edbaab78b4773f5f9daed76afc8a96f910c42a3bb77dda4db64", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是真实 UI验收与 verify-code；blocked/unknown 保留 failure_reason；delete-condition 为 browser QA 路由退役或被唯一替代
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
+
+  - name: ui-project-init
+    path: skills/ui-project-init/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 7e5aa7ccf80fc3a5ac56215565653afbb0e3bf08fed0bb6092106c659894c6b6
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
+    design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
+    standalone: true
+    used_by_stages: []
+    upstream: []
+    local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
+    dependency_closure: [skills/ui-project-init]
+    update_policy: 随 UI Contract 与新旧项目初始化事实变更人工审查
+  - name: design-source-readiness
+    path: skills/design-source-readiness/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 459cd9bcc76c100a1c9dfd71fd93a855e019290a704e784302eb14fe2b300367
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 从项目级 Design.md 派生可读 Screen Read Map
+    design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
+    standalone: true
+    used_by_stages: []
+    upstream: []
+    local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
+    dependency_closure: [skills/design-source-readiness]
+    update_policy: 随 Design.md Read Map 字段和 plan-design-review consumer 人工审查
+  - name: frontend-component-quality
+    path: skills/frontend-component-quality/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: bda2c1dc5328fbd620472439f7556f74b3f98655687f11a763d0c27ba0bcf895
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图
+    design_idea: reuse/modify/extend/add/remove 动作与真实 consumer 绑定
+    standalone: true
+    used_by_stages: []
+    upstream:
+      - github_url: https://github.com/vercel-labs/agent-skills
+        commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
+        commit_url: https://github.com/vercel-labs/agent-skills/commit/dd089a8c752c966dee8bf0f27cb625ba193ffd9e
+        license: MIT
+        reviewed_at: "2026-08-22"
+        review_outcome: accepted
+        path: skills/react-best-practices/AGENTS.md
+        skill_url: https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md
+    local_changes: 公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后
+    dependency_closure: [skills/frontend-component-quality]
+    update_policy: 只比较固定 Vercel commit 的上游变化，人工升级并保留 LICENSE/UPSTREAM
 
 capability_decisions:
   - name: scope-triage

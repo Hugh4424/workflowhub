@@ -20,6 +20,8 @@ const stageSkills = Object.freeze({
     "spec-specify",
     "simplicity-guard",
     "plan-ceo-review",
+    "ui-project-init",
+    "design-source-readiness",
     "plan-design-review",
     "wh-review",
     "spec-analyze",
@@ -30,6 +32,7 @@ const stageSkills = Object.freeze({
     "simplicity-guard",
     "plan-eng-review",
     "testing-system-blueprint",
+    "frontend-component-quality",
     "test-routing-advisor",
     "spec-tasks",
     "spec-analyze",
@@ -39,11 +42,12 @@ const stageSkills = Object.freeze({
     "test-routing-advisor",
     "backend-testing",
     "frontend-testing",
+    "frontend-component-quality",
     "fullstack-slice-testing",
     "wh-review",
     "spec-analyze",
   ],
-  "verify-code": ["dsh-code-review", "wh-review"],
+  "verify-code": ["dsh-code-review", "frontend-component-quality", "wh-review"],
 });
 
 describe("direct stage package contract", () => {

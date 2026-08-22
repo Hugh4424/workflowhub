@@ -140,6 +140,130 @@ function contextObservation(value) {
   ]);
 }
 
+const UI_DESIGN_STATUSES = new Set(["ready", "approved", "not_ready", "unknown", "unavailable"]);
+const UI_COMPONENT_ACTIONS = new Set([
+  "reuse",
+  "modify",
+  "extend-state-or-variant",
+  "add-local",
+  "extract-shared",
+  "remove-after-no-consumers",
+]);
+
+function uiConsumers(entry) {
+  if (Array.isArray(entry?.real_consumers)) return entry.real_consumers;
+  if (entry?.real_consumer !== undefined) return [entry.real_consumer];
+  return [];
+}
+
+function uiFact(value) {
+  if (text(value)) return !/^(?:unknown|unavailable|n\/a|na)$/i.test(value.trim());
+  return Boolean(value && typeof value === "object" && !Array.isArray(value)
+    && (text(value.value) || text(value.ref) || text(value.path) || text(value.reason)));
+}
+
+function resolvedConsumer(value) {
+  return text(value) && !/^(?:unknown|unavailable|n\/a|na)$/i.test(value.trim());
+}
+
+function unresolvedConsumer(value) {
+  return Boolean((value && typeof value === "object" && !Array.isArray(value)
+    && /^(?:unknown|unavailable|not_applicable|n\/a|na)$/i.test(String(value.status ?? ""))
+    && text(value.reason)));
+}
+
+/**
+ * Align the UI Contract and Component Quality Map with observed consumers.
+ * Design gaps and missing quality facts are reportable unknowns/gaps; this
+ * projection never creates a UI gate or a sixth stage.
+ */
+export function alignUiDesignEvidence({
+  uiContract,
+  ui_contract,
+  componentQualityMap,
+  component_quality_map,
+  consumerFacts,
+  consumer_facts,
+} = {}) {
+  const contract = uiContract ?? ui_contract;
+  const map = componentQualityMap ?? component_quality_map;
+  const observedConsumers = consumerFacts ?? consumer_facts;
+  const gaps = [];
+  const designStatus = text(contract?.design_status) ?? "unknown";
+
+  if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+    gaps.push(gap("UI-CONTRACT", "design_gap_unknown", [], "publish the current UI Contract or record N/A for a non-UI task"));
+  } else {
+    if (!UI_DESIGN_STATUSES.has(designStatus)) {
+      gaps.push(gap("UI-CONTRACT", "design_status_unknown", refs([contract.current_material_ref]), "record a recognized design_status and keep the missing reason"));
+    }
+    const missingItems = Array.isArray(contract.missing_items) ? contract.missing_items : [];
+    if (["not_ready", "unknown", "unavailable"].includes(designStatus) || missingItems.length > 0) {
+      gaps.push(gap("UI-CONTRACT", "design_gap_unknown", refs([contract.current_material_ref, ...missingItems.flatMap((item) => item?.evidence_refs ?? [])]), "keep the design gap, handoff, and rework risk visible while continuing the same task"));
+    }
+  }
+
+  const entries = Array.isArray(map) ? map : map?.entries;
+  if (entries !== undefined && !Array.isArray(entries)) {
+    gaps.push(gap("UI-COMPONENT-QUALITY", "component_quality_map_unknown", [], "publish a Component Quality Map or record N/A for a non-UI task"));
+  }
+  const facts = Array.isArray(observedConsumers) ? observedConsumers : [];
+  for (const [index, entry] of (Array.isArray(entries) ? entries : []).entries()) {
+    const id = text(entry?.id) ?? `UI-COMPONENT-${index + 1}`;
+    const consumers = uiConsumers(entry);
+    const resolvedConsumers = consumers.filter(resolvedConsumer);
+    const unknownConsumers = consumers.filter(unresolvedConsumer);
+    const malformedConsumers = consumers.filter((value) => !resolvedConsumer(value) && !unresolvedConsumer(value));
+    if (malformedConsumers.length > 0) {
+      gaps.push(gap(id, "component_quality_consumer_invalid", refs(entry?.evidence_refs), "remove malformed consumer entries and retain a resolved or reasoned unknown fact"));
+    }
+    if (!UI_COMPONENT_ACTIONS.has(entry?.action)) {
+      gaps.push(gap(id, "component_quality_action_unknown", refs(entry?.evidence_refs), "record one supported Component Quality Map action"));
+    }
+    if (entry?.action === "extract-shared" && resolvedConsumers.length < 2 && unknownConsumers.length === 0) {
+      gaps.push(gap(id, "component_quality_consumer_missing", refs(entry?.evidence_refs), "bind extract-shared to at least two real consumers"));
+    }
+    if (entry?.action === "extract-shared" && resolvedConsumers.length < 2 && unknownConsumers.length > 0) {
+      gaps.push(gap(id, "component_quality_consumer_unknown", refs(entry?.evidence_refs), "resolve the unknown consumer fact before claiming two extract-shared consumers"));
+    }
+    if (entry?.action !== "remove-after-no-consumers" && resolvedConsumers.length === 0 && unknownConsumers.length === 0) {
+      gaps.push(gap(id, "component_quality_consumer_missing", refs(entry?.evidence_refs), "bind the component action to a real consumer or narrow the action"));
+    }
+    if (entry?.action !== "remove-after-no-consumers" && resolvedConsumers.length === 0 && unknownConsumers.length > 0) {
+      gaps.push(gap(id, "component_quality_consumer_unknown", refs(entry?.evidence_refs), "resolve the unknown consumer fact while keeping the same-task risk visible"));
+    }
+    if (entry?.action === "remove-after-no-consumers" && resolvedConsumers.length > 0) {
+      gaps.push(gap(id, "component_quality_consumer_present", refs(entry?.evidence_refs), "retain the component while a current consumer remains"));
+    }
+    if (entry?.action === "remove-after-no-consumers" && unknownConsumers.length > 0) {
+      gaps.push(gap(id, "component_quality_consumer_unknown", refs(entry?.evidence_refs), "resolve unknown consumers before claiming removal; keep no-consumer evidence visible"));
+    }
+    if (["state_owner", "typed_view_model", "css_token_owner"].some((field) => !uiFact(entry?.[field]))) {
+      gaps.push(gap(id, "component_quality_owner_missing", refs(entry?.evidence_refs), "record state_owner, typed_view_model, and css_token_owner or an explicit unknown/N/A reason"));
+    }
+    if (["modify", "extend-state-or-variant", "add-local", "extract-shared"].includes(entry?.action)
+      && !uiFact(entry?.story_or_test_update)) {
+      gaps.push(gap(id, "component_quality_story_test_missing", refs(entry?.evidence_refs), "record the Story/test update or an explicit unknown/N/A reason"));
+    }
+    for (const consumer of resolvedConsumers) {
+      const fact = facts.find((candidate) => text(candidate?.component) === text(entry?.component));
+      const known = fact && (Array.isArray(fact.consumers) ? fact.consumers : [fact.consumer]).includes(consumer);
+      if (!known) gaps.push(gap(id, "component_quality_consumer_unobserved", refs(entry?.evidence_refs), "bind each planned consumer to a current consumer fact"));
+    }
+  }
+
+  const designUnknown = gaps.some((entry) => entry.reason === "design_gap_unknown" || entry.reason === "design_status_unknown");
+  return {
+    status: designUnknown ? "unknown" : gaps.length ? "gaps" : "aligned",
+    design_status: designStatus,
+    gate: false,
+    continuation_allowed: true,
+    affected_ids: unique(gaps.map(({ affected_id }) => affected_id)),
+    gaps,
+    recovery_conditions: unique(gaps.map(({ recovery }) => recovery)),
+  };
+}
+
 /**
  * Compare explicit accepted design IDs with explicit current evidence.
  * A gap is advisory data for the verify handoff; this function never reruns or

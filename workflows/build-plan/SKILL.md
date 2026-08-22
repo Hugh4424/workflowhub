@@ -79,6 +79,30 @@ repair in this same task.
 Do not implement code or execute RED/GREEN; plan the test scenarios, commands,
 expected outcomes, and evidence for `build-code` to execute later.
 
+## Conditional UI component-quality plan
+
+For an applicable UI phase, the `frontend-component-quality` dependency is the
+single owner of the **Component Quality Map**. Each entry names the action
+(`reuse`, `modify`, `extend-state-or-variant`, `add-local`, `extract-shared`,
+or `remove-after-no-consumers`), every real consumer, compatibility impact,
+state owner, typed ViewModel, and the single CSS/token owner. `extract-shared`
+requires at least two real consumers; a removal requires `no_consumer_evidence`
+or `evidence_refs` proving that no current consumer remains. A `modify` or
+`extend-state-or-variant`, `add-local`, or `extract-shared` entry also names the
+non-empty `story_or_test_update` fact to update. A structured
+`unknown`/`unavailable` consumer with a reason remains a handoff risk; it is not
+silently treated as zero consumers or a deletion proof.
+
+The map is conditional: non-UI phases keep the existing plan and record
+`N/A + reason`. Missing consumers, owners, preview, browser, or screenshot
+facts stay `unknown`/`unavailable` and become handoff risks. Build-plan designs
+the facts and does not execute frontend-testing (the `frontend-testing` skill);
+build-code owns execution
+and verify-code checks the real consumer. The map is a quality fact, not a
+gate, no gate is created, and no new stage, fifth material, or second authority
+is introduced.
+No new stage or no gate is introduced by the Component Quality Map.
+
 Do not create a double-solution exercise, a build-plan Grill, a second decision
 log, a parallel review output, or a process summary. `simplicity-guard` and
 `plan-eng-review` are ordinary advisory lenses in the declared review contract,

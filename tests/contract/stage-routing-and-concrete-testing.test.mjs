@@ -36,6 +36,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("keeps build-spec direct order and wh-review as the only provider reviewer", () => {
     expect(names("build-spec")).toEqual([
       "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
+      "ui-project-init", "design-source-readiness",
       "plan-design-review", "wh-review", "spec-analyze",
     ]);
     expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
@@ -78,6 +79,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-plan")).toEqual([
       "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
       "testing-system-blueprint",
+      "frontend-component-quality",
       "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review",
     ]);
     expect(deps("build-plan").find(({ name }) => name === "spec-research"))
@@ -144,6 +146,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("routes build-code against actual scope and directly uses one concrete testing package", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
+      "frontend-component-quality",
       "fullstack-slice-testing", "wh-review", "spec-analyze",
     ]);
     expect(stepSlugs("build-code")).toContain("inspect-and-route-actual-tests");

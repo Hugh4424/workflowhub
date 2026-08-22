@@ -49,6 +49,18 @@
 - **fixtures_services**：[填写：fixture、服务和清理责任 / N/A — reason]
 - **coverage limits**：[填写：本命令覆盖范围和明确未覆盖项]
 
+### UI phase/task fields (仅 UI scope 填写)
+
+- **ui_scope**：`ui` / `non_ui` / `unknown`，不允许 caller 降级事实。
+- **component action / real consumer**：[填写复用、修改、增加状态、局部新增、共享抽取或删除动作，以及真实消费者]
+- **state owner / typed ViewModel / CSS/token owner**：[填写状态、类型和样式/token 的唯一责任边界]
+- **fixture / viewport / responsive**：[填写假数据、视口、断点和响应式场景]
+- **browser / a11y / performance / screenshot**：[填写交互、keyboard、a11y、性能命令与截图交接；必须说明执行 phase]
+- **coverage limits / N/A or unknown reason**：[填写明确未覆盖范围和不能执行的原因]
+- **design-gap handoff**：`design_status`、`missing_items`/reason、`fallback_visual_basis`、`constraints`、`assumptions`、`rework_risk`、`human_confirmation`。
+- **design refs**：`current_material_ref`、`design_revision`、`visible_labels`、`preview_refs`、`fixture_refs`、`viewport_refs`、`screenshot_refs`；Design.md 只记录版本，不记录 SHA-256。
+- **state UI facts**：每个适用状态补 `responsive` 和 `a11y`；缺失写 `unknown`/`unavailable`/`N/A + reason`。
+
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**

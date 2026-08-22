@@ -86,6 +86,24 @@ If a dependency is unavailable, preserve that fact and use any safe repository
 test commands already specified in `tasks.md`. The missing dependency limits the
 quality or completion claim; it does not prohibit code or material repair.
 
+## Conditional UI implementation handoff
+
+When the current phase has `ui_applicability=ui`, consume the existing
+`frontend-component-quality` Component Quality Map before editing. For every
+entry, check the real consumer, state owner, typed ViewModel, CSS/token owner,
+and any `story_or_test_update` against the actual diff. Preserve `unknown`, `unavailable`, and `N/A +
+reason` when a planned consumer, design source, browser, fixture, viewport, or
+screenshot fact is missing; these facts are not a gate and do not authorize a
+new stage or public command.
+
+Build-code is the owner that executes `frontend-testing` for the changed UI
+behavior. The implementation order remains static composition, state and
+interaction, then DTO-to-typed-ViewModel wiring; the test route must observe
+the real consumer and recovery behavior rather than a component snapshot.
+Non-UI phases keep the existing backend or fullstack route and record the UI
+skill as not applicable.
+No new stage or no gate is introduced by this conditional handoff.
+
 ## Work loop
 
 1. Read all four materials and select the next incomplete Task. Write a small

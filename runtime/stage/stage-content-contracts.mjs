@@ -37,8 +37,8 @@ export const DECISION_CORRECTIONS = Object.freeze({
   D7: "原“结构错误不可继续”保持；decision coverage omission 只有被机器发现、展示并进入专用 omission appendix 后才从未处置错误变成 accepted exception，review risk record 不得代替",
 });
 
-function result(errors) {
-  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+function result(errors, extras = {}) {
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), ...extras });
 }
 
 function schemaErrors(validate) {
@@ -50,6 +50,713 @@ function schemaErrors(validate) {
 
 function object(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+export const UI_APPLICABILITY_INPUTS = Object.freeze([
+  "raw_requirement",
+  "project_inventory",
+  "planned_or_changed_frontend_fact",
+]);
+export const UI_APPLICABILITY_RESULTS = Object.freeze(["ui", "non_ui", "unknown"]);
+export const UI_STATE_CONTRACT_FIELDS = Object.freeze([
+  "name",
+  "interaction_flow",
+  "visible_structure",
+  "fixture_shape",
+  "available_actions",
+  "disabled_actions",
+  "trigger",
+  "recovery_or_exit",
+  "permission_result",
+  "responsive",
+  "a11y",
+  "preview_browser_screenshot_assertion",
+]);
+export const UI_CONTRACT_FIELDS = Object.freeze([
+  "page_or_region",
+  "design_status",
+  "missing_items",
+  "fallback_visual_basis",
+  "constraints",
+  "assumptions",
+  "rework_risk",
+  "human_confirmation",
+  "current_material_ref",
+  "design_revision",
+  "visible_labels",
+  "preview_refs",
+  "fixture_refs",
+  "viewport_refs",
+  "screenshot_refs",
+]);
+export const UI_COMPONENT_QUALITY_FIELDS = Object.freeze([
+  "component_quality_map",
+  "real_consumer",
+  "state_owner",
+  "typed_view_model",
+  "css_token_owner",
+  "story_or_test_update",
+]);
+export const COMPONENT_QUALITY_ACTIONS = Object.freeze([
+  "reuse",
+  "modify",
+  "extend-state-or-variant",
+  "add-local",
+  "extract-shared",
+  "remove-after-no-consumers",
+]);
+
+/**
+ * The build-spec UI design loop is a small fact contract, not a second
+ * workflow or a persisted state machine.  These values describe the fact
+ * recorded in the current four materials after each design observation.
+ */
+export const UI_DESIGN_LOOP_STATES = Object.freeze([
+  "preview_ready",
+  "preview_unavailable",
+  "design_prompt_ready",
+  "external_design_pending",
+  "external_design_returned",
+  "external_design_cancelled",
+  "external_design_not_returned",
+  "external_design_version_mismatch",
+  "human_approved",
+  "human_acknowledged",
+  "human_not_approved",
+]);
+
+export const UI_DESIGN_PROMPT_FIELDS = Object.freeze([
+  "page_or_region",
+  "interactions",
+  "states",
+  "visible_labels",
+]);
+
+const UI_DESIGN_ACTION_LABELS = Object.freeze({
+  preview_ready: ["确认设计", "需要修改"],
+  preview_unavailable: ["重新读取", "生成设计提示词", "继续并记录风险"],
+  design_prompt_ready: ["取消"],
+  external_design_pending: ["未返回", "取消"],
+  external_design_returned: ["确认设计", "需要修改"],
+  external_design_cancelled: ["继续并记录风险"],
+  external_design_not_returned: ["重新生成设计提示词", "继续并记录风险"],
+  external_design_version_mismatch: ["重新读取并确认"],
+});
+
+const UI_DESIGN_STATUSES = new Set(["ready", "not_ready", "unknown", "unavailable"]);
+const UI_CONFIRMATION_RESULTS = new Set(["approved", "acknowledged", "not_approved"]);
+const MISSING_FACT_STATUSES = new Set(["unknown", "unavailable", "not_applicable", "n/a", "na"]);
+const UNKNOWN_LITERAL = /^(?:unknown|unavailable|n\/a|na)$/i;
+const explicitFact = (value) => (nonEmptyString(value) && !UNKNOWN_LITERAL.test(value.trim()))
+  || (object(value) && (
+    nonEmptyString(value.value)
+    || nonEmptyString(value.ref)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.reason)
+    || (MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()) && nonEmptyString(value.reason))
+  ));
+
+function versionFact(value) {
+  if (nonEmptyString(value)) return !UNKNOWN_LITERAL.test(value.trim());
+  return object(value) && (
+    nonEmptyString(value.version)
+    || (MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()) && nonEmptyString(value.reason))
+  );
+}
+
+function resolvedConsumer(value) {
+  return nonEmptyString(value) && !UNKNOWN_LITERAL.test(value.trim());
+}
+
+function factText(value) {
+  if (typeof value === "string") return value;
+  if (!object(value)) return "";
+  return [value.signal, value.kind, value.type, value.name, value.title, value.description, value.value]
+    .filter((entry) => typeof entry === "string")
+    .join(" ");
+}
+
+function sourceConclusion(value) {
+  if (object(value)) {
+    const declared = [value.result, value.conclusion, value.applicability, value.ui_applicability, value.scope]
+      .filter((entry) => UI_APPLICABILITY_RESULTS.includes(entry));
+    const booleanSignals = [
+      value.ui === true || value.is_ui === true || value.frontend === true ? "ui" : null,
+      value.ui === false || value.is_ui === false || value.frontend === false ? "non_ui" : null,
+    ].filter(Boolean);
+    const signals = new Set([...declared, ...booleanSignals]);
+    if (signals.has("ui") && signals.has("non_ui")) return "conflict";
+    if (declared.length > 0) return declared[0];
+    if (booleanSignals[0]) return booleanSignals[0];
+  }
+  const text = factText(value).toLowerCase();
+  if (!text) return "unknown";
+  if (UI_APPLICABILITY_RESULTS.includes(text.trim())) return text.trim();
+  if (/(?:non[-_ ]?ui|backend[-_ ]?only|api[-_ ]?only|cli[-_ ]?only|command[-_ ]?line[-_ ]?only|docs?[-_ ]?only|no (?:page|screen|frontend|ui))/.test(text)) {
+    return "non_ui";
+  }
+  if (/(?:\bui\b|frontend|front[-_ ]?end|page|screen|route|component|css|design|browser)/.test(text)) {
+    return "ui";
+  }
+  return "unknown";
+}
+
+function collectionFact(value, { allowEmpty = false } = {}) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return allowEmpty;
+    return value.every((entry) => explicitFact(entry));
+  }
+  return explicitFact(value);
+}
+
+function factList(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .filter((entry) => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function unknownFact(reason) {
+  return Object.freeze({ status: "unknown", reason });
+}
+
+function knownOrUnknown(value, reason) {
+  return explicitFact(value) ? value : unknownFact(reason);
+}
+
+// Inventory values may be lists (routes, component candidates) or small
+// structured maps, not only scalar facts. Preserve those values when they are
+// present; otherwise keep a reasoned unknown fact instead of silently dropping
+// the legacy-project surface.
+function inventoryFact(value, reason) {
+  if (Array.isArray(value) && value.length > 0) return value;
+  if (object(value) && Object.keys(value).length > 0) return value;
+  return knownOrUnknown(value, reason);
+}
+
+function designRevisionValue(value, reason = "Design.md version is unavailable") {
+  return versionFact(value) ? value : unknownFact(reason);
+}
+
+function actionLabels(value) {
+  return factList(value?.visible_actions ?? value?.actions);
+}
+
+function hasActions(value, required) {
+  const actual = actionLabels(value);
+  return required.every((label) => actual.includes(label));
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+/**
+ * Build the intentionally short prompt sent to an external design tool.
+ * Design.md and the UI Contract carry technical constraints; this function
+ * only emits page/region, interaction, state and visible-label context.
+ */
+export function buildShortUiDesignPrompt(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["short UI design prompt input must be an object"]);
+  const pageOrRegion = String(input.page_or_region ?? input.page ?? input.region ?? "").trim();
+  const interactions = factList(input.interactions ?? input.interaction);
+  const states = factList(input.states ?? input.state);
+  const visibleLabels = factList(input.visible_labels);
+  if (!pageOrRegion) errors.push("short UI design prompt page_or_region is required");
+  if (interactions.length === 0) errors.push("short UI design prompt interactions are required");
+  if (states.length === 0) errors.push("short UI design prompt states are required");
+  if (visibleLabels.length === 0) errors.push("short UI design prompt visible_labels are required");
+  const fields = Object.freeze({
+    page_or_region: pageOrRegion,
+    interactions: Object.freeze(interactions),
+    states: Object.freeze(states),
+    visible_labels: Object.freeze(visibleLabels),
+  });
+  const prompt = errors.length > 0 ? null : [
+    `页面/区域：${pageOrRegion}`,
+    `交互：${interactions.join("；")}`,
+    `状态：${states.join("；")}`,
+    `可见 label：${visibleLabels.join("、")}`,
+  ].join("\n");
+  return result(errors, { fields, prompt });
+}
+
+/**
+ * Produce the executable output contract of ui-project-init. Missing project
+ * inputs are facts with reasons, not errors and never become a progression
+ * gate. The function deliberately does no filesystem mutation or inference.
+ */
+export function buildUiProjectInitFact(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["ui-project-init input must be an object"]);
+  const mode = input.mode;
+  if (!["new", "legacy"].includes(mode)) errors.push("ui-project-init mode must be new or legacy");
+  const inventory = object(input.project_inventory) ? input.project_inventory : {};
+  const missingItems = [];
+  const missing = (code, reason) => {
+    missingItems.push(Object.freeze({ code, reason }));
+    return unknownFact(reason);
+  };
+  const designPath = nonEmptyString(input.design_path ?? input.design_source_path)
+    ? String(input.design_path ?? input.design_source_path).trim()
+    : missing("DESIGN-SOURCE-PATH-MISSING", "Design.md path was not provided");
+  const designRevision = versionFact(input.design_revision)
+    ? input.design_revision
+    : missing("DESIGN-REVISION-MISSING", "Design.md version was not provided");
+  const scope = knownOrUnknown(input.scope ?? input.first_page ?? inventory.first_page,
+    mode === "legacy" ? "legacy first-page boundary requires human selection" : "first UI page or region is not selected");
+  const componentBoundary = knownOrUnknown(
+    input.component_boundary ?? (mode === "legacy" ? inventory.component_candidates : undefined),
+    mode === "legacy" ? "legacy component candidates were not inventoried" : "component boundary is not selected",
+  );
+  const styleBoundary = knownOrUnknown(
+    input.style_boundary ?? (mode === "legacy" ? inventory.css_boundary : undefined),
+    mode === "legacy" ? "legacy CSS boundary was not inventoried" : "style boundary is not selected",
+  );
+  const fixture = knownOrUnknown(input.fixture, "fixed preview fixture is not selected");
+  const viewport = knownOrUnknown(input.viewport, "preview viewport is not selected");
+  const preview = knownOrUnknown(input.preview, "preview host or Story is unavailable");
+  const assumptions = Array.isArray(input.assumptions) && input.assumptions.length > 0
+    ? input.assumptions
+    : [unknownFact("initialization assumptions are not confirmed")];
+  const humanConfirmation = object(input.human_confirmation) || nonEmptyString(input.human_confirmation)
+    ? input.human_confirmation
+    : unknownFact("human confirmation is pending");
+  const status = missingItems.length > 0 || [scope, componentBoundary, styleBoundary, fixture, viewport, preview]
+    .some((value) => object(value) && MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()))
+    ? "not_ready"
+    : "ready";
+  const legacyInventory = mode === "legacy"
+    ? Object.freeze({
+      technology_stack: inventoryFact(
+        inventory.technology_stack ?? inventory.tech_stack ?? inventory.stack,
+        "legacy technology stack was not inventoried",
+      ),
+      routes: inventoryFact(inventory.routes, "legacy routes were not inventoried"),
+      css_side_effects: inventoryFact(
+        inventory.css_side_effects ?? inventory.css_effects ?? inventory.css_boundary,
+        "legacy CSS side effects were not inventoried",
+      ),
+      data_entrypoints: inventoryFact(
+        inventory.data_entrypoints ?? inventory.data_sources ?? inventory.data_entry_points,
+        "legacy data entrypoints were not inventoried",
+      ),
+      component_candidates: inventoryFact(
+        inventory.component_candidates ?? input.component_boundary,
+        "legacy component candidates were not inventoried",
+      ),
+      testing_capability: inventoryFact(
+        inventory.testing_capability ?? inventory.test_capability ?? inventory.tests,
+        "legacy testing capability was not inventoried",
+      ),
+      baseline: inventoryFact(inventory.baseline, "legacy baseline was not recorded"),
+      legacy_exceptions: inventoryFact(
+        inventory.legacy_exceptions ?? inventory.exceptions,
+        "legacy exceptions were not recorded",
+      ),
+      first_page_candidates: inventoryFact(
+        inventory.first_page_candidates ?? inventory.first_page ?? input.first_page,
+        "legacy first-page candidates were not inventoried",
+      ),
+      coupling_risks: inventoryFact(
+        inventory.coupling_risks ?? inventory.coupling_risk,
+        "legacy coupling risks were not inventoried",
+      ),
+      minimal_scope_reduction: inventoryFact(
+        inventory.minimal_scope_reduction ?? inventory.scope_reduction ?? inventory.shrink_suggestion,
+        "legacy minimal scope-reduction suggestion was not recorded",
+      ),
+    })
+    : undefined;
+  return result(errors, {
+    mode,
+    status,
+    design_path: designPath,
+    design_revision: designRevision,
+    scope,
+    component_boundary: componentBoundary,
+    style_boundary: styleBoundary,
+    fixture,
+    viewport,
+    preview,
+    missing_items: Object.freeze(missingItems),
+    assumptions: Object.freeze(assumptions),
+    human_confirmation: humanConfirmation,
+    ...(legacyInventory ? { legacy_inventory: legacyInventory } : {}),
+    gate: false,
+  });
+}
+
+function parseDesignMarkdownSections(content) {
+  if (typeof content !== "string" || content.trim() === "") return [];
+  return [...content.matchAll(/^#{2,6}\s+(.+?)\s*$/gm)].map(([, heading]) => ({
+    anchor: slug(heading),
+    page_or_region: heading.trim(),
+  }));
+}
+
+/**
+ * Derive a Screen Read Map from caller-parsed Design.md sections (or headings
+ * in the supplied text). This is a pure lens: it reports missing fields and
+ * freshness but does not rewrite Design.md or score visual quality.
+ */
+export function deriveDesignSourceReadiness(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["design-source-readiness input must be an object"]);
+  const designPath = nonEmptyString(input.design_path ?? input.path)
+    ? String(input.design_path ?? input.path).trim()
+    : "";
+  const actualRevision = input.design_revision;
+  const expectedRevision = input.expected_design_revision;
+  const sections = Array.isArray(input.sections)
+    ? input.sections
+    : Array.isArray(input.read_map)
+      ? input.read_map
+      : parseDesignMarkdownSections(input.design_content ?? input.content);
+  const missingItems = [];
+  const addMissing = (code, reason, anchor = undefined) => {
+    const fact = Object.freeze({ code, reason, ...(anchor ? { anchor } : {}) });
+    missingItems.push(fact);
+    return fact;
+  };
+  let bindingState = "bindable";
+  let freshnessStatus = "matching";
+  if (!designPath) {
+    bindingState = "not_bindable";
+    freshnessStatus = "unknown";
+    addMissing("DESIGN-SOURCE-MISSING", "Design.md path is unavailable");
+  } else if (!versionFact(actualRevision)) {
+    bindingState = "unknown";
+    freshnessStatus = "unknown";
+    addMissing("DESIGN-REVISION-MISSING", "Design.md version is unavailable");
+  } else if (versionFact(expectedRevision) && String(actualRevision) !== String(expectedRevision)) {
+    bindingState = "not_bindable";
+    freshnessStatus = "stale";
+    addMissing("DESIGN-REVISION-MISMATCH", "current Design.md version does not match the requested version");
+  }
+  if (!Array.isArray(sections)) {
+    bindingState = bindingState === "bindable" ? "unknown" : bindingState;
+    freshnessStatus = freshnessStatus === "matching" ? "unknown" : freshnessStatus;
+    addMissing("SCREEN-READ-MAP-MISSING", "Design.md sections could not be read");
+  }
+  const sourceSections = Array.isArray(sections) ? sections : [];
+  const readMap = sourceSections.map((section, index) => {
+    const source = object(section) ? section : {};
+    const anchor = nonEmptyString(source.anchor ?? source.id)
+      ? String(source.anchor ?? source.id).trim()
+      : slug(source.page_or_region ?? source.page ?? source.region) || `section-${index + 1}`;
+    const entryMissing = [];
+    for (const field of [
+      "page_or_region", "goal", "primary_action", "states", "components", "tokens",
+      "fixture", "viewport", "responsive", "a11y", "evidence",
+    ]) {
+      const value = field === "page_or_region"
+        ? (source.page_or_region ?? source.page ?? source.region)
+        : source[field];
+      if (!explicitFact(value) && !(Array.isArray(value) && value.length > 0)) {
+        entryMissing.push(`${field} is missing`);
+      }
+    }
+    for (const reason of entryMissing) addMissing("SCREEN-READ-MAP-FIELD-MISSING", reason, anchor);
+    return Object.freeze({
+      anchor,
+      page_or_region: source.page_or_region ?? source.page ?? source.region ?? unknownFact("page or region is missing"),
+      goal: source.goal ?? unknownFact("screen goal is missing"),
+      primary_action: source.primary_action ?? unknownFact("primary action is missing"),
+      states: source.states ?? unknownFact("state list is missing"),
+      components: source.components ?? unknownFact("component source is missing"),
+      tokens: source.tokens ?? unknownFact("token/style source is missing"),
+      fixture: source.fixture ?? unknownFact("fixture is missing"),
+      viewport: source.viewport ?? unknownFact("viewport is missing"),
+      responsive: source.responsive ?? unknownFact("responsive intent is missing"),
+      a11y: source.a11y ?? unknownFact("accessibility intent is missing"),
+      evidence: source.evidence ?? unknownFact("preview/browser/screenshot evidence is missing"),
+      missing_items: Object.freeze(entryMissing),
+    });
+  });
+  if (readMap.length === 0) addMissing("SCREEN-READ-MAP-EMPTY", "Design.md contains no page or section map");
+  const confirmation = object(input.human_confirmation) || nonEmptyString(input.human_confirmation)
+    ? input.human_confirmation
+    : unknownFact("human confirmation is pending");
+  const status = bindingState === "bindable" && missingItems.length === 0 ? "ready" : "not_ready";
+  return result(errors, {
+    status,
+    design_path: designPath || unknownFact("Design.md path is unavailable"),
+    design_revision: designRevisionValue(actualRevision),
+    expected_design_revision: expectedRevision ?? unknownFact("requested Design.md version is not specified"),
+    binding_state: bindingState,
+    read_map: Object.freeze(readMap),
+    missing_items: Object.freeze(missingItems),
+    freshness: Object.freeze({
+      status: freshnessStatus,
+      expected: expectedRevision ?? null,
+      actual: actualRevision ?? null,
+    }),
+    human_confirmation: confirmation,
+    gate: false,
+  });
+}
+
+/**
+ * Validate one append-only design-loop fact. It makes the failure/cancel/
+ * version-mismatch labels observable while leaving continuation non-gating.
+ */
+export function validateUiDesignLoopFact(value) {
+  const errors = [];
+  if (!object(value)) return result(["UI design loop fact must be an object"]);
+  const state = value.state ?? value.status;
+  if (!UI_DESIGN_LOOP_STATES.includes(state)) errors.push("UI design loop state is invalid");
+  if (!nonEmptyString(value.current_material_ref)) errors.push("UI design loop current_material_ref is required");
+  if (value.gate === true || value.is_gate === true) errors.push("UI design loop fact must not become a gate");
+  const actions = actionLabels(value);
+  if (UI_DESIGN_ACTION_LABELS[state] && !hasActions(value, UI_DESIGN_ACTION_LABELS[state])) {
+    errors.push(`UI design loop ${state} must preserve its visible action labels`);
+  }
+  if (state === "preview_ready" && !collectionFact(value.preview_refs ?? value.preview_ref)) {
+    errors.push("preview_ready requires preview_refs");
+  }
+  if (state === "preview_unavailable" && !nonEmptyString(value.reason)) {
+    errors.push("preview_unavailable requires a reason");
+  }
+  if (state === "design_prompt_ready") {
+    const promptInput = value.prompt ?? value.design_prompt;
+    const prompt = buildShortUiDesignPrompt(promptInput);
+    if (!prompt.ok) errors.push(...prompt.errors.map((error) => `design_prompt: ${error}`));
+    if (nonEmptyString(value.prompt_text) && value.prompt_text !== prompt.prompt) {
+      errors.push("design_prompt prompt_text does not match the executable prompt builder");
+    }
+  }
+  if (state === "external_design_pending" && !nonEmptyString(value.prompt_ref)) {
+    errors.push("external_design_pending requires prompt_ref");
+  }
+  if (state === "external_design_returned") {
+    if (!nonEmptyString(value.design_ref)) errors.push("external_design_returned requires design_ref");
+    if (!versionFact(value.expected_design_revision)) errors.push("external_design_returned requires expected_design_revision");
+    if (!versionFact(value.returned_design_revision)) errors.push("external_design_returned requires returned_design_revision");
+    if (String(value.expected_design_revision) !== String(value.returned_design_revision)) {
+      errors.push("external_design_returned cannot carry a mismatched design revision");
+    }
+  }
+  if (["external_design_cancelled", "external_design_not_returned"].includes(state)) {
+    if (!nonEmptyString(value.reason)) errors.push(`${state} requires a reason`);
+    if (value.preserves_current_contract !== true) errors.push(`${state} must preserve the current UI Contract`);
+  }
+  if (state === "external_design_version_mismatch") {
+    if (!versionFact(value.expected_design_revision)) errors.push("external_design_version_mismatch requires expected_design_revision");
+    if (value.returned_design_revision !== undefined
+      && versionFact(value.returned_design_revision)
+      && String(value.expected_design_revision) === String(value.returned_design_revision)) {
+      errors.push("external_design_version_mismatch must retain a different or missing returned revision");
+    }
+    if (!nonEmptyString(value.reason)) errors.push("external_design_version_mismatch requires a reason");
+    if (value.preserves_current_contract !== true) errors.push("external_design_version_mismatch must preserve the current UI Contract");
+  }
+  if (["human_approved", "human_acknowledged", "human_not_approved"].includes(state)) {
+    const expected = state === "human_approved" ? "approved" : state === "human_acknowledged" ? "acknowledged" : "not_approved";
+    const confirmation = object(value.human_confirmation) ? value.human_confirmation.result : value.human_confirmation;
+    if (confirmation !== expected) errors.push(`${state} requires human_confirmation=${expected}`);
+    if (value.continuation_allowed !== true) errors.push(`${state} must explicitly preserve continuation_allowed=true`);
+    if (state !== "human_approved" && value.design_status === "ready") errors.push(`${state} cannot mark design_status=ready`);
+  }
+  return result(errors, {
+    state,
+    continuation_allowed: value.continuation_allowed !== false,
+    visible_actions: Object.freeze(actions),
+  });
+}
+
+function namedFact(value) {
+  return nonEmptyString(value) || (object(value) && (
+    nonEmptyString(value.name)
+    || nonEmptyString(value.page)
+    || nonEmptyString(value.region)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.ref)
+  ));
+}
+
+function componentFact(value) {
+  return nonEmptyString(value) || (object(value) && (
+    nonEmptyString(value.name)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.ref)
+  ));
+}
+
+/**
+ * Validate the UI applicability fact carried by the existing stage contracts.
+ * It is a derived fact from three named inputs; it never acts as a gate.
+ */
+export function validateUiApplicability(value) {
+  const errors = [];
+  if (!object(value)) return result(["ui applicability must be an object"]);
+  const declared = value.result ?? value.conclusion;
+  if (!UI_APPLICABILITY_RESULTS.includes(declared)) {
+    errors.push("ui applicability result must be ui, non_ui, or unknown");
+  }
+  const sources = value.sources ?? value.source_facts;
+  if (!object(sources) && !Array.isArray(sources)) errors.push("ui applicability must retain the three source facts");
+  const sourceValues = UI_APPLICABILITY_INPUTS.map((input) => {
+    if (object(sources)) return sources[input];
+    if (Array.isArray(sources)) {
+      const entry = sources.find((candidate) => candidate?.name === input || candidate?.input === input);
+      return entry?.value ?? entry?.fact ?? entry;
+    }
+    return undefined;
+  });
+  for (const input of UI_APPLICABILITY_INPUTS) {
+    if (object(sources) && !Object.prototype.hasOwnProperty.call(sources, input)) errors.push(`ui applicability source missing ${input}`);
+    if (Array.isArray(sources) && !sources.some((entry) => entry?.name === input || entry?.input === input)) errors.push(`ui applicability source missing ${input}`);
+  }
+  const sourceResults = sourceValues.map(sourceConclusion);
+  const hasUi = sourceResults.includes("ui");
+  const hasNonUi = sourceResults.includes("non_ui");
+  const hasConflict = sourceResults.includes("conflict");
+  const derived = hasConflict || (hasUi && hasNonUi)
+    ? "unknown"
+    : hasUi
+      ? "ui"
+      : sourceResults.every((entry) => entry === "non_ui")
+        ? "non_ui"
+        : "unknown";
+  if (declared !== derived) {
+    errors.push(`ui applicability result ${declared ?? "missing"} conflicts with derived ${derived}`);
+  }
+  if (derived === "unknown") {
+    if (!nonEmptyString(value.reason) && !nonEmptyString(value.unknown_reason)
+      && !(Array.isArray(value.source_reasons) && value.source_reasons.some((reason) => explicitFact(reason)))) {
+      errors.push("unknown ui applicability requires source reasons");
+    }
+    if (!nonEmptyString(value.handoff) || !/make-decision/i.test(value.handoff)) errors.push("unknown ui applicability requires a make-decision handoff");
+  }
+  if (value.gate === true || value.is_gate === true) errors.push("ui applicability must not become a gate");
+  return result(errors, { derived_result: derived, source_results: Object.freeze(sourceResults) });
+}
+
+/**
+ * Validate the UI Contract and its state-level eight-field observation seam.
+ * Missing design/preview facts remain observable quality facts and do not
+ * become a stage gate.
+ */
+export function validateUiContract(value) {
+  const errors = [];
+  if (!object(value)) return result(["ui contract must be an object"]);
+  if (!UI_DESIGN_STATUSES.has(value.design_status)) errors.push("ui contract design_status is invalid");
+  const pageOrRegion = value.page_or_region ?? value.page ?? value.region;
+  if (!namedFact(pageOrRegion)) errors.push("ui contract page_or_region is required");
+  for (const field of UI_CONTRACT_FIELDS) {
+    if (field === "page_or_region") continue;
+    if (value[field] === undefined || value[field] === null) errors.push(`ui contract is missing ${field}`);
+  }
+  if (!Array.isArray(value.missing_items)) errors.push("ui contract missing_items must be an array");
+  for (const [index, item] of (Array.isArray(value.missing_items) ? value.missing_items : []).entries()) {
+    if (!explicitFact(item)) errors.push(`ui contract missing_items[${index}] must include a non-empty reasoned fact`);
+  }
+  if (!versionFact(value.design_revision)) errors.push("ui contract design_revision must be a version or reasoned unknown");
+  for (const field of ["current_material_ref", "fallback_visual_basis", "rework_risk"]) {
+    if (!explicitFact(value[field])) errors.push(`ui contract ${field} must preserve a non-empty fact or reasoned unknown`);
+  }
+  for (const field of ["visible_labels", "preview_refs", "fixture_refs", "viewport_refs", "screenshot_refs"]) {
+    if (!collectionFact(value[field])) errors.push(`ui contract ${field} must preserve a non-empty fact or reasoned unknown`);
+  }
+  if (!collectionFact(value.constraints, { allowEmpty: true })) errors.push("ui contract constraints must be an explicit list or reasoned fact");
+  if (!collectionFact(value.assumptions, { allowEmpty: true })) errors.push("ui contract assumptions must be an explicit list or reasoned fact");
+  const states = value.states ?? value.state_contracts ?? [];
+  if (!Array.isArray(states)) errors.push("ui contract states must be an array");
+  if (Array.isArray(states) && states.length === 0) errors.push("ui contract requires at least one state");
+  for (const [index, state] of (Array.isArray(states) ? states : []).entries()) {
+    if (!object(state)) {
+      errors.push(`ui contract state ${index + 1} must be an object`);
+      continue;
+    }
+    for (const field of UI_STATE_CONTRACT_FIELDS) {
+      const valid = field === "name" ? namedFact(state[field]) : explicitFact(state[field]);
+      if (!valid) errors.push(`ui contract state ${index + 1} missing ${field}`);
+    }
+  }
+  if (value.human_confirmation !== undefined && value.human_confirmation !== null) {
+    const confirmation = value.human_confirmation.result ?? value.human_confirmation;
+    if (!UI_CONFIRMATION_RESULTS.has(confirmation)) errors.push("ui contract human_confirmation result is invalid");
+  } else {
+    errors.push("ui contract human_confirmation is required");
+  }
+  const confirmation = object(value.human_confirmation)
+    ? value.human_confirmation.result
+    : value.human_confirmation;
+  if (value.design_status === "ready" && confirmation !== "approved") {
+    errors.push("ready ui contract requires approved human_confirmation");
+  }
+  if (["not_ready", "unknown", "unavailable"].includes(value.design_status)) {
+    const hasMissingReason = Array.isArray(value.missing_items)
+      && value.missing_items.some((item) => explicitFact(item));
+    if (!hasMissingReason && !explicitFact(value.rework_risk)) {
+      errors.push("non-ready ui contract requires a missing-item reason or rework_risk");
+    }
+  }
+  if (value.gate === true || value.is_gate === true) errors.push("ui contract must not become a gate");
+  return result(errors);
+}
+
+/**
+ * Validate the conditional Component Quality Map consumed by plan/code/verify.
+ * The map records ownership and consumers; it does not grant a progression
+ * permit.
+ */
+export function validateComponentQualityMap(value) {
+  const errors = [];
+  const risks = [];
+  const entries = Array.isArray(value) ? value : value?.entries;
+  if (!Array.isArray(entries)) return result(["component quality map must contain entries"]);
+  for (const [index, entry] of entries.entries()) {
+    if (!object(entry)) {
+      errors.push(`component quality entry ${index + 1} must be an object`);
+      continue;
+    }
+    if (!COMPONENT_QUALITY_ACTIONS.includes(entry.action)) errors.push(`component quality entry ${index + 1} action is invalid`);
+    if (!componentFact(entry.component)) errors.push(`component quality entry ${index + 1} missing component`);
+    const consumers = Array.isArray(entry.real_consumers)
+      ? entry.real_consumers
+      : entry.real_consumer === undefined ? [] : [entry.real_consumer];
+    const hasUnknownConsumer = consumers.some((consumer) => object(consumer)
+      && MISSING_FACT_STATUSES.has(String(consumer.status ?? "").toLowerCase())
+      && nonEmptyString(consumer.reason));
+    const hasMalformedConsumer = consumers.some((consumer) => (
+      (typeof consumer === "string" && UNKNOWN_LITERAL.test(consumer.trim()))
+      || (!nonEmptyString(consumer) && !(
+        object(consumer)
+        && MISSING_FACT_STATUSES.has(String(consumer.status ?? "").toLowerCase())
+        && nonEmptyString(consumer.reason)
+      ))
+    ));
+    const validConsumers = consumers.filter(resolvedConsumer);
+    const distinctConsumers = new Set(validConsumers.map((consumer) => consumer.trim()));
+    if (hasMalformedConsumer) errors.push(`component quality entry ${index + 1} contains a malformed real consumer fact`);
+    if (hasUnknownConsumer) risks.push(`component quality entry ${index + 1} retains an unresolved real_consumer fact`);
+    if (entry.action === "extract-shared" && distinctConsumers.size < 2 && !hasUnknownConsumer) errors.push(`component quality entry ${index + 1} extract-shared requires two distinct real consumers`);
+    if (entry.action === "extract-shared" && distinctConsumers.size < 2 && hasUnknownConsumer) risks.push(`component quality entry ${index + 1} cannot confirm two distinct real consumers`);
+    if (entry.action !== "remove-after-no-consumers" && validConsumers.length === 0 && !hasUnknownConsumer) errors.push(`component quality entry ${index + 1} requires a real consumer`);
+    if (entry.action === "remove-after-no-consumers" && validConsumers.length > 0) errors.push(`component quality entry ${index + 1} removal still has a real consumer`);
+    if (entry.action === "remove-after-no-consumers") {
+      const hasRemovalEvidence = nonEmptyString(entry.no_consumer_evidence)
+        || (Array.isArray(entry.evidence_refs) && entry.evidence_refs.some(nonEmptyString));
+      if (!hasRemovalEvidence) errors.push(`component quality entry ${index + 1} removal requires no-consumer evidence`);
+    }
+    for (const field of ["state_owner", "typed_view_model", "css_token_owner"]) {
+      if (!explicitFact(entry[field])) errors.push(`component quality entry ${index + 1} missing ${field}`);
+    }
+    if (["modify", "extend-state-or-variant", "add-local", "extract-shared"].includes(entry.action) && !explicitFact(entry.story_or_test_update)) {
+      errors.push(`component quality entry ${index + 1} ${entry.action} requires story_or_test_update`);
+    }
+    if (entry.gate === true || entry.is_gate === true) errors.push("component quality map must not become a gate");
+  }
+  return result(errors, { risks: Object.freeze(risks) });
 }
 
 function semanticAnchor(value, expectedRole = null) {
@@ -934,7 +1641,7 @@ export function validateSpecContentProfile(markdown) {
     ["SCN card", /^###\s+SCN-\d{3}(?:\s*[:：].*)?$/m],
     ["PFACT card", /^\s*-\s+\*\*PFACT-[A-Z0-9]+\*\*\s*[:：]/m],
     ["FR card", /^\s*-\s+\*\*FR-[A-Z][A-Z0-9]*-\d{3}\*\*\s*[:：]/m],
-    ["AC card", /^\s*-\s+\[[ xX]\]\s+\*\*AC-[A-Z0-9]+\*\*\s*[:：]/m],
+    ["AC card", new RegExp(String.raw`^\s*-\s+\[[ xX]\]\s+\*\*${ACCEPTANCE_CRITERION_SOURCE}\*\*\s*[:：]`, "m")],
   ]) {
     if (!pattern.test(markdown)) errors.push(`spec-content.v3 is missing a ${label}`);
   }

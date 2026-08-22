@@ -61,6 +61,64 @@ working. Missing or unavailable quality evidence lowers the completion claim;
 it does not block same-task drafting or repair. An unavailable review is never
 `pass`.
 
+## Conditional UI design path
+
+When the make-decision applicability fact is `ui`, consume the declared
+dependencies in this order: `ui-project-init` first, then
+`design-source-readiness`, then the existing `plan-design-review`. The init
+result establishes the new/legacy project boundary; the readiness result is a
+derived **Screen Read Map**; the existing review consumes that map before this
+stage records the UI Contract. No step may silently skip the readiness result
+or treat a caller label as UI proof.
+
+If the applicability fact is `non_ui`, record the reason and keep the existing
+non-UI path. If it is `unknown`, or the upstream page/flow/state facts conflict,
+preserve the conflict and hand it back to make-decision; do not invent product
+scope in build-spec. A missing `Design.md`, preview, fixture, or version can
+produce `unknown`/`not_bindable`, `unavailable`, or `N/A + reason`; this is a
+quality fact and rework risk, not a gate or no gate. There is no new stage, public command,
+fifth material, or no-design gate.
+No new stage or no gate is introduced by this conditional path.
+
+The UI Contract keeps a required `page_or_region`, its interaction flow,
+visible labels, and a state matrix. Every state has a required `name` and
+`interaction_flow`, in addition to the state evidence below.
+`design_status`, `missing_items` with reasons, `fallback_visual_basis`,
+`constraints`, `assumptions`, `rework_risk`, `human_confirmation`, and
+`current_material_ref`, plus preview/fixture/viewport/screenshot/design-version
+references (`preview_refs`, `fixture_refs`, `viewport_refs`, `screenshot_refs`).
+Every state also records responsive behavior and accessibility intent (`responsive`,
+`a11y`), and the page-level visible labels are kept as `visible_labels`. Missing
+references are explicit `unknown`/`unavailable`/`N/A + reason` facts rather than
+empty placeholders. It is handed to build-plan without copying `Design.md`.
+
+### Executable UI design loop
+
+The UI path is backed by pure runtime contract functions in
+`runtime/stage/stage-content-contracts.mjs`; the Markdown skills describe how
+to call them but are not the implementation:
+
+- `buildUiProjectInitFact` returns the `new`/`legacy` initialization fact. A
+  missing Design.md, version, first page, fixture, viewport, or preview is
+  returned as an unknown fact with a reason.
+- `deriveDesignSourceReadiness` turns caller-read Design.md sections (or its
+  headings) into a Screen Read Map and reports `bindable`, `not_bindable`, or
+  `unknown` plus freshness and missing fields.
+- `buildShortUiDesignPrompt` emits exactly four lines: page/region,
+  interaction, states, and visible labels. It does not repeat the technical
+  Design.md/UI Contract constraints.
+- `validateUiDesignLoopFact` validates the recorded preview, prompt, external
+  return/cancel/not-returned/version-mismatch, and human-confirmation facts.
+  Every recovery path preserves the current UI Contract and `gate` is rejected;
+  no new stage, material, or independent state machine is created.
+
+When preview is unavailable or not accepted, record the corresponding fact and
+visible action labels (`重新读取`, `生成设计提示词`, `取消`, `未返回`, or
+`重新读取并确认`). A returned design is usable only when its Design.md
+revision matches the expected revision. `human_acknowledged` and
+`human_not_approved` retain risk but may continue to build-plan; they are not
+silently rewritten as design success.
+
 ## Required specification content
 
 Read the decision log and existing spec before researching. Preserve every

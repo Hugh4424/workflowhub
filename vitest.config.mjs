@@ -26,6 +26,13 @@ export default defineConfig({
     exclude: [
       "node_modules/**",
       "specs/archive/**",
+      // These contract files use the Node test runner deliberately. They are
+      // invoked by their evidence commands and must not be collected by
+      // Vitest as empty suites.
+      "tests/contract/ui-skill-contract.test.mjs",
+      "tests/contract/ui-stage-integration.test.mjs",
+      "tests/contract/ui-frontend-governance.test.mjs",
+      "tests/contract/frontend-component-quality-static.test.mjs",
     ],
     // Fail the run when a filter matches no files, so a mis-typed path can never
     // produce a false-green exit 0 (see memory: vitest-run-path-false-green-exit0).
