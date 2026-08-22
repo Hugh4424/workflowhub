@@ -10,12 +10,18 @@
 
 import { readFileSync } from "node:fs";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
 
 import {
+  currentCodexSessionId,
   finishCodexSessionEvent,
   recordCodexSessionSpecAnalyze,
   startCodexSessionEvent,
 } from "./workflowhub-codex-session-state.mjs";
+import { loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
+
+const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 function option(argv, name, { required = true } = {}) {
   const inline = argv.find((entry) => typeof entry === "string" && entry.startsWith(`${name}=`));
@@ -36,23 +42,41 @@ function repeated(argv, name) {
   return values;
 }
 
+function assertDeclaredSubject(stage, subjectKind, subjectId) {
+  const manifest = loadStageManifest(stage, RUNNER_ROOT);
+  if (subjectKind === "step" && manifest.steps.some((step) => step.step_slug === subjectId)) return;
+  if (subjectKind === "skill") {
+    const dependencies = yaml.load(readFileSync(new URL(`../../workflows/${stage}/skill-deps.yaml`, import.meta.url), "utf8"));
+    if (Array.isArray(dependencies?.skills) && dependencies.skills.some((skill) => skill?.name === subjectId)) return;
+  }
+  throw new Error(`${stage} ${subjectKind} is not declared: ${subjectId}`);
+}
+
 function main(argv) {
   const command = argv[2];
   if (command === "start") {
+    const stage = option(argv, "--stage");
+    const subjectKind = option(argv, "--subject-kind");
+    const subjectId = option(argv, "--subject-id");
+    assertDeclaredSubject(stage, subjectKind, subjectId);
     return startCodexSessionEvent({
       taskId: option(argv, "--task-id", { required: false }) ?? null,
-      stage: option(argv, "--stage"),
-      subjectKind: option(argv, "--subject-kind"),
-      subjectId: option(argv, "--subject-id"),
-      sessionId: process.env.CODEX_THREAD_ID ?? null,
+      stage,
+      subjectKind,
+      subjectId,
+      sessionId: currentCodexSessionId(process.env),
     });
   }
   if (command === "finish") {
+    const stage = option(argv, "--stage");
+    const subjectKind = option(argv, "--subject-kind");
+    const subjectId = option(argv, "--subject-id");
+    assertDeclaredSubject(stage, subjectKind, subjectId);
     return finishCodexSessionEvent({
       taskId: option(argv, "--task-id", { required: false }) ?? null,
-      stage: option(argv, "--stage"),
-      subjectKind: option(argv, "--subject-kind"),
-      subjectId: option(argv, "--subject-id"),
+      stage,
+      subjectKind,
+      subjectId,
       status: option(argv, "--status", { required: false }) ?? "completed",
       resultSummary: option(argv, "--summary", { required: false }) ?? "",
       reason: option(argv, "--reason", { required: false }) ?? null,
@@ -60,12 +84,12 @@ function main(argv) {
       trigger: option(argv, "--trigger", { required: false }) === undefined ? null : option(argv, "--trigger") === "true",
       executed: option(argv, "--executed", { required: false }) === undefined ? null : option(argv, "--executed") === "true",
       version: option(argv, "--version", { required: false }) ?? "unavailable",
-      sessionId: process.env.CODEX_THREAD_ID ?? null,
+      sessionId: currentCodexSessionId(process.env),
     });
   }
   if (command === "record-spec-analyze") {
     const path = option(argv, "--input");
-    return recordCodexSessionSpecAnalyze({ taskId: option(argv, "--task-id", { required: false }) ?? null, stage: option(argv, "--stage"), value: JSON.parse(readFileSync(path, "utf8")), sessionId: process.env.CODEX_THREAD_ID ?? null });
+    return recordCodexSessionSpecAnalyze({ taskId: option(argv, "--task-id", { required: false }) ?? null, stage: option(argv, "--stage"), value: JSON.parse(readFileSync(path, "utf8")), sessionId: currentCodexSessionId(process.env) });
   }
   throw new Error("usage: workflowhub-codex-session-event.mjs <start|finish|record-spec-analyze> ...");
 }

@@ -420,7 +420,7 @@ const REQUIREMENT_DISPOSITIONS = new Set(["selected", "represented", "explicitly
 /**
  * Validate the semantic output produced after authenticated messages are
  * classified by a product skill. The runtime checks bindings and omissions;
- * it does not classify natural language itself.
+ * it does not classify natural language itself or let a host source do so.
  */
 export function validateRequirementCoverage({ messages, outputs } = {}) {
   const errors = [];
@@ -429,8 +429,8 @@ export function validateRequirementCoverage({ messages, outputs } = {}) {
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: Object.freeze({}) });
   const byId = new Map();
   for (const message of messages) {
-    if (!nonEmptyString(message?.id) || !validHash(message?.content_hash) || !REQUIREMENT_COVERAGE_CLASSES.has(message?.message_class)) {
-      errors.push("authenticated message identity, hash, and class are required");
+    if (!nonEmptyString(message?.id) || !validHash(message?.content_hash)) {
+      errors.push("authenticated message identity and hash are required");
       continue;
     }
     if (byId.has(message.id)) errors.push(`authenticated message ${message.id} is duplicated`);
@@ -443,7 +443,7 @@ export function validateRequirementCoverage({ messages, outputs } = {}) {
     const message = byId.get(output?.message_id);
     if (!message) { errors.push(`coverage output ${index + 1} must bind an authenticated message`); continue; }
     if (output.message_hash !== message.content_hash) errors.push(`coverage output ${index + 1} message hash binding mismatch`);
-    if (output.message_class !== message.message_class) errors.push(`coverage output ${index + 1} message class mismatch`);
+    if (!REQUIREMENT_COVERAGE_CLASSES.has(output.message_class)) errors.push(`coverage output ${index + 1} message class is invalid`);
     if (!nonEmptyString(output.axis_id)) errors.push(`coverage output ${index + 1} axis_id is required`);
     if (!REQUIREMENT_IMPACTS.has(output.impact)) errors.push(`coverage output ${index + 1} impact is invalid`);
     if (!REQUIREMENT_DISPOSITIONS.has(output.disposition)) errors.push(`coverage output ${index + 1} disposition is invalid`);
@@ -457,7 +457,7 @@ export function validateRequirementCoverage({ messages, outputs } = {}) {
     if (["high", "medium"].includes(output.impact) && output.disposition === "not_asked" && !nonEmptyString(output.skip_reason)) {
       errors.push(`coverage output ${index + 1} not_asked needs skip_reason`);
     }
-    coveredClasses.add(message.message_class);
+    if (REQUIREMENT_COVERAGE_CLASSES.has(output.message_class)) coveredClasses.add(output.message_class);
     coveredMessages.add(message.id);
     if (nonEmptyString(output.axis_id)) coveredAxes.add(output.axis_id);
   }

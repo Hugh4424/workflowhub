@@ -136,6 +136,7 @@ describe("make-decision current artifact path contract", () => {
     const previous = {
       HOME: process.env.HOME,
       WORKFLOWHUB_TASK_DIR: process.env.WORKFLOWHUB_TASK_DIR,
+      CODEX_SESSION_ID: process.env.CODEX_SESSION_ID,
       CODEX_THREAD_ID: process.env.CODEX_THREAD_ID,
       CODEX_ROLLOUT_PATH: process.env.CODEX_ROLLOUT_PATH,
       WORKFLOWHUB_CODEX_ROLLOUT_PATH: process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH,
@@ -143,6 +144,7 @@ describe("make-decision current artifact path contract", () => {
     };
     process.env.HOME = state.home;
     process.env.WORKFLOWHUB_TASK_DIR = state.storage;
+    delete process.env.CODEX_SESSION_ID;
     delete process.env.CODEX_THREAD_ID;
     delete process.env.CODEX_ROLLOUT_PATH;
     delete process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
@@ -173,6 +175,8 @@ describe("make-decision current artifact path contract", () => {
       else process.env.HOME = previous.HOME;
       if (previous.WORKFLOWHUB_TASK_DIR === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
       else process.env.WORKFLOWHUB_TASK_DIR = previous.WORKFLOWHUB_TASK_DIR;
+      if (previous.CODEX_SESSION_ID === undefined) delete process.env.CODEX_SESSION_ID;
+      else process.env.CODEX_SESSION_ID = previous.CODEX_SESSION_ID;
       if (previous.CODEX_THREAD_ID === undefined) delete process.env.CODEX_THREAD_ID;
       else process.env.CODEX_THREAD_ID = previous.CODEX_THREAD_ID;
       if (previous.CODEX_ROLLOUT_PATH === undefined) delete process.env.CODEX_ROLLOUT_PATH;

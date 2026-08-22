@@ -47,7 +47,7 @@ function publicRunFixture() {
 
 function isolatedPublicRuntimeEnv({ home, taskDir, source = {} } = {}) {
   const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: taskDir };
-  for (const key of ['CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
+  for (const key of ['CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
   return { ...env, ...source };
 }
 
@@ -329,6 +329,8 @@ describe('M15 stage sidecar integration', () => {
     const state = publicRunFixture();
     const previousHome = process.env.HOME;
     const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
+    const previousSessionId = process.env.CODEX_SESSION_ID;
+    const previousThreadId = process.env.CODEX_THREAD_ID;
     try {
       const outcome = writeStageOutcomeFixture({
         task: state.task,
@@ -343,6 +345,8 @@ describe('M15 stage sidecar integration', () => {
       writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
       process.env.HOME = state.storageRoot;
       process.env.WORKFLOWHUB_TASK_DIR = state.storageRoot;
+      delete process.env.CODEX_SESSION_ID;
+      delete process.env.CODEX_THREAD_ID;
       await expect(stageRuntimeCliMain([
         'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
       ], {
@@ -355,6 +359,8 @@ describe('M15 stage sidecar integration', () => {
     } finally {
       if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
       if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
+      if (previousSessionId === undefined) delete process.env.CODEX_SESSION_ID; else process.env.CODEX_SESSION_ID = previousSessionId;
+      if (previousThreadId === undefined) delete process.env.CODEX_THREAD_ID; else process.env.CODEX_THREAD_ID = previousThreadId;
       try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
       rmSync(state.storageRoot, { recursive: true, force: true });
       rmSync(state.repo, { recursive: true, force: true });

@@ -485,11 +485,10 @@ describe("vNext official stage completion", () => {
       const id = `message-${index + 1}`;
       return {
         timestamp: new Date(1002 + index).toISOString(),
-        type: "event_msg",
+        type: "response_item",
         payload: {
-          type: "requirement_message", id, source_version: "v1", task_id: state.task.identity.taskId,
-          session_id: sessionId, stage: "make-decision", order: index + 1, message_class,
-          content: id, content_hash: sha256(id),
+          type: "message", id, role: "user",
+          content: [{ type: "input_text", text: id }],
         },
       };
     });
@@ -518,7 +517,7 @@ describe("vNext official stage completion", () => {
       ], {
         cwd: root,
         encoding: "utf8",
-        env: { ...process.env, HOME: home, CODEX_THREAD_ID: sessionId, WORKFLOWHUB_TASK_DIR: state.root },
+        env: { ...process.env, HOME: home, CODEX_SESSION_ID: sessionId, CODEX_THREAD_ID: "session-other-thread-456", WORKFLOWHUB_TASK_DIR: state.root },
       });
       expect(JSON.parse(stageEntryOutput)).toMatchObject({ stage: "make-decision" });
       let timestamp = 1000;
@@ -549,7 +548,8 @@ describe("vNext official stage completion", () => {
         env: {
           ...process.env,
           HOME: home,
-          CODEX_THREAD_ID: sessionId,
+          CODEX_SESSION_ID: sessionId,
+          CODEX_THREAD_ID: "session-other-thread-456",
           WORKFLOWHUB_TASK_DIR: state.root,
           WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT: "0",
         },

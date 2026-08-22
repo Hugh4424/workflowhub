@@ -323,8 +323,9 @@ export function requirementMessageStatus(status, source, errors, messages, expec
  * Authenticate the narrow requirement-message seam owned by the launcher.
  *
  * The runtime checks only source identity, order, version and content hash.
- * It deliberately returns metadata without the message body; the skill that
- * owns product meaning classifies the authenticated messages separately.
+ * It deliberately returns metadata without the message body.  In particular,
+ * host capture never assigns product classes; the product skill classifies an
+ * authenticated message in its coverage output.
  */
 export function authenticateRegisteredRequirementMessages(source, { stage = null } = {}) {
   if (!source || typeof source !== "object" || !isTranscriptSourceReader(source.reader)) {
@@ -360,7 +361,6 @@ export function authenticateRegisteredRequirementMessages(source, { stage = null
     if (value.session_id !== source.session_id) lineErrors.push("session identity mismatch");
     if (stage !== null && value.stage !== stage) lineErrors.push("stage identity mismatch");
     if (!Number.isSafeInteger(value.order) || value.order !== expectedOrder) lineErrors.push("message order is not contiguous");
-    if (!REQUIREMENT_MESSAGE_CLASSES.has(value.message_class)) lineErrors.push("message class is unsupported");
     if (typeof value.content !== "string" || value.content.trim() === "") lineErrors.push("message content is required for hash verification");
     const actualHash = typeof value.content === "string" ? sha256(value.content) : null;
     if (!/^[a-f0-9]{64}$/.test(value.content_hash ?? "") || value.content_hash !== actualHash) lineErrors.push("message content hash mismatch");
@@ -372,7 +372,7 @@ export function authenticateRegisteredRequirementMessages(source, { stage = null
     messages.push(Object.freeze({
       id: value.id,
       order: value.order,
-      message_class: value.message_class,
+      ...(REQUIREMENT_MESSAGE_CLASSES.has(value.message_class) ? { message_class: value.message_class } : {}),
       content_hash: value.content_hash,
       source_id: source.source_id,
       source_ref: source.source_ref,

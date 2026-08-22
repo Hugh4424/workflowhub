@@ -32,7 +32,7 @@ import { createRegisteredCodexSource, parseRegisteredCodexTranscript, parseRegis
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
-import { bindCodexSessionTask, readCurrentCodexSession, buildWorkflowHubSessionInput } from "../host/workflowhub-codex-session-state.mjs";
+import { bindCodexSessionTask, buildWorkflowHubSessionInput, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 import { publishCurrentWorkflowHubSession } from "../host/workflowhub-stage-agent-bridge.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
@@ -44,20 +44,30 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
 const MONITORING_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
-const CODEX_THREAD_ID = /^[A-Za-z0-9._:-]{8,128}$/;
+const CODEX_SESSION_ID = /^[A-Za-z0-9._:-]{8,160}$/;
 const CODEX_ROLLOUT_STARTED_AT = "WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT";
 
 function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
   const hasProject = typeof values.project === "string" && values.project.trim() !== "";
   const hasTask = typeof values.task === "string" && values.task.trim() !== "";
   if (hasProject !== hasTask) throw new TypeError("--project and --task must be supplied together, or omitted inside a bound WorkflowHub session");
-  const current = readCurrentCodexSession({ cwd, sessionId: process.env.CODEX_THREAD_ID ?? null });
+  const current = readCurrentCodexSession({ cwd, sessionId: currentCodexSessionId(process.env) });
   if (current.status === "conflict") throw new Error("current WorkflowHub session has multiple active Codex sessions");
   const binding = current.status === "present" ? current.task_binding : null;
   if (binding) {
     if (hasProject && (values.project !== binding.project_name || values.task !== binding.task_id)) {
       throw new Error("explicit project/task does not match the current WorkflowHub session binding");
     }
+    // Older handoffs predate the requirement snapshot. Refreshing the same
+    // binding is safe: it only freezes transcript identities at the original
+    // bound_at_ms and never changes a valid existing snapshot.
+    bindCodexSessionTask({
+      projectName: binding.project_name,
+      taskId: binding.task_id,
+      taskPath: binding.task_path,
+      cwd,
+      sessionId: current.session_id,
+    });
     return Object.freeze({ project: binding.project_name, task: binding.task_id, taskPath: binding.task_path, source: "session-binding" });
   }
   if (!hasProject) throw new Error("current WorkflowHub session has no task binding; run task-bootstrap in this session first");
@@ -65,7 +75,7 @@ function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
 }
 
 function bindExplicitWorkflowHubIdentity(context, cwd) {
-  const sessionId = process.env.CODEX_THREAD_ID ?? null;
+  const sessionId = currentCodexSessionId(process.env);
   const current = readCurrentCodexSession({ cwd, sessionId });
   if (current.status !== "present" || current.task_binding) return null;
   return bindCodexSessionTask({
@@ -99,29 +109,30 @@ function isSafeCodexRolloutPath(candidate, { home, threadId }) {
 }
 
 function locateCodexRollout({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
-  const threadId = env.CODEX_THREAD_ID;
-  const explicit = env.CODEX_ROLLOUT_PATH ?? env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
-  if (typeof explicit === "string" && explicit.trim() !== "") {
-    if (typeof threadId !== "string" || !CODEX_THREAD_ID.test(threadId)) return null;
-    const target = isSafeCodexRolloutPath(explicit, { home, threadId });
-    if (!target) throw new Error("CODEX_ROLLOUT_PATH must point to the current .codex/sessions rollout for CODEX_THREAD_ID");
-    return { threadId, target };
-  }
+  const sessionId = currentCodexSessionId(env);
   const handoff = readCurrentCodexSession({
     cwd,
-    sessionId: typeof threadId === "string" && CODEX_THREAD_ID.test(threadId) ? threadId : null,
+    sessionId: typeof sessionId === "string" && CODEX_SESSION_ID.test(sessionId) ? sessionId : null,
   });
   if (handoff.status === "conflict") throw new Error("WorkflowHub Codex session handoff has multiple active sessions for this workspace");
+  const requirementMessages = handoff.status === "present" ? handoff.task_binding?.requirement_messages ?? [] : [];
+  const explicit = env.CODEX_ROLLOUT_PATH ?? env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+  if (typeof explicit === "string" && explicit.trim() !== "") {
+    if (typeof sessionId !== "string" || !CODEX_SESSION_ID.test(sessionId)) return null;
+    const target = isSafeCodexRolloutPath(explicit, { home, threadId: sessionId });
+    if (!target) throw new Error("CODEX_ROLLOUT_PATH must point to the current .codex/sessions rollout for the current Codex session");
+    return { threadId: sessionId, target, requirementMessages };
+  }
   if (handoff.status !== "present") return null;
   const handoffThreadId = handoff.session_id;
-  if (!CODEX_THREAD_ID.test(handoffThreadId)) throw new Error("WorkflowHub Codex session handoff has an invalid session_id");
+  if (!CODEX_SESSION_ID.test(handoffThreadId)) throw new Error("WorkflowHub Codex session handoff has an invalid session_id");
   if (!handoff.transcript_path) return null;
   const target = isSafeCodexRolloutPath(handoff.transcript_path, { home, threadId: handoffThreadId });
   // A handoff from another isolated HOME is not evidence we may read.  Treat
   // it as an unavailable source so the official run can still publish honest
   // stage/step/skill facts instead of dropping the whole sidecar write.
   if (!target) return null;
-  return { threadId: handoffThreadId, target };
+  return { threadId: handoffThreadId, target, requirementMessages };
 }
 
 function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
@@ -135,15 +146,47 @@ function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
   return numeric;
 }
 
-function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER }) {
+function codexUserInputText(outer) {
+  const payload = outer?.payload;
+  if (outer?.type !== "response_item" || payload?.type !== "message" || payload?.role !== "user") return null;
+  if (!Array.isArray(payload.content)) return null;
+  const parts = payload.content
+    .filter((part) => part?.type === "input_text" && typeof part.text === "string" && part.text.trim() !== "")
+    .map((part) => part.text);
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+function codexUserMessageId(outer, payload, lineIndex) {
+  const candidate = payload?.id ?? outer?.id ?? `codex-user-${lineIndex + 1}`;
+  const normalized = safeRolloutId(candidate);
+  return CODEX_SESSION_ID.test(normalized) ? normalized : `codex-user-${lineIndex + 1}`;
+}
+
+function selectedRequirementMessages(value) {
+  if (!Array.isArray(value)) return [];
+  const messages = [];
+  const ids = new Set();
+  for (const [index, message] of value.entries()) {
+    if (!message || typeof message !== "object" || Array.isArray(message)
+      || !CODEX_SESSION_ID.test(message.id ?? "") || ids.has(message.id)
+      || message.order !== index + 1 || !/^[a-f0-9]{64}$/.test(message.content_hash ?? "")) return [];
+    ids.add(message.id);
+    messages.push(message);
+  }
+  return messages;
+}
+
+function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER, requirementMessages = [] }) {
   const records = [];
+  const selected = selectedRequirementMessages(requirementMessages);
+  const selectedById = new Map(selected.map((message) => [message.id, message]));
+  const emittedRequirementIds = new Set();
   for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
     let outer;
     try { outer = JSON.parse(line); } catch { continue; }
     if (!outer || typeof outer !== "object" || !outer.payload || typeof outer.payload !== "object") continue;
     const occurredAt = rolloutTimestamp(outer);
-    if (occurredAt !== null && (occurredAt < startedAtMs || occurredAt >= endedAtMs)) continue;
     const payload = outer.payload;
     const payloadType = typeof payload.type === "string" ? payload.type : "unknown";
     const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${index}-${payloadType}`);
@@ -153,20 +196,28 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
       stage,
       ...(attemptId ? { attempt_id: attemptId } : {}),
     };
-    if (payloadType === "requirement_message") {
+    // Original requirements are a pre-task-binding snapshot, not stage-window
+    // telemetry.  Re-read only the saved user-message ids and bind the
+    // current bytes to their frozen hashes.  Nothing else in the transcript
+    // can become a requirement message.
+    const userText = codexUserInputText(outer);
+    const userMessageId = codexUserMessageId(outer, payload, index);
+    const selectedMessage = userText === null ? null : selectedById.get(userMessageId);
+    if (selectedMessage) {
       records.push(JSON.stringify({
-        id: safeRolloutId(payload.id ?? `${index}-requirement`),
+        id: selectedMessage.id,
         type: "requirement_message",
         ...common,
         session_id: sessionId,
-        source_version: typeof payload.source_version === "string" ? payload.source_version : "v1",
-        order: payload.order,
-        message_class: payload.message_class,
-        content: payload.content,
-        content_hash: payload.content_hash,
+        source_version: "v1",
+        order: selectedMessage.order,
+        content: userText,
+        content_hash: selectedMessage.content_hash,
       }));
+      emittedRequirementIds.add(selectedMessage.id);
       continue;
     }
+    if (occurredAt !== null && (occurredAt < startedAtMs || occurredAt >= endedAtMs)) continue;
     if (outer.type === "event_msg" && payloadType === "token_count") {
       // Codex records usage as event_msg/token_count rather than as a
       // response_item/message.  Keep the per-turn usage (not the cumulative
@@ -228,6 +279,25 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
       },
     }));
   }
+  for (const message of selected) {
+    if (emittedRequirementIds.has(message.id)) continue;
+    // Preserve a concrete failure when the transcript no longer contains a
+    // bound source message instead of silently treating its requirement as
+    // absent.
+    records.push(JSON.stringify({
+      id: message.id,
+      type: "requirement_message",
+      task_id: taskId,
+      run_id: runId,
+      stage,
+      ...(attemptId ? { attempt_id: attemptId } : {}),
+      session_id: sessionId,
+      source_version: "v1",
+      order: message.order,
+      content: "",
+      content_hash: message.content_hash,
+    }));
+  }
   return records.join("\n");
 }
 
@@ -260,6 +330,7 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
       sessionId: safeRolloutId(located.threadId),
       startedAtMs,
       endedAtMs,
+      requirementMessages: located.requirementMessages,
     })),
   });
 }
@@ -277,7 +348,7 @@ function currentSessionAttemptId(sessionId, taskId, stage) {
 export function bindCurrentSessionOutcome({ context, stage, input, cwd = process.cwd() } = {}) {
   if (typeof input?.receipts?.stage_outcomes === "string" && input.receipts.stage_outcomes.trim()) return input;
   const taskId = context?.identity?.taskId;
-  const session = buildWorkflowHubSessionInput({ cwd, stage, taskId, sessionId: process.env.CODEX_THREAD_ID ?? null });
+  const session = buildWorkflowHubSessionInput({ cwd, stage, taskId, sessionId: currentCodexSessionId(process.env) });
   if (session.status !== "present") return input;
   if (!session.spec_analyze || typeof session.spec_analyze !== "object" || Array.isArray(session.spec_analyze)) return input;
   const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()

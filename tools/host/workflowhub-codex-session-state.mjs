@@ -42,6 +42,21 @@ function safeId(value, label) {
   return result;
 }
 
+/**
+ * Codex uses session_id for the hook/transcript identity.  Some hosts also
+ * expose a thread id, but a sub-agent thread is not necessarily the session
+ * that owns this handoff.  Keep the legacy name only as a compatibility
+ * fallback for older launchers and tests.
+ */
+export function currentCodexSessionId(env = process.env) {
+  for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID"]) {
+    const value = env?.[key];
+    if (value === null || value === undefined || String(value).trim() === "") continue;
+    return safeId(value, key);
+  }
+  return null;
+}
+
 function nowMs(value = Date.now()) {
   if (!Number.isSafeInteger(value) || value < 0) throw new TypeError("session timestamp must be a non-negative integer");
   return value;
@@ -186,6 +201,75 @@ function safeTranscriptPath(transcriptPath, home = homedir()) {
   return value;
 }
 
+function rolloutTimestamp(record) {
+  const timestamp = record?.timestamp ?? record?.payload?.timestamp ?? record?.payload?.info?.timestamp;
+  const parsed = Date.parse(typeof timestamp === "string" ? timestamp : "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function codexUserMessageId(outer, payload, lineIndex) {
+  const candidate = payload?.id ?? outer?.id ?? `codex-user-${lineIndex + 1}`;
+  const normalized = String(candidate).replace(/[^A-Za-z0-9._:-]/g, "_");
+  return SAFE_ID.test(normalized) ? normalized : `codex-user-${lineIndex + 1}`;
+}
+
+function codexUserInputText(outer) {
+  const payload = outer?.payload;
+  if (outer?.type !== "response_item" || payload?.type !== "message" || payload?.role !== "user") return null;
+  if (!Array.isArray(payload.content)) return null;
+  const parts = payload.content
+    .filter((part) => part?.type === "input_text" && typeof part.text === "string" && part.text.trim() !== "")
+    .map((part) => part.text);
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+/**
+ * Freeze only the host-authenticated user-message identities that existed
+ * before the task was bound.  The sidecar retains hashes, never raw prompt
+ * text; the later registered source rereads the exact transcript and checks
+ * those hashes before the make-decision stage may use it.
+ */
+function snapshotOriginalRequirementMessages(transcriptPath, boundAtMs) {
+  if (!transcriptPath || !Number.isSafeInteger(boundAtMs)) return [];
+  let raw;
+  try { raw = readFileSync(transcriptPath, "utf8"); }
+  catch { return []; }
+  const messages = [];
+  const usedIds = new Set();
+  for (const [lineIndex, line] of raw.split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    let outer;
+    try { outer = JSON.parse(line); } catch { continue; }
+    const occurredAt = rolloutTimestamp(outer);
+    if (occurredAt === null || occurredAt > boundAtMs) continue;
+    const content = codexUserInputText(outer);
+    if (content === null) continue;
+    let id = codexUserMessageId(outer, outer.payload, lineIndex);
+    if (usedIds.has(id)) id = `codex-user-${lineIndex + 1}`;
+    usedIds.add(id);
+    messages.push(Object.freeze({
+      id,
+      order: messages.length + 1,
+      content_hash: createHash("sha256").update(content).digest("hex"),
+    }));
+  }
+  return messages;
+}
+
+function frozenRequirementMessages(value) {
+  if (!Array.isArray(value)) return [];
+  const messages = [];
+  const ids = new Set();
+  for (const [index, message] of value.entries()) {
+    if (!message || typeof message !== "object" || Array.isArray(message)) return [];
+    if (!SAFE_ID.test(message.id ?? "") || ids.has(message.id)
+      || message.order !== index + 1 || !/^[a-f0-9]{64}$/.test(message.content_hash ?? "")) return [];
+    ids.add(message.id);
+    messages.push(Object.freeze({ id: message.id, order: message.order, content_hash: message.content_hash }));
+  }
+  return messages;
+}
+
 export function registerCodexSession({ sessionId, transcriptPath, cwd = process.cwd(), model = null, observedAtMs = Date.now(), home = homedir() } = {}) {
   const currentCwd = canonicalCwd(cwd);
   const id = safeId(sessionId, "session_id");
@@ -222,13 +306,22 @@ export function bindCodexSessionTask({ projectName, taskId, taskPath, cwd = proc
       throw new Error("cannot switch the current WorkflowHub task inside one Codex session; start a fresh session for another task");
     }
     if (previous.task_path !== path) throw new Error("current WorkflowHub task binding path does not match the requested task");
+    const frozen = frozenRequirementMessages(previous.requirement_messages);
+    if (!Array.isArray(previous.requirement_messages)) {
+      previous.requirement_messages = snapshotOriginalRequirementMessages(current.session.transcript_path, previous.bound_at_ms);
+      const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
+      return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: statePath });
+    }
+    if (frozen.length !== previous.requirement_messages.length) throw new Error("current WorkflowHub task requirement snapshot is invalid");
     return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: current.state_path });
   }
+  const bound = nowMs(boundAtMs);
   current.session.task_binding = {
     project_name: project,
     task_id: task,
     task_path: path,
-    bound_at_ms: nowMs(boundAtMs),
+    bound_at_ms: bound,
+    requirement_messages: snapshotOriginalRequirementMessages(current.session.transcript_path, bound),
   };
   current.session.last_seen_at_ms = current.session.task_binding.bound_at_ms;
   const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
@@ -402,7 +495,12 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   const task = resolveSessionTaskId(current, taskId, { allowUnbound: true });
   if (!task) return Object.freeze({ status: "unbound", state_path: current.state_path, session_id: current.session_id });
   const taskEvents = current.events.filter((entry) => entry.task_id === task);
-  const events = taskEvents.filter((entry) => entry.status !== "open").map((entry) => ({
+  // Older hosts could emit the workflow name as if it were a skill.  It is a
+  // category error, not a declared skill event.  Preserve it in the private
+  // handoff diagnostic but never send it to the strict stage publisher.
+  const rejectedEvents = taskEvents.filter((entry) => entry.subject_kind === "skill" && STAGES.has(entry.subject_id));
+  const declaredCandidateEvents = taskEvents.filter((entry) => !rejectedEvents.includes(entry));
+  const events = declaredCandidateEvents.filter((entry) => entry.status !== "open").map((entry) => ({
     task_id: task,
     stage: entry.stage,
     subject_kind: entry.subject_kind,
@@ -420,12 +518,12 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
       version: entry.version,
     } : {}),
   }));
-  const open = taskEvents.some((entry) => entry.status === "open");
+  const open = declaredCandidateEvents.some((entry) => entry.status === "open");
   const specAnalyze = stage
     ? current.spec_analyze_by_task_stage?.[task]?.[stage] ?? null
     : current.spec_analyze_by_task?.[task] ?? null;
-  const complete = taskEvents.length > 0
-    && taskEvents.every((entry) => entry.status === "completed")
+  const complete = declaredCandidateEvents.length > 0
+    && declaredCandidateEvents.every((entry) => entry.status === "completed")
     && !open
     && specAnalyze !== null;
   return Object.freeze({
@@ -437,5 +535,15 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     status_value: complete ? "completed" : "incomplete",
     events,
     spec_analyze: specAnalyze,
+    requirement_messages: frozenRequirementMessages(current.task_binding?.requirement_messages),
+    ...(rejectedEvents.length > 0 ? {
+      rejected_events: rejectedEvents.map((entry) => ({
+        event_id: entry.event_id,
+        stage: entry.stage,
+        subject_kind: entry.subject_kind,
+        subject_id: entry.subject_id,
+        reason: "workflow_name_recorded_as_skill",
+      })),
+    } : {}),
   });
 }

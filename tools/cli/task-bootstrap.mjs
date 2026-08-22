@@ -10,7 +10,7 @@ import { authenticateOfficialInvocation } from "../../runtime/evidence/invocatio
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
-import { bindCodexSessionTask, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
+import { bindCodexSessionTask, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home, cwd = process.cwd() } = {}) {
@@ -29,7 +29,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
       project: task.identity.projectName,
       task: task.identity.taskId,
       runner_identity: runnerIdentity,
-      session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: env.CODEX_THREAD_ID ?? null }),
+      session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }),
     });
   }
   for (const key of ["project", "task", "target-repo"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required`);
@@ -44,7 +44,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
   const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-  return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch, session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: env.CODEX_THREAD_ID ?? null }) });
+  return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch, session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }) });
 }
 
 function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null } = {}) {

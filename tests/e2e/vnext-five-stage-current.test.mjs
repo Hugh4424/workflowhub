@@ -156,7 +156,7 @@ function fixture(taskId, { materialFiles = materials } = {}) {
 
 function isolatedPublicRuntimeEnv(state) {
   const env = { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root };
-  for (const key of ['CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
+  for (const key of ['CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
   return env;
 }
 

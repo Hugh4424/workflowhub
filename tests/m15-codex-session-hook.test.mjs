@@ -41,6 +41,19 @@ function bind(state, taskId = state.taskId) {
   return bindCodexSessionTask({ projectName: "workflowhub", taskId, taskPath: state.taskPath, cwd: state.cwd });
 }
 
+function appendCodexUserMessage(state, { id = "msg-requirement-source-1", text = "把这个任务按真实用户流程完成。", timestamp = "1970-01-01T00:00:01.000Z" } = {}) {
+  appendFileSync(state.rollout, `${JSON.stringify({
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "message",
+      id,
+      role: "user",
+      content: [{ type: "input_text", text }],
+    },
+  })}\n`);
+}
+
 describe("WorkflowHub current Codex session handoff", () => {
   it("authenticates requirement messages without retaining raw transcript content", () => {
     const state = fixture();
@@ -154,6 +167,120 @@ describe("WorkflowHub current Codex session handoff", () => {
         usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 },
       })]);
       expect(session.events[0].evidence).toEqual([{ ref: "quality/tests/current.json" }]);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("freezes real pre-binding Codex user messages as hash-checked requirements", () => {
+    const state = fixture();
+    const text = "把这项需求覆盖到完整的产品流程和验收边界。";
+    try {
+      appendCodexUserMessage(state, { text });
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
+      bind(state);
+      const session = buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: state.cwd, stage: "make-decision", sessionId: state.sessionId });
+      expect(session.requirement_messages).toEqual([{
+        id: "msg-requirement-source-1",
+        order: 1,
+        content_hash: createHash("sha256").update(text).digest("hex"),
+      }]);
+
+      // A concurrent sub-agent thread must not steal the session handoff.
+      const source = resolveDefaultMonitoringSource({
+        context: { stage: "make-decision" },
+        task_id: state.taskId,
+        run_id: "run-real-user-requirement",
+        attempt_id: "attempt-real-user-requirement",
+        env: { CODEX_SESSION_ID: state.sessionId, CODEX_THREAD_ID: "session-other-thread-456" },
+        home: state.home,
+        cwd: state.cwd,
+        startedAtMs: Date.now(),
+      });
+      const authenticated = parseRegisteredRequirementTranscript(source, { stage: "make-decision" });
+      expect(authenticated).toMatchObject({ status: "present", messages: [expect.objectContaining({
+        id: "msg-requirement-source-1",
+        content_hash: createHash("sha256").update(text).digest("hex"),
+      })] });
+      expect(authenticated.messages[0].content).toBeUndefined();
+      expect(authenticated.messages[0].message_class).toBeUndefined();
+
+      const explicitSource = resolveDefaultMonitoringSource({
+        context: { stage: "make-decision" },
+        task_id: state.taskId,
+        run_id: "run-explicit-real-user-requirement",
+        attempt_id: "attempt-explicit-real-user-requirement",
+        env: {
+          CODEX_SESSION_ID: state.sessionId,
+          CODEX_THREAD_ID: "session-other-thread-456",
+          CODEX_ROLLOUT_PATH: state.rollout,
+        },
+        home: state.home,
+        cwd: state.cwd,
+        startedAtMs: Date.now(),
+      });
+      expect(parseRegisteredRequirementTranscript(explicitSource, { stage: "make-decision" })).toMatchObject({
+        status: "present",
+        messages: [expect.objectContaining({ id: "msg-requirement-source-1" })],
+      });
+
+      appendCodexUserMessage(state, { id: "msg-late-user-prompt-2", text: "这是绑定后的 Talk 回复，不能变成原始需求。", timestamp: "1970-01-01T00:00:02.000Z" });
+      appendFileSync(state.rollout, `${JSON.stringify({
+        timestamp: "1970-01-01T00:00:03.000Z",
+        type: "event_msg",
+        payload: {
+          type: "requirement_message",
+          id: "forged-late-requirement",
+          content: "不能伪造原始需求",
+          content_hash: createHash("sha256").update("不能伪造原始需求").digest("hex"),
+        },
+      })}\n`);
+      expect(parseRegisteredRequirementTranscript(source, { stage: "make-decision" }).messages).toHaveLength(1);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("backfills the frozen requirement snapshot for an existing task binding", () => {
+    const state = fixture();
+    const text = "旧会话也必须保留绑定前的原始需求。";
+    try {
+      appendCodexUserMessage(state, { text });
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
+      bind(state);
+      const handoffPath = sessionHandoffPath(state.cwd);
+      const raw = JSON.parse(readFileSync(handoffPath, "utf8"));
+      delete raw.sessions[0].task_binding.requirement_messages;
+      writeFileSync(handoffPath, `${JSON.stringify(raw, null, 2)}\n`);
+
+      bind(state);
+      expect(buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: state.cwd, stage: "make-decision", sessionId: state.sessionId }).requirement_messages).toEqual([
+        expect.objectContaining({ id: "msg-requirement-source-1", content_hash: createHash("sha256").update(text).digest("hex") }),
+      ]);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("quarantines old workflow-as-skill markers instead of crashing the stage publisher", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
+      bind(state);
+      startCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: "make-decision", cwd: state.cwd, startedAtMs: 1000 });
+      finishCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: "make-decision", cwd: state.cwd, endedAtMs: 2000, status: "completed" });
+      startCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: "build-plan", cwd: state.cwd, startedAtMs: 3000 });
+      finishCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: "build-plan", cwd: state.cwd, endedAtMs: 4000, status: "completed" });
+      const session = buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: state.cwd, stage: "make-decision", sessionId: state.sessionId });
+      expect(session.events).toEqual([]);
+      expect(session.rejected_events).toEqual(expect.arrayContaining([expect.objectContaining({
+        subject_kind: "skill",
+        subject_id: "make-decision",
+        reason: "workflow_name_recorded_as_skill",
+      }), expect.objectContaining({ subject_id: "build-plan" })]));
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
       rmSync(state.root, { recursive: true, force: true });
@@ -280,7 +407,7 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
-  it("private event CLI uses CODEX_THREAD_ID when the stage cwd changes", () => {
+  it("private event CLI prefers CODEX_SESSION_ID when the stage cwd changes", () => {
     const state = fixture();
     const alternateCwd = join(state.root, "alternate-workspace");
     mkdirSync(alternateCwd, { recursive: true });
@@ -288,17 +415,17 @@ describe("WorkflowHub current Codex session handoff", () => {
     try {
       registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
       bind(state);
-      const env = { ...process.env, HOME: state.home, CODEX_THREAD_ID: state.sessionId };
-      const start = spawnSync(process.execPath, [event, "start", "--stage=build-plan", "--subject-kind=step", "--subject-id=plan-step"], {
+      const env = { ...process.env, HOME: state.home, CODEX_SESSION_ID: state.sessionId, CODEX_THREAD_ID: "session-other-thread-456" };
+      const start = spawnSync(process.execPath, [event, "start", "--stage=build-plan", "--subject-kind=step", "--subject-id=read-current-materials"], {
         cwd: alternateCwd, encoding: "utf8", env,
       });
       expect(start.status, start.stderr).toBe(0);
-      const finish = spawnSync(process.execPath, [event, "finish", "--stage=build-plan", "--subject-kind=step", "--subject-id=plan-step", "--status=completed"], {
+      const finish = spawnSync(process.execPath, [event, "finish", "--stage=build-plan", "--subject-kind=step", "--subject-id=read-current-materials", "--status=completed"], {
         cwd: alternateCwd, encoding: "utf8", env,
       });
       expect(finish.status, finish.stderr).toBe(0);
       expect(buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: alternateCwd, stage: "build-plan", sessionId: state.sessionId }).events).toEqual([
-        expect.objectContaining({ subject_kind: "step", subject_id: "plan-step", status: "completed" }),
+        expect.objectContaining({ subject_kind: "step", subject_id: "read-current-materials", status: "completed" }),
       ]);
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
@@ -434,7 +561,10 @@ describe("WorkflowHub current Codex session handoff", () => {
       expect(JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8")).sessions).toHaveLength(1);
       bind(state);
       expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" }).status).toBe("present");
-      const eventEnv = { ...process.env, HOME: state.home, CODEX_THREAD_ID: state.sessionId };
+      const eventEnv = { ...process.env, HOME: state.home, CODEX_SESSION_ID: state.sessionId, CODEX_THREAD_ID: "session-other-thread-456" };
+      const rejected = spawnSync(process.execPath, [event, "start", "--stage=make-decision", "--subject-kind=skill", "--subject-id=make-decision"], { cwd: state.cwd, encoding: "utf8", env: eventEnv });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stderr).toMatch(/make-decision skill is not declared/i);
       const start = spawnSync(process.execPath, [event, "start", "--stage=build-code", "--subject-kind=skill", "--subject-id=backend-testing"], { cwd: state.cwd, encoding: "utf8", env: eventEnv });
       expect(start.status, start.stderr).toBe(0);
       const finish = spawnSync(process.execPath, [event, "finish", "--stage=build-code", "--subject-kind=skill", "--subject-id=backend-testing", "--status=not_applicable", "--reason=本次改动不是后端行为", "--trigger=false", "--executed=false"], { cwd: state.cwd, encoding: "utf8", env: eventEnv });

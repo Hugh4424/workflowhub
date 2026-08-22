@@ -1875,7 +1875,7 @@
       "owner": "M15 current-session host binding",
       "consumer": "session hook, event marker, and public stage run",
       "delete_condition": "remove when a canonical host lifecycle source replaces the private handoff",
-      "content_change": "ephemeral session/source/event handoff; not a task facts writer"
+      "content_change": "ephemeral session/source/event handoff, including pre-binding user-message identities and hashes; not a task facts writer"
     },
     {
       "source": "tools/host/workflowhub-codex-session-event.mjs",
@@ -1884,7 +1884,7 @@
       "owner": "M15 current-session host binding",
       "consumer": "WorkflowHub workflow skills",
       "delete_condition": "remove when semantic step/skill events are supplied by the host",
-      "content_change": "same-session step/skill boundaries and transcript usage windows"
+      "content_change": "declared same-session step/skill boundaries and transcript usage windows"
     }
   ]
 }
