@@ -336,6 +336,48 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
+  it("does not create a transcript source from a late user prompt", () => {
+    const state = fixture();
+    const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
+    try {
+      const result = spawnSync(process.execPath, [hook], {
+        cwd: state.cwd,
+        input: JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: state.sessionId, transcript_path: state.rollout, cwd: state.cwd, model: "test-model" }),
+        encoding: "utf8",
+        env: { ...process.env, HOME: state.home },
+      });
+      expect(result.status).toBe(0);
+      expect(readCurrentCodexSession({ cwd: state.cwd, sessionId: state.sessionId })).toMatchObject({ status: "unregistered" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("refreshes only a live session and never reopens it after SessionEnd", () => {
+    const state = fixture();
+    const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
+    const invoke = (hookEventName, transcriptPath = state.rollout) => spawnSync(process.execPath, [hook], {
+      cwd: state.cwd,
+      input: JSON.stringify({ hook_event_name: hookEventName, session_id: state.sessionId, transcript_path: transcriptPath, cwd: state.cwd, model: "test-model" }),
+      encoding: "utf8",
+      env: { ...process.env, HOME: state.home },
+    });
+    try {
+      expect(invoke("SessionStart").status).toBe(0);
+      expect(readCurrentCodexSession({ cwd: state.cwd, sessionId: state.sessionId })).toMatchObject({ status: "present", transcript_path: state.rollout });
+      expect(invoke("UserPromptSubmit", null).status).toBe(0);
+      expect(readCurrentCodexSession({ cwd: state.cwd, sessionId: state.sessionId })).toMatchObject({ status: "present", transcript_path: state.rollout });
+      expect(invoke("SessionEnd").status).toBe(0);
+      expect(readCurrentCodexSession({ cwd: state.cwd, sessionId: state.sessionId })).toMatchObject({ status: "unregistered" });
+      expect(invoke("UserPromptSubmit").status).toBe(0);
+      expect(readCurrentCodexSession({ cwd: state.cwd, sessionId: state.sessionId })).toMatchObject({ status: "unregistered" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("keeps duration capture when Codex does not expose a transcript path", () => {
     const state = fixture();
     const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
