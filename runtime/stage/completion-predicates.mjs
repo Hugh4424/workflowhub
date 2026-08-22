@@ -83,6 +83,29 @@ export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, sub
   return fact.status === "passed";
 }
 
+// Quality facts are immutable history.  A repeated attempt for the same
+// current predicate must therefore project its latest terminal observation,
+// rather than treating an earlier `missing` fact as permanently concurrent
+// with a later repair.  File-name order is content-hash order, not event
+// order, so it is deliberately never used as a tie-breaker.
+function selectLatestTerminalObservation(observations) {
+  if (observations.length === 0) return { status: "missing", observation: null };
+  if (observations.length === 1) return { status: "selected", observation: observations[0] };
+
+  const ranked = observations.map((observation) => ({
+    observation,
+    recordedAt: Date.parse((observation.fact?.value ?? observation.fact)?.recorded_at ?? ""),
+  }));
+  if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) {
+    return { status: "conflict", observation: null };
+  }
+  const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
+  const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt);
+  return latest.length === 1
+    ? { status: "selected", observation: latest[0].observation }
+    : { status: "conflict", observation: null };
+}
+
 export function deriveStageCompletion(stage, observations = []) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
@@ -100,14 +123,16 @@ export function deriveStageCompletion(stage, observations = []) {
     candidates.set(fact.subject, subjectCandidates);
   }
   for (const [subject, subjectCandidates] of candidates.entries()) {
-    if (subjectCandidates.length > 1) {
-      // Conflict is about multiple current facts, not only multiple facts
-      // that happen to pass. A failed/missing fact must not disappear before
-      // it can conflict with a passing fact.
+    const selected = selectLatestTerminalObservation(subjectCandidates);
+    if (selected.status === "conflict") {
+      // A missing/failed fact remains immutable history, but two equally new
+      // terminals (or an invalid terminal order) have no truthful current
+      // projection. Keep that failure explicit instead of guessing from ref
+      // order or filtering one status away.
       conflicts.add(subject);
       continue;
     }
-    const [observation] = subjectCandidates;
+    const observation = selected.observation;
     const fact = observation.fact?.value ?? observation.fact;
     const reviewStatus = observation.review_status ?? observation.freshness?.review_status;
     if (qualityPredicateSatisfied(fact, fact.kind, { stage, subject, review_status: reviewStatus })) {

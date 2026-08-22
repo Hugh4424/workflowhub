@@ -116,6 +116,51 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(result.predicates.code_review).toMatchObject({ status: "conflict", fact_ref: null });
   });
 
+  it("projects the latest terminal fact for the same current predicate", () => {
+    const facts = observations("make-decision");
+    const scope = facts.find(({ fact }) => fact.value.subject === "scope");
+    scope.fact.value.status = "missing";
+    scope.fact.value.recorded_at = "2026-08-22T00:00:00.000Z";
+    const latest = {
+      ...structuredClone(scope),
+      fact: {
+        ref: "quality/scope-latest.json",
+        value: {
+          ...scope.fact.value,
+          fact_id: "scope-latest",
+          status: "passed",
+          recorded_at: "2026-08-22T00:00:01.000Z",
+        },
+      },
+    };
+    facts.push(latest);
+
+    const result = deriveStageCompletion("make-decision", facts);
+
+    expect(result).toMatchObject({ status: "completed", missing: [] });
+    expect(result.predicates.scope).toMatchObject({ status: "satisfied", fact_ref: latest.fact.ref });
+    expect(result.fact_refs).toContain(latest.fact.ref);
+    expect(result.fact_refs).not.toContain(scope.fact.ref);
+  });
+
+  it("keeps an equal terminal timestamp in explicit conflict instead of using ref order", () => {
+    const facts = observations("build-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    review.fact.value.recorded_at = "2026-08-22T00:00:00.000Z";
+    facts.push({
+      ...structuredClone(review),
+      fact: {
+        ref: "quality/integration-review-duplicate.json",
+        value: { ...review.fact.value, fact_id: "integration-review-duplicate" },
+      },
+    });
+
+    const result = deriveStageCompletion("build-code", facts);
+
+    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["integration_review"]) });
+    expect(result.predicates.integration_review).toMatchObject({ status: "conflict", fact_ref: null });
+  });
+
   it("keeps a real unavailable review visible without declaring stage completion", () => {
     const facts = observations("build-code");
     const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
