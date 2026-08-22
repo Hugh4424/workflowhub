@@ -447,7 +447,11 @@ export function validateRequirementCoverage({ messages, outputs } = {}) {
     if (!nonEmptyString(output.axis_id)) errors.push(`coverage output ${index + 1} axis_id is required`);
     if (!REQUIREMENT_IMPACTS.has(output.impact)) errors.push(`coverage output ${index + 1} impact is invalid`);
     if (!REQUIREMENT_DISPOSITIONS.has(output.disposition)) errors.push(`coverage output ${index + 1} disposition is invalid`);
-    const ids = ["decision_ids", "requirement_ids", "fr_ids", "ac_ids"];
+    // make-decision owns the original-requirement and decision bindings.
+    // Functional requirements and acceptance criteria are created only by
+    // build-spec, so requiring their IDs here would force a fabricated
+    // downstream contract into the decision stage.
+    const ids = ["decision_ids", "requirement_ids"];
     for (const field of ids) {
       if (!Array.isArray(output[field]) || output[field].length === 0 || output[field].some((id) => !nonEmptyString(id))) errors.push(`coverage output ${index + 1} ${field} must be non-empty`);
     }

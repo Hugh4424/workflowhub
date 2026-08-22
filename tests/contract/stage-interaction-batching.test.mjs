@@ -74,7 +74,10 @@ describe("batched interaction contract", () => {
     delete missingAxis[1].decision_ids;
     const axisResult = contracts.validateRequirementCoverage({ messages, outputs: missingAxis });
     expect(axisResult.ok).toBe(false);
-    expect(axisResult.errors.join("; ")).toMatch(/axis|decision|FR|AC/i);
+    expect(axisResult.errors.join("; ")).toMatch(/axis|decision/i);
+
+    const decisionStageOutputs = outputs.map(({ fr_ids, ac_ids, ...output }) => output);
+    expect(contracts.validateRequirementCoverage({ messages, outputs: decisionStageOutputs })).toMatchObject({ ok: true });
   });
 
   it("accepts one user-visible batch for Talk and spec-clarify while preserving lifecycle binding", () => {
