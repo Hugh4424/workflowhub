@@ -23,12 +23,57 @@ function validateSchema(validate, value, label, errors) {
   if (!validate(value)) pushError(errors, `${label}: schema invalid: ${validate.errors.map(e => `${e.instancePath || "/"} ${e.message}`).join("; ")}`);
 }
 
+function isPortableRelativeLocator(value) {
+  return typeof value === "string"
+    && value.trim() !== ""
+    && !value.startsWith("/")
+    && !value.startsWith("\\")
+    && !/^[A-Za-z]:/.test(value)
+    && !value.split("/").includes("")
+    && !value.split("/").some((segment) => segment === "." || segment === "..")
+    && !value.includes("\\");
+}
+
 export function checkReleaseClosure({ skillRelease, runnerRelease } = {}) {
   const errors = [];
   if (skillRelease?.skill !== "workflowhub") errors.push("skill release identity is invalid");
   if (runnerRelease?.release !== "workflowhub-runner") errors.push("runner release identity is invalid");
-  const skillFiles = new Set((skillRelease?.files ?? []).map((entry) => entry.path));
-  const runnerFiles = new Set((runnerRelease?.files ?? []).map((entry) => entry.path));
+  if (!Array.isArray(skillRelease?.files) || skillRelease.files.length === 0) errors.push("skill release closure is empty");
+  if (!Array.isArray(runnerRelease?.files) || runnerRelease.files.length === 0) errors.push("runner release closure is empty");
+  const pathsFor = (release, label) => {
+    const paths = [];
+    if (!Array.isArray(release?.files)) {
+      errors.push(`${label} release files must be an array`);
+      return paths;
+    }
+    for (const entry of release?.files ?? []) {
+      if (!entry || typeof entry.path !== "string" || entry.path.trim() === ""
+          || !isPortableRelativeLocator(entry.path)) {
+        errors.push(`${label} release file entry is invalid`);
+        continue;
+      }
+      if (typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(entry.sha256)) {
+        errors.push(`${label} release file sha256 is invalid: ${entry.path}`);
+      }
+      paths.push(entry.path);
+    }
+    if (new Set(paths).size !== paths.length) errors.push(`${label} release contains duplicate file paths`);
+    return new Set(paths);
+  };
+  const skillFiles = pathsFor(skillRelease, "skill");
+  const runnerFiles = pathsFor(runnerRelease, "runner");
+  const hashFor = (release) => new Map((release?.files ?? [])
+    .filter((entry) => entry && typeof entry.path === "string")
+    .map((entry) => [entry.path, entry.sha256 ?? null]));
+  const skillHashes = hashFor(skillRelease);
+  const runnerHashes = hashFor(runnerRelease);
+  for (const locator of [...skillFiles].filter((pathName) => runnerFiles.has(pathName))) {
+    const skillHash = skillHashes.get(locator);
+    const runnerHash = runnerHashes.get(locator);
+    if (skillHash !== null && runnerHash !== null && skillHash !== runnerHash) {
+      errors.push(`shared release file hash mismatch: ${locator}`);
+    }
+  }
   for (const locator of skillFiles) {
     if (/(^|\/)(?:node_modules|tests?|specs?|evidence)(?:\/|$)/.test(locator)) {
       errors.push(`skill release contains forbidden path: ${locator}`);

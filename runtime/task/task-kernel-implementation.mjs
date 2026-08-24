@@ -210,6 +210,9 @@ export function buildTaskKernel(taskHandle, {
     task,
     readInput,
     currentVNextSnapshot,
+    currentVNextMaterialRevision() {
+      return currentContext().revision.revision_id;
+    },
     deriveStageWorkflowRunId(stage) {
       return `vnext-${hash(`${task.identity.taskId}\0${stageName(stage)}`).slice(0, 32)}`;
     },

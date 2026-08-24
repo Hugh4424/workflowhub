@@ -9,25 +9,56 @@ const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_s
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
-// Keep the public consumer aligned with the 3rd-review v3 contract: reject
-// every host/container absolute path, while allowing only the explicit
-// provider-relative API route notation `/api/...` and prose such as
-// `中文/AC/oracle`.
-const absoluteUnixPathPattern = /(?:^|[^\p{L}\p{N}:A-Za-z0-9._~\/%-])(\/[^\s"'`<>()[\]{}]+)/gu;
-const absoluteWindowsPathPattern = /(?:[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+|\\\\[^\s"'`<>()[\]{}]+)/;
-const providerRelativeRoutePattern = /^\/api(?:\/[A-Za-z0-9._~:%-]+)*$/;
-const fileUriPathPattern = /\bfile:\/\//i;
+// Only structural path fields and broker error metadata are checked. Issue,
+// recommendation, and provider output prose remain opaque reviewer text.
+const pathBoundary = "(?:^|[\\s(\"'`=,:;])";
+const absoluteWindowsPath = new RegExp(`${pathBoundary}(?:[A-Za-z]:[\\\\/]|\\\\\\\\)`);
+const windowsDrivePrefix = new RegExp(`${pathBoundary}[A-Za-z]:`);
+const windowsRootPath = new RegExp(`${pathBoundary}\\\\`);
+const privateUnixPath = new RegExp(`${pathBoundary}(?:\\/\\/|\\/(?!api(?:\\/|$)))`);
+const opaqueUrl = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const dotPath = /(?:^|[\\/])\.\.?(?:[\\/]|$)/;
+const fileUri = new RegExp(`${pathBoundary}file:\\/\\/`, "i");
 
 function containsPrivatePath(value) {
-  if (typeof value === "string") {
-    if (fileUriPathPattern.test(value) || absoluteWindowsPathPattern.test(value)) return true;
-    for (const match of value.matchAll(absoluteUnixPathPattern)) {
-      if (!providerRelativeRoutePattern.test(match[1])) return true;
+  return typeof value === "string" && (fileUri.test(value) || opaqueUrl.test(value) || absoluteWindowsPath.test(value) || windowsDrivePrefix.test(value) || windowsRootPath.test(value) || privateUnixPath.test(value) || dotPath.test(value));
+}
+
+function extractProviderJson(value) {
+  try { return JSON.parse(value); } catch { /* try the canonical fenced form below */ }
+  const fence = value.match(/^\s*```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```\s*$/i);
+  if (!fence) return null;
+  try { return JSON.parse(fence[1].trim()); } catch { return null; }
+}
+
+function validateProviderOutput(value) {
+  if (typeof value !== "string" || value.trim() === "") throw failure("OUTPUT_INVALID", "provider output must be a non-empty JSON object");
+  const parsed = extractProviderJson(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Object.hasOwn(parsed, "findings")) throw failure("OUTPUT_INVALID", "provider output must contain findings");
+  if (Object.keys(parsed).length !== 1 || !Array.isArray(parsed.findings)) throw failure("OUTPUT_INVALID", "provider output findings must be an array and the only top-level field");
+  const severities = new Set(["blocking", "major", "minor"]);
+  const evidenceKinds = new Set(["direct", "machine", "inferred"]);
+  for (const [index, finding] of parsed.findings.entries()) {
+    if (!finding || typeof finding !== "object" || Array.isArray(finding)
+        || !severities.has(finding.severity)
+        || typeof finding.path !== "string" || finding.path.trim() === ""
+        || typeof finding.issue !== "string" || !finding.issue.trim()
+        || typeof finding.recommendation !== "string" || !finding.recommendation.trim()
+        || (finding.line !== undefined && finding.line !== null && (!Number.isSafeInteger(finding.line) || finding.line < 1))) {
+      throw failure("OUTPUT_INVALID", `provider finding ${index} is invalid`);
     }
-    return false;
+    const allowedKeys = new Set(["severity", "path", "line", "issue", "recommendation", "root_cause", "evidence_kind", "evidence"]);
+    if (Object.keys(finding).some((key) => !allowedKeys.has(key))) throw failure("OUTPUT_INVALID", `provider finding ${index} has unsupported fields`);
+    if (["major", "blocking"].includes(finding.severity)
+        && (typeof finding.root_cause !== "string" || !finding.root_cause.trim()
+          || !evidenceKinds.has(finding.evidence_kind)
+          || typeof finding.evidence !== "string" || !finding.evidence.trim())) {
+      throw failure("OUTPUT_INVALID", `provider finding ${index} requires root_cause, evidence_kind, and evidence`);
+    }
+    if (containsPrivatePath(finding.path)) {
+      throw failure("PUBLIC_RESULT_INVALID", "provider finding path contains a private path or file URI");
+    }
   }
-  if (!value || typeof value !== "object") return false;
-  return Array.isArray(value) ? value.some(containsPrivatePath) : Object.values(value).some(containsPrivatePath);
 }
 
 function digest(value) {
@@ -41,6 +72,7 @@ function wireSummary(wire) {
 function safeBrokerError(value) {
   const error = value?.error ?? value;
   if (!error || typeof error !== "object" || Array.isArray(error) || typeof error.code !== "string" || typeof error.message !== "string") return null;
+  if (containsPrivatePath(error.code) || containsPrivatePath(error.message)) throw failure("PUBLIC_RESULT_INVALID", "broker error contains a private path");
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(error.code) || error.message.length === 0 || containsPrivatePath(error.message)) return null;
   return failure(error.code, error.message);
 }
@@ -72,7 +104,8 @@ function validateV3Error(value, label) {
   if (value === null) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.code !== "string" || typeof value.message !== "string") throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
   if (Object.keys(value).sort().join("\0") !== ["code", "message"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", `${label} has unsupported fields`);
-  if (value.code.length === 0 || value.message.length === 0 || containsPrivatePath(value.code) || containsPrivatePath(value.message)) throw failure("PROTOCOL_INCOMPATIBLE", `${label} contains an unsafe or empty field`);
+  if (value.code.length === 0 || value.message.length === 0) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  if (containsPrivatePath(value.code) || containsPrivatePath(value.message)) throw failure("PUBLIC_RESULT_INVALID", `${label} contains a private path`);
   return { code: value.code, message: value.message };
 }
 
@@ -87,9 +120,10 @@ function validateV3Timing(value, label) {
   return value;
 }
 
-function validateV3String(value, label, { nullable = false } = {}) {
+function validateV3String(value, label, { nullable = false, publicMetadata = false } = {}) {
   if (nullable && value === null) return null;
-  if (typeof value !== "string" || value.trim().length === 0 || containsPrivatePath(value)) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  if (typeof value !== "string" || value.trim().length === 0) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  if (publicMetadata && containsPrivatePath(value)) throw failure("PUBLIC_RESULT_INVALID", `${label} contains a private path`);
   return value;
 }
 
@@ -111,6 +145,9 @@ function validateV3Usage(value, label = "v3 usage") {
     if (keys.length === 0 || keys.some((key) => key.trim() === "")) {
       throw failure("PROTOCOL_INCOMPATIBLE", `${path} must not be empty`);
     }
+    if (keys.some((key) => containsPrivatePath(key))) {
+      throw failure("PUBLIC_RESULT_INVALID", `${path} contains a private path key`);
+    }
     return Object.fromEntries(keys.map((key) => [key, visit(current[key], `${path}.${key}`, allowDecimal || (path === label && key === "cost"))]));
   };
   return visit(value, label);
@@ -131,36 +168,46 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   const error = validateV3Error(value.error, "v3 error");
   const identity = value.identity;
   if (!identity) throw failure("PROTOCOL_INCOMPATIBLE", "v3 identity is invalid");
-  validateV3String(identity.provider, "v3 identity.provider");
-  validateV3String(identity.adapter, "v3 identity.adapter");
-  validateV3String(identity.source_id, "v3 identity.source_id");
-  validateV3String(identity.config_id, "v3 identity.config_id");
-  if (identity.model !== null) validateV3String(identity.model, "v3 identity.model");
+  exactKeys(identity, ["adapter", "config_id", "model", "provider", "source_id"], "v3 identity");
+  validateV3String(identity.provider, "v3 identity.provider", { publicMetadata: true });
+  validateV3String(identity.adapter, "v3 identity.adapter", { publicMetadata: true });
+  validateV3String(identity.source_id, "v3 identity.source_id", { publicMetadata: true });
+  validateV3String(identity.config_id, "v3 identity.config_id", { publicMetadata: true });
+  if (identity.model !== null) validateV3String(identity.model, "v3 identity.model", { publicMetadata: true });
   const material = value.material;
   if (!material) throw failure("PROTOCOL_INCOMPATIBLE", "v3 material identity is invalid");
+  exactKeys(material, ["contract_hash", "contract_id", "material_id", "semantic_hash"], "v3 material");
   validateV3String(material.material_id, "v3 material.material_id");
   validateV3String(material.contract_id, "v3 material.contract_id");
   validateV3String(material.contract_hash, "v3 material.contract_hash");
   validateV3String(material.semantic_hash, "v3 material.semantic_hash");
   validateV3Sha256(value.provenance?.raw_output_sha256, "v3 provenance.raw_output_sha256");
   validateV3Sha256(value.provenance?.raw_stderr_sha256, "v3 provenance.raw_stderr_sha256");
-  validateV3String(value.provenance?.runtime_id, "v3 provenance.runtime_id");
+  exactKeys(value.provenance, ["raw_output_sha256", "raw_stderr_sha256", "runtime_id"], "v3 provenance");
+  validateV3String(value.provenance?.runtime_id, "v3 provenance.runtime_id", { publicMetadata: true });
   const recovery = value.recovery;
+  exactKeys(recovery, ["fresh_execution_retry_count", "provider_internal_retry_count", "same_session_repair_count"], "v3 recovery");
   if (!recovery || ["provider_internal_retry_count", "fresh_execution_retry_count", "same_session_repair_count"].some((key) => !Number.isSafeInteger(recovery[key]) || recovery[key] < 0)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 recovery counters are invalid");
   if (!Array.isArray(value.attempts)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempts must be an array");
   for (const attempt of value.attempts) {
     exactKeys(attempt, v3AttemptFields, "v3 attempt");
     if (!Number.isSafeInteger(attempt.provider_retry_count) || attempt.provider_retry_count < 0 || !["completed", "failed", "cancelled"].includes(attempt.status)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt is invalid");
+    validateV3String(attempt.attempt_id, "v3 attempt.attempt_id", { publicMetadata: true });
+    validateV3String(attempt.kind, "v3 attempt.kind", { publicMetadata: true });
+    if (attempt.session_id !== null) validateV3String(attempt.session_id, "v3 attempt.session_id", { publicMetadata: true });
     validateV3Error(attempt.error, "v3 attempt error");
     validateV3Timing(attempt, "v3 attempt");
   }
+  exactKeys(value.timing, ["completed_at_ms", "duration_ms", "started_at_ms"], "v3 timing");
   if (!value.timing || Object.keys(value.timing).sort().join("\0") !== ["completed_at_ms", "duration_ms", "started_at_ms"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 timing is invalid");
   validateV3Timing(value.timing, "v3");
   if (value.deadline_ms !== null || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
-  if (value.output !== null) validateV3String(value.output, "v3 output");
-  if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id");
+  if (value.output !== null) {
+    validateV3String(value.output, "v3 output");
+    validateProviderOutput(value.output);
+  }
+  if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id", { publicMetadata: true });
   const usage = validateV3Usage(value.usage);
-  if (containsPrivatePath(value)) throw failure("PUBLIC_RESULT_INVALID", "v3 provider result contains a private path");
   return Object.freeze({
     ...value,
     provider: identity.provider,
@@ -179,6 +226,7 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
 function validateV3Group(value, { hostProvider, providers, materialId, contractId = null, contractHash = null, semanticHash = null }) {
   exactKeys(value, v3GroupFields, "3rd-review v3 public group");
   if (value.version !== protocol || value.host_provider !== hostProvider || value.material_id !== materialId || !["completed", "partial", "unavailable", "cancelled"].includes(value.outcome) || !Number.isSafeInteger(value.round) || value.round < 1 || typeof value.runtime_id !== "string" || !Array.isArray(value.providers) || value.providers.length === 0) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 public group is invalid");
+  if (containsPrivatePath(value.runtime_id)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review v3 group runtime_id contains a private path");
   if (!(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0))) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 selected_tier is invalid");
   const received = new Set();
   const members = value.providers.map((item) => {
@@ -188,7 +236,6 @@ function validateV3Group(value, { hostProvider, providers, materialId, contractI
     return member;
   });
   if (received.size !== providers.size || [...providers].some((provider) => !received.has(provider))) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 omitted configured provider result(s)");
-  if (containsPrivatePath(value)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review v3 public group contains a private path");
   return Object.freeze({ ...value, providers: Object.freeze(members) });
 }
 
@@ -199,6 +246,30 @@ function validateDirectionFlow(value) {
     { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
     { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
   ];
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    exactKeys(value, ["output", "public_request_count", "steps", "version"], "direction-review");
+    validateV3String(value.version, "direction-review.version", { publicMetadata: true });
+    exactKeys(value.output, ["one_logical_fact", "one_provider_result"], "direction-review.output");
+    if (Array.isArray(value.steps)) {
+      for (const [index, step] of value.steps.entries()) {
+        if (!step || typeof step !== "object" || Array.isArray(step)) continue;
+        for (const field of ["id", "hidden_until", "output"]) {
+          if (typeof step[field] === "string" && containsPrivatePath(step[field])) {
+            throw failure("PUBLIC_RESULT_INVALID", `direction-review.steps[${index}].${field} contains a private path`);
+          }
+        }
+        for (const field of ["visible", "after"]) {
+          if (Array.isArray(step[field])) {
+            for (const [itemIndex, item] of step[field].entries()) {
+              if (typeof item === "string" && containsPrivatePath(item)) {
+                throw failure("PUBLIC_RESULT_INVALID", `direction-review.steps[${index}].${field}[${itemIndex}] contains a private path`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   const stepsValid = Array.isArray(value?.steps)
     && value.steps.length === expectedSteps.length
     && value.steps.every((step, index) => {
@@ -217,7 +288,7 @@ function validateDirectionFlow(value) {
       || !stepsValid
       || value.output?.one_provider_result !== true
       || value.output?.one_logical_fact !== true
-      || containsPrivatePath(value)) {
+      ) {
     throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 flow is invalid");
   }
   return structuredClone(value);
@@ -247,7 +318,6 @@ function parsePublicRun(wire) {
   if (wire?.exitCode !== 0 && wire?.exitCode !== 3) {
     throw failure("BROKER_EXIT_NONZERO", `3rd-review public run exited without a terminal result; ${wireSummary(wire)}`);
   }
-  if (containsPrivatePath(result)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review public run result contains a private path");
   return result;
 }
 

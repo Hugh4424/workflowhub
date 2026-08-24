@@ -94,21 +94,6 @@ function reviewIdentityMatches(value, { taskId, stage, reviewTrack = null, revie
 
 function canonicalReviewEnvelope({ task, taskId, stage, reviewTrack, reviewKind, ref, value } = {}) {
   const attemptRef = value.attempt_ref;
-  const qualityFactRefs = typeof task.listCanonicalQualityFactRefs === "function"
-    ? task.listCanonicalQualityFactRefs()
-    : [];
-  let qualityFactRef = null;
-  for (const factRef of qualityFactRefs) {
-    try {
-      const fact = JSON.parse(task.readRecord(factRef));
-      if (fact?.task_id === taskId && fact.stage === stage && fact.kind === "review"
-          && Array.isArray(fact.evidence)
-          && fact.evidence.some((entry) => entry?.ref === ref || entry?.ref === attemptRef)) {
-        qualityFactRef = factRef;
-        break;
-      }
-    } catch { /* Ignore unrelated or malformed historical facts. */ }
-  }
   return {
     status: "available",
     attempt_ref: attemptRef,
@@ -122,7 +107,6 @@ function canonicalReviewEnvelope({ task, taskId, stage, reviewTrack, reviewKind,
     review_scope: value.review_scope ?? null,
     base_tree: value.base_tree,
     candidate_tree: value.candidate_tree,
-    ...(qualityFactRef ? { quality_fact_ref: qualityFactRef } : {}),
     ...(reviewKind ? { review_kind: reviewKind } : {}),
   };
 }
@@ -167,11 +151,20 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
   const currentSnapshot = typeof trusted.kernel.currentVNextSnapshot === "function"
     ? trusted.kernel.currentVNextSnapshot()
     : null;
+  const currentMaterialRevision = typeof trusted.kernel.currentVNextMaterialRevision === "function"
+    ? trusted.kernel.currentVNextMaterialRevision()
+    : null;
+  if (!/^revision-[a-f0-9]{64}$/.test(currentMaterialRevision ?? "")) {
+    throw new Error("verify-code review cannot authenticate the current material revision");
+  }
   if (typeof result.snapshotTree !== "string" || !currentSnapshot?.tree || result.snapshotTree !== currentSnapshot.tree) {
     throw new Error("verify-code review result is stale before quality-fact publication");
   }
   if (result.subjectKind !== "worktree" || result.phaseId !== null || result.reviewScope !== null) {
     throw new Error("verify-code quality fact requires a worktree-scoped final review");
+  }
+  if (typeof result.materialId !== "string" || !/^[a-f0-9]{64}$/.test(result.materialId)) {
+    throw new Error("verify-code review result is missing material identity");
   }
   const evidenceRef = result.status === "available" ? result.resultRef : result.attemptRef;
   const expectedRefPattern = result.status === "available" ? REVIEW_RESULT_REF : REVIEW_ATTEMPT_REF;
@@ -191,8 +184,14 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
     || evidence.phase_id !== null || evidence.review_scope !== null || evidence.snapshot_tree !== result.snapshotTree) {
     throw new Error("verify-code review evidence is not bound to the current task, stage, or snapshot");
   }
+  if (evidence.material_id !== result.materialId) {
+    throw new Error("verify-code review evidence is not bound to the returned material identity");
+  }
+  if (evidence.material_revision !== currentMaterialRevision) {
+    throw new Error("verify-code review evidence is not bound to the current material revision");
+  }
   if (result.status === "available") {
-    if (evidence.attempt_ref !== result.attemptRef || evidence.review_kind !== reviewKind || evidence.terminal_status === "unavailable") {
+    if (evidence.attempt_ref !== result.attemptRef || (evidence.review_kind ?? null) !== reviewKind || evidence.terminal_status === "unavailable") {
       throw new Error("verify-code review result is not bound to the current review request");
     }
     if (typeof evidence.attempt_ref !== "string" || !REVIEW_ATTEMPT_REF.test(evidence.attempt_ref)) {
@@ -204,24 +203,29 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
     validateSchema("attempt", attempt);
     const attemptRefMatch = REVIEW_ATTEMPT_REF.exec(evidence.attempt_ref);
     if (attempt.task_id !== trusted.taskId || attempt.stage !== stage || attempt.subject_kind !== "worktree"
-      || attempt.phase_id !== null || attempt.review_scope !== null || attempt.review_kind !== reviewKind
+      || attempt.phase_id !== null || attempt.review_scope !== null || (attempt.review_kind ?? null) !== reviewKind
       || attempt.attempt_id !== attemptRefMatch?.[1]
       || attempt.snapshot_tree !== result.snapshotTree || attempt.terminal_status !== "semantic" || attempt.error !== null) {
       throw new Error("verify-code review result is not bound to a semantic terminal attempt");
     }
   } else if (evidence.terminal_status !== "unavailable") {
     throw new Error("verify-code unavailable fact requires an unavailable terminal attempt");
-  } else if (evidence.review_kind !== reviewKind || evidence.attempt_id !== REVIEW_ATTEMPT_REF.exec(evidenceRef)?.[1]) {
+  } else if ((evidence.review_kind ?? null) !== reviewKind || evidence.attempt_id !== REVIEW_ATTEMPT_REF.exec(evidenceRef)?.[1]) {
     throw new Error("verify-code unavailable attempt is not bound to the current review request");
   }
   const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
-  const fact = trusted.kernel.publishVNextQualityFact(stage, {
+  // wh-review owns broker-provenance review bytes. It returns a narrow fact
+  // intent for stage-runtime to consume; it never writes current quality.
+  return Object.freeze({
+    schema_version: "workflowhub-quality-fact-intent.v1",
+    stage,
     kind: "review",
     status: result.status === "available" ? "recorded" : "unavailable",
     subject: "code_review",
+    material_id: result.materialId,
+    material_revision: currentMaterialRevision,
     evidence: [{ ref: evidenceRef, sha256: evidenceHash, evidence_type: "review_result" }],
   });
-  return fact.ref;
 }
 
 export async function runReviewRecovery(input, { runRound = runReviewRound, sameSourceFallback = null } = {}) {
@@ -287,6 +291,7 @@ export async function runReviewRound(input) {
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null, reviewKind);
   const hostProvider = input.host_provider ?? input.hostProvider;
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
+  const materialRevision = stage === "verify-code" ? trusted.kernel.currentVNextMaterialRevision() : null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack, reviewKind);
   if (route === null) {
     const result = await recordMissingRouteUnavailable({
@@ -296,8 +301,9 @@ export async function runReviewRound(input) {
       phaseId,
       reviewTrack,
       reviewKind,
+      materialRevision,
     });
-    const qualityFactRef = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
+    const qualityFactIntent = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
     return {
       status: result.status,
       attempt_ref: result.attemptRef,
@@ -305,13 +311,14 @@ export async function runReviewRound(input) {
       report_ref: result.reportRef,
       snapshot_tree: result.snapshotTree,
       material_id: result.materialId,
+      material_revision: result.materialRevision,
       runtime_ids: result.runtimeIds,
       subject_kind: result.subjectKind,
       phase_id: result.phaseId,
       review_scope: result.reviewScope,
       base_tree: result.baseTree,
       candidate_tree: result.candidateTree,
-      ...(qualityFactRef ? { quality_fact_ref: qualityFactRef } : {}),
+      ...(qualityFactIntent ? { review_fact_intent: qualityFactIntent } : {}),
       error_code: "REVIEW_ROUTE_UNAVAILABLE",
       ...(result.errorCode ? { error_code: result.errorCode } : {}),
       ...(reviewKind ? { review_kind: reviewKind } : {}),
@@ -336,6 +343,7 @@ export async function runReviewRound(input) {
   const result = await runReview({
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
     stage, phaseId, reviewTrack, reviewKind, uiScope: input.ui_scope === true,
+    materialRevision,
     materials: input.materials ?? {},
     current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
     directionSelection: input.direction_selection ?? input.directionSelection ?? null,
@@ -345,7 +353,7 @@ export async function runReviewRound(input) {
     // pre-filter; policy still records the eligible heterologous quorum.
     providers: selection.providers, reviewPolicy, providerClient: client,
   });
-  const qualityFactRef = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
+  const qualityFactIntent = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
   let errorCode = null;
   if (result.status === "unavailable" && result.attemptRef) {
     const attempt = JSON.parse(trusted.task.readRecord(result.attemptRef));
@@ -356,9 +364,9 @@ export async function runReviewRound(input) {
     attempt_ref: result.attemptRef,
     result_ref: result.resultRef,
     report_ref: result.reportRef,
-    snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
+    snapshot_tree: result.snapshotTree, material_id: result.materialId, material_revision: result.materialRevision, runtime_ids: result.runtimeIds,
     subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
-    ...(qualityFactRef ? { quality_fact_ref: qualityFactRef } : {}),
+    ...(qualityFactIntent ? { review_fact_intent: qualityFactIntent } : {}),
     ...(errorCode ? { error_code: errorCode } : {}),
     ...(reviewKind ? { review_kind: reviewKind } : {}),
     ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),

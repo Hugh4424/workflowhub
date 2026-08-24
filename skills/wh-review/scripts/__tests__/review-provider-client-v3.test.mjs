@@ -39,6 +39,13 @@ function materials() {
   return { bundleRoot: "/tmp/bundle", attachmentRoot: "/tmp/attachments", materialId: "material-id", sourcePrefix: ".wh-review-packets", deliveryManifest: [] };
 }
 
+function majorFinding(overrides = {}) {
+  return {
+    severity: "major", path: "runtime/review.mjs", issue: "review issue", recommendation: "review recommendation",
+    root_cause: "review root cause", evidence_kind: "direct", evidence: "review evidence", ...overrides,
+  };
+}
+
 test("client marks every attachment for codex always_embed delivery", async () => {
   const calls = [];
   const client = new ReviewProviderClient({ invoke: async (value) => {
@@ -65,6 +72,22 @@ test("client defaults to negotiated delivery so each provider gets its supported
   await client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review" });
   expect(calls[0].attachmentDelivery).toBe("negotiated");
   expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+});
+
+test("client rejects direction-flow metadata outside the public contract", async () => {
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["codex/luna"]))}\n`, stderr: "" }) });
+  const flow = {
+    version: "direction-review.v1",
+    public_request_count: 1,
+    steps: [
+      { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+      { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+      { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+    ],
+    output: { one_provider_result: true, one_logical_fact: true, leaked_path: "/private/review.json" },
+  };
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review", reviewFlow: flow }))
+    .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
 test("client negotiates attachment delivery for mixed provider groups", async () => {
@@ -109,6 +132,37 @@ test("client rejects a positive provider deadline in a public v3 result", async 
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
+test("client rejects private paths hidden in structured broker metadata", async () => {
+  for (const mutate of [
+    (value) => { value.providers[0].attempts[0].session_id = "/private/session"; },
+    (value) => { value.providers[0].usage = { "file:///private/usage.json": 1 }; },
+    (value) => { value.providers[0].provenance.private_path = "/private/provenance"; },
+  ]) {
+    const value = group(["opencode/v4flash"]);
+    mutate(value);
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+      .rejects.toMatchObject({ code: expect.stringMatching(/PUBLIC_RESULT_INVALID|PROTOCOL_INCOMPATIBLE/) });
+  }
+});
+
+test("client rejects malformed reviewer output instead of accepting a completed member", async () => {
+  for (const output of [
+    "plain reviewer prose",
+    "[]",
+    "{}",
+    "```json\n{\"findings\":[]}\n```\n```json\n{\"findings\":[]}\n```",
+    "prefix\n```json\n{\"findings\":[]}\n```\nsuffix",
+    JSON.stringify({ findings: [{ severity: "major", path: "src/app.mjs", issue: "broken", recommendation: "fix" }] }),
+  ]) {
+    const value = group(["opencode/v4flash"]);
+    value.providers[0].output = output;
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+      .rejects.toMatchObject({ code: "OUTPUT_INVALID" });
+  }
+});
+
 test("client rejects a direction flow that exposes the choice before the reveal boundary", async () => {
   const calls = [];
   const client = new ReviewProviderClient({ invoke: async (value) => {
@@ -149,6 +203,22 @@ test("client rejects direction flow without the single_round mode", async () => 
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" }) });
   await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review", reviewFlow }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+});
+
+test("client rejects private paths in direction-flow metadata before protocol validation", async () => {
+  const reviewFlow = {
+    version: "direction-review.v1",
+    public_request_count: 1,
+    steps: [
+      { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+      { id: "reveal", after: ["/private/reconstruct-step"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+      { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+    ],
+    output: { one_provider_result: true, one_logical_fact: true },
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review", reviewMode: "single_round", reviewFlow }))
+    .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
 });
 
 test("client preserves numeric nested usage telemetry", async () => {
@@ -276,22 +346,59 @@ test("client classifies a spawn failure separately from a malformed public resul
     .rejects.toMatchObject({ code: "BROKER_SPAWN_FAILED" });
 });
 
-test("client rejects provider results that expose unlisted absolute Unix paths", async () => {
-  for (const path of ["/workspace/subject.md", "/srv/review/subject.md", "/secret/data", "//server/share/review.md", "C:\\private\\review.md"]) {
-    const bad = group(["opencode/v4flash"]);
-    bad.providers[0].output = JSON.stringify({ findings: [{ severity: "major", path, issue: "leak", recommendation: "remove" }] });
-    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(bad)}\n`, stderr: "" }) });
+test("client rejects private paths in the structural finding path only", async () => {
+  for (const path of ["/workspace/subject.md", "/srv/review/subject.md", "/secret/data", "//server/share/review.md", "\\\\private\\\\review.md", "C:\\private\\review.md", "C:private.md", "file://host/private/review.md", "http://example.com/review.json", "https://example.com/review.json", "x=/private/review.md", "x:/private/review.md", "x=C:\\private\\review.md", "x=file://private/review.md", "src/../../private.json", "/api/../private.json", "src\\..\\..\\private.json"]) {
+    const value = group(["opencode/v4flash"]);
+    value.providers[0].output = JSON.stringify({ findings: [majorFinding({ path, issue: "review subject", recommendation: "keep semantic text unchanged" })] });
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
     await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
       .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
   }
 });
 
+test("client rejects private paths in broker metadata but leaves reviewer prose opaque", async () => {
+  for (const mutate of [
+    (value) => { value.providers[0].identity.source_id = "broker /private/source.json"; },
+    (value) => { value.providers[0].provenance.runtime_id = "broker /private/runtime"; value.runtime_id = value.providers[0].provenance.runtime_id; },
+    (value) => { value.providers[0].session_id = "broker file://private/session"; },
+    (value) => { value.providers[0].status = "failed"; value.providers[0].output = null; value.providers[0].error = { code: "PROCESS_DEAD", message: "broker /private/error.log" }; value.providers[0].attempts[0].status = "failed"; value.providers[0].attempts[0].error = value.providers[0].error; },
+  ]) {
+    const value = group(["opencode/v4flash"]);
+    mutate(value);
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+      .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
+  }
+  const prose = group(["opencode/v4flash"]);
+  prose.providers[0].output = JSON.stringify({ findings: [majorFinding({ issue: "prose mentions /private/example without exposing it as metadata", recommendation: "keep prose" })] });
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(prose)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .resolves.toMatchObject({ providers: [{ status: "completed" }] });
+});
+
+test("client rejects private paths inside a fenced provider result and error code", async () => {
+  const fenced = group(["opencode/v4flash"]);
+  fenced.providers[0].output = "```json\n{" + JSON.stringify({ findings: [majorFinding({ path: "/private/fenced-review.md", issue: "issue", recommendation: "recommendation" })]}).slice(1) + "\n```";
+  const fencedClient = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(fenced)}\n`, stderr: "" }) });
+  await expect(fencedClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
+
+  const badCode = group(["opencode/v4flash"]);
+  badCode.providers[0].status = "failed";
+  badCode.providers[0].output = null;
+  badCode.providers[0].error = { code: "ERR /private/error", message: "provider failed" };
+  badCode.providers[0].attempts[0].status = "failed";
+  badCode.providers[0].attempts[0].error = badCode.providers[0].error;
+  const codeClient = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(badCode)}\n`, stderr: "" }) });
+  await expect(codeClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
+});
+
 test("client allows slash notation that follows a Unicode word", async () => {
   const value = group(["opencode/v4flash"]);
-  value.providers[0].output = JSON.stringify({ findings: [{
-    severity: "major", path: "requirements/open_risks.json",
-    issue: "代码/AC/oracle/接口变化需要重新绑定事实", recommendation: "补齐当前事实",
-  }] });
+  value.providers[0].output = JSON.stringify({ findings: [majorFinding({
+    path: "requirements/open_risks.json", issue: "代码/AC/oracle/接口变化需要重新绑定事实", recommendation: "补齐当前事实",
+  })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
   await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
@@ -299,9 +406,9 @@ test("client allows slash notation that follows a Unicode word", async () => {
 
 test("client allows provider-relative API routes", async () => {
   const value = group(["opencode/v4flash"]);
-  value.providers[0].output = JSON.stringify({ findings: [{
-    severity: "major", path: "/api/items/:id", issue: "保持既有 API 语义", recommendation: "保留当前路由契约",
-  }] });
+  value.providers[0].output = JSON.stringify({ findings: [majorFinding({
+    path: "/api/items/:id", issue: "保持既有 API 语义", recommendation: "保留当前路由契约",
+  })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
   await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
@@ -323,12 +430,12 @@ test("client accepts truthful null deadline and timing for an unavailable provid
   expect(result.providers[0].timing).toEqual({ started_at_ms: null, completed_at_ms: null, duration_ms: null });
 });
 
-test("client rejects inconsistent duration and unsafe public strings", async () => {
+test("client rejects inconsistent duration and malformed structural fields", async () => {
   const cases = [
     (value) => { value.providers[0].timing.duration_ms = 11; },
     (value) => { value.providers[0].material.contract_id = ""; },
     (value) => { value.providers[0].error = { code: "", message: "failed" }; value.providers[0].status = "failed"; },
-    (value) => { value.providers[0].output = JSON.stringify({ path: "file://host/private/review.json" }); },
+    (value) => { value.providers[0].provenance.raw_output_sha256 = "not-a-sha"; },
   ];
   for (const mutate of cases) {
     const value = group(["opencode/v4flash"]);
@@ -337,4 +444,12 @@ test("client rejects inconsistent duration and unsafe public strings", async () 
     await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
       .rejects.toMatchObject({ code: expect.stringMatching(/PROTOCOL_INCOMPATIBLE|PUBLIC_RESULT_INVALID/) });
   }
+});
+
+test("client preserves file URI notation inside review content", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].output = JSON.stringify({ findings: [majorFinding({ path: "requirements/review.json", issue: "quoted file://host/private/review.json in prose", recommendation: "keep prose" })] });
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .resolves.toMatchObject({ providers: [{ status: "completed" }] });
 });

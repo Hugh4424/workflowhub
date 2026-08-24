@@ -8,12 +8,12 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 import { appendTaskFact, initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { publishQualityFact } from "../../runtime/evidence/quality-store.mjs";
 
-function task() {
+function task(projectName = "workflowhub-fixture") {
   const storage = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-journal-replacement-")));
   const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-journal-repo-")));
   execFileSync("git", ["init", "-q"], { cwd: repo });
   const value = createTask({ storageRoot: storage, manifest: {
-    schema_version: "1.0.0", project_name: "workflowhub", task_id: "journal-replacement",
+    schema_version: "1.0.0", project_name: projectName, task_id: "journal-replacement",
     created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
   } });
   initializeTaskStore(value.taskPath, { taskId: value.identity.taskId });

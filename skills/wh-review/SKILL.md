@@ -66,7 +66,7 @@ fact, not a prerequisite for continuing the same task.
 ## Material and path safety
 
 - The provider receives only the frozen bundle and cannot read the repository, host paths, Git, shell or network.
-- Every visible byte is listed with a hash in `manifest.json`; `material_id` binds the bundle and `snapshot_tree` binds source context when code is reviewed.
+- Every visible byte is listed with a hash in `manifest.json`; `material_id` binds the bundle, `material_revision` binds the current four WorkflowHub materials, and `snapshot_tree` binds source context when code is reviewed.
 - Reject symlinks, hard links, traversal, escaped realpaths, undeclared attachments, tampered hashes and host-path leakage before dispatch.
 - Large diffs may use the existing hash-addressed index/shard representation. Missing shards or incomplete change coverage fail before dispatch.
 - Security failure rejects that review write. It does not stop the Agent from fixing materials or code in the same task.

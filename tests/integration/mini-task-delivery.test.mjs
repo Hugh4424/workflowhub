@@ -10,6 +10,7 @@ import { createCanonicalReceiptWriter } from "../../runtime/evidence/canonical-r
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
 import {
   authorizeMiniTaskDelivery,
   confirmMiniTaskDelivery,
@@ -382,7 +383,7 @@ describe("mini-task delivery RED contract", () => {
       acTrace: captureStructuredMiniAcTrace(state, receipt, "failed", "failed"),
     });
     expect(quality.status).toBe("incomplete");
-    const facts = state.task.listCanonicalQualityFactRefs().map((ref) => JSON.parse(state.task.readRecord(ref)));
+    const facts = state.task.listCanonicalMiniTaskQualityEvidenceRefs().map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.filter((fact) => fact.subject === "acceptance_criteria").at(-1).status).toBe("missing");
   });
 
@@ -405,7 +406,7 @@ describe("mini-task delivery RED contract", () => {
     const state = deliveryFixture();
     const quality = publishMiniTaskQualityFixture(state, { humanConfirmation: null });
     expect(quality.status).toBe("incomplete");
-    expect(state.task.listCanonicalQualityFactRefs()
+    expect(state.task.listCanonicalMiniTaskQualityEvidenceRefs()
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
       .filter((fact) => fact.subject === "human_confirmation")
       .at(-1)).toMatchObject({ status: "missing" });
@@ -501,20 +502,20 @@ describe("mini-task delivery RED contract", () => {
       .resolves.toMatchObject({ status: "completed" });
   });
 
-  it("reuses mini-task quality after execution-status writeback without another review", async () => {
+  it("does not reuse mini-task quality after a material writeback", async () => {
     const state = deliveryFixture();
     const quality = publishMiniTaskQualityFixture(state);
-    const tasksPath = join(state.candidate.worktreeRoot, "specs", state.taskId, "tasks.md");
-    writeFileSync(tasksPath, `${readFileSync(tasksPath, "utf8")}\n### 执行状态填写区\n- [x] 任务完成\n- status: completed\n- 执行事实：只写回执行状态，不改变实现\n`);
+    const specPath = join(state.candidate.worktreeRoot, "specs", state.taskId, "spec.md");
+    writeFileSync(specPath, `${readFileSync(specPath, "utf8")}\n## 未经授权的材料变更\n- 这不是执行状态回写，而是新的需求材料。\n`);
 
     const current = captureExecutionSnapshot(state.candidate.worktreeRoot, state.taskId);
     expect(current.tree).not.toBe(quality.snapshot_tree);
 
-    const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: { ...state.delivery, task_commit: current.commit } });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
-    authorizeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
-    await expect(executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref }))
-      .resolves.toMatchObject({ status: "completed" });
+    expect(() => prepareMiniTaskDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: { ...state.delivery, task_commit: current.commit },
+    })).toThrow(/current verify-code quality facts are incomplete|material/i);
   });
 
   it("re-authenticates the mini-task implementation review before delivery close", async () => {
@@ -536,16 +537,18 @@ describe("mini-task delivery RED contract", () => {
     const forgedPacketRaw = `${JSON.stringify(forgedPacket, null, 2)}\n`;
     const forgedPacketRef = "quality/evidence/mini-task-implementation/forged-close-packet.json";
     state.kernel.publishCanonicalRecord(forgedPacketRef, forgedPacketRaw);
-    state.kernel.publishVNextQualityFact("build-code", {
-      kind: "review", status: "recorded", subject: "mini_task_implementation_review",
+    const implementationIntent = state.task.listCanonicalMiniTaskQualityEvidenceRefs()
+      .map((ref) => ({ ref, value: JSON.parse(state.task.readRecord(ref)) }))
+      .find(({ value }) => value.subject === "mini_task_implementation_review").value;
+    const forgedIntentValue = {
+      ...implementationIntent,
       evidence: [{ ref: forgedPacketRef, sha256: sha256(forgedPacketRaw), evidence_type: "review_result" }],
-    });
+    };
+    const forgedIntentRaw = `${JSON.stringify(forgedIntentValue, null, 2)}\n`;
+    state.kernel.publishCanonicalRecord(`quality/evidence/mini-task-quality/${sha256(forgedIntentRaw)}.json`, forgedIntentRaw);
 
-    const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
-    authorizeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
-    await expect(executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref }))
-      .rejects.toThrow(/aggregation|provider evidence|review attempt|canonical semantic review result|conflict/i);
+    expect(() => prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery }))
+      .toThrow(/mini-task quality intents conflict/i);
     expect(existsSync(state.candidate.worktreeRoot)).toBe(true);
   });
 
@@ -562,6 +565,29 @@ describe("mini-task delivery RED contract", () => {
     expect(quality.status).toBe("incomplete");
     expect(() => prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery }))
       .toThrow(/code_review/);
+    expect(existsSync(state.candidate.worktreeRoot)).toBe(true);
+  });
+
+  it("does not project a recorded mini review with actionable findings as clean", () => {
+    const state = deliveryFixture();
+    const finding = {
+      severity: "major",
+      path: "src/feature.txt", issue: "feature behavior is incomplete", recommendation: "repair the feature",
+      root_cause: "the implementation omits the required behavior", evidence_kind: "direct", evidence: "current source does not implement the requirement",
+    };
+    const findingId = `F-${sha256(`${finding.path}\u0000\u0000feature behavior is incomplete`).slice(0, 12)}`;
+    const quality = publishMiniTaskQualityFixture(state, {
+      implementationFindings: [finding],
+      findingDispositions: [{
+        finding_id: findingId, original_fact: "feature behavior is incomplete", source: "current implementation review",
+        consequence: "delivery behavior may be wrong", status: "fixed", next_action: "repair before delivery",
+        evidence_ref: "quality/evidence/mini-task-implementation-fix.json", owner: "task owner",
+        consumer: "delivery close", retain_or_delete: "retain",
+      }],
+    });
+    expect(quality.status).toBe("ready");
+    expect(() => prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery }))
+      .toThrow(/code_review|review/i);
     expect(existsSync(state.candidate.worktreeRoot)).toBe(true);
   });
 
@@ -583,8 +609,31 @@ describe("mini-task delivery RED contract", () => {
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-function reviewRawFor({ taskId, snapshotTree, reviewKind, attemptId = "fixture-attempt" }) {
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function fixtureReviewPolicy(provider = "fixture") {
+  return {
+    source: "wh_review.v2",
+    mode: "single_round",
+    minimum_heterologous: 1,
+    requested_profiles: [provider],
+    eligible_profiles: [provider],
+    same_source_exclusions: [],
+    effective_profiles: [{ provider, adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null }],
+  };
+}
+function reviewRawFor({ taskId, snapshotTree, reviewKind, attemptId = "fixture-attempt", findings = [] }) {
   const phaseId = reviewKind.endsWith("design") ? "mini-task-design" : "mini-task-implementation";
+  const providerReview = { findings };
+  const aggregation = aggregateCanonicalProviderResults([{
+    provider: "fixture",
+    identity: { provider: "fixture", adapter: "fixture", source_id: "fixture-source" },
+    review: providerReview,
+    evidenceAnchors: findings.map(() => true),
+  }], 1, { profilePriority: ["fixture"], requireIdentity: true, requireSourceId: true });
   return `${JSON.stringify({
     version: "wh-review-result.v1", task_id: taskId, stage: "build-code", review_track: null,
     review_kind: reviewKind, subject_kind: "phase", phase_id: phaseId, review_scope: "phase",
@@ -592,8 +641,9 @@ function reviewRawFor({ taskId, snapshotTree, reviewKind, attemptId = "fixture-a
     source: { target_commit: "a".repeat(40), base_commit: "a".repeat(40), base_tree: snapshotTree, captured_head: "a".repeat(40) },
     snapshot_tree: snapshotTree, material_id: "b".repeat(64),
     attempt_ref: `quality/reviews/attempts/${attemptId}/attempt.json`,
-    provider_results: [{ provider: "fixture", output: { findings: [] } }], findings: [],
-    adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    provider_results: [{ provider: "fixture", output: providerReview }],
+    findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   })}\n`;
 }
 function verifyReviewRawFor({ taskId, snapshotTree, subject }) {
@@ -630,11 +680,13 @@ function publishReviewChain(state, { ref, raw }) {
   const outputRef = `quality/reviews/attempts/${attemptId}/providers/${provider}.output.json`;
   const output = {
     schema_version: "wh-review-provider-output.v1", task_id: result.task_id, stage: result.stage,
-    attempt_id: attemptId, provider, content, content_hash: sha256(content),
+    attempt_id: attemptId, provider, content, content_hash: sha256(content), evidence_anchor_valid: (result.provider_results?.[0]?.output?.findings ?? []).map(() => true),
   };
   const { version, provider_results, findings, adjudication, attempt_ref, ...scope } = result;
   const attempt = {
     version: "wh-review-attempt.v1", ...scope, attempt_id: attemptId,
+    review_policy: fixtureReviewPolicy(provider),
+    policy_snapshot_hash: sha256(canonicalJson(fixtureReviewPolicy(provider))),
     provider_attempts: [{ provider, identity, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
   };
@@ -710,6 +762,8 @@ function captureStructuredMiniAcTrace(state, receipt, suffix = "default", status
 
 function publishMiniTaskQualityFixture(state, {
   implementationStatus = "passed",
+  implementationFindings = [],
+  findingDispositions,
   humanConfirmation = { decision: "accepted", subject_ref: "mini-task-quality" },
   testCommand = "true",
   acStatus = "passed",
@@ -722,7 +776,7 @@ function publishMiniTaskQualityFixture(state, {
   const designFact = recordMiniTaskDesignReview({ task: state.task, kernel: state.kernel, review: { ref: designRef, sha256: sha256(designRaw) } });
   const implementationRaw = implementationStatus === "failed"
     ? attemptRawFor({ taskId: state.taskId, snapshotTree: snapshot.tree, reviewKind: "mini_task.implementation", attemptId: "fixture-implementation" })
-    : reviewRawFor({ taskId: state.taskId, snapshotTree: snapshot.tree, reviewKind: "mini_task.implementation", attemptId: "fixture-implementation" });
+    : reviewRawFor({ taskId: state.taskId, snapshotTree: snapshot.tree, reviewKind: "mini_task.implementation", attemptId: "fixture-implementation", findings: implementationFindings });
   const implementationRef = "quality/reviews/results/mini-task-implementation-fixture.json";
   if (implementationStatus === "failed") state.kernel.publishCanonicalRecord(implementationRef, implementationRaw);
   else publishReviewChain(state, { ref: implementationRef, raw: implementationRaw });
@@ -742,6 +796,7 @@ function publishMiniTaskQualityFixture(state, {
     coverageLimits: ["temporary Git fixture only"],
     skipReasons: ["no real remote review"],
     remainingRisks: ["caller must rerun the original stage after A resume"],
+    findingDispositions,
     humanConfirmation,
   });
   return { ...quality, designFact };

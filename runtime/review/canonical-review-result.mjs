@@ -19,16 +19,17 @@ export function parseCanonicalReviewerOutput(raw, options = {}) {
 }
 
 function adapterOf(provider) {
-  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?$/.test(provider)) return null;
+  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z0-9](?:[a-z0-9-]|\.(?=[a-z0-9]))*)?$/.test(provider)) return null;
   return provider.split("/", 1)[0];
 }
-function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = false } = {}) {
+function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = false, requireConfigId = false } = {}) {
   const provider = item?.provider;
   const adapter = item?.identity?.adapter ?? adapterOf(provider);
   const explicitSourceId = Object.hasOwn(item ?? {}, "source_id") ? item.source_id : item?.identity?.source_id;
   if (typeof provider !== "string" || provider.trim() === "" || typeof adapter !== "string" || adapter === "") return null;
   if (requireIdentity && !Object.hasOwn(item ?? {}, "identity")) return null;
   if (Object.hasOwn(item ?? {}, "identity") && (!item.identity || typeof item.identity !== "object" || item.identity.provider !== provider || item.identity.adapter !== adapterOf(provider) || typeof item.identity.source_id !== "string" || item.identity.source_id.trim() === "")) return null;
+  if (requireConfigId && (typeof item?.identity?.config_id !== "string" || item.identity.config_id.trim() === "")) return null;
   if (Object.hasOwn(item ?? {}, "source_id") && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
   if (requireSourceId && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
   return { provider, adapter, source_id: explicitSourceId ?? provider };
@@ -170,9 +171,7 @@ export function conservativelyAssessUnattestedAnchors(items) {
 
 function policyFacts(attempt, fallbackMinimumReviewers) {
   const policy = attempt.review_policy ?? null;
-  if (policy?.source !== "wh_review.v2") {
-    return { minimum: fallbackMinimumReviewers, priority: policy?.requested_profiles ?? [], eligible: null };
-  }
+  if (policy?.source !== "wh_review.v2") invalid("formal review requires a wh_review.v2 policy");
   if (attempt.policy_snapshot_hash !== createHash("sha256").update(canonicalJson(policy)).digest("hex")) {
     invalid("review policy snapshot hash mismatch");
   }
@@ -181,7 +180,7 @@ function policyFacts(attempt, fallbackMinimumReviewers) {
   if (!Array.isArray(requested) || attempted.size !== requested.length || requested.some((provider) => !attempted.has(provider))) {
     invalid("provider attempts do not exactly match requested profiles");
   }
-  if (requested.some((provider) => sourceIdentityOf(attempt.provider_attempts.find((item) => item.provider === provider), { requireIdentity: true, requireSourceId: true }) === null)) invalid("review provider source identity is missing");
+  if (requested.some((provider) => sourceIdentityOf(attempt.provider_attempts.find((item) => item.provider === provider), { requireIdentity: true, requireSourceId: true, requireConfigId: true }) === null)) invalid("review provider broker identity is missing");
   if (!Number.isSafeInteger(policy.minimum_heterologous) || policy.minimum_heterologous < 1) invalid("review quorum is invalid");
   if (!Array.isArray(policy.eligible_profiles)) invalid("eligible review profiles are invalid");
   if (!Array.isArray(policy.effective_profiles) || policy.effective_profiles.some((profile) => {

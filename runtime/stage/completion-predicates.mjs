@@ -96,16 +96,21 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   "verify-code": Object.freeze({}),
 });
 
-export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, subject = fact?.subject, review_status: reviewStatus } = {}) {
+export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, subject = fact?.subject, review_status: reviewStatus, review_source: reviewSource } = {}) {
   if (kind === "review") {
     // A real unavailable attempt is a current quality fact, but it is not a
     // completed independent review. It remains visible to stage handlers and
     // never blocks same-task repair; it must not satisfy formal completion.
     if (stage === "verify-code" && subject === "code_review") {
+      if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
       // verify-code has one stricter review predicate than the advisory and
       // build-code review subjects: the authenticated result must explicitly
       // say that it is clean. `recorded` only proves that a review record
       // exists; it does not prove that the review has no open finding.
+      return fact.status === "recorded" && reviewStatus === "clean";
+    }
+    if (stage === "build-code" && subject === "integration_review") {
+      if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
       return fact.status === "recorded" && reviewStatus === "clean";
     }
     return fact.status === "recorded";
@@ -165,7 +170,8 @@ export function deriveStageCompletion(stage, observations = []) {
     const observation = selected.observation;
     const fact = observation.fact?.value ?? observation.fact;
     const reviewStatus = observation.review_status ?? observation.freshness?.review_status;
-    if (qualityPredicateSatisfied(fact, fact.kind, { stage, subject, review_status: reviewStatus })) {
+    const reviewSource = observation.review_source ?? observation.freshness?.review_source ?? fact.review_source ?? fact.source;
+    if (qualityPredicateSatisfied(fact, fact.kind, { stage, subject, review_status: reviewStatus, review_source: reviewSource })) {
       satisfied.set(subject, observation);
     }
   }

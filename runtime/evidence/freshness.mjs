@@ -118,6 +118,9 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       const outputRaw = readBound({ ref: value.output_ref, sha256: value.output_hash }, read, dependencies, outputKey);
       if (outputRaw !== undefined) dependencies[outputKey] = "current";
     } else if (evidence.evidence_type === "review_result") {
+      if (!/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(evidence.ref)) {
+        throw new Error("review evidence ref is outside the canonical wh-review namespace");
+      }
       const adviceReview = isAdviceReviewFact(fact);
       if (value.version === "wh-review-attempt.v1") {
         validateSchema("attempt", value);
@@ -235,7 +238,10 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   for (const evidence of fact.evidence ?? []) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
-    if (raw !== undefined && fact.stage === "verify-code" && fact.subject === "code_review" && evidence.evidence_type === "review_result") {
+    if (raw !== undefined
+        && ((fact.stage === "verify-code" && fact.subject === "code_review")
+          || (fact.stage === "build-code" && fact.subject === "integration_review"))
+        && evidence.evidence_type === "review_result") {
       try {
         const parsed = JSON.parse(raw);
         if (parsed?.version === "wh-review-result.v1" && Array.isArray(parsed.findings)) {

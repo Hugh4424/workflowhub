@@ -609,9 +609,7 @@ function authenticatedTestSnapshotCommit(task, fact, { currentSnapshotTree = fac
   } catch (error) {
     throw unavailableVerifySnapshotCommit(`test receipt is not an authenticated passing record: ${error.message}`);
   }
-  const receiptTreeMatchesCurrent = receipt?.snapshot_tree === currentSnapshotTree
-    || (typeof currentSnapshotTree === "string"
-      && isMaterialOnlySnapshotDelta(task.manifest.target_repo_root, receipt?.snapshot_tree, currentSnapshotTree, task.identity.taskId));
+  const receiptTreeMatchesCurrent = receipt?.snapshot_tree === currentSnapshotTree;
   const receiptStage = receipt?.stage;
   const crossStageReuse = receiptStage === "build-code";
   if (receipt?.schema_version !== "workflowhub-receipt.v1"
@@ -635,29 +633,129 @@ function authenticatedTestSnapshotCommit(task, fact, { currentSnapshotTree = fac
       || tree.stdout.toLowerCase() !== receipt.snapshot_tree.toLowerCase()
       || !parents.ok
       || (isSyntheticDirtySnapshot && (parentList.length !== 1 || parentList[0].toLowerCase() !== head))
-      || (!isSyntheticDirtySnapshot && parentList.length > 1)) {
+      || (!isSyntheticDirtySnapshot && parentList.length > 1)
+  ) {
     throw unavailableVerifySnapshotCommit(`snapshot commit does not bind its tree and parent for ${evidence.ref}`);
   }
   return commit;
 }
 
 function factMatchesExpected(value, expected, root, taskId) {
-  const snapshotDelta = (from, to) => isMaterialOnlySnapshotDelta(root, from, to, taskId)
-    || isExecutionRecordOnlyMaterialDelta(root, from, to, taskId);
-  const treeMatches = expected.snapshotTree === undefined
-    || value.snapshot_tree === expected.snapshotTree
-    || (root && snapshotDelta(value.snapshot_tree, expected.snapshotTree));
-  const reusableMaterialOnlyDelta = expected.snapshotTree !== undefined
-    && value.snapshot_tree !== expected.snapshotTree
-    && root
-    && snapshotDelta(value.snapshot_tree, expected.snapshotTree);
+  // A current close fact must bind to the exact current snapshot. Historical
+  // compatibility for material or execution-only writebacks is read-only
+  // diagnostic behavior and cannot satisfy a vNext completion predicate.
+  const treeMatches = expected.snapshotTree === undefined || value.snapshot_tree === expected.snapshotTree;
   const materialMatches = expected.materialRevision === undefined
-    || value.material_revision === expected.materialRevision
-    || reusableMaterialOnlyDelta;
+    || value.material_revision === expected.materialRevision;
   return treeMatches && materialMatches;
 }
 
+function deriveMiniReviewStatus(task, miniReview) {
+  if (miniReview.value.status !== "recorded") return "unavailable";
+  const firstEvidence = miniReview.value.evidence?.[0];
+  const first = readQualityEvidenceBinding(task, firstEvidence, "mini-task review evidence").value;
+  let result = first;
+  if (first?.schema_version === "workflowhub-mini-task-implementation-evidence.v1") {
+    if (first.task_id !== task.identity.taskId || first.snapshot_tree !== miniReview.value.snapshot_tree) {
+      throw new Error("mini-task implementation review packet is not bound to the current snapshot");
+    }
+    result = readQualityEvidenceBinding(task, first.implementation_review, "mini-task implementation review").value;
+  }
+  if (result?.version !== "wh-review-result.v1"
+      || result.task_id !== task.identity.taskId
+      || result.snapshot_tree !== miniReview.value.snapshot_tree) {
+    throw new Error("mini-task review evidence is not a canonical current review result");
+  }
+  validateSchema("result", result);
+  authenticateReviewEvidence(task, result);
+  return canonicalReviewFindings(result).some(isActionableSeriousFinding) ? "findings" : "clean";
+}
+
 function currentVerifyFacts(task, expected = {}) {
+  if (expected.allowMiniTaskFocused && typeof task.listCanonicalMiniTaskQualityEvidenceRefs === "function") {
+    // Mini-task quality is a delivery-local intent.  It is authenticated here
+    // for the legacy close consumer, but it is deliberately never projected
+    // into quality/facts or used by ordinary stage completion.
+    for (const ref of task.listCanonicalQualityFactRefs()) currentQualityValue(task, ref);
+    const miniValues = task.listCanonicalMiniTaskQualityEvidenceRefs().map((ref) => {
+      const raw = task.readRecord(ref);
+      const value = JSON.parse(raw);
+      if (value?.schema_version !== "workflowhub-mini-task-quality-evidence.v1"
+          || ref !== `quality/evidence/mini-task-quality/${sha256(raw)}.json`
+          || value.task_id !== task.identity.taskId
+          || !["build-code", "verify-code"].includes(value.stage)
+          || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+          || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")
+          || typeof value.kind !== "string"
+          || typeof value.subject !== "string"
+          || !Array.isArray(value.evidence)
+          || value.evidence.length === 0) {
+        throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} is not a bound mini-task quality intent`);
+      }
+      const expectedIntent = {
+        mini_task_design_review: { stage: "build-code", kind: "review", statuses: new Set(["recorded", "unavailable"]) },
+        mini_task_implementation_review: { stage: "build-code", kind: "review", statuses: new Set(["recorded", "unavailable"]) },
+        independent_review: { stage: "verify-code", kind: "review", statuses: new Set(["recorded", "unavailable"]) },
+        full_tests_fresh: { stage: "verify-code", kind: "test", statuses: new Set(["passed", "failed"]) },
+        acceptance_criteria: { stage: "verify-code", kind: "acceptance_criterion", statuses: new Set(["passed", "missing"]) },
+        finding_dispositions: { stage: "verify-code", kind: "acceptance_criterion", statuses: new Set(["passed", "missing"]) },
+        exceptions: { stage: "verify-code", kind: "acceptance_criterion", statuses: new Set(["passed", "missing"]) },
+        human_confirmation: { stage: "verify-code", kind: "confirmation", statuses: new Set(["passed", "failed", "missing"]) },
+      }[value.subject];
+      if (!expectedIntent || value.stage !== expectedIntent.stage || value.kind !== expectedIntent.kind || !expectedIntent.statuses.has(value.status)) {
+        throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} has an invalid kind/status/stage for ${value.subject}`);
+      }
+      for (const [index, evidence] of value.evidence.entries()) {
+        if (!evidence || typeof evidence.ref !== "string" || !/^quality\//.test(evidence.ref) || !HASH.test(evidence.sha256 ?? "")) {
+          throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} evidence[${index}] is not canonical`);
+        }
+        if (sha256(task.readRecord(evidence.ref)) !== evidence.sha256) {
+          throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} evidence[${index}] hash mismatch`);
+        }
+      }
+      return { ref, value };
+    }).filter(({ value }) => value.stage === "verify-code"
+      || (value.stage === "build-code" && value.subject === "mini_task_implementation_review"))
+      .filter(({ value }) => factMatchesExpected(value, expected, expected.worktreeRoot, task.identity.taskId));
+    const bySubject = new Map();
+    for (const item of miniValues) {
+      const previous = bySubject.get(item.value.subject);
+      if (previous) throw new Error(`mini-task quality intents conflict: ${item.value.subject}`);
+      bySubject.set(item.value.subject, item);
+    }
+    const requiredSubjects = Object.keys(STAGE_PREDICATES["verify-code"]);
+    // Mini-task intents are delivery-local. Never map their subjects into the
+    // formal verify-code namespace, even when a caller forges a canonical
+    // subject such as code_review or human_confirmation.
+    const miniReview = bySubject.get("independent_review") ?? bySubject.get("mini_task_implementation_review");
+    const miniConfirmation = bySubject.get("human_confirmation");
+    const miniTests = bySubject.get("full_tests_fresh");
+    const miniAcceptance = bySubject.get("acceptance_criteria");
+    return Object.freeze({
+      vnext: true,
+      facts: {
+        ...Object.fromEntries(requiredSubjects.map((subject) => [subject, null])),
+        tests: miniTests
+          ? { kind: miniTests.value.kind, snapshot_tree: miniTests.value.snapshot_tree, status: miniTests.value.status }
+          : null,
+        acceptance_criteria: miniAcceptance
+          ? { kind: miniAcceptance.value.kind, snapshot_tree: miniAcceptance.value.snapshot_tree, status: miniAcceptance.value.status }
+          : null,
+        finding_dispositions: bySubject.get("finding_dispositions")
+          ? { kind: bySubject.get("finding_dispositions").value.kind, snapshot_tree: bySubject.get("finding_dispositions").value.snapshot_tree, status: bySubject.get("finding_dispositions").value.status }
+          : null,
+        exceptions: bySubject.get("exceptions")
+          ? { kind: bySubject.get("exceptions").value.kind, snapshot_tree: bySubject.get("exceptions").value.snapshot_tree, status: bySubject.get("exceptions").value.status }
+          : null,
+        mini_task_implementation_review: miniReview
+          ? { kind: miniReview.value.kind, snapshot_tree: miniReview.value.snapshot_tree, status: miniReview.value.status, review_status: deriveMiniReviewStatus(task, miniReview) }
+          : null,
+        mini_task_human_confirmation: miniConfirmation
+          ? { kind: miniConfirmation.value.kind, snapshot_tree: miniConfirmation.value.snapshot_tree, status: miniConfirmation.value.status }
+          : null,
+      },
+    });
+  }
   const relevantSubjects = new Set(Object.keys(STAGE_PREDICATES["verify-code"]));
   const allValues = task.listCanonicalQualityFactRefs()
     .map((ref) => {
@@ -707,7 +805,7 @@ function currentVerifyFacts(task, expected = {}) {
     // explicitly marked mini-task close mode. Ordinary delivery still needs a
     // real verify-code/code_review fact and cannot use this alias.
     const candidates = subject === "code_review" && expected.allowMiniTaskFocused
-      ? ["code_review", "independent_review"]
+      ? ["code_review"]
       : [subject];
     const item = candidates.map((candidate) => bySubject.get(candidate)).find(Boolean);
     // `authenticatedQualityEvidence` validates the nested evidence bytes and
@@ -989,18 +1087,28 @@ function createOrVerify(task, path, record, label) {
   return record;
 }
 
-function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, currentSnapshotTree = null, repositoryRoot = null) {
+function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, currentSnapshotTree = null, repositoryRoot = null, closeMode = "ordinary") {
   if (acceptedVerify?.vnext !== true) {
     return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
   }
   const requiredKinds = { ...STAGE_PREDICATES["verify-code"] };
   const requiredSubjects = Object.keys(requiredKinds);
-  const required = requiredSubjects.map((subject) => acceptedVerify?.facts?.[subject === "full_tests_fresh" ? "tests" : subject]);
+  const required = requiredSubjects.map((subject) => {
+    if (closeMode === "mini-task" && subject === "code_review") {
+      return acceptedVerify?.facts?.mini_task_implementation_review;
+    }
+    if (closeMode === "mini-task" && subject === "human_confirmation") {
+      return acceptedVerify?.facts?.mini_task_human_confirmation;
+    }
+    return acceptedVerify?.facts?.[subject === "full_tests_fresh" ? "tests" : subject];
+  });
   const missing = requiredSubjects.filter((subject, index) => {
     const fact = required[index];
     const kind = requiredKinds[subject];
     return !fact || fact.kind !== kind || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === ""
-      || !qualityPredicateSatisfied(fact, kind);
+      || !qualityPredicateSatisfied(fact, kind, closeMode === "mini-task"
+        ? { stage: "verify-code", subject, review_status: fact.review_status }
+        : {});
   });
   if (missing.length) {
     const state = existsSync(worktreeRoot) ? "current verify-code quality facts are incomplete" : "current verify-code quality facts are incomplete after worktree removal";
@@ -1017,20 +1125,13 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, c
   // second build-code integration review here duplicated work without adding
   // a new acceptance question. The explicit close confirmation decides what
   // to do with the current verification conclusion.
-  // A task-card execution-status write is bookkeeping, not a new
-  // implementation subject. It may change the full tree, but only that
-  // bounded block is allowed to keep the old quality facts current.
-  // After delivery cleanup the accepted worktree is gone. Material-only
-  // freshness still needs Git objects to compare the old fact tree with the
-  // current tree, so use the target repository instead of a deleted cwd.
-  const deltaRoot = worktreeRoot && existsSync(worktreeRoot) ? worktreeRoot : repositoryRoot;
-  const stale = required.filter((fact) => fact?.snapshot_tree !== snapshot.tree
-    && !isMaterialOnlySnapshotDelta(deltaRoot, fact?.snapshot_tree, snapshot.tree, taskId)
-    && !isExecutionRecordOnlyMaterialDelta(deltaRoot, fact?.snapshot_tree, snapshot.tree, taskId));
+  // Historical freshness helpers may explain execution/material writebacks,
+  // but current close requires the exact snapshot that produced the facts.
+  const stale = required.filter((fact) => fact?.snapshot_tree !== snapshot.tree);
   if (stale.length) {
     return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(stale.map((fact) => fact.snapshot_tree))] });
   }
-  return Object.freeze({ current: true, reason: snapshot.tree === currentSnapshotTree ? "current" : "record-only-task-writeback", snapshot_tree: snapshot.tree });
+  return Object.freeze({ current: true, reason: "current", snapshot_tree: snapshot.tree });
 }
 
 /** Persist one immutable, plan-bound close decision. */
@@ -1486,7 +1587,14 @@ export function prepareDeliveryClosePlan({
     qualityReasons.push(`product-release: ${productRelease.reasons.join(", ")}`);
   }
   let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
-  if (acceptedVerify) verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree, task.identity.taskId, currentSnapshot.tree);
+  if (acceptedVerify) verifyFreshness = verifyFactsFreshForClose(
+    acceptedVerify,
+    worktree,
+    task.identity.taskId,
+    currentSnapshot.tree,
+    null,
+    allowMiniTaskFocused ? "mini-task" : "ordinary",
+  );
   if (!verifyFreshness.current) {
     if (!riskClose) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
     qualityReasons.push(`verify-code freshness: ${verifyFreshness.reason}`);
@@ -1584,7 +1692,14 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     verifyError = error;
   }
   const verifyFreshness = acceptedVerify
-    ? verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root, task.identity.taskId, taskSnapshotTree.ok ? taskSnapshotTree.stdout : null, root)
+    ? verifyFactsFreshForClose(
+      acceptedVerify,
+      delivery.worktree_root,
+      task.identity.taskId,
+      taskSnapshotTree.ok ? taskSnapshotTree.stdout : null,
+      root,
+      delivery.close_mode,
+    )
     : { current: false, reason: verifyError?.message ?? "verify-code facts are unavailable" };
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;

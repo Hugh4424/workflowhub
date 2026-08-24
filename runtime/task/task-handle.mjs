@@ -556,6 +556,32 @@ function makeTaskHandle(taskPath, manifest) {
       if (!CANONICAL_STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
       return Object.freeze([]);
     },
+    /** Enumerate immutable stage-agent outcome envelopes for replay authentication. */
+    listCanonicalStageOutcomeRefs(stage) {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      if (!CANONICAL_STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+      const qualityRoot = resolve(realTaskPath, "quality");
+      const outcomesRoot = resolve(qualityRoot, "evidence", "stage-outcomes", stage);
+      assertInside(realTaskPath, qualityRoot, "quality directory");
+      assertInside(realTaskPath, outcomesRoot, "stage outcomes directory");
+      if (!existsSync(outcomesRoot)) return Object.freeze([]);
+      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
+      const outcomesIdentity = directorySnapshot(realTaskPath, outcomesRoot);
+      const refs = readdirSync(outcomesRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(outcomesRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`stage outcome must be a regular non-symlink JSON file: ${entry.name}`);
+          return `quality/evidence/stage-outcomes/${stage}/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(outcomesIdentity);
+      verifyDirectorySnapshot(qualityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate only canonical wh-review result records. */
     listCanonicalReviewResultRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -634,6 +660,33 @@ function makeTaskHandle(taskPath, manifest) {
         })
         .sort((left, right) => left.localeCompare(right));
       verifyDirectorySnapshot(factsIdentity);
+      verifyDirectorySnapshot(qualityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate mini-task quality intents; these are not vNext quality facts. */
+    listCanonicalMiniTaskQualityEvidenceRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const qualityRoot = resolve(realTaskPath, "quality");
+      const evidenceRoot = resolve(qualityRoot, "evidence", "mini-task-quality");
+      assertInside(realTaskPath, qualityRoot, "quality directory");
+      assertInside(realTaskPath, evidenceRoot, "mini-task quality evidence directory");
+      if (!existsSync(evidenceRoot)) return Object.freeze([]);
+      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
+      const evidenceIdentity = directorySnapshot(realTaskPath, evidenceRoot);
+      const refs = readdirSync(evidenceRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(evidenceRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (stat.isSymbolicLink() || !stat.isFile()) {
+            throw new Error(`mini-task quality evidence must be a regular non-symlink JSON file: ${entry.name}`);
+          }
+          return `quality/evidence/mini-task-quality/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(evidenceIdentity);
       verifyDirectorySnapshot(qualityIdentity);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);

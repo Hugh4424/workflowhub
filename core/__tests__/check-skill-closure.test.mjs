@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { afterEach, expect, it } from "vitest";
-import { checkSkillClosure } from "../../runtime/evidence/check-skill-closure.mjs";
+import { checkReleaseClosure, checkSkillClosure } from "../../runtime/evidence/check-skill-closure.mjs";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const roots = [];
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 function fixture({
@@ -57,6 +59,11 @@ function fixture({
 
 it("accepts a closed repository-local stage manifest", () => {
   expect(checkSkillClosure(fixture())).toEqual({ ok: true, errors: [] });
+});
+
+it("accepts the current repository closure after bundle/catalog generation", () => {
+  const result = checkSkillClosure(REPOSITORY_ROOT);
+  expect(result, result.errors.join("\n")).toEqual({ ok: true, errors: [] });
 });
 
 it("accepts a direct package without repeating every dependency in the stage prompt", () => {
@@ -141,4 +148,37 @@ runtime_capabilities: []
 external_capabilities: []
 `);
   expect(checkSkillClosure(root).errors.join("\n")).toMatch(/delegated wh-review lens must not appear in stage manifest: lens/);
+});
+
+it("rejects an empty release closure instead of treating an empty package as closed", () => {
+  const result = checkReleaseClosure({
+    skillRelease: { skill: "workflowhub", files: [] },
+    runnerRelease: { release: "workflowhub-runner", files: [] },
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors).toEqual(expect.arrayContaining([
+    "skill release closure is empty",
+    "runner release closure is empty",
+  ]));
+});
+
+it("rejects shared release files whose content hashes disagree", () => {
+  const result = checkReleaseClosure({
+    skillRelease: { skill: "workflowhub", files: [{ path: "shared/SKILL.md", sha256: "a".repeat(64) }] },
+    runnerRelease: { release: "workflowhub-runner", files: [{ path: "shared/SKILL.md", sha256: "b".repeat(64) }] },
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors).toContain("shared release file hash mismatch: shared/SKILL.md");
+});
+
+it("rejects release files without an authenticated content hash", () => {
+  const result = checkReleaseClosure({
+    skillRelease: { skill: "workflowhub", files: [{ path: "shared/SKILL.md" }] },
+    runnerRelease: { release: "workflowhub-runner", files: [{ path: "shared/SKILL.md", sha256: "z".repeat(64) }] },
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors).toEqual(expect.arrayContaining([
+    "skill release file sha256 is invalid: shared/SKILL.md",
+    "runner release file sha256 is invalid: shared/SKILL.md",
+  ]));
 });

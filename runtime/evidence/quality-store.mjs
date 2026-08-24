@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { readTaskIndex, replaceTaskIndex, withStoreLock } from "../task/task-store.mjs";
@@ -21,6 +21,18 @@ function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
+}
+
+function isCanonicalWorkflowHubTaskRoot(taskRoot) {
+  // Direct quality-store publication is forbidden for the canonical vNext
+  // task root. Resolve aliases before checking the shape so a symlink cannot
+  // turn the same TaskHandle store into an apparently unrelated path.
+  let canonicalRoot;
+  try { canonicalRoot = realpathSync(taskRoot); }
+  catch { canonicalRoot = resolve(taskRoot); }
+  const parts = canonicalRoot.replaceAll("\\", "/").split("/");
+  const tasksIndex = parts.lastIndexOf("tasks");
+  return tasksIndex > 0 && parts[tasksIndex - 1].toLowerCase() === "workflowhub" && tasksIndex + 1 < parts.length;
 }
 
 function atomicCreate(root, relativePath, raw, { testHooks } = {}) {
@@ -60,6 +72,11 @@ function atomicCreate(root, relativePath, raw, { testHooks } = {}) {
 }
 
 function assertQualityValue(root, kind, value) {
+  // Reject the canonical WorkflowHub task root before any editable task-index
+  // read. The TaskKernel/stage-runtime writer owns that namespace.
+  if (isCanonicalWorkflowHubTaskRoot(root)) {
+    throw new Error("current quality facts require the stage-runtime/TaskKernel canonical writer");
+  }
   if (!KINDS.has(kind)) throw new TypeError("quality kind must be reviews or tests");
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.task_id !== "string" || typeof value.stage !== "string" || typeof value.status !== "string" || typeof value.source !== "string" || typeof value.schema_version !== "string" || !/^[a-f0-9]{64}$/.test(value.content_hash ?? "")) {
     throw new TypeError("quality fact fields are invalid");

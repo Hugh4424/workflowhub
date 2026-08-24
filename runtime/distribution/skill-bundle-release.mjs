@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
+import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
+import { checkSkillClosure } from "../evidence/check-skill-closure.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const FORBIDDEN = /(?:^|\/)(?:node_modules|tests?|__tests__|specs?|evidence|archive|history|historical)(?:\/|$)|(?:^|\/)[^/]*\.test\.[^/]+$/;
@@ -20,7 +22,8 @@ function assertRoot(candidate, label) {
 }
 
 function assertLocator(locator) {
-  if (!locator || path.isAbsolute(locator) || locator.split(/[\\/]/).includes("..")) {
+  if (!locator || locator.startsWith("/") || locator.startsWith("\\") || /^[A-Za-z]:/.test(locator)
+      || locator.includes("\\") || locator.split("/").some((segment) => segment === "." || segment === "..")) {
     throw new Error(`release locator must be contained and relative: ${locator}`);
   }
   if (FORBIDDEN.test(locator)) throw new Error(`skill bundle contains forbidden path: ${locator}`);
@@ -31,11 +34,13 @@ function addSkillClosure(root, name, locators, visited) {
   visited.add(name);
   const base = `skills/${name}`;
   const bundleLocator = `${base}/skill-bundle.json`;
-  const bundle = JSON.parse(fs.readFileSync(path.join(root, bundleLocator), "utf8"));
+  const expectedSkillPath = `${base}/SKILL.md`;
+  const { bundle } = validateSkillBundle(root, bundleLocator, expectedSkillPath);
   locators.add(bundleLocator);
   for (const entry of bundle.files ?? []) {
     const locator = path.posix.join(base, typeof entry === "string" ? entry : entry.path);
-    if (!FORBIDDEN.test(locator)) locators.add(locator);
+    assertLocator(locator);
+    locators.add(locator);
   }
   if (name !== "wh-review") return;
   const plan = JSON.parse(fs.readFileSync(path.join(root, base, "stage-skill-plan.json"), "utf8"));
@@ -72,6 +77,47 @@ function addStaticImportClosure(root, locators) {
   }
 }
 
+function assertSourceClosure(root) {
+  const result = checkSkillClosure(root);
+  if (!result.ok) throw new Error(`skill closure is not closed: ${result.errors.join("; ")}`);
+}
+
+function collectSourceClosure(root) {
+  assertSourceClosure(root);
+  const locators = new Set([
+    "runtime/schemas/skill-bundle.schema.json",
+    "runtime/schemas/stage-skill-deps.schema.json",
+  ]);
+  const visitedSkills = new Set();
+  for (const stage of STAGES) {
+    const base = `workflows/${stage}`;
+    for (const name of ["SKILL.md", "skill-deps.yaml", "steps.json"]) {
+      if (fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
+    }
+    const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
+    for (const dependency of manifest.skills ?? []) {
+      addSkillClosure(root, dependency.name, locators, visitedSkills);
+    }
+  }
+  addStaticImportClosure(root, locators);
+  return locators;
+}
+
+function captureSourceHashes(root, locators) {
+  return new Map([...locators].map((locator) => [locator, sha256(fs.readFileSync(path.join(root, locator)))]));
+}
+
+function assertSourceSnapshotStable(root, locators, sourceHashes, files) {
+  const copied = new Map(files.map((entry) => [entry.path, entry.sha256]));
+  for (const locator of locators) {
+    const expected = sourceHashes.get(locator);
+    const current = sha256(fs.readFileSync(path.join(root, locator)));
+    if (current !== expected || copied.get(locator) !== expected) {
+      throw new Error(`source changed during skill bundle release: ${locator}`);
+    }
+  }
+}
+
 async function copy(packageRoot, outputDir, locator) {
   assertLocator(locator);
   const source = path.join(packageRoot, locator);
@@ -93,45 +139,21 @@ export async function buildSkillBundleRelease({
   const root = assertRoot(packageRoot, "packageRoot");
   await fs.promises.mkdir(outputDir, { recursive: true });
   const destination = fs.realpathSync(outputDir);
-  const locators = new Set([
-    "runtime/schemas/skill-bundle.schema.json",
-    "runtime/schemas/stage-skill-deps.schema.json",
-  ]);
-  const visitedSkills = new Set();
-  for (const stage of STAGES) {
-    const base = `workflows/${stage}`;
-    for (const name of ["SKILL.md", "skill-deps.yaml", "steps.json"]) {
-      if (fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
-    }
-    const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
-    for (const dependency of manifest.skills ?? []) {
-      addSkillClosure(root, dependency.name, locators, visitedSkills);
-    }
-  }
-  addStaticImportClosure(root, locators);
+  const locators = collectSourceClosure(root);
+  const sourceHashes = captureSourceHashes(root, locators);
   const files = await Promise.all([...locators].sort().map((locator) => copy(root, destination, locator)));
-  // Source skill manifests may list test-only assets used by the Hub checkout.
-  // A clean Skill Bundle deliberately excludes those assets, so publish a
-  // self-consistent manifest whose closure matches the files actually copied.
-  // Otherwise an installed runner can fail before a conditional skill is
-  // invoked merely because its manifest points at an omitted test fixture.
-  for (const entry of files.filter(({ path: locator }) => locator.endsWith("/skill-bundle.json"))) {
-    const target = path.join(destination, entry.path);
-    const manifest = JSON.parse(fs.readFileSync(target, "utf8"));
-    const original = Array.isArray(manifest.files) ? manifest.files : [];
-    manifest.files = original.filter((asset) => {
-      const relative = typeof asset === "string" ? asset : asset?.path;
-      if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes("..")) return false;
-      const locator = path.posix.join(path.posix.dirname(entry.path), relative);
-      return locators.has(locator);
-    }).map((asset) => {
-      if (typeof asset === "string") return asset;
-      const locator = path.posix.join(path.posix.dirname(entry.path), asset.path);
-      return { ...asset, sha256: sha256(fs.readFileSync(path.join(destination, locator))) };
-    });
-    const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
-    await fs.promises.writeFile(target, bytes);
-    entry.sha256 = sha256(bytes);
+  assertSourceSnapshotStable(root, locators, sourceHashes, files);
+  // Re-resolve after copying so a manifest/import graph mutation cannot add
+  // an un-copied file or leave an obsolete file hash in the release.
+  const finalLocators = collectSourceClosure(root);
+  if (finalLocators.size !== locators.size || [...finalLocators].some((locator) => !locators.has(locator))) {
+    throw new Error("source closure changed during skill bundle release");
+  }
+  const finalHashes = captureSourceHashes(root, finalLocators);
+  for (const locator of locators) {
+    if (finalHashes.get(locator) !== sourceHashes.get(locator)) {
+      throw new Error(`source changed during skill bundle release: ${locator}`);
+    }
   }
   const contract = createSkillBundleContract({ major: runnerContractMajor, minMinor: runnerContractMinMinor });
   const release = {
