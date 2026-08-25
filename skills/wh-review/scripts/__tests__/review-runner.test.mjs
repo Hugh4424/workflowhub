@@ -95,6 +95,17 @@ function publicV3GroupForRequest(request, provider, options = {}) {
   });
 }
 
+function publicV3GroupForRequestMembers(request, members) {
+  const group = publicV3GroupForRequest(request, members[0].provider, members[0]);
+  const contracts = {
+    contractHash: request.request.contract_hash ?? "contract-hash",
+    contractId: request.request.contract_id ?? "contract-id",
+    semanticHash: request.request.semantic_hash ?? "semantic-hash",
+  };
+  group.providers = members.map(({ provider, ...options }) => publicV3Provider(provider, { ...options, ...contracts }));
+  return group;
+}
+
 function fixture(prefix = "workflowhub-review-") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
   temporary.push(root);
@@ -588,6 +599,110 @@ describe("broker boundary", () => {
     expect(result).toMatchObject({ status: "unavailable", resultRef: null });
     expect(calls).toHaveLength(1);
     expect(JSON.parse(task.readRecord(result.attemptRef)).provider_attempts[0].error).toMatchObject({ code: "OUTPUT_INVALID" });
+  });
+
+  it("keeps valid v3 siblings when one public broker member has invalid reviewer output", async () => {
+    const { attachmentRoot, task } = fixture("review-v3-member-normalization-");
+    const calls = [];
+    const providerClient = new ReviewProviderClient({ invoke: async (request) => {
+      calls.push(request);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(publicV3GroupForRequestMembers(request, [
+          { provider: "kimi/coding", output: "```json\n{\"findings\":[]}\n```" },
+          { provider: "grok/grok", output: "review preface\n{\"findings\":[]}" },
+          { provider: "codex/luna", output: "not valid reviewer JSON" },
+        ])),
+        stderr: "",
+      };
+    } });
+
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex",
+      providers: ["kimi/coding", "grok/grok", "codex/luna"], providerClient,
+      captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ status: "available" });
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    const semantic = JSON.parse(task.readRecord(result.resultRef));
+    expect(attempt).toMatchObject({
+      terminal_status: "semantic",
+      coverage: { group_outcome: "completed", valid_provider_count: 2 },
+    });
+    expect(attempt.provider_attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "kimi/coding", status: "completed", error: null }),
+      expect.objectContaining({ provider: "grok/grok", status: "completed", error: null }),
+      expect.objectContaining({ provider: "codex/luna", status: "failed", output_ref: null, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } }),
+    ]));
+    expect(semantic.provider_results.map(({ provider }) => provider)).toEqual(["grok/grok", "kimi/coding"]);
+  });
+
+  it("keeps an all-invalid v3 broker group unavailable without inventing findings", async () => {
+    const { attachmentRoot, task } = fixture("review-v3-all-invalid-");
+    const calls = [];
+    const providerClient = new ReviewProviderClient({ invoke: async (request) => {
+      calls.push(request);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(publicV3GroupForRequestMembers(request, [
+          { provider: "kimi/coding", output: "not JSON" },
+          { provider: "grok/grok", output: "{}" },
+          { provider: "codex/luna", output: "```json\n{\"findings\":[]}\n```\n```json\n{\"findings\":[]}\n```" },
+        ])),
+        stderr: "",
+      };
+    } });
+
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex",
+      providers: ["kimi/coding", "grok/grok", "codex/luna"], providerClient,
+      captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt).toMatchObject({
+      terminal_status: "unavailable",
+      error: { code: "OUTPUT_INVALID" },
+      coverage: { group_outcome: "completed", valid_provider_count: 0 },
+    });
+    expect(attempt.provider_attempts).toHaveLength(3);
+    for (const providerAttempt of attempt.provider_attempts) {
+      expect(providerAttempt).toMatchObject({ status: "failed", output_ref: null, error: { code: "OUTPUT_INVALID" } });
+    }
+  });
+
+  it("keeps a private finding path out of public review records", async () => {
+    const { attachmentRoot, task } = fixture("review-v3-private-output-");
+    const privatePath = "/private/review-output.md";
+    const providerClient = new ReviewProviderClient({ invoke: async (request) => ({
+      exitCode: 0,
+      stdout: JSON.stringify(publicV3GroupForRequestMembers(request, [{
+        provider: "kimi/coding",
+        output: JSON.stringify({ findings: [{
+          severity: "major", path: privatePath, line: 1, issue: "private path", root_cause: "invalid path",
+          recommendation: "remove it", evidence_kind: "direct", evidence: "private path was returned",
+        }] }),
+      }])),
+      stderr: "",
+    }) });
+
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex",
+      providers: ["kimi/coding"], providerClient, captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    const attemptRaw = task.readRecord(result.attemptRef);
+    const reportRaw = task.readRecord(result.reportRef);
+    expect(JSON.parse(attemptRaw)).toMatchObject({
+      provider_attempts: [{ provider: "kimi/coding", status: "failed", output_ref: null, error: { code: "OUTPUT_INVALID" } }],
+    });
+    expect(attemptRaw).not.toContain(privatePath);
+    expect(reportRaw).not.toContain(privatePath);
   });
 
   it("keeps a terminal unavailable group unavailable even when a member has output", async () => {

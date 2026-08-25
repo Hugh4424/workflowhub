@@ -628,10 +628,12 @@ function reviewGroupOutcome(provider, result, runtimeId) {
   try {
     return { provider, ...(result.identity ? { identity: result.identity } : {}), review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls: [{ runtimeId, provider: result }] };
   } catch {
+    const failure = { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" };
+    const failed = { ...result, status: "failed", output: null, error: failure, unavailable_diagnostics: failure };
     return {
       provider, ...(result.identity ? { identity: result.identity } : {}), review: null,
-      final: { ...result, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } },
-      calls: [{ runtimeId, provider: { ...result, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } } }],
+      final: failed,
+      calls: [{ runtimeId, provider: failed }],
     };
   }
 }

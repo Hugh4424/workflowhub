@@ -24,43 +24,6 @@ function containsPrivatePath(value) {
   return typeof value === "string" && (fileUri.test(value) || opaqueUrl.test(value) || absoluteWindowsPath.test(value) || windowsDrivePrefix.test(value) || windowsRootPath.test(value) || privateUnixPath.test(value) || dotPath.test(value));
 }
 
-function extractProviderJson(value) {
-  try { return JSON.parse(value); } catch { /* try the canonical fenced form below */ }
-  const fence = value.match(/^\s*```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```\s*$/i);
-  if (!fence) return null;
-  try { return JSON.parse(fence[1].trim()); } catch { return null; }
-}
-
-function validateProviderOutput(value) {
-  if (typeof value !== "string" || value.trim() === "") throw failure("OUTPUT_INVALID", "provider output must be a non-empty JSON object");
-  const parsed = extractProviderJson(value);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Object.hasOwn(parsed, "findings")) throw failure("OUTPUT_INVALID", "provider output must contain findings");
-  if (Object.keys(parsed).length !== 1 || !Array.isArray(parsed.findings)) throw failure("OUTPUT_INVALID", "provider output findings must be an array and the only top-level field");
-  const severities = new Set(["blocking", "major", "minor"]);
-  const evidenceKinds = new Set(["direct", "machine", "inferred"]);
-  for (const [index, finding] of parsed.findings.entries()) {
-    if (!finding || typeof finding !== "object" || Array.isArray(finding)
-        || !severities.has(finding.severity)
-        || typeof finding.path !== "string" || finding.path.trim() === ""
-        || typeof finding.issue !== "string" || !finding.issue.trim()
-        || typeof finding.recommendation !== "string" || !finding.recommendation.trim()
-        || (finding.line !== undefined && finding.line !== null && (!Number.isSafeInteger(finding.line) || finding.line < 1))) {
-      throw failure("OUTPUT_INVALID", `provider finding ${index} is invalid`);
-    }
-    const allowedKeys = new Set(["severity", "path", "line", "issue", "recommendation", "root_cause", "evidence_kind", "evidence"]);
-    if (Object.keys(finding).some((key) => !allowedKeys.has(key))) throw failure("OUTPUT_INVALID", `provider finding ${index} has unsupported fields`);
-    if (["major", "blocking"].includes(finding.severity)
-        && (typeof finding.root_cause !== "string" || !finding.root_cause.trim()
-          || !evidenceKinds.has(finding.evidence_kind)
-          || typeof finding.evidence !== "string" || !finding.evidence.trim())) {
-      throw failure("OUTPUT_INVALID", `provider finding ${index} requires root_cause, evidence_kind, and evidence`);
-    }
-    if (containsPrivatePath(finding.path)) {
-      throw failure("PUBLIC_RESULT_INVALID", "provider finding path contains a private path or file URI");
-    }
-  }
-}
-
 function digest(value) {
   return createHash("sha256").update(String(value ?? ""), "utf8").digest("hex");
 }
@@ -204,7 +167,6 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   if (value.deadline_ms !== null || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
   if (value.output !== null) {
     validateV3String(value.output, "v3 output");
-    validateProviderOutput(value.output);
   }
   if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id", { publicMetadata: true });
   const usage = validateV3Usage(value.usage);

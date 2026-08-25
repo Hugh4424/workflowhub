@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "15cc6fdd386436074b21e88a0ad9857e745c45d0825a48d2b17011811cf9f81d"
+      "sha256": "97087fcd1909f65fc5456dc56b8b67ee98408f319ab3ff16a83b0ddfd3b742da"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "035446283ac2d997b1c9c3c3f7fe52ff3959054084d6576441dc31a0077830d9"
+      "sha256": "1255a5a4abc899265b4174d470fbd7a0c25d641e2182b79c579008a52be22a9e"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
