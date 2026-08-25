@@ -205,7 +205,7 @@ describe("verify selects facts by freshness", () => {
       material_revision: "revision-old",
       snapshot_tree: "old-tree",
       kind: "review",
-      subject: "independent_review",
+      subject: "code_review",
       status: "recorded",
       ref: "verify-review-fact.json",
       sha256: "",
@@ -386,12 +386,12 @@ describe("verify selects facts by freshness", () => {
       status: "recorded",
       ref: "fact.json",
       sha256: "",
-      evidence: [{ ref: "review.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+      evidence: [{ ref: "quality/reviews/results/mini-task.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
     };
     const factRaw = JSON.stringify({ ...fact, schema_version: "quality-fact.v1" });
     const io = store();
     io.records.set("fact.json", factRaw);
-    io.records.set("review.json", reviewRaw);
+    io.records.set("quality/reviews/results/mini-task.json", reviewRaw);
     expect(evaluateFactFreshness({ ...fact, sha256: sha256(factRaw) }, {
       material_revision: fact.material_revision,
       snapshot_tree: snapshotTree,

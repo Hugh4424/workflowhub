@@ -10,6 +10,7 @@ import { authenticateOfficialInvocation } from "../../runtime/evidence/invocatio
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
+import { validateExistingWorkspaceBinding } from "../../runtime/task/workspace.mjs";
 import { bindCodexSessionTask, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
@@ -38,11 +39,25 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
   try { targetTop = realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim()); }
   catch (error) { throw new Error(`target repository validation failed: ${error.stderr?.toString().trim() || error.message}`); }
   if (targetTop !== target) throw new Error("target repository must be a Git toplevel directory");
+  const existingWorkspace = values["workspace-root"] === undefined
+    ? null
+    : validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: values["workspace-root"] });
   const inputs = values.inputs ? JSON.parse(readFileSync(values.inputs, "utf8")) : {};
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || Object.keys(inputs).some((key) => !["decision", "spec", "build_plan"].includes(key)) || Object.values(inputs).some((ref) => typeof ref !== "string" || !isAbsolute(ref))) throw new TypeError("inputs must contain only absolute decision/spec/build_plan accepted refs");
   const storageRoot = resolveStorageRoot({ env, home });
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
-  const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
+  const task = createTask({ storageRoot, manifest: {
+    schema_version: "1.0.0",
+    execution_mode: "per_invocation",
+    record_model: "vnext-single-write",
+    project_name: values.project,
+    task_id: values.task,
+    created_at: new Date().toISOString(),
+    target_repo_root: target,
+    ...(existingWorkspace ? { workspace_mode: "existing", workspace_root: existingWorkspace.worktreeRoot } : {}),
+    issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [],
+    inputs,
+  } });
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch, session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }) });
 }
@@ -50,13 +65,23 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
 function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null } = {}) {
   const current = readCurrentCodexSession({ cwd, sessionId });
   if (current.status !== "present") return Object.freeze({ status: current.status });
-  return bindCodexSessionTask({
-    projectName: task.identity.projectName,
-    taskId: task.identity.taskId,
-    taskPath: task.taskPath,
-    cwd,
-    sessionId,
-  });
+  try {
+    return bindCodexSessionTask({
+      projectName: task.identity.projectName,
+      taskId: task.identity.taskId,
+      taskPath: task.taskPath,
+      cwd,
+      sessionId,
+    });
+  } catch (error) {
+    // Session handoff is supporting provenance, not task/workspace authority.
+    // A different task already bound in the host session must be reported as
+    // unavailable instead of blocking an otherwise authenticated bootstrap.
+    if (/cannot switch the current WorkflowHub task|current WorkflowHub task binding path does not match/i.test(String(error?.message ?? error))) {
+      return Object.freeze({ status: "unavailable", reason: "session_task_binding_mismatch" });
+    }
+    throw error;
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

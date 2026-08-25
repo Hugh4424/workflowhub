@@ -16,6 +16,11 @@ describe("final cutover guard contracts", () => {
   const sha = createHash("sha256").update("true").digest("hex"), tree = "b".repeat(40);
   const providerFilePart = (provider) => `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
   const canonicalHash = (value) => createHash("sha256").update(`${JSON.stringify(value, null, 2)}\n`).digest("hex");
+  const canonicalJson = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+    return JSON.stringify(value);
+  };
 
   it("does not certify build-code completion from an unrecorded review quality fact", () => {
     expect(certifyBuildCodeQualityBasis({
@@ -39,6 +44,12 @@ describe("final cutover guard contracts", () => {
   });
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
   const verifyStageOutcomeRef = `quality/evidence/stage-outcomes/verify-code/${sha}.json`;
+  const fixtureReviewPolicy = (provider = "fixture-provider") => ({
+    source: "wh_review.v2", mode: "single_round", minimum_heterologous: 1,
+    requested_profiles: [provider], eligible_profiles: [provider], same_source_exclusions: [],
+    effective_profiles: [{ provider, adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null }],
+  });
+  const fixtureReviewPolicyHash = (policy) => createHash("sha256").update(canonicalJson(policy)).digest("hex");
   const verifyReceipts = (worker, qualityReview = worker.qualityReviewRef) => ({
     quality_review: qualityReview,
     stage_outcomes: worker.stageOutcomeRef ?? verifyStageOutcomeRef,
@@ -198,12 +209,16 @@ ${task("T002", "contract GREEN", 0, "T001")}
     for (const result of Object.values(values).filter((value) => value?.version === "wh-review-result.v1")) {
       const attemptId = result.attempt_ref.split("/")[3], outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFilePart("fixture-provider")}.output.json`;
       const content = JSON.stringify(result.provider_results[0].output);
+      const reviewPolicy = fixtureReviewPolicy();
+      const providerIdentity = { provider: "fixture-provider", adapter: "fixture-provider", source_id: "fixture-provider-source", config_id: "fixture-provider-config", model: null };
       values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: result.stage, review_track: result.review_track ?? null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
         subject_kind: result.subject_kind, phase_id: result.phase_id, review_scope: result.review_scope, base_tree: result.base_tree, candidate_tree: result.candidate_tree,
-        provider_attempts: [{ provider: "fixture-provider", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
+        review_policy: reviewPolicy, policy_snapshot_hash: fixtureReviewPolicyHash(reviewPolicy),
+        provider_attempts: [{ provider: "fixture-provider", identity: providerIdentity, status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
       values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage: result.stage, attempt_id: attemptId,
-        provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex") };
+        provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex"),
+        evidence_anchor_valid: result.provider_results[0].output.findings.map(() => true) };
     }
     // Build-code now authenticates the execution-baseline diff before it can
     // reach the review-chain assertions below.  These fixtures use HEAD as a
@@ -840,7 +855,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       "quality/reviews/results/review.json": reviewReceipt(stage, "pass", tree, "phase"),
     };
     const worker = workerFor(stage, values);
-    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "unknown", evidence_refs: [] }] } }))
       .resolves.toMatchObject({
         completion: { system: { result: "incomplete" } },
         missing_items: expect.arrayContaining([expect.stringMatching(/not a same-snapshot full-worktree integration review/i)]),
@@ -855,7 +870,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     delete values["quality/reviews/results/review.json"].review_scope;
     const worker = workerFor(stage, values);
-    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "unknown", evidence_refs: [] }] } }))
       .resolves.toMatchObject({
         completion: { system: { result: "incomplete" } },
         missing_items: expect.arrayContaining([expect.stringMatching(/not a same-snapshot full-worktree integration review/i)]),
@@ -900,6 +915,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       "evidence/ac2.json": { result: "pass" },
     };
     const documents = completedBuildCodeDocuments();
+    documents.spec = documents.spec.replace("- **AC1**: the accepted facts retain integration scope. ← FR-DEMO-001", "- **AC1**: the accepted facts retain integration scope. ← FR-DEMO-001\n- **AC2**: the same fixture deliberately supplies a second criterion. ← FR-DEMO-001");
     const worker = {
       ...workerFor(stage, values),
       workspace: { worktreeRoot: resolve(".") },

@@ -33,6 +33,29 @@ describe("task bootstrap target repository boundary", () => {
     expect(() => bootstrapTask({ project: "Demo", task: "plain-target", "target-repo": f.repo }, { ...f, cwd: f.repo })).not.toThrow();
   });
 
+  it("binds an explicitly supplied existing trusted worktree without deriving a second one", () => {
+    const f = fixture();
+    writeFileSync(join(f.repo, "baseline.txt"), "baseline\n");
+    execFileSync("git", ["add", "."], { cwd: f.repo });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "baseline"], { cwd: f.repo });
+    const worktree = join(f.home, "trusted-task-worktree");
+    execFileSync("git", ["worktree", "add", "-b", "codex/demo-existing-worktree", worktree, "HEAD"], { cwd: f.repo });
+
+    const result = bootstrapTask({
+      project: "Demo",
+      task: "demo-existing-worktree",
+      "target-repo": f.repo,
+      "workspace-root": worktree,
+    }, { ...f, cwd: worktree });
+
+    const manifest = JSON.parse(readFileSync(join(result.task_path, "task.json"), "utf8"));
+    expect(manifest).toMatchObject({
+      target_repo_root: realpathSync(f.repo),
+      workspace_mode: "existing",
+      workspace_root: realpathSync(worktree),
+    });
+  });
+
   it("opens a legacy pinned manifest read-only and authenticates a fresh invocation independently", () => {
     const f = fixture(), runner = join(f.home, "runner"); mkdirSync(runner);
     execFileSync("git", ["init", "-q", "-b", "task/workflowhub/m14b-fact-collection-g2"], { cwd: runner });

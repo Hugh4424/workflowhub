@@ -25,7 +25,10 @@ import { realpathSync } from "node:fs";
 
 const SCHEMA_VERSION = "workflowhub-codex-session-handoff.v1";
 const STATE_ROOT = join(tmpdir(), "workflowhub-codex-session-handoffs");
-const SAFE_ID = /^[A-Za-z0-9._:-]{8,160}$/;
+// Project/task names already have their own path-segment validator.  The
+// handoff layer must not add an arbitrary eight-character gate: valid names
+// such as "Demo" and "E2E" are common in clean-runner and local smoke flows.
+const SAFE_ID = /^[A-Za-z0-9._:-]{1,160}$/;
 const SESSION_LOCATOR_SCHEMA = "workflowhub-codex-session-locator.v1";
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const SUBJECT_KINDS = new Set(["step", "skill"]);
@@ -60,6 +63,13 @@ export function currentCodexSessionId(env = process.env) {
 function nowMs(value = Date.now()) {
   if (!Number.isSafeInteger(value) || value < 0) throw new TypeError("session timestamp must be a non-negative integer");
   return value;
+}
+
+function compareSessionEvents(a, b) {
+  return (a.started_at_ms - b.started_at_ms)
+    || (b.ended_at_ms - a.ended_at_ms)
+    || String(a.subject_kind).localeCompare(String(b.subject_kind))
+    || String(a.subject_id).localeCompare(String(b.subject_id));
 }
 
 function canonicalCwd(cwd) {
@@ -492,6 +502,14 @@ export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd
 export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stage, sessionId = null } = {}) {
   const current = readCurrentCodexSession({ cwd, stage, sessionId });
   if (current.status !== "present") return current;
+  if (taskId && current.task_binding?.task_id && current.task_binding.task_id !== taskId) {
+    return Object.freeze({
+      status: "unavailable",
+      state_path: current.state_path,
+      session_id: current.session_id,
+      reason: "session_task_binding_mismatch",
+    });
+  }
   const task = resolveSessionTaskId(current, taskId, { allowUnbound: true });
   if (!task) return Object.freeze({ status: "unbound", state_path: current.state_path, session_id: current.session_id });
   const taskEvents = current.events.filter((entry) => entry.task_id === task);
@@ -500,12 +518,15 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   // handoff diagnostic but never send it to the strict stage publisher.
   const rejectedEvents = taskEvents.filter((entry) => entry.subject_kind === "skill" && STAGES.has(entry.subject_id));
   const declaredCandidateEvents = taskEvents.filter((entry) => !rejectedEvents.includes(entry));
+  const stageCandidateEvents = stage
+    ? declaredCandidateEvents.filter((entry) => entry.stage === stage)
+    : declaredCandidateEvents;
   // A repaired subject gets a new lifecycle pair in the same session.  The
   // prior terminal event remains in the private sidecar for diagnosis, but a
   // single stage-outcome attempt may receive only the latest state for each
   // declared subject; otherwise its strict recorder rejects the duplicate.
   const currentBySubject = new Map();
-  for (const event of declaredCandidateEvents) {
+  for (const event of stageCandidateEvents) {
     if (event.status === "open") continue;
     const key = `${event.stage}:${event.subject_kind}:${event.subject_id}`;
     const previous = currentBySubject.get(key);
@@ -514,7 +535,7 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     // repair rather than a stale result.
     if (!previous || event.ended_at_ms >= previous.ended_at_ms) currentBySubject.set(key, event);
   }
-  const currentEvents = [...currentBySubject.values()];
+  const currentEvents = [...currentBySubject.values()].sort(compareSessionEvents);
   const events = currentEvents.filter((entry) => entry.status !== "open").map((entry) => ({
     task_id: task,
     stage: entry.stage,
@@ -533,7 +554,7 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
       version: entry.version,
     } : {}),
   }));
-  const open = declaredCandidateEvents.some((entry) => entry.status === "open");
+  const open = stageCandidateEvents.some((entry) => entry.status === "open");
   const specAnalyze = stage
     ? current.spec_analyze_by_task_stage?.[task]?.[stage] ?? null
     : current.spec_analyze_by_task?.[task] ?? null;

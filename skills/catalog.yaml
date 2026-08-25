@@ -144,7 +144,7 @@ skills:
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
-    used_by_stages: [make-decision, build-spec, build-plan, build-code]
+    used_by_stages: [build-plan]
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
@@ -236,7 +236,7 @@ skills:
     standalone: true
     purpose: 关联原始需求、AC、实现和验证证据
     design_idea: 以 manifest/hash 绑定的 ledger 与 coverage 保持需求谱系
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    used_by_stages: []
     upstream: []
     local_changes: make-decision audit P0 原生合同；由 canonical requirements artifacts 消费
     dependency_closure: [skills/requirement-lineage]
@@ -272,7 +272,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 60dea1ca3b9a50d1a86961f037ecb010471aeff72fae9614911f3e41110d64a3
+    local_bundle_hash: 68b2c8e3f8d612c1b1abe82b58dbda8ae723052878509966db82441e85487746
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -343,7 +343,10 @@ skills:
     status: adapted
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
-    used_by_stages: [make-decision, build-spec, build-plan]
+    # Includes the existing wh-review lens dispatch in build-code and
+    # verify-code; this is an effective-consumer projection, not a new stage
+    # dependency.
+    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: [{ <<: *gstack, path: "review", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review" }]
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
     dependency_closure: [skills/review]
@@ -357,7 +360,7 @@ skills:
     purpose: 用户结果、复现证据和遗漏场景验收 lens
     design_idea: report-only acceptance review
     standalone: true
-    used_by_stages: [verify-code]
+    used_by_stages: []
     upstream: [{ <<: *gstack, path: "qa-only", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only" }]
     local_changes: 去浏览器 daemon；只消费 sealed packet
     dependency_closure: [skills/qa-only]
@@ -371,7 +374,7 @@ skills:
     purpose: 验收闭环和验证证据 lens
     design_idea: 对 supplied evidence 做 report-only 检查
     standalone: true
-    used_by_stages: [verify-code]
+    used_by_stages: []
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/verify-change", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change" }]
     local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
     dependency_closure: [skills/verify-change]
@@ -545,7 +548,7 @@ skills:
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
     design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-spec]
     upstream: []
     local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
     dependency_closure: [skills/ui-project-init]
@@ -559,7 +562,7 @@ skills:
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-spec]
     upstream: []
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
     dependency_closure: [skills/design-source-readiness]
@@ -573,7 +576,7 @@ skills:
     purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图
     design_idea: reuse/modify/extend/add/remove 动作与真实 consumer 绑定
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan, build-code, verify-code]
     upstream:
       - github_url: https://github.com/vercel-labs/agent-skills
         commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e

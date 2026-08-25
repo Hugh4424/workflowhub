@@ -191,7 +191,7 @@ function stageAgentExecution(stage) {
   };
 }
 
-function stageOutcome(state, stage, { workspace = null, artifacts = null, attemptId = `attempt-${stage}` } = {}) {
+function stageOutcome(state, stage, { workspace = null, artifacts = null, attemptId = `attempt-${stage}`, status = "completed", qualityReview = null } = {}) {
   return writeStageOutcomeFixture({
     task: state.task,
     kernel: state.kernel,
@@ -199,6 +199,8 @@ function stageOutcome(state, stage, { workspace = null, artifacts = null, attemp
     ...(workspace ? { workspace } : { candidateWorkspace: state.candidate }),
     stage,
     attemptId,
+    status,
+    qualityReview,
   });
 }
 
@@ -437,7 +439,15 @@ describe("vNext official stage completion", () => {
   it("consumes a broker-provenance wh-review intent through stage-runtime", async () => {
     const state = fixture("stage-runtime-wh-review-intent");
     const context = contextFor("verify-code", state);
-    const review = writeFormalReviewFixture({
+    const whReview = writeFormalReviewFixture({
+      task: state.task,
+      stage: "verify-code",
+      snapshotTree: state.candidate.captureSnapshot().tree,
+      verdict: "pass",
+      reviewScope: null,
+      materialRevision: state.kernel.currentVNextMaterialRevision(),
+    });
+    const dshReview = writeFormalReviewFixture({
       task: state.task,
       stage: "verify-code",
       snapshotTree: state.candidate.captureSnapshot().tree,
@@ -455,26 +465,33 @@ describe("vNext official stage completion", () => {
       reviewKind: null,
       result: {
         status: "available",
-        resultRef: review.resultRef,
-        attemptRef: review.attemptRef,
+        resultRef: whReview.resultRef,
+        attemptRef: whReview.attemptRef,
         snapshotTree: state.candidate.captureSnapshot().tree,
-        materialId: review.materialId,
+        materialId: whReview.materialId,
         subjectKind: "worktree",
         phaseId: null,
         reviewScope: null,
       },
     });
-    const outcome = stageOutcome(state, "verify-code", { attemptId: "attempt-wh-review-intent" });
+    const outcome = stageOutcome(state, "verify-code", {
+      attemptId: "attempt-wh-review-intent",
+      qualityReview: dshReview,
+    });
     const result = await runOfficialStage("verify-code", context, {
       attempt_id: "attempt-wh-review-intent",
       review_fact_intent: intent,
-      receipts: { quality_review: review.resultRef, stage_outcomes: outcome.ref },
+      receipts: { quality_review: dshReview.resultRef, review: whReview.resultRef, stage_outcomes: outcome.ref },
     });
     const codeReviewFacts = result.quality_fact_refs
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
       .filter((fact) => fact.kind === "review" && fact.subject === "code_review");
     expect(codeReviewFacts).toHaveLength(1);
     expect(codeReviewFacts[0]).toMatchObject({ status: "recorded", snapshot_tree: state.candidate.captureSnapshot().tree });
+    expect(codeReviewFacts[0].evidence[0].ref).toBe(dshReview.resultRef);
+    expect(result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .some((fact) => fact.subject === "independent_review" && fact.evidence[0].ref === whReview.resultRef)).toBe(true);
     expect(result.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
   });
 
@@ -544,11 +561,11 @@ describe("vNext official stage completion", () => {
         subjectKind: "worktree", phaseId: null, reviewScope: null,
       },
     });
-    const outcome = stageOutcome(state, "verify-code", { attemptId });
+    const outcome = stageOutcome(state, "verify-code", { attemptId, status: "incomplete", qualityReview: { ref: attemptRef } });
     const result = await runOfficialStage("verify-code", context, {
       attempt_id: attemptId,
       review_fact_intent: intent,
-      receipts: { quality_review: attemptRef, stage_outcomes: outcome.ref },
+      receipts: { quality_review: attemptRef, review: attemptRef, stage_outcomes: outcome.ref },
     });
     const codeReviewFacts = result.quality_fact_refs
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
@@ -558,14 +575,64 @@ describe("vNext official stage completion", () => {
     expect(result.completion.predicates.code_review).toMatchObject({ status: "missing" });
   });
 
-  it("does not authenticate a recorded intent when the review has serious findings", async () => {
+  it("rejects an unavailable stage review attempt with stale material revision", async () => {
+    const state = fixture("stage-runtime-stale-unavailable-review");
+    const context = contextFor("verify-code", state);
+    const snapshotTree = state.candidate.captureSnapshot().tree;
+    const attemptId = "attempt-stale-unavailable-review";
+    const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+    createCanonicalReviewWriter({ task: state.task, taskId: state.task.identity.taskId, stage: "verify-code" }).writeAttempt(attemptRef, {
+      version: "wh-review-attempt.v1",
+      attempt_id: attemptId,
+      task_id: state.task.identity.taskId,
+      stage: "verify-code",
+      review_track: null,
+      review_kind: null,
+      source: { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree },
+      snapshot_tree: snapshotTree,
+      material_id: "f".repeat(64),
+      material_revision: `revision-${"f".repeat(64)}`,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      provider_attempts: [{
+        provider: "fixture-provider",
+        status: "failed",
+        session_id: null,
+        runtime_id: "fixture-runtime",
+        output_ref: null,
+        error: { code: "PROCESS_DEAD", message: "fixture provider unavailable" },
+      }],
+      terminal_status: "unavailable",
+      error: { code: "REVIEW_ROUTE_UNAVAILABLE", message: "fixture route unavailable" },
+    });
+    const outcome = stageOutcome(state, "verify-code", {
+      attemptId,
+      status: "incomplete",
+      qualityReview: { ref: attemptRef },
+    });
+    await expect(runOfficialStage("verify-code", context, {
+      attempt_id: attemptId,
+      receipts: { quality_review: attemptRef, stage_outcomes: outcome.ref },
+    })).rejects.toThrow(/stage_outcome_invalid|material revision mismatch/);
+  });
+
+  it("keeps serious findings in wh-review advice without replacing canonical code_review", async () => {
     const state = fixture("stage-runtime-wh-review-intent-findings");
     const context = contextFor("verify-code", state);
-    const review = writeFormalReviewFixture({
+    const whReview = writeFormalReviewFixture({
       task: state.task,
       stage: "verify-code",
       snapshotTree: state.candidate.captureSnapshot().tree,
       verdict: "findings",
+      reviewScope: null,
+      materialRevision: state.kernel.currentVNextMaterialRevision(),
+    });
+    const dshReview = writeFormalReviewFixture({
+      task: state.task,
+      stage: "verify-code",
+      snapshotTree: state.candidate.captureSnapshot().tree,
+      verdict: "pass",
       reviewScope: null,
       materialRevision: state.kernel.currentVNextMaterialRevision(),
     });
@@ -575,24 +642,31 @@ describe("vNext official stage completion", () => {
       reviewKind: null,
       result: {
         status: "available",
-        resultRef: review.resultRef,
-        attemptRef: review.attemptRef,
+        resultRef: whReview.resultRef,
+        attemptRef: whReview.attemptRef,
         snapshotTree: state.candidate.captureSnapshot().tree,
-        materialId: review.materialId,
+        materialId: whReview.materialId,
         subjectKind: "worktree",
         phaseId: null,
         reviewScope: null,
       },
     });
-    const outcome = stageOutcome(state, "verify-code", { attemptId: "attempt-wh-review-intent-findings" });
-    await expect(runOfficialStage("verify-code", context, {
+    const outcome = stageOutcome(state, "verify-code", {
+      attemptId: "attempt-wh-review-intent-findings",
+      qualityReview: dshReview,
+    });
+    const result = await runOfficialStage("verify-code", context, {
       attempt_id: "attempt-wh-review-intent-findings",
       review_fact_intent: intent,
-      receipts: { quality_review: review.resultRef, stage_outcomes: outcome.ref },
-    })).rejects.toThrow(/recorded status is not authenticated/);
-    expect(state.task.listCanonicalQualityFactRefs()
+      receipts: { quality_review: dshReview.resultRef, review: whReview.resultRef, stage_outcomes: outcome.ref },
+    });
+    const facts = state.task.listCanonicalQualityFactRefs()
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
-      .filter((fact) => fact.kind === "review" && fact.subject === "code_review")).toHaveLength(0);
+      .filter((fact) => fact.kind === "review");
+    expect(facts.filter((fact) => fact.subject === "code_review")).toHaveLength(1);
+    expect(facts.find((fact) => fact.subject === "code_review").evidence[0].ref).toBe(dshReview.resultRef);
+    expect(facts.find((fact) => fact.subject === "independent_review")).toMatchObject({ status: "recorded" });
+    expect(result.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
   });
 
   it("rejects an invalid review intent before invoking handler validation", async () => {
@@ -627,7 +701,7 @@ describe("vNext official stage completion", () => {
       attempt_id: "attempt-wh-review-intent-preflight",
       review_fact_intent: intent,
       receipts: {
-        quality_review: review.resultRef,
+        review: review.resultRef,
         stage_outcomes: outcome.ref,
         unexpected_host_receipt: "quality/tests/not-allowed.json",
       },
@@ -668,7 +742,7 @@ describe("vNext official stage completion", () => {
       attempt_id: "attempt-wh-review-handler-failure",
       review_fact_intent: intent,
       receipts: {
-        quality_review: review.resultRef,
+        review: review.resultRef,
         stage_outcomes: outcome.ref,
         unexpected_host_receipt: "quality/tests/not-allowed.json",
       },

@@ -29,7 +29,10 @@ describe("strict skill provenance", () => {
         expect(source.commit_url, `${entry.name} commit_url`).toContain(`/commit/${source.commit}`);
         expect(source.skill_url, `${entry.name} skill_url`).toContain(source.commit);
         expect(source.license, `${entry.name} license`).toBeTruthy();
-        expect(source.reviewed_at, `${entry.name} reviewed_at`).toBe("2026-07-14");
+        const sourceReviewedAt = Date.parse(source.reviewed_at);
+        const catalogReviewedAt = Date.parse(catalog.last_reviewed_at);
+        expect(sourceReviewedAt, `${entry.name} reviewed_at`).not.toBeNaN();
+        expect(sourceReviewedAt, `${entry.name} reviewed_at`).toBeGreaterThanOrEqual(catalogReviewedAt);
         expect(source.review_outcome, `${entry.name} review_outcome`).toMatch(/accepted|rejected|watch/);
       }
     }

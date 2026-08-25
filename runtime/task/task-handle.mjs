@@ -61,6 +61,19 @@ function validateManifest(manifest) {
   if (typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) {
     throw new TypeError("task manifest target_repo_root must be an absolute path");
   }
+  const workspaceFields = ["workspace_mode", "workspace_root"];
+  const presentWorkspaceFields = workspaceFields.filter((field) => Object.prototype.hasOwnProperty.call(manifest, field));
+  if (presentWorkspaceFields.length > 0) {
+    if (presentWorkspaceFields.length !== workspaceFields.length) {
+      throw new TypeError("task manifest workspace_mode and workspace_root must be present together");
+    }
+    if (manifest.workspace_mode !== "existing") {
+      throw new TypeError('task manifest workspace_mode must be "existing" when present');
+    }
+    if (typeof manifest.workspace_root !== "string" || !isAbsolute(manifest.workspace_root)) {
+      throw new TypeError("task manifest workspace_root must be an absolute path");
+    }
+  }
   if (!Array.isArray(manifest.issue_ids) || !manifest.issue_ids.every((id) => typeof id === "string" && id.trim() !== "")) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
@@ -387,6 +400,7 @@ function assertPublicRecordWritable(relativePath) {
   }
   if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   if (/^(?:receipts|reviews|evidence)\//.test(relativePath)) throw new Error(`record is canonical-receipt-owned and cannot be written through TaskHandle: ${relativePath}`);
+  if (/^quality\/facts\//.test(relativePath)) throw new Error(`quality facts are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
 }
 
 function resolveRecord(taskRoot, relativePath, { createParents = false } = {}) {

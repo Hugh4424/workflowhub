@@ -607,6 +607,27 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
+  it("projects only the requested stage in chronological lifecycle order", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
+      bind(state);
+      startCodexSessionEvent({ stage: "build-spec", subjectKind: "step", subjectId: "read-decision-log", cwd: state.cwd, startedAtMs: 3000 });
+      finishCodexSessionEvent({ stage: "build-spec", subjectKind: "step", subjectId: "read-decision-log", cwd: state.cwd, endedAtMs: 4000, status: "completed" });
+      startCodexSessionEvent({ stage: "build-spec", subjectKind: "step", subjectId: "conditional-spec-research", cwd: state.cwd, startedAtMs: 1000 });
+      finishCodexSessionEvent({ stage: "build-spec", subjectKind: "step", subjectId: "conditional-spec-research", cwd: state.cwd, endedAtMs: 2000, status: "skipped", reason: "没有新增研究问题" });
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 5000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, endedAtMs: 6000, status: "completed" });
+
+      const session = buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: state.cwd, stage: "build-spec" });
+      expect(session.events.map((entry) => entry.subject_id)).toEqual(["conditional-spec-research", "read-decision-log"]);
+      expect(session.events.every((entry) => entry.stage === "build-spec")).toBe(true);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("does not claim a task is completed when its current task has no lifecycle events", () => {
     const state = fixture();
     try {

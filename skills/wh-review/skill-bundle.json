@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "eddf58747ca2d877476df52d966978c4594128b60a8dac52f2b45b5c25a5f5aa"
+      "sha256": "72cd352cdb77d68d83e1bccf949531e6e08ff6c15f224ec1cf71446b43674f8f"
     },
     {
       "path": "contracts/build-code.md",
@@ -36,7 +36,7 @@
     },
     {
       "path": "contracts/verify-code.md",
-      "sha256": "694a40f3085bd68a5ac28b4b78ebd742cd487d7f6908b394ebb534c482cef057"
+      "sha256": "356a39b621f455ab99b92136d03c5b6a3adf92f9e50457178b3fb48129a7a5fc"
     },
     {
       "path": "contracts/workflowhub-result.v1.json",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "f70882cd171835fe26708f1673e79dd1284c8d4eff6ce29af75224d7be378e13"
+      "sha256": "3721afdc356a5db3fa45f997f6ac6ffc0279e31537310f33b1b60e48776a647f"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "f1ea2c73763bf459e6f55b127cfe8916483da8fe5ec73b8dec425db48fd7e822"
+      "sha256": "c204ab66c1be77fe4fa55205597d93aca0d16f38bbd888778ef2c4d20b9e21fd"
     },
     {
       "path": "stage-skill-plan.json",

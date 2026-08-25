@@ -41,7 +41,7 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
-    expect(STAGE_ADVISORY_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
+    expect(STAGE_ADVISORY_PREDICATES["verify-code"].independent_review).toBe("review");
   });
 
   it("does not treat a recorded verify-code review without a clean result as complete", () => {

@@ -22,6 +22,8 @@ const REPOSITORY_ROOT = new URL("../../", import.meta.url);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
+const SHA256 = /^[a-f0-9]{64}$/;
+const QUALITY_REVIEW_REF = /^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/;
 
 /**
  * Validate the ordered rounds supplied by the host for one declared skill.
@@ -312,6 +314,15 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
   if (!new Set(["clean", "findings", "unavailable"]).has(result.status)) throw new Error("execution.code_review.result.status is invalid");
   if (!Array.isArray(result.findings)) throw new TypeError("execution.code_review.result.findings must be an array");
   text(result.summary, "execution.code_review.result.summary");
+  const qualityReviewRef = input.quality_review_ref;
+  const qualityReviewHash = input.quality_review_hash;
+  if ((qualityReviewRef === undefined) !== (qualityReviewHash === undefined)) {
+    throw new TypeError("execution.code_review quality_review_ref/hash must be provided together");
+  }
+  if (qualityReviewRef !== undefined
+      && (!QUALITY_REVIEW_REF.test(qualityReviewRef) || !SHA256.test(qualityReviewHash))) {
+    throw new TypeError("execution.code_review quality_review_ref/hash is invalid");
+  }
   return {
     schema_version: "workflowhub-code-review-stage-outcome.v1",
     stage,
@@ -319,6 +330,7 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
     material_revision: materials.revision,
     step_slug: reviewStep.step_slug,
     skill_id: reviewSkill.name,
+    ...(qualityReviewRef === undefined ? {} : { quality_review_ref: qualityReviewRef, quality_review_hash: qualityReviewHash }),
     result: structuredClone(result),
   };
 }

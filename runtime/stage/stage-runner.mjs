@@ -312,7 +312,7 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
   return Object.freeze({ analyzer, analysis });
 }
 
-function validateCodeReviewOutcome(record, stage, snapshot, materialRevision, manifest, skillManifest) {
+function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevision, manifest, skillManifest) {
   const review = outcomeObject(record.code_review, "stage outcome code_review");
   if (review.schema_version !== "workflowhub-code-review-stage-outcome.v1") {
     throw outcomeError("stage outcome code_review schema_version is invalid");
@@ -340,6 +340,63 @@ function validateCodeReviewOutcome(record, stage, snapshot, materialRevision, ma
         || typeof finding.issue !== "string" || finding.issue.trim() === ""
         || typeof finding.recommendation !== "string" || finding.recommendation.trim() === "") {
       throw outcomeError(`stage outcome code_review.result.findings[${index}] is invalid`);
+    }
+  }
+  const boundRef = review.quality_review_ref;
+  const boundHash = review.quality_review_hash;
+  if ((boundRef === undefined) !== (boundHash === undefined)) {
+    throw outcomeError("stage outcome code_review quality_review_ref/hash must be provided together");
+  }
+  if (boundRef !== undefined) {
+    if (!/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(boundRef)
+        || !SHA256.test(boundHash)) {
+      throw outcomeError("stage outcome code_review quality_review_ref/hash is invalid");
+    }
+    let raw;
+    try { raw = ctx.task.readRecord(boundRef); }
+    catch (error) { throw outcomeError(`stage outcome code_review quality_review_ref is unavailable: ${error.message}`); }
+    if (createHash("sha256").update(raw).digest("hex") !== boundHash) {
+      throw outcomeError("stage outcome code_review quality_review_hash does not match the referenced bytes");
+    }
+    let bound;
+    try { bound = JSON.parse(raw); }
+    catch { throw outcomeError("stage outcome code_review quality_review_ref must contain JSON"); }
+    if (bound.version === "wh-review-attempt.v1") {
+      const mismatches = [
+        record.status === "completed" ? "stage status is completed" : null,
+        result.status !== "unavailable" ? `result status is ${result.status}` : null,
+        bound.task_id !== ctx.identity.taskId ? "task mismatch" : null,
+        bound.stage !== stage ? "stage mismatch" : null,
+        bound.snapshot_tree !== snapshot.tree ? "snapshot mismatch" : null,
+        bound.material_revision !== materialRevision ? "material revision mismatch" : null,
+        bound.terminal_status !== "unavailable" ? `terminal status is ${bound.terminal_status}` : null,
+      ].filter(Boolean);
+      if (mismatches.length) {
+        throw outcomeError(`unavailable stage outcome code_review is not bound to an unavailable review attempt: ${mismatches.join(", ")}`);
+      }
+    } else {
+      try { validateSchema("result", bound); }
+      catch (error) { throw outcomeError(`stage outcome code_review quality review is invalid: ${error.message}`); }
+      if (bound.task_id !== ctx.identity.taskId || bound.stage !== stage
+          || bound.subject_kind !== "worktree" || bound.phase_id !== null || bound.review_scope !== null
+          || bound.snapshot_tree !== snapshot.tree || bound.material_revision !== materialRevision) {
+        throw outcomeError("stage outcome code_review quality review is not bound to the current task, snapshot, or materials");
+      }
+      const serious = canonicalReviewFindings(bound).filter(isActionableSeriousFinding);
+      if (result.status === "clean" && serious.length > 0) {
+        throw outcomeError("stage outcome code_review clean result hides actionable serious findings");
+      }
+      const outcomeSerious = canonicalReviewFindings(result).filter(isActionableSeriousFinding);
+      const seriousKey = (finding) => JSON.stringify({
+        severity: finding.severity,
+        path: finding.path,
+        issue: finding.issue,
+        recommendation: finding.recommendation,
+      });
+      const outcomeKeys = new Set(outcomeSerious.map(seriousKey));
+      if (serious.some((finding) => !outcomeKeys.has(seriousKey(finding)))) {
+        throw outcomeError("stage outcome code_review omitted an actionable serious finding from the bound quality review");
+      }
     }
   }
   const actionableFindings = canonicalReviewFindings(result).filter(isActionableSeriousFinding);
@@ -402,7 +459,7 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   const stepOutcomes = record.step_outcomes.map((entry, index) => validateStepOutcome(ctx, stage, entry, manifest.steps[index], index, binding));
   const skillOutcomes = record.skill_outcomes.map((entry, index) => validateSkillOutcome(ctx, entry, skillManifest.skills[index], index, binding));
   const stageReview = stage === "verify-code"
-    ? validateCodeReviewOutcome(record, stage, snapshot, materials.revision, manifest, skillManifest)
+    ? validateCodeReviewOutcome(ctx, record, stage, snapshot, materials.revision, manifest, skillManifest)
     : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materials.revision, materials, manifest, skillManifest);
   return Object.freeze({
     ref,
@@ -673,16 +730,19 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } 
         && Array.isArray(record.provider_results)
         && Array.isArray(record.findings)
       && record.adjudication?.version === "wh-review-adjudication.v1") {
-      if (stage === "verify-code" && subject === "code_review") {
+      if (stage === "verify-code" && ["code_review", "independent_review"].includes(subject)) {
         try {
           // An empty findings array is only meaningful after the immutable
           // attempt, terminal provider members, provider outputs, and
           // aggregation have all been authenticated. Do not let a copied or
           // partially failed result satisfy the final code-review predicate.
           authenticateStageReviewResult(task, record);
-          return canonicalReviewFindings(record).some(isActionableSeriousFinding)
-            ? { status: "missing", review_status: "findings" }
-            : { status: "recorded", review_status: "clean" };
+          const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
+          return subject === "code_review"
+            ? hasSeriousFinding
+              ? { status: "missing", review_status: "findings" }
+              : { status: "recorded", review_status: "clean" }
+            : { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean" };
         } catch {
           return { status: "missing" };
         }
@@ -1195,12 +1255,12 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
       || intent.stage !== "verify-code"
       || intent.kind !== "review"
       || !["recorded", "unavailable"].includes(intent.status)
-      || intent.subject !== "code_review"
+      || !["code_review", "independent_review"].includes(intent.subject)
       || !/^[a-f0-9]{64}$/.test(intent.material_id ?? "")
       || !/^revision-[a-f0-9]{64}$/.test(intent.material_revision ?? "")
       || !Array.isArray(intent.evidence)
       || intent.evidence.length !== 1) {
-    throw new Error("review fact intent is not a verify-code code_review intent");
+    throw new Error("review fact intent is not a verify-code review intent");
   }
   const evidence = intent.evidence[0];
   if (!evidence || typeof evidence.ref !== "string" || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(evidence.ref)
@@ -1208,7 +1268,7 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
       || evidence.evidence_type !== "review_result") {
     throw new Error("review fact intent evidence is invalid");
   }
-  if (receiptRef !== null && receiptRef !== evidence.ref) throw new Error("review fact intent does not match receipts.quality_review");
+  if (receiptRef !== null && receiptRef !== evidence.ref) throw new Error("review fact intent does not match its review receipt");
   const raw = ctx.task.readRecord(evidence.ref);
   if (createHash("sha256").update(raw).digest("hex") !== evidence.sha256) throw new Error("review fact intent evidence hash mismatch");
   let value;
@@ -1223,11 +1283,21 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
       || intent.material_revision !== ctx.kernel.currentVNextMaterialRevision()) {
     throw new Error("review fact intent evidence is not bound to the current review materials");
   }
-  const observed = reviewEvidenceStatus(ctx.task, evidence, { stage: "verify-code", subject: "code_review" });
+  const observed = reviewEvidenceStatus(ctx.task, evidence, {
+    stage: "verify-code",
+    subject: intent.subject === "code_review" ? "independent_review" : intent.subject,
+  });
   const validRecorded = observed.status === "recorded";
   if (intent.status === "recorded" && !validRecorded) throw new Error("review fact intent recorded status is not authenticated");
   if (intent.status === "unavailable" && observed.status !== "unavailable") throw new Error("review fact intent unavailable status is not authenticated");
-  return Object.freeze({ status: intent.status, evidence: Object.freeze({ ref: evidence.ref, sha256: evidence.sha256 }) });
+  return Object.freeze({
+    status: intent.status,
+    // `code_review` remains accepted at this transport boundary for old
+    // callers, but it is deliberately downgraded to the existing advisory
+    // subject so it cannot recreate the canonical completion fact.
+    subject: "independent_review",
+    evidence: Object.freeze({ ref: evidence.ref, sha256: evidence.sha256 }),
+  });
 }
 
 /** Publish an already authenticated broker intent through the official writer. */
@@ -1237,7 +1307,7 @@ export function publishReviewFactIntent({ context, intent, receiptRef = null } =
   return ctx.kernel.publishVNextQualityFact("verify-code", {
     kind: "review",
     status: validated.status,
-    subject: "code_review",
+    subject: validated.subject,
     evidence: [{ ref: validated.evidence.ref, sha256: validated.evidence.sha256, evidence_type: "review_result" }],
   });
 }
@@ -1291,6 +1361,26 @@ export function runOfficialStage(stage, context, invocation, publication) {
           })),
         };
       }
+      if (stage === "verify-code") {
+        const receipts = handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)
+          ? handlerInput.receipts
+          : (handlerInput.receipts = {});
+        const stageReview = stageOutcome.value?.code_review ?? null;
+        const boundReviewRef = stageReview?.quality_review_ref;
+        const suppliedReviewRef = receipts.quality_review;
+        if (!stageOutcome.value && suppliedReviewRef !== undefined) {
+          throw new Error("verify-code quality_review requires a bound dsh-code-review stage outcome");
+        }
+        if (stageOutcome.value && boundReviewRef === undefined && suppliedReviewRef !== undefined) {
+          throw new Error("verify-code quality_review is not bound to the dsh-code-review stage outcome");
+        }
+        if (boundReviewRef !== undefined) {
+          if (suppliedReviewRef !== undefined && suppliedReviewRef !== boundReviewRef) {
+            throw new Error("verify-code quality_review does not match the dsh-code-review stage outcome");
+          }
+          receipts.quality_review = boundReviewRef;
+        }
+      }
       if (handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)) {
         delete handlerInput.receipts.stage_outcomes;
       }
@@ -1303,13 +1393,25 @@ export function runOfficialStage(stage, context, invocation, publication) {
       let validatedReviewFactIntent = null;
       if (reviewFactIntent !== undefined) {
         if (stage !== "verify-code") throw new Error("review fact intent is only valid for verify-code");
+        if (typeof handlerInput.receipts?.review !== "string") {
+          throw new Error("verify-code advisory review intent requires receipts.review");
+        }
         validatedReviewFactIntent = validateReviewFactIntent({
           context: ctx,
           intent: reviewFactIntent,
-          receiptRef: handlerInput.receipts?.quality_review ?? null,
+          receiptRef: handlerInput.receipts.review,
         });
       }
       const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), handlerInput));
+      if (stage === "verify-code" && stageOutcome.value?.code_review?.quality_review_ref) {
+        const reviewFacts = handlerResult.facts?.code_review ?? {};
+        const actualReviewRef = reviewFacts.result_ref ?? reviewFacts.attempt_ref;
+        const actualReviewHash = reviewFacts.result_hash ?? reviewFacts.attempt_hash;
+        if (actualReviewRef !== stageOutcome.value.code_review.quality_review_ref
+            || actualReviewHash !== stageOutcome.value.code_review.quality_review_hash) {
+          throw new Error("verify-code canonical code_review is not bound to the dsh-code-review stage outcome");
+        }
+      }
       let result = handlerResult;
       if (validatedReviewFactIntent !== null) {
         // Keep the intent in memory until the official stage publication has
@@ -1320,7 +1422,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
           ...handlerResult,
           facts: {
             ...(handlerResult.facts ?? {}),
-            code_review: {
+            review: {
               status: validatedReviewFactIntent.status,
               result_ref: validatedReviewFactIntent.evidence.ref,
               result_hash: validatedReviewFactIntent.evidence.sha256,

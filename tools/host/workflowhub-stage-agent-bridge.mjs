@@ -39,6 +39,49 @@ function requiredTimestamp(value, label) {
   return value;
 }
 
+function compareLifecycleEvents(a, b) {
+  return (a.started_at_ms - b.started_at_ms)
+    || (b.ended_at_ms - a.ended_at_ms)
+    || String(a.subject_kind).localeCompare(String(b.subject_kind))
+    || String(a.subject_id).localeCompare(String(b.subject_id))
+    || (a.index - b.index);
+}
+
+function intervalsOverlap(a, b) {
+  return a.started_at_ms < b.ended_at_ms && b.started_at_ms < a.ended_at_ms;
+}
+
+function intervalContains(a, b) {
+  return (a.started_at_ms <= b.started_at_ms && b.ended_at_ms <= a.ended_at_ms)
+    || (b.started_at_ms <= a.started_at_ms && a.ended_at_ms <= b.ended_at_ms);
+}
+
+function assertLifecycleOrdering(events) {
+  const normalized = events.map((event, index) => {
+    if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError(`session.events[${index}] must be an object`);
+    const startedAt = requiredTimestamp(event.started_at_ms, `session.events[${index}].started_at_ms`);
+    const endedAt = requiredTimestamp(event.ended_at_ms, `session.events[${index}].ended_at_ms`);
+    if (endedAt < startedAt) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] ended before it started`);
+    return Object.freeze({ event, index, started_at_ms: startedAt, ended_at_ms: endedAt, subject_kind: event.subject_kind, subject_id: event.subject_id });
+  }).sort(compareLifecycleEvents);
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const current = normalized[index];
+    for (const previous of normalized.slice(0, index)) {
+      if (!intervalsOverlap(previous, current)) continue;
+      // A step and the skill it invokes are legitimately nested in the same
+      // host session. Same-kind overlap or a partial cross-kind overlap is
+      // still malformed and must fail before any writer runs.
+      const nested = intervalContains(previous, current);
+      const crossKind = previous.subject_kind !== current.subject_kind;
+      if (!nested || !crossKind) {
+        throw new Error(`BRIDGE_TIME_INVALID: session.events[${current.index}] overlaps or moves the lifecycle clock backward`);
+      }
+    }
+  }
+  return normalized;
+}
+
 function normalizeBridgeError(error) {
   if (error && typeof error.code === "string" && error.code.startsWith("BRIDGE_")) return error;
   const message = String(error?.message ?? error);
@@ -74,20 +117,13 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     now: () => clock,
     requirementAuthentication,
   });
-  let previousEndedAt = null;
-  for (const [index, event] of session.events.entries()) {
+  const orderedEvents = assertLifecycleOrdering(session.events);
+  for (const { event, index, started_at_ms: startedAt, ended_at_ms: endedAt } of orderedEvents) {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError(`session.events[${index}] must be an object`);
     const subjectKind = requiredText(event.subject_kind, `session.events[${index}].subject_kind`);
     const subjectId = requiredText(event.subject_id, `session.events[${index}].subject_id`);
     if (requiredText(event.task_id, `session.events[${index}].task_id`) !== context.task.identity.taskId) throw new Error(`session.events[${index}] task_id does not match the current WorkflowHub task`);
     if (requiredText(event.stage, `session.events[${index}].stage`) !== stage) throw new Error(`session.events[${index}] stage does not match the current stage`);
-    const startedAt = requiredTimestamp(event.started_at_ms, `session.events[${index}].started_at_ms`);
-    const endedAt = requiredTimestamp(event.ended_at_ms, `session.events[${index}].ended_at_ms`);
-    if (endedAt < startedAt) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] ended before it started`);
-    if (previousEndedAt !== null && startedAt < previousEndedAt) {
-      throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] overlaps or moves the lifecycle clock backward`);
-    }
-    previousEndedAt = endedAt;
     clock = startedAt;
     const finish = subjectKind === "step" ? recorder.startStep(subjectId) : subjectKind === "skill" ? recorder.startSkill(subjectId) : null;
     if (!finish) throw new Error(`unsupported session subject_kind: ${subjectKind}`);

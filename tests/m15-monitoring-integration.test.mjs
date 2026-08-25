@@ -11,7 +11,6 @@ import { initializeTaskStore, readMonitoringFacts, readTaskFacts } from '../runt
 import { prepareTaskWorkspace } from '../runtime/task/workspace.mjs';
 import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from '../runtime/evidence/codex-transcript-adapter.mjs';
 import { createTranscriptSourceReader } from '../runtime/evidence/fact-collector.mjs';
-import { createQualityFact } from '../runtime/evidence/quality-fact.mjs';
 import { publishVerifySummary } from '../runtime/evidence/quality-store.mjs';
 import { publishStaleMonitoringSnapshot, resolveDefaultMonitoringSource, runMonitoringSidecar } from '../tools/cli/stage-runtime.mjs';
 import { monitoringTopology, stageRuntimeCliMain } from '../tools/cli/stage-runtime.mjs';
@@ -38,6 +37,7 @@ function publicRunFixture() {
   const task = createTask({ storageRoot, manifest: {
     schema_version: '1.0.0', project_name: 'workflowhub', task_id: 'm15-public-run', created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
   } });
+  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   const candidate = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
   writeCanonicalStageMaterials(artifacts);
@@ -549,18 +549,11 @@ describe('M15 stage sidecar integration', () => {
   });
 
   it('uses one derived attempt identity for stage and quality monitoring facts', async () => {
-    const { storageRoot, task } = fixture();
-    const quality = createQualityFact({
-      taskId: task.identity.taskId,
-      stage: 'build-code',
-      materialRevision: `revision-${'a'.repeat(64)}`,
-      snapshotTree: 'b'.repeat(40),
-      kind: 'review',
-      status: 'recorded',
-      subject: 'same_build_integration_review',
+    const { storageRoot, task, kernel } = publicRunFixture();
+    const quality = kernel.publishVNextQualityFact('build-code', {
+      kind: 'review', status: 'recorded', subject: 'same_build_integration_review',
       evidence: [{ ref: 'quality/reviews/results/review.json', sha256: 'c'.repeat(64), evidence_type: 'review_result' }],
     });
-    task.createRecordAtomic(quality.ref, quality.raw);
     await runMonitoringSidecar({
       context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code' },
       stageOutcome: { status: 'completed', quality_fact_refs: [quality.ref] },
@@ -593,18 +586,11 @@ describe('M15 stage sidecar integration', () => {
   });
 
   it('maps quality test facts into canonical monitoring observations', async () => {
-    const { storageRoot, task } = fixture();
-    const quality = createQualityFact({
-      taskId: task.identity.taskId,
-      stage: 'build-code',
-      materialRevision: `revision-${'a'.repeat(64)}`,
-      snapshotTree: 'b'.repeat(40),
-      kind: 'test',
-      status: 'passed',
-      subject: 'm15-focused-tests',
+    const { storageRoot, task, kernel } = publicRunFixture();
+    const quality = kernel.publishVNextQualityFact('build-code', {
+      kind: 'test', status: 'passed', subject: 'm15-focused-tests',
       evidence: [{ ref: 'quality/tests/m15-focused.json', sha256: 'c'.repeat(64), evidence_type: 'test_receipt' }],
     });
-    task.createRecordAtomic(quality.ref, quality.raw);
     await runMonitoringSidecar({
       context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code', attempt_id: 'attempt-test' },
       stageOutcome: { status: 'completed', quality_fact_refs: [quality.ref] },
@@ -623,18 +609,11 @@ describe('M15 stage sidecar integration', () => {
   });
 
   it('keeps a failed quality review as a failed observation instead of hiding it as unknown', async () => {
-    const { storageRoot, task } = fixture();
-    const quality = createQualityFact({
-      taskId: task.identity.taskId,
-      stage: 'build-code',
-      materialRevision: `revision-${'a'.repeat(64)}`,
-      snapshotTree: 'b'.repeat(40),
-      kind: 'review',
-      status: 'failed',
-      subject: 'same_build_integration_review',
+    const { storageRoot, task, kernel } = publicRunFixture();
+    const quality = kernel.publishVNextQualityFact('build-code', {
+      kind: 'review', status: 'failed', subject: 'same_build_integration_review',
       evidence: [{ ref: 'quality/reviews/results/m15-failed.json', sha256: 'c'.repeat(64), evidence_type: 'review_result' }],
     });
-    task.createRecordAtomic(quality.ref, quality.raw);
     await runMonitoringSidecar({
       context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code', attempt_id: 'attempt-review-failed' },
       stageOutcome: { status: 'completed', quality_fact_refs: [quality.ref] },
@@ -748,9 +727,11 @@ describe('M15 stage sidecar integration', () => {
   });
 
   it('does not silently drop unsupported or cross-stage quality facts', async () => {
-    const { storageRoot, task } = fixture();
-    const unsupported = createQualityFact({ taskId: task.identity.taskId, stage: 'build-code', materialRevision: `revision-${'a'.repeat(64)}`, snapshotTree: 'b'.repeat(40), kind: 'acceptance_criterion', status: 'passed', subject: 'ac-1', evidence: [{ ref: 'quality/evidence/ac.json', sha256: 'c'.repeat(64), evidence_type: 'acceptance_evidence' }] });
-    task.createRecordAtomic(unsupported.ref, unsupported.raw);
+    const { storageRoot, task, kernel } = publicRunFixture();
+    const unsupported = kernel.publishVNextQualityFact('build-code', {
+      kind: 'acceptance_criterion', status: 'passed', subject: 'ac-1',
+      evidence: [{ ref: 'quality/evidence/ac.json', sha256: 'c'.repeat(64), evidence_type: 'acceptance_evidence' }],
+    });
     await runMonitoringSidecar({
       context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-spec', attempt_id: 'attempt-binding' },
       stageOutcome: { status: 'completed', quality_fact_refs: [unsupported.ref] },
@@ -762,18 +743,11 @@ describe('M15 stage sidecar integration', () => {
   });
 
   it('keeps quality observations from repeated attempts when the ref is unchanged', async () => {
-    const { storageRoot, task } = fixture();
-    const quality = createQualityFact({
-      taskId: task.identity.taskId,
-      stage: 'build-code',
-      materialRevision: `revision-${'a'.repeat(64)}`,
-      snapshotTree: 'b'.repeat(40),
-      kind: 'test',
-      status: 'passed',
-      subject: 'm15-repeat-test',
+    const { storageRoot, task, kernel } = publicRunFixture();
+    const quality = kernel.publishVNextQualityFact('build-code', {
+      kind: 'test', status: 'passed', subject: 'm15-repeat-test',
       evidence: [{ ref: 'quality/tests/m15-repeat.json', sha256: 'c'.repeat(64), evidence_type: 'test_receipt' }],
     });
-    task.createRecordAtomic(quality.ref, quality.raw);
     const base = { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code', stageOutcome: { status: 'completed', quality_fact_refs: [quality.ref] }, services: { resolveMonitoringSource: async () => null }, now: () => new Date('2026-08-12T00:00:00.000Z') };
     await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-a' }, stageOutcome: base.stageOutcome, services: base.services, now: base.now });
     await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-b' }, stageOutcome: base.stageOutcome, services: base.services, now: base.now });

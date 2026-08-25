@@ -221,7 +221,10 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
     stage,
     kind: "review",
     status: result.status === "available" ? "recorded" : "unavailable",
-    subject: "code_review",
+    // verify-code's canonical code_review belongs to dsh-code-review. Keep
+    // this broker result under the existing advisory subject so it cannot
+    // compete with the completion fact while its provenance remains intact.
+    subject: "independent_review",
     material_id: result.materialId,
     material_revision: currentMaterialRevision,
     evidence: [{ ref: evidenceRef, sha256: evidenceHash, evidence_type: "review_result" }],
