@@ -163,22 +163,92 @@ function bindAnalyzerPacketIdentity(packet, identity) {
   return bound;
 }
 
+function bindAnalyzerPacketEvidence(packet, evidence) {
+  const currentByRef = new Map(evidence.map((entry) => [entry.ref, entry]));
+  const currentByKind = new Map(evidence.map((entry) => [entry.kind, entry]));
+  const currentByCanonicalRef = new Map(evidence.map((entry) => [entry.canonical_ref, entry]));
+  const existing = Array.isArray(packet?.evidence) ? packet.evidence : [];
+  const matched = new Set();
+  const bound = existing.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+    const current = currentByRef.get(entry.ref)
+      ?? currentByKind.get(entry.kind)
+      ?? currentByCanonicalRef.get(entry.ref)
+      ?? currentByCanonicalRef.get(entry.canonical_ref);
+    if (!current) return entry;
+    matched.add(current.ref);
+    return {
+      ...entry,
+      ref: current.ref,
+      kind: current.kind,
+      canonical_ref: current.canonical_ref,
+      status: current.status,
+      hash: current.hash,
+      snapshot_tree: current.snapshot_tree,
+    };
+  });
+  for (const current of evidence) {
+    if (!matched.has(current.ref)) bound.push(current);
+  }
+  return { ...packet, evidence: bound };
+}
+
 function bindAcceptanceCoverageEvidence(packet, evidence, identity) {
   if (!Array.isArray(packet?.acceptance_coverage)) return packet;
   const evidenceByRef = new Map(evidence.map((entry) => [entry.ref, entry]));
+  const evidenceByKind = new Map(evidence.map((entry) => [entry.kind, entry]));
+  const packetEvidenceByRef = new Map((packet.evidence ?? []).map((entry) => [entry?.ref, entry]));
+  const packetEvidenceByKind = new Map((packet.evidence ?? []).map((entry) => [entry?.kind, entry]));
+  const bindCoverageEvidenceRef = (ref) => {
+    if (typeof ref !== "string") return ref;
+    const packetEntry = packetEvidenceByRef.get(ref);
+    const logicalRef = packetEntry?.kind ?? ref;
+    return evidenceByKind.get(logicalRef)?.ref ?? evidenceByRef.get(ref)?.ref ?? ref;
+  };
   const bindEvidence = (entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
-    const current = evidenceByRef.get(entry.ref);
+    const packetEntry = packetEvidenceByRef.get(entry.ref);
+    const logicalRef = packetEntry?.kind ?? entry.ref;
+    const current = evidenceByRef.get(entry.ref) ?? evidenceByKind.get(logicalRef);
     if (!current) return entry;
-    return { ...entry, hash: current.hash, snapshot_tree: current.snapshot_tree };
+    return {
+      ...entry,
+      ref: current.canonical_ref ?? current.ref,
+      hash: current.hash,
+      snapshot_tree: current.snapshot_tree,
+    };
   };
+  const enrichEvidence = (entry) => {
+    const packetEntry = packetEvidenceByRef.get(entry?.ref) ?? packetEvidenceByKind.get(entry?.kind);
+    return packetEntry?.test_result && !entry?.test_result
+      ? { ...entry, test_result: packetEntry.test_result }
+      : entry;
+  };
+  const boundEvidence = evidence.flatMap((entry) => {
+    const enriched = enrichEvidence(entry);
+    return enriched?.canonical_ref
+      ? [enriched, { ...enriched, ref: enriched.canonical_ref }]
+      : [enriched];
+  });
   return {
     ...packet,
+    evidence: boundEvidence,
+    coverage: Array.isArray(packet.coverage)
+      ? packet.coverage.map((row) => ({
+          ...row,
+          evidence_refs: Array.isArray(row.evidence_refs)
+            ? row.evidence_refs.map(bindCoverageEvidenceRef)
+            : row.evidence_refs,
+        }))
+      : packet.coverage,
     acceptance_coverage: packet.acceptance_coverage.map((row) => ({
       ...row,
       material_revision: identity.material_revision,
       snapshot_tree: identity.snapshot_tree,
       evidence_refs: Array.isArray(row.evidence_refs) ? row.evidence_refs.map(bindEvidence) : row.evidence_refs,
+      ...(row.test_result && typeof row.test_result === "object" && !Array.isArray(row.test_result)
+        ? { test_result: { ...row.test_result, evidence_ref: bindEvidence({ ref: row.test_result.evidence_ref })?.ref ?? row.test_result.evidence_ref } }
+        : {}),
       review_ref: bindEvidence(row.review_ref),
       stage_end_ref: bindEvidence(row.stage_end_ref),
     })),
@@ -229,6 +299,7 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     return {
       ref: logicalRef,
       kind: logicalRef,
+      canonical_ref: proof.ref,
       status: "fresh",
       hash: proof.sha256,
       snapshot_tree: snapshot.tree,
@@ -265,10 +336,18 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     && requirementAuthentication.status === "present"
     ? requirementAuthentication.messages
     : [];
+  const boundPacket = bindAcceptanceCoverageEvidence(
+    bindAnalyzerPacketEvidence(bindAnalyzerPacketIdentity(packetInput, identity), analyzerEvidence),
+    analyzerEvidence,
+    identity,
+  );
   const packet = {
-    ...bindAcceptanceCoverageEvidence(bindAnalyzerPacketIdentity(packetInput, identity), analyzerEvidence, identity),
+    ...boundPacket,
     materials: analyzerMaterials,
-    evidence: analyzerEvidence,
+    // Keep the provider's extra observations, but replace each required
+    // logical entry with the host-authenticated proof and add missing ones.
+    // The runtime validator looks up required evidence by logical ref.
+    evidence: boundPacket.evidence,
     ...(stage === "make-decision" ? {
       // The launcher-authenticated projection is the only accepted source for
       // original requirement messages. A packet cannot self-report this list.
@@ -749,7 +828,7 @@ export function createWorkflowHubSessionRecorder({
   return Object.freeze({
     startStep: (stepSlug) => begin("step", text(stepSlug, "stepSlug")),
     startSkill: (skillId) => begin("skill", text(skillId, "skillId")),
-    finish({ status: stageStatus, spec_analyze } = {}) {
+    finish({ status: stageStatus, spec_analyze, code_review } = {}) {
       if (closed) throw new Error("WorkflowHub session recorder is already closed");
       if (activeSubjects.size) throw new Error("WorkflowHub session recorder has unfinished step/skill lifecycles");
       const steps = subjects.steps.map((entry) => finishedSteps.get(entry.step_slug) ?? missingOutcome("step", entry.step_slug));
@@ -757,16 +836,19 @@ export function createWorkflowHubSessionRecorder({
         const subjectId = skillIdentity(entry);
         return finishedSkills.get(subjectId) ?? missingOutcome("skill", subjectId);
       });
-      const resolvedStatus = stageStatus ?? (steps.every((entry) => entry.status === "completed") && skills.every((entry) => entry.status === "completed") ? "completed" : "incomplete");
-      if (resolvedStatus === "completed" && [...steps, ...skills].some((entry) => entry.status !== "completed")) {
-        throw new Error("completed WorkflowHub session outcome cannot contain incomplete step/skill rows");
+      const terminal = (entry) => ["completed", "skipped", "not_applicable"].includes(entry.status);
+      const resolvedStatus = stageStatus ?? (steps.every(terminal) && skills.every(terminal) ? "completed" : "incomplete");
+      if (resolvedStatus === "completed" && [...steps, ...skills].some((entry) => !terminal(entry))) {
+        throw new Error("completed WorkflowHub session outcome cannot contain non-terminal step/skill rows");
       }
       const execution = {
         status: resolvedStatus,
         provenance: { kind: "workflowhub-session", host: safeHost, agent_run_id: safeSessionId, session_id: safeSessionId, source_ref: safeSourceRef },
         steps,
         skills,
-        spec_analyze: object(spec_analyze, "spec_analyze"),
+        ...(stage === "verify-code"
+          ? { code_review: object(code_review, "code_review") }
+          : { spec_analyze: object(spec_analyze, "spec_analyze") }),
       };
       closed = true;
       return publishStageAgentOutcome({

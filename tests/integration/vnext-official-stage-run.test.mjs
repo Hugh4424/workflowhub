@@ -302,6 +302,74 @@ describe("vNext official stage completion", () => {
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "incomplete", quality_status: "incomplete" });
   });
 
+  it("accepts a completed session with deliberate not_applicable boundaries", async () => {
+    const state = fixture("workflowhub-session-not-applicable");
+    const context = contextFor("build-plan", state);
+    const fixtureExecution = stageAgentExecution("build-plan");
+    let clock = 1000;
+    const recorder = createWorkflowHubSessionRecorder({
+      task: state.task,
+      kernel: state.kernel,
+      candidateWorkspace: state.candidate,
+      stage: "build-plan",
+      attemptId: "attempt-workflowhub-session-not-applicable",
+      workflowRunId: context.workflowRunId,
+      host: "codex-test",
+      sessionId: "session-not-applicable",
+      sourceRef: "codex-session-not-applicable",
+      now: () => clock,
+    });
+    for (const step of fixtureExecution.steps) {
+      const notApplicable = step.step_slug === "review-plan";
+      const finish = recorder.startStep(step.step_slug);
+      clock += 10;
+      finish({
+        status: notApplicable ? "not_applicable" : "completed",
+        input_refs: step.input_refs,
+        result_summary: notApplicable ? "host-owned review is evaluated separately" : `当前会话完成 ${step.step_slug}`,
+        ...(notApplicable ? { reason: "separate_benchmark_surface" } : {}),
+        evidence: step.evidence,
+      });
+    }
+    for (const skill of fixtureExecution.skills) {
+      const notApplicable = skill.skill_id === "wh-review";
+      const finish = recorder.startSkill(skill.skill_id);
+      clock += 10;
+      finish({
+        status: notApplicable ? "not_applicable" : "completed",
+        trigger: notApplicable ? false : true,
+        executed: notApplicable ? false : true,
+        version: skill.version,
+        result_summary: notApplicable ? "host-owned review is evaluated separately" : `当前会话完成 ${skill.skill_id}`,
+        ...(notApplicable ? { reason: "separate_benchmark_surface" } : {}),
+        evidence: skill.evidence,
+      });
+    }
+    const analyzer = structuredClone(fixtureExecution.spec_analyze);
+    analyzer.evidence_subjects = Object.fromEntries(
+      ["decision-log", "spec", "plan", "tasks"].map((ref, index) => [ref, {
+        subject_kind: "step",
+        subject_id: fixtureExecution.steps[index].step_slug,
+      }]),
+    );
+    const outcome = recorder.finish({ status: "completed", spec_analyze: analyzer });
+    expect(outcome.value.status).toBe("completed");
+    expect(outcome.value.step_outcomes.find((entry) => entry.step_slug === "review-plan").status).toBe("not_applicable");
+    expect(outcome.value.skill_outcomes.find((entry) => entry.skill_id === "wh-review").status).toBe("not_applicable");
+    for (const logicalRef of ["decision-log", "spec", "plan", "tasks"]) {
+      const packetEvidence = outcome.value.spec_analyze.packet.evidence.find((entry) => entry.ref === logicalRef);
+      const binding = outcome.value.spec_analyze.evidence_bindings[logicalRef];
+      expect(packetEvidence).toMatchObject({
+        ref: logicalRef,
+        kind: logicalRef,
+        status: "fresh",
+        hash: binding.sha256,
+        snapshot_tree: binding.snapshot_tree,
+        canonical_ref: binding.ref,
+      });
+    }
+  });
+
   it("turns a host outcome into canonical quality facts in the same handoff", async () => {
     const state = fixture("workflowhub-host-quality-handoff");
     const context = contextFor("make-decision", state);

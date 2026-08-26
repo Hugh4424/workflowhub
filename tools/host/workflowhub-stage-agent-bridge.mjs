@@ -130,7 +130,10 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     clock = endedAt;
     finish(event);
   }
-  return recorder.finish({ status: session.status, spec_analyze: session.spec_analyze });
+  return recorder.finish({
+    status: session.status,
+    ...(stage === "verify-code" ? { code_review: session.code_review } : { spec_analyze: session.spec_analyze }),
+  });
 }
 
 export function publishCurrentWorkflowHubSession(args) {
