@@ -424,7 +424,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
     }));
   }
   const acceptanceSubjects = {
-    "make-decision": ["scope", "non_goals", "risks", "talk_clarify"],
+    "make-decision": ["scope", "non_goals", "risks"],
     "build-spec": ["zero_major_ambiguities"],
     "build-plan": ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks"],
     "build-code": ["acceptance_criteria"],
@@ -680,26 +680,11 @@ describe("current vNext five-stage runtime", () => {
     expect(invoked).toBe(false);
   });
 
-  it("completes make-decision without coverage audit while accepting immutable Talk/Clarify evidence", () => {
+  it("completes make-decision from the stage outcome and confirmation without a duplicate Talk receipt", () => {
     const state = fixture("public-make-decision-no-audit");
     const decisionLog = "# public decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
     state.artifacts.writeAtomic("decision-log.md", decisionLog);
-    const decisionRef = state.artifacts.reference("decision-log.md");
-    const decisionHash = sha256(decisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-    const interactionValue = {
-      schema_version: "workflowhub-interaction-aggregate.v1",
-      task_id: state.task.identity.taskId,
-      stage: "make-decision",
-      snapshot_tree: snapshot.tree,
-      talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true, lifecycle_rounds: talkLifecycleRounds() },
-      clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "no_direction_changing_ambiguity" },
-      decision_ref: decisionRef,
-      decision_hash: decisionHash,
-    };
-    const interactionRaw = `${JSON.stringify(interactionValue, null, 2)}\n`;
-    const interactionRef = `quality/evidence/interactions/${sha256(interactionRaw)}.json`;
-    state.kernel.publishCanonicalRecord(interactionRef, interactionRaw);
     const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
     const stageOutcome = stageOutcomeReceipt(state, "make-decision");
@@ -717,7 +702,7 @@ describe("current vNext five-stage runtime", () => {
     expect(confirmation.quality_fact_ref).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
     const input = join(state.root, "make-decision-input.json");
     writeFileSync(input, `${JSON.stringify({ receipts: {
-      interaction: interactionRef, direction_review: direction.resultRef, detail_review: detail.resultRef,
+      direction_review: direction.resultRef, detail_review: detail.resultRef,
       confirmation: confirmation.ref, stage_outcomes: stageOutcome.ref,
     } })}\n`);
     const result = spawnSync(process.execPath, [
@@ -733,11 +718,7 @@ describe("current vNext five-stage runtime", () => {
     const publicFacts = publicRun.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(publicFacts.some((fact) => fact.subject === "research")).toBe(false);
     expect(publicFacts.some((fact) => fact.subject === "grill")).toBe(false);
-    const talkClarifyFact = publicFacts.find((fact) => fact.subject === "talk_clarify");
-    expect(talkClarifyFact).toMatchObject({ status: "passed" });
-    const acceptance = JSON.parse(state.task.readRecord(talkClarifyFact.evidence[0].ref));
-    const subjectEvidence = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
-    expect(subjectEvidence.subject_fact.evidence_refs).toEqual([{ ref: interactionRef, sha256: sha256(interactionRaw) }]);
+    expect(publicFacts.some((fact) => fact.subject === "talk_clarify")).toBe(false);
     expect(publicRun, `${result.stdout}\n${result.stderr}\n${JSON.stringify(publicFacts)}`).toMatchObject({ stage: "make-decision", status: "completed", work_status: "ready" });
     expect(() => state.task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT/);
     const status = publicStatus(state, "make-decision");
