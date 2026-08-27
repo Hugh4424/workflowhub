@@ -153,11 +153,11 @@ describe("current quality boundary", () => {
     })).toMatchObject({ status: "continue", findings: [] });
   });
 
-  it("keeps the 21-clause constitution and its checklist synchronized", () => {
-    expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.5\.0\b/);
-    expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(21);
-    expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(21);
-    expect(checklist).toMatch(/\*\*条目数\*\*：21/);
+  it("keeps the 22-clause constitution and its checklist synchronized", () => {
+    expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.6\.0\b/);
+    expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
+    expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
+    expect(checklist).toMatch(/\*\*条目数\*\*：22/);
   });
 
   it("separates ordinary progress, structurally authentic publication, and fail-closed completion", () => {

@@ -1,6 +1,7 @@
 const ARTIFACT_KINDS = new Set(["spec", "plan", "tasks", "evidence", "code"]);
 const HASH = /^[a-f0-9]{64}$/;
 const SNAPSHOT = /^[a-f0-9]{40,64}$/;
+import { buildConsumerCensus, validateProjectStandardSources } from "../../runtime/stage/stage-content-contracts.mjs";
 
 function text(value) {
   return typeof value === "string" && value.trim() !== "" ? value : null;
@@ -172,6 +173,64 @@ function unresolvedConsumer(value) {
     && text(value.reason)));
 }
 
+function comparableSourceIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return Object.fromEntries(["document_kind", "path", "content_sha256", "revision", "anchor_id"].map((key) => [key, value[key]]));
+}
+
+function sameSourceIdentity(left, right) {
+  const a = comparableSourceIdentity(left);
+  const b = comparableSourceIdentity(right);
+  return Boolean(a && b && Object.keys(a).every((key) => a[key] === b[key]));
+}
+
+function alignProjectSourcesAndCensus({
+  projectStandardSources,
+  project_standard_sources,
+  consumerCensus,
+  consumer_census,
+  requireCurrent = false,
+  expectedSnapshotTree = null,
+  expectedDesignIdentity = null,
+  expectedExperienceIdentity = null,
+} = {}, gaps) {
+  const sources = projectStandardSources ?? project_standard_sources;
+  if (sources === undefined) {
+    if (requireCurrent) gaps.push(gap("UI-SOURCES", "project_standard_sources_missing", [], "bind the current Design.md and Experience.md identities before claiming UI alignment"));
+  } else {
+    const checked = validateProjectStandardSources({ ...sources, require_current_binding: requireCurrent });
+    if (!checked.ok) {
+      for (const error of checked.errors) {
+        gaps.push(gap("UI-SOURCES", "project_standard_source_invalid", [], `repair Design.md/Experience.md identity contract: ${error}`));
+      }
+    } else if (["stale", "missing", "unknown", "not_ready"].includes(checked.status)) {
+      gaps.push(gap("UI-SOURCES", `project_standard_source_${checked.status}`, [], "refresh the bound Design.md and Experience.md identities before claiming alignment"));
+    } else {
+      if (expectedDesignIdentity && !sameSourceIdentity(checked.identities?.design, expectedDesignIdentity)) {
+        gaps.push(gap("UI-SOURCES", "design_identity_mismatch", [], "bind Design.md to the current path, content hash, revision, and explicit anchor"));
+      }
+      if (expectedExperienceIdentity && !sameSourceIdentity(checked.identities?.experience, expectedExperienceIdentity)) {
+        gaps.push(gap("UI-SOURCES", "experience_identity_mismatch", [], "bind Experience.md to the current path, content hash, revision, and explicit anchor"));
+      }
+    }
+  }
+  const censusInput = consumerCensus ?? consumer_census;
+  if (censusInput === undefined) {
+    if (requireCurrent) gaps.push(gap("UI-CONSUMER-CENSUS", "consumer_census_missing", [], "publish a current deterministic consumer census before claiming UI alignment"));
+  } else {
+    const checked = buildConsumerCensus(censusInput);
+    if (!checked.ok) {
+      for (const error of checked.errors) {
+        gaps.push(gap("UI-CONSUMER-CENSUS", "consumer_census_invalid", [], `repair consumer-census.v1: ${error}`));
+      }
+    } else if (checked.unknown_count > 0) {
+      gaps.push(gap("UI-CONSUMER-CENSUS", "consumer_census_unknown", [], "resolve or preserve each unsupported/unknown consumer reason before claiming complete alignment"));
+    } else if (expectedSnapshotTree && checked.source_snapshot?.tree !== expectedSnapshotTree) {
+      gaps.push(gap("UI-CONSUMER-CENSUS", "consumer_census_stale_snapshot", [], "re-run the consumer census against the current implementation snapshot"));
+    }
+  }
+}
+
 /**
  * Align the UI Contract and Component Quality Map with observed consumers.
  * Design gaps and missing quality facts are reportable unknowns/gaps; this
@@ -184,6 +243,12 @@ export function alignUiDesignEvidence({
   component_quality_map,
   consumerFacts,
   consumer_facts,
+  projectStandardSources,
+  project_standard_sources,
+  consumerCensus,
+  consumer_census,
+  currentSnapshotTree,
+  current_snapshot_tree,
 } = {}) {
   const contract = uiContract ?? ui_contract;
   const map = componentQualityMap ?? component_quality_map;
@@ -208,6 +273,36 @@ export function alignUiDesignEvidence({
     gaps.push(gap("UI-COMPONENT-QUALITY", "component_quality_map_unknown", [], "publish a Component Quality Map or record N/A for a non-UI task"));
   }
   const facts = Array.isArray(observedConsumers) ? observedConsumers : [];
+  const explicitlyNonUi = contract?.ui_applicability === "not_applicable"
+    || contract?.applicability === "not_applicable"
+    || contract?.impact === "non_ui";
+  const requiresCurrentUiFacts = !explicitlyNonUi && (
+    contract?.ui_applicability === "ui"
+    || contract?.impact === "ui"
+    || contract?.impact === "fullstack"
+    || contract?.ui_required === true
+    || contract?.design_status !== undefined
+    || entries !== undefined
+    || projectStandardSources !== undefined
+    || project_standard_sources !== undefined
+    || consumerCensus !== undefined
+    || consumer_census !== undefined
+  );
+  const expectedSnapshotTree = text(currentSnapshotTree)
+    ?? text(current_snapshot_tree)
+    ?? text(contract?.current_snapshot_tree)
+    ?? text(contract?.snapshot_tree)
+    ?? null;
+  alignProjectSourcesAndCensus({
+    projectStandardSources,
+    project_standard_sources,
+    consumerCensus,
+    consumer_census,
+    requireCurrent: requiresCurrentUiFacts,
+    expectedSnapshotTree,
+    expectedDesignIdentity: contract?.design_identity ?? contract?.ui_contract?.design_identity,
+    expectedExperienceIdentity: contract?.experience_identity ?? contract?.ui_contract?.experience_identity,
+  }, gaps);
   for (const [index, entry] of (Array.isArray(entries) ? entries : []).entries()) {
     const id = text(entry?.id) ?? `UI-COMPONENT-${index + 1}`;
     const consumers = uiConsumers(entry);
@@ -252,7 +347,10 @@ export function alignUiDesignEvidence({
     }
   }
 
-  const designUnknown = gaps.some((entry) => entry.reason === "design_gap_unknown" || entry.reason === "design_status_unknown");
+  const designUnknown = gaps.some((entry) => entry.reason === "design_gap_unknown"
+    || entry.reason === "design_status_unknown"
+    || entry.reason.startsWith("project_standard_source_")
+    || entry.reason === "consumer_census_unknown");
   return {
     status: designUnknown ? "unknown" : gaps.length ? "gaps" : "aligned",
     design_status: designStatus,

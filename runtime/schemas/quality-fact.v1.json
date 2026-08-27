@@ -15,6 +15,7 @@
     "snapshot_tree": { "type": "string", "minLength": 1 },
     "kind": { "enum": ["test", "review", "acceptance_criterion", "confirmation"] },
     "status": { "enum": ["passed", "failed", "unavailable", "missing", "recorded"] },
+    "review_status": { "enum": ["clean", "findings", "resolved", "unavailable"] },
     "subject": { "type": "string", "minLength": 1 },
     "evidence": {
       "type": "array",

@@ -105,15 +105,19 @@ export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, sub
     // never blocks same-task repair; it must not satisfy formal completion.
     if (stage === "verify-code" && subject === "code_review") {
       if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
-      // verify-code has one stricter review predicate than the advisory and
-      // build-code review subjects: the authenticated result must explicitly
-      // say that it is clean. `recorded` only proves that a review record
-      // exists; it does not prove that the review has no open finding.
-      return fact.status === "recorded" && reviewStatus === "clean";
+      // A review may finish with findings that were fixed in the same task.
+      // `resolved` is a current disposition, not a claim that the old review
+      // snapshot was clean.  Keep accepting the legacy `clean` value for
+      // findings-free reviews, but never require it as a separate loop.
+      return fact.status === "recorded" && new Set(["clean", "resolved"]).has(reviewStatus);
     }
     if (stage === "build-code" && subject === "integration_review") {
       if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
-      return fact.status === "recorded" && reviewStatus === "clean";
+      // build-code already has the required finding-disposition predicate;
+      // the review fact only needs to be authentic and recorded.  Requiring a
+      // second "clean" label duplicated that disposition check and created a
+      // needless review loop.
+      return fact.status === "recorded";
     }
     return fact.status === "recorded";
   }

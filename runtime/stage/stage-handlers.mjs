@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
@@ -11,12 +11,18 @@ import { validateSchema } from "../review/schema-validator.mjs";
 import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
+import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 import {
   validateAcceptanceDesignMinimum,
   validateExecutablePlanTaskMinimum,
   validateInteractionLifecycleSequence,
+  validateInteractionAggregateContract,
   validatePlanTaskContract,
   activeAcceptanceCriterionIds,
+  validateProjectStandardSources,
+  buildConsumerCensus,
+  deriveChangeImpact,
+  validateDeliveryContract,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
@@ -49,13 +55,13 @@ const NAMESPACE = Object.freeze({
   decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
-  audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/",
+  audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/", ui_qa: "quality/evidence/browser-qa/",
   direction_risk_acceptance: "quality/evidence/risk-acceptances/",
   detail_risk_acceptance: "quality/evidence/risk-acceptances/",
   quality_risk_acceptance: "quality/evidence/risk-acceptances/",
   stage_outcomes: "quality/evidence/stage-outcomes/",
 });
-const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification" });
+const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", ui_qa: "browser-qa" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -71,7 +77,7 @@ const RECEIPT_KEYS = Object.freeze({
   "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
   "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
   "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
-  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes"]),
+  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes", "ui_qa"]),
   // quality_review is the dsh-code-review result bound by the stage outcome;
   // review is the existing wh-review advisory receipt and never feeds the
   // canonical completion subject.
@@ -279,6 +285,24 @@ function interactionAggregateFacts(worker, invocation, expected) {
   const record = object(worker.readReceipt(ref), "interaction aggregate record");
   if (record.sha256 !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) throw new Error("interaction aggregate ref is not content-addressed to its immutable bytes");
   const value = object(record.value, "interaction aggregate");
+  const currentContract = Object.hasOwn(value, "original_requirement")
+    || Object.hasOwn(value, "decision")
+    || Object.hasOwn(value, "confirmation");
+  if (currentContract) {
+    const validation = validateInteractionAggregateContract(value);
+    if (!validation.ok) throw materialIncomplete(`make-decision interaction aggregate is invalid: ${validation.errors.join("; ")}`);
+    const decision = value.decision;
+    if (value.snapshot_tree !== expected.snapshot_tree
+        || decision.ref !== expected.decision_ref
+        || decision.hash !== expected.decision_hash) {
+      throw new Error("interaction aggregate does not bind the current task and decision");
+    }
+    return Object.freeze({
+      ref,
+      value: Object.freeze(value),
+      evidence: Object.freeze({ ref, sha256: record.sha256 }),
+    });
+  }
   const allowed = new Set(["schema_version", "task_id", "stage", "snapshot_tree", "talk", "clarify", "decision_ref", "decision_hash"]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`interaction aggregate has unknown fields: ${unknown.join(", ")}`);
@@ -420,6 +444,471 @@ function optionalTestFacts(worker, invocation, name = "tests", producerStage = w
     return unavailableTestFacts(worker, name, "no current test receipt was supplied");
   }
   return testFacts(worker, invocation, name, producerStage);
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalBrowserQaComparable(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const comparable = { ...value };
+  // The reference and hash are the external content-address binding. Exclude
+  // them from the byte comparison to avoid a recursive self-hash; every other
+  // browser observation must still match the current payload exactly.
+  delete comparable.evidence_ref;
+  delete comparable.evidence_hash;
+  return comparable;
+}
+
+function assertCanonicalBrowserQaContent(stored, payload) {
+  if (!stored || typeof stored.bytes !== "string") throw new Error("canonical evidence bytes are unavailable");
+  let canonical;
+  try { canonical = JSON.parse(stored.bytes); }
+  catch { throw new Error("canonical evidence bytes are not valid JSON"); }
+  if (canonicalJson(canonicalBrowserQaComparable(canonical)) !== canonicalJson(canonicalBrowserQaComparable(payload))) {
+    throw new Error("canonical evidence content does not match the current browser QA payload");
+  }
+}
+
+function classifyChangedFiles(changedFiles) {
+  const uiPattern = /(?:^|\/)(?:ui|frontend|components?|pages?|routes?|views?|styles?|design)(?:\/|$)|\.(?:jsx|tsx|vue|svelte|css|scss|less|html)$/i;
+  const backendPattern = /(?:^|\/)(?:api|backend|server|dto|schema|migrations?|persistence|database|db|models?|repositories?|services?)(?:\/|$)|\.(?:sql|graphql|gql)$/i;
+  const ui = changedFiles.some((path) => uiPattern.test(path));
+  const backend = changedFiles.some((path) => backendPattern.test(path));
+  return ui && backend ? "fullstack" : ui ? "ui" : backend ? "backend" : null;
+}
+
+function inferImpactFromAuthenticatedImplementation(worker, invocation) {
+  if (invocation.receipts?.implementation === undefined) return { impact: null, reason: "implementation receipt unavailable" };
+  try {
+    const implementation = receipt(worker, invocation, "implementation");
+    if (!Array.isArray(implementation.value.changed)) return { impact: null, reason: "implementation.changed is unavailable" };
+    const impact = classifyChangedFiles(implementation.value.changed);
+    return impact
+      ? { impact, changed_files: implementation.value.changed }
+      : { impact: null, changed_files: implementation.value.changed, reason: "changed files do not establish a UI or backend consumer" };
+  } catch (error) {
+    return { impact: null, reason: `implementation receipt cannot be authenticated: ${error.message}` };
+  }
+}
+
+async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null) {
+  const suppliedRef = invocation.receipts?.ui_qa;
+  const adapter = worker.runControlledUiQa;
+  const usableDerivedImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(derivedImpact) && derivedImpact !== "unknown"
+    ? derivedImpact
+    : null;
+  const declaredImpact = usableDerivedImpact
+    ?? invocation.contract_facts?.change_impact?.impact
+    ?? invocation.contract_facts?.impact?.impact
+    ?? invocation.contract_facts?.impact
+    ?? invocation.change_impact?.impact
+    ?? invocation.impact;
+  const authenticated = inferImpactFromAuthenticatedImplementation(worker, invocation);
+  const declaredImpactValue = typeof declaredImpact === "string" ? declaredImpact : declaredImpact?.impact;
+  const hasDeclaredImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(declaredImpactValue);
+  let impact = authenticated.impact ?? declaredImpactValue;
+  let impactReason = null;
+  if (authenticated.impact && hasDeclaredImpact && declaredImpactValue !== authenticated.impact) {
+    impact = "unknown";
+    impactReason = `declared impact ${declaredImpactValue} does not match authenticated implementation impact ${authenticated.impact}`;
+  } else if (!authenticated.impact && declaredImpactValue === "non_ui") {
+    impact = "unknown";
+    impactReason = "non_ui impact cannot skip browser QA without an authenticated implementation consumer classification";
+  }
+  // UI applicability is an explicit branch of the contract.  A pure backend
+  // or non-UI change must not start a browser, while a UI/fullstack change
+  // with no executor must remain an unknown quality fact rather than silently
+  // disappearing from the build-code result.
+  if (impact === "backend" || impact === "non_ui") {
+    return {
+      facts: { status: "not_applicable", result: "not_applicable", applicability: "not_applicable", reason: "change impact is non-UI; browser QA is not applicable" },
+      evidence: null,
+      missing_items: [],
+    };
+  }
+  if (impact !== "ui" && impact !== "fullstack") {
+    if (suppliedRef === undefined && typeof adapter !== "function" && invocation.contract_facts === undefined) return null;
+    if (suppliedRef === undefined && typeof adapter !== "function") {
+      return {
+      facts: { status: "unknown", applicability: "unknown", reason: impactReason ?? "UI applicability is unknown; no derived ui/fullstack impact was supplied" },
+        evidence: null,
+        missing_items: ["browser QA applicability is unknown: derive ui/fullstack impact before execution"],
+      };
+    }
+    return {
+      facts: { status: "unknown", applicability: "unknown", reason: impactReason ?? "UI applicability is unknown; refusing an unclassified browser QA invocation" },
+      evidence: null,
+      missing_items: ["browser QA applicability is unknown: refusing an unclassified invocation"],
+    };
+  }
+  if (typeof adapter !== "function") {
+    return {
+      facts: { status: "unknown", applicability: impact, reason: "applicable UI/fullstack change has no controlled browser QA executor" },
+      evidence: null,
+      missing_items: ["controlled browser QA unavailable for an applicable UI/fullstack change"],
+    };
+  }
+
+  const snapshot = typeof worker.snapshotWorkspace === "function"
+    ? worker.snapshotWorkspace()
+    : typeof worker.candidateWorkspace?.captureSnapshot === "function"
+      ? worker.candidateWorkspace.captureSnapshot()
+      : null;
+  const contractFacts = invocation.contract_facts ?? {};
+  const qaBinding = contractFacts.qa_binding ?? invocation.qa_binding ?? {};
+  const binding = {
+    task_id: worker.identity.taskId,
+    stage: worker.stage,
+    ...(typeof (worker.currentAttemptId ?? qaBinding.attempt_id) === "string" ? { attempt_id: worker.currentAttemptId ?? qaBinding.attempt_id } : {}),
+    material_revision: typeof worker.currentMaterialRevision === "string" ? worker.currentMaterialRevision : undefined,
+    snapshot_tree: snapshot?.tree ?? null,
+  };
+  const deliveryUi = contractFacts.delivery_contract?.ui_contract ?? contractFacts.ui_contract ?? {};
+  const expectedAttemptId = worker.currentAttemptId ?? qaBinding.attempt_id;
+  const expectedAcceptanceId = qaBinding.acceptance_criterion_id;
+  const expectedDesignIdentity = qaBinding.design_identity ?? contractFacts.design_identity ?? deliveryUi.design_identity;
+  const expectedExperienceIdentity = qaBinding.experience_identity ?? contractFacts.experience_identity ?? deliveryUi.experience_identity;
+  const expectedServiceIdentity = qaBinding.service_identity ?? contractFacts.service_identity;
+  const expectedApiIdentity = qaBinding.api_identity ?? contractFacts.api_identity;
+  const expectedDtoIdentity = qaBinding.dto_identity ?? contractFacts.dto_identity;
+  const expectedBrowserProfile = qaBinding.browser_profile ?? contractFacts.browser_profile;
+  const expectedRoute = qaBinding.route ?? contractFacts.route ?? deliveryUi.route;
+  const expectedPage = qaBinding.page ?? contractFacts.page ?? deliveryUi.page;
+  const expectedScenario = qaBinding.scenario ?? contractFacts.scenario ?? deliveryUi.scenario;
+  const expectedFixture = qaBinding.fixture ?? contractFacts.fixture ?? deliveryUi.fixture;
+  let evidence = null;
+  let payload;
+  let invocationId = null;
+  let failure = null;
+  // A previous ui_qa receipt is diagnostic only.  Every applicable attempt
+  // must execute the current controlled adapter so an old pass cannot be
+  // reused after the implementation, material, or service changes.
+  invocationId = `ui-qa-${randomUUID()}`;
+  try {
+    const adapterBinding = {
+      ...binding,
+      ...(expectedAcceptanceId !== undefined ? { acceptance_criterion_id: expectedAcceptanceId } : {}),
+      ...(expectedDesignIdentity !== undefined ? { design_identity: expectedDesignIdentity } : {}),
+      ...(expectedExperienceIdentity !== undefined ? { experience_identity: expectedExperienceIdentity } : {}),
+      ...(expectedServiceIdentity !== undefined ? { service_identity: expectedServiceIdentity } : {}),
+      ...(expectedApiIdentity !== undefined ? { api_identity: expectedApiIdentity } : {}),
+      ...(expectedDtoIdentity !== undefined ? { dto_identity: expectedDtoIdentity } : {}),
+      ...(expectedBrowserProfile !== undefined ? { browser_profile: expectedBrowserProfile } : {}),
+      ...(expectedRoute !== undefined ? { route: expectedRoute } : {}),
+      ...(expectedPage !== undefined ? { page: expectedPage } : {}),
+      ...(expectedScenario !== undefined ? { scenario: expectedScenario } : {}),
+      ...(expectedFixture !== undefined ? { fixture: expectedFixture } : {}),
+      invocation_id: invocationId,
+      ...(suppliedRef !== undefined ? { previous_receipt_ref: suppliedRef } : {}),
+    };
+    const result = await adapter(Object.freeze(adapterBinding));
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("controlled QA adapter must return an object");
+    invocationId = result.invocation_id ?? invocationId;
+    payload = result.payload ?? result.browser_qa ?? result.evidence;
+    if (result.evidence_ref !== undefined || result.evidence_hash !== undefined) {
+      if (typeof result.evidence_ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(result.evidence_ref) || !SHA256.test(result.evidence_hash ?? "")) throw new Error("controlled QA evidence_ref/evidence_hash binding is invalid");
+      if (typeof worker.readEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
+      const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
+      if (typeof readBrowserEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
+      const stored = readBrowserEvidence(result.evidence_ref);
+      if (stored.sha256 !== result.evidence_hash) throw new Error("controlled QA evidence hash mismatch");
+      evidence = { ref: result.evidence_ref, sha256: result.evidence_hash };
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        payload = { ...payload, evidence_ref: result.evidence_ref, evidence_hash: result.evidence_hash };
+      }
+      assertCanonicalBrowserQaContent(stored, payload);
+    }
+  } catch (error) {
+    failure = `controlled browser QA invocation failed: ${error.message}`;
+  }
+  if (failure) {
+    return {
+      facts: { status: "unknown", invocation_id: invocationId, ...binding, reason: failure },
+      evidence,
+      missing_items: [failure],
+    };
+  }
+  try {
+    validateBrowserQaEvidence(payload);
+  } catch (error) {
+    const reason = `controlled browser QA evidence is invalid: ${error.message}`;
+    return {
+      facts: { status: "unknown", invocation_id: invocationId, ...binding, reason },
+      evidence,
+      missing_items: [reason],
+    };
+  }
+  const identityMismatches = [
+    payload.task_id !== worker.identity.taskId ? "task_id" : null,
+    payload.stage !== worker.stage ? "stage" : null,
+    !expectedAttemptId ? "attempt_id_unbound" : payload.attempt_id !== expectedAttemptId ? "attempt_id" : null,
+    !expectedAcceptanceId ? "acceptance_criterion_unbound" : payload.acceptance_criterion_id !== expectedAcceptanceId ? "acceptance_criterion_id" : null,
+    !expectedDesignIdentity ? "design_identity_unbound" : canonicalJson(payload.design_identity) !== canonicalJson(expectedDesignIdentity) ? "design_identity" : null,
+    !expectedExperienceIdentity ? "experience_identity_unbound" : canonicalJson(payload.experience_identity) !== canonicalJson(expectedExperienceIdentity) ? "experience_identity" : null,
+    !expectedServiceIdentity ? "service_identity_unbound" : canonicalJson(payload.service_identity) !== canonicalJson(expectedServiceIdentity) ? "service_identity" : null,
+    !expectedApiIdentity ? "api_identity_unbound" : canonicalJson(payload.api_identity) !== canonicalJson(expectedApiIdentity) ? "api_identity" : null,
+    !expectedDtoIdentity ? "dto_identity_unbound" : canonicalJson(payload.dto_identity) !== canonicalJson(expectedDtoIdentity) ? "dto_identity" : null,
+    !expectedBrowserProfile ? "browser_profile_unbound" : canonicalJson(payload.browser_profile) !== canonicalJson(expectedBrowserProfile) ? "browser_profile" : null,
+    expectedRoute !== undefined && canonicalJson(payload.route) !== canonicalJson(expectedRoute) ? "route" : null,
+    expectedPage !== undefined && canonicalJson(payload.page) !== canonicalJson(expectedPage) ? "page" : null,
+    expectedScenario !== undefined && canonicalJson(payload.scenario) !== canonicalJson(expectedScenario) ? "scenario" : null,
+    expectedFixture !== undefined && canonicalJson(payload.fixture) !== canonicalJson(expectedFixture) ? "fixture" : null,
+    !binding.material_revision ? "material_revision_unbound" : payload.material_revision !== binding.material_revision ? "material_revision" : null,
+    !binding.snapshot_tree ? "snapshot_tree_unbound" : payload.snapshot_tree !== binding.snapshot_tree ? "snapshot_tree" : null,
+    payload.invocation_id !== invocationId ? "invocation_id" : null,
+  ].filter(Boolean);
+  if (identityMismatches.length) {
+    const reason = `controlled browser QA identity mismatch: ${identityMismatches.join(", ")}`;
+    return {
+      facts: { status: "unknown", invocation_id: invocationId, ...binding, reason },
+      evidence,
+      missing_items: [reason],
+    };
+  }
+  if (payload.applicability === "ui" && payload.cancellation?.status === "cancelled") {
+    const reason = `controlled browser QA was cancelled: ${payload.cancellation.reason}`;
+    return {
+      facts: { status: "failed", invocation_id: invocationId, ...binding, result: payload.result, cancellation: payload.cancellation, cleanup: payload.cleanup, reason },
+      evidence,
+      missing_items: [reason],
+    };
+  }
+  if (payload.applicability === "ui" && payload.cleanup?.status !== "completed") {
+    const reason = `controlled browser QA cleanup is ${payload.cleanup?.status ?? "missing"}`;
+    return {
+      facts: { status: "failed", invocation_id: invocationId, ...binding, result: payload.result, cancellation: payload.cancellation, cleanup: payload.cleanup, reason },
+      evidence,
+      missing_items: [reason],
+    };
+  }
+  if (payload.applicability === "ui" && payload.result === "pass") {
+    if (payload.fixture?.fixture_only !== false || String(payload.service_identity?.instance ?? "").toLowerCase() === "fixture") {
+      const reason = "controlled browser QA pass requires fixture.fixture_only=false real-page provenance";
+      return {
+        facts: { status: "unknown", invocation_id: invocationId, ...binding, result: payload.result, reason },
+        evidence,
+        missing_items: [reason],
+      };
+    }
+    const canonicalRef = payload.evidence_ref ?? payload.evidence?.ref;
+    const canonicalHash = payload.evidence_hash ?? payload.evidence?.sha256 ?? payload.evidence?.hash;
+    if (typeof canonicalRef !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(canonicalRef)
+        || !SHA256.test(canonicalHash ?? "")) {
+      const reason = "controlled browser QA pass is missing canonical evidence_ref/evidence_hash";
+      return {
+        facts: { status: "unknown", invocation_id: invocationId, ...binding, result: payload.result, reason },
+        evidence,
+        missing_items: [reason],
+      };
+    }
+    const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
+    if (typeof readBrowserEvidence !== "function") {
+      const reason = "controlled browser QA pass cannot authenticate canonical evidence without a reader";
+      return {
+        facts: { status: "unknown", invocation_id: invocationId, ...binding, result: payload.result, reason },
+        evidence,
+        missing_items: [reason],
+      };
+    }
+    try {
+      const stored = readBrowserEvidence(canonicalRef);
+      if (stored.sha256 !== canonicalHash) throw new Error("canonical evidence hash mismatch");
+      assertCanonicalBrowserQaContent(stored, payload);
+      evidence = { ref: canonicalRef, sha256: canonicalHash };
+    } catch (error) {
+      const reason = `controlled browser QA canonical evidence is unavailable: ${error.message}`;
+      return {
+        facts: { status: "unknown", invocation_id: invocationId, ...binding, result: payload.result, reason },
+        evidence,
+        missing_items: [reason],
+      };
+    }
+  }
+  const result = payload.applicability === "not_applicable" ? "not_applicable" : payload.result;
+  const status = result === "pass" ? "passed" : result === "fail" ? "failed" : result === "blocked" ? "blocked" : result === "not_applicable" ? "not_applicable" : "unknown";
+  const facts = {
+    status,
+    invocation_id: invocationId,
+    ...binding,
+    evidence_ref: evidence?.ref ?? null,
+    evidence_hash: evidence?.sha256 ?? null,
+    result,
+    design_identity: payload.design_identity ?? null,
+    experience_identity: payload.experience_identity ?? null,
+    service_identity: payload.service_identity ?? null,
+    api_identity: payload.api_identity ?? null,
+    dto_identity: payload.dto_identity ?? null,
+    browser_profile: payload.browser_profile ?? null,
+    cancellation: payload.cancellation,
+    cleanup: payload.cleanup,
+    observations: payload.observations,
+  };
+  return {
+    facts,
+    evidence,
+    missing_items: status === "passed" || status === "not_applicable" ? [] : [`browser QA result is ${status}: ${payload.failure_reason ?? "see bound evidence"}`],
+  };
+}
+
+function qualityStatusForProjectSource(status) {
+  if (status === "bound_current") return "passed";
+  if (status === "update_required" || status === "stale" || status === "not_ready" || status === "missing") return "incomplete";
+  return "unknown";
+}
+
+/**
+ * Consume the project-standard, census, impact and delivery facts at the
+ * official build-code boundary.  The facts stay in the invocation/result;
+ * they are not a fifth task material and missing input is disclosed rather
+ * than replaced with a passing default.
+ */
+function buildCodeContractFacts(invocation = {}, currentSnapshotTree = null) {
+  const supplied = invocation.contract_facts;
+  if (supplied === undefined) {
+    return Object.freeze({ status: "unavailable", reason: "no current project-standard/consumer/delivery contract facts were supplied", missing_items: [] });
+  }
+  if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
+    return Object.freeze({ status: "incomplete", reason: "contract_facts must be an object", missing_items: ["contract_facts must be an object"] });
+  }
+  const missing = [];
+  const censusInput = supplied.consumer_census;
+  const impactInputs = supplied.impact_inputs && typeof supplied.impact_inputs === "object" ? supplied.impact_inputs : {};
+  const impact = deriveChangeImpact({
+    ...impactInputs,
+    ...(censusInput ? { census: censusInput } : {}),
+    declared_impact: supplied.impact?.impact ?? supplied.declared_impact,
+  });
+  const requiresUiFacts = impact.impact === "ui" || impact.impact === "fullstack";
+  const impactFact = { status: impact.status === "derived" ? "passed" : "unknown", impact: impact.impact, evidence_refs: impact.evidence_refs, unknown_reasons: impact.unknown_reasons, basis: impact.basis };
+  if (impact.status !== "derived" || impact.impact === "unknown") missing.push("change impact is unknown");
+
+  let standards = null;
+  if (supplied.project_standard_sources !== undefined) {
+    const validation = validateProjectStandardSources({ ...supplied.project_standard_sources, stage: "build-code", require_current_binding: true });
+    standards = {
+      status: qualityStatusForProjectSource(validation.status),
+      source_status: validation.status,
+      identities: validation.identities,
+      stale: validation.stale,
+      missing: validation.missing,
+      errors: validation.errors,
+    };
+    if (requiresUiFacts && (!validation.ok || validation.status !== "bound_current")) missing.push(`project standard sources are ${validation.status}`);
+  } else {
+    standards = { status: "unknown", source_status: "missing", reason: "project_standard_sources were not supplied" };
+    if (requiresUiFacts) missing.push("project_standard_sources are missing");
+  }
+
+  let census = null;
+  if (supplied.consumer_census !== undefined) {
+    const validation = buildConsumerCensus(supplied.consumer_census);
+    census = {
+      status: validation.ok && validation.unknown_count === 0 ? "passed" : validation.ok ? "unknown" : "incomplete",
+      schema_version: validation.schema_version ?? null,
+      replay_key: validation.replay_key ?? null,
+      consumer_count: validation.consumers?.length ?? 0,
+      unknown_count: validation.unknown_count ?? null,
+      evidence_refs: validation.consumers?.flatMap((entry) => entry.evidence_refs ?? []) ?? [],
+      errors: validation.errors,
+    };
+    if (requiresUiFacts && validation.ok && currentSnapshotTree && validation.source_snapshot?.tree !== currentSnapshotTree) {
+      census = { ...census, status: "incomplete", reason: "consumer census source_snapshot does not match the current implementation snapshot" };
+      missing.push("consumer census is stale for the current implementation snapshot");
+    }
+    if (requiresUiFacts && (!validation.ok || validation.unknown_count > 0)) missing.push(`consumer census is ${census.status}`);
+    if (requiresUiFacts && validation.ok && validation.consumers.length === 0) {
+      census = { ...census, status: "incomplete", reason: "ui/fullstack consumer census has no discovered consumer" };
+      missing.push("ui/fullstack consumer census has no discovered consumer");
+    }
+  } else {
+    census = { status: "unknown", reason: "consumer_census was not supplied" };
+    if (requiresUiFacts) missing.push("consumer_census is missing");
+  }
+
+  let delivery = null;
+  if (supplied.delivery_contract !== undefined) {
+    const declaredDeliveryImpact = supplied.delivery_contract?.impact;
+    const deliveryInput = {
+      ...supplied.delivery_contract,
+      impact: impact.impact,
+      ...(requiresUiFacts ? {
+        project_standard_sources: supplied.project_standard_sources,
+        consumer_census: supplied.consumer_census,
+        ...(currentSnapshotTree ? { current_snapshot_tree: currentSnapshotTree } : {}),
+        ui_evidence: supplied.ui_evidence ?? supplied.delivery_contract?.ui_evidence,
+      } : {}),
+    };
+    if (declaredDeliveryImpact !== undefined && declaredDeliveryImpact !== impact.impact) {
+      missing.push(`delivery contract impact ${String(declaredDeliveryImpact)} does not match evidence-derived ${impact.impact}`);
+    }
+    const validation = validateDeliveryContract(deliveryInput);
+    delivery = {
+      status: validation.ok ? validation.conclusion?.status ?? validation.status : "incomplete",
+      errors: validation.errors,
+      conclusion: validation.conclusion,
+    };
+    if (!validation.ok || validation.conclusion?.status !== "covered") missing.push(`delivery contract is ${delivery.status}`);
+  } else {
+    delivery = { status: "unknown", reason: "delivery_contract was not supplied" };
+    missing.push("delivery_contract is missing");
+  }
+  return Object.freeze({
+    status: missing.length === 0 ? "recorded" : "incomplete",
+    project_standard_sources: Object.freeze(standards),
+    consumer_census: Object.freeze(census),
+    change_impact: Object.freeze(impactFact),
+    delivery_contract: Object.freeze(delivery),
+    missing_items: Object.freeze(missing),
+  });
+}
+
+function mergeUiQaIntoContractFacts(contractFacts, uiQa) {
+  if (!contractFacts || contractFacts.status === "unavailable") return contractFacts;
+  const impact = contractFacts.change_impact?.impact;
+  if (impact !== "ui" && impact !== "fullstack") return contractFacts;
+  const qaFacts = uiQa?.facts ?? {
+    status: "unknown",
+    reason: "controlled browser QA was not executed for an applicable UI/fullstack change",
+  };
+  const qaStatus = qaFacts.status;
+  const currentDelivery = contractFacts.delivery_contract ?? { status: "unknown", conclusion: null };
+  const deliveryStatus = qaStatus === "passed"
+    ? currentDelivery.status
+    : qaStatus === "failed" || qaStatus === "blocked"
+      ? "incomplete"
+      : currentDelivery.status === "incomplete"
+        ? "incomplete"
+        : "unknown";
+  const missing = [...(contractFacts.missing_items ?? [])];
+  if (qaStatus !== "passed") missing.push(`browser QA is ${qaStatus}`);
+  const conclusion = currentDelivery.conclusion
+    ? Object.freeze({
+      ...currentDelivery.conclusion,
+      status: deliveryStatus,
+      conclusion: deliveryStatus,
+      reason: qaStatus === "passed"
+        ? currentDelivery.conclusion.reason
+        : `browser QA is ${qaStatus}: ${qaFacts.reason ?? "current UI evidence is not covered"}`,
+      ...(qaStatus === "passed" ? {} : { unknown: qaStatus === "unknown" ? [{ key: "ui_qa", status: qaStatus, reason: qaFacts.reason ?? "current UI evidence is unknown" }] : currentDelivery.conclusion.unknown, incomplete: qaStatus === "failed" || qaStatus === "blocked" ? [{ key: "ui_qa", status: qaStatus, reason: qaFacts.reason ?? `current UI evidence is ${qaStatus}` }] : currentDelivery.conclusion.incomplete }),
+    })
+    : null;
+  return Object.freeze({
+    ...contractFacts,
+    status: missing.length === 0 && contractFacts.status === "recorded" ? "recorded" : "incomplete",
+    delivery_contract: Object.freeze({
+      ...currentDelivery,
+      status: deliveryStatus,
+      conclusion,
+      ui_qa: Object.freeze(qaFacts),
+    }),
+    missing_items: Object.freeze([...new Set(missing)]),
+  });
 }
 
 function optionalEvidence(worker, invocation) {
@@ -1494,8 +1983,16 @@ HANDLERS.set("build-plan", async (worker, input) => {
 HANDLERS.set("build-code", async (worker, input) => {
   // Implementation and test facts describe quality; they are not the work
   // authority.  A vNext run with only the four materials stays runnable.
+  const currentSnapshotTree = typeof worker.snapshotWorkspace === "function"
+    ? worker.snapshotWorkspace()?.tree ?? null
+    : typeof worker.candidateWorkspace?.captureSnapshot === "function"
+      ? worker.candidateWorkspace.captureSnapshot()?.tree ?? null
+      : null;
+  const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
   if (worker.manifest?.record_model === "vnext-single-write"
       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
+    const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
+    const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
     const current = currentMaterialContent(worker, "tasks.md");
     const capture = typeof worker.snapshotWorkspace === "function"
       ? worker.snapshotWorkspace
@@ -1516,15 +2013,17 @@ HANDLERS.set("build-code", async (worker, input) => {
     return addCompletion("build-code", {
       facts: {
         changed: [],
+        contract_facts: contractFacts,
         acceptance_coverage: acceptanceCoverage,
         completion_subjects: {
           acceptance_criteria: subjectFact("missing", [], "implementation and test quality facts are not yet recorded"),
         },
+        ...(uiQa ? { ui_qa: uiQa.facts } : {}),
         finding_dispositions: { status: "not_applicable", items: [] },
         audit_gaps: ["current implementation/test facts are unavailable; current four materials remain the work authority"],
       },
-      evidence_refs: [],
-      missing_items: ["current implementation/test facts are unavailable; record them when available"],
+      evidence_refs: uiQa?.evidence ? [uiQa.evidence] : [],
+      missing_items: ["current implementation/test facts are unavailable; record them when available", ...(input.contract_facts === undefined ? [] : contractFacts.missing_items), ...(uiQa?.missing_items ?? [])],
     }, {
       worker,
       artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
@@ -1535,6 +2034,9 @@ HANDLERS.set("build-code", async (worker, input) => {
     });
   }
   const missingItems = [];
+  const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
+  const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
+  if (uiQa?.missing_items?.length) missingItems.push(...uiQa.missing_items);
   const auditGaps = [];
   const audit = (() => {
     try { return auditFacts(worker, input); }
@@ -1592,6 +2094,7 @@ HANDLERS.set("build-code", async (worker, input) => {
   return addCompletion("build-code", {
     facts: {
       changed: actualChangedFiles,
+      contract_facts: contractFacts,
       tests: tests.facts,
       review: review.facts,
       finding_dispositions: dispositions.facts,
@@ -1599,14 +2102,16 @@ HANDLERS.set("build-code", async (worker, input) => {
       task_boundary_audit_gaps: phase.audit_gaps ?? [],
       audit_gaps: auditGaps,
       acceptance_coverage: coverage,
+      ...(uiQa ? { ui_qa: uiQa.facts } : {}),
       completion_subjects: {
         acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
       },
       ...(audit?.facts ?? {}),
     },
-    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
+    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(uiQa?.evidence ? [uiQa.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
     missing_items: [
       ...missingItems,
+      ...(input.contract_facts === undefined ? [] : contractFacts.missing_items),
     ],
   }, {
     worker,
@@ -1690,4 +2195,4 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions"]) : stage === "verify-code" ? new Set(["receipts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"]) : stage === "verify-code" ? new Set(["receipts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }

@@ -11,11 +11,11 @@ import {
 } from "../../tools/architecture/verify-final-coverage.mjs";
 
 const validGovernance = {
-  constitution: "Version: 1.5.0\n1.5.0（2026-07-28）：F3/F4/F6/F7/F8/F9/Q1/Q2\n### F1 薄核心\n### F2 窄契约",
-  checklist: "条目数严格等于宪法条目数（21）。\n- [ ] **F1**\n- [ ] **F2**",
+  constitution: "Version: 1.6.0\n1.6.0（2026-08-25）：新增 F11\n### F1 薄核心\n### F2 窄契约\n### F3\n### F4\n### F5\n### F6\n### F7\n### F8\n### F9\n### F10\n### F11\n### Q1\n### Q2\n### Q3\n### S1\n### S2\n### S3\n### S4\n### S5\n### S6\n### S7\n### S8",
+  checklist: "条目数严格等于宪法条目数（22）。\n- [ ] **F1**\n- [ ] **F2**\n- [ ] **F3**\n- [ ] **F4**\n- [ ] **F5**\n- [ ] **F6**\n- [ ] **F7**\n- [ ] **F8**\n- [ ] **F9**\n- [ ] **F10**\n- [ ] **F11**\n- [ ] **Q1**\n- [ ] **Q2**\n- [ ] **Q3**\n- [ ] **S1**\n- [ ] **S2**\n- [ ] **S3**\n- [ ] **S4**\n- [ ] **S5**\n- [ ] **S6**\n- [ ] **S7**\n- [ ] **S8**",
   context: "旧条目到新条目的映射；四材料决定推进；质量事实不作推进许可证；provenance 保留。",
-  constitution_ids: ["F1", "F2"],
-  checklist_ids: ["F1", "F2"],
+  constitution_ids: ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "Q1", "Q2", "Q3", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"],
+  checklist_ids: ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "Q1", "Q2", "Q3", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"],
 };
 
 describe("final coverage failure contracts", () => {
@@ -73,12 +73,12 @@ describe("final coverage failure contracts", () => {
   });
 
   test("final-coverage:constitution-version-drift", () => {
-    expect(validateGovernanceContract({ ...validGovernance, constitution: validGovernance.constitution.replace("1.5.0", "1.4.0") }))
+    expect(validateGovernanceContract({ ...validGovernance, constitution: validGovernance.constitution.replace("1.6.0", "1.5.0") }))
       .toContain("constitution_version_drift");
   });
 
   test("final-coverage:constitution-revision-drift", () => {
-    expect(validateGovernanceContract({ ...validGovernance, constitution: validGovernance.constitution.replace("2026-07-28", "2026-07-27") }))
+    expect(validateGovernanceContract({ ...validGovernance, constitution: validGovernance.constitution.replace("2026-08-25", "2026-08-24") }))
       .toContain("constitution_revision_drift");
   });
 
@@ -93,7 +93,7 @@ describe("final coverage failure contracts", () => {
   });
 
   test("final-coverage:checklist-count-drift", () => {
-    expect(validateGovernanceContract({ ...validGovernance, checklist: validGovernance.checklist.replace("21", "20") }))
+    expect(validateGovernanceContract({ ...validGovernance, checklist: validGovernance.checklist.replace("22", "21") }))
       .toContain("checklist_count_drift");
   });
 

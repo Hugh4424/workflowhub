@@ -168,7 +168,7 @@ oracle identity；`gate_cmd` 只是测试命令，不是工作许可证。
 
 ## Constitution Check
 
-- **Constitution binding**：`{"artifact_kind":"constitution","ref":"[填写：constitution-checklist.md ref]","hash":"[填写：真实 SHA-256]","id":"CONSTITUTION","version":"[填写：version]","clause_count":21}`
+- **Constitution binding**：`{"artifact_kind":"constitution","ref":"[填写：constitution-checklist.md ref]","hash":"[填写：真实 SHA-256]","id":"CONSTITUTION","version":"[填写：version]","clause_count":22}`
 - **F1**：[填写：逐条事实与证据]
 - **F2**：[填写：逐条事实与证据]
 - **F3**：[填写：逐条事实与证据]
@@ -179,6 +179,7 @@ oracle identity；`gate_cmd` 只是测试命令，不是工作许可证。
 - **F8**：[填写：逐条事实与证据]
 - **F9**：[填写：逐条事实与证据]
 - **F10**：[填写：逐条事实与证据]
+- **F11**：[填写：逐条事实与证据]
 - **Q1**：[填写：逐条事实与证据]
 - **Q2**：[填写：逐条事实与证据]
 - **Q3**：[填写：逐条事实与证据]

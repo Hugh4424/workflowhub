@@ -104,6 +104,17 @@ Non-UI phases keep the existing backend or fullstack route and record the UI
 skill as not applicable.
 No new stage or no gate is introduced by this conditional handoff.
 
+For an applicable UI phase, the official `build-code` handler is the only
+execution seam for controlled browser QA. It may invoke the existing
+`isolated-browser-qa` adapter once for the current attempt, with the current
+task, material revision, snapshot, AC, Design.md/Experience.md identities, and
+service/API/DTO identities. A retry is a new invocation and keeps the previous
+failure. Success requires the adapter's real evidence, cancellation state, and
+cleanup result to validate against `browser-qa-evidence.v1`; a fixture-only
+return, identity mismatch, browser failure, cancellation, or cleanup failure
+is retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.
+No public Runner, QA command, or persistent QA control object is created.
+
 ## Work loop
 
 1. Read all four materials and select the next incomplete Task. Write a small

@@ -9,9 +9,12 @@ import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-vali
 import { deriveStageCompletion, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import {
   buildRiskAcceptance,
+  canonicalReviewFindings,
   deriveSeriousReviewPause,
+  isActionableSeriousFinding,
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
+import { validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
 export { createQualityFact } from "../evidence/quality-fact.mjs";
 export { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 export { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
@@ -23,6 +26,9 @@ const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
 const AUTHORIZATION_OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup"]);
 const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
+const RESOLVED_REVIEW_STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/verify-code\/[a-f0-9]{64}\.json$/;
+const RESOLVED_REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
+const RESOLVED_REVIEW_STATUS = "resolved";
 const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
   Object.entries(factsContract.stages).map(([stage, contract]) => [stage, Object.freeze([...contract.required_keys])]),
 ));
@@ -35,6 +41,11 @@ function stageName(stage) {
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
   return value;
+}
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }
 function text(value, label) {
   if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`);
@@ -100,6 +111,127 @@ function validateEvidenceRefs(value, label) {
     sha(entry.sha256, `${label}[${index}].sha256`);
   });
   return value;
+}
+
+function validateResolvedReviewAuthorization({ task, stage, input, authorization, currentContext }) {
+  if (input.review_status !== RESOLVED_REVIEW_STATUS) {
+    if (authorization !== undefined && authorization !== null) {
+      throw new Error("resolved review authorization is only valid for a resolved verify-code review");
+    }
+    return;
+  }
+  if (stage !== "verify-code" || input.kind !== "review" || input.subject !== "code_review") {
+    throw new Error("resolved review status is only valid for verify-code code_review");
+  }
+  const proof = object(authorization, "resolved review authorization");
+  if (Object.keys(proof).some((key) => !new Set(["stage_outcome_ref", "stage_outcome_hash"]).has(key))) {
+    throw new Error("resolved review authorization contains unsupported fields");
+  }
+  const outcomeRef = proof.stage_outcome_ref;
+  const outcomeHash = proof.stage_outcome_hash;
+  if (!RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef ?? "") || !HASH.test(outcomeHash ?? "")) {
+    throw new Error("resolved review authorization must bind a verify-code stage outcome");
+  }
+  if (outcomeRef.slice("quality/evidence/stage-outcomes/verify-code/".length, -".json".length) !== outcomeHash) {
+    throw new Error("resolved review authorization stage outcome ref/hash do not match");
+  }
+  const { revision, snapshot } = currentContext();
+  let outcomeRaw;
+  try { outcomeRaw = task.readRecord(outcomeRef); }
+  catch (error) { throw new Error(`resolved review authorization stage outcome is unavailable: ${error.message}`); }
+  if (hash(outcomeRaw) !== outcomeHash) throw new Error("resolved review authorization stage outcome hash mismatch");
+  let outcome;
+  try { outcome = JSON.parse(outcomeRaw); }
+  catch { throw new Error("resolved review authorization stage outcome must be valid JSON"); }
+  if (outcome?.schema_version !== "workflowhub-stage-outcomes.v1"
+      || outcome.task_id !== task.identity.taskId
+      || outcome.stage !== "verify-code"
+      || outcome.status !== "completed"
+      || outcome.snapshot_tree !== snapshot.tree
+      || outcome.material_revision !== revision.revision_id) {
+    throw new Error("resolved review authorization stage outcome is not current and completed");
+  }
+  const stageReview = object(outcome.code_review, "resolved review authorization code_review");
+  const reviewEvidence = Array.isArray(input.evidence)
+    ? input.evidence.find((entry) => entry?.ref === stageReview.quality_review_ref && entry?.sha256 === stageReview.quality_review_hash)
+    : null;
+  if (!reviewEvidence || !RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef)) {
+    throw new Error("resolved review authorization does not bind the current review evidence");
+  }
+  if (stageReview.stage !== "verify-code"
+      || stageReview.step_slug !== "approve-verification"
+      || stageReview.skill_id !== "dsh-code-review"
+      || typeof stageReview.quality_review_ref !== "string"
+      || !HASH.test(stageReview.quality_review_hash ?? "")) {
+    throw new Error("resolved review authorization code_review binding is invalid");
+  }
+  let reviewRaw;
+  try { reviewRaw = task.readRecord(stageReview.quality_review_ref); }
+  catch (error) { throw new Error(`resolved review authorization review result is unavailable: ${error.message}`); }
+  if (hash(reviewRaw) !== stageReview.quality_review_hash) throw new Error("resolved review authorization review result hash mismatch");
+  let review;
+  try { review = JSON.parse(reviewRaw); }
+  catch { throw new Error("resolved review authorization review result must be valid JSON"); }
+  if (review?.task_id !== task.identity.taskId || review.stage !== "verify-code") {
+    throw new Error("resolved review authorization review result identity mismatch");
+  }
+  const sourceFindings = canonicalReviewFindings(review).filter(isActionableSeriousFinding);
+  const result = object(stageReview.result, "resolved review authorization result");
+  if (result.status !== "findings" || sourceFindings.length === 0 || !Array.isArray(result.repairs)) {
+    throw new Error("resolved review authorization must prove repaired actionable findings");
+  }
+  const findingKey = (finding) => JSON.stringify({
+    severity: finding.severity,
+    path: finding.path,
+    issue: finding.issue,
+    recommendation: finding.recommendation,
+  });
+  const outcomeKeys = new Set(canonicalReviewFindings(result).filter(isActionableSeriousFinding).map(findingKey));
+  if (sourceFindings.some((finding) => !outcomeKeys.has(findingKey(finding)))) {
+    throw new Error("resolved review authorization omitted an actionable finding");
+  }
+  const sourceIds = new Set(sourceFindings.map((finding) => finding.id));
+  const repairedIds = new Set();
+  for (const repair of result.repairs) {
+    if (!repair || typeof repair !== "object" || Array.isArray(repair)
+        || typeof (repair.finding_id ?? repair.id) !== "string"
+        || !sourceIds.has(repair.finding_id ?? repair.id)
+        || repairedIds.has(repair.finding_id ?? repair.id)
+        || !RESOLVED_REVIEW_REPAIR_STATUSES.has(repair.status)) {
+      throw new Error("resolved review authorization contains an invalid repair disposition");
+    }
+    repairedIds.add(repair.finding_id ?? repair.id);
+  }
+  if (repairedIds.size !== sourceIds.size) throw new Error("resolved review authorization does not cover every actionable finding");
+}
+
+function interactionAggregateIdentity(value) {
+  return {
+    task_id: value?.task_id,
+    stage: value?.stage,
+    snapshot_tree: value?.snapshot_tree,
+    original_requirement: value?.original_requirement,
+    decision: value?.decision,
+    confirmation: value?.confirmation,
+  };
+}
+
+function interactionAggregateContent(value) {
+  const { generated_at: _generatedAt, ...content } = value ?? {};
+  return content;
+}
+
+// Content-addressed replay must not depend on object-property insertion order.
+// Arrays retain their declared order because Talk/Clarify lifecycle order is
+// semantic; plain object keys are sorted before identity/content comparison.
+function canonicalizeAggregate(value) {
+  if (Array.isArray(value)) return value.map((entry) => canonicalizeAggregate(entry));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalizeAggregate(value[key])]));
+}
+
+function aggregateJson(value) {
+  return JSON.stringify(canonicalizeAggregate(value));
 }
 
 export function validatePhaseCompletion(value, label = "phase_completion", { allowLegacyBoolean = true } = {}) {
@@ -206,6 +338,108 @@ export function buildTaskKernel(taskHandle, {
     }
     return { ref: relativePath, sha256: hash(raw) };
   };
+  const readBoundRecord = (relativePath, label) => {
+    const decisionRef = artifactDir().reference("decision-log.md");
+    if (relativePath === decisionRef) return artifactDir().read("decision-log.md");
+    try { return task.readRecord(relativePath); }
+    catch (error) {
+      if (error?.code === "ENOENT") throw new Error(`${label} is missing: ${relativePath}`);
+      throw error;
+    }
+  };
+  const prepareInteractionPublication = (input = {}) => {
+    object(input, "make-decision interaction publication input");
+    const candidateInput = input.aggregate && !input.schema_version ? input.aggregate : input;
+    object(candidateInput, "make-decision interaction aggregate");
+    const { revision, snapshot } = currentContext();
+    if (candidateInput.snapshot_tree !== undefined && candidateInput.snapshot_tree !== snapshot.tree) {
+      throw new Error("make-decision interaction aggregate is stale relative to the current Workspace snapshot");
+    }
+    const decision = object(candidateInput.decision, "interaction aggregate decision");
+    const currentDecisionRef = artifactDir().reference("decision-log.md");
+    const currentDecisionRaw = artifactDir().read("decision-log.md");
+    if (decision.ref !== currentDecisionRef || decision.hash !== hash(currentDecisionRaw)) {
+      throw new Error("make-decision interaction aggregate decision is not bound to the current decision-log.md");
+    }
+    if (decision.revision !== revision.revision_id) {
+      throw new Error("make-decision interaction aggregate decision revision is stale");
+    }
+    const confirmation = readAcceptedHumanConfirmation(task, candidateInput.confirmation?.ref, "interaction aggregate confirmation");
+    if (candidateInput.confirmation?.hash !== confirmation.sha256
+        || candidateInput.confirmation?.result !== "accepted"
+        || confirmation.value.stage !== "make-decision"
+        || confirmation.value.subject_ref !== currentDecisionRef
+        || confirmation.value.material_revision !== revision.revision_id
+        || confirmation.value.snapshot_tree !== snapshot.tree) {
+      throw new Error("make-decision interaction aggregate confirmation does not bind the current decision and snapshot");
+    }
+    const requirement = object(candidateInput.original_requirement, "interaction aggregate original_requirement");
+    const requirementRaw = readBoundRecord(requirement.ref, "interaction aggregate original_requirement");
+    if (hash(requirementRaw) !== requirement.hash) throw new Error("interaction aggregate original_requirement hash does not bind canonical bytes");
+    const normalized = {
+      ...structuredClone(candidateInput),
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: task.identity.taskId,
+      stage: "make-decision",
+      snapshot_tree: snapshot.tree,
+      decision: { ref: currentDecisionRef, hash: hash(currentDecisionRaw), revision: revision.revision_id },
+      decision_ref: currentDecisionRef,
+      decision_hash: hash(currentDecisionRaw),
+      confirmation: { ref: confirmation.ref, hash: confirmation.sha256, result: "accepted" },
+      generated_at: candidateInput.generated_at ?? now(),
+    };
+    const validation = validateInteractionAggregateContract(normalized);
+    if (!validation.ok) throw new Error(`MATERIAL_INCOMPLETE: interaction aggregate is invalid: ${validation.errors.join("; ")}`);
+    return deepFreeze(normalized);
+  };
+  const completeInteractionPublication = (input = {}) => {
+    const prepared = prepareInteractionPublication(input);
+    const identity = aggregateJson(interactionAggregateIdentity(prepared));
+    const content = aggregateJson(interactionAggregateContent(prepared));
+    for (const qualityRef of task.listCanonicalQualityFactRefs()) {
+      let qualityRaw;
+      try { qualityRaw = task.readRecord(qualityRef); } catch { continue; }
+      let quality;
+      try { quality = JSON.parse(qualityRaw); } catch { continue; }
+      if (quality?.task_id !== task.identity.taskId || quality.stage !== "make-decision"
+          || quality.kind !== "acceptance_criterion" || quality.subject !== "talk_clarify") continue;
+      const evidence = quality.evidence?.[0];
+      if (!evidence?.ref || !/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(evidence.ref)) continue;
+      let aggregateRaw;
+      try { aggregateRaw = task.readRecord(evidence.ref); } catch { continue; }
+      if (hash(aggregateRaw) !== evidence.sha256) continue;
+      let aggregate;
+      try { aggregate = JSON.parse(aggregateRaw); } catch { continue; }
+      if (aggregateJson(interactionAggregateIdentity(aggregate)) !== identity) continue;
+      if (aggregateJson(interactionAggregateContent(aggregate)) !== content) {
+        throw new Error("INTERACTION_AGGREGATE_CONFLICT: bound interaction content changed; obtain a new confirmation");
+      }
+      return Object.freeze({
+        ref: evidence.ref,
+        hash: evidence.sha256,
+        value: Object.freeze(aggregate),
+        quality_fact_ref: qualityRef,
+        quality_fact_hash: hash(qualityRaw),
+        idempotent: true,
+      });
+    }
+    const raw = `${JSON.stringify(prepared, null, 2)}\n`;
+    const record = createImmutable(`quality/evidence/interactions/${hash(raw)}.json`, raw);
+    const qualityFact = kernel.publishVNextQualityFact("make-decision", {
+      kind: "acceptance_criterion",
+      status: "passed",
+      subject: "talk_clarify",
+      evidence: [{ ref: record.ref, sha256: record.sha256, evidence_type: "acceptance_evidence" }],
+    });
+    return Object.freeze({
+      ref: record.ref,
+      hash: record.sha256,
+      value: prepared,
+      quality_fact_ref: qualityFact.ref,
+      quality_fact_hash: qualityFact.sha256,
+      idempotent: false,
+    });
+  };
   const kernel = {
     task,
     readInput,
@@ -234,13 +468,22 @@ export function buildTaskKernel(taskHandle, {
       }
       return createImmutable(relativePath, raw);
     },
-    publishVNextQualityFact(stage, input = {}) {
+    publishVNextQualityFact(stage, input = {}, options = {}) {
       const name = stageName(stage);
       object(input, "vNext quality fact input");
-      rejectUnknown(input, new Set(["kind", "status", "subject", "evidence"]), "vNext quality fact input");
+      object(options, "vNext quality fact options");
+      rejectUnknown(options, new Set(["resolved_review"]), "vNext quality fact options");
+      rejectUnknown(input, new Set(["kind", "status", "review_status", "subject", "evidence"]), "vNext quality fact input");
       if (input.evidence.some((entry) => typeof entry?.ref !== "string" || !entry.ref.startsWith("quality/"))) {
         throw new Error("vNext quality facts must reference the quality namespace");
       }
+      validateResolvedReviewAuthorization({
+        task,
+        stage: name,
+        input,
+        authorization: options.resolved_review,
+        currentContext,
+      });
       const { revision, snapshot } = currentContext();
       const materialScope = STAGE_FACT_MATERIALS[name];
       // Read the current materials once through the authenticated ArtifactDir;
@@ -257,6 +500,7 @@ export function buildTaskKernel(taskHandle, {
       });
       const currentValues = Object.fromEntries(values);
       const scopeRevision = materialRevisionFromValues(materialScope.map((file) => [file, currentValues[file] ?? null]));
+      const { review_status: reviewStatus, ...factInput } = input;
       const fact = createQualityFact({
         taskId: task.identity.taskId,
         stage: name,
@@ -264,7 +508,8 @@ export function buildTaskKernel(taskHandle, {
         materialScope,
         materialScopeRevision: scopeRevision,
         snapshotTree: snapshot.tree,
-        ...input,
+        ...factInput,
+        reviewStatus,
         recordedAt: now(),
       });
       return publishQualityFact({ fact, read: task.readRecord, create: (recordRef, raw) => createRecord(recordRef, raw) });
@@ -427,8 +672,8 @@ export function buildTaskKernel(taskHandle, {
       }
       return Object.freeze({ ref: consumptionRef, hash: hash(raw), value: consumed });
     },
-    prepareMakeDecisionInteractionPublication: unsupported("make-decision interaction publication preparation"),
-    completeMakeDecisionInteractionPublication: unsupported("make-decision interaction publication completion"),
+    prepareMakeDecisionInteractionPublication: prepareInteractionPublication,
+    completeMakeDecisionInteractionPublication: completeInteractionPublication,
     completeMakeDecisionResearch: unsupported("make-decision research publication"),
     completeMakeDecisionReceipt: unsupported("make-decision receipt completion"),
     completeBuildSpecResultPublication: unsupported("build-spec result publication"),

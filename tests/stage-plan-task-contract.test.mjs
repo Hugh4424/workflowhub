@@ -68,7 +68,7 @@ Keep accepted artifacts immutable and revert only the current implementation sna
 FR-DEMO-001 → T001 → AC1; FR-DEMO-002 → T002 → AC2.
 
 ## Constitution Check
-F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Q1 Q2 Q3 S1 S2 S3 S4 S5 S6 S7 S8.
+F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 Q1 Q2 Q3 S1 S2 S3 S4 S5 S6 S7 S8.
 
 ## Complexity Trade-offs
 Reuse one validator instead of a second parser.
@@ -283,7 +283,7 @@ describe("FR-PLN-001 required plan content", () => {
     expectRejected(validate({ plan: removeSection(plan, heading) }), new RegExp(heading, "i"));
   });
 
-  it("rejects a constitution check that does not enumerate all 21 clauses", () => {
+  it("rejects a constitution check that does not enumerate all 22 clauses", () => {
     expectRejected(validate({
       plan: plan.replace("S1 S2 S3 S4 S5 S6 S7 S8.", "S1 S2."),
     }), /21|constitution|F1|S8/i);

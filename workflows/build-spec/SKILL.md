@@ -119,6 +119,20 @@ revision matches the expected revision. `human_acknowledged` and
 `human_not_approved` retain risk but may continue to build-plan; they are not
 silently rewritten as design success.
 
+### Project source boundary
+
+`Design.md` is the project-wide visual and component standard: tokens,
+typography, layout, component variants, accessibility defaults, and the
+decision rules for reuse versus extension. `Experience.md` is the project-wide
+interaction and page-flow standard: routes, user-visible states, transitions,
+failure/recovery behavior, examples, and test scenarios. A UI specification
+must bind both files by path, content hash, revision, owner, and explicit
+section anchor when both exist. Reusing an existing rule does not require a
+Design.md rewrite; a new or changed visual rule does. A changed page or
+interaction belongs in Experience.md and must not be smuggled into Design.md.
+The generated spec carries these identities forward and the strict analyzer
+rejects hand-repaired or heading-slug-only bindings.
+
 ## Required specification content
 
 Read the decision log and existing spec before researching. Preserve every

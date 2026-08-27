@@ -257,6 +257,720 @@ function slug(value) {
     .slice(0, 80);
 }
 
+// Project-level sources are deliberately a pair of plain facts.  They are
+// not task materials and they do not create another workflow state machine.
+// Keeping this contract here lets build-spec/build-plan/build-code/verify-code
+// share exactly the same identity and responsibility vocabulary.
+export const PROJECT_STANDARD_DOCUMENT_KINDS = Object.freeze(["design", "experience"]);
+export const CONSUMER_KINDS = Object.freeze(["route", "import", "lazy", "css", "data"]);
+export const CONSUMER_DISCOVERY_STATUSES = Object.freeze(["discovered", "unknown", "incomplete", "unavailable"]);
+export const CONSUMER_UNKNOWN_REASONS = Object.freeze([
+  "dynamic_loading",
+  "generated_code",
+  "unsupported_framework",
+  "scan_failed",
+  "semantic_ambiguity",
+  "missing_anchor",
+  "unsupported_pattern",
+  "unavailable_source",
+]);
+export const DELIVERY_IMPACTS = Object.freeze(["non_ui", "ui", "backend", "fullstack", "unknown"]);
+
+const DESIGN_RESPONSIBILITY_WORDS = new Set([
+  "visual", "component", "components", "token", "tokens", "layout", "responsive",
+  "state", "states", "accessibility", "performance", "governance", "style", "styles",
+]);
+const EXPERIENCE_RESPONSIBILITY_WORDS = new Set([
+  "page", "pages", "region", "regions", "interaction", "interactions", "flow", "flows",
+  "recovery", "scenario", "scenarios", "long_term_scenarios", "testing", "test_scenarios",
+  "accessibility_interaction", "known_gaps", "states",
+]);
+const DESIGN_FORBIDDEN_WORDS = /(?:page flow|user flow|interaction|scenario|test step|运行结果|页面流转|用户流程|长期场景|逐次运行)/i;
+const EXPERIENCE_FORBIDDEN_WORDS = /(?:design token|color token|font|typography|spacing token|breakpoint|component api|组件规则|视觉规则|色彩|字体|间距|断点|样式)/i;
+const SAFE_DOCUMENT_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
+const SAFE_REF = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))\S+$/;
+
+function sourceIdentity(value, expectedKind, errors, label) {
+  if (!object(value)) {
+    errors.push(`${label} must be an object`);
+    return null;
+  }
+  if (value.document_kind !== expectedKind) errors.push(`${label}.document_kind must be ${expectedKind}`);
+  if (!nonEmptyString(value.path) || !SAFE_DOCUMENT_PATH.test(value.path)) errors.push(`${label}.path must be a project-relative path`);
+  if (!HASH.test(value.content_sha256 ?? "")) errors.push(`${label}.content_sha256 must be a sha256 of the raw UTF-8 bytes`);
+  if (typeof value.content === "string" && HASH.test(value.content_sha256 ?? "") && sha256(value.content) !== value.content_sha256) {
+    errors.push(`${label}.content_sha256 does not match the supplied raw UTF-8 content`);
+  }
+  if (!nonEmptyString(value.revision) || UNKNOWN_LITERAL.test(String(value.revision))) errors.push(`${label}.revision must be a non-empty current revision`);
+  if (!nonEmptyString(value.anchor_id) || UNKNOWN_LITERAL.test(String(value.anchor_id))) errors.push(`${label}.anchor_id must be an explicit stable anchor`);
+  if (!nonEmptyString(value.anchor_title)) errors.push(`${label}.anchor_title is required`);
+  if (value.anchor_source !== "explicit") errors.push(`${label}.anchor_source must be explicit; title slugs are not stable anchors`);
+  if (!nonEmptyString(value.owner)) errors.push(`${label}.owner is required`);
+  if (Array.isArray(value.anchors)) {
+    const ids = value.anchors.map((entry) => entry?.anchor_id);
+    if (ids.some((id) => !nonEmptyString(id)) || new Set(ids).size !== ids.length) errors.push(`${label}.anchors must contain unique explicit anchor_id values`);
+  }
+  return value;
+}
+
+function sourceResponsibilities(value) {
+  const values = [];
+  for (const field of ["responsibilities", "sections", "scope"]) {
+    const raw = value?.[field];
+    if (Array.isArray(raw)) values.push(...raw);
+    else if (nonEmptyString(raw)) values.push(raw);
+  }
+  return values.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean);
+}
+
+function identityComparable(value) {
+  if (!object(value)) return null;
+  return {
+    document_kind: value.document_kind,
+    path: value.path,
+    content_sha256: value.content_sha256,
+    revision: value.revision,
+    anchor_id: value.anchor_id,
+  };
+}
+
+function sameIdentity(left, right) {
+  const a = identityComparable(left);
+  const b = identityComparable(right);
+  return Boolean(a && b && Object.keys(a).every((key) => a[key] === b[key]));
+}
+
+function completeProjectSourceIdentity(value) {
+  const identity = identityComparable(value);
+  return Boolean(identity
+    && PROJECT_STANDARD_DOCUMENT_KINDS.includes(identity.document_kind)
+    && SAFE_DOCUMENT_PATH.test(identity.path ?? "")
+    && HASH.test(identity.content_sha256 ?? "")
+    && nonEmptyString(identity.revision)
+    && nonEmptyString(identity.anchor_id)
+    && !UNKNOWN_LITERAL.test(String(identity.revision))
+    && !UNKNOWN_LITERAL.test(String(identity.anchor_id)));
+}
+
+// Replay identity must not depend on JavaScript object insertion order.  A
+// scanner may construct the same scan configuration from maps in a different
+// order; the census result and replay key must still be identical.
+function stableJsonValue(value) {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableJsonValue(value[key])]));
+}
+
+function stableJson(value) {
+  return JSON.stringify(stableJsonValue(value));
+}
+
+function identityTokens(value) {
+  if (nonEmptyString(value)) return new Set([value.trim()]);
+  if (!object(value)) return new Set();
+  return new Set([
+    value.ref,
+    value.identity_ref,
+    value.revision,
+    value.content_sha256,
+    value.anchor_id,
+    value.replay_key,
+    value.evidence_ref,
+  ].filter(nonEmptyString).map((entry) => entry.trim()));
+}
+
+function sameBoundIdentity(declared, current) {
+  if (object(declared) && object(current) && identityComparable(declared) && identityComparable(current)) {
+    return sameIdentity(declared, current);
+  }
+  const declaredTokens = identityTokens(declared);
+  const currentTokens = identityTokens(current);
+  return declaredTokens.size > 0 && [...declaredTokens].some((token) => currentTokens.has(token));
+}
+
+function exactIdentityToken(value) {
+  if (nonEmptyString(value)) return value.trim();
+  if (!object(value)) return null;
+  const tokens = [value.replay_key, value.ref, value.evidence_ref, value.identity_ref, value.identity]
+    .filter(nonEmptyString)
+    .map((entry) => entry.trim());
+  return tokens.length === 1 ? tokens[0] : null;
+}
+
+function requireBoundIdentity(label, declared, current, errors, { structured = false, exactToken = false } = {}) {
+  if (!explicitFact(current)) {
+    errors.push(`${label} identity source is missing`);
+    return;
+  }
+  if (!explicitFact(declared)) {
+    errors.push(`${label} identity is required`);
+    return;
+  }
+  if (structured && (!completeProjectSourceIdentity(declared) || !completeProjectSourceIdentity(current))) {
+    errors.push(`${label} identity must be the structured Design.md/Experience.md identity object`);
+    return;
+  }
+  if (exactToken && exactIdentityToken(declared) !== exactIdentityToken(current)) {
+    errors.push(`${label} identity must exactly match the current canonical token`);
+    return;
+  }
+  if (!sameBoundIdentity(declared, current)) errors.push(`${label} identity does not match current source`);
+}
+
+/**
+ * Validate the one Design.md + one Experience.md project source contract.
+ * Identity comparison is explicit (path/hash/revision/anchor); no title slug
+ * or missing value is silently promoted to a current source.
+ */
+export function validateProjectStandardSources(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["project standard sources must be an object"]);
+  const design = sourceIdentity(input.design ?? input.design_source, "design", errors, "design");
+  const experience = sourceIdentity(input.experience ?? input.experience_source, "experience", errors, "experience");
+  if (design && experience && design.path === experience.path) errors.push("Design.md and Experience.md must use distinct project paths");
+
+  const designWords = sourceResponsibilities(design);
+  const experienceWords = sourceResponsibilities(experience);
+  if (design && !designWords.some((entry) => DESIGN_RESPONSIBILITY_WORDS.has(entry) || /design|visual|component|token|layout|responsive|style|accessibility|performance/i.test(entry))) {
+    errors.push("Design.md must declare visual/component responsibilities");
+  }
+  if (design && designWords.some((entry) => EXPERIENCE_RESPONSIBILITY_WORDS.has(entry) && !DESIGN_RESPONSIBILITY_WORDS.has(entry))) {
+    errors.push("Design.md must not own page, interaction, or long-term experience responsibilities");
+  }
+  if (design && DESIGN_FORBIDDEN_WORDS.test([...designWords, design.description, design.content].filter(Boolean).join(" "))) {
+    errors.push("Design.md must not contain page-flow, interaction, scenario, or run-result semantics");
+  }
+  if (experience && !experienceWords.some((entry) => EXPERIENCE_RESPONSIBILITY_WORDS.has(entry) || /experience|page|interaction|flow|scenario|recovery|testing/i.test(entry))) {
+    errors.push("Experience.md must declare page/interaction/scenario responsibilities");
+  }
+  if (experience && experienceWords.some((entry) => DESIGN_RESPONSIBILITY_WORDS.has(entry) && !EXPERIENCE_RESPONSIBILITY_WORDS.has(entry))) {
+    errors.push("Experience.md must not own shared visual/component responsibilities");
+  }
+  if (experience && EXPERIENCE_FORBIDDEN_WORDS.test([...experienceWords, experience.description, experience.content].filter(Boolean).join(" "))) {
+    errors.push("Experience.md must not define style, token, breakpoint, or visual component rules");
+  }
+
+  const bound = object(input.bound) ? input.bound : {};
+  const stale = [];
+  const missing = [];
+  for (const [kind, current] of [["design", design], ["experience", experience]]) {
+    const previous = bound[kind];
+    if (!current) {
+      missing.push(kind);
+    } else if (previous !== undefined && !sameIdentity(current, previous)) {
+      stale.push(kind);
+    }
+  }
+  if (input.require_current_binding === true) {
+    if (!completeProjectSourceIdentity(bound.design) || !completeProjectSourceIdentity(bound.experience)) {
+      errors.push("current project standard sources require authenticated Design.md and Experience.md bindings");
+    }
+  }
+  const updateRequested = input.update_required === true || input.update === true || input.change_kind === "rules_changed" || input.change_kind === "experience_changed";
+  if (updateRequested && input.stage !== "build-code") errors.push("only build-code may write an updated Design.md or Experience.md identity");
+  const status = stale.length > 0
+    ? "stale"
+    : errors.length > 0
+      ? (missing.length > 0 ? "unknown" : "not_ready")
+        : missing.length > 0
+          ? "missing"
+        : updateRequested
+          ? "update_required"
+          : "bound_current";
+  return result(errors, {
+    status,
+    identities: Object.freeze({ design: design ? identityComparable(design) : null, experience: experience ? identityComparable(experience) : null }),
+    stale: Object.freeze(stale),
+    missing: Object.freeze(missing),
+    writer: Object.freeze({ stage: input.stage ?? null, can_write: input.stage === "build-code" }),
+    responsibilities: Object.freeze({ design: Object.freeze(designWords), experience: Object.freeze(experienceWords) }),
+  });
+}
+
+function normalizeSupportMatrix(value, errors) {
+  const entries = Array.isArray(value)
+    ? value
+    : object(value)
+      ? Object.entries(value).map(([kind, entry]) => (object(entry) ? { kind, ...entry } : { kind, supported: entry }))
+      : [];
+  if (entries.length === 0) errors.push("consumer census support_matrix must enumerate route/import/lazy/css/data modes");
+  const seen = new Set();
+  const normalized = [];
+  for (const entry of entries) {
+    const kind = entry?.kind;
+    if (!CONSUMER_KINDS.includes(kind)) { errors.push(`consumer census support_matrix kind is invalid: ${kind ?? "missing"}`); continue; }
+    if (seen.has(kind)) { errors.push(`consumer census support_matrix kind is duplicated: ${kind}`); continue; }
+    seen.add(kind);
+    if (typeof entry.supported !== "boolean") errors.push(`consumer census support_matrix ${kind}.supported must be boolean`);
+    const unknownReason = entry.unknown_reason;
+    if (entry.supported === false && !CONSUMER_UNKNOWN_REASONS.includes(unknownReason)) errors.push(`consumer census unsupported ${kind} requires an enumerated unknown_reason`);
+    normalized.push({
+      kind,
+      supported: entry.supported === true,
+      ...(Array.isArray(entry.patterns) ? { patterns: [...entry.patterns].map(String).sort() } : {}),
+      ...(unknownReason ? { unknown_reason: unknownReason } : {}),
+    });
+  }
+  for (const kind of CONSUMER_KINDS) if (!seen.has(kind)) errors.push(`consumer census support_matrix missing ${kind}`);
+  return normalized.sort((a, b) => a.kind.localeCompare(b.kind));
+}
+
+function normalizeSourceSnapshot(value, errors) {
+  const snapshot = typeof value === "string" ? { tree: value } : value;
+  if (!object(snapshot) || !/^[a-f0-9]{40,64}$/i.test(snapshot?.tree ?? snapshot?.snapshot_tree ?? "")) {
+    errors.push("consumer census source_snapshot must bind a Git snapshot tree");
+    return { tree: null };
+  }
+  return { tree: snapshot.tree ?? snapshot.snapshot_tree, ...(snapshot.commit ? { commit: snapshot.commit } : {}) };
+}
+
+function consumerId(kind, path, anchor) {
+  return sha256(`${kind}\0${path}\0${anchor}`);
+}
+
+function normalizeConsumer(entry, source, errors, index) {
+  if (!object(entry)) { errors.push(`consumer census consumer ${index + 1} must be an object`); return null; }
+  const kind = entry.kind;
+  const path = String(entry.path ?? entry.location?.path ?? "").trim();
+  const anchor = String(entry.anchor ?? entry.anchor_id ?? "").trim();
+  if (!CONSUMER_KINDS.includes(kind)) errors.push(`consumer census consumer ${index + 1} kind is invalid`);
+  if (!SAFE_DOCUMENT_PATH.test(path)) errors.push(`consumer census consumer ${index + 1} path must be project-relative`);
+  if (!nonEmptyString(anchor) || UNKNOWN_LITERAL.test(anchor)) errors.push(`consumer census consumer ${index + 1} needs an explicit anchor`);
+  const status = entry.discovery_status ?? entry.status ?? "discovered";
+  if (!CONSUMER_DISCOVERY_STATUSES.includes(status)) errors.push(`consumer census consumer ${index + 1} discovery_status is invalid`);
+  const unknownReason = entry.unknown_reason;
+  if (["unknown", "incomplete", "unavailable"].includes(status) && !CONSUMER_UNKNOWN_REASONS.includes(unknownReason)) {
+    errors.push(`consumer census consumer ${index + 1} needs an enumerated unknown_reason`);
+  }
+  if (status === "discovered" && unknownReason !== undefined) errors.push(`consumer census discovered consumer ${index + 1} must not carry unknown_reason`);
+  if (!nonEmptyString(entry.location) && !object(entry.location)) errors.push(`consumer census consumer ${index + 1} location is required`);
+  if (kind === "route" && !nonEmptyString(entry.page) && !nonEmptyString(entry.page_ref)) {
+    errors.push(`consumer census route ${index + 1} must identify its Experience page or page_ref`);
+  }
+  const invalidEvidenceRefs = entry.evidence_refs !== undefined
+    && (!Array.isArray(entry.evidence_refs)
+      || entry.evidence_refs.some((ref) => !(nonEmptyString(ref) || (object(ref) && nonEmptyString(ref.ref)))));
+  if (invalidEvidenceRefs) {
+    errors.push(`consumer census consumer ${index + 1} evidence_refs must contain canonical or explicit references`);
+  }
+  if (source === "human") {
+    if (!nonEmptyString(entry.reason)) errors.push(`consumer census human addition ${index + 1} requires a reason`);
+    if (!Array.isArray(entry.evidence_refs) || entry.evidence_refs.length === 0) {
+      errors.push(`consumer census human addition ${index + 1} requires evidence_refs`);
+    }
+  }
+  const normalized = {
+    consumer_id: consumerId(kind, path, anchor),
+    kind,
+    path,
+    anchor,
+    location: entry.location,
+    discovery_status: status,
+    source,
+    ...(entry.page ? { page: entry.page } : {}),
+    ...(entry.page_ref ? { page_ref: entry.page_ref } : {}),
+    ...(entry.data_chain ? { data_chain: entry.data_chain } : {}),
+    ...(entry.evidence_refs ? { evidence_refs: Array.isArray(entry.evidence_refs) ? [...entry.evidence_refs].sort() : entry.evidence_refs } : {}),
+    ...(unknownReason ? { unknown_reason: unknownReason } : {}),
+    ...(entry.reason ? { reason: entry.reason } : {}),
+  };
+  return normalized;
+}
+
+/**
+ * Normalize an explicit, replayable consumer scan.  This function does not
+ * walk a repository; callers provide scanner facts, and unsupported/dynamic
+ * patterns remain reasoned unknown entries. Human additions are append-only.
+ */
+export function buildConsumerCensus(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["consumer census input must be an object"]);
+  if (input.schema_version !== "consumer-census.v1") errors.push("consumer census schema_version must be consumer-census.v1");
+  if (!nonEmptyString(input.scanner_version)) errors.push("consumer census scanner_version is required");
+  const sourceSnapshot = normalizeSourceSnapshot(input.source_snapshot ?? input.source_snapshot_identity, errors);
+  if (!object(input.scan_config)) errors.push("consumer census scan_config is required");
+  if (!Array.isArray(input.consumers)) errors.push("consumer census consumers must be an explicit array; absence is not zero consumers");
+  const supportMatrix = normalizeSupportMatrix(input.support_matrix, errors);
+  const seenSourceIds = new Set();
+  const consumers = [];
+  for (const [index, entry] of (Array.isArray(input.consumers) ? input.consumers : []).entries()) {
+    const normalized = normalizeConsumer(entry, "scanner", errors, index);
+    if (!normalized) continue;
+    if (seenSourceIds.has(`${normalized.source}:${normalized.consumer_id}`)) errors.push(`consumer census duplicate scanner consumer ${normalized.consumer_id}`);
+    seenSourceIds.add(`${normalized.source}:${normalized.consumer_id}`);
+    consumers.push(normalized);
+  }
+  for (const [index, entry] of (Array.isArray(input.human_additions) ? input.human_additions : []).entries()) {
+    const normalized = normalizeConsumer({ ...entry, source: "human" }, "human", errors, index);
+    if (!normalized) continue;
+    if (seenSourceIds.has(`${normalized.source}:${normalized.consumer_id}`)
+        || [...seenSourceIds].some((key) => key.endsWith(`:${normalized.consumer_id}`))) {
+      errors.push(`consumer census human addition collides with existing consumer ${normalized.consumer_id}`);
+      continue;
+    }
+    seenSourceIds.add(`${normalized.source}:${normalized.consumer_id}`);
+    consumers.push(normalized);
+  }
+  consumers.sort((a, b) => a.consumer_id.localeCompare(b.consumer_id) || a.source.localeCompare(b.source) || a.path.localeCompare(b.path));
+  const experienceIndex = consumers
+    .filter((entry) => entry.kind === "route")
+    .map((entry) => ({ consumer_id: entry.consumer_id, page: entry.page ?? entry.page_ref ?? unknownFact("route has no Experience page binding"), status: entry.page || entry.page_ref ? "indexed" : "incomplete" }));
+  return result(errors, {
+    schema_version: "consumer-census.v1",
+    scanner_version: input.scanner_version ?? null,
+    source_snapshot: Object.freeze(sourceSnapshot),
+    scan_config: structuredClone(input.scan_config ?? {}),
+    support_matrix: Object.freeze(supportMatrix),
+    consumers: Object.freeze(consumers),
+    experience_index: Object.freeze(experienceIndex),
+    replay_key: sha256(stableJson({
+      schema_version: "consumer-census.v1",
+      scanner_version: input.scanner_version ?? null,
+      source_snapshot: sourceSnapshot,
+      scan_config: input.scan_config ?? {},
+      support_matrix: supportMatrix,
+      consumers,
+    })),
+    unknown_count: consumers.filter((entry) => entry.discovery_status !== "discovered").length
+      + supportMatrix.filter((entry) => entry.supported === false).length,
+  });
+}
+
+function impactSignal(value) {
+  if (typeof value === "string") {
+    const text = value.trim().toLowerCase();
+    if (DELIVERY_IMPACTS.includes(text)) return text;
+    const hasUiSignal = /(?:\bui\b|front[-_ ]?end|frontend|page|screen|route|component|css|design|browser|页面|前端)/.test(text);
+    const hasBackendSignal = /(?:backend|back[-_ ]?end|api|dto|schema|migration|persistence|后端|数据链)/.test(text);
+    if (/full[-_ ]?stack|前后端|跨边界/.test(text) || (hasUiSignal && hasBackendSignal)) return "fullstack";
+    if (/backend|back[-_ ]?end|api|dto|schema|migration|persistence|后端|数据链/.test(text)) return "backend";
+    if (/non[-_ ]?ui|backend[-_ ]?only|api[-_ ]?only|cli[-_ ]?only|docs?[-_ ]?only/.test(text)) return "non_ui";
+    if (/ui|front[-_ ]?end|frontend|page|screen|route|component|css|design|browser|页面|前端/.test(text)) return "ui";
+    return "unknown";
+  }
+  if (!object(value)) return "unknown";
+  const signals = [];
+  for (const field of ["impact", "result", "conclusion", "scope", "kind"]) {
+    if (value[field] !== undefined) {
+      const signal = impactSignal(value[field]);
+      if (signal !== "unknown") signals.push(signal);
+    }
+  }
+  if (value.frontend === true || value.ui === true || value.is_ui === true) signals.push("ui");
+  if (value.backend === true || value.api === true || value.data === true) signals.push("backend");
+  if (signals.includes("ui") && signals.includes("backend")) return "fullstack";
+  if (signals.includes("fullstack")) return "fullstack";
+  if (signals.length > 0) return signals[0];
+  if (value.frontend === false && value.backend === false) return "non_ui";
+  return impactSignal(factText(value));
+}
+
+/** Derive impact from evidence, never from a caller's downgrade label. */
+export function deriveChangeImpact(input = {}) {
+  if (!object(input)) return Object.freeze({ impact: "unknown", status: "unknown", evidence_refs: [], unknown_reasons: ["input_unavailable"] });
+  const census = input.census ?? input.consumer_census;
+  const consumers = Array.isArray(census?.consumers) ? census.consumers : [];
+  const signals = [];
+  const unknownReasons = [];
+  for (const source of [input.raw_requirement, input.project_inventory, input.planned_or_changed_frontend_fact, input.backend_fact, input.fullstack_fact]) {
+    const signal = impactSignal(source);
+    if (signal !== "unknown") signals.push(signal);
+    else if (source !== undefined && source !== null) {
+      const reason = object(source) ? source.reason ?? source.unknown_reason : null;
+      if (reason) unknownReasons.push(String(reason));
+    }
+  }
+  for (const consumer of consumers) {
+    if (consumer.discovery_status !== "discovered") unknownReasons.push(consumer.unknown_reason ?? "consumer_unknown");
+    if (consumer.kind === "data") signals.push("backend");
+    if (["route", "import", "lazy", "css"].includes(consumer.kind)) signals.push("ui");
+  }
+  if (census && consumers.length === 0 && census.unknown_count > 0) unknownReasons.push("consumer_scan_unknown");
+  for (const unsupported of (Array.isArray(census?.support_matrix) ? census.support_matrix : []).filter((entry) => entry?.supported === false)) {
+    unknownReasons.push(unsupported.unknown_reason ?? `unsupported_${unsupported.kind ?? "consumer"}_pattern`);
+  }
+  const hasUi = signals.includes("ui") || signals.includes("fullstack");
+  const hasBackend = signals.includes("backend") || signals.includes("fullstack");
+  let impact = hasUi && hasBackend ? "fullstack" : hasUi ? "ui" : hasBackend ? "backend" : "unknown";
+  if (impact === "unknown" && signals.length > 0 && signals.every((signal) => signal === "non_ui") && unknownReasons.length === 0) impact = "non_ui";
+  if (impact === "unknown" && signals.length === 0 && input.raw_requirement !== undefined && input.raw_requirement !== null) {
+    const reason = object(input.raw_requirement) ? input.raw_requirement.reason : null;
+    if (reason && /non[-_ ]?ui|backend[-_ ]?only|no (?:page|ui)/i.test(String(reason))) impact = "non_ui";
+    else unknownReasons.push(reason ?? "impact_evidence_unavailable");
+  }
+  if (input.declared_impact && input.declared_impact !== impact) unknownReasons.push("caller_declared_impact_did_not_match_evidence");
+  const evidenceRefs = consumers.flatMap((entry) => Array.isArray(entry.evidence_refs) ? entry.evidence_refs : []).filter(nonEmptyString);
+  return Object.freeze({
+    impact,
+    status: impact === "unknown" || unknownReasons.length > 0 ? "unknown" : "derived",
+    evidence_refs: Object.freeze([...new Set(evidenceRefs)].sort()),
+    unknown_reasons: Object.freeze([...new Set(unknownReasons.filter(nonEmptyString))]),
+    consumer_count: consumers.length,
+    basis: Object.freeze({ census: Boolean(census), signals: Object.freeze([...new Set(signals)]) }),
+  });
+}
+
+const INCOMPLETE_FACT_STATUSES = new Set([
+  "failed", "failure", "incomplete", "missing", "cancelled", "canceled", "blocked", "stale", "mismatch",
+  "identity_mismatch", "cleanup_failed", "not_executed", "not_started", "error", "invalid",
+]);
+const UNKNOWN_FACT_STATUSES = new Set(["unknown", "unavailable", "unsupported", "pending"]);
+const PASSED_FACT_STATUSES = new Set(["passed", "pass", "success", "succeeded", "completed", "covered", "ready", "current"]);
+
+function factStatus(value) {
+  if (typeof value === "string") return value.trim().toLowerCase();
+  if (!object(value)) return "missing";
+  return String(value.status ?? value.result ?? value.conclusion ?? "missing").trim().toLowerCase();
+}
+
+function factReason(value) {
+  if (typeof value === "string") return value;
+  if (!object(value)) return "fact is missing";
+  return value.reason ?? value.failure_reason ?? value.unknown_reason ?? value.message ?? "fact has no reason";
+}
+
+/** Apply the fixed incomplete > unknown > covered precedence. */
+export function deriveDeliveryConclusion({ impact, facts = {}, contract } = {}) {
+  const kind = DELIVERY_IMPACTS.includes(impact) ? impact : "unknown";
+  const source = object(facts) ? facts : object(contract) ? contract : {};
+  const requiredByImpact = {
+    non_ui: ["impact_evidence"],
+    ui: ["design", "experience", "census", "evidence"],
+    backend: ["api", "dto", "schema_migration", "persistence", "consumer"],
+    fullstack: ["design", "experience", "census", "evidence", "api", "dto", "schema_migration", "persistence", "consumer", "e2e_slice"],
+    unknown: ["impact_evidence"],
+  };
+  const required = requiredByImpact[kind];
+  const incomplete = [];
+  const unknown = [];
+  const considered = [];
+  if (kind === "unknown") unknown.push({ key: "impact", reason: "impact classification is unknown" });
+  for (const key of required) {
+    const value = source[key];
+    const status = factStatus(value);
+    if (status === "not_applicable") {
+      incomplete.push({ key, status, reason: factReason(value) === "fact is missing" ? "not_applicable requires a reason" : factReason(value) });
+      continue;
+    }
+    if (INCOMPLETE_FACT_STATUSES.has(status)) incomplete.push({ key, status, reason: factReason(value) });
+    else if (UNKNOWN_FACT_STATUSES.has(status)) unknown.push({ key, status, reason: factReason(value) });
+    else if (PASSED_FACT_STATUSES.has(status)) considered.push({ key, status });
+    else incomplete.push({ key, status: status || "missing", reason: factReason(value) });
+  }
+  const status = incomplete.length > 0 ? "incomplete" : unknown.length > 0 ? "unknown" : "covered";
+  return Object.freeze({
+    status,
+    conclusion: status,
+    impact: kind,
+    required: Object.freeze(required),
+    incomplete: Object.freeze(incomplete),
+    unknown: Object.freeze(unknown),
+    considered: Object.freeze(considered),
+    reason: status === "covered" ? "all required current facts passed" : `${status} facts remain in the contract`,
+  });
+}
+
+function validateLayer(layer, name, errors) {
+  if (!object(layer)) { errors.push(`${name} layer is required`); return; }
+  const status = factStatus(layer);
+  if (!PASSED_FACT_STATUSES.has(status) && !INCOMPLETE_FACT_STATUSES.has(status) && !UNKNOWN_FACT_STATUSES.has(status)) errors.push(`${name} layer status is invalid`);
+  for (const field of ["success", "failure", "state_owner", "recovery"]) if (!explicitFact(layer[field])) errors.push(`${name} layer requires ${field}`);
+}
+
+const API_FAILURE_CLASSES = Object.freeze(["validation", "permission", "conflict", "upstream", "timeout"]);
+
+function validateApiFailureClasses(api, errors) {
+  if (!Array.isArray(api?.failure_classes) || api.failure_classes.length === 0) {
+    errors.push("api layer must enumerate applicable validation/permission/conflict/upstream/timeout failures");
+    return;
+  }
+  const seen = new Set();
+  for (const [index, entry] of api.failure_classes.entries()) {
+    const kind = typeof entry === "string"
+      ? entry.trim().toLowerCase()
+      : object(entry)
+        ? String(entry.kind ?? entry.class ?? entry.type ?? "").trim().toLowerCase()
+        : "";
+    if (!API_FAILURE_CLASSES.includes(kind)) {
+      errors.push(`api failure_classes[${index}] must identify one of ${API_FAILURE_CLASSES.join(", ")}`);
+      continue;
+    }
+    if (seen.has(kind)) {
+      errors.push(`api failure_classes must not duplicate ${kind}`);
+      continue;
+    }
+    seen.add(kind);
+    if (object(entry) && entry.applicable !== undefined && typeof entry.applicable !== "boolean") {
+      errors.push(`api failure_classes[${index}].applicable must be boolean`);
+    }
+    if (object(entry) && entry.applicable === false && !explicitFact(entry.reason)) {
+      errors.push(`api failure_classes[${index}] not_applicable requires an explicit reason`);
+    }
+  }
+  for (const kind of API_FAILURE_CLASSES) {
+    if (!seen.has(kind)) errors.push(`api failure_classes is missing ${kind}`);
+  }
+}
+
+function validateBackendContract(dataContract, errors, { requireReadBack = false } = {}) {
+  if (!object(dataContract)) { errors.push("backend data_contract is required"); return; }
+  for (const name of ["api", "dto", "schema_migration", "persistence", "consumer"]) validateLayer(dataContract[name], name, errors);
+  const api = dataContract.api;
+  if (object(api)) validateApiFailureClasses(api, errors);
+  const dto = dataContract.dto;
+  if (object(dto) && dto.compatibility !== "compatible") errors.push("dto incompatibility must be explicit; defaults cannot hide it");
+  const migration = dataContract.schema_migration;
+  if (object(migration)) {
+    if (!/atomic|transaction/i.test(String(migration.atomicity ?? ""))) errors.push("schema_migration must declare atomicity");
+    if (!explicitFact(migration.stop_condition)) errors.push("schema_migration must declare a stop_condition");
+    if (!explicitFact(migration.forward) || (!explicitFact(migration.rollback) && !explicitFact(migration.manual_recovery))) errors.push("schema_migration must declare forward and rollback or manual_recovery");
+  }
+  const persistence = dataContract.persistence;
+  if (object(persistence)) {
+    if (persistence.atomic_commit !== true
+        && !(persistence.atomic_commit === false && explicitFact(persistence.atomic_commit_reason ?? persistence.unsupported_reason ?? persistence.reason))) {
+      errors.push("persistence must declare atomic_commit true or an explicit unsupported reason");
+    }
+    if (persistence.partial_commit_observable !== true) errors.push("persistence must expose partial-commit state");
+    if (!object(persistence.idempotency) || typeof persistence.idempotency.supported !== "boolean") errors.push("persistence must declare idempotency support");
+    else if (persistence.idempotency.supported && !explicitFact(persistence.idempotency.key)) errors.push("persistence idempotency needs a key");
+    else if (!persistence.idempotency.supported && !explicitFact(persistence.idempotency.reason)) errors.push("unsupported idempotency needs a reason");
+  }
+  const consumer = dataContract.consumer;
+  if (object(consumer)) {
+    for (const field of ["retry", "no_retry", "unknown"]) if (!explicitFact(consumer[field])) errors.push(`consumer layer must map ${field} to a recovery action`);
+  }
+  if (requireReadBack || dataContract.read_back !== undefined) {
+    const readBack = dataContract.read_back;
+    if (!object(readBack) || !PASSED_FACT_STATUSES.has(factStatus(readBack)) || !explicitFact(readBack.correlation_id) || !explicitFact(readBack.consumer_id) || !explicitFact(readBack.value_ref)) {
+      errors.push("backend consumer read_back must bind correlation_id, consumer_id, and value_ref");
+    }
+  }
+}
+
+/** Validate the minimal UI/backend/fullstack contract without inventing a product API. */
+export function validateDeliveryContract(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["delivery contract must be an object"]);
+  const impact = input.impact;
+  const suppliedFacts = object(input.facts) ? input.facts : {};
+  if (!DELIVERY_IMPACTS.includes(impact)) errors.push("delivery contract impact is invalid");
+  if (impact === "non_ui") {
+    if (!explicitFact(input.reason ?? input.impact_evidence ?? input.basis)) errors.push("non_ui delivery requires an evidence-based reason");
+  } else if (impact === "ui" || impact === "fullstack") {
+    const ui = input.ui_contract;
+    if (!object(ui)) errors.push("ui delivery requires ui_contract");
+    else {
+      for (const field of ["design_identity", "experience_identity", "census_ref", "experience_scenario_ref", "evidence_ref"]) if (!explicitFact(ui[field])) errors.push(`ui_contract requires ${field}`);
+    }
+  }
+  if (impact === "backend" || impact === "fullstack") validateBackendContract(input.data_contract ?? input.backend_contract, errors, { requireReadBack: impact === "fullstack" });
+  if (impact === "fullstack") {
+    const slice = input.e2e_slice;
+    if (!object(slice)) errors.push("fullstack delivery requires e2e_slice");
+    else {
+      if (!PASSED_FACT_STATUSES.has(factStatus(slice))) errors.push("fullstack e2e_slice must be a current successful fact");
+      for (const field of ["correlation_id", "request_ref", "consumer_read_back_ref"]) if (!explicitFact(slice[field])) errors.push(`fullstack e2e_slice requires ${field}`);
+      const readBack = (input.data_contract ?? input.backend_contract)?.read_back;
+      if (object(readBack) && explicitFact(slice.correlation_id) && readBack.correlation_id !== slice.correlation_id) errors.push("fullstack request/read-back correlation_id mismatch");
+      if (object(readBack) && explicitFact(slice.consumer_read_back_ref) && explicitFact(readBack.value_ref)
+          && slice.consumer_read_back_ref !== readBack.value_ref) errors.push("fullstack consumer read-back value_ref mismatch");
+    }
+  }
+  if (impact === "unknown" && !explicitFact(input.reason ?? input.unknown_reason)) errors.push("unknown delivery requires a reason");
+  // When build-code has current project sources/census, the UI contract must
+  // bind to those exact identities.  Non-empty labels alone are not enough:
+  // otherwise an unrelated Design.md/Experience.md or stale census can be
+  // presented as if it covered this implementation.
+  if (impact === "ui" || impact === "fullstack") {
+    const ui = object(input.ui_contract) ? input.ui_contract : {};
+    const standardSources = input.project_standard_sources ?? input.standard_sources;
+    if (object(standardSources)) {
+      const currentDesign = standardSources.design ?? standardSources.design_source ?? standardSources.identities?.design;
+      const currentExperience = standardSources.experience ?? standardSources.experience_source ?? standardSources.identities?.experience;
+      requireBoundIdentity("ui_contract.design", ui.design_identity, currentDesign, errors, { structured: true });
+      requireBoundIdentity("ui_contract.experience", ui.experience_identity, currentExperience, errors, { structured: true });
+      if (object(suppliedFacts.design) && explicitFact(suppliedFacts.design.identity ?? suppliedFacts.design.source)) {
+        requireBoundIdentity("facts.design", suppliedFacts.design.identity ?? suppliedFacts.design.source, currentDesign, errors, { structured: true });
+      }
+      if (object(suppliedFacts.experience) && explicitFact(suppliedFacts.experience.identity ?? suppliedFacts.experience.source)) {
+        requireBoundIdentity("facts.experience", suppliedFacts.experience.identity ?? suppliedFacts.experience.source, currentExperience, errors, { structured: true });
+      }
+    }
+    const censusSource = input.consumer_census;
+    if (censusSource !== undefined) {
+      const census = censusSource?.ok === true && nonEmptyString(censusSource.replay_key)
+        ? censusSource
+        : buildConsumerCensus(censusSource);
+      const declaredCensus = ui.census_ref;
+      if (!census.ok) errors.push("ui_contract census identity source is invalid");
+      else if (!exactIdentityToken(declaredCensus) || exactIdentityToken(declaredCensus) !== exactIdentityToken(census.replay_key)) errors.push("ui_contract.census_ref does not exactly match current consumer census");
+      if (census.ok && input.current_snapshot_tree && census.source_snapshot?.tree !== input.current_snapshot_tree) {
+        errors.push("ui_contract consumer census is stale for the current snapshot");
+      }
+      if (census.ok && census.consumers.length === 0) errors.push("ui_contract consumer census has no discovered consumer");
+      if (census.ok && census.experience_index.length > 0) {
+        const scenarioTokens = identityTokens(ui.experience_scenario_ref);
+        const indexed = census.experience_index.flatMap((entry) => [entry.consumer_id, entry.page, entry.page_ref].filter(nonEmptyString));
+        if (![...scenarioTokens].some((token) => indexed.includes(token))) errors.push("ui_contract.experience_scenario_ref does not match consumer census experience index");
+      } else if (census.ok) {
+        errors.push("ui_contract experience scenario has no indexed Experience page");
+      }
+      if (object(suppliedFacts.census) && explicitFact(suppliedFacts.census.replay_key ?? suppliedFacts.census.identity)) {
+        requireBoundIdentity("facts.census", suppliedFacts.census.replay_key ?? suppliedFacts.census.identity, census.replay_key, errors, { exactToken: true });
+      }
+    }
+    const evidenceSource = input.ui_evidence ?? input.evidence_source ?? input.current_ui_evidence;
+    if (evidenceSource !== undefined) {
+      const declaredEvidence = ui.evidence_ref;
+      const currentEvidence = object(evidenceSource) ? (evidenceSource.ref ?? evidenceSource.evidence_ref ?? evidenceSource.identity ?? evidenceSource) : evidenceSource;
+      requireBoundIdentity("ui_contract.evidence", declaredEvidence, currentEvidence, errors, { exactToken: true });
+      if (object(suppliedFacts.evidence) && explicitFact(suppliedFacts.evidence.identity ?? suppliedFacts.evidence.ref ?? suppliedFacts.evidence.evidence_ref)) {
+        requireBoundIdentity("facts.evidence", suppliedFacts.evidence.identity ?? suppliedFacts.evidence.ref ?? suppliedFacts.evidence.evidence_ref, currentEvidence, errors, { exactToken: true });
+      }
+    }
+  }
+  const normalizedSuppliedFacts = { ...suppliedFacts };
+  if (impact === "non_ui" && typeof normalizedSuppliedFacts.impact_evidence === "string") {
+    normalizedSuppliedFacts.impact_evidence = { status: "passed", reason: normalizedSuppliedFacts.impact_evidence };
+  }
+  const data = input.data_contract ?? input.backend_contract;
+  const derivedFacts = {
+    ...normalizedSuppliedFacts,
+    ...(impact === "non_ui" && !Object.hasOwn(normalizedSuppliedFacts, "impact_evidence")
+      ? {
+        impact_evidence: (() => {
+          const evidence = input.impact_evidence ?? input.reason ?? input.basis;
+          return typeof evidence === "string" ? { status: "passed", reason: evidence } : evidence;
+        })(),
+      }
+      : {}),
+    ...(impact === "ui" || impact === "fullstack"
+      ? {
+        design: suppliedFacts.design ?? input.ui_contract?.design,
+        experience: suppliedFacts.experience ?? input.ui_contract?.experience,
+        census: suppliedFacts.census ?? input.ui_contract?.census,
+        evidence: suppliedFacts.evidence ?? input.ui_contract?.evidence,
+      }
+      : {}),
+    ...(impact === "backend" || impact === "fullstack"
+      ? {
+        api: suppliedFacts.api ?? data?.api,
+        dto: suppliedFacts.dto ?? data?.dto,
+        schema_migration: suppliedFacts.schema_migration ?? data?.schema_migration,
+        persistence: suppliedFacts.persistence ?? data?.persistence,
+        consumer: suppliedFacts.consumer ?? data?.consumer,
+        ...(impact === "fullstack" ? { e2e_slice: suppliedFacts.e2e_slice ?? input.e2e_slice } : {}),
+      }
+      : {}),
+  };
+  const conclusion = deriveDeliveryConclusion({ impact, facts: derivedFacts });
+  if (errors.length === 0 && conclusion.status !== "covered") {
+    errors.push(`delivery contract conclusion is ${conclusion.status}; required current facts are not all covered`);
+  }
+  return result(errors, { status: errors.length === 0 ? conclusion.status : "incomplete", conclusion });
+}
+
 /**
  * Build the intentionally short prompt sent to an external design tool.
  * Design.md and the UI Contract carry technical constraints; this function
@@ -310,6 +1024,12 @@ export function buildUiProjectInitFact(input = {}) {
   const designRevision = versionFact(input.design_revision)
     ? input.design_revision
     : missing("DESIGN-REVISION-MISSING", "Design.md version was not provided");
+  const experiencePath = nonEmptyString(input.experience_path ?? input.experience_source_path)
+    ? String(input.experience_path ?? input.experience_source_path).trim()
+    : missing("EXPERIENCE-SOURCE-PATH-MISSING", "Experience.md path was not provided");
+  const experienceRevision = versionFact(input.experience_revision)
+    ? input.experience_revision
+    : missing("EXPERIENCE-REVISION-MISSING", "Experience.md version was not provided");
   const scope = knownOrUnknown(input.scope ?? input.first_page ?? inventory.first_page,
     mode === "legacy" ? "legacy first-page boundary requires human selection" : "first UI page or region is not selected");
   const componentBoundary = knownOrUnknown(
@@ -380,6 +1100,12 @@ export function buildUiProjectInitFact(input = {}) {
     status,
     design_path: designPath,
     design_revision: designRevision,
+    experience_path: experiencePath,
+    experience_revision: experienceRevision,
+    source_identities: Object.freeze({
+      design: object(input.design_identity) ? input.design_identity : unknownFact("Design.md identity is not bound"),
+      experience: object(input.experience_identity) ? input.experience_identity : unknownFact("Experience.md identity is not bound"),
+    }),
     scope,
     component_boundary: componentBoundary,
     style_boundary: styleBoundary,
@@ -397,7 +1123,6 @@ export function buildUiProjectInitFact(input = {}) {
 function parseDesignMarkdownSections(content) {
   if (typeof content !== "string" || content.trim() === "") return [];
   return [...content.matchAll(/^#{2,6}\s+(.+?)\s*$/gm)].map(([, heading]) => ({
-    anchor: slug(heading),
     page_or_region: heading.trim(),
   }));
 }
@@ -449,10 +1174,15 @@ export function deriveDesignSourceReadiness(input = {}) {
   const sourceSections = Array.isArray(sections) ? sections : [];
   const readMap = sourceSections.map((section, index) => {
     const source = object(section) ? section : {};
-    const anchor = nonEmptyString(source.anchor ?? source.id)
-      ? String(source.anchor ?? source.id).trim()
-      : slug(source.page_or_region ?? source.page ?? source.region) || `section-${index + 1}`;
+    const explicitAnchor = source.anchor_id ?? source.anchor ?? source.id;
+    const anchor = nonEmptyString(explicitAnchor)
+      ? String(explicitAnchor).trim()
+      : `section-${index + 1}`;
     const entryMissing = [];
+    if (!nonEmptyString(explicitAnchor)) {
+      entryMissing.push("anchor_id is missing; heading slugs are not stable anchors");
+      addMissing("SCREEN-READ-MAP-ANCHOR-MISSING", "Design.md section needs an explicit anchor_id", anchor);
+    }
     for (const field of [
       "page_or_region", "goal", "primary_action", "states", "components", "tokens",
       "fixture", "viewport", "responsive", "a11y", "evidence",
@@ -1111,6 +1841,73 @@ export function validateInteractionLifecycleSequence(value) {
     ok: errors.length === 0,
     errors: Object.freeze(errors),
     facts: Object.freeze({ interaction_type: expectedType ?? rounds[0]?.interaction_type ?? rounds[0]?.kind ?? null, rounds: rounds.length }),
+  });
+}
+
+/**
+ * Validate the input-side shape of the single make-decision interaction
+ * aggregate.  Writing, hashing, replay and conflict handling remain owned by
+ * the make-decision kernel writer in the later phase; P1 only supplies the
+ * shared, fail-loud contract.
+ */
+export function validateInteractionAggregateContract(value) {
+  const errors = [];
+  if (!object(value)) return result(["interaction aggregate must be an object"]);
+  if (value.schema_version !== "workflowhub-interaction-aggregate.v1") errors.push("interaction aggregate schema_version is invalid");
+  if (!nonEmptyString(value.task_id)) errors.push("interaction aggregate task_id is required");
+  if (value.stage !== "make-decision") errors.push("interaction aggregate stage must be make-decision");
+  if (!/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")) errors.push("interaction aggregate snapshot_tree must be a Git snapshot tree");
+  const allowed = new Set([
+    "schema_version", "task_id", "stage", "snapshot_tree", "original_requirement", "decision", "confirmation",
+    "talk", "grill", "advice", "decision_ref", "decision_hash", "clarify", "generated_at",
+  ]);
+  for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`interaction aggregate contains unsupported field ${key}`);
+  if (value.generated_at !== undefined && !Number.isFinite(Date.parse(value.generated_at))) {
+    errors.push("interaction aggregate generated_at must be an ISO timestamp");
+  }
+
+  const requirement = value.original_requirement;
+  if (!object(requirement) || !SAFE_REF.test(requirement.ref ?? "") || !HASH.test(requirement.hash ?? "")) {
+    errors.push("interaction aggregate original_requirement must bind a ref and hash");
+  }
+  const decision = value.decision ?? (value.decision_ref ? { ref: value.decision_ref, hash: value.decision_hash, revision: value.material_revision } : null);
+  if (!object(decision) || !SAFE_REF.test(decision.ref ?? "") || !HASH.test(decision.hash ?? "") || !/^revision-[a-f0-9]{64}$/.test(decision.revision ?? "")) {
+    errors.push("interaction aggregate decision must bind ref, hash, and material revision");
+  }
+  const confirmation = value.confirmation;
+  if (!object(confirmation) || !/^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(confirmation.ref ?? "") || !HASH.test(confirmation.hash ?? "") || confirmation.result !== "accepted") {
+    errors.push("interaction aggregate confirmation must bind an accepted confirmation ref and hash");
+  }
+
+  const talk = value.talk;
+  if (!object(talk) || talk.status !== "completed" || !Number.isSafeInteger(talk.round_count) || talk.round_count < 1 || !Array.isArray(talk.lifecycle_rounds)) {
+    errors.push("interaction aggregate talk must contain completed status, round_count, and lifecycle_rounds");
+  } else {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: talk.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors.map((error) => `Talk: ${error}`));
+    if (lifecycle.facts.rounds !== talk.round_count) errors.push("interaction aggregate Talk round_count does not match lifecycle_rounds");
+  }
+  const grill = value.grill;
+  if (!object(grill) || !["completed", "recorded"].includes(grill.status) || !explicitFact(grill.summary)) {
+    errors.push("interaction aggregate grill must retain a completed summary");
+  }
+  if (object(grill) && (Object.hasOwn(grill, "review_fact") || grill.produces_review_fact === true)) errors.push("interaction aggregate Grill summary must not become a review fact");
+  const advice = value.advice ?? value.detail_advice;
+  if (!object(advice) || !["completed", "recorded", "unavailable"].includes(advice.status)) {
+    errors.push("interaction aggregate advice summary is required");
+  } else if (advice.status === "unavailable") {
+    if (!explicitFact(advice.reason)) errors.push("unavailable interaction advice requires a reason");
+  } else if (!SAFE_REF.test(advice.result_ref ?? "") || !HASH.test(advice.result_hash ?? "")) {
+    errors.push("interaction aggregate advice must bind result_ref and result_hash");
+  }
+  return result(errors, {
+    status: errors.length === 0 ? "valid" : "invalid",
+    bound: Object.freeze({
+      task_id: value.task_id ?? null,
+      stage: value.stage ?? null,
+      decision_ref: decision?.ref ?? null,
+      confirmation_ref: confirmation?.ref ?? null,
+    }),
   });
 }
 
@@ -1775,7 +2572,7 @@ const TASK_FIELDS_V3 = Object.freeze([
 const PLAN_TASK_V3 = "plan-task.v3";
 const CURRENT_CONSTITUTION_CLAUSE_IDS = Object.freeze([
   // Deliberate governance snapshot: update this list with constitution-checklist.md.
-  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10",
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11",
   "Q1", "Q2", "Q3",
   "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
 ]);
@@ -3566,7 +4363,7 @@ export function validatePlanTaskContract({
     if (body === undefined || body.trim() === "") errors.push(`plan section missing or empty: ${heading}`);
   }
   const constitution = findPlanSection("Constitution Check")?.body ?? "";
-  const constitutionIds = identifiers(constitution, /\b(?:F(?:10|[1-9])|Q[1-3]|S[1-8])\b/g);
+  const constitutionIds = identifiers(constitution, /\b(?:F(?:11|10|[1-9])|Q[1-3]|S[1-8])\b/g);
   if (isV3) {
     const binding = parseConstitutionBinding(plan);
     if (!binding || binding.artifact_kind !== "constitution"
