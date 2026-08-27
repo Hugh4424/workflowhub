@@ -321,19 +321,6 @@ function branchExists(targetRepoRoot, branch) {
   }
 }
 
-function isAncestor(repoRoot, ancestor, descendant) {
-  try {
-    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-      cwd: repoRoot,
-      stdio: "ignore",
-    });
-    return true;
-  } catch (error) {
-    if (error?.status === 1) return false;
-    throw new Error(`task worktree ancestry validation failed: ${error.stderr?.toString().trim() || error.message}`);
-  }
-}
-
 function validateCandidate(task, expected, facts = {
   worktree_root: expected.worktreeRoot,
   baseline_commit: expected.baselineCommit,
@@ -438,10 +425,6 @@ export function prepareTaskWorkspace(taskHandle) {
   const targetStatus = inspectTargetStatus(deterministic.targetRepoRoot);
   const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task worktree HEAD");
   if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task worktree HEAD must be a full Git commit OID");
-  const targetCommit = gitValue(deterministic.targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
-  if (!isAncestor(deterministic.targetRepoRoot, baselineCommit, targetCommit)) {
-    throw new Error("existing task worktree HEAD is not an ancestor of target repository HEAD; refusing fallback or baseline rebinding");
-  }
   return validateCandidate(task, { ...deterministic, baselineCommit, targetStatus });
 }
 

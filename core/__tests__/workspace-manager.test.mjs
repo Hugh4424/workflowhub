@@ -78,16 +78,17 @@ describe("deterministic WorktreeManager", () => {
     expect(git(repo, ["status", "--porcelain", "--untracked-files=all"])).toContain("dirty.txt");
   });
 
-  it("fails loud instead of rebinding baseline after a task-only commit", () => {
+  it("reuses the same task worktree after a task-only commit", () => {
     const { task, repo, baseline, expectedRoot } = fixture("retry-after-task-commit");
     const first = prepareTaskWorkspace(task);
     const firstIdentity = lstatSync(first.worktreeRoot);
     execFileSync("git", ["commit", "--allow-empty", "-qm", "task-only commit"], { cwd: expectedRoot });
     const taskOnlyHead = git(expectedRoot, ["rev-parse", "HEAD"]);
 
-    expect(() => prepareTaskWorkspace(task)).toThrow(/not an ancestor|fallback|baseline rebinding/i);
+    const retry = prepareTaskWorkspace(task);
 
     const currentIdentity = lstatSync(expectedRoot);
+    expect(retry).toMatchObject({ worktreeRoot: realpathSync(expectedRoot), baselineCommit: taskOnlyHead });
     expect(git(expectedRoot, ["rev-parse", "HEAD"])).toBe(taskOnlyHead);
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(baseline);
     expect({ dev: currentIdentity.dev, ino: currentIdentity.ino }).toEqual({ dev: firstIdentity.dev, ino: firstIdentity.ino });
