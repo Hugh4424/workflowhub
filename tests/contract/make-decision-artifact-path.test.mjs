@@ -240,7 +240,7 @@ describe("make-decision current artifact path contract", () => {
     expect(result.quality_warnings ?? []).not.toContain(expect.stringContaining("review does not bind the final current snapshot"));
   });
 
-  it("reuses Talk/Clarify evidence after downstream workspace changes when the decision is unchanged", async () => {
+  it("keeps optional Talk/Clarify evidence without turning it into a completion gate", async () => {
     const state = fixture("p1-interaction-after-downstream-change");
     const decisionLog = "# current decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
     state.artifacts.writeAtomic("decision-log.md", decisionLog);
@@ -276,7 +276,7 @@ describe("make-decision current artifact path contract", () => {
     });
 
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(facts.find((fact) => fact.subject === "talk_clarify")).toMatchObject({ status: "passed" });
-    expect(result.completion.missing).not.toContain("talk_clarify");
+    expect(facts.find((fact) => fact.subject === "talk_clarify")).toBeUndefined();
+    expect(result.completion).not.toHaveProperty("predicates.talk_clarify");
   });
 });

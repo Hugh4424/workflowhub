@@ -28,6 +28,7 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("grill");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("research");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("decision_coverage");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("talk_clarify");
     expect(STAGE_PREDICATES["build-spec"]).not.toHaveProperty("traceability");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("direction_review");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("detail_review");

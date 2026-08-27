@@ -54,7 +54,6 @@ export const STAGE_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({
     scope: "acceptance_criterion",
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
-    talk_clarify: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
     finding_dispositions: "acceptance_criterion",
     human_confirmation: "confirmation",
