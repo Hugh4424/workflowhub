@@ -1778,9 +1778,9 @@ HANDLERS.set("make-decision", async (worker, input) => {
       audit_gaps: auditGaps,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
       completion_subjects: {
-        scope: subjectFact(sectionHasContent(currentDecisionLog, "范围") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
+        scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
         non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log non-goals section"),
-        risks: subjectFact(sectionHasContent(currentDecisionLog, "风险与延期交接") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
+        risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
         talk_clarify: subjectFact(interaction ? "passed" : "missing", interaction ? [interaction.evidence] : [], "content-addressed immutable Talk/Clarify aggregate"),
       },
       reviews: { direction: direction.facts, detail: detail.facts },

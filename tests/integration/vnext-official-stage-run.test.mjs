@@ -1337,7 +1337,7 @@ describe("vNext official stage completion", () => {
     expect(result).not.toHaveProperty("publication_hash");
   });
 
-  it("keeps formal completion open until serious finding dispositions are complete", async () => {
+  it("keeps serious finding dispositions visible as authoring advice", async () => {
     const state = fixture("vnext-finding-disposition-completion");
     const review = publishReviewFixture(state);
     const result = await runStage(
@@ -1359,7 +1359,8 @@ describe("vNext official stage completion", () => {
     );
 
     expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
-    expect(result.completion.missing).toContain("finding_dispositions");
+    expect(result.completion.missing).not.toContain("finding_dispositions");
+    expect(result.quality_advisories).toContain("finding_dispositions:missing");
   });
 
   it("stores make-decision interaction evidence in the content-addressed quality namespace", () => {
@@ -1382,7 +1383,7 @@ describe("vNext official stage completion", () => {
     expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
   });
 
-  it("review:unavailable keeps the repository-owned official build-spec run incomplete", async () => {
+  it("review:unavailable stays visible without blocking the repository-owned build-spec run", async () => {
     const state = fixture("vnext-official-run");
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
@@ -1418,16 +1419,17 @@ describe("vNext official stage completion", () => {
       workspace, artifacts,
     }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
 
-    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "incomplete" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
-    expect(result.completion).toMatchObject({ status: "in_progress" });
-    expect(result.completion.missing).toContain("finding_dispositions");
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
     expect(result.quality_advisories).toContain("independent_review:unavailable");
+    expect(result.quality_advisories).toContain("finding_dispositions:missing");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
     expect(result.quality_fact_refs).toHaveLength(4);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
+    expect(qualityFacts.find((fact) => fact.subject === "finding_dispositions")).toMatchObject({ status: "missing" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });

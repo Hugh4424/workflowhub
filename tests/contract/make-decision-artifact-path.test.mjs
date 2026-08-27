@@ -190,7 +190,7 @@ describe("make-decision current artifact path contract", () => {
 
   it("uses the current decision-log without a legacy decision receipt", async () => {
     const state = fixture("p1-decision-hash");
-    const decisionLog = "# current decision\n\n## 范围\n继续当前任务。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n质量事实缺失保持可见。\n";
+    const decisionLog = "# current decision\n\n## 范围\n\n## 目标、用户流程与边界\n继续当前任务，范围限于治理运行时。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n\n## 风险、延期与交接\n质量事实缺失保持可见。\n";
     state.artifacts.writeAtomic("decision-log.md", decisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
     const direction = writeFormalReviewFixture({
@@ -209,6 +209,9 @@ describe("make-decision current artifact path contract", () => {
       receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef, stage_outcomes: stageOutcome(state, "attempt-current").ref },
     });
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find((fact) => fact.subject === "scope")).toMatchObject({ status: "passed" });
+    expect(facts.find((fact) => fact.subject === "risks")).toMatchObject({ status: "passed" });
   });
 
   it("keeps direction and detail advice after a later decision-log snapshot", async () => {
@@ -238,6 +241,9 @@ describe("make-decision current artifact path contract", () => {
 
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
     expect(result.quality_warnings ?? []).not.toContain(expect.stringContaining("review does not bind the final current snapshot"));
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find((fact) => fact.subject === "scope")).toMatchObject({ status: "passed" });
+    expect(facts.find((fact) => fact.subject === "risks")).toMatchObject({ status: "passed" });
   });
 
   it("reuses Talk/Clarify evidence after downstream workspace changes when the decision is unchanged", async () => {

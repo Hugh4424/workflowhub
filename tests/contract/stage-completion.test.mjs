@@ -33,6 +33,13 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("detail_review");
     expect(STAGE_ADVISORY_PREDICATES["make-decision"].direction_review).toBe("review");
     expect(STAGE_ADVISORY_PREDICATES["make-decision"].detail_review).toBe("review");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["make-decision"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-spec"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["build-spec"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-plan"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["build-plan"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-code"].finding_dispositions).toBe("acceptance_criterion");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("independent_review");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");

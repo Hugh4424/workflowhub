@@ -56,20 +56,17 @@ export const STAGE_PREDICATES = Object.freeze({
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
     talk_clarify: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
-    finding_dispositions: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
     zero_major_ambiguities: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
-    finding_dispositions: "acceptance_criterion",
   }),
   "build-plan": Object.freeze({
     fr_coverage: "acceptance_criterion", ac_coverage: "acceptance_criterion",
     dependencies: "acceptance_criterion", deletion_proofs: "acceptance_criterion",
     executable_tasks: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
-    finding_dispositions: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-code": Object.freeze({
@@ -83,15 +80,14 @@ export const STAGE_PREDICATES = Object.freeze({
   }),
 });
 
-// Review is useful advice for every stage except build-code. It must still be
-// recorded and shown, but an unavailable or incomplete advice source must not
-// turn a runnable stage into a fake quality gate. build-code keeps its final
-// integration review in STAGE_PREDICATES because that is the one user-defined
-// implementation gate.
+// Review and its dispositions are useful advice in the three authoring
+// stages. They stay recorded and visible without becoming completion gates.
+// build-code keeps both dispositions and its final integration review in
+// STAGE_PREDICATES because that is the one user-defined implementation gate.
 export const STAGE_ADVISORY_PREDICATES = Object.freeze({
-  "make-decision": Object.freeze({ direction_review: "review", detail_review: "review" }),
-  "build-spec": Object.freeze({ independent_review: "review" }),
-  "build-plan": Object.freeze({ independent_review: "review" }),
+  "make-decision": Object.freeze({ direction_review: "review", detail_review: "review", finding_dispositions: "acceptance_criterion" }),
+  "build-spec": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion" }),
+  "build-plan": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion" }),
   "build-code": Object.freeze({}),
   // wh-review's verify-code result is advice only. The required code_review
   // remains owned by the dsh stage outcome and its bound quality_review ref.
