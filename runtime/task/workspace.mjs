@@ -167,7 +167,7 @@ function deterministicWorkspace(task) {
 
 function inspectTargetStatus(targetRepoRoot) {
   const head = gitValue(targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
-  const branch = gitValue(targetRepoRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "target repository branch");
+  const branch = symbolicBranchOrNull(targetRepoRoot, "target repository branch");
   const raw = String(execFileSync("git", ["status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
     cwd: targetRepoRoot,
     encoding: "utf8",
@@ -239,11 +239,14 @@ function registeredWorktree(targetRepoRoot, worktreeRoot) {
 }
 
 function symbolicBranchOrNull(root, label) {
-  try {
-    return gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], label);
-  } catch (error) {
-    if (/not a symbolic ref|detached HEAD|HEAD is detached/i.test(String(error?.message ?? ""))) return null;
-    throw error;
+  try { return String(execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  })).trim(); }
+  catch (error) {
+    if (error?.status === 1) return null;
+    throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`);
   }
 }
 
@@ -273,23 +276,6 @@ export function validateExistingWorkspaceBinding({ targetRepoRoot, workspaceRoot
   });
 }
 
-function existingLegacyWorkspace(task) {
-  const target = realGitToplevel(task.manifest.target_repo_root, "target repository");
-  try {
-    return validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: target });
-  } catch (error) {
-    // A normal repository has a .git directory and is therefore not an
-    // existing linked worktree. Preserve the deterministic creation default;
-    // surface all other validation errors when an explicit binding exists.
-    const dotGit = join(target, ".git");
-    let stat;
-    try { stat = lstatSync(dotGit); } catch { return null; }
-    if (stat.isDirectory() && !stat.isSymbolicLink()) return null;
-    if (stat.isFile() && !stat.isSymbolicLink()) throw error;
-    return null;
-  }
-}
-
 function workspaceExpectation(task) {
   const manifest = task.manifest;
   const hasExplicitBinding = Object.prototype.hasOwnProperty.call(manifest, "workspace_mode")
@@ -297,7 +283,7 @@ function workspaceExpectation(task) {
   if (hasExplicitBinding) {
     return validateExistingWorkspaceBinding({ targetRepoRoot: manifest.target_repo_root, workspaceRoot: manifest.workspace_root });
   }
-  return existingLegacyWorkspace(task) ?? deterministicWorkspace(task);
+  return deterministicWorkspace(task);
 }
 
 function assertWorktreeRegistration(expected, label) {

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
-import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 
 const roots = [];
@@ -70,10 +70,15 @@ describe("authenticated current Workspace binding", () => {
     expect(artifacts.reference("tasks.md")).toBe("specs/demo-workspace-binding/tasks.md");
   });
 
-  it("keeps old manifests readable when the target path is the trusted task worktree", () => {
+  it("creates a task worktree from an unbound detached linked checkout", () => {
     const state = fixture({ explicit: false });
+    git(state.worktree, ["checkout", "--detach", "-q"]);
 
-    const context = bootstrapStage("verify-code", {
+    const candidate = prepareTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(candidate.worktreeRoot, state.task);
+    artifacts.writeAtomic("decision-log.md", "# current decision\n");
+
+    const context = bootstrapStage("make-decision", {
       mode: "sidecar",
       taskPath: state.task.taskPath,
       projectName: "Demo",
@@ -81,7 +86,9 @@ describe("authenticated current Workspace binding", () => {
       readOnly: true,
     });
 
-    expect(context.workspace.worktreeRoot).toBe(realpathSync(state.worktree));
-    expect(context.artifacts.read("decision-log.md")).toBe("# decision-log.md\n");
+    expect(context.workspace.worktreeRoot).toBe(realpathSync(candidate.worktreeRoot));
+    expect(context.workspace.worktreeRoot).not.toBe(realpathSync(state.worktree));
+    expect(git(candidate.worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"])).toBe("task/Demo/demo-workspace-binding");
+    expect(context.artifacts.read("decision-log.md")).toBe("# current decision\n");
   });
 });
