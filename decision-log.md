@@ -511,7 +511,7 @@
 | RISK-002 | 已按任务工作区规则确认的现有 worktree/工作副本不含 node_modules（git worktree 只检出 tracked 文件），后续阶段跑测试需要安装依赖或复用主仓库环境 | 验证成本、环境不一致 | build-plan/build-code 时处理 |
 | RISK-003 | 延期：交互证据机器绑定（clarify outcome 绑定真实批次、FND-002/005 完全机器化）与机制「咬人」对抗性用例 | 执行层依赖遵循；spec-analyze 测试覆盖留后续 | 后续 WorkflowHub 治理任务；本任务只写死标准与可观察规则 |
 | RISK-004 | 对抗性运行不做（用户 T-015 选 B） | dogfood 只证明 happy path；检查「会咬人」由 spec-analyze 测试覆盖 | 后续任务（并入 RISK-003） |
-| RISK-005 | 隔离复现边界风险：官方入口在 create-only 发布后、工作区/存储准备阶段失败，可能留下半创建目录并令重试被 create-only 冲突卡住（登记自「任务身份与启动前置诊断事实」节；该缺陷在本次官方 bootstrap 成功执行后未实际发生，属待评估缺陷，非本次成功运行失败） | 重试被 create-only 冲突卡住；半创建目录被误判为任务已初始化 | build-plan/build-code 时评估并给出失败事实处理（fail-loud/unavailable，不新增恢复状态机/回滚机制） |
+| RISK-005 | 隔离复现边界风险：官方入口在 create-only 发布后、工作区/存储准备阶段失败，可能留下半创建目录并令重试被 create-only 冲突卡住（登记自「任务身份与启动前置诊断事实」节；该缺陷在本次官方 bootstrap 成功执行后未实际发生，属待评估缺陷，非本次成功运行失败） | 重试被 create-only 冲突卡住；半创建目录被误判为任务已初始化 | build-plan/build-code 时明确成功/完整事实（task.json + index.json + facts.jsonl + quality/ 全部存在），缺失任一即 fail-loud，不视为 unavailable 成功；操作员可复用现有官方入口（open + initializeTaskStore 幂等重入）或人工检查，不新增恢复状态机/回滚机制/第二启动路径/公共命令 |
 
 ## 质量边界
 
