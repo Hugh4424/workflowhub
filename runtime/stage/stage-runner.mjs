@@ -5,7 +5,6 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import yaml from "js-yaml";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
@@ -19,6 +18,7 @@ import { validateSchema } from "../review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
+import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -150,12 +150,10 @@ function validateStepOutcome(ctx, stage, actual, expected, index, binding) {
 function validateSkillOutcome(ctx, actual, expected, index, binding) {
   const value = outcomeObject(actual, `skill_outcomes[${index}]`);
   if (value.skill_id !== expected.name) throw outcomeError(`skill_outcomes[${index}] does not match manifest order/identity`);
-  if (!OUTCOME_STATUSES.has(value.status)) throw outcomeError(`skill_outcomes[${index}].status is invalid`);
-  if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
-    throw outcomeError(`skill_outcomes[${index}] requires boolean trigger and executed`);
-  }
-  if (value.status === "not_applicable" && (value.trigger !== false || value.executed !== false)) {
-    throw outcomeError(`skill_outcomes[${index}] not_applicable requires trigger=false and executed=false`);
+  try {
+    validateSkillOutcomeLifecycle(value, `skill_outcomes[${index}]`);
+  } catch (error) {
+    throw outcomeError(error.message);
   }
   outcomeText(value.version, `skill_outcomes[${index}].version`);
   outcomeText(value.result_summary, `skill_outcomes[${index}].result_summary`);
@@ -170,7 +168,105 @@ function validateSkillOutcome(ctx, actual, expected, index, binding) {
   if (value.status === "completed" && evidence.length === 0) throw outcomeError(`completed skill ${value.skill_id} must provide evidence`);
   if (value.status !== "completed") outcomeText(value.reason ?? value.error, `skill_outcomes[${index}].reason`);
   validateOutcomeCost(value.cost, `skill_outcomes[${index}].cost`);
-  return { ...value, evidence_refs: evidence };
+  const consumer = validateSkillConsumerBinding({
+    dependency: expected,
+    outcome: value,
+    identity: {
+      task_id: binding.taskId,
+      stage: binding.stage,
+      material_revision: binding.materialRevision,
+      snapshot_tree: binding.snapshotTree,
+    },
+  });
+  return { ...value, evidence_refs: evidence, consumer_binding: consumer };
+}
+
+function valueAtPath(value, path) {
+  if (typeof path !== "string" || path.trim() === "") return undefined;
+  return path.split(".").reduce((current, key) => {
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
+    return current[key];
+  }, value);
+}
+
+function consumerInputAvailable(worker, handlerInput, stageOutcome, input) {
+  if (input.startsWith("receipts.")) {
+    return Object.prototype.hasOwnProperty.call(handlerInput.receipts ?? {}, input.slice("receipts.".length));
+  }
+  if (input.startsWith("contract_facts.")) {
+    return valueAtPath(handlerInput.contract_facts, input.slice("contract_facts.".length)) !== undefined;
+  }
+  if (input.startsWith("stage_outcome.")) {
+    return valueAtPath(stageOutcome?.value, input.slice("stage_outcome.".length)) !== undefined;
+  }
+  if (input.startsWith("artifacts.")) {
+    const artifactName = input.slice("artifacts.".length);
+    if (typeof worker.readArtifact !== "function") return false;
+    try { return typeof worker.readArtifact(artifactName) === "string"; } catch { return false; }
+  }
+  // A selector such as review.lens=simplicity-guard narrows a shared receipt;
+  // it is only a declaration-level distinction.  It cannot satisfy the input
+  // on its own: the shared receipt must be present first.
+  if (input.includes("=")) return false;
+  return valueAtPath(handlerInput, input) !== undefined;
+}
+
+function consumerInvocationObserved(worker, stageOutcome, consumer) {
+  const observedByHandler = typeof worker?.hasConsumerInvocation === "function"
+    && worker.hasConsumerInvocation(consumer);
+  const observedByStageOutcome = Array.isArray(stageOutcome?.value?.consumer_invocations)
+    && stageOutcome.value.consumer_invocations.includes(consumer);
+  return observedByHandler || observedByStageOutcome;
+}
+
+export function validateSkillConsumerExecution({ worker, handlerInput, stageOutcome, handlerResult, binding, skillId } = {}) {
+  if (!binding) return Object.freeze({ skill_id: skillId, status: "incomplete", reason: "consumer binding is unavailable" });
+  if (["unavailable", "not_applicable", "skipped", "incomplete"].includes(binding.status)
+      || binding.trigger !== true || binding.executed !== true) {
+    return Object.freeze({ skill_id: skillId, status: binding.status, consumer: binding.consumer });
+  }
+  const inputs = Array.isArray(binding.inputs) ? binding.inputs : [];
+  const inputAvailable = inputs.length > 0
+    && inputs.every((input) => {
+      if (input.includes("=")) {
+        // Selectors distinguish a shared receipt (for example a review
+        // lens or test kind); they cannot satisfy the input by themselves.
+        // The corresponding base receipt must still be present.
+        return inputs.some((candidate) => !candidate.includes("=")
+          && consumerInputAvailable(worker, handlerInput, stageOutcome, candidate));
+      }
+      return consumerInputAvailable(worker, handlerInput, stageOutcome, input);
+    });
+  const resultAvailable = binding.result === undefined
+    ? true
+    : binding.result.startsWith("stage_outcome.")
+      ? valueAtPath(stageOutcome?.value, binding.result.slice("stage_outcome.".length)) !== undefined
+      : valueAtPath(handlerResult, binding.result) !== undefined;
+  const consumerObserved = consumerInvocationObserved(worker, stageOutcome, binding.consumer);
+  const consumed = inputAvailable && resultAvailable && consumerObserved;
+  return Object.freeze({
+    skill_id: skillId,
+    status: consumed ? "consumed" : "incomplete",
+    consumer: binding.consumer,
+    inputs: Object.freeze(inputs),
+    ...(consumed ? {} : {
+      reason: !consumerObserved
+        ? "declared consumer was not invoked by the current handler"
+        : "declared consumer input or result was not observed by the current handler",
+    }),
+  });
+}
+
+function consumeSkillOutcomeBindings(worker, handlerInput, stageOutcome, handlerResult) {
+  if (!stageOutcome?.value || !Array.isArray(stageOutcome.value.skill_outcomes)) return null;
+  return Object.freeze(stageOutcome.value.skill_outcomes.map((outcome) => validateSkillConsumerExecution({
+    worker,
+    handlerInput,
+    stageOutcome,
+    handlerResult,
+    binding: outcome.consumer_binding,
+    skillId: outcome.skill_id,
+  })));
 }
 
 function currentMaterialBinding(ctx) {
@@ -477,7 +573,7 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   if (record.steps_manifest_hash !== createHash("sha256").update(stepsRaw).digest("hex")
     || record.skills_manifest_hash !== createHash("sha256").update(skillsRaw).digest("hex")) throw outcomeError("stage outcome manifest hash is stale");
   const manifest = loadStageManifest(stage, REPOSITORY_ROOT);
-  const skillManifest = yaml.load(skillsRaw);
+  const skillManifest = loadStageSkillManifest(REPOSITORY_ROOT, stage).manifest;
   if (!Array.isArray(record.step_outcomes) || record.step_outcomes.length !== manifest.steps.length) throw outcomeError("stage outcome must contain every declared step exactly once");
   if (!Array.isArray(record.skill_outcomes) || record.skill_outcomes.length !== (skillManifest?.skills?.length ?? 0)) throw outcomeError("stage outcome must contain every declared skill exactly once");
   const binding = {
@@ -498,6 +594,12 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
     // official stage run.  The publication path still captures a fresh
     // snapshot at the end, so external material changes remain detectable.
     snapshot,
+    // The analyzer consumer is executed inside this authenticated wrapper;
+    // keep the observation in memory so binding validation can verify the
+    // declared consumer without creating another persisted state machine.
+    consumer_invocations: stage === "verify-code"
+      ? Object.freeze([])
+      : Object.freeze(["stage-runner#validateStageSpecAnalyzeOutcome"]),
     value: Object.freeze({
       ...record,
       step_outcomes: stepOutcomes,
@@ -516,10 +618,10 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
 
 /**
  * An external Stage Agent outcome is diagnostic execution evidence, not a
- * permission to run the current WorkflowHub handler. A missing optional
- * handoff remains visible as unavailable so the normal stage can continue;
- * an explicitly supplied but unreadable/invalid required handoff fails before
- * any current quality writer runs.
+ * permission to run the current WorkflowHub handler. A missing or invalid
+ * handoff remains visible as an unavailable diagnostic so the normal stage can
+ * continue with its own authenticated receipts; structural event and bridge
+ * inputs still fail before they can write current facts.
  */
 function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
   const supplied = input?.receipts?.stage_outcomes;
@@ -966,6 +1068,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     ...Object.entries(STAGE_PREDICATES[ctx.stage])
       .filter(([subject]) => subject !== "stage_end_spec_analyze")
       .map(([subject, kind]) => ({ subject, kind, gating: true })),
+    ...(ctx.stage === "build-spec" && result.facts?.completion_subjects?.ui_design
+      ? [{ subject: "ui_design", kind: "acceptance_criterion", gating: true }]
+      : []),
     ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}).map(([subject, kind]) => ({ subject, kind, gating: false })),
   ];
   for (const { subject, kind, gating } of predicateEntries) {
@@ -1118,6 +1223,11 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx));
   const completion = deriveStageCompletion(ctx.stage, observations);
+  for (const binding of result.skill_consumer_bindings ?? []) {
+    if (binding.status === "incomplete") {
+      qualityAdvisories.push(`${binding.skill_id}:consumer_incomplete`);
+    }
+  }
   const stageOutcomeSummary = typeof result.stage_outcome_ref === "string"
     ? summarizeStageOutcome({
       stage: ctx.stage,
@@ -1148,6 +1258,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     quality_fact_refs: Object.freeze(qualityFactRefs),
     quality_advisory_fact_refs: Object.freeze(qualityAdvisoryFactRefs),
     ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
+    ...(Array.isArray(result.skill_consumer_bindings) ? { skill_consumer_bindings: Object.freeze([...result.skill_consumer_bindings]) } : {}),
     stage_outcome_ref: typeof result.stage_outcome_ref === "string" ? result.stage_outcome_ref : null,
     stage_outcome_hash: typeof result.stage_outcome_hash === "string" ? result.stage_outcome_hash : null,
     stage_outcome_status: typeof result.stage_outcome_status === "string" ? result.stage_outcome_status : "unavailable",
@@ -1194,11 +1305,16 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}) {
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
       : null);
+  const consumerInvocations = new Set();
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
     workflowRunId: ctx.workflowRunId,
     currentMaterialRevision: ctx.kernel.currentVNextMaterialRevision(),
+    recordConsumerInvocation: (target) => {
+      if (typeof target === "string" && target.trim() !== "") consumerInvocations.add(target);
+    },
+    hasConsumerInvocation: (target) => consumerInvocations.has(target),
     ...(typeof invocation.attempt_id === "string" && invocation.attempt_id.trim() ? { currentAttemptId: invocation.attempt_id } : {}),
     manifest: ctx.manifest,
     accepted: Object.freeze({ readInput: (slot) => ctx.kernel.readInput(slot) }),
@@ -1417,7 +1533,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
   return runStage(
     stage,
     ctx,
-    async (_worker, _upstream, preflight) => {
+    async (worker, _upstream, preflight) => {
       const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
       // A missing/invalid host outcome is a quality fact, not a work permit.
       // Keep its diagnostic on the returned result and let the current stage
@@ -1479,7 +1595,9 @@ export function runOfficialStage(stage, context, invocation, publication) {
           receiptRef: handlerInput.receipts.review,
         });
       }
-      const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication, input), handlerInput));
+      const officialWorker = officialWorkerContext(ctx, publication, input);
+      const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
+      const skillConsumerBindings = consumeSkillOutcomeBindings(officialWorker, handlerInput, stageOutcome, handlerResult);
       if (stage === "verify-code" && stageOutcome.value?.code_review?.quality_review_ref) {
         const reviewFacts = handlerResult.facts?.code_review ?? {};
         const actualReviewRef = reviewFacts.result_ref ?? reviewFacts.attempt_ref;
@@ -1509,6 +1627,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
       }
       return {
         ...result,
+        ...(skillConsumerBindings ? { skill_consumer_bindings: skillConsumerBindings } : {}),
         ...(stageOutcome.value ? {
           stage_outcome_ref: stageOutcome.value.ref,
           stage_outcome_hash: stageOutcome.value.sha256,

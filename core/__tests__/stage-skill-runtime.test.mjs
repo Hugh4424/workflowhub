@@ -41,8 +41,8 @@ function fixture() {
 
   fs.writeFileSync(path.join(root, "workflows/build-code/skill-deps.yaml"), `stage: build-code
 skills:
-  - { name: beta, path: skills/beta/SKILL.md, bundle: skills/beta/skill-bundle.json }
-  - { name: alpha, path: skills/alpha/SKILL.md, bundle: skills/alpha/skill-bundle.json }
+  - { name: beta, path: skills/beta/SKILL.md, bundle: skills/beta/skill-bundle.json, execution: inline, trigger: always, owner: stage, consumer: { target: stage-handlers#testFacts, inputs: [receipts.tests], identity: [task_id, stage, material_revision, snapshot_tree], result: facts.tests } }
+  - { name: alpha, path: skills/alpha/SKILL.md, bundle: skills/alpha/skill-bundle.json, execution: inline, trigger: always, owner: stage, consumer: { target: stage-handlers#interactionAggregateFacts, inputs: [receipts.interaction], identity: [task_id, stage, material_revision, snapshot_tree], result: facts.interaction } }
 `);
   writeJson(path.join(root, "workflows/build-code/steps.json"), {
     schema_version: "2.0.0",

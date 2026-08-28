@@ -68,7 +68,6 @@ const RETIRED_RECOVERY_FIELDS = ["previous_result_ref", "previousResultRef", "re
 
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/;
-const SINGLE_ROUND_ADVICE_STAGES = new Set(["make-decision", "build-spec", "build-plan"]);
 
 function publishReviewFactOrThrow(args) {
   try {
@@ -80,62 +79,6 @@ function publishReviewFactOrThrow(args) {
     error.reviewResult = args.result;
     throw error;
   }
-}
-
-function reviewIdentityMatches(value, { taskId, stage, reviewTrack = null, reviewKind = null, phaseId = null } = {}) {
-  if (!value || typeof value !== "object" || value.task_id !== taskId || value.stage !== stage) return false;
-  if ((value.review_track ?? null) !== reviewTrack || (value.review_kind ?? null) !== reviewKind) return false;
-  if ((value.phase_id ?? null) !== phaseId) return false;
-  const expectedSubjectKind = phaseId === null ? "worktree" : "phase";
-  if (value.subject_kind !== expectedSubjectKind) return false;
-  const expectedScope = stage === "build-code" ? (phaseId === null ? "integration" : "phase") : null;
-  return (value.review_scope ?? null) === expectedScope;
-}
-
-function canonicalReviewEnvelope({ task, taskId, stage, reviewTrack, reviewKind, ref, value } = {}) {
-  const attemptRef = value.attempt_ref;
-  return {
-    status: "available",
-    attempt_ref: attemptRef,
-    result_ref: ref,
-    report_ref: value.report_ref ?? null,
-    snapshot_tree: value.snapshot_tree,
-    material_id: value.material_id,
-    runtime_ids: {},
-    subject_kind: value.subject_kind,
-    phase_id: value.phase_id ?? null,
-    review_scope: value.review_scope ?? null,
-    base_tree: value.base_tree,
-    candidate_tree: value.candidate_tree,
-    ...(reviewKind ? { review_kind: reviewKind } : {}),
-  };
-}
-
-/**
- * Early-stage review surfaces are advice-only and single-round. Once a
- * semantic result exists for this task/review surface, return that immutable
- * fact instead of starting another broker request. Build-code and verify-code
- * stay freshness-bound; their callers own current-snapshot review behavior.
- */
-export function findExistingOrdinaryReview({ task, taskId, stage, reviewTrack = null, reviewKind = null, phaseId = null } = {}) {
-  if (!SINGLE_ROUND_ADVICE_STAGES.has(stage) || reviewKind !== null || !task || typeof task.readRecord !== "function") return null;
-  const resultRefs = typeof task.listCanonicalReviewResultRefs === "function"
-    ? task.listCanonicalReviewResultRefs()
-    : [];
-  for (const ref of [...resultRefs].sort().reverse()) {
-    try {
-      const value = JSON.parse(task.readRecord(ref));
-      if (!reviewIdentityMatches(value, { taskId, stage, reviewTrack, reviewKind, phaseId })) continue;
-      if (typeof value.attempt_ref !== "string") continue;
-      const attempt = JSON.parse(task.readRecord(value.attempt_ref));
-      validateSchema("attempt", attempt);
-      if (attempt.terminal_status !== "semantic" || attempt.error !== null
-          || !reviewIdentityMatches(attempt, { taskId, stage, reviewTrack, reviewKind, phaseId })) continue;
-      validateSchema("result", value);
-      return canonicalReviewEnvelope({ task, taskId, stage, reviewTrack, reviewKind, ref, value });
-    } catch { /* Ignore stale or malformed historical records. */ }
-  }
-  return null;
 }
 
 export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
@@ -289,12 +232,21 @@ export async function runReviewRound(input) {
   for (const [field, value] of [["task_path", input.task_path], ["project_name", input.project_name ?? input.projectName], ["task_id", input.task_id ?? input.taskId], ["stage", input.stage], ["host_provider", input.host_provider ?? input.hostProvider]]) {
     if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${field} is required`);
   }
+  if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials)) throw new TypeError("materials is required");
   const reviewKind = input.review_kind ?? input.reviewKind ?? null;
   if (reviewKind !== null && !["mini_task.design", "mini_task.implementation"].includes(reviewKind)) throw new TypeError("review_kind is unsupported");
+  const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
+  if (reviewTrack === "detail" && input.stage !== "make-decision") {
+    throw new TypeError("identity: detail review requires stage make-decision");
+  }
+  if (input.stage === "make-decision" && reviewTrack === "detail" && reviewKind !== null) {
+    throw new TypeError("identity: make-decision detail review cannot use review_kind");
+  }
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null, reviewKind);
   const hostProvider = input.host_provider ?? input.hostProvider;
-  const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
-  const materialRevision = stage === "verify-code" ? trusted.kernel.currentVNextMaterialRevision() : null;
+  const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null;
+  const materialRevision = stage === "verify-code" || (stage === "make-decision" && reviewTrack === "detail")
+    ? trusted.kernel.currentVNextMaterialRevision() : null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack, reviewKind);
   if (route === null) {
     const result = await recordMissingRouteUnavailable({
@@ -328,9 +280,6 @@ export async function runReviewRound(input) {
       ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
     };
   }
-  const existing = findExistingOrdinaryReview({ task: trusted.task, taskId: trusted.taskId, stage, reviewTrack, reviewKind, phaseId });
-  if (existing) return existing;
-  if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials)) throw new TypeError("materials is required");
   const profileSet = "initial";
   const selection = selectTrustedReviewProviderSelection(thirdReview.config, hostProvider, route, profileSet);
   const reviewPolicy = {

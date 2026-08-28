@@ -12,9 +12,10 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与这些材料一致的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-同一 task 的同一 track 只记录一次 semantic advice result；runner 仍完整校验首轮
-材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
-如果首轮只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
+每次真正执行 `make-decision` 时，`direction` 和 `detail` 各审查一次当次输入。
+旧结果只作为不可变历史保留，不自动复用，也不通过正文、版本、material_id 或
+semantic hash 判断“还是不是同一份”。同一次执行不为追求空 findings 重审。
+如果本次只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
 
 缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 下
 `quality/reviews/attempts/*` 的不可变质量事实保留；它没有 findings，也不能写成
@@ -74,6 +75,13 @@ P0-P3：优先删除、直接复用或最小改造；标出 scope creep、重复
 direction 是不含候选方案的盲审，不包含 `simplicity-guard` 或其他依赖候选方案的 lens，
 避免从不存在的方案中推断或裁剪内容。
 
+detail 的公开调用只提交任务身份、`review_track=detail` 和三项材料：
+`raw_requirement`、完整当前 `approved_direction`、`draft_spec_or_acceptance`。
+`review_instructions`、packet 元数据、hash、provider/model 配置等由 runner 生成或受信配置，
+调用方提交时必须在 provider 前点名 `forbidden`；三项材料分别按 `missing`、`empty`、`type`
+诊断。`approved_direction` 必须逐字匹配当前 Workspace 的 `decision-log.md`，并带当前
+material revision；不匹配时报告 `identity`/`freshness`，不得静默替换成摘要或旧结果。
+
 `context_map` 和 `evidence_map` 只是可选优化。提供时，map-level state 必须是
 `complete|unknown`，并包含简短 summary 和逐项 entries；每个 entry 包含 id、subject、
 rationale、disposition。`complete` entry 必须使用可验证 anchors（id、snapshot path、
@@ -87,11 +95,11 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
 
 findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
-通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings
-自动发起后续复审；direction 也只发一个 broker group request，内部 flow 必须提供可观察
-的 reconstruct/reveal/challenge 顺序和 reveal boundary。detail 也只发一个短请求。finding
-处理和最终快照变化属于业务材料变更；旧 findings 不被改写，也不生成独立 resolution
-action。普通阶段不会因为这些变化再次调用 provider。
+通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings 自动发起后续复审；
+direction 也只发一个 broker group request，内部 flow
+必须提供可观察的 reconstruct/reveal/challenge 顺序和 reveal boundary。detail 也只发一个短请求。
+finding 处理和最终快照变化属于业务材料变更；旧 findings 不被改写，也不生成
+独立 resolution action。下一次真正重跑该阶段时，再审查那次的当前输入。
 
 ## 处置边界
 

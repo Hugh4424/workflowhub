@@ -321,19 +321,6 @@ function branchExists(targetRepoRoot, branch) {
   }
 }
 
-function isAncestor(repoRoot, ancestor, descendant) {
-  try {
-    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-      cwd: repoRoot,
-      stdio: "ignore",
-    });
-    return true;
-  } catch (error) {
-    if (error?.status === 1) return false;
-    throw new Error(`task worktree ancestry validation failed: ${error.stderr?.toString().trim() || error.message}`);
-  }
-}
-
 function validateCandidate(task, expected, facts = {
   worktree_root: expected.worktreeRoot,
   baseline_commit: expected.baselineCommit,
@@ -396,12 +383,31 @@ export function assertWorkspace(value) {
   return value;
 }
 
+function sharedReviewBaseline(sourceRoot, targetRepoRoot) {
+  const sourceHead = gitValue(sourceRoot, ["rev-parse", "HEAD"], "review Workspace HEAD");
+  const targetHead = gitValue(targetRepoRoot, ["rev-parse", "HEAD"], "review target repository HEAD");
+  const bases = gitValue(sourceRoot, ["merge-base", "--all", targetHead, sourceHead], "review Workspace baseline")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (bases.length !== 1) {
+    throw new Error(`review Workspace requires exactly one shared baseline commit, got ${bases.length}`);
+  }
+  return bases[0];
+}
+
 /** Return the immutable repository binding carried by an authentic accepted Workspace. */
 export function reviewSourceForWorkspace(value) {
   const workspace = assertWorkspace(value);
   const binding = WORKSPACE_BINDINGS.get(workspace);
   if (!binding) throw new TypeError("Workspace review binding is unavailable");
-  return Object.freeze({ worktreeRoot: workspace.worktreeRoot, targetRepoRoot: binding.targetRepoRoot, baselineCommit: workspace.baselineCommit });
+  return Object.freeze({
+    worktreeRoot: workspace.worktreeRoot,
+    targetRepoRoot: binding.targetRepoRoot,
+    // Workspace.baselineCommit is the current execution baseline. A review
+    // must instead compare the task branch with its shared repository fork
+    // point, otherwise a committed task appears as an empty diff.
+    baselineCommit: sharedReviewBaseline(workspace.worktreeRoot, binding.targetRepoRoot),
+  });
 }
 
 export function assertCandidateWorkspace(value) {
@@ -438,10 +444,6 @@ export function prepareTaskWorkspace(taskHandle) {
   const targetStatus = inspectTargetStatus(deterministic.targetRepoRoot);
   const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task worktree HEAD");
   if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task worktree HEAD must be a full Git commit OID");
-  const targetCommit = gitValue(deterministic.targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
-  if (!isAncestor(deterministic.targetRepoRoot, baselineCommit, targetCommit)) {
-    throw new Error("existing task worktree HEAD is not an ancestor of target repository HEAD; refusing fallback or baseline rebinding");
-  }
   return validateCandidate(task, { ...deterministic, baselineCommit, targetStatus });
 }
 

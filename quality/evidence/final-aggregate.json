@@ -1,0 +1,65 @@
+{
+  "schema_version": "workflowhub-final-aggregate.v1",
+  "task_id": "governance-runtime-execution-chain-20260827",
+  "stage": "build-code",
+  "task": "T012",
+  "command": "npm test",
+  "run_count": 3,
+  "exit_code": 0,
+  "status": "completed",
+  "summary": {
+    "test_files_passed": 173,
+    "test_files_failed": 0,
+    "tests_passed": 1953,
+    "tests_failed": 0,
+    "tests_skipped": 24
+  },
+  "current_run": {
+    "commands": [
+      {
+        "command": "npm run test:safe",
+        "exit_code": 0,
+        "summary": { "test_files_passed": 171, "tests_passed": 1922, "tests_skipped": 24, "tests_failed": 0 }
+      },
+      {
+        "command": "npm run test:exclusive",
+        "exit_code": 0,
+        "summary": { "test_files_passed": 2, "tests_passed": 31, "tests_skipped": 0, "tests_failed": 0 }
+      }
+    ],
+    "fact": "当前工作树全量聚合 exit 0；所有测试通过，保留 24 项显式跳过。"
+  },
+  "prior_run": {
+    "exit_code": 1,
+    "status": "incomplete",
+    "summary": {
+      "test_files_passed": 159,
+      "test_files_failed": 12,
+      "tests_passed": 1891,
+      "tests_failed": 24,
+      "tests_skipped": 24
+    },
+    "failures": [
+      { "path": "core/__tests__/check-skill-closure.test.mjs", "fact": "synthetic manifests lacked the newly required concrete consumer descriptor" },
+      { "path": "core/__tests__/run-checks.test.mjs", "fact": "new detail fixture was not classified by the static task-path/direct-writer guard" },
+      { "path": "core/__tests__/stage-skill-runtime.test.mjs", "fact": "synthetic manifests lacked the newly required concrete consumer descriptor" },
+      { "path": "tests/m15-codex-session-hook.test.mjs", "fact": "legacy fixture expects verify-code without declared events to remain incomplete; another assertion expected chronological projection" },
+      { "path": "tests/p0-foundation-contracts.test.mjs", "fact": "documented inventory size differs from actual repository size (63 versus 65)" },
+      { "path": "tests/requirements-completeness-audit-acceptance.test.mjs", "fact": "make-decision contract wording did not match the required unavailable-never-pass phrase" },
+      { "path": "tests/stage-plan-task-contract.test.mjs", "fact": "accepted task contract counted 21 Constitution Check clauses instead of 22" },
+      { "path": "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs", "fact": "stage-materials matrix had an extra surface forbidden field and contract wording/bundle hash was stale" },
+      { "path": "tests/integration/mutation-guards.test.mjs", "fact": "temporary package fixture omitted config/workflowhub.yaml" },
+      { "path": "tests/contract/material-workspace.test.mjs", "fact": "temporary storage root contains a symlink at /var" },
+      { "path": "tests/integration/vnext-official-stage-run.test.mjs", "fact": "existing invalid/stale stage-outcome expectations disagree with current optional diagnostic handling" }
+    ]
+  },
+  "post_run_focused_checks": [
+    { "command": "vitest impacted contracts and fixtures", "exit_code": 0, "fact": "consumer manifests, material round-trip, startup, detail input, closure, static path guard and wh-review wording pass" },
+    { "command": "node runtime/evidence/check-skill-closure.mjs", "exit_code": 0, "fact": "current skill closure is valid after bundle/catalog hash refresh" }
+  ],
+  "quality_limits": [
+    "The current full aggregate is green; it is not acceptance or release proof.",
+    "wh-review provider capability remains unavailable when strict test_evidence is absent.",
+    "No product UI, browser QA, downstream acceptance or historical record rewrite was performed."
+  ]
+}

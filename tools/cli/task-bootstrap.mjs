@@ -10,7 +10,7 @@ import { authenticateOfficialInvocation } from "../../runtime/evidence/invocatio
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
-import { validateExistingWorkspaceBinding } from "../../runtime/task/workspace.mjs";
+import { prepareTaskWorkspace, validateExistingWorkspaceBinding } from "../../runtime/task/workspace.mjs";
 import { bindCodexSessionTask, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
@@ -58,8 +58,20 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [],
     inputs,
   } });
+  // A new task is not ready until its authenticated parallel worktree exists.
+  // Prepare it before initializing the task store or binding the host session,
+  // so Git/path failures surface at bootstrap rather than at publication.
+  const workspace = prepareTaskWorkspace(task);
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-  return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch, session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }) });
+  return Object.freeze({
+    task_path: task.taskPath,
+    project: task.identity.projectName,
+    task: task.identity.taskId,
+    storage_root: authority.storage_root,
+    cutover_epoch: authority.cutover_epoch,
+    workspace: Object.freeze({ worktree_root: workspace.worktreeRoot, branch: workspace.branch, baseline_commit: workspace.baselineCommit }),
+    session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }),
+  });
 }
 
 function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null } = {}) {

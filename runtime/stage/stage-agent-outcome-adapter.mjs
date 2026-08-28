@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import yaml from "js-yaml";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
@@ -14,6 +13,7 @@ import {
   validateInteractionLifecycleSequence,
   validateStageSpecAnalyzeProfile,
 } from "./stage-content-contracts.mjs";
+import { loadStageSkillManifest, validateSkillConsumerBinding } from "./stage-skill-runtime.mjs";
 import { isAuthenticatedRequirementResult } from "../evidence/codex-transcript-adapter.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -539,11 +539,21 @@ export function publishStageAgentOutcome({
   const stepsManifestRaw = readFileSync(new URL(stepsManifestRef, REPOSITORY_ROOT), "utf8");
   const skillsManifestRaw = readFileSync(new URL(skillsManifestRef, REPOSITORY_ROOT), "utf8");
   const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
-  const skills = yaml.load(skillsManifestRaw);
+  const skills = loadStageSkillManifest(new URL("../../", import.meta.url).pathname, stage).manifest;
   if (input.steps.length !== manifest.steps.length || input.skills.length !== (skills.skills?.length ?? 0)) {
     throw new Error(`${stage} Stage Agent execution must contain every declared step and skill exactly once`);
   }
   const context = { kernel: safeKernel, taskId: safeTask.identity.taskId, stage, attemptId, snapshotTree: snapshot.tree, materialRevision: materials.revision };
+  const consumerBindings = input.skills.map((entry, index) => validateSkillConsumerBinding({
+      dependency: skills.skills[index],
+      outcome: entry,
+      identity: {
+        task_id: safeTask.identity.taskId,
+        stage,
+        material_revision: materials.revision,
+        snapshot_tree: snapshot.tree,
+      },
+    }));
   const stepOutcomes = input.steps.map((entry, index) => {
     const expected = manifest.steps[index];
     if (entry.step_id !== expected.step_id || entry.step_slug !== expected.step_slug || entry.order !== expected.order) {
@@ -575,6 +585,7 @@ export function publishStageAgentOutcome({
       version: text(entry.version, `skill ${expected.name}.version`),
       result_summary: result.resultSummary,
       evidence_refs: result.evidenceRefs,
+      consumer_binding: consumerBindings[index],
       ...(result.outcomeStatus === "completed" ? {} : { reason: text(entry.reason ?? entry.error, `skill ${expected.name}.reason`) }),
       cost: cost(entry.cost, `skill ${expected.name}.cost`),
     };
@@ -695,9 +706,8 @@ function lifecycleEvidence({ sourceRef, sessionId, subjectKind, subjectId, start
 
 function sessionManifest(stage) {
   const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
-  const skillsRaw = readFileSync(new URL(`../../workflows/${stage}/skill-deps.yaml`, import.meta.url), "utf8");
-  const skillManifest = yaml.load(skillsRaw);
-  return { steps: manifest.steps, skills: Array.isArray(skillManifest?.skills) ? skillManifest.skills : [] };
+  const skillManifest = loadStageSkillManifest(new URL("../../", import.meta.url).pathname, stage).manifest;
+  return { steps: manifest.steps, skills: Array.isArray(skillManifest.skills) ? skillManifest.skills : [] };
 }
 
 /**
@@ -850,11 +860,12 @@ export function createWorkflowHubSessionRecorder({
           ? { code_review: object(code_review, "code_review") }
           : { spec_analyze: object(spec_analyze, "spec_analyze") }),
       };
-      closed = true;
-      return publishStageAgentOutcome({
+      const published = publishStageAgentOutcome({
         task: safeTask, kernel: safeKernel, artifacts: safeArtifacts, workspace, candidateWorkspace,
         stage, attemptId, workflowRunId, execution, requirementAuthentication,
       });
+      closed = true;
+      return published;
     },
   });
 }
@@ -869,8 +880,7 @@ export function publishUnavailableStageAgentOutcome({
   host, agentRunId, reason,
 } = {}) {
   const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
-  const skillsRaw = readFileSync(new URL(`../../workflows/${stage}/skill-deps.yaml`, import.meta.url), "utf8");
-  const skills = yaml.load(skillsRaw);
+  const skills = loadStageSkillManifest(new URL("../../", import.meta.url).pathname, stage).manifest;
   return publishStageAgentOutcome({
     task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId, workflowRunId,
     execution: unavailableExecution({

@@ -449,6 +449,30 @@ describe("current review material and capture contracts", () => {
     }
   });
 
+  it("keeps committed task changes visible to the current review Workspace", () => {
+    const { root, task, workspace } = taskFixture();
+    const base = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: join(root, "repo"), encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["add", "package.json"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "commit task change"], { cwd: workspace.worktreeRoot });
+
+    const current = openCurrentTaskWorkspace(task);
+    const committedHead = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: workspace.worktreeRoot, encoding: "utf8",
+    }).trim();
+    const source = captureReviewSource({ workspace: current, reviewDataRoot: root, includeDiff: true });
+    try {
+      expect(current.baselineCommit).toBe(committedHead);
+      expect(source.baseCommit).toBe(base);
+      expect(source.snapshotTree).not.toBe(source.baseTree);
+      expect(source.changedFiles.map(({ path }) => path)).toContain("package.json");
+      expect(readFileSync(source.diffPath, "utf8")).toContain("package.json");
+    } finally {
+      source.dispose();
+    }
+  });
+
   it("rejects a build-code phase test receipt from an older snapshot", () => {
     const { root, task, workspace } = taskFixture();
     writeFileSync(join(workspace.worktreeRoot, "phase.mjs"), "phase changed\n");

@@ -388,7 +388,14 @@ describe("WorkflowHub current Codex session handoff", () => {
         startCodexSessionEvent({ taskId: state.taskId, stage, subjectKind: "step", subjectId: `${stage}-step`, cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1000 });
         finishCodexSessionEvent({ taskId: state.taskId, stage, subjectKind: "step", subjectId: `${stage}-step`, cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 2000, status: "completed", resultSummary: `${stage} completed` });
         const session = buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: alternateCwd, stage, sessionId: state.sessionId });
-        expect(session).toMatchObject({ status: "present", session_id: state.sessionId, task_id: state.taskId, status_value: "incomplete" });
+        expect(session).toMatchObject({
+          status: "present",
+          session_id: state.sessionId,
+          task_id: state.taskId,
+          // verify-code has no spec-analyze step; its lifecycle projection is
+          // complete when all of its own declared subjects are terminal.
+          status_value: stage === "verify-code" ? "completed" : "incomplete",
+        });
         const source = resolveDefaultMonitoringSource({
           context: { stage },
           task_id: state.taskId,

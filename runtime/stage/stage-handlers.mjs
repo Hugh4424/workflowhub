@@ -20,9 +20,16 @@ import {
   validatePlanTaskContract,
   activeAcceptanceCriterionIds,
   validateProjectStandardSources,
+  completeProjectSourceIdentity,
   buildConsumerCensus,
   deriveChangeImpact,
   validateDeliveryContract,
+  buildUiProjectInitFact,
+  deriveDesignSourceReadiness,
+  validateUiDesignLoopFact,
+  validateUiApplicability,
+  validateUiContract,
+  validateComponentQualityMap,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
@@ -75,8 +82,8 @@ const COMPLETION_COPY = Object.freeze({
 });
 const RECEIPT_KEYS = Object.freeze({
   "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
-  "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
-  "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
+  "build-spec": new Set(["spec", "review", "research", "clarify", "risk_acceptance", "audit", "stage_outcomes"]),
+  "build-plan": new Set(["plan", "tasks", "research", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes", "ui_qa"]),
   // quality_review is the dsh-code-review result bound by the stage outcome;
   // review is the existing wh-review advisory receipt and never feeds the
@@ -85,6 +92,9 @@ const RECEIPT_KEYS = Object.freeze({
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
+function recordConsumerInvocation(worker, target) {
+  if (typeof worker?.recordConsumerInvocation === "function") worker.recordConsumerInvocation(target);
+}
 function semanticAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
     && typeof value.id === "string" && value.id.trim() !== ""
@@ -280,6 +290,7 @@ export function validateInteractionAggregateLifecycle(value) {
 }
 
 function interactionAggregateFacts(worker, invocation, expected) {
+  recordConsumerInvocation(worker, "stage-handlers#interactionAggregateFacts");
   const ref = text(object(invocation.receipts, "receipts").interaction, "interaction aggregate ref");
   if (!validReceiptRef("interaction", ref)) throw materialIncomplete("make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
   const record = object(worker.readReceipt(ref), "interaction aggregate record");
@@ -398,6 +409,7 @@ function receipt(worker, invocation, name, producerStage = worker.stage) {
   return { ref, value, evidence: { ref, sha256: record.sha256 } };
 }
 function testFacts(worker, invocation, name = "tests", producerStage = worker.stage) {
+  recordConsumerInvocation(worker, "stage-handlers#testFacts");
   const item = receipt(worker, invocation, name, producerStage);
   text(item.value.command, `${name}.command`);
   if (!Number.isInteger(item.value.exit_code)) throw new TypeError(`${name}.exit_code must be integer`);
@@ -547,6 +559,31 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
       missing_items: ["browser QA applicability is unknown: refusing an unclassified invocation"],
     };
   }
+  const contractFacts = invocation.contract_facts ?? {};
+  const componentQualityMap = contractFacts.component_quality_map;
+  if (componentQualityMap === undefined) {
+    return {
+      facts: { status: "incomplete", applicability: impact, reason: "component_quality_map is missing for an applicable UI/fullstack change" },
+      evidence: null,
+      missing_items: ["component_quality_map is missing for an applicable UI/fullstack change"],
+    };
+  }
+  const componentQualityValidation = validateComponentQualityMap(componentQualityMap);
+  if (!componentQualityValidation.ok) {
+    return {
+      facts: {
+        status: "incomplete",
+        applicability: impact,
+        component_quality_map: componentQualityMap,
+        risks: componentQualityValidation.risks ?? [],
+        errors: componentQualityValidation.errors ?? [],
+        reason: "component_quality_map is invalid; controlled browser QA was not executed",
+      },
+      evidence: null,
+      missing_items: (componentQualityValidation.errors ?? []).map((error) => `component quality map: ${error}`),
+    };
+  }
+  recordConsumerInvocation(worker, "stage-handlers#controlledBrowserQaFacts");
   if (typeof adapter !== "function") {
     return {
       facts: { status: "unknown", applicability: impact, reason: "applicable UI/fullstack change has no controlled browser QA executor" },
@@ -560,7 +597,6 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     : typeof worker.candidateWorkspace?.captureSnapshot === "function"
       ? worker.candidateWorkspace.captureSnapshot()
       : null;
-  const contractFacts = invocation.contract_facts ?? {};
   const qaBinding = contractFacts.qa_binding ?? invocation.qa_binding ?? {};
   const binding = {
     task_id: worker.identity.taskId,
@@ -1296,7 +1332,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   // that terminal transport fact as unavailable; do not accept an empty
   // provider list for provider-specific failures or malformed results.
   if (attempt.provider_attempts.length === 0
-      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "GROUP_OUTCOME_UNAVAILABLE"].includes(attempt.error.code)) {
+      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "GROUP_OUTCOME_UNAVAILABLE", "PROCESS_TIMEOUT"].includes(attempt.error.code)) {
     throw new Error("review unavailable attempt must contain provider attempts");
   }
   const latestByProvider = new Map();
@@ -1629,6 +1665,7 @@ function unavailableReviewFacts(worker, invocation, name, expectedTrack, produce
 }
 
 function safeReviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage, options = {}) {
+  recordConsumerInvocation(worker, "stage-handlers#safeReviewFacts");
   try { return reviewFacts(worker, invocation, name, expectedTrack, producerStage, options); }
   catch (error) {
     // A missing/material-incomplete review is an honest quality fact and may
@@ -1641,6 +1678,7 @@ function safeReviewFacts(worker, invocation, name = "review", expectedTrack, pro
 }
 
 function codeReviewFacts(worker, invocation, name = "quality_review") {
+  recordConsumerInvocation(worker, "stage-handlers#codeReviewFacts");
   // A verify-code review authenticates the review packet itself, but it does
   // not make risk cards, finding-disposition receipts, AC evidence, or test
   // receipts prerequisites for reviewing the implementation.
@@ -1650,11 +1688,323 @@ function codeReviewFacts(worker, invocation, name = "quality_review") {
   });
 }
 
+function validationErrors(value) {
+  return Array.isArray(value?.errors) ? value.errors : [];
+}
+
+const UI_SOURCE_IDENTITY_FIELDS = Object.freeze([
+  "document_kind",
+  "path",
+  "content_sha256",
+  "revision",
+  "anchor_id",
+]);
+const UNKNOWN_UI_SOURCE_VALUE = /^(?:unknown|unavailable|n\/a|na)$/i;
+
+function normalizeUiSourceIdentity(value, expectedKind) {
+  const candidate = value && typeof value === "object" && !Array.isArray(value)
+    ? (value.identity && typeof value.identity === "object" && !Array.isArray(value.identity) ? value.identity : value)
+    : null;
+  if (!candidate || candidate.document_kind !== expectedKind || !completeProjectSourceIdentity(candidate)) return null;
+  return Object.freeze(Object.fromEntries(UI_SOURCE_IDENTITY_FIELDS.map((field) => [field, candidate[field]])));
+}
+
+function uiSourceIdentityEntriesFrom(container, kind) {
+  if (!container || typeof container !== "object" || Array.isArray(container)) return [];
+  return [
+    container.source_identities?.[kind],
+    container.input_identities?.[kind],
+    container.bound_input_identities?.[kind],
+    container[kind],
+    container[`${kind}_identity`],
+    container[`${kind}_source_identity`],
+  ].filter((candidate) => candidate !== undefined && candidate !== null);
+}
+
+function uiSourceIdentityCandidatesFrom(container, kind) {
+  return uiSourceIdentityEntriesFrom(container, kind).map((candidate) => normalizeUiSourceIdentity(candidate, kind)).filter(Boolean);
+}
+
+function collectUiSourceIdentity(containers, kind) {
+  const entries = containers.flatMap((container) => uiSourceIdentityEntriesFrom(container, kind));
+  const identities = entries.map((candidate) => normalizeUiSourceIdentity(candidate, kind)).filter(Boolean);
+  return Object.freeze({
+    current: identities[0] ?? null,
+    conflict: identities.some((identity) => canonicalJson(identity) !== canonicalJson(identities[0] ?? null)),
+    invalid: entries.some((candidate) => normalizeUiSourceIdentity(candidate, kind) === null),
+  });
+}
+
+function approvedUiSourceIdentities(reviewInput) {
+  return Object.freeze(Object.fromEntries(["design", "experience"].map((kind) => [
+    kind, uiSourceIdentityCandidatesFrom(reviewInput, kind)[0] ?? null,
+  ])));
+}
+
+function declaredUiSourceField(container, kind, field) {
+  if (!container || typeof container !== "object" || Array.isArray(container)) return null;
+  const keys = field === "path"
+    ? [`${kind}_path`, `${kind}_source_path`]
+    : [`${kind}_revision`];
+  const key = keys.find((candidate) => Object.prototype.hasOwnProperty.call(container, candidate));
+  if (!key) return null;
+  const raw = container[key];
+  const value = typeof raw === "string"
+    ? raw.trim()
+    : raw && typeof raw === "object" && !Array.isArray(raw)
+      ? String(raw.version ?? raw.value ?? "").trim()
+      : "";
+  return Object.freeze({ value, valid: value !== "" && !UNKNOWN_UI_SOURCE_VALUE.test(value) });
+}
+
+function validateUiSourceIdentityBinding(supplied, initInput, readinessInput, reviewInput) {
+  const containers = [initInput, readinessInput, supplied.project_standard_sources, supplied];
+  const collected = Object.fromEntries(["design", "experience"].map((kind) => [kind, collectUiSourceIdentity(containers, kind)]));
+  const current = Object.freeze(Object.fromEntries(["design", "experience"].map((kind) => [kind, collected[kind].current])));
+  const approved = approvedUiSourceIdentities(reviewInput);
+  const errors = [];
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    if (collected[kind].invalid) errors.push(`plan-design-review: current ${label} identity is malformed or unavailable`);
+    if (collected[kind].conflict) errors.push(`plan-design-review: current ${label} identity sources disagree`);
+  }
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    if (!current[kind]) errors.push(`plan-design-review: current ${label} identity is missing or invalid`);
+    const approvedEntries = uiSourceIdentityEntriesFrom(reviewInput, kind);
+    const approvedIdentity = approved[kind];
+    if (approvedEntries.some((candidate) => normalizeUiSourceIdentity(candidate, kind) === null)) {
+      errors.push(`plan-design-review: approved ${label} identity is malformed or unavailable`);
+    }
+    if (!approvedIdentity) errors.push(`plan-design-review: human_approved requires current ${label} identity binding`);
+    else if (current[kind] && canonicalJson(approvedIdentity) !== canonicalJson(current[kind])) {
+      errors.push(`plan-design-review: approved ${label} identity does not match the current source`);
+    }
+  }
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    const declaredFields = [
+      [initInput, "ui-project-init"],
+      [readinessInput, "design-source-readiness"],
+      [supplied, "build-spec contract facts"],
+    ];
+    for (const [container, owner] of declaredFields) {
+      if (!container || typeof container !== "object" || Array.isArray(container)) continue;
+      const identity = uiSourceIdentityCandidatesFrom(container, kind)[0] ?? null;
+      const declaredPath = declaredUiSourceField(container, kind, "path");
+      const declaredRevision = declaredUiSourceField(container, kind, "revision");
+      if (declaredPath && !declaredPath.valid) {
+        errors.push(`plan-design-review: ${owner} ${label} path is missing or unavailable`);
+      } else if (declaredPath && identity && declaredPath.value !== identity.path) {
+        errors.push(`plan-design-review: ${owner} ${label} path does not match its identity`);
+      }
+      if (declaredRevision && !declaredRevision.valid) {
+        errors.push(`plan-design-review: ${owner} ${label} revision is missing or unavailable`);
+      } else if (declaredRevision && identity && declaredRevision.value !== identity.revision) {
+        errors.push(`plan-design-review: ${owner} ${label} revision does not match its identity`);
+      }
+    }
+  }
+  return Object.freeze({ errors: Object.freeze(errors), current, approved });
+}
+
+/**
+ * Consume the three conditional build-spec UI facts through the existing
+ * content validators. The facts stay in the current stage result; no UI
+ * page, approval store, or extra workflow state is created.
+ */
+function buildSpecUiFacts(worker, invocation) {
+  const supplied = invocation.contract_facts;
+  if (supplied === undefined) {
+    return { facts: { status: "not_applicable", applicability: "non_ui", reason: "no UI contract facts supplied; current scope is non-UI" }, missing_items: [] };
+  }
+  if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
+    return { facts: { status: "incomplete", applicability: "unknown", reason: "contract_facts must be an object" }, missing_items: ["build-spec UI contract_facts must be an object"] };
+  }
+  const applicabilityInput = supplied.ui_applicability ?? supplied.applicability;
+  if (applicabilityInput === undefined) {
+    return {
+      facts: {
+        status: "unknown",
+        applicability: "unknown",
+        reason: "ui_applicability is required before accepting UI design facts",
+      },
+      missing_items: ["UI applicability is unknown: ui_applicability is missing"],
+    };
+  }
+  const applicability = validateUiApplicability(applicabilityInput);
+  const applicabilityResult = applicabilityInput.result ?? applicabilityInput.conclusion;
+  if (!applicability.ok || applicabilityResult === "unknown") {
+    return {
+      facts: { status: applicability.ok ? "unknown" : "incomplete", applicability: applicabilityResult ?? "unknown", ui_applicability: applicabilityInput, errors: validationErrors(applicability) },
+      missing_items: validationErrors(applicability).map((error) => `UI applicability: ${error}`),
+    };
+  }
+  if (applicabilityResult === "non_ui") {
+    return { facts: { status: "not_applicable", applicability: "non_ui", ui_applicability: applicabilityInput, reason: "current spec has no UI scope" }, missing_items: [] };
+  }
+  const initInput = supplied.ui_project_init;
+  const readinessInput = supplied.design_source_readiness;
+  const reviewInput = supplied.plan_design_review;
+  const init = initInput === undefined
+    ? { ok: false, errors: ["ui-project-init fact is missing"], value: null }
+    : buildUiProjectInitFact(initInput);
+  const readiness = readinessInput ? deriveDesignSourceReadiness(readinessInput) : { ok: false, errors: ["design-source-readiness fact is missing"], value: null };
+  const designLoop = reviewInput ? validateUiDesignLoopFact(reviewInput) : { ok: false, errors: ["plan-design-review fact is missing"], value: null };
+  const contract = supplied.ui_contract;
+  const contractValidation = contract === undefined ? { ok: true, errors: [] } : validateUiContract(contract);
+  const errors = [
+    ...validationErrors(init).map((error) => `ui-project-init: ${error}`),
+    ...validationErrors(readiness).map((error) => `design-source-readiness: ${error}`),
+    ...validationErrors(designLoop).map((error) => `plan-design-review: ${error}`),
+    ...validationErrors(contractValidation).map((error) => `ui-contract: ${error}`),
+  ];
+  const nonEmpty = (value) => typeof value === "string" && value.trim() !== "";
+  const missingFacts = (value) => (Array.isArray(value?.missing_items) ? value.missing_items : [])
+    .map((item) => typeof item === "string" ? item : item?.reason ?? item?.code ?? "missing input")
+    .filter(nonEmpty);
+  if (initInput !== undefined && init.status !== "ready") {
+    errors.push(`ui-project-init: status is ${init.status ?? "unknown"}; missing inputs must be resolved`);
+    errors.push(...missingFacts(init).map((item) => `ui-project-init: ${item}`));
+  }
+  if (readinessInput !== undefined && readiness.status !== "ready") {
+    errors.push(`design-source-readiness: status is ${readiness.status ?? "unknown"}; missing inputs must be resolved`);
+    errors.push(...missingFacts(readiness).map((item) => `design-source-readiness: ${item}`));
+  }
+  const reviewState = reviewInput?.state ?? reviewInput?.status;
+  const sourceIdentityBinding = validateUiSourceIdentityBinding(supplied, initInput, readinessInput, reviewInput);
+  if (reviewState !== "human_approved") {
+    errors.push("plan-design-review: current design must be human_approved before build-spec can continue");
+  }
+  const currentRevision = worker.currentMaterialRevision;
+  const binding = reviewInput?.material_revision ?? reviewInput?.current_material_revision;
+  if (binding === undefined || binding === null || String(binding).trim() === "") {
+    errors.push("plan-design-review: approval must name the current material revision");
+  } else if (binding !== currentRevision) {
+    errors.push("plan-design-review: approval is not bound to the current material revision");
+  }
+  if (reviewInput?.display_before_reply !== true) {
+    errors.push("plan-design-review: prototype must be displayed before the user reply");
+  }
+  if (reviewState === "human_approved") {
+    const confirmationValue = reviewInput?.human_confirmation;
+    const confirmation = confirmationValue && typeof confirmationValue === "object" && !Array.isArray(confirmationValue)
+      ? confirmationValue
+      : {};
+    const firstText = (...values) => values.flatMap((value) => Array.isArray(value) ? value : [value])
+      .find(nonEmpty);
+    const designArtifactRef = firstText(
+      reviewInput.design_artifact_ref,
+      reviewInput.artifact_ref,
+      reviewInput.design_ref,
+      reviewInput.preview_ref,
+      reviewInput.preview_refs,
+    );
+    const designArtifactHash = firstText(
+      reviewInput.design_artifact_hash,
+      reviewInput.artifact_hash,
+      reviewInput.design_hash,
+      reviewInput.preview_hash,
+      reviewInput.preview_hashes,
+    );
+    const replyRef = firstText(reviewInput.reply_ref, reviewInput.user_reply_ref, confirmation.reply_ref, confirmation.user_reply_ref);
+    const replyHash = firstText(reviewInput.reply_hash, reviewInput.user_reply_hash, confirmation.reply_hash, confirmation.user_reply_hash);
+    const replySource = reviewInput.reply_source ?? reviewInput.source ?? confirmation.reply_source ?? confirmation.source;
+    const displayAt = reviewInput.displayed_at_ms ?? reviewInput.display_event?.at_ms ?? reviewInput.displayed_at;
+    const replyAt = reviewInput.reply_at_ms ?? reviewInput.reply_event?.at_ms ?? reviewInput.replied_at_ms ?? confirmation.at_ms;
+    const timestamp = (value) => Number.isSafeInteger(value)
+      ? value
+      : typeof value === "string" && value.trim() !== "" && Number.isSafeInteger(Date.parse(value))
+        ? Date.parse(value)
+        : null;
+    const displayedAtMs = timestamp(displayAt);
+    const repliedAtMs = timestamp(replyAt);
+    if (!nonEmpty(designArtifactRef)) errors.push("plan-design-review: human_approved requires the current design artifact ref");
+    if (!SHA256.test(designArtifactHash ?? "")) errors.push("plan-design-review: human_approved requires the current design artifact sha256");
+    if (!nonEmpty(replyRef)) errors.push("plan-design-review: human_approved requires the current user reply ref");
+    if (!SHA256.test(replyHash ?? "")) errors.push("plan-design-review: human_approved requires the current user reply sha256");
+    if (replySource !== "user") errors.push("plan-design-review: human_approved reply source must be user");
+    if (displayedAtMs === null || repliedAtMs === null || repliedAtMs <= displayedAtMs) {
+      errors.push("plan-design-review: the current design display event must precede the user reply");
+    }
+    errors.push(...sourceIdentityBinding.errors);
+  }
+  return {
+    facts: {
+      status: errors.length === 0 ? "recorded" : "incomplete",
+      applicability: "ui",
+      ui_project_init: initInput ?? null,
+      design_source_readiness: readinessInput ?? null,
+      plan_design_review: reviewInput ?? null,
+      source_identity_binding: sourceIdentityBinding,
+      ui_contract: contract ?? null,
+      errors,
+      current_material_revision: currentRevision,
+    },
+    missing_items: errors.map((error) => `build-spec UI contract incomplete: ${error}`),
+  };
+}
+
+function componentQualityConsumerFacts(worker, invocation) {
+  const contract = invocation.contract_facts;
+  const declaredImpact = contract?.change_impact?.impact ?? contract?.impact?.impact ?? contract?.impact;
+  if (contract === undefined || declaredImpact === "non_ui") {
+    return { facts: { status: "not_applicable", applicability: "non_ui", reason: "current scope has no UI component quality consumer" }, missing_items: [] };
+  }
+  if (declaredImpact === undefined) {
+    return { facts: { status: "unknown", applicability: "unknown", reason: "UI applicability is unknown" }, missing_items: ["component quality applicability is unknown"] };
+  }
+  if (declaredImpact === "unknown") {
+    return { facts: { status: "unknown", applicability: "unknown", reason: "UI applicability is unknown" }, missing_items: ["component quality applicability is unknown"] };
+  }
+  const map = contract.component_quality_map;
+  if (map === undefined) {
+    return { facts: { status: "incomplete", applicability: declaredImpact, reason: "component_quality_map is missing" }, missing_items: ["component_quality_map is missing for an applicable UI change"] };
+  }
+  recordConsumerInvocation(worker, "stage-content-contracts#validateComponentQualityMap");
+  const validation = validateComponentQualityMap(map);
+  return {
+    facts: {
+      status: validation.ok ? "recorded" : "incomplete",
+      applicability: declaredImpact,
+      component_quality_map: map,
+      risks: validation.risks ?? [],
+      errors: validation.errors ?? [],
+    },
+    missing_items: (validation.errors ?? []).map((error) => `component quality map: ${error}`),
+  };
+}
+
 function declaredFinalTestScope(tasks) {
   const section = String(tasks ?? "").match(/## 4\. Final current-snapshot aggregate strategy([\s\S]*?)(?=\n##\s|$)/i)?.[1] ?? "";
   const command = section.match(/\*\*command\*\*:\s*`([^`]+)`/i)?.[1]?.trim();
   if (!command) return { status: "unknown", reason: "tasks.md does not declare the final test command" };
   return { status: "declared", command, scope: command === "npm test" ? "full" : "focused" };
+}
+
+function declaredTestRouting(structural) {
+  const tierRank = { simple: 1, feature: 2, fullstack: 3 };
+  const tiers = [];
+  for (const row of structural.facts?.task_rows ?? []) {
+    const method = row.fields?.["test tier / test method"] ?? "";
+    const match = String(method).match(/\b(simple|feature|fullstack)\b/i);
+    if (match) tiers.push(match[1].toLowerCase());
+  }
+  const uniqueTiers = [...new Set(tiers)];
+  const routingTier = uniqueTiers
+    .sort((left, right) => tierRank[right] - tierRank[left])[0] ?? null;
+  const taskCount = structural.facts?.task_count ?? null;
+  const allTasksHaveTier = Number.isSafeInteger(taskCount) && taskCount > 0 && tiers.length === taskCount;
+  const status = structural.ok && allTasksHaveTier ? "recorded" : uniqueTiers.length > 0 ? "incomplete" : "unknown";
+  return {
+    status,
+    routing_tier: routingTier,
+    declared_tiers: uniqueTiers,
+    task_count: taskCount,
+    source: "plan.md + tasks.md",
+    ...(status === "recorded" ? {} : {
+      reason: structural.ok
+        ? "tasks.md does not declare a test tier for every task"
+        : "plan/task contract is incomplete; test routing is not authoritative",
+    }),
+  };
 }
 
 function authenticateReviewHead(review, expected) {
@@ -1778,9 +2128,9 @@ HANDLERS.set("make-decision", async (worker, input) => {
       audit_gaps: auditGaps,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
       completion_subjects: {
-        scope: subjectFact(sectionHasContent(currentDecisionLog, "范围") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
+        scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
         non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log non-goals section"),
-        risks: subjectFact(sectionHasContent(currentDecisionLog, "风险与延期交接") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
+        risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
       },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
@@ -1823,6 +2173,8 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
   const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const clarify = input.receipts?.clarify === undefined ? null : testFacts(worker, input, "clarify");
+  const ui = buildSpecUiFacts(worker, input);
   const review = safeReviewFacts(worker, input);
   const dispositions = findingDispositions([review], input);
   text(item.value.content, "spec content");
@@ -1835,26 +2187,41 @@ HANDLERS.set("build-spec", async (worker, input) => {
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
   const specEvidence = { ref: item.ref, sha256: item.content_hash ?? item.evidence.sha256 };
+  const completionSubjects = {
+    zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
+  };
+  if (ui.facts.applicability !== "non_ui") {
+    completionSubjects.ui_design = subjectFact(
+      ui.facts.status === "recorded" ? "passed" : "missing",
+      [specEvidence],
+      ui.facts.status === "recorded" ? "current UI design facts are complete" : "current UI design facts are incomplete",
+    );
+  }
   return addCompletion("build-spec", {
     facts: {
       spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest,
       audit_gaps: auditGaps,
-      completion_subjects: {
-        zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
-      },
+      completion_subjects: completionSubjects,
       ...(research ? { research: research.facts } : {}),
+      ...(clarify ? { clarify: clarify.facts } : {}),
+      ui_design: ui.facts,
+      ...(ui.facts.ui_project_init !== undefined ? { ui_project_init: ui.facts.ui_project_init } : {}),
+      ...(ui.facts.design_source_readiness !== undefined ? { design_source_readiness: ui.facts.design_source_readiness } : {}),
+      ...(ui.facts.plan_design_review !== undefined ? { plan_design_review: ui.facts.plan_design_review } : {}),
       review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}),
     },
     evidence_refs: [
       ...(item.evidence ? [item.evidence] : []),
       ...(review.evidence ? [review.evidence] : []),
       ...(research?.evidence ? [research.evidence] : []),
+      ...(clarify?.evidence ? [clarify.evidence] : []),
       ...(audit ? [audit.evidence] : []),
       ...review.risk_evidence,
       ...bindingEvidence,
     ],
     missing_items: [
       ...dispositions.missing_items,
+      ...ui.missing_items,
       ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
     ],
   }, {
@@ -1863,7 +2230,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
-    verification: `最终规格、工作区快照和正式审查已完成绑定检查；条件调研事实：${research ? "recorded" : "no research receipt supplied"}`,
+    verification: `最终规格、工作区快照和正式审查已完成绑定检查；条件调研事实：${research ? "recorded" : "no research receipt supplied"}；条件 UI 事实：${ui.facts.status}`,
   });
 });
 HANDLERS.set("build-plan", async (worker, input) => {
@@ -1890,6 +2257,9 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const missingItems = structural.ok
     ? []
     : structural.errors.map((error) => `plan-task contract incomplete: ${error}`);
+  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const componentQuality = componentQualityConsumerFacts(worker, input);
+  missingItems.push(...componentQuality.missing_items);
   const evidenceRefs = [];
   const optional = (label, operation) => {
     try { return operation(); }
@@ -1946,6 +2316,16 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const fr = structural.facts?.fr_coverage;
   const ac = structural.facts?.ac_coverage;
   const deletionProofs = /(?:deletion proofs?|删除证明|不涉及删除|no deletion)/i.test(`${materials["plan.md"]}\n${materials["tasks.md"]}`);
+  const declaredStrategy = declaredFinalTestScope(materials["tasks.md"]);
+  const testStrategy = {
+    status: !structural.ok ? "incomplete" : declaredStrategy.status === "declared" ? "recorded" : "unknown",
+    command: declaredStrategy.command ?? null,
+    scope: declaredStrategy.scope ?? null,
+    source: "tasks.md",
+    ...(declaredStrategy.reason ? { reason: declaredStrategy.reason } : {}),
+    ...(structural.ok ? {} : { reason: "plan/task contract is incomplete; test strategy is not authoritative" }),
+  };
+  const testRouting = declaredTestRouting(structural);
   return addCompletion("build-plan", {
     facts: {
       plan_ref: planRef,
@@ -1961,11 +2341,15 @@ HANDLERS.set("build-plan", async (worker, input) => {
         executable_tasks: subjectFact(executable.ok && structural.facts?.command_oracle_checks?.valid === true ? "passed" : "missing", [tasksEvidence], "task command/oracle executability"),
       },
       review: review.facts,
+      ...(research ? { research: research.facts } : {}),
+      component_quality: componentQuality.facts,
+      test_strategy: testStrategy,
+      test_routing: testRouting,
       ...(confirmation ? { human_confirmation: confirmation.facts } : {}),
       finding_dispositions: dispositions.facts,
       ...(audit ? audit.facts : {}),
     },
-    evidence_refs: evidenceRefs,
+    evidence_refs: [...evidenceRefs, ...(research?.evidence ? [research.evidence] : [])],
     missing_items: missingItems,
   }, {
     worker,
@@ -1987,6 +2371,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     : typeof worker.candidateWorkspace?.captureSnapshot === "function"
       ? worker.candidateWorkspace.captureSnapshot()?.tree ?? null
       : null;
+  recordConsumerInvocation(worker, "stage-handlers#buildCodeContractFacts");
   const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
   if (worker.manifest?.record_model === "vnext-single-write"
       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
@@ -2137,6 +2522,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   // result and exposes its findings; it does not audit materials, AC coverage,
   // test receipts, verification receipts, or requirement replay.
   const review = codeReviewFacts(worker, input, "quality_review");
+  const componentQuality = componentQualityConsumerFacts(worker, input);
   const findings = Array.isArray(review.value?.findings) ? review.value.findings : [];
   const actionableFindings = findings.filter(isActionableSeriousFinding);
   const invalidEvidenceFindings = Array.isArray(review.value?.adjudication?.clusters)
@@ -2167,6 +2553,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
         status: review.facts.status,
       },
       review_diagnostics: reviewDiagnostics,
+      component_quality: componentQuality.facts,
       completion_subjects: {
         code_review: subjectFact(
           review.facts.status === "recorded" && actionableFindings.length === 0 ? "passed" : "missing",
@@ -2176,7 +2563,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
       },
     },
     evidence_refs: review.evidence ? [review.evidence] : [],
-    missing_items: reviewMissing,
+    missing_items: [...reviewMissing, ...componentQuality.missing_items],
   }, {
     worker,
     artifacts: [],
@@ -2194,4 +2581,4 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"]) : stage === "verify-code" ? new Set(["receipts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { recordConsumerInvocation(worker, `stage-handlers#officialStageHandler("${stage}")`); const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"]) : stage === "build-spec" || stage === "build-plan" || stage === "verify-code" ? new Set(["receipts", "finding_dispositions", "contract_facts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }

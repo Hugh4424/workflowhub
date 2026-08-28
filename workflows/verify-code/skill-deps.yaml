@@ -1,8 +1,8 @@
 stage: verify-code
 skills:
-  - { name: dsh-code-review, path: skills/dsh-code-review/SKILL.md, execution: inline, trigger: code_review, bundle: skills/dsh-code-review/skill-bundle.json, owner: stage }
-  - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: ui_acceptance, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: post_first_repair, bundle: skills/wh-review/skill-bundle.json, owner: stage }
+  - { name: dsh-code-review, path: skills/dsh-code-review/SKILL.md, execution: inline, trigger: code_review, bundle: skills/dsh-code-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#codeReviewFacts", inputs: ["receipts.quality_review"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.code_review" } }
+  - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: ui_acceptance, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage, consumer: { target: "stage-content-contracts#validateComponentQualityMap", inputs: ["contract_facts.component_quality_map"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.component_quality" } }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: post_first_repair, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.review" } }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

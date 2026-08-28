@@ -175,7 +175,7 @@ function qaWorker({ taskId = "qa-contract", impact = "ui", payload = qaPayload({
       return { invocation_id: input.invocation_id, payload: currentPayload };
     } } : {}),
   };
-  return { worker, invocation: { receipts: previousUiQaRef ? { ui_qa: previousUiQaRef } : {}, contract_facts: { impact, impact_inputs: { raw_requirement: impact }, qa_binding: qaBinding } }, calls: () => calls };
+  return { worker, invocation: { receipts: previousUiQaRef ? { ui_qa: previousUiQaRef } : {}, contract_facts: { impact, impact_inputs: { raw_requirement: impact }, component_quality_map: [{ action: "reuse", component: "Settings", real_consumer: "settings-page", state_owner: "Settings", typed_view_model: "SettingsViewModel", css_token_owner: "Settings tokens", story_or_test_update: "existing Settings story covers the current contract" }], qa_binding: qaBinding } }, calls: () => calls };
 }
 
 afterEach(() => {
@@ -334,6 +334,7 @@ describe("P2 formal wiring contract", () => {
       contract_facts: {
         impact: "ui",
         impact_inputs: { raw_requirement: "ui" },
+        component_quality_map: [{ action: "reuse", component: "Settings", real_consumer: "settings-page", state_owner: "Settings", typed_view_model: "SettingsViewModel", css_token_owner: "Settings tokens", story_or_test_update: "existing Settings story covers the current contract" }],
         qa_binding: {
           acceptance_criterion_id: "AC-UI-001",
           design_identity: { document_kind: "design", path: "Design.md", content_sha256: "a".repeat(64), revision: "design-1", anchor_id: "design-components", anchor_title: "Components", anchor_source: "explicit" },
@@ -387,6 +388,13 @@ describe("P2 formal wiring contract", () => {
     const noExecutorResult = await handler(noExecutor.worker, noExecutor.invocation);
     expect(noExecutorResult.facts.ui_qa.status).toBe("unknown");
     expect(noExecutorResult.facts.ui_qa.reason).toMatch(/no controlled browser QA executor/i);
+
+    const invalidMap = qaWorker();
+    invalidMap.invocation.contract_facts.component_quality_map = [{ component: "Settings" }];
+    const invalidMapResult = await handler(invalidMap.worker, invalidMap.invocation);
+    expect(invalidMapResult.facts.ui_qa.status).toBe("incomplete");
+    expect(invalidMapResult.facts.ui_qa.reason).toMatch(/component_quality_map is invalid/i);
+    expect(invalidMap.calls()).toBe(0);
 
     const backend = qaWorker({ impact: "backend" });
     const backendResult = await handler(backend.worker, backend.invocation);

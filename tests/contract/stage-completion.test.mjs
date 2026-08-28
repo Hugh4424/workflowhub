@@ -34,6 +34,13 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("detail_review");
     expect(STAGE_ADVISORY_PREDICATES["make-decision"].direction_review).toBe("review");
     expect(STAGE_ADVISORY_PREDICATES["make-decision"].detail_review).toBe("review");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["make-decision"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-spec"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["build-spec"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-plan"]).not.toHaveProperty("finding_dispositions");
+    expect(STAGE_ADVISORY_PREDICATES["build-plan"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-code"].finding_dispositions).toBe("acceptance_criterion");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("independent_review");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");
@@ -196,6 +203,36 @@ describe("five-stage completion predicates derive only from quality facts", () =
       status: "in_progress",
       missing: expect.arrayContaining(["integration_review"]),
     });
+  });
+
+  it("adds the UI design predicate only for an applicable UI build-spec fact", () => {
+    const facts = observations("build-spec");
+    facts.push({
+      fact: {
+        ref: "quality/ui-design.json",
+        value: {
+          task_id: "task",
+          stage: "build-spec",
+          material_revision: "revision",
+          snapshot_tree: "tree",
+          kind: "acceptance_criterion",
+          subject: "ui_design",
+          applicability: "ui",
+          status: "missing",
+          recorded_at: "2026-08-22T00:00:00.000Z",
+        },
+      },
+      freshness: { status: "current" },
+      authenticated: true,
+    });
+    expect(deriveStageCompletion("build-spec", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["ui_design"]),
+    });
+    const repaired = facts.map((entry) => entry.fact.value.subject === "ui_design"
+      ? { ...entry, fact: { ...entry.fact, value: { ...entry.fact.value, status: "passed", recorded_at: "2026-08-22T00:00:01.000Z" } } }
+      : entry);
+    expect(deriveStageCompletion("build-spec", repaired)).toMatchObject({ status: "completed", missing: [] });
   });
 
   it("lets build-code finding disposition, not a clean label, decide completion", () => {

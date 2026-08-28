@@ -472,7 +472,7 @@ describe("broker boundary", () => {
     }
   });
 
-  it("reuses an unchanged semantic review without another provider call", async () => {
+  it("reviews the current build-plan input on every stage execution", async () => {
     const calls = [];
     const { attachmentRoot, task } = fixture("review-semantic-reuse-");
     const first = await runReviewFixture({
@@ -482,16 +482,17 @@ describe("broker boundary", () => {
     });
     const second = await runReviewFixture({
       task, attachmentRoot, taskId: "task", stage: "build-plan", materials: { draft_plan: "按依赖顺序执行" },
-      hostProvider: "codex", providers: ["kimi"], providerClient: {
-        runGroup: async () => { throw new Error("provider must not be called for semantic reuse"); },
-      }, captureSource: () => source, buildMaterials: materialBuilder(),
+      hostProvider: "codex", providers: ["kimi"], providerClient: groupClient([publicProvider("kimi")], calls),
+      captureSource: () => source, buildMaterials: materialBuilder(),
     });
     expect(first.status).toBe("available");
-    expect(second).toMatchObject({ status: "available", reused: true, resultRef: first.resultRef });
-    expect(calls).toHaveLength(1);
+    expect(second).toMatchObject({ status: "available" });
+    expect(second.reused).not.toBe(true);
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(calls).toHaveLength(2);
   });
 
-  it("reuses an unchanged semantic review when only target HEAD advances", async () => {
+  it("reviews build-plan again when only target HEAD advances", async () => {
     const calls = [];
     const { attachmentRoot, task } = fixture("review-semantic-target-advance-");
     let targetCommit = source.targetCommit;
@@ -504,16 +505,17 @@ describe("broker boundary", () => {
     targetCommit = "9".repeat(40);
     const second = await runReviewFixture({
       task, attachmentRoot, taskId: "task", stage: "build-plan", materials: { draft_plan: "按依赖顺序执行" },
-      hostProvider: "codex", providers: ["kimi"], providerClient: {
-        runGroup: async () => { throw new Error("provider must not be called when only target HEAD advances"); },
-      }, captureSource: capture, buildMaterials: materialBuilder(),
+      hostProvider: "codex", providers: ["kimi"], providerClient: groupClient([publicProvider("kimi")], calls),
+      captureSource: capture, buildMaterials: materialBuilder(),
     });
     expect(first.status).toBe("available");
-    expect(second).toMatchObject({ status: "available", reused: true, resultRef: first.resultRef });
-    expect(calls).toHaveLength(1);
+    expect(second).toMatchObject({ status: "available" });
+    expect(second.reused).not.toBe(true);
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(calls).toHaveLength(2);
   });
 
-  it("proves material-only writeback reuses the old result against real snapshot trees", async () => {
+  it("reviews build-plan again after material-only writeback", async () => {
     const calls = [];
     const { root, attachmentRoot, task } = fixture("review-semantic-real-reuse-");
     const repo = join(root, "review-repo");
@@ -546,20 +548,15 @@ describe("broker boundary", () => {
     changed = true;
     const second = await runReviewFixture({
       task, attachmentRoot, taskId: "task", stage: "build-plan", materials: { draft_plan: "同一计划", draft_tasks: "# Tasks\n\n#### T010\n- 任务：实现核心行为\n\n##### 执行状态填写区（唯一完成权威）\n- status: completed\n- 执行事实：已写回结果\n" },
-      hostProvider: "codex", providers: ["kimi"], providerClient: {
-        runGroup: async () => { throw new Error("provider must not be called for material-only reuse"); },
-      }, captureSource: () => {
+      hostProvider: "codex", providers: ["kimi"], providerClient: groupClient([publicProvider("kimi")], calls), captureSource: () => {
         if (!changed) throw new Error("expected material writeback before second capture");
         return capture();
       }, buildMaterials: materialBuilder(),
     });
-    expect(second).toMatchObject({ status: "available", reused: true });
+    expect(second).toMatchObject({ status: "available" });
+    expect(second.reused).not.toBe(true);
     expect(second.resultRef).not.toBe(first.resultRef);
-    expect(JSON.parse(task.readRecord(second.resultRef))).toMatchObject({
-      reuse: { source_result_ref: first.resultRef, reason: "semantic_hash_unchanged_material_only" },
-      snapshot_tree: second.snapshotTree,
-      attempt_ref: second.attemptRef,
-    });
+    expect(JSON.parse(task.readRecord(second.resultRef))).not.toHaveProperty("reuse");
     expect(JSON.parse(task.readRecord(second.attemptRef))).toMatchObject({
       attempt_id: second.attemptRef.split("/").at(-2), snapshot_tree: second.snapshotTree, terminal_status: "semantic",
     });
@@ -571,7 +568,7 @@ describe("broker boundary", () => {
       expect(output.attempt_id).toBe(reusedAttemptId);
       expect(output.provider).toBe(providerAttempt.provider);
     }
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
 
   it("does not copy broker-private raw-output references into the public v3 fact", async () => {

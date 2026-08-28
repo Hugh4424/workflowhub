@@ -338,10 +338,6 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
   });
 }
 
-function currentSessionAttemptId(sessionId, taskId, stage) {
-  return `attempt-${sha256(`workflowhub-session:${sessionId}:${taskId}:${stage}`).slice(0, 32)}`;
-}
-
 /**
  * The public run is the automatic caller for a normal WorkflowHub session.
  * It consumes the exact hook handoff and boundary events, then reuses the
@@ -356,7 +352,15 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   if (!session.spec_analyze || typeof session.spec_analyze !== "object" || Array.isArray(session.spec_analyze)) return input;
   const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
     ? input.attempt_id
-    : currentSessionAttemptId(session.session_id, taskId, stage);
+    : `attempt-${sha256(JSON.stringify({
+      task_id: taskId,
+      stage,
+      workflow_run_id: context?.workflowRunId ?? null,
+      session_id: session.session_id,
+      source_ref: session.source_ref,
+      events: session.events,
+      spec_analyze: session.spec_analyze,
+    })).slice(0, 32)}`;
   const requirementAuthentication = stage === "make-decision"
     ? parseRegisteredRequirementTranscript(resolveDefaultMonitoringSource({
       context,
@@ -1203,8 +1207,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       throw new TypeError("run input must be an object when supplied");
     }
     const allowedRunFields = new Set(values.stage === "build-code"
-      ? ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions"]
-      : ["receipts", "attempt_id", "finding_dispositions"]);
+      ? ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts"]
+      : ["receipts", "attempt_id", "finding_dispositions", "contract_facts"]);
     const suppliedInput = input ?? {};
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);

@@ -6,14 +6,15 @@ import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../../runtime/task/workspace.mjs";
 import { captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildIntegrationReviewSubject as buildIntegrationSubjectDefault } from "./integration-review-subject.mjs";
-import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
+import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor, validateDetailReviewInput } from "./review-materials.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
 import { buildSemanticProjection } from "./review-semantic-projection.mjs";
 import { validateSchema } from "./schema-validator.mjs";
-import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
 const errorPriority = ["MATERIAL_TOO_LARGE", "MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "BROKER_SPAWN_FAILED", "BROKER_EXIT_NONZERO", "BROKER_INVOCATION_FAILED", "GROUP_OUTCOME_UNAVAILABLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
+const ALWAYS_REVIEW_CURRENT_INPUT_STAGES = new Set(["make-decision", "build-spec", "build-plan"]);
 // Providers run from a writable wrapper directory; sealed review material is
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 // Keep the provider on the bounded, provider-visible view. The canonical
@@ -25,6 +26,7 @@ const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 const reviewRootFor = () => "quality/reviews";
 const providerOutputPrefixFor = (task, attemptId) => `${reviewRootFor(task)}/attempts/${attemptId}/providers/`;
+const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 
 function protocolFailure(message) {
   const error = new Error(`PROTOCOL_INCOMPATIBLE: ${message}`);
@@ -679,7 +681,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return providers.map((provider) => reviewedByProvider.get(provider));
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, materialRevision = null, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, materialRevision = null, currentDecisionLog = undefined, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -716,8 +718,34 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     includeDiff: !designMaterialsOnly && (phaseId !== null || stage !== "build-code" || needsMiniImplementationDiff),
     taskId, ...(phaseId === null ? {} : { phaseId }) });
   const isDirectionReview = stage === "make-decision" && reviewTrack === "direction" && reviewKind === null;
+  const isDetailReview = stage === "make-decision" && reviewTrack === "detail" && reviewKind === null;
   let integrationSubject; let subject; let bundle; let fixedMaterials;
   try {
+    // Detail is the one early-stage review whose caller-visible direction must
+    // be authenticated against the current decision log.  Production calls
+    // read the bytes through the accepted Workspace; fixture calls may supply
+    // the same bytes explicitly so isolated tests cannot smuggle a summary.
+    if (isDetailReview && (fixtureSourceToken !== FIXTURE_SOURCE_TOKEN || currentDecisionLog !== undefined || materialRevision !== null)) {
+      if (currentDecisionLog === undefined) {
+        const dir = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
+        try { currentDecisionLog = dir.read("decision-log.md"); }
+        catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+          const missing = new Error("MATERIAL_INCOMPLETE: detail input freshness current decision-log.md is missing");
+          missing.code = "MATERIAL_INCOMPLETE";
+          throw missing;
+        }
+      }
+      if (materialRevision === null && workspace) {
+        const dir = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
+        const values = CURRENT_MATERIAL_FILES.map((file) => {
+          try { return [file, dir.read(file)]; }
+          catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
+        });
+        materialRevision = materialRevisionFromValues(values);
+      }
+      validateDetailReviewInput({ materials, currentDecisionLog, currentMaterialRevision: materialRevision });
+    }
     // mini-task reviews use their own material contracts even though the
     // public runner enters through the build-code stage. They must not be
     // treated as the ordinary final integration review, which would inject
@@ -819,7 +847,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
     });
     reviewBundle = { ...bundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
-    const reusable = findReusableReviewResult({
+    const reusable = ALWAYS_REVIEW_CURRENT_INPUT_STAGES.has(stage) ? null : findReusableReviewResult({
       task: taskHandle, source, subject, integrationSubject, stage, reviewTrack, reviewKind, semanticProjection,
       reviewPolicy: policy,
       materialRevision,

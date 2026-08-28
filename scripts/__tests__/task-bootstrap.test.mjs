@@ -18,6 +18,7 @@ describe("task bootstrap target repository boundary", () => {
     const storage = join(home, "storage"), repo = join(home, "repo");
     mkdirSync(storage); mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
     return { home, storage, repo, env: { HOME: home, WORKFLOWHUB_TASK_DIR: storage } };
   }
 

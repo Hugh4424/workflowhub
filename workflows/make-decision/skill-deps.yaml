@@ -1,10 +1,10 @@
 stage: make-decision
 skills:
-  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, trigger: talk_round_1_2_3_only, bundle: skills/talk-with-zhipeng/skill-bundle.json, owner: stage }
-  - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json, owner: stage }
-  - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json, owner: stage }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
-  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }
+  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, trigger: talk_round_1_2_3_only, bundle: skills/talk-with-zhipeng/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#interactionAggregateFacts", inputs: ["receipts.interaction"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.interaction_aggregate" } }
+  - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.grill"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.grill" } }
+  - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"make-decision\")", inputs: ["artifacts.decision-log.md"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.decision_ref" } }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.direction_review", "receipts.detail_review"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.reviews" } }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["stage_outcome.spec_analyze"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "stage_outcome.spec_analyze" } }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

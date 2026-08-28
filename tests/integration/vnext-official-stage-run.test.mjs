@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "js-yaml";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { brandTaskKernel } from "../../core/task-capability.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
 import {
@@ -204,6 +205,105 @@ function stageOutcome(state, stage, { workspace = null, artifacts = null, attemp
   });
 }
 
+function uiSourceBindingCase(taskId) {
+  const state = fixture(taskId);
+  const workspace = openCurrentTaskWorkspace(state.task);
+  const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+  const kernel = createTaskKernel(state.task, { workspace, artifacts });
+  const outcome = stageOutcome(state, "build-spec", { workspace, artifacts, attemptId: `attempt-${taskId}` });
+  const review = publishReviewFixture({ ...state, kernel });
+  const design = {
+    document_kind: "design",
+    path: "Design.md",
+    content_sha256: "a".repeat(64),
+    revision: "design-r1",
+    anchor_id: "design-root",
+  };
+  const experience = {
+    document_kind: "experience",
+    path: "Experience.md",
+    content_sha256: "b".repeat(64),
+    revision: "experience-r1",
+    anchor_id: "experience-root",
+  };
+  const currentFacts = {
+    ui_applicability: {
+      result: "ui",
+      sources: {
+        raw_requirement: "new settings page",
+        project_inventory: "existing settings page",
+        planned_or_changed_frontend_fact: "new settings component",
+      },
+    },
+    ui_project_init: {
+      mode: "new",
+      design_path: design.path,
+      design_revision: design.revision,
+      experience_path: experience.path,
+      experience_revision: experience.revision,
+      design_identity: design,
+      experience_identity: experience,
+      scope: "Settings page",
+      component_boundary: "src/components/settings",
+      style_boundary: "tokens/forms",
+      fixture: "settings-default",
+      viewport: "desktop-1440x900",
+      preview: "quality/evidence/ui-design/settings.html",
+    },
+    design_source_readiness: {
+      design_path: design.path,
+      design_revision: design.revision,
+      expected_design_revision: design.revision,
+      design_identity: design,
+      experience_identity: experience,
+      sections: [{
+        anchor_id: "settings",
+        page_or_region: "Settings page",
+        goal: "edit settings",
+        primary_action: "Save",
+        states: ["default", "loading", "error"],
+        components: "SettingsForm",
+        tokens: "tokens/forms",
+        fixture: "settings-default",
+        viewport: "desktop-1440x900",
+        responsive: "stack actions on narrow viewport",
+        a11y: "label controls",
+        evidence: "quality/evidence/ui-design/settings.html",
+      }],
+    },
+  };
+  const approved = {
+    ...currentFacts,
+    plan_design_review: {
+      state: "human_approved",
+      current_material_ref: "spec.md",
+      material_revision: kernel.currentVNextMaterialRevision(),
+      display_before_reply: true,
+      design_artifact_ref: "quality/evidence/ui-design/settings.html",
+      design_artifact_hash: "c".repeat(64),
+      reply_ref: "host-message://ui-design/reply-1",
+      reply_hash: "d".repeat(64),
+      reply_source: "user",
+      displayed_at_ms: 1000,
+      reply_at_ms: 2000,
+      input_identities: { design, experience },
+    },
+  };
+  return { state, workspace, artifacts, kernel, outcome, review, approved, design, experience };
+}
+
+async function runUiSourceBindingCase(testCase, contractFacts) {
+  const { state, workspace, artifacts, kernel, outcome, review } = testCase;
+  return runOfficialStage("build-spec", {
+    stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
+    workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
+    workspace, artifacts,
+  }, {
+    contract_facts: contractFacts,
+    receipts: { review: review.ref, stage_outcomes: outcome.ref },
+  });
+}
+
 describe("vNext official stage completion", () => {
   it("rejects a session event that belongs to another stage", () => {
     const state = fixture("workflowhub-session-stage-boundary");
@@ -239,9 +339,20 @@ describe("vNext official stage completion", () => {
     const context = contextFor("make-decision", state);
     const sourceEvidence = { kind: "codex-session-event", source_ref: "codex-rollout-thread-session", session_id: "session-1" };
     let clock = 1000;
+    let failPublish = true;
+    const retryKernel = {
+      publishCanonicalRecord(...args) {
+        if (failPublish) {
+          failPublish = false;
+          throw new Error("simulated canonical publish failure");
+        }
+        return state.kernel.publishCanonicalRecord(...args);
+      },
+    };
+    brandTaskKernel(retryKernel);
     const recorder = createWorkflowHubSessionRecorder({
       task: state.task,
-      kernel: state.kernel,
+      kernel: retryKernel,
       candidateWorkspace: state.candidate,
       stage: "make-decision",
       attemptId: "attempt-workflowhub-session",
@@ -281,6 +392,10 @@ describe("vNext official stage completion", () => {
     finishSkill(fixtureExecution.skills[0]);
     for (const step of fixtureExecution.steps.slice(1)) finishStep(step);
     for (const skill of fixtureExecution.skills.slice(1)) finishSkill(skill);
+    expect(() => recorder.finish({
+      status: "incomplete",
+      spec_analyze: fixtureExecution.spec_analyze,
+    })).toThrow(/simulated canonical publish failure/);
     const outcome = recorder.finish({
       status: "incomplete",
       spec_analyze: fixtureExecution.spec_analyze,
@@ -438,10 +553,19 @@ describe("vNext official stage completion", () => {
     });
     expect(outcome.value.producer).toMatchObject({ kind: "stage-agent", host: "test-host" });
     expect(outcome.value.run_id).toBe(context.workflowRunId);
+    expect(outcome.value.skill_outcomes[0].consumer_binding).toMatchObject({
+      status: "completed",
+      consumer: "stage-handlers#interactionAggregateFacts",
+      identity: {
+        task_id: state.task.identity.taskId,
+        stage: "make-decision",
+      },
+    });
     const proof = JSON.parse(state.task.readRecord(outcome.value.step_outcomes[0].evidence_refs[0].ref));
     expect(proof.host_evidence).toEqual({ kind: "host-command", command: "stage-agent-test", exit_code: 0, output: "actual host result" });
     const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+    expect(result.skill_consumer_bindings.find((entry) => entry.skill_id === "decision-log")).toMatchObject({ status: "consumed" });
   });
 
   it("does not complete verify-code when the current code review still has findings", async () => {
@@ -682,7 +806,7 @@ describe("vNext official stage completion", () => {
     await expect(runOfficialStage("verify-code", context, {
       attempt_id: attemptId,
       receipts: { quality_review: attemptRef, stage_outcomes: outcome.ref },
-    })).rejects.toThrow(/stage_outcome_invalid|material revision mismatch/);
+    })).rejects.toThrow(/quality_review requires a bound dsh-code-review stage outcome/);
   });
 
   it("keeps serious findings in wh-review advice without replacing canonical code_review", async () => {
@@ -833,13 +957,24 @@ describe("vNext official stage completion", () => {
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
   });
-  it("rejects a supplied invalid required outcome before the official writer runs", async () => {
+  it("records a supplied invalid optional outcome without hiding the diagnostic", async () => {
     const state = fixture("stage-agent-invalid-optional");
     const before = state.task.listCanonicalQualityFactRefs();
-    await expect(runOfficialStage("make-decision", contextFor("make-decision", state), {
+    const result = await runOfficialStage("make-decision", contextFor("make-decision", state), {
       receipts: { stage_outcomes: `quality/evidence/stage-outcomes/make-decision/${"0".repeat(64)}.json` },
-    })).rejects.toMatchObject({ code: "STAGE_OUTCOME_UNAVAILABLE" });
-    expect(state.task.listCanonicalQualityFactRefs()).toEqual(before);
+    });
+    expect(result).toMatchObject({
+      stage: "make-decision",
+      stage_outcome_ref: null,
+      stage_outcome_hash: null,
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: {
+        status: "unavailable",
+        reason: "stage_outcome_invalid",
+        error_code: "MATERIAL_INCOMPLETE",
+      },
+    });
+    expect(state.task.listCanonicalQualityFactRefs().length).toBeGreaterThan(before.length);
   });
   it("accepts the same result through the private current-session bridge and official route", async () => {
     const state = fixture("stage-agent-host-bridge");
@@ -1102,6 +1237,108 @@ describe("vNext official stage completion", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+  it("publishes a new immutable attempt when the same session reruns the same stage", () => {
+    const state = fixture("workflowhub-current-session-rerun");
+    const execution = stageAgentExecution("make-decision");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-current-session-rerun-cwd-")));
+    roots.push(root);
+    const stageCwd = join(root, "later-stage-workspace");
+    mkdirSync(stageCwd, { recursive: true });
+    const home = join(root, "home");
+    const sessionId = `session-rerun-${process.pid}`;
+    const rolloutDir = join(home, ".codex", "sessions", "2026", "08", "27");
+    const rollout = join(rolloutDir, `rollout-2026-08-27T00-00-00-${sessionId}.jsonl`);
+    const messageClasses = ["goal", "flow_or_surface", "data_or_state", "success_failure_acceptance", "constraint_non_goal_defer"];
+    mkdirSync(rolloutDir, { recursive: true });
+    writeFileSync(rollout, messageClasses.map((messageClass, index) => JSON.stringify({
+      timestamp: new Date(100 + index).toISOString(),
+      type: "response_item",
+      payload: { type: "message", id: `rerun-message-${index + 1}`, role: "user", content: [{ type: "input_text", text: messageClass }] },
+    })).join("\n") + "\n");
+    const env = {
+      ...process.env,
+      HOME: home,
+      CODEX_SESSION_ID: sessionId,
+      WORKFLOWHUB_TASK_DIR: state.root,
+      WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT: "0",
+    };
+    const runtimeArgs = [
+      join(process.cwd(), "tools", "cli", "stage-runtime.mjs"),
+      "run", "--action=execute", "--stage=make-decision",
+    ];
+    const recordPass = (pass, startAt) => {
+      let timestamp = startAt;
+      for (const entry of execution.steps) {
+        startCodexSessionEvent({ stage: "make-decision", subjectKind: "step", subjectId: entry.step_slug, cwd: root, startedAtMs: timestamp });
+        timestamp += 10;
+        finishCodexSessionEvent({
+          stage: "make-decision", subjectKind: "step", subjectId: entry.step_slug, cwd: root, endedAtMs: timestamp,
+          status: entry.status, resultSummary: `${pass}: ${entry.result_summary}`, evidenceRefs: ["decision-log"],
+        });
+        timestamp += 1;
+      }
+      for (const entry of execution.skills) {
+        startCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: entry.skill_id, cwd: root, startedAtMs: timestamp });
+        timestamp += 10;
+        finishCodexSessionEvent({
+          stage: "make-decision", subjectKind: "skill", subjectId: entry.skill_id, cwd: root, endedAtMs: timestamp,
+          status: entry.status, resultSummary: `${pass}: ${entry.result_summary}`, evidenceRefs: ["decision-log"],
+          trigger: entry.trigger, executed: entry.executed, version: entry.version,
+        });
+        timestamp += 1;
+      }
+      const current = buildWorkflowHubSessionInput({ cwd: root, stage: "make-decision", taskId: state.task.identity.taskId, sessionId });
+      const analyzer = structuredClone(execution.spec_analyze);
+      analyzer.packet.requirement_coverage_outputs = current.requirement_messages.map((message, index) => ({
+        message_id: message.id,
+        message_hash: message.content_hash,
+        message_class: messageClasses[index],
+        axis_id: `rerun-axis-${index + 1}`,
+        impact: index < 2 ? "high" : "medium",
+        disposition: "represented",
+        decision_ids: ["D-001"],
+        requirement_ids: ["R-001"],
+      }));
+      analyzer.packet.work_summary = `${pass}: current make-decision result`;
+      recordCodexSessionSpecAnalyze({ stage: "make-decision", value: analyzer, cwd: root, sessionId });
+      return timestamp;
+    };
+    try {
+      registerCodexSession({ sessionId, transcriptPath: rollout, cwd: root, home, observedAtMs: 1000 });
+      bindCodexSessionTask({
+        projectName: state.task.identity.projectName,
+        taskId: state.task.identity.taskId,
+        taskPath: state.task.taskPath,
+        cwd: root,
+        boundAtMs: 1000,
+        sessionId,
+      });
+      let timestamp = recordPass("first", 1000);
+      const first = spawnSync(process.execPath, runtimeArgs, { cwd: stageCwd, env, encoding: "utf8" });
+      expect(first.status, `${first.stdout}\n${first.stderr}`).toBe(0);
+      timestamp = recordPass("second", timestamp + 100);
+      const second = spawnSync(process.execPath, runtimeArgs, { cwd: stageCwd, env, encoding: "utf8" });
+      expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+      const third = spawnSync(process.execPath, runtimeArgs, { cwd: stageCwd, env, encoding: "utf8" });
+      expect(third.status, `${third.stdout}\n${third.stderr}`).toBe(0);
+      const firstResult = JSON.parse(first.stdout);
+      const secondResult = JSON.parse(second.stdout);
+      const thirdResult = JSON.parse(third.stdout);
+      const firstOutcome = JSON.parse(state.task.readRecord(firstResult.stage_outcome_ref));
+      const secondOutcome = JSON.parse(state.task.readRecord(secondResult.stage_outcome_ref));
+      const thirdOutcome = JSON.parse(state.task.readRecord(thirdResult.stage_outcome_ref));
+      expect(secondResult.stage_outcome_ref).not.toBe(firstResult.stage_outcome_ref);
+      expect(secondOutcome.attempt_id).not.toBe(firstOutcome.attempt_id);
+      expect(thirdResult.stage_outcome_ref).toBe(secondResult.stage_outcome_ref);
+      expect(thirdOutcome.attempt_id).toBe(secondOutcome.attempt_id);
+      expect(state.task.listCanonicalStageOutcomeRefs("make-decision")).toEqual(expect.arrayContaining([
+        firstResult.stage_outcome_ref,
+        secondResult.stage_outcome_ref,
+      ]));
+    } finally {
+      rmSync(sessionHandoffPath(root), { force: true });
+    }
+  });
   it("publishes a truthful unavailable outcome when the external Stage Agent produced no packet", async () => {
     const state = fixture("stage-agent-unavailable");
     const outcome = publishUnavailableStageAgentOutcome({
@@ -1337,7 +1574,7 @@ describe("vNext official stage completion", () => {
     expect(result).not.toHaveProperty("publication_hash");
   });
 
-  it("keeps formal completion open until serious finding dispositions are complete", async () => {
+  it("keeps serious finding dispositions visible as authoring advice", async () => {
     const state = fixture("vnext-finding-disposition-completion");
     const review = publishReviewFixture(state);
     const result = await runStage(
@@ -1359,7 +1596,8 @@ describe("vNext official stage completion", () => {
     );
 
     expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
-    expect(result.completion.missing).toContain("finding_dispositions");
+    expect(result.completion.missing).not.toContain("finding_dispositions");
+    expect(result.quality_advisories).toContain("finding_dispositions:missing");
   });
 
   it("stores make-decision interaction evidence in the content-addressed quality namespace", () => {
@@ -1382,7 +1620,7 @@ describe("vNext official stage completion", () => {
     expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
   });
 
-  it("review:unavailable keeps the repository-owned official build-spec run incomplete", async () => {
+  it("review:unavailable stays visible without blocking the repository-owned build-spec run", async () => {
     const state = fixture("vnext-official-run");
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
@@ -1418,18 +1656,116 @@ describe("vNext official stage completion", () => {
       workspace, artifacts,
     }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
 
-    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "incomplete" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
-    expect(result.completion).toMatchObject({ status: "in_progress" });
-    expect(result.completion.missing).toContain("finding_dispositions");
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
     expect(result.quality_advisories).toContain("independent_review:unavailable");
+    expect(result.quality_advisories).toContain("finding_dispositions:missing");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
     expect(result.quality_fact_refs).toHaveLength(4);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
+    expect(qualityFacts.find((fact) => fact.subject === "finding_dispositions")).toMatchObject({ status: "missing" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("does not let a partial UI contract silently take the non-UI build-spec path", async () => {
+    const state = fixture("vnext-build-spec-ui-applicability");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    const outcome = stageOutcome(state, "build-spec", { workspace, artifacts, attemptId: "attempt-ui-applicability" });
+    const review = publishReviewFixture({ ...state, kernel });
+    const result = await runOfficialStage("build-spec", {
+      stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
+      workspace, artifacts,
+    }, {
+      contract_facts: { ui_project_init: {} },
+      receipts: { review: review.ref, stage_outcomes: outcome.ref },
+    });
+
+    expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+    expect(result.completion.missing).toContain("ui_design");
+    expect(result.quality_warnings).toEqual(expect.arrayContaining([
+      expect.stringMatching(/UI applicability is unknown|ui_design:missing/i),
+    ]));
+  });
+
+  it("does not accept a UI approval bound to a different Design.md or Experience.md", async () => {
+    const testCase = uiSourceBindingCase("workflowhub-build-spec-ui-source-binding");
+    const { approved } = testCase;
+    const mismatched = structuredClone(approved);
+    mismatched.plan_design_review.input_identities.design.revision = "design-r0";
+    const result = await runUiSourceBindingCase(testCase, mismatched);
+
+    expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+    expect(result.completion.missing).toContain("ui_design");
+    expect(result.quality_warnings).toEqual(expect.arrayContaining([
+      expect.stringMatching(/ui_design:missing|approved Design\.md identity/i),
+    ]));
+  });
+
+  it("does not accept unknown or unavailable UI source identity values", async () => {
+    const testCase = uiSourceBindingCase("workflowhub-build-spec-ui-source-unknown-identity");
+    for (const field of ["revision", "anchor_id"]) {
+      for (const value of ["unknown", "unavailable", "n/a"]) {
+        const invalid = structuredClone(testCase.approved);
+        invalid.plan_design_review.input_identities.design[field] = value;
+        const result = await runUiSourceBindingCase(testCase, invalid);
+        expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+        expect(result.completion.missing).toContain("ui_design");
+        expect(result.quality_warnings).toEqual(expect.arrayContaining([
+          expect.stringMatching(/approved Design\.md identity is malformed|missing or invalid/i),
+        ]));
+      }
+    }
+    for (const [owner, field, value] of [
+      ["ui_project_init", "design_revision", { status: "unknown", reason: "revision unavailable" }],
+      ["design_source_readiness", "design_revision", { status: "unavailable", reason: "revision unavailable" }],
+    ]) {
+      const invalid = structuredClone(testCase.approved);
+      invalid[owner][field] = value;
+      const result = await runUiSourceBindingCase(testCase, invalid);
+      expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+      expect(result.completion.missing).toContain("ui_design");
+      expect(result.quality_warnings).toEqual(expect.arrayContaining([
+        expect.stringMatching(/revision is missing or unavailable|ui-project-init: status is not_ready/i),
+      ]));
+    }
+  });
+
+  it("does not accept producer path or revision fields that contradict their source identity", async () => {
+    const testCase = uiSourceBindingCase("workflowhub-build-spec-ui-source-fields");
+    for (const [owner, field, value] of [
+      ["ui_project_init", "design_path", "OtherDesign.md"],
+      ["ui_project_init", "design_revision", "design-r0"],
+      ["design_source_readiness", "design_path", "OtherDesign.md"],
+      ["design_source_readiness", "design_revision", "design-r0"],
+    ]) {
+      const invalid = structuredClone(testCase.approved);
+      invalid[owner][field] = value;
+      const result = await runUiSourceBindingCase(testCase, invalid);
+      expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+      expect(result.completion.missing).toContain("ui_design");
+      expect(result.quality_warnings).toEqual(expect.arrayContaining([
+        expect.stringMatching(/path does not match|revision does not match/i),
+      ]));
+    }
+  });
+
+  it("does not silently ignore a malformed current UI source identity", async () => {
+    const testCase = uiSourceBindingCase("workflowhub-build-spec-ui-source-malformed-identity");
+    const invalid = structuredClone(testCase.approved);
+    invalid.ui_project_init.design_identity = { document_kind: "design", path: "../Design.md" };
+    const result = await runUiSourceBindingCase(testCase, invalid);
+    expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+    expect(result.completion.missing).toContain("ui_design");
+    expect(result.quality_warnings).toEqual(expect.arrayContaining([
+      expect.stringMatching(/current Design\.md identity is malformed|missing or invalid/i),
+    ]));
   });
 
   it("ignores a stale vNext material receipt while preserving it as read-only history", async () => {
