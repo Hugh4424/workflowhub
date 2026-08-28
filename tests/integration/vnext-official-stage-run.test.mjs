@@ -8,6 +8,7 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { brandTaskKernel } from "../../core/task-capability.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
 import {
@@ -338,9 +339,20 @@ describe("vNext official stage completion", () => {
     const context = contextFor("make-decision", state);
     const sourceEvidence = { kind: "codex-session-event", source_ref: "codex-rollout-thread-session", session_id: "session-1" };
     let clock = 1000;
+    let failPublish = true;
+    const retryKernel = {
+      publishCanonicalRecord(...args) {
+        if (failPublish) {
+          failPublish = false;
+          throw new Error("simulated canonical publish failure");
+        }
+        return state.kernel.publishCanonicalRecord(...args);
+      },
+    };
+    brandTaskKernel(retryKernel);
     const recorder = createWorkflowHubSessionRecorder({
       task: state.task,
-      kernel: state.kernel,
+      kernel: retryKernel,
       candidateWorkspace: state.candidate,
       stage: "make-decision",
       attemptId: "attempt-workflowhub-session",
@@ -380,6 +392,10 @@ describe("vNext official stage completion", () => {
     finishSkill(fixtureExecution.skills[0]);
     for (const step of fixtureExecution.steps.slice(1)) finishStep(step);
     for (const skill of fixtureExecution.skills.slice(1)) finishSkill(skill);
+    expect(() => recorder.finish({
+      status: "incomplete",
+      spec_analyze: fixtureExecution.spec_analyze,
+    })).toThrow(/simulated canonical publish failure/);
     const outcome = recorder.finish({
       status: "incomplete",
       spec_analyze: fixtureExecution.spec_analyze,
@@ -1303,12 +1319,18 @@ describe("vNext official stage completion", () => {
       timestamp = recordPass("second", timestamp + 100);
       const second = spawnSync(process.execPath, runtimeArgs, { cwd: stageCwd, env, encoding: "utf8" });
       expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+      const third = spawnSync(process.execPath, runtimeArgs, { cwd: stageCwd, env, encoding: "utf8" });
+      expect(third.status, `${third.stdout}\n${third.stderr}`).toBe(0);
       const firstResult = JSON.parse(first.stdout);
       const secondResult = JSON.parse(second.stdout);
+      const thirdResult = JSON.parse(third.stdout);
       const firstOutcome = JSON.parse(state.task.readRecord(firstResult.stage_outcome_ref));
       const secondOutcome = JSON.parse(state.task.readRecord(secondResult.stage_outcome_ref));
+      const thirdOutcome = JSON.parse(state.task.readRecord(thirdResult.stage_outcome_ref));
       expect(secondResult.stage_outcome_ref).not.toBe(firstResult.stage_outcome_ref);
       expect(secondOutcome.attempt_id).not.toBe(firstOutcome.attempt_id);
+      expect(thirdResult.stage_outcome_ref).toBe(secondResult.stage_outcome_ref);
+      expect(thirdOutcome.attempt_id).toBe(secondOutcome.attempt_id);
       expect(state.task.listCanonicalStageOutcomeRefs("make-decision")).toEqual(expect.arrayContaining([
         firstResult.stage_outcome_ref,
         secondResult.stage_outcome_ref,

@@ -510,7 +510,6 @@ function inferImpactFromAuthenticatedImplementation(worker, invocation) {
 }
 
 async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null) {
-  recordConsumerInvocation(worker, "stage-handlers#controlledBrowserQaFacts");
   const suppliedRef = invocation.receipts?.ui_qa;
   const adapter = worker.runControlledUiQa;
   const usableDerivedImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(derivedImpact) && derivedImpact !== "unknown"
@@ -560,6 +559,31 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
       missing_items: ["browser QA applicability is unknown: refusing an unclassified invocation"],
     };
   }
+  const contractFacts = invocation.contract_facts ?? {};
+  const componentQualityMap = contractFacts.component_quality_map;
+  if (componentQualityMap === undefined) {
+    return {
+      facts: { status: "incomplete", applicability: impact, reason: "component_quality_map is missing for an applicable UI/fullstack change" },
+      evidence: null,
+      missing_items: ["component_quality_map is missing for an applicable UI/fullstack change"],
+    };
+  }
+  const componentQualityValidation = validateComponentQualityMap(componentQualityMap);
+  if (!componentQualityValidation.ok) {
+    return {
+      facts: {
+        status: "incomplete",
+        applicability: impact,
+        component_quality_map: componentQualityMap,
+        risks: componentQualityValidation.risks ?? [],
+        errors: componentQualityValidation.errors ?? [],
+        reason: "component_quality_map is invalid; controlled browser QA was not executed",
+      },
+      evidence: null,
+      missing_items: (componentQualityValidation.errors ?? []).map((error) => `component quality map: ${error}`),
+    };
+  }
+  recordConsumerInvocation(worker, "stage-handlers#controlledBrowserQaFacts");
   if (typeof adapter !== "function") {
     return {
       facts: { status: "unknown", applicability: impact, reason: "applicable UI/fullstack change has no controlled browser QA executor" },
@@ -573,7 +597,6 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     : typeof worker.candidateWorkspace?.captureSnapshot === "function"
       ? worker.candidateWorkspace.captureSnapshot()
       : null;
-  const contractFacts = invocation.contract_facts ?? {};
   const qaBinding = contractFacts.qa_binding ?? invocation.qa_binding ?? {};
   const binding = {
     task_id: worker.identity.taskId,
@@ -1956,6 +1979,34 @@ function declaredFinalTestScope(tasks) {
   return { status: "declared", command, scope: command === "npm test" ? "full" : "focused" };
 }
 
+function declaredTestRouting(structural) {
+  const tierRank = { simple: 1, feature: 2, fullstack: 3 };
+  const tiers = [];
+  for (const row of structural.facts?.task_rows ?? []) {
+    const method = row.fields?.["test tier / test method"] ?? "";
+    const match = String(method).match(/\b(simple|feature|fullstack)\b/i);
+    if (match) tiers.push(match[1].toLowerCase());
+  }
+  const uniqueTiers = [...new Set(tiers)];
+  const routingTier = uniqueTiers
+    .sort((left, right) => tierRank[right] - tierRank[left])[0] ?? null;
+  const taskCount = structural.facts?.task_count ?? null;
+  const allTasksHaveTier = Number.isSafeInteger(taskCount) && taskCount > 0 && tiers.length === taskCount;
+  const status = structural.ok && allTasksHaveTier ? "recorded" : uniqueTiers.length > 0 ? "incomplete" : "unknown";
+  return {
+    status,
+    routing_tier: routingTier,
+    declared_tiers: uniqueTiers,
+    task_count: taskCount,
+    source: "plan.md + tasks.md",
+    ...(status === "recorded" ? {} : {
+      reason: structural.ok
+        ? "tasks.md does not declare a test tier for every task"
+        : "plan/task contract is incomplete; test routing is not authoritative",
+    }),
+  };
+}
+
 function authenticateReviewHead(review, expected) {
   if (review.facts?.status === "unavailable") return review;
   if (expected?.snapshot_tree !== undefined && review.value.snapshot_tree !== expected.snapshot_tree) {
@@ -2265,6 +2316,16 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const fr = structural.facts?.fr_coverage;
   const ac = structural.facts?.ac_coverage;
   const deletionProofs = /(?:deletion proofs?|删除证明|不涉及删除|no deletion)/i.test(`${materials["plan.md"]}\n${materials["tasks.md"]}`);
+  const declaredStrategy = declaredFinalTestScope(materials["tasks.md"]);
+  const testStrategy = {
+    status: !structural.ok ? "incomplete" : declaredStrategy.status === "declared" ? "recorded" : "unknown",
+    command: declaredStrategy.command ?? null,
+    scope: declaredStrategy.scope ?? null,
+    source: "tasks.md",
+    ...(declaredStrategy.reason ? { reason: declaredStrategy.reason } : {}),
+    ...(structural.ok ? {} : { reason: "plan/task contract is incomplete; test strategy is not authoritative" }),
+  };
+  const testRouting = declaredTestRouting(structural);
   return addCompletion("build-plan", {
     facts: {
       plan_ref: planRef,
@@ -2282,6 +2343,8 @@ HANDLERS.set("build-plan", async (worker, input) => {
       review: review.facts,
       ...(research ? { research: research.facts } : {}),
       component_quality: componentQuality.facts,
+      test_strategy: testStrategy,
+      test_routing: testRouting,
       ...(confirmation ? { human_confirmation: confirmation.facts } : {}),
       finding_dispositions: dispositions.facts,
       ...(audit ? audit.facts : {}),

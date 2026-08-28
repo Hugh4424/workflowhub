@@ -860,11 +860,12 @@ export function createWorkflowHubSessionRecorder({
           ? { code_review: object(code_review, "code_review") }
           : { spec_analyze: object(spec_analyze, "spec_analyze") }),
       };
-      closed = true;
-      return publishStageAgentOutcome({
+      const published = publishStageAgentOutcome({
         task: safeTask, kernel: safeKernel, artifacts: safeArtifacts, workspace, candidateWorkspace,
         stage, attemptId, workflowRunId, execution, requirementAuthentication,
       });
+      closed = true;
+      return published;
     },
   });
 }

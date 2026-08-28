@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import process from "node:process";
@@ -352,7 +352,15 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   if (!session.spec_analyze || typeof session.spec_analyze !== "object" || Array.isArray(session.spec_analyze)) return input;
   const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
     ? input.attempt_id
-    : `attempt-${randomUUID()}`;
+    : `attempt-${sha256(JSON.stringify({
+      task_id: taskId,
+      stage,
+      workflow_run_id: context?.workflowRunId ?? null,
+      session_id: session.session_id,
+      source_ref: session.source_ref,
+      events: session.events,
+      spec_analyze: session.spec_analyze,
+    })).slice(0, 32)}`;
   const requirementAuthentication = stage === "make-decision"
     ? parseRegisteredRequirementTranscript(resolveDefaultMonitoringSource({
       context,

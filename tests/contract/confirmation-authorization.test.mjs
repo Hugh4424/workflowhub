@@ -210,6 +210,8 @@ describe("confirmation and authorization boundary", () => {
       confirmation_hash: fixture.confirmationHash,
       snapshot_tree: value.snapshot_tree,
     });
+    expect(result.facts.test_strategy).toMatchObject({ status: "unknown", source: "tasks.md" });
+    expect(result.facts.test_routing).toMatchObject({ status: "unknown", source: "plan.md + tasks.md" });
     expect(result.evidence_refs).toContainEqual({ ref: fixture.confirmationRef, sha256: fixture.confirmationHash });
   });
 
