@@ -27,12 +27,14 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-spec | 4 | spec-specify | spec generation | generate spec.md from decision-log |
 | build-spec | 5 | simplicity-guard | simplicity lens | delete, narrow, or reuse before lock |
 | build-spec | 6 | plan-ceo-review | product lens | record advisory product findings |
-| build-spec | 7 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
-| build-spec | 8 | freeze-spec | material freeze | freeze before independent review |
-| build-spec | 9 | review-frozen-spec | wh-review | one advisory异源 review |
-| build-spec | 10 | main-agent-disposes-findings | disposition | inspect every finding |
-| build-spec | 11 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
-| build-spec | 12 | publish-spec-result | handoff | publish spec and facts |
+| build-spec | 7 | ui-project-init | UI-only design input | otherwise record not applicable |
+| build-spec | 8 | design-source-readiness | UI-only design input | existing page/data/spec sources or explicit unavailable |
+| build-spec | 9 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
+| build-spec | 10 | freeze-spec | material freeze | freeze before independent review |
+| build-spec | 11 | review-frozen-spec | wh-review | one advisory异源 review |
+| build-spec | 12 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-spec | 13 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
+| build-spec | 14 | publish-spec-result | handoff | publish spec and facts |
 | build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |

@@ -1,0 +1,36 @@
+{
+  "phase": "P3",
+  "goal": "让 make-decision detail 只依赖公开三项材料，并在 provider 前绑定当前 decision-log 与 material revision。",
+  "allowed_files": [
+    "skills/wh-review/scripts/review-materials.mjs",
+    "skills/wh-review/scripts/review-runner.mjs",
+    "skills/wh-review/scripts/wh-review-cli.mjs",
+    "skills/wh-review/contracts/make-decision.md",
+    "skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs"
+  ],
+  "covered_ac": ["AC-REV-001", "AC-REV-002", "AC-REV-003"],
+  "non_goals": ["不新增 detail 命令", "不复制 decision-log", "不新增 provider fallback 或重试状态机"],
+  "test_route": {
+    "tier": "feature",
+    "command": "./node_modules/.bin/vitest run skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs --passWithNoTests=false",
+    "oracle": "ORACLE-DETAIL",
+    "red_expected_exit": 1,
+    "green_expected_exit": 0
+  },
+  "stop_conditions": ["需要第二份 decision-log、caller runner 指令、provider fallback 或新 detail 公共命令"],
+  "expected_handoff": "detail provider 只看到完整当前决定和待审材料；缺字段、禁止字段、类型、身份或 freshness 错误在 provider 前留下 unavailable 事实；早期阶段不自动复用旧结果。",
+  "status": "completed",
+  "execution": {
+    "red": {
+      "command": "./node_modules/.bin/vitest run skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs --passWithNoTests=false",
+      "exit": 1,
+      "result": "6 of 9 assertions failed: caller-supplied review_instructions was silently overwritten, stale approved_direction reached the provider, non-text input was not diagnosed as type, freshness binding was absent, and the public validator was missing."
+    },
+    "green": {
+      "command": "./node_modules/.bin/vitest run skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs --passWithNoTests=false",
+      "exit": 0,
+      "result": "9 tests passed; valid detail sent the complete decision-log once, six preflight classes skipped provider dispatch, and repeated detail execution produced a new result without reuse."
+    },
+    "coverage_limits": ["不证明第三方 provider 语义质量", "不覆盖产品 UI、浏览器或下游验收", "当前 fixture 不替代真实 provider 可用性"]
+  }
+}

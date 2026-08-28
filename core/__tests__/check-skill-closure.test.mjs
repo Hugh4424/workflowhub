@@ -36,7 +36,7 @@ function fixture({
   fs.writeFileSync(path.join(root, `skills/${skillName}/skill-bundle.json`), JSON.stringify({ schema_version: 1, skill: skillName, files: ["SKILL.md"] }));
   fs.writeFileSync(path.join(root, `workflows/${stage}/SKILL.md`), prompt);
   fs.writeFileSync(path.join(root, `workflows/${stage}/skill-deps.yaml`), manifestSkill
-    ? `stage: ${stage}\nskills:\n  - { name: ${skillName}, path: skills/${skillName}/SKILL.md, execution: inline, trigger: always, bundle: skills/${skillName}/skill-bundle.json, owner: stage }\nruntime_capabilities: []\nexternal_capabilities: []\n`
+    ? `stage: ${stage}\nskills:\n  - { name: ${skillName}, path: skills/${skillName}/SKILL.md, execution: inline, trigger: always, bundle: skills/${skillName}/skill-bundle.json, owner: stage, consumer: { target: stage-handlers#testFacts, inputs: [receipts.tests], identity: [task_id, stage, material_revision, snapshot_tree], result: facts.tests } }\nruntime_capabilities: []\nexternal_capabilities: []\n`
     : `stage: ${stage}\nskills: []\nruntime_capabilities: []\nexternal_capabilities: []\n`);
   if (indirectLens) {
     fs.rmSync(path.join(root, `skills/${skillName}`), { recursive: true, force: true });
@@ -52,7 +52,7 @@ function fixture({
     fs.writeFileSync(path.join(root, "skills/catalog.yaml"), `schema_version: 2\nlast_reviewed_at: '2026-07-14'\nprojects: {}\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, local_version: 1.0.0, local_bundle_hash: ${whHash}, last_reviewed_at: '2026-07-14', status: native, purpose: review, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/wh-review], update_policy: manual }\n  - { name: lens, path: skills/lens/SKILL.md, local_version: 1.0.0, local_bundle_hash: ${lensHash}, last_reviewed_at: '2026-07-14', status: native, purpose: lens, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/lens], update_policy: manual }\ncapability_decisions:\n  - { name: fixture, status: rejected, purpose: fixture, design_idea: fixture, used_by_stages: [], local_path: null, upstream: [], local_changes: rejected, dependency_closure: [], update_policy: none }\n`);
     fs.writeFileSync(path.join(root, "skills/reuse-registry.md"), "- `wh-review`\n- `lens`\n- `fixture`\n");
     fs.writeFileSync(path.join(root, "workflows/stage/SKILL.md"), "Use wh-review.\n");
-    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }\nruntime_capabilities: []\nexternal_capabilities: []\n");
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: stage-handlers#safeReviewFacts, inputs: [receipts.review], identity: [task_id, stage, material_revision, snapshot_tree], result: facts.review } }\nruntime_capabilities: []\nexternal_capabilities: []\n");
   }
   return root;
 }

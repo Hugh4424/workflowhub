@@ -6,8 +6,10 @@ import { tmpdir } from "node:os";
 import { validateInteractionLifecycleContract, validateInteractionLifecycleSequence } from "../../runtime/stage/stage-content-contracts.mjs";
 import { validateStageAgentInteractionRounds } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import {
+  buildWorkflowHubSessionInput,
   bindCodexSessionTask,
   finishCodexSessionEvent,
+  recordCodexSessionSpecAnalyze,
   registerCodexSession,
   readCurrentCodexSession,
   sessionHandoffPath,
@@ -27,6 +29,7 @@ function eventFixture() {
       { step_id: 1, step_slug: "read-current-task-documents", order: 1, depends_on: [] },
       { step_id: 2, step_slug: "write-red-tests", order: 2, depends_on: [1] },
       { step_id: 3, step_slug: "implement-change", order: 3, depends_on: [2] },
+      { step_id: 4, step_slug: "publish-current-result", order: 4, depends_on: [3] },
     ],
   }));
   const sessionId = `stage-order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -158,6 +161,99 @@ describe("P1 stage order and real host interaction contract", () => {
     }
   });
 
+  it("rejects an undeclared skill before writing a host event", () => {
+    const state = eventFixture();
+    try {
+      writeFileSync(join(state.cwd, "workflows", "build-code", "skill-deps.yaml"), [
+        "stage: build-code",
+        "skills:",
+        "  - name: backend-testing",
+        "    consumer:",
+        "      target: stage-handlers#testFacts",
+        "      inputs: [receipts.tests]",
+        "      identity: [task_id, stage, material_revision, snapshot_tree]",
+      ].join("\n"));
+      const before = JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8"));
+      expect(() => startCodexSessionEvent({
+        stage: "build-code", subjectKind: "skill", subjectId: "frontend-testing",
+        cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 2300,
+      })).toThrow(/skill frontend-testing is not declared/i);
+      const after = JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8"));
+      expect(after.sessions[0].events).toEqual(before.sessions[0].events);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not project a declared skill as complete when its event is absent", () => {
+    const state = eventFixture();
+    try {
+      writeFileSync(join(state.cwd, "workflows", "build-code", "skill-deps.yaml"), [
+        "stage: build-code",
+        "skills:",
+        "  - name: backend-testing",
+        "    consumer:",
+        "      target: stage-handlers#testFacts",
+        "      inputs: [receipts.tests]",
+        "      identity: [task_id, stage, material_revision, snapshot_tree]",
+      ].join("\n"));
+      const steps = [
+        "read-current-task-documents",
+        "write-red-tests",
+        "implement-change",
+        "publish-current-result",
+      ];
+      steps.forEach((subjectId, index) => {
+        const startedAtMs = 3000 + index * 100;
+        startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, startedAtMs });
+        finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, endedAtMs: startedAtMs + 10, status: "completed", resultSummary: subjectId });
+      });
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "complete-steps-only" }, cwd: state.cwd, sessionId: state.sessionId });
+      expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId })).toMatchObject({ status_value: "incomplete" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("projects skipped steps and not-applicable skills as terminal without inventing completion", () => {
+    const state = eventFixture();
+    try {
+      writeFileSync(join(state.cwd, "workflows", "build-code", "skill-deps.yaml"), [
+        "stage: build-code",
+        "skills:",
+        "  - name: backend-testing",
+        "    consumer:",
+        "      target: stage-handlers#testFacts",
+        "      inputs: [receipts.tests]",
+        "      identity: [task_id, stage, material_revision, snapshot_tree]",
+      ].join("\n"));
+      const steps = [
+        "read-current-task-documents",
+        "write-red-tests",
+        "implement-change",
+        "publish-current-result",
+      ];
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: steps[0], cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 4000 });
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "skill", subjectId: "backend-testing", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 4010 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "skill", subjectId: "backend-testing", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 4020, status: "not_applicable", reason: "当前改动没有后端测试范围", trigger: false, executed: false });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: steps[0], cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 4030, status: "completed", resultSummary: steps[0] });
+      steps.slice(1, 3).forEach((subjectId, index) => {
+        const startedAtMs = 4100 + index * 100;
+        startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, startedAtMs });
+        finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, endedAtMs: startedAtMs + 10, status: "completed", resultSummary: subjectId });
+      });
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: steps[3], cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 4350 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: steps[3], cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 4360, status: "skipped", reason: "当前步骤不适用" });
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "terminal-skipped-and-na" }, cwd: state.cwd, sessionId: state.sessionId });
+      expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId })).toMatchObject({ status_value: "completed" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("fails closed when historical completed step intervals overlap", () => {
     const state = eventFixture();
     try {
@@ -170,6 +266,70 @@ describe("P1 stage order and real host interaction contract", () => {
       finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 4000 });
       expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "implement-change", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 5000 }))
         .toThrow(/history invalid|overlap/i);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("restarts from an affected step without reusing later results from the previous pass", () => {
+    const state = eventFixture();
+    const complete = (subjectId, startedAtMs, endedAtMs, resultSummary = "") => {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, startedAtMs });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId, cwd: state.cwd, sessionId: state.sessionId, endedAtMs, status: "completed", resultSummary });
+    };
+    try {
+      complete("read-current-task-documents", 1000, 1000);
+      complete("write-red-tests", 1200, 1200, "old-red");
+      complete("implement-change", 1600, 1600, "old-implementation");
+      complete("publish-current-result", 1700, 1700, "old-publication");
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "old-pass" }, cwd: state.cwd, sessionId: state.sessionId });
+      expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId }).status_value).toBe("completed");
+
+      expect(() => startCodexSessionEvent({
+        stage: "build-code", subjectKind: "step", subjectId: "write-red-tests",
+        cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 500,
+      })).not.toThrow();
+
+      const restarted = buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId });
+      expect(restarted).toMatchObject({ status_value: "incomplete", spec_analyze: null });
+      expect(restarted.events.map((entry) => entry.subject_id)).toEqual(["read-current-task-documents"]);
+
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 500, status: "completed", resultSummary: "new-red" });
+      expect(() => startCodexSessionEvent({
+        stage: "build-code", subjectKind: "step", subjectId: "publish-current-result",
+        cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 400,
+      })).toThrow(/dependency.*implement-change/i);
+
+      complete("implement-change", 300, 300, "new-implementation");
+      complete("publish-current-result", 200, 200, "new-publication");
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "current-pass" }, cwd: state.cwd, sessionId: state.sessionId });
+
+      const raw = readCurrentCodexSession({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId });
+      expect(raw.events.filter((entry) => entry.subject_kind === "step")).toHaveLength(7);
+      const current = buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId });
+      expect(current).toMatchObject({ status_value: "completed", spec_analyze: { marker: "current-pass" } });
+      expect(current.events.map((entry) => entry.subject_id)).toEqual([
+        "read-current-task-documents", "write-red-tests", "implement-change", "publish-current-result",
+      ]);
+      expect(current.events.slice(1).map((entry) => entry.result_summary)).toEqual(["new-red", "new-implementation", "new-publication"]);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects duplicate manifest step orders before recording an event", () => {
+    const state = eventFixture();
+    try {
+      const manifestPath = join(state.cwd, "workflows", "build-code", "steps.json");
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      manifest.steps[1].order = manifest.steps[0].order;
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      expect(() => startCodexSessionEvent({
+        stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents",
+        cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1000,
+      })).toThrow(/duplicate or invalid step order/i);
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
       rmSync(state.root, { recursive: true, force: true });

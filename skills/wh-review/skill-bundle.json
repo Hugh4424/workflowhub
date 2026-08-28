@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "72cd352cdb77d68d83e1bccf949531e6e08ff6c15f224ec1cf71446b43674f8f"
+      "sha256": "a96503e171d153e8b8901fbdace441ecf2618cd0c46af4b5cfa8bd11a369f242"
     },
     {
       "path": "contracts/build-code.md",
@@ -20,7 +20,7 @@
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "da877920d0702f9f730c224eb69131e2247d6e32d846e63378e00f1797bf8ad8"
+      "sha256": "ac430ec1b1667920b603afef050ba3d8cb65c2b8951ecda9a39d6046cab3f703"
     },
     {
       "path": "contracts/mini-task-design.md",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "3721afdc356a5db3fa45f997f6ac6ffc0279e31537310f33b1b60e48776a647f"
+      "sha256": "2e61b419cd587c8590cd194e0bd2bb55169f66c2cb786e0cf9364a370b6e6029"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "1255a5a4abc899265b4174d470fbd7a0c25d641e2182b79c579008a52be22a9e"
+      "sha256": "49e4b2b15fc679d844a7458916741819a2a1f1e90cd21071c25ff50402e4a4f3"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "c204ab66c1be77fe4fa55205597d93aca0d16f38bbd888778ef2c4d20b9e21fd"
+      "sha256": "a01de035cffb009ff6c43a7847f54a3db184559f36e0177f6f92959be4f54d13"
     },
     {
       "path": "stage-skill-plan.json",

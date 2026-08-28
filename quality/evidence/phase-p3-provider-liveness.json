@@ -1,0 +1,70 @@
+{
+  "phase": "P3",
+  "task_ids": ["T009", "T013"],
+  "goal": "让 3rd-review provider 逻辑运行有一个共享的有限最终期限，并确保超时后的 provider 进程最终结束。",
+  "allowed_files": [
+    "3rd-review/lib/broker.mjs",
+    "3rd-review/lib/process.mjs",
+    "3rd-review/test/broker.test.mjs",
+    "3rd-review/test/process.test.mjs"
+  ],
+  "covered_ac": ["AC-REV-004"],
+  "non_goals": [
+    "不改 WorkflowHub 外层调用、health-runner、config、protocol、provider adapter、重试策略或公共流程",
+    "不把 provider unavailable 改成 findings/pass"
+  ],
+  "test_route": {
+    "tier": "feature",
+    "command": "node --test test/process.test.mjs test/broker.test.mjs",
+    "oracle": "ORACLE-REV-LIVENESS",
+    "red_expected_exit": 1,
+    "green_expected_exit": 0
+  },
+  "stop_conditions": [
+    "需要新增公开配置/字段、第二状态机、WorkflowHub 外层 timeout、provider adapter 或修改 workflowhub-result.v3"
+  ],
+  "expected_handoff": "Broker 在一次 provider 逻辑运行中只计算一次绝对 deadline；所有已有 attempt/retry/repair/rewrite 只消费剩余时间；超时沿用 PROCESS_TIMEOUT，忽略 SIGTERM 的进程在现有宽限期后被终止。",
+  "status": "completed",
+  "execution": {
+    "red": {
+      "command": "node --test --test-name-pattern='timeout eventually kills|provider terminal recovery consumes' test/process.test.mjs test/broker.test.mjs",
+      "exit_code": 1,
+      "result": "两项红测失败：timeout eventually kills provider that ignores SIGTERM 收到 PROCESS_TIMEOUT 后进程仍存活；provider terminal recovery consumes one shared deadline 的 recovery attempt 仍获得完整新期限（约 131ms），说明当前 process cleanup 会清掉 SIGKILL 计时器且 Broker 每个 attempt 重新计时。",
+      "limits": ["红测使用本地 test fixtures，不证明真实 provider 或网络质量"]
+    },
+    "green": {
+      "focused_command": "node --test test/process.test.mjs test/broker.test.mjs",
+      "exit_code": 0,
+      "result": "56 tests passed; 覆盖初始执行、共享 deadline、默认期限常量、终止宽限期、忽略 SIGTERM 的主进程和主进程退出后的 descendant。",
+      "aggregate_command": "npm test",
+      "aggregate_exit_code": 0,
+      "aggregate_result": "322 tests passed, 0 failed。"
+    }
+  },
+  "review": {
+    "status": "completed_with_accepted_risks",
+    "source": "independent read-only review of the four changed 3rd-review files",
+    "findings": [
+      {
+        "id": "process-tree-after-leader-exit",
+        "disposition": "fixed",
+        "fact": "timeout now starts a referenced grace timer, launches providers in a separate process group, and force-kills the group after SIGTERM; regression covers a leader that exits while its descendant ignores SIGTERM"
+      },
+      {
+        "id": "deadline-expired-new-attempt",
+        "disposition": "fixed",
+        "fact": "Broker skips any retry, same-session repair, or output rewrite once the shared deadline is exhausted instead of spawning a 1ms attempt"
+      },
+      {
+        "id": "global-default-bound",
+        "disposition": "accepted_risk",
+        "reason": "D-017 and DEC-005 explicitly choose one finite internal final deadline for every provider; health probes remain advisory and may finish earlier"
+      },
+      {
+        "id": "v3-deadline-field",
+        "disposition": "accepted_risk",
+        "reason": "The approved non-goal forbids changing workflowhub-result.v3; the internal safety bound is intentionally not presented as a new public protocol field"
+      }
+    ]
+  }
+}

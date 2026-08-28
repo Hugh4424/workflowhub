@@ -1,0 +1,89 @@
+{
+  "schema_version": "workflowhub-verify-code-review.v1",
+  "task_id": "governance-runtime-execution-chain-20260827",
+  "stage": "verify-code",
+  "status": "incomplete",
+  "review_scope": {
+    "subject": "current WorkflowHub worktree plus the approved four-file 3rd-review provider repair",
+    "workflowhub_snapshot_reviewed": "425aee9df4fb21c4c17ff6c3bad8ee3e8abaad1d",
+    "workflowhub_current_snapshot_after_evidence_updates": "425aee9df4fb21c4c17ff6c3bad8ee3e8abaad1d",
+    "production_files": [
+      "runtime/stage/stage-content-contracts.mjs",
+      "runtime/stage/stage-agent-outcome-adapter.mjs",
+      "runtime/stage/stage-runner.mjs",
+      "runtime/stage/stage-handlers.mjs",
+      "runtime/stage/stage-skill-runtime.mjs",
+      "tools/cli/task-bootstrap.mjs",
+      "tools/cli/stage-runtime.mjs",
+      "tools/host/workflowhub-codex-session-state.mjs",
+      "skills/wh-review/scripts/review-materials.mjs",
+      "skills/wh-review/scripts/review-runner.mjs",
+      "skills/wh-review/scripts/wh-review-cli.mjs",
+      "workflows/make-decision/skill-deps.yaml",
+      "workflows/build-spec/skill-deps.yaml",
+      "workflows/build-plan/skill-deps.yaml",
+      "workflows/build-code/skill-deps.yaml",
+      "workflows/verify-code/skill-deps.yaml"
+    ],
+    "provider_files": [
+      "3rd-review/lib/broker.mjs",
+      "3rd-review/lib/process.mjs",
+      "3rd-review/test/broker.test.mjs",
+      "3rd-review/test/process.test.mjs"
+    ]
+  },
+  "architecture_review": {
+    "status": "no_actionable_findings",
+    "checks": [
+      "真实入口 officialStageHandler、task-bootstrap、wh-review-cli 和 stage-skill-runtime 均有对应消费者",
+      "身份、材料、事件和消费者错误在当前事实写入前失败",
+      "没有新增公共阶段、Runner、持久任务对象、第二状态机、第五份核心材料或硬质量 Gate",
+      "provider unavailable、unknown、incomplete 和历史失败事实没有被改写成通过"
+    ],
+    "accepted_simplification_risk": "声明统一使用具体 receipt/material 输入；未实现的 selector 语法直接拒绝。多个测试 Skill 共享已有 testFacts consumer，避免新增重复控制面；外部 provider unavailable 保持原始质量事实。"
+  },
+  "external_review": {
+    "status": "unavailable",
+    "attempt_ref": "quality/reviews/attempts/0b9973ae-b469-45c0-ab24-ab32dad70938/attempt.json",
+    "report_ref": "quality/reviews/reports/0b9973ae-b469-45c0-ab24-ab32dad70938.md",
+    "attempt_snapshot_tree": "8d9179cb8ba2e3f7fd435af87d32f1aac418b45f",
+    "attempt_material_id": "2aae446d8bd6cb81b3671dcbae4835f5e95adec7e57a142f82adc04490f7df80",
+    "provider_attempts": [
+      { "provider": "pi/coding", "status": "failed", "error": "PROCESS_EXIT_NONZERO", "duration_ms": 703 },
+      { "provider": "opencode/v4flash", "status": "failed", "error": "PROCESS_EXIT_NONZERO", "duration_ms": 1485 },
+      { "provider": "codex/luna", "status": "failed", "error": "PROCESS_TIMEOUT", "duration_ms": 901053 }
+    ],
+    "group_error": "GROUP_OUTCOME_UNAVAILABLE: only 0 valid reviewer result(s); 1 required",
+    "finding_fact": "没有 provider semantic findings；这不是 clean review 或 acceptance。"
+  },
+  "provider_liveness_evidence": {
+    "focused_command": "node --test test/process.test.mjs test/broker.test.mjs",
+    "focused_exit_code": 0,
+    "focused_tests_passed": 56,
+    "aggregate_command": "npm test",
+    "aggregate_exit_code": 0,
+    "aggregate_tests_passed": 322,
+    "aggregate_tests_failed": 0,
+    "fact": "真实官方入口在临时指向修复旁路后，约 15 分钟无终态的 provider 被收口为 PROCESS_TIMEOUT，进程树无残留。"
+  },
+  "workflowhub_test_evidence": {
+    "safe": { "exit_code": 0, "test_files": 171, "tests_passed": 1922, "tests_skipped": 24, "tests_failed": 0 },
+    "exclusive": { "exit_code": 0, "test_files": 2, "tests_passed": 31, "tests_skipped": 0, "tests_failed": 0 },
+    "total": { "exit_code": 0, "test_files": 173, "tests_passed": 1953, "tests_skipped": 24, "tests_failed": 0 }
+  },
+  "remaining_risks": [
+    "宿主配置仍指向主目录 3rd-review；本次只用临时本地配置验证修复旁路，未改用户配置、未提交或合并。",
+    "verify-code 的异源 provider attempt 绑定较早快照且最终 unavailable；当前代码审查不把它当作当前快照的语义通过。",
+    "provider 默认期限是所有 provider 共用的内部 900000ms；workflowhub-result.v3 的 deadline_ms 仍为 null，这是已确认的非目标风险。",
+    "未做产品 UI、浏览器 QA、下游验收或历史记录改写。"
+  ],
+  "confirmation": {
+    "status": "accepted",
+    "ref": "quality/confirmations/870110e624ca9019653c7765e61bbdb5704721589be0c98d0cffd37e04a7dda8.json",
+    "hash": "870110e624ca9019653c7765e61bbdb5704721589be0c98d0cffd37e04a7dda8",
+    "material_revision": "revision-106f2d52e3432268a74dc847845a2fb3e16d4d1f26ac90fd5ef0cc0974af0bf8",
+    "snapshot_tree": "425aee9df4fb21c4c17ff6c3bad8ee3e8abaad1d",
+    "confirmed_at": "2026-08-28T03:48:22.961Z",
+    "does_not_authorize": ["commit", "push", "merge", "close", "archive", "cleanup"]
+  }
+}

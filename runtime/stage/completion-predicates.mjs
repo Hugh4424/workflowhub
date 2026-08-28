@@ -145,7 +145,19 @@ function selectLatestTerminalObservation(observations) {
 export function deriveStageCompletion(stage, observations = []) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
-  const requirements = STAGE_PREDICATES[stage];
+  const requirements = {
+    ...STAGE_PREDICATES[stage],
+    // UI design is conditional. It becomes a real build-spec completion
+    // subject only when the current handler observed an applicable UI fact;
+    // ordinary non-UI runs keep the existing five-stage predicate set.
+    ...(stage === "build-spec" && observations.some((observation) => {
+      const fact = observation?.fact?.value ?? observation?.fact;
+      return fact?.stage === stage
+        && fact.kind === "acceptance_criterion"
+        && fact.subject === "ui_design"
+        && fact.applicability !== "non_ui";
+    }) ? { ui_design: "acceptance_criterion" } : {}),
+  };
   const satisfied = new Map();
   const conflicts = new Set();
   const candidates = new Map();

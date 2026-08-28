@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { validateSpecAnalyze, validateSpecAnalyzeCompleteness, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
+import { validateSpecAnalyze, validateSpecAnalyzeCompleteness, validateSpecFailureConditions, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { buildPlanningArtifacts } from "../../skills/wh-review/scripts/review-materials.mjs";
 
 const strategy = `
@@ -47,6 +47,11 @@ function complete() {
 }
 
 describe("spec-analyze completeness contract", () => {
+  it("accepts the official bold failure-condition label emitted by the spec template", () => {
+    const markdown = "- [ ] **AC-001**：完成路径\n  - **失败条件**：结果缺失或状态不正确。\n";
+    expect(validateSpecFailureConditions(markdown)).toEqual([]);
+  });
+
   it("has report-only planning and five-stage consumers without a runtime publication gate", () => {
     const runtimeCallerFiles = [
       new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url),

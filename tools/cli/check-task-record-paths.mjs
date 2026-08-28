@@ -62,6 +62,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
   "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs",
+  "skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs",
   "skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs",
   "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",

@@ -340,7 +340,7 @@ function sameIdentity(left, right) {
   return Boolean(a && b && Object.keys(a).every((key) => a[key] === b[key]));
 }
 
-function completeProjectSourceIdentity(value) {
+export function completeProjectSourceIdentity(value) {
   const identity = identityComparable(value);
   return Boolean(identity
     && PROJECT_STANDARD_DOCUMENT_KINDS.includes(identity.document_kind)
@@ -1292,12 +1292,17 @@ export function validateUiDesignLoopFact(value) {
     const expected = state === "human_approved" ? "approved" : state === "human_acknowledged" ? "acknowledged" : "not_approved";
     const confirmation = object(value.human_confirmation) ? value.human_confirmation.result : value.human_confirmation;
     if (confirmation !== expected) errors.push(`${state} requires human_confirmation=${expected}`);
-    if (value.continuation_allowed !== true) errors.push(`${state} must explicitly preserve continuation_allowed=true`);
+    if (state === "human_approved" && value.continuation_allowed !== true) {
+      errors.push("human_approved must explicitly preserve continuation_allowed=true");
+    }
+    if (state !== "human_approved" && value.continuation_allowed !== false) {
+      errors.push(`${state} must explicitly preserve continuation_allowed=false`);
+    }
     if (state !== "human_approved" && value.design_status === "ready") errors.push(`${state} cannot mark design_status=ready`);
   }
   return result(errors, {
     state,
-    continuation_allowed: value.continuation_allowed !== false,
+    continuation_allowed: state === "human_approved",
     visible_actions: Object.freeze(actions),
   });
 }
@@ -3696,7 +3701,7 @@ function hasPlanTaskV3Material(markdown) {
     && (templateVersion(markdown) === PLAN_TASK_V3 || /\bplan-task\.v3\b/i.test(markdown));
 }
 
-function validateSpecFailureConditions(markdown) {
+export function validateSpecFailureConditions(markdown) {
   const errors = [];
   const lines = markdown.split(/\r?\n/);
   const starts = [];
@@ -3706,8 +3711,9 @@ function validateSpecFailureConditions(markdown) {
   for (const [position, start] of starts.entries()) {
     const block = lines.slice(start, starts[position + 1] ?? lines.length).join("\n");
     const id = lines[start].match(/\bAC-[A-Za-z0-9_-]+\b/i)?.[0] ?? `AC-${position + 1}`;
-    if (!/(?:^|\n)\s*失败\s*[:：]/m.test(block)
-        && !/(?:^|\n)\s*(?:failure condition|failure)\s*[:：]/im.test(block)) {
+    const hasFailureCondition = /(?:^|\n)\s*(?:-\s+)?(?:\*\*)?失败(?:条件)?(?:\*\*)?\s*[:：]/m.test(block)
+      || /(?:^|\n)\s*(?:-\s+)?(?:\*\*)?(?:failure condition|failure)(?:\*\*)?\s*[:：]/im.test(block);
+    if (!hasFailureCondition) {
       errors.push(`${id} acceptance design is missing a failure condition`);
     }
   }

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const FIXTURES = resolve(ROOT, "tests/fixtures/mutations");
@@ -82,14 +83,16 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
     expect(deriveStageCompletion("verify-code", facts).missing).toContain("human_confirmation");
   });
 
-  it("excludes test pollution from the published Skill Bundle", async () => {
-    expect(fixture("bundle-pollution").expected).toContain("exclude");
+  it("rejects test pollution before publishing the Skill Bundle", async () => {
+    expect(fixture("bundle-pollution").expected).toContain("reject");
     const packageRoot = mkdtempSync(join(tmpdir(), "workflowhub-mutation-package-"));
     const outputDir = mkdtempSync(join(tmpdir(), "workflowhub-mutation-release-"));
     try {
-      cpSync(join(ROOT, "workflows"), join(packageRoot, "workflows"), { recursive: true });
-      cpSync(join(ROOT, "skills"), join(packageRoot, "skills"), { recursive: true });
-      cpSync(join(ROOT, "runtime/schemas"), join(packageRoot, "runtime/schemas"), { recursive: true });
+      for (const directory of ["config", "core", "runtime", "skills", "workflows"]) {
+        cpSync(join(ROOT, directory), join(packageRoot, directory), { recursive: true });
+      }
+      cpSync(join(ROOT, "skills/reuse-registry.md"), join(packageRoot, "skills/reuse-registry.md"));
+      cpSync(join(ROOT, "THIRD_PARTY_NOTICES.md"), join(packageRoot, "THIRD_PARTY_NOTICES.md"));
       const manifestPath = join(packageRoot, "skills/wh-review/skill-bundle.json");
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
       manifest.files = [...manifest.files, "tests/fixtures/polluted.mjs"];
@@ -97,10 +100,16 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       const pollutedPath = join(packageRoot, "skills/wh-review/tests/fixtures/polluted.mjs");
       mkdirSync(dirname(pollutedPath), { recursive: true });
       writeFileSync(pollutedPath, "export const polluted = true;\n");
-      const release = await buildSkillBundleRelease({ packageRoot, outputDir });
-      expect(release.files.some(({ path }) => path.includes("tests/"))).toBe(false);
-      const published = JSON.parse(readFileSync(join(outputDir, "skills/wh-review/skill-bundle.json"), "utf8"));
-      expect(published.files.some((entry) => (typeof entry === "string" ? entry : entry.path).includes("tests/"))).toBe(false);
+      const { bundleHash } = validateSkillBundle(packageRoot, "skills/wh-review/skill-bundle.json", "skills/wh-review/SKILL.md");
+      const catalogPath = join(packageRoot, "skills/catalog.yaml");
+      const catalog = readFileSync(catalogPath, "utf8");
+      const updatedCatalog = catalog.replace(
+        /(  - name: wh-review[\s\S]*?local_bundle_hash: )\S+/,
+        `$1${bundleHash}`,
+      );
+      writeFileSync(catalogPath, updatedCatalog);
+      await expect(buildSkillBundleRelease({ packageRoot, outputDir }))
+        .rejects.toThrow(/forbidden path/);
     } finally {
       rmSync(packageRoot, { recursive: true, force: true });
       rmSync(outputDir, { recursive: true, force: true });

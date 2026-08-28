@@ -22,6 +22,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, resolve, join } from "node:path";
 import { realpathSync } from "node:fs";
+import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
 
 const SCHEMA_VERSION = "workflowhub-codex-session-handoff.v1";
 const STATE_ROOT = join(tmpdir(), "workflowhub-codex-session-handoffs");
@@ -70,6 +71,17 @@ function compareSessionEvents(a, b) {
     || (b.ended_at_ms - a.ended_at_ms)
     || String(a.subject_kind).localeCompare(String(b.subject_kind))
     || String(a.subject_id).localeCompare(String(b.subject_id));
+}
+
+// The host projection must use the same terminal vocabulary as the session
+// recorder.  A skipped or not-applicable row is terminal evidence, while a
+// completed skill still has to carry truthful lifecycle flags.
+function terminalSessionEvent(entry) {
+  if (!entry || !["completed", "skipped", "not_applicable"].includes(entry.status)) return false;
+  if (entry.subject_kind !== "skill") return true;
+  if (entry.status === "completed") return entry.trigger === true && entry.executed === true;
+  if (entry.status === "not_applicable") return entry.trigger === false && entry.executed === false;
+  return true;
 }
 
 function canonicalCwd(cwd) {
@@ -450,13 +462,15 @@ function loadStageSequenceManifest(cwd, stage) {
   }
   const seenIds = new Set();
   const seenSlugs = new Set();
+  const seenOrders = new Set();
   for (const step of manifest.steps) {
     if (!Number.isSafeInteger(step?.step_id) || !Number.isSafeInteger(step?.order) || typeof step.step_slug !== "string" || step.step_slug.trim() === "") {
       throw new Error(`${stage} step manifest contains an incomplete step identity`);
     }
-    if (seenIds.has(step.step_id) || seenSlugs.has(step.step_slug) || step.order < 1) throw new Error(`${stage} step manifest contains duplicate or invalid step order`);
+    if (seenIds.has(step.step_id) || seenSlugs.has(step.step_slug) || seenOrders.has(step.order) || step.order < 1) throw new Error(`${stage} step manifest contains duplicate or invalid step order`);
     seenIds.add(step.step_id);
     seenSlugs.add(step.step_slug);
+    seenOrders.add(step.order);
     if (step.depends_on !== undefined && (!Array.isArray(step.depends_on) || step.depends_on.some((id) => !seenIds.has(id) && !manifest.steps.some((candidate) => candidate?.step_id === id)))) {
       throw new Error(`${stage} step manifest dependency is invalid for ${step.step_slug}`);
     }
@@ -464,17 +478,68 @@ function loadStageSequenceManifest(cwd, stage) {
   return manifest;
 }
 
-function latestEventForSubject(events, stage, subjectKind, subjectId) {
-  return events
-    .filter((entry) => entry.stage === stage && entry.subject_kind === subjectKind && entry.subject_id === subjectId)
-    .sort((a, b) => (a.ended_at_ms ?? Number.MAX_SAFE_INTEGER) - (b.ended_at_ms ?? Number.MAX_SAFE_INTEGER))
-    .at(-1) ?? null;
+function loadStageSkillDependencyManifest(cwd, stage) {
+  const projectRoot = canonicalCwd(cwd);
+  const manifestPath = join(projectRoot, "workflows", stage, "skill-deps.yaml");
+  if (!existsSync(manifestPath)) {
+    // Historical host fixtures may not carry a workflow package. A real
+    // checkout must not record a skill event without its declaration.
+    if (existsSync(join(projectRoot, ".git"))) {
+      throw new Error(`${stage} skill manifest is unavailable; refusing to write an unbound event`);
+    }
+    return null;
+  }
+  try {
+    return loadStageSkillManifest(projectRoot, stage).manifest;
+  } catch (error) {
+    throw new Error(`${stage} skill manifest is invalid: ${error.message}`);
+  }
+}
+
+function manifestStepOrder(manifest, subjectId) {
+  return manifest?.steps.find((entry) => entry.step_slug === subjectId)?.order ?? null;
+}
+
+function stageRestartFrontier(events, stage, manifest) {
+  if (!manifest) return null;
+  let previousOrder = null;
+  let frontier = null;
+  for (const [eventIndex, event] of events.entries()) {
+    if (event.stage !== stage || event.subject_kind !== "step" || !Number.isSafeInteger(event.started_at_ms)) continue;
+    const order = manifestStepOrder(manifest, event.subject_id);
+    if (!Number.isSafeInteger(order)) continue;
+    if (previousOrder !== null && order <= previousOrder) {
+      frontier = { order, event_index: eventIndex };
+    }
+    previousOrder = order;
+  }
+  return frontier;
+}
+
+function currentStageEvents(events, stage, manifest) {
+  const frontier = stageRestartFrontier(events, stage, manifest);
+  if (!frontier) return events;
+  return events.filter((event, eventIndex) => {
+    if (event.stage !== stage) return true;
+    const order = event.subject_kind === "step"
+      ? manifestStepOrder(manifest, event.subject_id)
+      : manifestStepOrder(manifest, event.parent_subject_id);
+    if (Number.isSafeInteger(order) && order < frontier.order) return true;
+    return eventIndex >= frontier.event_index;
+  });
 }
 
 function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parentSubjectId = null) {
   const manifest = loadStageSequenceManifest(cwd, stage);
-  if (!manifest) return { parentSubjectId: null };
+  const skillManifest = loadStageSkillDependencyManifest(cwd, stage);
+  if (subjectKind === "skill" && skillManifest
+      && !skillManifest.skills.some((entry) => entry?.name === subjectId)) {
+    throw new Error(`${stage} skill ${subjectId} is not declared`);
+  }
+  if (!manifest) return { parentSubjectId: null, restartsStage: false };
   const events = current.session.events;
+  const restartFrontier = stageRestartFrontier(events, stage, manifest);
+  const projectedEvents = currentStageEvents(events, stage, manifest);
   const completedSteps = events
     .filter((entry) => entry.stage === stage
       && entry.subject_kind === "step"
@@ -499,25 +564,26 @@ function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parent
     if (openSteps.length > 0) throw new Error(`${stage} step sequence invalid: ${openSteps.map((entry) => entry.subject_id).join(", ")} is still open before ${subjectId}`);
     for (const dependencyId of step.depends_on ?? []) {
       const dependency = manifest.steps.find((entry) => entry.step_id === dependencyId);
-      const previous = dependency ? latestEventForSubject(events, stage, "step", dependency.step_slug) : null;
+      const previous = dependency ? projectedEvents.findLast((entry) => entry.stage === stage
+        && entry.subject_kind === "step" && entry.subject_id === dependency.step_slug) : null;
       if (!previous || previous.status !== "completed") {
         throw new Error(`${stage} step sequence invalid: dependency ${dependency?.step_slug ?? dependencyId} must be completed before ${subjectId}`);
       }
     }
-    const completedOrders = events
-      .filter((entry) => entry.stage === stage && entry.subject_kind === "step" && entry.status === "completed")
-      .map((entry) => manifest.steps.find((candidate) => candidate.step_slug === entry.subject_id)?.order)
-      .filter((order) => Number.isSafeInteger(order));
-    if (completedOrders.some((order) => order > step.order)) {
-      throw new Error(`${stage} step sequence invalid: ${subjectId} is after a later completed step`);
-    }
-    return { parentSubjectId: null };
+    const lastStartedStep = events
+      .filter((entry) => entry.stage === stage && entry.subject_kind === "step")
+      .at(-1);
+    const lastStartedOrder = manifestStepOrder(manifest, lastStartedStep?.subject_id);
+    return {
+      parentSubjectId: null,
+      restartsStage: Number.isSafeInteger(lastStartedOrder) && step.order <= lastStartedOrder,
+    };
   }
   const parent = parentSubjectId
     ? openSteps.find((entry) => entry.subject_id === parentSubjectId)
     : openSteps.at(-1);
   if (parentSubjectId && !parent) throw new Error(`${stage} skill ${subjectId} must be nested under an open parent step: ${parentSubjectId}`);
-  return { parentSubjectId: parent?.subject_id ?? null };
+  return { parentSubjectId: parent?.subject_id ?? null, restartsStage: false };
 }
 
 export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subjectId, parentSubjectId = null, cwd = process.cwd(), startedAtMs = Date.now(), sessionId = null } = {}) {
@@ -528,6 +594,9 @@ export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subj
   const task = resolveSessionTaskId(current.session, taskId);
   const started = nowMs(startedAtMs);
   const sequenceBinding = preflightStartEvent(current, cwd, stage, subjectKind, id, parentSubjectId);
+  if (sequenceBinding.restartsStage && current.session.spec_analyze_by_task_stage?.[task]?.[stage] !== undefined) {
+    current.session.spec_analyze_by_task_stage[task][stage] = null;
+  }
   const sequence = current.session.events.length + 1;
   const event = {
     event_id: eventId(current.session.session_id, task, stage, subjectKind, id, started, sequence),
@@ -581,6 +650,31 @@ export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("spec_analyze must be an object");
   const current = sessionForMutation(cwd, sessionId);
   const task = resolveSessionTaskId(current.session, taskId);
+  // A host may send the compact analyzer input used by older session fixtures,
+  // but once it declares the v1 envelope its identity must agree with the
+  // stage being recorded.  Reject the bad record before mutating the sidecar.
+  if (value.stage !== undefined && value.stage !== stage) {
+    throw new Error(`spec_analyze stage identity mismatch: expected ${stage}, received ${value.stage}`);
+  }
+  if (value.task_id !== undefined && value.task_id !== task) {
+    throw new Error(`spec_analyze task identity mismatch: expected ${task}, received ${value.task_id}`);
+  }
+  if (value.schema_version !== undefined && value.schema_version !== "workflowhub-spec-analyze-stage-outcome.v1") {
+    throw new Error("spec_analyze schema_version is unsupported");
+  }
+  if (value.schema_version === "workflowhub-spec-analyze-stage-outcome.v1") {
+    if (!value.packet || typeof value.packet !== "object" || Array.isArray(value.packet)) {
+      throw new TypeError("spec_analyze packet is required");
+    }
+    if (!value.result || typeof value.result !== "object" || Array.isArray(value.result)) {
+      throw new TypeError("spec_analyze result is required");
+    }
+  }
+  for (const [field, pattern] of [["snapshot_tree", /^[a-f0-9]{40}$/], ["material_revision", /^revision-[a-f0-9]{64}$/]]) {
+    if (value[field] !== undefined && (typeof value[field] !== "string" || !pattern.test(value[field]))) {
+      throw new TypeError(`spec_analyze ${field} identity is invalid`);
+    }
+  }
   current.session.spec_analyze_by_task_stage ??= {};
   current.session.spec_analyze_by_task_stage[task] ??= {};
   current.session.spec_analyze_by_task_stage[task][stage] = structuredClone(value);
@@ -603,29 +697,45 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   const task = resolveSessionTaskId(current, taskId, { allowUnbound: true });
   if (!task) return Object.freeze({ status: "unbound", state_path: current.state_path, session_id: current.session_id });
   const taskEvents = current.events.filter((entry) => entry.task_id === task);
+  const manifest = stage ? loadStageSequenceManifest(cwd, stage) : null;
+  const skillManifest = stage ? loadStageSkillDependencyManifest(cwd, stage) : null;
   // Older hosts could emit the workflow name as if it were a skill.  It is a
   // category error, not a declared skill event.  Preserve it in the private
   // handoff diagnostic but never send it to the strict stage publisher.
   const rejectedEvents = taskEvents.filter((entry) => entry.subject_kind === "skill" && STAGES.has(entry.subject_id));
   const declaredCandidateEvents = taskEvents.filter((entry) => !rejectedEvents.includes(entry));
-  const stageCandidateEvents = stage
+  const unprojectedStageCandidateEvents = stage
     ? declaredCandidateEvents.filter((entry) => entry.stage === stage)
     : declaredCandidateEvents;
+  const stageCandidateEvents = stage
+    ? currentStageEvents(unprojectedStageCandidateEvents, stage, manifest)
+    : unprojectedStageCandidateEvents;
   // A repaired subject gets a new lifecycle pair in the same session.  The
   // prior terminal event remains in the private sidecar for diagnosis, but a
   // single stage-outcome attempt may receive only the latest state for each
   // declared subject; otherwise its strict recorder rejects the duplicate.
   const currentBySubject = new Map();
-  for (const event of stageCandidateEvents) {
+  for (const [eventIndex, event] of stageCandidateEvents.entries()) {
     if (event.status === "open") continue;
     const key = `${event.stage}:${event.subject_kind}:${event.subject_id}`;
-    const previous = currentBySubject.get(key);
-    // The array sequence breaks an exact timestamp tie, so a host that
-    // serializes two finishes in the same millisecond still projects the last
-    // repair rather than a stale result.
-    if (!previous || event.ended_at_ms >= previous.ended_at_ms) currentBySubject.set(key, event);
+    currentBySubject.set(key, { event, eventIndex });
   }
-  const currentEvents = [...currentBySubject.values()].sort(compareSessionEvents);
+  const currentEvents = [...currentBySubject.values()]
+    .sort((left, right) => {
+      const leftOrder = left.event.subject_kind === "step"
+        ? manifestStepOrder(manifest, left.event.subject_id)
+        : manifestStepOrder(manifest, left.event.parent_subject_id);
+      const rightOrder = right.event.subject_kind === "step"
+        ? manifestStepOrder(manifest, right.event.subject_id)
+        : manifestStepOrder(manifest, right.event.parent_subject_id);
+      if (Number.isSafeInteger(leftOrder) && Number.isSafeInteger(rightOrder) && leftOrder !== rightOrder) return leftOrder - rightOrder;
+      // Keep the historic projection order when no step manifest (or no
+      // matching step order) is available.  The manifest order only governs
+      // declared steps; it must not turn an arbitrary lifecycle fixture into
+      // insertion order and hide the real timestamps.
+      return compareSessionEvents(left.event, right.event) || left.eventIndex - right.eventIndex;
+    })
+    .map(({ event }) => event);
   const events = currentEvents.filter((entry) => entry.status !== "open").map((entry) => ({
     task_id: task,
     stage: entry.stage,
@@ -655,8 +765,18 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   // Authoring stages still require their declared analyzer; verify-code is
   // complete when its own declared events are terminal.
   const requiresSpecAnalyze = stage !== "verify-code";
+  const completedStepIds = new Set(currentEvents
+    .filter((entry) => entry.subject_kind === "step" && terminalSessionEvent(entry))
+    .map((entry) => entry.subject_id));
+  const declaredStepsComplete = !manifest || manifest.steps.every((step) => completedStepIds.has(step.step_slug));
+  const declaredSkillsComplete = !skillManifest || skillManifest.skills.every((skill) => {
+    const event = currentEvents.find((entry) => entry.subject_kind === "skill" && entry.subject_id === skill.name);
+    return terminalSessionEvent(event);
+  });
   const complete = currentEvents.length > 0
-    && currentEvents.every((entry) => entry.status === "completed")
+    && currentEvents.every(terminalSessionEvent)
+    && declaredStepsComplete
+    && declaredSkillsComplete
     && !open
     && (!requiresSpecAnalyze || specAnalyze !== null);
   return Object.freeze({

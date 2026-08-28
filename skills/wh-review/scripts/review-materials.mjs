@@ -258,6 +258,49 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+/**
+ * Validate the public make-decision detail input before runner-owned fields
+ * are generated.  The caller supplies the current decision log bytes; the
+ * runner supplies the authenticated material revision.  Keeping this check
+ * at the public boundary prevents callers from guessing packet metadata or
+ * silently replacing the current decision with a summary.
+ */
+export function validateDetailReviewInput({ materials, currentDecisionLog = null, currentMaterialRevision = null } = {}) {
+  const errors = [];
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
+    throw new TypeError("MATERIAL_INCOMPLETE: detail materials must be an object");
+  }
+  const required = ["raw_requirement", "approved_direction", "draft_spec_or_acceptance"];
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(materials, key)) {
+      errors.push(`missing ${key}`);
+      continue;
+    }
+    if (typeof materials[key] !== "string") {
+      errors.push(`type ${key} must be text`);
+      continue;
+    }
+    if (materials[key].trim() === "") errors.push(`empty ${key}`);
+  }
+  const allowed = new Set([...required, "context_map", "evidence_map"]);
+  const forbidden = Object.keys(materials).filter((key) => !allowed.has(key));
+  if (forbidden.length) errors.push(`forbidden ${forbidden.join(", ")}`);
+  if (typeof currentDecisionLog !== "string" || currentDecisionLog.length === 0) {
+    errors.push("freshness current decision-log.md bytes are unavailable");
+  } else if (typeof materials.approved_direction === "string" && materials.approved_direction !== currentDecisionLog) {
+    errors.push("identity approved_direction must match current decision-log.md bytes");
+  }
+  if (!/^revision-[a-f0-9]{64}$/.test(currentMaterialRevision ?? "")) {
+    errors.push("freshness current material revision is unavailable or invalid");
+  }
+  if (errors.length) {
+    const error = new Error(`MATERIAL_INCOMPLETE: detail input ${errors.join("; ")}`);
+    error.code = "MATERIAL_INCOMPLETE";
+    throw error;
+  }
+  return true;
+}
+
 const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+/g;
 
 function redactHostPathText(value) {

@@ -1,0 +1,35 @@
+{
+  "phase": "P4",
+  "task_id": "governance-runtime-execution-chain-20260827",
+  "stage": "build-code",
+  "phase_id": "P4",
+  "status": "completed",
+  "test_route": {
+    "tier": "fullstack",
+    "command": "./node_modules/.bin/vitest run tests/contract/stage-skill-consumer-contract.test.mjs --passWithNoTests=false",
+    "oracle": "ORACLE-SKILL+UI",
+    "red_expected_exit": 1,
+    "green_expected_exit": 0
+  },
+  "execution": {
+    "red": {
+      "exit_code": 1,
+      "result": "4 项断言失败：35 条声明没有 consumer、loader 不早失败、没有 binding API、human_acknowledged 仍可带 continuation_allowed=true。"
+    },
+    "green": {
+      "exit_code": 0,
+      "tests": {"files": 1, "passed": 4, "failed": 0},
+      "result": "35 条动态声明均有具体 consumer 和四项身份锚点；缺失、重复、generic 在 loader 早失败；completed/unavailable/not_applicable binding 和 UI acknowledgement 边界可验证。"
+    },
+    "review": {
+      "status": "unavailable",
+      "attempt_ref": "quality/reviews/attempts/7bbef233-5654-4117-a4c9-d2e0aa77b25a/attempt.json",
+      "report_ref": "quality/reviews/reports/7bbef233-5654-4117-a4c9-d2e0aa77b25a.md",
+      "reason": "MATERIAL_INCOMPLETE: missing or empty test_evidence",
+      "provider_attempts": 0
+    }
+  },
+  "covered_ac": ["AC-SKL-001", "AC-SKL-002", "AC-UI-001", "AC-UI-002", "AC-UI-003", "AC-UI-004"],
+  "non_goals": ["不新增 dispatcher、持久 census、公共命令或第二状态机", "不实现产品页面、浏览器 QA 或下游验收", "不把 unavailable/incomplete 变成通过"],
+  "limits": ["focused contract 不证明真实 provider、测试工具或 UI 语义质量", "不替代产品页面和浏览器验收", "review unavailable 保持真实，不等于 provider 通过或空 findings"]
+}

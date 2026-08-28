@@ -243,16 +243,20 @@ describe("accepted stage-content-contracts artifacts", () => {
     expect(() => new Ajv2020({ strict: false }).compile(schema)).not.toThrow();
   });
 
-  it("validates the real accepted spec, plan, and tasks without omissions", () => {
+  it("validates the current accepted spec, while leaving the archived contract historical", () => {
     requireApi();
-    const root = existsSync("specs/stage-content-contracts/spec.md")
-      ? "specs/stage-content-contracts"
-      : "specs/archive/stage-content-contracts";
+    const current = existsSync("specs/stage-content-contracts/spec.md");
+    const root = current ? "specs/stage-content-contracts" : "specs/archive/stage-content-contracts";
     const result = validatePlanTaskContract({
       spec: readFileSync(`${root}/spec.md`, "utf8"),
       plan: readFileSync(`${root}/plan.md`, "utf8"),
       tasks: readFileSync(`${root}/tasks.md`, "utf8"),
     });
+    if (!current) {
+      expect(result).toMatchObject({ ok: false });
+      expect(result.errors).toContain("Constitution Check must enumerate all 22 clauses; found 21");
+      return;
+    }
     expect(result).toMatchObject({
       ok: true,
       errors: [],

@@ -1175,6 +1175,26 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
+  it("keeps a group-level PROCESS_TIMEOUT with no dispatched providers as an incomplete verify fact", async () => {
+    const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-group-timeout/attempt.json";
+    const values = {
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "verify-group-timeout", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: null, base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "PROCESS_TIMEOUT", message: "review group timed out before provider dispatch" },
+      },
+    };
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { quality_review: attemptRef },
+    })).resolves.toMatchObject({
+      facts: { code_review: { status: "unavailable" } },
+      completion: { system: { result: "incomplete" } },
+    });
+  });
+
   it.skip("uses the current supplied integration review instead of legacy accepted review facts", async () => {
     const stage = "verify-code", values = {
       // verify-code may reuse the complete same-snapshot suite produced by

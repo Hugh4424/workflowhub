@@ -48,6 +48,17 @@ describe("wh-review production CLI", () => {
     await expect(runReviewRound(null)).rejects.toThrow("review request must be an object");
   });
 
+  it("validates current materials before task lookup or historical review reuse", async () => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({
+      task_path: "/missing/task",
+      project_name: "Demo",
+      task_id: "task",
+      stage: "make-decision",
+      host_provider: "codex",
+    })).rejects.toThrow("materials is required");
+  });
+
   it("exports only current review operations and no resolution writer", async () => {
     const mod = await import(cli.href);
     expect(typeof mod.verifyFinalReview).toBe("function");
@@ -60,47 +71,6 @@ describe("wh-review production CLI", () => {
     expect(mod.ensureResolutionFlowHead).toBeUndefined();
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.runReviewRecovery).toBe("function");
-  });
-
-  it("reuses one early-stage advice result and leaves code reviews freshness-bound", async () => {
-    const { findExistingOrdinaryReview } = await import(cli.href);
-    const resultRef = "quality/reviews/results/one.json";
-    const attemptRef = reviewResultRecord.attempt_ref;
-    const adviceResultRecord = { ...reviewResultRecord, stage: "build-spec" };
-    const adviceAttemptRecord = { ...reviewSemanticAttemptRecord, stage: "build-spec" };
-    const records = new Map([
-      [resultRef, `${JSON.stringify(adviceResultRecord)}\n`],
-      [attemptRef, `${JSON.stringify(adviceAttemptRecord)}\n`],
-    ]);
-    const task = {
-      readRecord: (ref) => {
-        if (!records.has(ref)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
-        return records.get(ref);
-      },
-      listCanonicalReviewResultRefs: () => [resultRef],
-      listCanonicalReviewAttemptRefs: () => [attemptRef],
-      listCanonicalQualityFactRefs: () => [],
-    };
-    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-spec" }))
-      .toMatchObject({ status: "available", result_ref: resultRef, attempt_ref: attemptRef });
-    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "verify-code" })).toBeNull();
-    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-code", phaseId: "P1" })).toBeNull();
-    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-code", reviewKind: "mini_task.design" })).toBeNull();
-  });
-
-  it("does not treat provider unavailability as obtained advice", async () => {
-    const { findExistingOrdinaryReview } = await import(cli.href);
-    const attemptRef = "quality/reviews/attempts/one/attempt.json";
-    const task = {
-      readRecord: (ref) => {
-        if (ref !== attemptRef) throw Object.assign(new Error("missing"), { code: "ENOENT" });
-        return `${JSON.stringify(reviewAttemptRecord)}\n`;
-      },
-      listCanonicalReviewResultRefs: () => [],
-      listCanonicalReviewAttemptRefs: () => [attemptRef],
-      listCanonicalQualityFactRefs: () => [],
-    };
-    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-plan" })).toBeNull();
   });
 
   it("binds one verify-code review result to the vNext advisory fact", async () => {
@@ -430,6 +400,7 @@ describe("wh-review production CLI", () => {
       stage: "make-decision",
       review_track: "direction",
       host_provider: "codex",
+      materials: { raw_requirement: "fixture requirement" },
     }));
 
     const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {

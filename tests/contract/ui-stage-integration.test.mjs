@@ -582,13 +582,27 @@ test("executable short prompt and design-loop facts cover recovery states", () =
     preserves_current_contract: true,
     visible_actions: ["重新读取并确认"],
   }).ok, true);
-  for (const [state, result] of [["human_approved", "approved"], ["human_acknowledged", "acknowledged"], ["human_not_approved", "not_approved"]]) {
+  for (const [state, result] of [["human_approved", "approved"]]) {
     assert.equal(validateUiDesignLoopFact({
       ...base,
       state,
       human_confirmation: { result },
       continuation_allowed: true,
     }).ok, true);
+  }
+  for (const [state, result] of [["human_acknowledged", "acknowledged"], ["human_not_approved", "not_approved"]]) {
+    assert.equal(validateUiDesignLoopFact({
+      ...base,
+      state,
+      human_confirmation: { result },
+      continuation_allowed: false,
+    }).ok, true);
+    assert.equal(validateUiDesignLoopFact({
+      ...base,
+      state,
+      human_confirmation: { result },
+      continuation_allowed: true,
+    }).ok, false);
   }
   assert.equal(validateUiDesignLoopFact({
     ...base,

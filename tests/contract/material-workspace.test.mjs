@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -13,7 +13,7 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 import * as completionPredicates from "../../runtime/stage/completion-predicates.mjs";
 
 function workspace() {
-  const root = mkdtempSync(join(tmpdir(), "workflowhub-materials-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-materials-")));
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -66,7 +66,6 @@ describe("material workspace contract", () => {
 
   it("uses the existing ArtifactDir owner for root current materials", () => {
     const root = workspace();
-    for (const file of CURRENT_MATERIAL_FILES) writeFileSync(join(root, file), `old ${file}\n`);
     const task = createTask({
       storageRoot: root,
       taskPath: join(root, "Projects", "Demo", "tasks", "root-materials"),
@@ -82,11 +81,13 @@ describe("material workspace contract", () => {
     });
     const artifacts = ArtifactDir.open(root, task);
 
+    for (const file of CURRENT_MATERIAL_FILES) artifacts.writeAtomic(file, `old ${file}\n`);
     artifacts.writeAtomic("spec.md", "new spec\n");
 
-    expect(artifacts.root).toBe(root);
-    expect(artifacts.reference("spec.md")).toBe("spec.md");
-    expect(readFileSync(join(root, "spec.md"), "utf8")).toBe("new spec\n");
+    expect(artifacts.root).toBe(join(root, "specs", "root-materials"));
+    expect(artifacts.reference("spec.md")).toBe("specs/root-materials/spec.md");
+    expect(readFileSync(join(artifacts.root, "spec.md"), "utf8")).toBe("new spec\n");
+    expect(inspectMaterialWorkspace(artifacts.root).status).toBe("working");
   });
 
   it("rejects path traversal and non-material files", () => {

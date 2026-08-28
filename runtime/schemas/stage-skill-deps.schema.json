@@ -9,14 +9,27 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "path", "execution", "trigger", "bundle", "owner"],
+        "required": ["name", "path", "execution", "trigger", "bundle", "owner", "consumer"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "path": { "type": "string", "pattern": "^skills/[^/]+/SKILL\\.md$" },
           "execution": { "enum": ["inline", "independent"] },
           "trigger": { "type": "string", "minLength": 1 },
           "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" },
-          "owner": { "const": "stage" }
+          "owner": { "const": "stage" },
+          "consumer": {
+            "type": "object",
+            "required": ["target", "inputs", "identity"],
+            "properties": {
+              "target": { "type": "string", "minLength": 1 },
+              "inputs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              "identity": {
+                "const": ["task_id", "stage", "material_revision", "snapshot_tree"]
+              },
+              "result": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
         },
         "additionalProperties": false
       }

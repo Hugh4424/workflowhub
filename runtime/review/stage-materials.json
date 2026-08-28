@@ -9,8 +9,7 @@
     "make-decision/detail": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["scope", "user_flow", "states", "acceptance", "risk", "simplicity"],
-      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "ui_applicability", "ui_contract"],
-      "forbidden": ["objective_facts"]
+      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "ui_applicability", "ui_contract"]
     },
     "build-spec": {
       "contract": "contracts/build-spec.md",

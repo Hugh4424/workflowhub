@@ -205,6 +205,36 @@ describe("five-stage completion predicates derive only from quality facts", () =
     });
   });
 
+  it("adds the UI design predicate only for an applicable UI build-spec fact", () => {
+    const facts = observations("build-spec");
+    facts.push({
+      fact: {
+        ref: "quality/ui-design.json",
+        value: {
+          task_id: "task",
+          stage: "build-spec",
+          material_revision: "revision",
+          snapshot_tree: "tree",
+          kind: "acceptance_criterion",
+          subject: "ui_design",
+          applicability: "ui",
+          status: "missing",
+          recorded_at: "2026-08-22T00:00:00.000Z",
+        },
+      },
+      freshness: { status: "current" },
+      authenticated: true,
+    });
+    expect(deriveStageCompletion("build-spec", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["ui_design"]),
+    });
+    const repaired = facts.map((entry) => entry.fact.value.subject === "ui_design"
+      ? { ...entry, fact: { ...entry.fact, value: { ...entry.fact.value, status: "passed", recorded_at: "2026-08-22T00:00:01.000Z" } } }
+      : entry);
+    expect(deriveStageCompletion("build-spec", repaired)).toMatchObject({ status: "completed", missing: [] });
+  });
+
   it("lets build-code finding disposition, not a clean label, decide completion", () => {
     const facts = observations("build-code");
     const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
