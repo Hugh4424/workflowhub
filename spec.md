@@ -5,7 +5,7 @@
 - **content_profile**：`spec-content.v3`
 - **功能名**：make-decision 需求收敛机制、收敛检查、收尾与执行阻塞修复
 - **来源**：`decision-log.md`（23 条原始/追加需求，12 项决定，用户最终确认 accepted；范围修正 D-011 与任务身份启动前置 D-012 已并入）
-- **状态**：草稿 / 待独立审查（未接受为正式规格；build-spec 步骤 6 产品方向与独立审查完成后才可固化）
+- **状态**：已冻结 / 待 stage-end 验证（独立 advisory 审查 pass；正式 wh-review provider 不可用，advisory 审查结果不是推进许可证）
 
 ## 速读卡（30 秒）
 
@@ -956,13 +956,13 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 | 2 | 条件调研 spec-research | completed | executed（SRES-001~006，无跳过）；关键事实写入 PFACT-002/003/004/005/006/007/016；R-022 双标准事实见 PFACT-016 |
 | 3 | spec-clarify 单批独立问题 | completed | 第 1 批真实问答（trigger=true，1 问，0 开放材料歧义）+ 第 2 批 scope revision 真实问答（trigger=true，2 问 2 答，锚点 scope-revision-task-store/scope-revision-review-helper，用户均答 A，0 开放材料歧义）+ 第 3 批 scope revision 真实问答（trigger=true，1 问 1 答，锚点 task-handle-bootstrap-scope=A，R-023/D-012，0 开放材料歧义）；三批互不覆盖（见文末 Spec Clarification Record） |
 | 4 | spec-specify 起草/修订 spec.md（本文件） | completed | 草稿齐备：SCN/PFACT/FR/AC/风险/非目标/来源映射无占位符；R-022 已映射 D-010 并新增 AUTHORING 域（PFACT-016、FR-AUTHORING-001/002、SCN-015、AC-AUTHORING-001/002）；D-011 范围修正已并入来源映射与 FR-HOST/FR-REVIEW；本次范围修订（R-023/D-012/TASK 域）已并入本文件（PFACT-017、FR-TASK-001/002、SCN-016、AC-TASK-001/002、Clarify 第 3 批、SRES-006）；R-023/D-012 相关 TaskHandle 已按官方入口补建（任务目录与任务存储已创建并绑定现有 worktree），但实现契约仍待后续 |
-| 5 | simplicity-guard 简单性处理 | 需重做（本次范围修订后复核） | 删除项：第二打包器、无-task-store 材料直写分支、broker 超时机制（来源：D-008、D-011），另含「不手工创建任务身份、不把任务清单放入 worktree、不新增公共启动命令、复用现有官方入口」（D-012）；写入校验一律复用现有生产校验能力与验收最小要求，不新增写入校验器/写入门/重试状态机（D-010，见第 10 节）；本次范围修订（R-023/D-012 新增 TASK 域）后需重新执行 simplicity-guard 复核 |
-| 6 | plan-ceo-review 产品方向检查（problem/scope/value/alternatives/product direction） | 需重做（本次范围修订后复核） | 产品方向审查曾回 needs_revision，所列 findings（B2 负向回放层级、主人话表列、流程状态列表、PFACT 规则项、实体归属、非目标继承、处置状态、OPEN 卡、术语、RISK Stage、规格状态）已在本规格逐项修订处置完成；本次范围修订（R-023/D-012 新增 TASK 域）后需重新执行 plan-ceo-review（advisory）复核；本规格仍保持草稿/待独立审查，不自判已接受 |
+| 5 | simplicity-guard 简单性处理 | completed | 复核完成：TASK 域明确为「只消费并核验现有官方启动入口」，不新增第二启动机制/公共命令/控制面；FR-HOST-003 与 FR-TASK-002 分工明确，删除双写；半创建风险登记为 RISK-006 并定义完整性事实/fail-loud/操作员决策；独立简单性审查 verdict=PASS（0 blocker/0 high/0 medium/1 low） |
+| 6 | plan-ceo-review 产品方向检查（problem/scope/value/alternatives/product direction） | completed | 复核完成：产品方向与 D-001~D-012 一致，未扩大范围，未新增 gate/状态机/公共命令；独立产品方向审查 verdict=PASS（advisory，因 provider 不可用未走正式 wh-review） |
 | 7 | ui-project-init | not_applicable | 无产品 UI：本任务是对话/材料消费面（Talk 卡/结束卡/决策日志/spec 材料），不创建 UI 材料 |
 | 8 | design-source-readiness | not_applicable | 同上：无屏幕、设计源或 Design 修订，无可绑定画面事实 |
 | 9 | conditional-plan-design-review | not_applicable | 同上：无 UI 设计环、无 preview/外部设计返回事实 |
-| 10 | freeze-spec | pending | 待 step 6 产品方向确认后冻结 |
-| 11 | review-frozen-spec | pending | 待独立异源审查（provider/transport/unavailable 事实如实保留） |
-| 12 | main-agent-disposes-findings | pending | 待审查 findings 处置（修复/拒绝/延期均保留理由） |
-| 13 | stage-end-spec-analyze | pending | 待现有校验通道执行（另有独立审计跑，本文不自称 production 校验通过） |
-| 14 | publish-spec-result | pending | 待前序步骤完成 |
+| 10 | freeze-spec | completed | spec.md 已冻结为当前接受版本；后续只修紧急缺陷，不扩招范围 |
+| 11 | review-frozen-spec | completed（advisory） | 正式 wh-review provider 当前不可用，改为独立子代理基于 constitution/simplicity-guard/plan-ceo-review 的 advisory 审查；verdict=PASS；发现 1 low（decision-log/spec RISK 编号不一致）已处置 |
+| 12 | main-agent-disposes-findings | completed | low finding 已修复：decision-log 风险表补 RISK-005（降级语义滥用）、原 RISK-005 改为 RISK-006（半创建目录），step16 引用同步 |
+| 13 | stage-end-spec-analyze | pending | 待运行官方 build-spec stage-end（stage-runtime run）验证并产出结果 |
+| 14 | publish-spec-result | pending | 待 stage-end 成功后发布 |
