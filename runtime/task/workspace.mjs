@@ -383,12 +383,31 @@ export function assertWorkspace(value) {
   return value;
 }
 
+function sharedReviewBaseline(sourceRoot, targetRepoRoot) {
+  const sourceHead = gitValue(sourceRoot, ["rev-parse", "HEAD"], "review Workspace HEAD");
+  const targetHead = gitValue(targetRepoRoot, ["rev-parse", "HEAD"], "review target repository HEAD");
+  const bases = gitValue(sourceRoot, ["merge-base", "--all", targetHead, sourceHead], "review Workspace baseline")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (bases.length !== 1) {
+    throw new Error(`review Workspace requires exactly one shared baseline commit, got ${bases.length}`);
+  }
+  return bases[0];
+}
+
 /** Return the immutable repository binding carried by an authentic accepted Workspace. */
 export function reviewSourceForWorkspace(value) {
   const workspace = assertWorkspace(value);
   const binding = WORKSPACE_BINDINGS.get(workspace);
   if (!binding) throw new TypeError("Workspace review binding is unavailable");
-  return Object.freeze({ worktreeRoot: workspace.worktreeRoot, targetRepoRoot: binding.targetRepoRoot, baselineCommit: workspace.baselineCommit });
+  return Object.freeze({
+    worktreeRoot: workspace.worktreeRoot,
+    targetRepoRoot: binding.targetRepoRoot,
+    // Workspace.baselineCommit is the current execution baseline. A review
+    // must instead compare the task branch with its shared repository fork
+    // point, otherwise a committed task appears as an empty diff.
+    baselineCommit: sharedReviewBaseline(workspace.worktreeRoot, binding.targetRepoRoot),
+  });
 }
 
 export function assertCandidateWorkspace(value) {
