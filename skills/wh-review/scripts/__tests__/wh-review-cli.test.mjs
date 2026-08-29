@@ -365,6 +365,11 @@ describe("wh-review production CLI", () => {
     expect(subject.workspace.worktreeRoot).toBe(`${repo}-task`);
     expect(subject.candidateWorkspace).toBeUndefined();
     expect(subject).not.toHaveProperty("sourceRoot");
+    // The make-decision detail track authenticates the current material
+    // revision through the kernel; the subject must bind the existing
+    // Workspace to the kernel instead of throwing "requires an authenticated
+    // Workspace".
+    expect(subject.kernel.currentVNextMaterialRevision()).toMatch(/^revision-[a-f0-9]{64}$/);
   });
 
   it("returns unavailable and writes an immutable attempt when the run route is missing", async () => {

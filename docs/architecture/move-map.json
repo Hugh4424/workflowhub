@@ -1966,6 +1966,105 @@
       "consumer": "release reviewers and skill closure audit",
       "delete_condition": "remove only when the project provenance notice is retired with its catalog consumer",
       "content_change": "UI delivery governance local-contract notice"
+    },
+    {
+      "source": "runtime/evidence/dsh-transcript.mjs",
+      "destination": "runtime/evidence/dsh-transcript.mjs",
+      "status": "add",
+      "owner": "DSH (non-Codex) session transcript adapter",
+      "consumer": "tools/cli/stage-runtime.mjs resolveDefaultMonitoringSource; tools/host/workflowhub-codex-session-state.mjs snapshot/repair; tests/dsh-transcript.test.mjs",
+      "delete_condition": "remove only when DSH is retired as a supported host or the adapter is superseded by a host-neutral transcript seam",
+      "content_change": "multi-frame zstd decoder, DSH transcript locator/normalizer, hash-bound requirement message snapshot"
+    },
+    {
+      "source": "tests/dsh-transcript.test.mjs",
+      "destination": "tests/dsh-transcript.test.mjs",
+      "status": "add",
+      "owner": "DSH transcript adapter test suite",
+      "consumer": "local vitest suite and CI regression evidence",
+      "delete_condition": "remove with runtime/evidence/dsh-transcript.mjs",
+      "content_change": "frame walking, requirement message extraction, session binding, empty-snapshot repair, monitoring source round-trip tests"
+    },
+    {
+      "source": "docs/adr/0020-close-five-actions-quality-transcription.md",
+      "destination": "docs/adr/0020-close-five-actions-quality-transcription.md",
+      "status": "add",
+      "owner": "close orchestration ADR",
+      "consumer": "make-decision decision-log, build-spec spec.md, close implementation and verification",
+      "delete_condition": "retire only when the five-action close contract is replaced by an approved successor",
+      "content_change": "defines close as commit/merge/archive/push/cleanup plus one confirmation; quality status is transcribed not judged"
+    },
+    {
+      "source": "tools/cli/stage-runtime.mjs",
+      "destination": "tools/cli/stage-runtime.mjs",
+      "status": "modify",
+      "owner": "public stage-runtime CLI",
+      "consumer": "official run/status/confirm/authorize commands and registered monitoring source resolution",
+      "delete_condition": "revert only when host transcript resolution is moved to a stable plugin interface",
+      "content_change": "DSH transcript source fallback in resolveDefaultMonitoringSource; locateDshTranscript mirrors Codex locate contract"
+    },
+    {
+      "source": "tools/host/workflowhub-codex-session-state.mjs",
+      "destination": "tools/host/workflowhub-codex-session-state.mjs",
+      "status": "modify",
+      "owner": "Codex/DSH session handoff state",
+      "consumer": "task-bootstrap, session hooks, stage-runtime monitoring source resolution",
+      "delete_condition": "revert only when session handoff is replaced by a host-neutral state seam",
+      "content_change": "accept DSH transcript paths; snapshot from DSH transcripts; repair empty requirement snapshots when a transcript becomes available"
+    },
+    {
+      "source": "runtime/stage/stage-content-contracts.mjs",
+      "destination": "runtime/stage/stage-content-contracts.mjs",
+      "status": "modify",
+      "owner": "stage content contract validator",
+      "consumer": "stage-agent-outcome-adapter and all stage spec-analyze packets",
+      "delete_condition": "revert only when authenticated requirement messages carry their own class from the host",
+      "content_change": "analyzeDecisionConvergence derives message class from hash-bound coverage outputs and binds multi-decision rows by row text"
+    },
+    {
+      "source": "skills/wh-review/scripts/wh-review-cli.mjs",
+      "destination": "skills/wh-review/scripts/wh-review-cli.mjs",
+      "status": "modify",
+      "owner": "wh-review skill CLI",
+      "consumer": "wh-review detail track and make-decision review preflight",
+      "delete_condition": "revert only when the detail-track vNext material revision can be read without a workspace kernel",
+      "content_change": "resolveTrustedReviewSubject passes readOnly:true for make-decision to bind the current workspace kernel"
+    },
+    {
+      "source": "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",
+      "destination": "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",
+      "status": "modify",
+      "owner": "wh-review skill CLI tests",
+      "consumer": "wh-review skill regression suite",
+      "delete_condition": "revert only when the readOnly binding behavior is removed",
+      "content_change": "assert currentVNextMaterialRevision is returned for make-decision trusted review subject"
+    },
+    {
+      "source": "tests/contract/requirement-convergence-regression.test.mjs",
+      "destination": "tests/contract/requirement-convergence-regression.test.mjs",
+      "status": "modify",
+      "owner": "requirement convergence contract regression tests",
+      "consumer": "stage content contracts regression suite",
+      "delete_condition": "remove only when the authenticated-message class-derivation contract is retired",
+      "content_change": "add regression test for message class derived from hash-bound coverage outputs"
+    },
+    {
+      "source": "skills/wh-review/skill-bundle.json",
+      "destination": "skills/wh-review/skill-bundle.json",
+      "status": "modify",
+      "owner": "wh-review skill bundle manifest",
+      "consumer": "skill catalog closure and distribution release",
+      "delete_condition": "revert only when the readOnly binding change to wh-review-cli is removed",
+      "content_change": "update sha256 for scripts/wh-review-cli.mjs after readOnly binding fix"
+    },
+    {
+      "source": "skills/catalog.yaml",
+      "destination": "skills/catalog.yaml",
+      "status": "modify",
+      "owner": "skill catalog registry",
+      "consumer": "distribution-closure and stage-skill-invocation-contract tests",
+      "delete_condition": "revert only when wh-review skill-bundle.json is restored to prior hash",
+      "content_change": "update wh-review local_bundle_hash to match resolved bundle hash"
     }
   ]
 }

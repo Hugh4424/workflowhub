@@ -2284,31 +2284,51 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const coverageDataRows = coverageRows.slice(1);
   const coverageText = coverageRows.map((row) => row.join(" ")).join("\n");
   for (const requirementMessage of requirementMessages) {
-    const messageClass = typeof requirementMessage === "string" ? requirementMessage : requirementMessage?.message_class;
-    if (typeof messageClass !== "string" || messageClass.trim() === "") {
+    const directClass = typeof requirementMessage === "string" ? requirementMessage : requirementMessage?.message_class;
+    const messageId = typeof requirementMessage === "object" && requirementMessage !== null ? requirementMessage.id : null;
+    const messageHash = typeof requirementMessage === "object" && requirementMessage !== null ? requirementMessage.content_hash : null;
+    // The host-authenticated message carries identity only; the semantic
+    // classification is a make-decision artifact.  Derive each message's
+    // classes from its hash-bound requirement coverage outputs instead of
+    // requiring the transcript line to carry a class it cannot know.
+    const outputClasses = typeof messageId === "string"
+      ? requirementCoverageOutputs
+        .filter((entry) => entry?.message_id === messageId
+          && (!/^[a-f0-9]{64}$/.test(messageHash ?? "") || entry?.message_hash === messageHash))
+        .map((entry) => entry?.message_class)
+      : [];
+    const messageClasses = [...new Set([directClass, ...outputClasses]
+      .filter((value) => typeof value === "string" && value.trim() !== ""))];
+    if (messageClasses.length === 0) {
       requiredDimensionsPresent = false;
       errors.push("authenticated requirement message class is missing");
       continue;
     }
-    if (!new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(coverageText)) {
-      requiredDimensionsPresent = false;
-      errors.push(`coverage matrix is missing the required dimension: ${messageClass}`);
-    }
-    if (typeof requirementMessage === "object" && requirementMessage !== null) {
-      const { id, content_hash: contentHash } = requirementMessage;
-      const output = typeof id === "string" && /^[a-f0-9]{64}$/.test(contentHash ?? "")
-        ? requirementCoverageOutputs.find((entry) => entry?.message_id === id
-          && entry?.message_hash === contentHash && entry?.message_class === messageClass)
-        : null;
-      const boundRow = output && coverageDataRows.find((row) => {
-        const rowText = row.join(" ");
-        return output.requirement_ids?.some((requirementId) => row.includes(requirementId))
-          && output.decision_ids?.some((decisionId) => row.includes(decisionId))
-          && new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(rowText);
-      });
-      if (!boundRow) {
+    for (const messageClass of messageClasses) {
+      if (!new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(coverageText)) {
         requiredDimensionsPresent = false;
-        errors.push(`coverage matrix does not bind authenticated message through its requirement/decision coverage output: ${id ?? "unknown"}`);
+        errors.push(`coverage matrix is missing the required dimension: ${messageClass}`);
+      }
+      if (typeof requirementMessage === "object" && requirementMessage !== null) {
+        const { id, content_hash: contentHash } = requirementMessage;
+        const output = typeof id === "string" && /^[a-f0-9]{64}$/.test(contentHash ?? "")
+          ? requirementCoverageOutputs.find((entry) => entry?.message_id === id
+            && entry?.message_hash === contentHash && entry?.message_class === messageClass)
+          : null;
+        const boundRow = output && coverageDataRows.find((row) => {
+          const rowText = row.join(" ");
+          // A row may legitimately map one requirement to several decisions
+          // ("D-001、D-009"), so containment is checked against the row text,
+          // not exact cell equality.  Requirement/decision ids are fixed-width
+          // (R-001/D-001), so substring containment cannot alias a longer id.
+          return output.requirement_ids?.some((requirementId) => rowText.includes(requirementId))
+            && output.decision_ids?.some((decisionId) => rowText.includes(decisionId))
+            && new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(rowText);
+        });
+        if (!boundRow) {
+          requiredDimensionsPresent = false;
+          errors.push(`coverage matrix does not bind authenticated message through its requirement/decision coverage output: ${id ?? "unknown"}`);
+        }
       }
     }
   }

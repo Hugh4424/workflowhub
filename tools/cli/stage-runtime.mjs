@@ -30,6 +30,7 @@ import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snap
 import { appendMonitoringFacts, initializeTaskStore, readMonitoringFacts } from "../../runtime/task/task-store.mjs";
 import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
 import { createRegisteredCodexSource, parseRegisteredCodexTranscript, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { isDshTranscriptPath, normalizeDshTranscript, readDshTranscriptText } from "../../runtime/evidence/dsh-transcript.mjs";
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
@@ -137,6 +138,32 @@ function locateCodexRollout({ env = process.env, home = homedir(), cwd = process
   // stage/step/skill facts instead of dropping the whole sidecar write.
   if (!target) return null;
   return { threadId: handoffThreadId, target, requirementMessages };
+}
+
+/**
+ * DSH keeps the authentic session log at ~/.dsh/sessions/<cwd-key>/<session>/
+ * session.jsonl.zstd (concatenated zstd frames).  Mirror the Codex locate
+ * contract against the same session handoff: the frozen requirement snapshot
+ * comes from the task binding, and the transcript is re-read for hash
+ * verification — never synthesized.
+ */
+function locateDshTranscript({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+  const sessionId = currentCodexSessionId(env);
+  const handoff = readCurrentCodexSession({
+    cwd,
+    sessionId: typeof sessionId === "string" && CODEX_SESSION_ID.test(sessionId) ? sessionId : null,
+  });
+  if (handoff.status === "conflict") throw new Error("WorkflowHub session handoff has multiple active sessions for this workspace");
+  if (handoff.status !== "present") return null;
+  const requirementMessages = handoff.task_binding?.requirement_messages ?? [];
+  const handoffSessionId = handoff.session_id;
+  if (typeof handoffSessionId !== "string" || !CODEX_SESSION_ID.test(handoffSessionId)) throw new Error("WorkflowHub session handoff has an invalid session_id");
+  if (!handoff.transcript_path) return null;
+  const target = isDshTranscriptPath(handoff.transcript_path, { home, sessionId: handoffSessionId });
+  // Same honesty rule as the Codex path: an unreadable or foreign transcript
+  // is an unavailable source, never an error that drops sidecar facts.
+  if (!target || !existsSync(target) || !statSync(target).isFile()) return null;
+  return { sessionId: handoffSessionId, target, requirementMessages };
 }
 
 function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
@@ -338,7 +365,33 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
  */
 export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, stage = null, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
   const located = locateCodexRollout({ env, home, cwd });
-  if (!located) return null;
+  if (!located) {
+    const dsh = locateDshTranscript({ env, home, cwd });
+    if (!dsh) return null;
+    const sessionRef = safeRolloutId(dsh.sessionId);
+    return createRegisteredCodexSource({
+      source_id: `dsh-session-${sessionRef}`,
+      source_ref: `dsh-transcript-${sessionRef}`,
+      registration_id: `launcher-dsh-${sessionRef}`,
+      required: true,
+      task_id: task_id ?? context?.identity?.taskId,
+      run_id: run_id ?? context?.workflowRunId,
+      session_id: sessionRef,
+      source_format: "jsonl",
+      source_version: "v1",
+      cli_version: env.DSH_CLI_VERSION ?? "dsh-host",
+      adapter_version: "dsh-transcript-adapter.v1",
+      capabilities: ["requirement_message"],
+      reader: createTranscriptSourceReader(() => normalizeDshTranscript(readDshTranscriptText(dsh.target), {
+        taskId: task_id ?? context?.identity?.taskId,
+        runId: run_id ?? context?.workflowRunId,
+        attemptId: attempt_id ?? context?.attempt_id ?? null,
+        stage: stage ?? context?.stage ?? null,
+        sessionId: sessionRef,
+        requirementMessages: dsh.requirementMessages,
+      })),
+    });
+  }
   const sourceRef = `codex-rollout-${safeRolloutId(located.threadId)}`;
   return createRegisteredCodexSource({
     source_id: `codex-thread-${safeRolloutId(located.threadId)}`,

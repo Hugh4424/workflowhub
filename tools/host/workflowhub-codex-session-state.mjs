@@ -23,6 +23,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, resolve, join } from "node:path";
 import { realpathSync } from "node:fs";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
+import { isDshTranscriptPath, looksLikeDshTranscriptPath, readDshTranscriptText, snapshotDshRequirementMessages } from "../../runtime/evidence/dsh-transcript.mjs";
 
 const SCHEMA_VERSION = "workflowhub-codex-session-handoff.v1";
 const STATE_ROOT = join(tmpdir(), "workflowhub-codex-session-handoffs");
@@ -217,10 +218,13 @@ function safeTranscriptPath(transcriptPath, home = homedir()) {
   if (transcriptPath === null || transcriptPath === undefined) return null;
   const value = resolve(text(transcriptPath, "transcript_path"));
   const sessionsRoot = resolve(home, ".codex", "sessions");
-  if (!isAbsolute(value) || !value.startsWith(`${sessionsRoot}/`) || !basename(value).endsWith(".jsonl")) {
-    throw new Error("transcript_path must point inside the current Codex sessions directory");
+  if (isAbsolute(value) && value.startsWith(`${sessionsRoot}/`) && basename(value).endsWith(".jsonl")) {
+    return value;
   }
-  return value;
+  // DSH keeps the authentic session log as concatenated-zstd JSONL under
+  // ~/.dsh/sessions; it is an equally valid host transcript source.
+  if (isDshTranscriptPath(value, { home })) return value;
+  throw new Error("transcript_path must point inside the current Codex or DSH sessions directory");
 }
 
 function rolloutTimestamp(record) {
@@ -253,6 +257,14 @@ function codexUserInputText(outer) {
  */
 function snapshotOriginalRequirementMessages(transcriptPath, boundAtMs) {
   if (!transcriptPath || !Number.isSafeInteger(boundAtMs)) return [];
+  // transcript_path was validated at registration time; the read-back here
+  // only needs the shape check, not the home-rooted boundary check.
+  if (looksLikeDshTranscriptPath(transcriptPath)) {
+    let text;
+    try { text = readDshTranscriptText(transcriptPath); }
+    catch { return []; }
+    return snapshotDshRequirementMessages(text, boundAtMs);
+  }
   let raw;
   try { raw = readFileSync(transcriptPath, "utf8"); }
   catch { return []; }
@@ -336,6 +348,20 @@ export function bindCodexSessionTask({ projectName, taskId, taskPath, cwd = proc
       return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: statePath });
     }
     if (frozen.length !== previous.requirement_messages.length) throw new Error("current WorkflowHub task requirement snapshot is invalid");
+    // Repair an empty snapshot that predates transcript availability: the
+    // original bind could not read any transcript (e.g. the host transcript
+    // format was unsupported or unregistered at the time), so the snapshot
+    // was frozen as [].  With an authentic transcript now registered, take
+    // the snapshot at the ORIGINAL bound time — the binding window itself is
+    // never rewritten.
+    if (frozen.length === 0 && current.session.transcript_path) {
+      const repaired = snapshotOriginalRequirementMessages(current.session.transcript_path, previous.bound_at_ms);
+      if (repaired.length > 0) {
+        previous.requirement_messages = repaired;
+        const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
+        return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: statePath });
+      }
+    }
     return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: current.state_path });
   }
   const bound = nowMs(boundAtMs);

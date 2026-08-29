@@ -39,6 +39,11 @@ export function resolveTrustedReviewSubject(input) {
     projectName,
     taskId,
     runnerRoot: RUNNER_ROOT,
+    // make-decision reviews read the current materials (the detail track
+    // needs currentVNextMaterialRevision), so bind the existing Workspace to
+    // the kernel read-only. This never prepares a worktree: a missing one
+    // stays an honest error from openCurrentTaskWorkspace below.
+    ...(stage === "make-decision" ? { readOnly: true } : {}),
   });
   if (stage === "make-decision") {
     const workspace = openCurrentTaskWorkspace(context.task);
