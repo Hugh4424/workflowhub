@@ -54,11 +54,17 @@ export const STAGE_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({
     scope: "acceptance_criterion",
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
+    requirement_coverage: "acceptance_criterion",
+    goal_achievement: "acceptance_criterion",
+    acceptance_clarity: "acceptance_criterion",
+    solution_convergence: "acceptance_criterion",
+    plain_language_card: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
     zero_major_ambiguities: "acceptance_criterion",
+    clarify: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
   }),
   "build-plan": Object.freeze({
@@ -140,6 +146,29 @@ function selectLatestTerminalObservation(observations) {
   return latest.length === 1
     ? { status: "selected", observation: latest[0].observation }
     : { status: "conflict", observation: null };
+}
+
+// Acceptance facts are append-only too. A single build-code/verify attempt
+// may first record an unavailable/missing leaf and then record its repaired
+// result for the same current material. Product release must project the
+// latest uniquely ordered terminal, just like stage completion does; keeping
+// every historical leaf here would turn a repaired criterion into a false
+// conflict. Facts without a recorded_at remain ambiguous and are deliberately
+// left as-is so legacy duplicate inputs still fail closed.
+function selectLatestAcceptanceCandidates(candidates) {
+  if (candidates.length <= 1) return { status: "selected", candidates };
+  const ranked = candidates.map((candidate) => ({
+    candidate,
+    recordedAt: Date.parse(candidate?.value?.recorded_at ?? ""),
+  }));
+  if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) {
+    return { status: "conflict", candidates };
+  }
+  const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
+  const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt).map(({ candidate }) => candidate);
+  return latest.length === 1
+    ? { status: "selected", candidates: latest }
+    : { status: "conflict", candidates };
 }
 
 export function deriveStageCompletion(stage, observations = []) {
@@ -707,8 +736,15 @@ export function deriveCurrentProductRelease({
   }
   const acceptanceResults = [...acceptanceCandidates.values()].flatMap((candidates) => {
     const verifyCandidates = candidates.filter(({ source }) => source === "verify-summary");
-    const stageCandidates = candidates.filter(({ source }) => source === "stage-fact");
-    if (verifyCandidates.length === 0) return stageCandidates;
+    const stageSelection = selectLatestAcceptanceCandidates(candidates.filter(({ source }) => source === "stage-fact"));
+    const stageCandidates = stageSelection.candidates;
+    // Verify summary candidates are already a single authenticated summary in
+    // the canonical store. Keep that authority even though its synthetic
+    // product leaf has no event timestamp; only stage facts need historical
+    // ordering here.
+    const orderedVerifyCandidates = verifyCandidates;
+    if (stageSelection.status === "conflict") return [...orderedVerifyCandidates, ...stageCandidates];
+    if (orderedVerifyCandidates.length === 0) return stageCandidates;
     // The verify summary is the final product AC authority. A matching
     // stage leaf is only a fallback and must not become a duplicate
     // candidate; a disagreement remains visible as an explicit conflict.
@@ -718,11 +754,11 @@ export function deriveCurrentProductRelease({
       const status = value.status ?? (result === "pass" ? "passed" : result);
       return `${result}:${status}`;
     };
-    const verifyOutcome = outcome(verifyCandidates[0]);
+    const verifyOutcome = outcome(orderedVerifyCandidates[0]);
     const conflictingStageFact = stageCandidates.find((candidate) => outcome(candidate) !== verifyOutcome);
     return conflictingStageFact === undefined
-      ? verifyCandidates
-      : [...verifyCandidates, conflictingStageFact];
+      ? orderedVerifyCandidates
+      : [...orderedVerifyCandidates, conflictingStageFact];
   }).map(({ value, ref, hash }) => ({
     acceptance_criterion_id: value.acceptance_criterion_id ?? value.subject,
     result: value.result ?? (value.status === "passed" ? "pass" : value.status),

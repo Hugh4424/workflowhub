@@ -8,6 +8,8 @@ description: Grilling session that challenges your plan against the existing dom
 先核实，再提问。沿设计依赖逐项检查计划，但不要把能从代码、文档或已确认事实得到的
 答案重新问用户。只有仍会改变方向的关键问题才进入对话。
 
+Grill follows the upstream round/frontier contract: batch all independent questions, use one axis per question, defer dependent questions to later rounds, and wait for real replies before moving to the next round.
+
 Ask one batch only when the remaining frontier questions are independent. Each
 question in that batch must be answerable without the answer to another question;
 dependent questions stay out of the batch and are re-ranked after the reply.

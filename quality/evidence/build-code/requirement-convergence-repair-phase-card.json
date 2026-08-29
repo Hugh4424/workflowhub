@@ -1,0 +1,55 @@
+{
+  "schema_version": "workflowhub-phase-card.v1",
+  "task_id": "make-decision-requirement-convergence-20260828",
+  "stage": "build-code",
+  "goal": "修复四个已复现的生产缺陷，并用真实入口负例证明失败边界会咬人",
+  "allowed_files": [
+    "runtime/stage/stage-content-contracts.mjs",
+    "runtime/stage/stage-handlers.mjs",
+    "runtime/stage/stage-runner.mjs",
+    "tools/host/workflowhub-codex-session-event.mjs",
+    "tools/cli/task-bootstrap.mjs",
+    "tests/contract/requirement-convergence-regression.test.mjs",
+    "tests/contract/spec-analyze-completeness.test.mjs",
+    "tests/contract/task-bootstrap-integrity.test.mjs",
+    "tests/e2e/vnext-five-stage-current.test.mjs",
+    "tests/helpers/stage-outcome.mjs",
+    "tests/m15-codex-session-hook.test.mjs",
+    "specs/make-decision-requirement-convergence-20260828/tasks.md",
+    "quality/evidence/build-code/**"
+  ],
+  "covered_ac": [
+    "AC-CONV-001",
+    "AC-CONV-002",
+    "AC-ANALYZE-001",
+    "AC-ANALYZE-002",
+    "AC-CLARIFY-001",
+    "AC-CLARIFY-002",
+    "AC-HOST-001",
+    "AC-HOST-002",
+    "AC-TASK-001",
+    "AC-TASK-002"
+  ],
+  "non_goals": [
+    "不新增公共命令、schema、状态机或恢复控制面",
+    "不执行 merge、push、archive、cleanup 或 close",
+    "不把 unavailable、失败测试或旧 review 改写为通过"
+  ],
+  "compatibility_boundary": "保留合法非 Codex 调用的结构化 unavailable；历史材料继续可读；existing bootstrap 只补齐同一官方 task store",
+  "predesigned_test_route": {
+    "tier": "feature",
+    "skill": "backend-testing",
+    "focused_commands": [
+      "npx vitest run tests/m15-codex-session-hook.test.mjs tests/contract/task-bootstrap-integrity.test.mjs",
+      "npx vitest run tests/contract/requirement-convergence-regression.test.mjs tests/contract/spec-analyze-completeness.test.mjs"
+    ],
+    "oracle": "四组旧缺陷负例先失败，最小修复后同命令退出 0",
+    "expected_exit": 0
+  },
+  "stop_conditions": [
+    "需要新公共入口、第五材料或自动恢复状态机",
+    "修复会覆盖不属于当前任务的用户改动",
+    "无法让真实生产入口区分 unavailable 与真实输入错误"
+  ],
+  "expected_stage_end_summary": "四项缺陷均有 RED/GREEN、当前快照测试、独立 review 与逐条 disposition"
+}

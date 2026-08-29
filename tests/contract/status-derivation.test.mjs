@@ -338,6 +338,38 @@ describe("status is derived from current quality facts", () => {
     expect(buildOnlyResult.reasons).toContain("verify_confirmation_missing");
   });
 
+  it("projects the newest timestamped current AC fact after a repair", () => {
+    const taskId = "task";
+    const tree = "a".repeat(40);
+    const materialRevision = `revision-${"b".repeat(64)}`;
+    const records = new Map();
+    const fact = (status, recorded_at) => ({
+      schema_version: "quality-fact.v1",
+      task_id: taskId,
+      stage: "build-code",
+      material_revision: materialRevision,
+      snapshot_tree: tree,
+      kind: "acceptance_criterion",
+      subject: "AC-001",
+      status,
+      recorded_at,
+    });
+    records.set("quality/facts/old.json", `${JSON.stringify(fact("missing", "2026-08-22T00:00:00.000Z"))}\n`);
+    records.set("quality/facts/new.json", `${JSON.stringify(fact("passed", "2026-08-22T00:01:00.000Z"))}\n`);
+    const result = deriveCurrentProductRelease({
+      task_id: taskId,
+      read: (ref) => records.get(ref),
+      refs: [...records.keys()],
+      snapshot_tree: tree,
+      material_revision: materialRevision,
+      expected_acceptance_ids: ["AC-001"],
+      evaluate_freshness: () => ({ status: "current", authenticated: true }),
+    });
+    expect(result.reasons).not.toContain("acceptance_result_conflicting:AC-001");
+    expect(result.reasons).not.toContain("acceptance_result_not_pass:AC-001:missing");
+    expect(result.reasons).not.toContain("acceptance_result_not_pass:AC-001:undefined");
+  });
+
   it("does not release from a partial or ambiguous AC result set", () => {
     const hash = "a".repeat(64);
     const stage_completions = [

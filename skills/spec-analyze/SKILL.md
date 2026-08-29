@@ -42,7 +42,7 @@ Read only the stage packet supplied by the Stage Agent and the frozen skill bund
 ## Check
 
 1. Map every raw requirement/source ID from decision-log to the decision, spec, plan, task, FR/AC, and objective verification evidence that claims it.
-2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, plan, and tasks.
+2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, plan, and tasks. For `make-decision`, separately assess requirement coverage, goal achievement, acceptance clarity, solution convergence, and the plain-language end card. For `build-spec`, compare the spec against the upstream decision-log for invented product direction and record whether Clarify was triggered or explicitly skipped with reason and zero open items.
 3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
 4. Check every Phase, task, and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule.
 5. For every `DEFER-*` and `OPEN-*` item visible in the source facts or current excerpts, require a downstream owner, trigger, handoff/consumer, and close/retain condition in `decision-log`-derived facts, `spec`, `plan`, and `tasks`. Missing any one is a real `deferred_open_handoff_gap` finding; do not invent a task or owner.
