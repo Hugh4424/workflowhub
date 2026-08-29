@@ -309,6 +309,7 @@ export function registerCodexSession({ sessionId, transcriptPath, cwd = process.
     spec_analyze: existing?.spec_analyze ?? null,
     spec_analyze_by_task: existing?.spec_analyze_by_task && typeof existing.spec_analyze_by_task === "object" ? existing.spec_analyze_by_task : {},
     spec_analyze_by_task_stage: existing?.spec_analyze_by_task_stage && typeof existing.spec_analyze_by_task_stage === "object" ? existing.spec_analyze_by_task_stage : {},
+    code_review_by_task_stage: existing?.code_review_by_task_stage && typeof existing.code_review_by_task_stage === "object" ? existing.code_review_by_task_stage : {},
     task_binding: existing?.task_binding ?? null,
   };
   const sessions = state.sessions.filter((entry) => entry.session_id !== id);
@@ -395,6 +396,7 @@ export function readCurrentCodexSession({ cwd = process.cwd(), stage = null, ses
     spec_analyze: session.spec_analyze,
     spec_analyze_by_task: session.spec_analyze_by_task ?? {},
     spec_analyze_by_task_stage: session.spec_analyze_by_task_stage ?? {},
+    code_review_by_task_stage: session.code_review_by_task_stage ?? {},
   });
 }
 
@@ -683,6 +685,59 @@ export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd
   return Object.freeze({ session_id: current.session.session_id, state_path: statePath });
 }
 
+/**
+ * Record the structured dsh-code-review result produced by the current host.
+ * Lifecycle events only prove that a skill ran; they cannot be promoted to a
+ * review result.  Keep this explicit, task/stage keyed, and sidecar-only so
+ * the normal stage bridge remains the sole canonical writer.
+ */
+export function recordCodexSessionCodeReview({ taskId = null, stage = "verify-code", value, cwd = process.cwd(), sessionId = null } = {}) {
+  if (stage !== "verify-code") throw new TypeError("code_review recording is only valid for verify-code");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("code_review must be an object");
+  const current = sessionForMutation(cwd, sessionId);
+  const task = resolveSessionTaskId(current.session, taskId);
+  if (value.schema_version !== undefined && value.schema_version !== "workflowhub-code-review-stage-outcome.v1") {
+    throw new Error("code_review schema_version is unsupported");
+  }
+  if (value.stage !== undefined && value.stage !== stage) {
+    throw new Error(`code_review stage identity mismatch: expected ${stage}, received ${value.stage}`);
+  }
+  if (value.task_id !== undefined && value.task_id !== task) {
+    throw new Error(`code_review task identity mismatch: expected ${task}, received ${value.task_id}`);
+  }
+  if (value.snapshot_tree !== undefined && (typeof value.snapshot_tree !== "string" || !/^[a-f0-9]{40}$/.test(value.snapshot_tree))) {
+    throw new TypeError("code_review snapshot_tree identity is invalid");
+  }
+  if (value.material_revision !== undefined && (typeof value.material_revision !== "string" || !/^revision-[a-f0-9]{64}$/.test(value.material_revision))) {
+    throw new TypeError("code_review material_revision identity is invalid");
+  }
+  if ((value.quality_review_ref === undefined) !== (value.quality_review_hash === undefined)) {
+    throw new TypeError("code_review quality_review_ref/hash must be provided together");
+  }
+  if (value.quality_review_ref !== undefined
+      && (typeof value.quality_review_ref !== "string"
+        || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(value.quality_review_ref)
+        || typeof value.quality_review_hash !== "string"
+        || !/^[a-f0-9]{64}$/.test(value.quality_review_hash))) {
+    throw new TypeError("code_review quality review binding is invalid");
+  }
+  if (!value.result || typeof value.result !== "object" || Array.isArray(value.result)) {
+    throw new TypeError("code_review result is required");
+  }
+  if (!new Set(["clean", "findings", "unavailable"]).has(value.result.status)
+      || !Array.isArray(value.result.findings)
+      || typeof value.result.summary !== "string"
+      || value.result.summary.trim() === "") {
+    throw new TypeError("code_review result is invalid");
+  }
+  current.session.code_review_by_task_stage ??= {};
+  current.session.code_review_by_task_stage[task] ??= {};
+  current.session.code_review_by_task_stage[task][stage] = structuredClone(value);
+  current.session.last_seen_at_ms = Date.now();
+  const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
+  return Object.freeze({ session_id: current.session.session_id, state_path: statePath });
+}
+
 export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stage, sessionId = null } = {}) {
   const current = readCurrentCodexSession({ cwd, stage, sessionId });
   if (current.status !== "present") return current;
@@ -759,6 +814,9 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   const specAnalyze = stage
     ? current.spec_analyze_by_task_stage?.[task]?.[stage] ?? null
     : current.spec_analyze_by_task?.[task] ?? null;
+  const codeReview = stage === "verify-code"
+    ? current.code_review_by_task_stage?.[task]?.[stage] ?? null
+    : null;
   // verify-code deliberately has no spec-analyze step.  Requiring a future
   // stage's analyzer here made an otherwise complete review handoff look
   // incomplete and turned an auxiliary fact into a hidden continuation gate.
@@ -788,6 +846,7 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     status_value: complete ? "completed" : "incomplete",
     events,
     spec_analyze: specAnalyze,
+    ...(stage === "verify-code" ? { code_review: codeReview } : {}),
     requirement_messages: frozenRequirementMessages(current.task_binding?.requirement_messages),
     ...(rejectedEvents.length > 0 ? {
       rejected_events: rejectedEvents.map((entry) => ({

@@ -42,7 +42,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f8d1add6bd0ef34343fdf710c2ebc6765b0a8488856bf8ba9b74c4e7b8b17eb8
+    local_bundle_hash: b0d29f16c9c519bd795d42320ca75d972f4707dca42deee91a6cf159c927436a
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -124,7 +124,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: a289147add6d7a46adc0c444829db4183a158c86a9851104ca273d935a6a9139
+    local_bundle_hash: 4957d11d7aa5cddb9736304f0510d67f825e50451ff549ef1c7fda275385fb5d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
@@ -170,7 +170,7 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 1e6d106ffd91e937b75eabc4f7cbffc8669aebe04887065b3e863a6d9334e1e7
+    local_bundle_hash: debaf18c4794b0fa00472e4cd4d079b2ec17df3d456254b62fc5eed638c6c944
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 前四 stage 收尾唯一语义检查与质量事实契约 owner

@@ -30,6 +30,8 @@ import {
   validateUiApplicability,
   validateUiContract,
   validateComponentQualityMap,
+  analyzeDecisionConvergence,
+  validateSpecClarifyAndDirectionFidelity,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
@@ -2115,6 +2117,8 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision", reviewTrack: "direction" });
   const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision", reviewTrack: "detail" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
+  const convergence = analyzeDecisionConvergence(currentDecisionLog);
+  const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
     facts: {
       worktree_root: worker.candidateWorkspace.worktreeRoot,
@@ -2128,9 +2132,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
       audit_gaps: auditGaps,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
       completion_subjects: {
-        scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
-        non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log non-goals section"),
-        risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
+        scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [specEvidence], "decision-log scope section"),
+        non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [specEvidence], "decision-log non-goals section"),
+        risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [specEvidence], "decision-log risk handoff section"),
+        requirement_coverage: subjectFact(convergence.facts.requirement_coverage, [specEvidence], convergence.facts.requirement_coverage === "passed" ? "decision-log requirement coverage matrix is present" : convergence.errors[0]),
+        goal_achievement: subjectFact(convergence.facts.goal_achievement, [specEvidence], convergence.facts.goal_achievement === "passed" ? "decision-log goal achievement is present" : convergence.errors.find((e) => e.includes("goal")) ?? "decision-log goal achievement section missing"),
+        acceptance_clarity: subjectFact(convergence.facts.acceptance_clarity, [specEvidence], convergence.facts.acceptance_clarity === "passed" ? "decision-log acceptance criteria are present" : convergence.errors.find((e) => e.includes("acceptance")) ?? "decision-log acceptance clarity section missing"),
+        solution_convergence: subjectFact(convergence.facts.solution_convergence, [specEvidence], convergence.facts.solution_convergence === "passed" ? "decision-log shows a converged solution" : convergence.errors.find((e) => e.includes("converged solution")) ?? "decision-log solution convergence section missing"),
+        plain_language_card: subjectFact(convergence.facts.plain_language_card, [specEvidence], convergence.facts.plain_language_card === "passed" ? "decision-log end card is in plain language" : convergence.errors.find((e) => e.includes("end card")) ?? "decision-log plain-language end card missing"),
       },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
@@ -2180,6 +2189,8 @@ HANDLERS.set("build-spec", async (worker, input) => {
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
   if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
+  const decisionLog = worker.readArtifact("decision-log.md");
+  const directionFidelity = validateSpecClarifyAndDirectionFidelity(item.value.content, decisionLog);
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-spec Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
   const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
@@ -2187,8 +2198,20 @@ HANDLERS.set("build-spec", async (worker, input) => {
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
   const specEvidence = { ref: item.ref, sha256: item.content_hash ?? item.evidence.sha256 };
+  const clarifyStatus = clarify ? "passed"
+    : directionFidelity.clarify.trigger === false ? "passed"
+    : directionFidelity.ok ? "passed"
+    : "missing";
   const completionSubjects = {
     zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
+    clarify: subjectFact(
+      clarifyStatus,
+      [specEvidence, ...(clarify?.evidence ? [clarify.evidence] : [])].filter(Boolean),
+      clarify ? "spec-clarify evidence is recorded"
+        : directionFidelity.clarify.trigger === false ? "spec explicitly records no material ambiguity"
+        : directionFidelity.ok ? "spec direction fidelity is confirmed"
+        : directionFidelity.errors.join("; "),
+    ),
   };
   if (ui.facts.applicability !== "non_ui") {
     completionSubjects.ui_design = subjectFact(
@@ -2223,6 +2246,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
       ...dispositions.missing_items,
       ...ui.missing_items,
       ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
+      ...directionFidelity.errors.map((error) => `spec direction fidelity: ${error}`),
     ],
   }, {
     worker,

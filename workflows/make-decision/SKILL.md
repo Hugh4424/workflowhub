@@ -97,7 +97,11 @@ decision and questions to the user.
 1. Replay the original requirement. Separate confirmed facts, assumptions,
    direction-changing ambiguity, non-goals, and deferred work. Completion:
    every part of the original requirement is represented or explicitly marked
-   unresolved.
+   unresolved. Record the requirement-to-decision coverage matrix so that every
+   original requirement has a visible disposition; the matrix must cover the five
+   dimensions: business goal, flow/surface, data/state, success/failure/
+   acceptance, and constraints/non-goals/deferrals. End with a plain-language
+   card containing the core requirement, core goal, and selected direction.
 2. Execute the manifest in order. Every step completion first
    uses the existing make-decision writer to append one update to the same
    `decision-log.md` ref/hash. The update records the step outcome, the actual

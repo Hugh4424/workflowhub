@@ -152,7 +152,9 @@ function bindAnalyzerPacketIdentity(packet, identity) {
   const bound = structuredClone(packet);
   for (const key of ["clarify", "clarify_outcome", "grill", "grill_summary", "confirmation", "final_confirmation"]) {
     if (bound[key] && typeof bound[key] === "object" && !Array.isArray(bound[key])) {
-      bound[key] = { ...identity, ...bound[key] };
+      // Host identity is authoritative for the current snapshot/materials;
+      // a session packet may carry the prior run's advisory identity.
+      bound[key] = { ...bound[key], ...identity };
     }
   }
   for (const key of ["acceptance_coverage"]) {

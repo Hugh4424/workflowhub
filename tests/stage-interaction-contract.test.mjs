@@ -224,6 +224,22 @@ describe("current interaction boundary", () => {
   });
 });
 
+describe("P1 RED requirement-convergence regression", () => {
+  it("expects the grill skill to use the upstream round/frontier contract", () => {
+    expect(() => read("skills", "grill-with-docs", "SKILL.md")).not.toThrow();
+    const grillSkill = read("skills", "grill-with-docs", "SKILL.md");
+    expect(grillSkill).toMatch(/batch all independent questions/i);
+    expect(grillSkill).toMatch(/one axis per question/i);
+    expect(grillSkill).toMatch(/defer dependent questions/i);
+    expect(grillSkill).toMatch(/wait for real replies/i);
+  });
+
+  it("forbids build-spec from inventing product direction", () => {
+    expect(buildSpec).toMatch(/never invents? product direction/i);
+    expect(buildSpec).toMatch(/records clarifications/i);
+  });
+});
+
 describe("current ambiguity handling", () => {
   it("records material ambiguity plainly and keeps drafting/revision possible", () => {
     expect(buildSpec).toMatch(/list every material ambiguity separately/i);

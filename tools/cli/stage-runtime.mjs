@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import process from "node:process";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
@@ -179,12 +180,39 @@ function selectedRequirementMessages(value) {
   return messages;
 }
 
+function* readUtf8Lines(path) {
+  const fd = openSync(path, "r");
+  const decoder = new StringDecoder("utf8");
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  let carry = "";
+  try {
+    while (true) {
+      const bytes = readSync(fd, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      carry += decoder.write(buffer.subarray(0, bytes));
+      const lines = carry.split(/\r?\n/);
+      carry = lines.pop() ?? "";
+      yield* lines;
+    }
+    carry += decoder.end();
+    if (carry !== "") yield carry;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER, requirementMessages = [] }) {
   const records = [];
   const selected = selectedRequirementMessages(requirementMessages);
   const selectedById = new Map(selected.map((message) => [message.id, message]));
   const emittedRequirementIds = new Set();
-  for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
+  const lines = typeof raw === "string" || Buffer.isBuffer(raw) || raw instanceof Uint8Array
+    ? String(raw).split(/\r?\n/)
+    : raw;
+  let index = 0;
+  for (const line of lines) {
+    const lineIndex = index;
+    index += 1;
     if (!line.trim()) continue;
     let outer;
     try { outer = JSON.parse(line); } catch { continue; }
@@ -192,7 +220,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
     const occurredAt = rolloutTimestamp(outer);
     const payload = outer.payload;
     const payloadType = typeof payload.type === "string" ? payload.type : "unknown";
-    const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${index}-${payloadType}`);
+    const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${lineIndex}-${payloadType}`);
     const common = {
       task_id: taskId,
       run_id: runId,
@@ -204,7 +232,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
     // current bytes to their frozen hashes.  Nothing else in the transcript
     // can become a requirement message.
     const userText = codexUserInputText(outer);
-    const userMessageId = codexUserMessageId(outer, payload, index);
+    const userMessageId = codexUserMessageId(outer, payload, lineIndex);
     const selectedMessage = userText === null ? null : selectedById.get(userMessageId);
     if (selectedMessage) {
       records.push(JSON.stringify({
@@ -254,7 +282,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
       continue;
     }
     if (outer.type === "response_item" && payloadType === "custom_tool_call") {
-      const toolId = safeRolloutId(payload.id ?? `${index}-tool`);
+      const toolId = safeRolloutId(payload.id ?? `${lineIndex}-tool`);
       records.push(JSON.stringify({
         id: `tool-${toolId}`,
         type: "tool_use",
@@ -269,7 +297,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
     // Generic transcript events need the rollout line boundary as part of
     // their identity, otherwise a normal append-only session becomes a false
     // typed-event conflict.
-    const genericEventId = `${sourceEventId}-${index}`;
+    const genericEventId = `${sourceEventId}-${lineIndex}`;
     records.push(JSON.stringify({
       id: `event-${genericEventId}`,
       type: "transcript_event",
@@ -308,7 +336,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
  * The launcher owns the host path and turns it into a private reader capability.
  * Runtime facts only receive the opaque thread reference and normalized events.
  */
-export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, stage = null, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
   const located = locateCodexRollout({ env, home, cwd });
   if (!located) return null;
   const sourceRef = `codex-rollout-${safeRolloutId(located.threadId)}`;
@@ -325,11 +353,11 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
     cli_version: env.CODEX_CLI_VERSION ?? "codex-host",
     adapter_version: "codex-rollout-adapter.v1",
     capabilities: ["transcript_event", "token", "tool_use", "requirement_message"],
-    reader: createTranscriptSourceReader(() => normalizeCodexRollout(readFileSync(located.target, "utf8"), {
+    reader: createTranscriptSourceReader(() => normalizeCodexRollout(readUtf8Lines(located.target), {
       taskId: task_id ?? context?.identity?.taskId,
       runId: run_id ?? context?.workflowRunId,
       attemptId: attempt_id ?? context?.attempt_id ?? null,
-      stage: context?.stage ?? null,
+      stage: stage ?? context?.stage ?? null,
       sessionId: safeRolloutId(located.threadId),
       startedAtMs,
       endedAtMs,
@@ -349,7 +377,8 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   const taskId = context?.identity?.taskId;
   const session = buildWorkflowHubSessionInput({ cwd, stage, taskId, sessionId: currentCodexSessionId(process.env) });
   if (session.status !== "present") return input;
-  if (!session.spec_analyze || typeof session.spec_analyze !== "object" || Array.isArray(session.spec_analyze)) return input;
+  const stageOutcome = stage === "verify-code" ? session.code_review : session.spec_analyze;
+  if (!stageOutcome || typeof stageOutcome !== "object" || Array.isArray(stageOutcome)) return input;
   const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
     ? input.attempt_id
     : `attempt-${sha256(JSON.stringify({
@@ -359,7 +388,7 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
       session_id: session.session_id,
       source_ref: session.source_ref,
       events: session.events,
-      spec_analyze: session.spec_analyze,
+      stage_outcome: stageOutcome,
     })).slice(0, 32)}`;
   const requirementAuthentication = stage === "make-decision"
     ? parseRegisteredRequirementTranscript(resolveDefaultMonitoringSource({
@@ -367,6 +396,7 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
       task_id: taskId,
       run_id: context.workflowRunId,
       attempt_id: attemptId,
+      stage,
       startedAtMs: resolveRolloutStartedAt(),
       cwd,
     }), { stage })
@@ -384,7 +414,7 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
         source_ref: session.source_ref,
         status: session.status_value,
         events: session.events,
-        spec_analyze: session.spec_analyze,
+        ...(stage === "verify-code" ? { code_review: session.code_review } : { spec_analyze: session.spec_analyze }),
       },
     },
   });

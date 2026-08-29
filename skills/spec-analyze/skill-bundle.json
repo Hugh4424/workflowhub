@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": "spec-analyze",
   "files": [
-    { "path": "SKILL.md", "sha256": "88e835d5a27cb7ac781bcf1765e511c1c7c2efbd47c5554da69451e0860152d0" },
+    { "path": "SKILL.md", "sha256": "cb77ba07cfc13e8af24e0ada1fd362e0677a8eeec7a40b4fd6c59f93f38d3cae" },
     { "path": "packet-lens.md", "sha256": "ea04e86573e0ddf70d3baad1cca461bb78da6eb2cffcdd136c521c297346684f" },
     "review-bundle.json"
   ]

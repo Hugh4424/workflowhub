@@ -57,9 +57,9 @@
 | R-018 | D-008（子项②） | FR-HOST-004 | AC-HOST-004 |
 | R-013 | D-002、D-003 | FR-CONV-002、FR-ANALYZE-001 | AC-CONV-002、AC-ANALYZE-001 |
 | R-014 | D-007 | FR-CONV-004 | AC-CONV-004 |
-| R-015 | D-008（子项⑤） | FR-HOST-001~004、FR-REVIEW-001~003 | AC-HOST-001~004、AC-REVIEW-001~003 |
+| R-015 | D-008（子项⑤） | FR-HOST-001~002、FR-HOST-004、FR-REVIEW-001~003 | AC-HOST-001~002、AC-HOST-004、AC-REVIEW-001~003 |
 | R-016 | D-008（子项①）、D-011 | FR-HOST-001、FR-HOST-002 | AC-HOST-001、AC-HOST-002 |
-| R-017 | D-008（子项①）、D-011、D-012 | FR-HOST-003 | AC-HOST-003 |
+| R-017 | D-008（子项①）、D-011、D-012 | FR-TASK-002 | AC-TASK-002 |
 | R-019、R-020 | D-008（子项③）、D-011 | FR-REVIEW-001、FR-REVIEW-002 | AC-REVIEW-001、AC-REVIEW-002 |
 | R-021 | D-008（子项④） | FR-REVIEW-003 | AC-REVIEW-003 |
 | dogfood 通过标准 | D-009 | FR-DOG-001 | AC-DOG-001 |
@@ -262,7 +262,7 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 
 - **PFACT-004**：task/worktree/task store 初始化先于 session 绑定发生，绑定失败不回滚已初始化内容（正式只读调研事实，SRES-003）。（状态=verified）
   - **证据或来源**：决策日志 R-017、D-008（子项①）、D-011（范围修正确认初始化顺序）；SRES-003（正式只读调研事实）
-  - **关联**：FR-HOST-003、AC-HOST-003（初始化顺序）；「绑定失败/会话来源不可用不回滚已创建任务」的验收单点归 AC-TASK-002（见 FR-TASK-002）
+  - **关联**：FR-TASK-002、AC-TASK-002（初始化顺序与绑定不回滚）
 
 - **PFACT-005**：worktree 的路径与分支规则为既有确定性 workspace 行为；「全无创建/全有复验/单边 conflict」三态是本规格对该既有行为的细化，来源 D-008 + D-011，不是用户逐项选择的新行为。（状态=verified）
   - **证据或来源**：决策日志 R-012、R-018、D-008（子项②）、D-011；SRES-003（正式只读调研事实）
@@ -398,12 +398,6 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
   - **场景**：SCN-008
   - **验收**：AC-HOST-002
 
-- **FR-HOST-003**：task/worktree/task store 的初始化先于 session 绑定发生；「绑定失败/会话来源不可用不回滚已创建任务」由 TASK 域单点承接（FR-TASK-002 / AC-TASK-002），本 FR 不再重复声明（删除 HOST/TASK 双写）。
-  - **范围边界**：初始化与绑定为先后顺序而非互相依赖；「不回滚已初始化/已创建内容」的任务目录侧验收只由 AC-TASK-002 承接，AC-HOST-003 仅验收初始化顺序
-  - **依据**：R-017、D-008（子项①）、D-011；PFACT-004
-  - **场景**：SCN-009
-  - **验收**：AC-HOST-003（仅初始化顺序）
-
 - **FR-HOST-004**：正式任务开始前 worktree 按现有 workspace 规则的确定性路径/分支预检：全无则创建、全有则复验路径与分支一致、仅单边存在则标 conflict 并停下报告，不自动修复。
   - **范围边界**：预检只到「存在/一致/冲突」三个确定性结论；冲突处置属人工，不做自动修复
   - **依据**：R-012、R-018、D-008（子项②）；PFACT-005
@@ -420,10 +414,10 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
   - **场景**：SCN-016
   - **验收**：AC-TASK-001
 
-- **FR-TASK-002**：已有认证 worktree 时必须使用显式现有绑定（existing）复用：只校验绑定关系、不创建也不覆盖既有材料；任务存储初始化完成后，会话来源（session provenance）仅是辅助溯源，不可用时不得删除或回滚已创建的任务目录；真实参数/材料/身份错误必须 fail-loud，不得以会话来源不可用掩盖。
-  - **范围边界**：显式绑定与只创建发布互斥（已存在即绑定、缺失即创建，不两者同时）；绑定失败或会话来源不可用不构成回滚理由；真实性错误与降级语义互不替代（沿用 FR-HOST-002 语义）；不新增回滚/恢复机制；「会话来源不可用不回滚已创建任务」验收单点归属 AC-TASK-002（与 FR-HOST-003 明确分工，不双写）；显式绑定语义全部来自既有官方入口，不新增第二绑定机制
-  - **依据**：D-012、R-017；PFACT-017
-  - **场景**：SCN-016
+- **FR-TASK-002**：任务存储初始化与显式绑定按既有官方入口顺序执行，且已有认证 worktree 时只校验不覆盖、会话来源不可用不回滚、真实错误 fail-loud。
+  - **范围边界**：task/worktree/task store 初始化先于 session 绑定发生；显式绑定与只创建发布互斥（已存在即绑定、缺失即创建，不两者同时）；绑定失败或会话来源不可用不构成回滚理由；真实性错误与降级语义互不替代（沿用 FR-HOST-002 语义）；不新增回滚/恢复机制/第二绑定机制/公共启动命令；显式绑定语义全部来自既有官方入口
+  - **依据**：D-012、R-017、D-011；PFACT-004、PFACT-017
+  - **场景**：SCN-009、SCN-016
   - **验收**：AC-TASK-002
 
 ### 审查材料交付（REVIEW）
@@ -623,7 +617,7 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 - 有实质歧义才问、无歧义显式跳过并给理由；不猜答、不换第二套 Clarify。（FR-CLARIFY-001、FR-CLARIFY-002、AC-CLARIFY-001、AC-CLARIFY-002）
 - 未来扩展只标影响不设计方案。（FR-CONV-002、AC-CONV-002）
 - 用户可见面人话为主，稳定编号仅内部追溯且校验可回指。（FR-CONV-004、AC-CONV-004）
-- 初始化先于 session 绑定（FR-HOST-003、AC-HOST-003）；绑定失败/会话来源不可用不回滚已创建任务（FR-TASK-002、AC-TASK-002 单点）；worktree 单边存在标 conflict 不自动修复。（FR-HOST-004、AC-HOST-004）
+- 初始化先于 session 绑定（FR-TASK-002、AC-TASK-002 单点）；worktree 单边存在标 conflict 不自动修复（FR-HOST-004、AC-HOST-004）。
 - 降级（unavailable）与真实错误（fail-loud）语义互不替代，真实错误不得被降级吞掉。（FR-HOST-002、AC-HOST-002）
 - 审查材料只走既有正式密封通道，错误保留正式错误码并标 unavailable。（FR-REVIEW-001、FR-REVIEW-002、AC-REVIEW-001、AC-REVIEW-002）
 - 验证/演练结果是质量事实，不是 gate。（FR-DOG-001、AC-DOG-001）
@@ -709,13 +703,6 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
   - **失败条件**：真实错误被降级语义吞掉（unavailable 掩盖错误），或能力正常时也误报错误
   - **证据类型**：`test`
 
-- [ ] **AC-HOST-003**：初始化先于绑定（不回滚语义单点归 AC-TASK-002）
-  - **需求**：FR-HOST-003
-  验证：新任务初始化顺序回放（绑定失败后状态检查由 AC-TASK-002 单点覆盖，避免 HOST/TASK 双写）
-  - **通过条件**：task/worktree/task store 初始化先于 session 绑定
-  - **失败条件**：初始化依赖绑定先行（顺序颠倒）
-  - **证据类型**：`test`
-
 - [ ] **AC-HOST-004**：worktree 三态确定性处理
   - **需求**：FR-HOST-004
   验证：全无、全有、单边存在三类 worktree 状态回放
@@ -772,11 +759,11 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
   - **失败条件**：把 worktree 存在误判为任务已初始化而跳过发布；只创建发布覆盖既有材料；出现手写任务清单/非官方启动通道；或把 task.json 单独存在但 store 不完整的半创建目录当作成功
   - **证据类型**：`test`
 
-- [ ] **AC-TASK-002**：既有 worktree 显式现有绑定不覆盖、会话来源不可用不回滚、真实错误 fail-loud，且半创建目录按真实失败处理
+- [ ] **AC-TASK-002**：任务存储初始化先于 session 绑定；既有 worktree 显式现有绑定不覆盖、会话来源不可用不回滚、真实错误 fail-loud，且半创建目录按真实失败处理
   - **需求**：FR-TASK-002
-  验证：构造「已认证 worktree 显式现有绑定」「会话来源不可用」「真实参数/材料/身份错误」三类样本回放；历史缺失样本与当前成功修复样本均可回放：本任务官方启动前任务目录缺失，启动后任务目录已创建、现有绑定复用工作副本且既有材料未被覆盖，启动输出中的会话来源冲突仅为辅助溯源异常；补构造「task.json 存在但 index/facts/quality 缺失」的半创建目录样本，验证其不被视为已初始化
-  - **通过条件**：显式现有绑定只校验不覆盖既有材料；任务存储初始化后会话来源不可用不回滚已创建任务目录；真实性错误 fail-loud 且不被会话来源不可用掩盖；task.json 单独存在但 store 不完整时按真实失败事实处理，不视为成功初始化，也不继续后续阶段
-  - **失败条件**：显式绑定覆盖既有材料；把会话来源不可用当作回滚/删除已创建任务的理由；真实性错误被降级成 unavailable 吞掉；或把半创建目录当作已初始化而继续运行
+  验证：构造「已认证 worktree 显式现有绑定」「会话来源不可用」「真实参数/材料/身份错误」「初始化顺序颠倒」四类样本回放；历史缺失样本与当前成功修复样本均可回放：本任务官方启动前任务目录缺失，启动后任务目录已创建、现有绑定复用工作副本且既有材料未被覆盖，启动输出中的会话来源冲突仅为辅助溯源异常；补构造「task.json 存在但 index/facts/quality 缺失」的半创建目录样本，验证其不被视为已初始化
+  - **通过条件**：task/worktree/task store 初始化先于 session 绑定；显式现有绑定只校验不覆盖既有材料；任务存储初始化后会话来源不可用不回滚已创建任务目录；真实性错误 fail-loud 且不被会话来源不可用掩盖；task.json 单独存在但 store 不完整时按真实失败事实处理，不视为成功初始化，也不继续后续阶段
+  - **失败条件**：初始化依赖绑定先行（顺序颠倒）；显式绑定覆盖既有材料；把会话来源不可用当作回滚/删除已创建任务的理由；真实性错误被降级成 unavailable 吞掉；或把半创建目录当作已初始化而继续运行
   - **证据类型**：`test`
 
 ## 12. 风险、未决与交接
@@ -790,7 +777,7 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
   - **验证**：本规格每个 FR/AC 可映射回 23 条需求，无越界项
 
 - **RISK-002**：认证 worktree 不含 node_modules，后续阶段跑测试需要安装依赖或复用主仓库环境
-  - **受影响 ID**：AC-HOST-003、AC-HOST-004、AC-DOG-001
+  - **受影响 ID**：AC-HOST-004、AC-DOG-001
   - **触发条件**：build-plan/build-code 在 worktree 内直接运行测试
   - **后果**：验证成本上升、环境不一致
   - **缓解或 STOP**：复用主仓库环境或按计划安装依赖；装不上则保持 incomplete
@@ -859,9 +846,9 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 ### 非 Codex 宿主初始化与 worktree 预检
 
 - **既有行为**：非 Codex 宿主调用 session 事件直接失败且无 task 绑定；worktree 漏建由用户纠正。
-- **本需求影响**：无 session 时结构化 unavailable 正常退出；真实错误 fail-loud；初始化先于绑定（「不回滚」验收单点归 TASK 域 AC-TASK-002，与 FR-HOST-003 分工见第 5 节）；worktree 三态确定性预检。
+- **本需求影响**：无 session 时结构化 unavailable 正常退出；真实错误 fail-loud；初始化先于绑定（「不回滚」验收单点归 TASK 域 AC-TASK-002，见 FR-TASK-002）；worktree 三态确定性预检。
 - **回归路径**：无 session、能力缺失、真实性错误、task store 缺失、worktree 全无/全有/单边存在。
-- **验收**：AC-HOST-001、AC-HOST-002、AC-HOST-003、AC-HOST-004
+- **验收**：AC-HOST-001、AC-HOST-002、AC-HOST-004、AC-TASK-002
 
 ### 审查材料交付
 
@@ -912,7 +899,7 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 - **classification**：scope revision Q&A（真实问答两轴，均用户真实回复）
 - **source**：build-spec 本规格修订 + scope-revision 真实回复（锚点 scope-revision-task-store / scope-revision-review-helper）
 - **answer**：①直写分支删除——task/worktree/task store 已在 session 绑定前初始化，无 task store 起点不存在，用户答 A；②打包辅助=复用既有正式密封材料入口（材料构建 → 成组运行 → 第三方审查）并补诊断/文档，不新增第二工具，用户答 A
-- **affected**：D-011、FR-HOST-001、FR-HOST-003、FR-REVIEW-001、FR-REVIEW-002、SCN-009、SCN-011、AC-HOST-001、AC-HOST-003、AC-REVIEW-001、AC-REVIEW-002
+- **affected**：D-011、FR-HOST-001、FR-TASK-002、FR-REVIEW-001、FR-REVIEW-002、SCN-009、SCN-011、AC-HOST-001、AC-TASK-002、AC-REVIEW-001、AC-REVIEW-002
 - **consequence**：本批为 scope revision 真实问答批（两问均 trigger=true 且用户答 A），不重算第 1 批结论；D-011 已锁定，来源映射与 FR/AC 表述随本批更新
 - **risk**：无新增歧义（material ambiguity=0）；若把「复用正式入口」实现成第二工具则违反 D-011，由 AC-REVIEW-001/002 验收兜底
 - **superseded wording**：任何「无 task store 时材料直写仍被保留」「可复用打包辅助=新增第二工具」的表述（D-008 两片段已被 D-011 修正）
@@ -948,7 +935,7 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 
 ## build-spec 工作步骤状态（本阶段）
 
-> 步骤编号与名称对齐既有 build-spec 步骤序列（1~14）；本规格状态=草稿 / 待独立审查，未接受为正式规格；步骤 7~9 为 UI 相关步骤，本任务无产品 UI 故整段 not_applicable。
+> 步骤编号与名称对齐既有 build-spec 步骤序列（1~14）；本规格状态=已冻结 / 待 stage-end 验证（独立 advisory 审查 pass；正式 wh-review provider 不可用，advisory 审查结果不是推进许可证）；步骤 7~9 为 UI 相关步骤，本任务无产品 UI 故整段 not_applicable。
 
 | step | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
@@ -956,13 +943,13 @@ WorkflowHub 的标准流程固定五阶段，make-decision 位于起点，负责
 | 2 | 条件调研 spec-research | completed | executed（SRES-001~006，无跳过）；关键事实写入 PFACT-002/003/004/005/006/007/016；R-022 双标准事实见 PFACT-016 |
 | 3 | spec-clarify 单批独立问题 | completed | 第 1 批真实问答（trigger=true，1 问，0 开放材料歧义）+ 第 2 批 scope revision 真实问答（trigger=true，2 问 2 答，锚点 scope-revision-task-store/scope-revision-review-helper，用户均答 A，0 开放材料歧义）+ 第 3 批 scope revision 真实问答（trigger=true，1 问 1 答，锚点 task-handle-bootstrap-scope=A，R-023/D-012，0 开放材料歧义）；三批互不覆盖（见文末 Spec Clarification Record） |
 | 4 | spec-specify 起草/修订 spec.md（本文件） | completed | 草稿齐备：SCN/PFACT/FR/AC/风险/非目标/来源映射无占位符；R-022 已映射 D-010 并新增 AUTHORING 域（PFACT-016、FR-AUTHORING-001/002、SCN-015、AC-AUTHORING-001/002）；D-011 范围修正已并入来源映射与 FR-HOST/FR-REVIEW；本次范围修订（R-023/D-012/TASK 域）已并入本文件（PFACT-017、FR-TASK-001/002、SCN-016、AC-TASK-001/002、Clarify 第 3 批、SRES-006）；R-023/D-012 相关 TaskHandle 已按官方入口补建（任务目录与任务存储已创建并绑定现有 worktree），但实现契约仍待后续 |
-| 5 | simplicity-guard 简单性处理 | completed | 复核完成：TASK 域明确为「只消费并核验现有官方启动入口」，不新增第二启动机制/公共命令/控制面；FR-HOST-003 与 FR-TASK-002 分工明确，删除双写；半创建风险登记为 RISK-006 并定义完整性事实/fail-loud/操作员决策；独立简单性审查 verdict=PASS（0 blocker/0 high/0 medium/1 low） |
+| 5 | simplicity-guard 简单性处理 | completed | 复核完成：TASK 域收缩为「复用现有官方启动入口的最小消费契约 + 执行纪律 + 风险登记」；删除原 HOST 域初始化顺序要求，其「初始化先于 session 绑定」语义并入 FR-TASK-002/AC-TASK-002；不新增第二启动机制/公共命令/控制面；RISK-006 仅作风险登记，不作为新前置检查；advisory 简单性审查 verdict=PASS（0 blocker/0 high/0 medium/0 low） |
 | 6 | plan-ceo-review 产品方向检查（problem/scope/value/alternatives/product direction） | completed | 复核完成：产品方向与 D-001~D-012 一致，未扩大范围，未新增 gate/状态机/公共命令；独立产品方向审查 verdict=PASS（advisory，因 provider 不可用未走正式 wh-review） |
 | 7 | ui-project-init | not_applicable | 无产品 UI：本任务是对话/材料消费面（Talk 卡/结束卡/决策日志/spec 材料），不创建 UI 材料 |
 | 8 | design-source-readiness | not_applicable | 同上：无屏幕、设计源或 Design 修订，无可绑定画面事实 |
 | 9 | conditional-plan-design-review | not_applicable | 同上：无 UI 设计环、无 preview/外部设计返回事实 |
 | 10 | freeze-spec | completed | spec.md 已冻结为当前接受版本；后续只修紧急缺陷，不扩招范围 |
-| 11 | review-frozen-spec | completed（advisory） | 正式 wh-review provider 当前不可用，改为独立子代理基于 constitution/simplicity-guard/plan-ceo-review 的 advisory 审查；verdict=PASS；发现 1 low（decision-log/spec RISK 编号不一致）已处置 |
-| 12 | main-agent-disposes-findings | completed | low finding 已修复：decision-log 风险表补 RISK-005（降级语义滥用）、原 RISK-005 改为 RISK-006（半创建目录），step16 引用同步 |
+| 11 | review-frozen-spec | completed（advisory，第二轮） | 正式 wh-review provider 仍不可用；第二轮独立 advisory 审查（simplicity-guard + plan-ceo-review）发现 needs_revision：TASK 域仍像新机制域，原 HOST 域初始化顺序要求与 FR-TASK-002 语义重复；审查建议删除该 HOST 域要求并将其语义并入 FR-TASK-002，TASK 域收缩为「复用既有官方入口 + 执行纪律 + 风险登记」 |
+| 12 | main-agent-disposes-findings | completed | finding 已处置：删除原 HOST 域初始化顺序要求与其验收卡；FR-TASK-002 吸收「初始化先于 session 绑定」「显式 existing 绑定只校验不覆盖」「会话来源不可用不回滚」「真实错误 fail-loud」「半创建目录按真实失败处理」；AC-TASK-002 同步更新；来源映射、SCN-009/SCN-016 关联、Clarify 第 2 批 affected、RISK-002 受影响 ID 全部同步；spec 重新通过三个 production validator |
 | 13 | stage-end-spec-analyze | pending | 待运行官方 build-spec stage-end（stage-runtime run）验证并产出结果 |
 | 14 | publish-spec-result | pending | 待 stage-end 成功后发布 |

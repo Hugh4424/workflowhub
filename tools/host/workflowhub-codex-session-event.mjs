@@ -16,6 +16,7 @@ import yaml from "js-yaml";
 import {
   currentCodexSessionId,
   finishCodexSessionEvent,
+  recordCodexSessionCodeReview,
   recordCodexSessionSpecAnalyze,
   startCodexSessionEvent,
 } from "./workflowhub-codex-session-state.mjs";
@@ -54,6 +55,16 @@ function assertDeclaredSubject(stage, subjectKind, subjectId) {
 
 function main(argv) {
   const command = argv[2];
+  const sessionId = currentCodexSessionId(process.env);
+  if (sessionId === null) {
+    return {
+      status: "unavailable",
+      reason: "no codex session id in environment; host is not a codex-based session",
+      stage: command === "start" || command === "finish" || command === "record-spec-analyze" || command === "record-code-review"
+        ? option(argv, "--stage", { required: false }) ?? null
+        : null,
+    };
+  }
   if (command === "start") {
     const stage = option(argv, "--stage");
     const subjectKind = option(argv, "--subject-kind");
@@ -64,7 +75,7 @@ function main(argv) {
       stage,
       subjectKind,
       subjectId,
-      sessionId: currentCodexSessionId(process.env),
+      sessionId,
     });
   }
   if (command === "finish") {
@@ -84,14 +95,18 @@ function main(argv) {
       trigger: option(argv, "--trigger", { required: false }) === undefined ? null : option(argv, "--trigger") === "true",
       executed: option(argv, "--executed", { required: false }) === undefined ? null : option(argv, "--executed") === "true",
       version: option(argv, "--version", { required: false }) ?? "unavailable",
-      sessionId: currentCodexSessionId(process.env),
+      sessionId,
     });
   }
   if (command === "record-spec-analyze") {
     const path = option(argv, "--input");
-    return recordCodexSessionSpecAnalyze({ taskId: option(argv, "--task-id", { required: false }) ?? null, stage: option(argv, "--stage"), value: JSON.parse(readFileSync(path, "utf8")), sessionId: currentCodexSessionId(process.env) });
+    return recordCodexSessionSpecAnalyze({ taskId: option(argv, "--task-id", { required: false }) ?? null, stage: option(argv, "--stage"), value: JSON.parse(readFileSync(path, "utf8")), sessionId });
   }
-  throw new Error("usage: workflowhub-codex-session-event.mjs <start|finish|record-spec-analyze> ...");
+  if (command === "record-code-review") {
+    const path = option(argv, "--input");
+    return recordCodexSessionCodeReview({ taskId: option(argv, "--task-id", { required: false }) ?? null, stage: option(argv, "--stage", { required: false }) ?? "verify-code", value: JSON.parse(readFileSync(path, "utf8")), sessionId });
+  }
+  throw new Error("usage: workflowhub-codex-session-event.mjs <start|finish|record-spec-analyze|record-code-review> ...");
 }
 
 try {

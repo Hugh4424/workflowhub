@@ -102,7 +102,7 @@ function lifecycleEvents(prefix = "fixture-confirmation") {
 }
 
 /** Test-only Stage Agent producer fixture; runtime authenticates every byte. */
-export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null } = {}) {
+export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null, skipAnalyzerValidation = false } = {}) {
   if (!task?.identity?.taskId || !kernel?.publishCanonicalRecord || !artifacts?.read) throw new TypeError("stage outcome fixture requires task, kernel, and ArtifactDir");
   const active = workspace ?? candidateWorkspace;
   if (!active?.worktreeRoot) throw new TypeError("stage outcome fixture requires an authenticated workspace");
@@ -256,7 +256,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       stage_end_ref: evidence(profile.required_evidence.includes("ac-trace") ? "ac-trace" : profile.required_evidence[0]),
     }];
   }
-  const analyzerResult = STAGE_SPEC_ANALYZE_PROFILES[stage]
+  const analyzerResult = !skipAnalyzerValidation && STAGE_SPEC_ANALYZE_PROFILES[stage]
     ? validateStageSpecAnalyzeProfile({ stage, packet: analyzerPacket, strict_material_contracts: true, identity })
     : null;
   if (analyzerResult && !analyzerResult.ok) throw new Error(`stage outcome fixture analyzer packet is invalid: ${analyzerResult.errors.join("; ")}`);

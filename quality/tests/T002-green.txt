@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ✓ tests/stage-interaction-contract.test.mjs (17 tests) 13ms
+ ✓ tests/contract/requirement-convergence-regression.test.mjs (5 tests) 20084ms
+   ✓ P1 RED requirement-convergence regression > make-decision requirement-convergence seam > reports missing requirement coverage, goal achievement, acceptance clarity, solution convergence, and plain-language card 7494ms
+   ✓ P1 RED requirement-convergence regression > make-decision requirement-convergence seam > preserves facts, choices, reasons, deferred handoffs, and execution blockers in the decision-log 7508ms
+   ✓ P1 RED requirement-convergence regression > build-spec Clarify seam > records clarifications and refuses to invent product direction 5080ms
+
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
+   Start at  12:14:36
+   Duration  20.61s (transform 193ms, setup 0ms, collect 561ms, tests 20.10s, environment 0ms, prepare 80ms)
+

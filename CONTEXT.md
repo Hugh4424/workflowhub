@@ -290,3 +290,17 @@ build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`ta
 
 **阶段完成判据（stage completion criteria）**：
 与推进资格不同的派生谓词。只有当前 task、stage、material revision 和适用 snapshot 上的阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。
+
+## 决策收敛与 Clarify 边界（2026-08-28）
+
+**make-decision 收敛检查（requirement convergence）**：
+`make-decision` 的 stage-end 检查必须覆盖五维需求映射、目标达成、验收清晰、方案收敛、以及大白话结束卡三要素。每行原始需求必须带可见 disposition，缺少任一项都作为当前 stage finding 而不是推到下游。
+
+**grill-with-docs upstream round/frontier**：
+Grill 按上游 round/frontier 协议运行：一批只放互相独立的问题，每个问题只处理一个决策轴；依赖问题必须等真实 reply 后再排入下一批。禁止编造反答复或把默认值当用户确认。
+
+**build-spec Clarify 触发/跳过**：
+`build-spec` 阶段出现方向性歧义时必须显式调用 `spec-clarify` 并记录触发原因；没有歧义时必须显式记录 `trigger=false`、原因和零个未决方向性问题。Spec 不能引入上游 decision-log 未授权的新产品方向。
+
+**spec-analyze profile 扩展**：
+stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `build-spec` 比对 spec 与上游 decision-log 的方向一致性和 Clarify 记录。`verify-code` 不经过此 lens，而使用 `dsh-code-review`。

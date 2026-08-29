@@ -10,6 +10,7 @@ import {
   bindCodexSessionTask,
   endCodexSession,
   finishCodexSessionEvent,
+  recordCodexSessionCodeReview,
   recordCodexSessionSpecAnalyze,
   registerCodexSession,
   readCurrentCodexSession,
@@ -440,6 +441,27 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
+  it("returns structured unavailable and exits normally when there is no codex session", () => {
+    const state = fixture();
+    const event = join(process.cwd(), "tools", "host", "workflowhub-codex-session-event.mjs");
+    try {
+      const env = { ...process.env, HOME: state.home };
+      delete env.CODEX_SESSION_ID;
+      delete env.CODEX_THREAD_ID;
+      const result = spawnSync(process.execPath, [event, "start", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1"], {
+        cwd: state.cwd, encoding: "utf8", env,
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.status).toBe("unavailable");
+      expect(parsed.reason).toMatch(/no codex session/i);
+      expect(parsed.stage).toBe("make-decision");
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("uses the project hook payload and then resolves that exact source for monitoring", () => {
     const state = fixture();
     const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
@@ -716,6 +738,51 @@ describe("WorkflowHub current Codex session handoff", () => {
       recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "code" }, cwd: state.cwd });
       expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "make-decision" }).spec_analyze).toEqual({ marker: "decision" });
       expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" }).spec_analyze).toEqual({ marker: "code" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps verify-code review outcome separate from authoring-stage spec analysis", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home });
+      bind(state);
+      const review = {
+        schema_version: "workflowhub-code-review-stage-outcome.v1",
+        stage: "verify-code",
+        task_id: state.taskId,
+        snapshot_tree: "a".repeat(40),
+        material_revision: `revision-${"b".repeat(64)}`,
+        step_slug: "approve-verification",
+        skill_id: "dsh-code-review",
+        result: { status: "clean", findings: [], summary: "当前快照审查完成" },
+      };
+      recordCodexSessionCodeReview({ taskId: state.taskId, value: review, cwd: state.cwd, sessionId: state.sessionId });
+      const projected = buildWorkflowHubSessionInput({ taskId: state.taskId, cwd: state.cwd, stage: "verify-code", sessionId: state.sessionId });
+      expect(projected.code_review).toEqual(review);
+      expect(projected.spec_analyze).toBeNull();
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects verify-code review results with a partial quality binding", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home });
+      bind(state);
+      expect(() => recordCodexSessionCodeReview({
+        taskId: state.taskId,
+        value: {
+          result: { status: "clean", findings: [], summary: "当前快照审查完成" },
+          quality_review_ref: "quality/reviews/results/current.json",
+        },
+        cwd: state.cwd,
+        sessionId: state.sessionId,
+      })).toThrow(/quality_review_ref\/hash|quality review binding/i);
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
       rmSync(state.root, { recursive: true, force: true });

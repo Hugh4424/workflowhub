@@ -2,7 +2,7 @@
 
 > feature: make-decision-requirement-convergence-20260828
 > stage: make-decision（进行中）
-> 宿主环境：DeepSeek Harness（codex-session-event 绑定不可用，按 AGENTS.md/ADR-0014 以已按任务工作区规则确认的现有 worktree/工作副本根目录四份材料为当前工作真相，直接维护本文件）
+> 宿主环境：DeepSeek Harness（codex-session-event 绑定不可用，按 AGENTS.md/ADR-0014 以已按任务工作区规则确认的现有 worktree/工作副本中 `specs/<task-id>/` 四份材料为当前工作真相，直接维护本文件）
 > worktree: `/Users/Hugh/Hugh/Project/workflowhub-make-decision-requirement-convergence-20260828`
 > branch: `task/workflowhub/make-decision-requirement-convergence-20260828`（baseline `8cd189c05`）
 > 术语说明：本日志中「认证 worktree/工作副本」均指**已按任务工作区规则确认的现有 worktree/工作副本**——路径/分支与当前任务工作区规则一致、可读写且材料保留；「认证」仅指按任务工作区规则确认，**不等于** session 事件绑定（codex-session-event 在当前宿主不可用，见 R-016）。
@@ -11,13 +11,13 @@
 
 | source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
 | --- | --- | --- | --- |
-| R-001 | make-decision 的需求收敛不能随机：必须系统检查「原始需求是否满足、原始目标是否达到、验收目标是否清晰、所有需求方案是否收敛」，不能想到什么问什么。 | 用户原文：`现在make-decision的过程中的需求收敛完全是随机的，想到什么问题就问什么问题，完全没考虑原始需求是否满足、原始目标是否达到、验收目标是否清晰、所有需求方案是否收敛等。` | 待 Talk/Grill 收敛 |
-| R-002 | 全部 talk/审查/grill 完成后，原始目标必须被真正问过并收敛；不能出现「原始目标一个问题都没问、原始需求完全没收敛」的状态。 | 用户原文：`最终所有talk、审查、grill都完成后，原始目标可能一个问题都没问过，原始需求完全没收敛。` | 待 Talk/Grill 收敛 |
-| R-003 | 需求没收敛就导致后续 spec、plan 路线歪掉、没实现最初需求，这是必须消除的后果。 | 用户原文：`导致后续spec、plan的路子也是完全歪的。完全没实现最开始的需求。` | 后果/约束 |
-| R-004 | spec-analyze 不能只检查基础文档内容，必须检查「需求收敛」这个语义部分（覆盖、目标达成、验收清晰、方案收敛）。 | 用户原文：`spec-analyze技能也完全没检查这个部分，只检查最基础了文档内容。` | 待 Talk/Grill 收敛 |
-| R-005 | make-decision 结束时必须用大白话总结当前核心需求、核心目标和最终方案。 | 用户原文：`make-decision结束的时候也没用大白话总结当前核心需求、核心目标和最终方案。` | 待 Talk/Grill 收敛 |
-| R-006 | grill 必须按 GitHub 最新 grill 标准一次问一组问题，不能总是一次只问一个问题。 | 用户原文：`现在grill并没有按照github上最新的grill标准，一次问一组问题，总是一次只问一个问题；` | 待调研；Talk R1 已选「调研上游标准」 |
-| R-007 | build-spec 阶段绝大部分场景下 clarify 技能必须被正常使用。 | 用户原文：`build-spec阶段中，绝大部分场景下clarify技能都没有正常使用。` | 待 Talk 收敛（本阶段记录，归属 build-spec 契约） |
+| R-001 | make-decision 的需求收敛不能随机：必须系统检查「原始需求是否满足、原始目标是否达到、验收目标是否清晰、所有需求方案是否收敛」，不能想到什么问什么。 | 用户原文：`现在make-decision的过程中的需求收敛完全是随机的，想到什么问题就问什么问题，完全没考虑原始需求是否满足、原始目标是否达到、验收目标是否清晰、所有需求方案是否收敛等。` | covered / D-001,D-002,D-003 |
+| R-002 | 全部 talk/审查/grill 完成后，原始目标必须被真正问过并收敛；不能出现「原始目标一个问题都没问、原始需求完全没收敛」的状态。 | 用户原文：`最终所有talk、审查、grill都完成后，原始目标可能一个问题都没问过，原始需求完全没收敛。` | covered / D-001,D-002,D-003 |
+| R-003 | 需求没收敛就导致后续 spec、plan 路线歪掉、没实现最初需求，这是必须消除的后果。 | 用户原文：`导致后续spec、plan的路子也是完全歪的。完全没实现最开始的需求。` | covered / D-001,D-002（后果/约束） |
+| R-004 | spec-analyze 不能只检查基础文档内容，必须检查「需求收敛」这个语义部分（覆盖、目标达成、验收清晰、方案收敛）。 | 用户原文：`spec-analyze技能也完全没检查这个部分，只检查最基础了文档内容。` | covered / D-003 |
+| R-005 | make-decision 结束时必须用大白话总结当前核心需求、核心目标和最终方案。 | 用户原文：`make-decision结束的时候也没用大白话总结当前核心需求、核心目标和最终方案。` | covered / D-006 |
+| R-006 | grill 必须按 GitHub 最新 grill 标准一次问一组问题，不能总是一次只问一个问题。 | 用户原文：`现在grill并没有按照github上最新的grill标准，一次问一组问题，总是一次只问一个问题；` | covered / D-004（上游调研完成） |
+| R-007 | build-spec 阶段绝大部分场景下 clarify 技能必须被正常使用。 | 用户原文：`build-spec阶段中，绝大部分场景下clarify技能都没有正常使用。` | covered / D-005（本阶段记录，归属 build-spec 契约） |
 | R-008 | 本任务按标准 WorkflowHub 开始，从 make-decision 起步，不跳阶段，不依赖 build-spec 补需求。 | 用户原文：`请按标准 WorkflowHub 开始这个任务吧，从 make-decision 开始，不要跳阶段，也不要依赖 build-spec 补需求。` | 本阶段硬约束 |
 | R-009 | 基于原始需求，在 make-decision 中一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项。 | 用户原文：`先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项。` | 本阶段硬约束 |
 | R-010 | Talk 用大白话说明选项、后果和风险。 | 用户原文：`Talk 请用大白话说明选项、后果和风险。` | 本阶段硬约束 |
@@ -71,6 +71,7 @@
 - 不新增第二打包工具；不保留无-task-store 的材料直写分支。（D-011 修正 D-008；T-022/T-023 用户选择）
 - 不改 broker/宿主超时配置、不新增 broker 超时机制。（D-008 拒绝方案、D-011）
 - 不新增写入校验器、写入门或重试状态机；宿主侧等价沙箱拒绝不在 WorkflowHub 内修。（D-010）
+- 不手写任务清单（task.json）；不把任务清单放入 worktree；不把任务启动前置变成新 gate；会话来源不可用不作为回滚依据。（D-012）
 - 交互证据的完全机器强绑定不在本任务落地（延期至后续治理任务）。（D-005、RISK-003）
 
 ## R→D 覆盖矩阵（R-013 工件；detail 审查 FND-D02 修复后建立）
@@ -580,13 +581,13 @@
 ### step 0 · worktree 准备 — completed（用户纠正后补执行）
 - 用户原文：`我没看见你创建的worktree啊？你是不是遗漏步骤了？`
 - 已创建并按任务工作区规则确认的现有 worktree/工作副本：`/Users/Hugh/Hugh/Project/workflowhub-make-decision-requirement-convergence-20260828`，branch `task/workflowhub/make-decision-requirement-convergence-20260828`，baseline `8cd189c05`。
-- 误放于主仓库 `specs/make-decision-requirement-convergence-20260828/` 的初版决策日志已删除；当前材料统一放 worktree 根目录（ADR-0014）。
+- 误放于主仓库 `specs/make-decision-requirement-convergence-20260828/` 的初版决策日志已删除；当前材料统一放 worktree 中 `specs/<task-id>/` 目录（ADR-0014）。
 - 已登记为 R-012：正式任务开始前必须先有正确位置的任务 worktree。
 
 ### step 1 · load-context — completed
 - 已读便携包 `workflows/make-decision/SKILL.md`、`steps.json`、`skill-deps.yaml`；已读 Talk/Grill/decision-log/spec-analyze/spec-clarify 技能；已读原件（用户本次消息）。
 - 已确认标准流程步骤序列 step1..step13；确认 Talk=R1/R2/R3 + research + direction advice + grill + draft + detail advice + approve + stage-end analyze + publish。
-- 宿主 codex-session-event 绑定在当前 DSH 会话不可用；按 AGENTS.md/ADR-0014 直接维护 worktree 根目录四份材料。
+- 宿主 codex-session-event 绑定在当前 DSH 会话不可用；按 AGENTS.md/ADR-0014 直接维护 worktree 中 `specs/<task-id>/` 四份材料。
 
 ### step 2 · triage-scope — completed
 - 原始需求已编译为 R-001..R-014（见上表）；非目标已由 Talk R2 确认；范围初步圈定为 process/skill/contract 三个层面。

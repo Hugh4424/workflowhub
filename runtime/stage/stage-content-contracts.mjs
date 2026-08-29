@@ -2166,6 +2166,158 @@ export function validateDecisionLogContract(input) {
   return result(errors);
 }
 
+/**
+ * Analyze a make-decision decision-log for the four convergence dimensions and
+ * the plain-language end card required by the convergence spec.
+ *
+ * The checks are operational: they look for readable sections/labels, not just
+ * IDs or file existence. IDs are internal anchors; the user-facing surface is
+ * plain language.
+ */
+const REQUIREMENT_MESSAGE_CLASSES = [
+  "goal",
+  "flow_or_surface",
+  "data_or_state",
+  "success_failure_acceptance",
+  "constraint_non_goal_defer",
+];
+
+function parseCoverageRows(markdown) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const rows = [];
+  let inCoverage = false;
+  for (const line of lines) {
+    if (/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/i.test(line)) inCoverage = true;
+    if (inCoverage && /^#{1,3}\s+/.test(line) && !/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/i.test(line)) break;
+    if (inCoverage && /^\s*\|/.test(line)) {
+      const cells = line.split("|").map((cell) => cell.trim()).filter((cell) => cell !== "");
+      if (cells.length >= 3 && !/^[-:]+$/.test(cells[0])) rows.push(cells);
+    }
+  }
+  return rows;
+}
+
+/**
+ * Analyze a make-decision decision-log for the four convergence dimensions and
+ * the plain-language end card required by the convergence spec.
+ *
+ * The checks are operational: they look for readable sections/labels, not just
+ * IDs or file existence. IDs are internal anchors; the user-facing surface is
+ * plain language.
+ */
+export function analyzeDecisionConvergence(decisionLogMarkdown, { originalRequirement = "", requirementMessages = [] } = {}) {
+  const errors = [];
+  const text = String(decisionLogMarkdown ?? "");
+  const hasSection = (pattern) => pattern.test(text);
+
+  const requirementCoverage = hasSection(/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/im)
+    || /(?:R-001|原始需求|requirement).*(?:D-001|决定|decision)/i.test(text);
+  const goalAchievement = hasSection(/^#{1,3}\s*(?:核心目标|目标|goal|成功意图|success intent)/im)
+    || /(?:目标|goal).*(?:实现|达成|确认|可执行)/i.test(text);
+  const acceptanceClarity = hasSection(/^#{1,3}\s*(?:验收标准|acceptance|验收目标|AC\b)/im)
+    || /(?:验收|acceptance|AC).*(?:可验证|通过|失败)/i.test(text);
+  const solutionConvergence = (hasSection(/^#{1,3}\s*(?:决定|decision|方案|direction|已选方向|selected direction|结论)/im)
+    && hasSection(/^#{1,3}\s*(?:开放问题|风险|延期|未决|open questions|risks|deferred)/im))
+    || /(?:决定|方案|已选方向|selected direction).*(?:风险|开放问题|延期|未决)/i.test(text);
+  const plainLanguageCard =
+    (/(?:核心需求|core requirement)/i.test(text) || /(?:需求|requirement).*(?:当前|核心)/i.test(text))
+    && (/(?:核心目标|core goal)/i.test(text) || /(?:目标|goal).*(?:核心|阶段结束)/i.test(text))
+    && (/(?:已选方向|选定方向|selected direction)/i.test(text) || /(?:方案|方向|direction).*(?:已选|确定|选择)/i.test(text));
+
+  if (!requirementCoverage) errors.push("decision-log does not present a requirement-to-decision coverage matrix");
+  if (!goalAchievement) errors.push("decision-log does not state the core goal achievement");
+  if (!acceptanceClarity) errors.push("decision-log does not make acceptance criteria explicit");
+  if (!solutionConvergence) errors.push("decision-log does not show a converged solution with open items");
+  if (!plainLanguageCard) errors.push("decision-log end card is missing core requirement, core goal, or selected direction");
+
+  const originalLines = String(originalRequirement ?? "").split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (originalLines.length > 0 && !requirementCoverage) {
+    errors.push("original requirement exists but coverage matrix is missing");
+  }
+
+  const coverageRows = requirementCoverage ? parseCoverageRows(text) : [];
+  if (requirementCoverage && coverageRows.length === 0) {
+    errors.push("requirement coverage section does not contain a mapped rows");
+  }
+  if (coverageRows.length > 0) {
+    const dispositionColumn = coverageRows[0].findIndex((cell) => /状态|处置|disposition|status/i.test(cell));
+    if (dispositionColumn < 0) {
+      errors.push("coverage matrix header is missing a disposition/status column");
+    } else {
+      const dataRows = coverageRows.slice(1);
+      for (const row of dataRows) {
+        const disposition = row[dispositionColumn];
+        if (!disposition || !/(?:covered|accepted_omission|deferred|rejected|non.?goal|延期|拒绝|覆盖|已接受)/i.test(disposition)) {
+          errors.push(`coverage row "${row.join(" | ")}" lacks a valid disposition`);
+        }
+      }
+    }
+  }
+
+  const coverageText = coverageRows.map((row) => row.join(" ")).join("\n");
+  for (const messageClass of requirementMessages) {
+    if (!new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(coverageText)) {
+      errors.push(`coverage matrix is missing the required dimension: ${messageClass}`);
+    }
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({
+      requirement_coverage: requirementCoverage && coverageRows.length > 0 ? "passed" : "missing",
+      goal_achievement: goalAchievement ? "passed" : "missing",
+      acceptance_clarity: acceptanceClarity ? "passed" : "missing",
+      solution_convergence: solutionConvergence ? "passed" : "missing",
+      plain_language_card: plainLanguageCard ? "passed" : "missing",
+    }),
+  });
+}
+
+function hasMarkdownHeadings(value) {
+  return /^#{1,3}\s+\S/m.test(String(value ?? ""));
+}
+
+/**
+ * Check that build-spec does not invent product direction and that Clarify
+ * evidence is present when the spec has material ambiguity or direction change.
+ */
+export function validateSpecClarifyAndDirectionFidelity(specMarkdown, decisionLogMarkdown) {
+  const errors = [];
+  const spec = String(specMarkdown ?? "");
+  const decision = String(decisionLogMarkdown ?? "");
+
+  const directionInventionMarkers = [
+    /(?:新增产品方向|new product direction|扩展到原始决策未授权|expand beyond the authorized decision|重命名为完全不同的产品)/i,
+  ];
+  const invented = directionInventionMarkers.some((pattern) => pattern.test(spec))
+    && !/(?:上游决定|上游授权|decision-log|已选方向|原始决策|upstream decision)/i.test(decision);
+
+  if (invented) errors.push("spec.md invents product direction not present in decision-log.md");
+
+  const ambiguityMarkers = [
+    /\b(?:歧义|ambiguity|不确定|unknown|待澄清|needs clarification|material ambiguity)\b/i,
+    /(?:方向性歧义|direction-changing)/i,
+  ];
+  const hasAmbiguity = ambiguityMarkers.some((pattern) => pattern.test(spec));
+  const clarifyStatement = /(?:spec-clarify\s+(?:trigger|状态)|clarify\s+(?:trigger|status)|trigger\s*=\s*(?:false|true)|reason\s*=)/i.test(spec);
+  const hasClarifyRecord = /clarify/i.test(spec) && clarifyStatement;
+
+  if (hasAmbiguity && !hasClarifyRecord) {
+    errors.push("spec.md has material ambiguity but does not record a Clarify trigger/reason");
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    clarify: Object.freeze({
+      trigger: hasAmbiguity ? true : hasClarifyRecord ? false : undefined,
+      reason: hasAmbiguity ? "material ambiguity present in spec" : "no material ambiguity detected by contract check",
+      open_direction_changing_questions: hasAmbiguity && !hasClarifyRecord ? 1 : 0,
+    }),
+  });
+}
+
 export function validateDecisionCorrectionAppendix(value) {
   const errors = [];
   if (!object(value)) return result(["decision correction appendix must be an object"]);
@@ -4183,6 +4335,39 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
         correction: "在当前 stage 补齐实际产物和证据映射，不能留给下游猜测",
       }));
       errors.push(`requirement coverage gap: ${requirementId}`);
+    }
+  }
+
+  if (stage === "make-decision" && nonEmptyString(materials.decision_log) && hasMarkdownHeadings(materials.decision_log)) {
+    const messageClasses = requirements.map((r) => r?.message_class).filter(Boolean);
+    const convergence = analyzeDecisionConvergence(materials.decision_log, {
+      requirementMessages: messageClasses.length > 0 ? [...new Set(messageClasses)] : [],
+    });
+    for (const [dimension, value] of Object.entries(convergence.facts)) {
+      if (value !== "passed") {
+        findings.push(stageAnalyzeFinding({
+          type: "convergence_gap",
+          requirementId: dimension,
+          impact: `decision-log convergence dimension ${dimension} is ${value}`,
+          correction: "在 make-decision 补齐需求覆盖、目标达成、验收清晰、方案收敛或结束卡三要素",
+        }));
+        errors.push(`convergence gap: ${dimension}`);
+      }
+    }
+  }
+
+  if (stage === "build-spec" && nonEmptyString(materials.spec) && nonEmptyString(materials.decision_log)
+      && (hasMarkdownHeadings(materials.spec) || hasMarkdownHeadings(materials.decision_log))) {
+    const fidelity = validateSpecClarifyAndDirectionFidelity(materials.spec, materials.decision_log);
+    if (!fidelity.ok) {
+      for (const error of fidelity.errors) {
+        findings.push(stageAnalyzeFinding({
+          type: "spec_direction_gap",
+          impact: error,
+          correction: "build-spec 必须回到 make-decision 处理方向性歧义，或显式记录 Clarify 触发/跳过",
+        }));
+        errors.push(`spec direction fidelity: ${error}`);
+      }
     }
   }
 

@@ -57,13 +57,10 @@ receipts, attempts, or runner details. Keep formal evidence references out of
 the question. If upstream already supplied choices or a
 recommendation, preserve them exactly instead of creating replacements.
 
-When locked constraints leave only one valid outcome, apply that outcome as a
-derived specification fact and record the reasoning; it is no longer a user
-decision. Apply actual confirmed answers to `spec.md` through the supplied
-writer. Preserve requirement IDs and append a clarification record containing
-the decision axis, its classification and source, the answer, affected
-requirements, consequences, risks, and any superseded wording. Unanswered
- material ambiguity is reported, never silently defaulted.
+When there is no material ambiguity, record an explicit `trigger=false` outcome
+with a reason and zero open direction-changing questions. Never silently skip
+Clarify; the absence of ambiguity must be as explicit and reviewable as a real
+ask → wait → reply → resume cycle.
 
 ## 十个维度（Ten-dimension）completeness check
 

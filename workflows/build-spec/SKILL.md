@@ -22,6 +22,8 @@ old records are not a replacement authority:
 This stage owns only `spec.md`. An existing specification is revised in place;
 do not create a parallel specification. If a direction-changing decision is
 missing, expose the exact gap to `make-decision` and continue unaffected repair.
+The specification records clarifications and never invents product direction;
+any new product scope must come from an explicit upstream decision in `decision-log.md`.
 The current `spec.md` remains the single revision target; never create a
  parallel revision target or infer a replacement from historical records.
 

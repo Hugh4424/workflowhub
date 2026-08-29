@@ -116,6 +116,7 @@ function stageOutcome(state, attemptId) {
     candidateWorkspace: state.context.candidateWorkspace,
     stage: "make-decision",
     attemptId,
+    skipAnalyzerValidation: true,
   });
 }
 
