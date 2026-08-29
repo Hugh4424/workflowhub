@@ -289,7 +289,7 @@ export class ReviewProviderClient {
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null } = {}) {
+  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true } = {}) {
     if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
     if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
@@ -333,6 +333,18 @@ export class ReviewProviderClient {
       command: "run", request, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: effectiveAttachmentDelivery,
     }));
     if (result.version === protocol) {
+      if (strictProtocol === false) {
+        return Object.freeze({
+          runtimeId: typeof result.runtime_id === "string" ? result.runtime_id : null,
+          outcome: typeof result.outcome === "string" ? result.outcome : null,
+          round: Number.isSafeInteger(result.round) ? result.round : null,
+          selectedTier: Number.isSafeInteger(result.selected_tier) ? result.selected_tier : null,
+          providers: Object.freeze(Array.isArray(result.providers) ? result.providers.map((item) => Object.freeze({
+            ...item,
+            provider: item?.identity?.provider ?? item?.provider ?? "unknown",
+          })) : []),
+        });
+      }
       const validated = validateV3Group(result, {
         hostProvider,
         providers: new Set(providers),
