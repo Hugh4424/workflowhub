@@ -1300,7 +1300,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
   return publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials);
 }
 
-function officialWorkerContext(ctx, publication = {}, invocation = {}) {
+function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null) {
   const artifactDir = ctx.artifacts
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
@@ -1316,6 +1316,19 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}) {
     },
     hasConsumerInvocation: (target) => consumerInvocations.has(target),
     ...(typeof invocation.attempt_id === "string" && invocation.attempt_id.trim() ? { currentAttemptId: invocation.attempt_id } : {}),
+    ...(authenticatedRequirementContext ? {
+      authenticatedRequirementContext: Object.freeze({
+        originalRequirement: authenticatedRequirementContext.originalRequirement,
+        requirementMessages: Object.freeze(authenticatedRequirementContext.requirementMessages
+          .map((message) => Object.freeze({ ...message }))),
+        requirementCoverageOutputs: Object.freeze(authenticatedRequirementContext.requirementCoverageOutputs
+          .map((output) => Object.freeze({
+            ...output,
+            decision_ids: Object.freeze([...(output.decision_ids ?? [])]),
+            requirement_ids: Object.freeze([...(output.requirement_ids ?? [])]),
+          }))),
+      }),
+    } : {}),
     manifest: ctx.manifest,
     accepted: Object.freeze({ readInput: (slot) => ctx.kernel.readInput(slot) }),
     readReceipt: (ref) => {
@@ -1595,7 +1608,36 @@ export function runOfficialStage(stage, context, invocation, publication) {
           receiptRef: handlerInput.receipts.review,
         });
       }
-      const officialWorker = officialWorkerContext(ctx, publication, input);
+      const authenticatedRequirementContext = stage === "make-decision" && stageOutcome.value?.spec_analyze?.packet
+        ? {
+          originalRequirement: stageOutcome.value.spec_analyze.packet.materials?.original_requirement ?? "",
+          requirementMessages: (stageOutcome.value.spec_analyze.packet.authenticated_requirement_messages ?? [])
+            .filter((message) => message && typeof message === "object" && !Array.isArray(message))
+            .map((message) => ({
+              id: message.id,
+              order: message.order,
+              message_class: message.message_class,
+              content_hash: message.content_hash,
+              source_id: message.source_id,
+              source_ref: message.source_ref,
+              source_version: message.source_version,
+              task_id: message.task_id,
+              session_id: message.session_id,
+              stage: message.stage,
+            })),
+          requirementCoverageOutputs: (stageOutcome.value.spec_analyze.packet.requirement_coverage_outputs ?? [])
+            .filter((output) => output && typeof output === "object" && !Array.isArray(output))
+            .map((output) => ({
+              message_id: output.message_id,
+              message_hash: output.message_hash,
+              message_class: output.message_class,
+              decision_ids: [...(output.decision_ids ?? [])],
+              requirement_ids: [...(output.requirement_ids ?? [])],
+              disposition: output.disposition,
+            })),
+        }
+        : null;
+      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext);
       const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
       const skillConsumerBindings = consumeSkillOutcomeBindings(officialWorker, handlerInput, stageOutcome, handlerResult);
       if (stage === "verify-code" && stageOutcome.value?.code_review?.quality_review_ref) {

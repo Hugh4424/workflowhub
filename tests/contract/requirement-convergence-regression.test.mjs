@@ -11,6 +11,10 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import {
+  analyzeDecisionConvergence,
+  validateSpecClarifyAndDirectionFidelity,
+} from "../../runtime/stage/stage-content-contracts.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -97,6 +101,72 @@ function qualityFacts(result, task) {
 
 describe("P1 RED requirement-convergence regression", () => {
   describe("make-decision requirement-convergence seam", () => {
+    it("marks requirement coverage missing when a disposition is invalid or a required dimension is absent", () => {
+      const decisionLog = `# 当前决策
+
+## 原始需求
+| 需求 | 维度 | 决定 | 状态 |
+| --- | --- | --- | --- |
+| 核心目标 | goal | 保持当前范围 | maybe |
+
+## 核心目标
+目标已确认并可执行。
+
+## 验收标准
+验收结果可验证通过或失败。
+
+## 已选方向
+保持当前范围。
+
+## 风险与延期交接
+风险已记录。
+
+## 核心需求
+解决当前问题。
+`;
+      const result = analyzeDecisionConvergence(decisionLog, {
+        originalRequirement: "必须覆盖目标、流程、状态、验收和边界。",
+        requirementMessages: [
+          "goal",
+          "flow_or_surface",
+          "data_or_state",
+          "success_failure_acceptance",
+          "constraint_non_goal_defer",
+        ],
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.join("; ")).toMatch(/valid disposition|required dimension/);
+      expect(result.facts.requirement_coverage).toBe("missing");
+
+      const titleAndIdsOnly = analyzeDecisionConvergence(`## 原始需求
+| 需求 | 维度 | 决定 | 状态 |
+| --- | --- | --- | --- |
+| R-001 | goal | D-001 | covered |
+
+## 核心需求
+R-001
+
+## 核心目标
+D-001
+
+## 验收标准
+AC-001
+
+## 已选方向
+D-001
+
+## 风险与延期交接
+RISK-001
+`, { requirementMessages: ["goal"] });
+      expect(titleAndIdsOnly.facts).toMatchObject({
+        goal_achievement: "missing",
+        acceptance_clarity: "missing",
+        solution_convergence: "missing",
+        plain_language_card: "missing",
+      });
+    });
+
     it("reports missing requirement coverage, goal achievement, acceptance clarity, solution convergence, and plain-language card", async () => {
       const state = makeDecisionFixture("p1-red-coverage");
       const decisionLog = `# 当前决策
@@ -155,6 +225,61 @@ R-001 需要做一个决策。
       expect(subjects).toContain("acceptance_clarity");
       expect(subjects).toContain("solution_convergence");
       expect(subjects).toContain("plain_language_card");
+    });
+
+    it("requires the real make-decision handler to cover every authenticated message identity and content hash", async () => {
+      const state = makeDecisionFixture("p1-red-handler-dimensions");
+      state.artifacts.writeAtomic("decision-log.md", `# 当前决策
+
+## 原始需求
+| 需求 | 维度 | 决定 | 状态 |
+| --- | --- | --- | --- |
+| 核心目标 | goal | D-001 | covered |
+| 使用流程 | flow_or_surface | D-001 | covered |
+| 数据状态 | data_or_state | D-001 | covered |
+| 验收边界 | success_failure_acceptance | D-001 | covered |
+| 范围边界 | constraint_non_goal_defer | D-001 | covered |
+
+## 核心需求
+完整处理用户需求。
+
+## 核心目标
+目标已确认并可执行。
+
+## 验收标准
+结果可验证通过或失败。
+
+## 已选方向
+保持当前范围。
+
+## 范围
+只处理当前任务。
+
+## 非目标
+不扩大范围。
+
+## 风险与延期交接
+风险已记录。
+`);
+      const snapshot = state.candidate.captureSnapshot();
+      const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
+      const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: "make-decision",
+        attemptId: "p1-red-handler-dimensions-attempt",
+        status: "incomplete",
+      });
+
+      const result = await runOfficialStage("make-decision", state.context, {
+        receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef, stage_outcomes: outcome.ref },
+      });
+
+      const coverageFact = qualityFacts(result, state.task).find((fact) => fact.subject === "requirement_coverage");
+      expect(coverageFact).toMatchObject({ status: "missing" });
     });
 
     it("preserves facts, choices, reasons, deferred handoffs, and execution blockers in the decision-log", async () => {
@@ -270,6 +395,76 @@ R-001 需要做一个决策。
   });
 
   describe("build-spec Clarify seam", () => {
+    it("keeps Clarify missing when material ambiguity says trigger=true without a verified lifecycle receipt", async () => {
+      const state = buildSpecFixture("p1-red-clarify-lifecycle");
+      writeCanonicalStageMaterials(state.artifacts);
+      const spec = state.artifacts.read("spec.md");
+      state.artifacts.writeAtomic(
+        "spec.md",
+        `${spec}\n## Clarify\n当前存在歧义，仍待澄清。\nspec-clarify trigger=true reason=需要用户选择真实方向。\n`,
+      );
+      const snapshot = state.candidate.captureSnapshot();
+      const review = writeFormalReviewFixture({
+        task: state.task,
+        stage: "build-spec",
+        snapshotTree: snapshot.tree,
+        reviewTrack: null,
+      });
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        workspace: state.workspace,
+        stage: "build-spec",
+        attemptId: "p1-red-clarify-lifecycle-attempt",
+        status: "incomplete",
+      });
+
+      const result = await runOfficialStage("build-spec", state.context, {
+        receipts: { review: review.resultRef, stage_outcomes: outcome.ref },
+      });
+
+      const clarifyFact = qualityFacts(result, state.task).find((fact) => fact.subject === "clarify");
+      expect(clarifyFact).toMatchObject({ status: "missing" });
+      expect(result.status).not.toBe("completed");
+    });
+
+    it("requires explicit direction authorization and handles Chinese ambiguity without word boundaries", () => {
+      const genericDecision = `# 当前决定\n\n## 已选方向\n保持当前范围。\n`;
+      const invented = validateSpecClarifyAndDirectionFidelity(
+        `# Spec\n\n## 新增产品方向\n把项目重命名为完全不同的产品。\n\n## Clarify\nspec-clarify trigger=false reason=没有歧义。\n`,
+        genericDecision,
+      );
+      expect(invented.ok).toBe(false);
+      expect(invented.errors.join("; ")).toMatch(/invents product direction/);
+
+      const chineseAmbiguity = validateSpecClarifyAndDirectionFidelity(
+        `# Spec\n\n当前存在歧义，仍待澄清。\n\n## Clarify\nspec-clarify trigger=false reason=没有歧义。\n`,
+        genericDecision,
+      );
+      expect(chineseAmbiguity.ok).toBe(false);
+      expect(chineseAmbiguity.errors.join("; ")).toMatch(/trigger=true/);
+    });
+
+    it("requires an explicit no-ambiguity skip record", () => {
+      const missingSkip = validateSpecClarifyAndDirectionFidelity(
+        "# Spec\n\n## 当前功能\n保持已经确认的方向。\n",
+        "# 当前决定\n\n## 已选方向\n保持当前范围。\n",
+      );
+      expect(missingSkip.ok).toBe(false);
+      expect(missingSkip.errors.join("; ")).toMatch(/trigger=false.*reason/i);
+
+      const explicitSkip = validateSpecClarifyAndDirectionFidelity(
+        "# Spec\n\n## 当前功能\n保持已经确认的方向。\n\n## Clarify\nspec-clarify trigger=false reason=没有实质材料歧义 open_direction_changing_questions=0。\n",
+        "# 当前决定\n\n## 已选方向\n保持当前范围。\n",
+      );
+      expect(explicitSkip.ok).toBe(true);
+      expect(explicitSkip.clarify).toMatchObject({
+        trigger: false,
+        open_direction_changing_questions: 0,
+      });
+    });
+
     it("records clarifications and refuses to invent product direction", async () => {
       const state = buildSpecFixture("p1-red-clarify");
       writeCanonicalStageMaterials(state.artifacts);

@@ -74,15 +74,15 @@ P2 消费明确的覆盖、目标、验收、收敛和 lifecycle 语义。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：建立收敛矩阵、结束卡、Grill/Clarify 负例，并保留真实失败输出。
+- **executed_commands**：`npx vitest run tests/contract/requirement-convergence-regression.test.mjs tests/stage-interaction-contract.test.mjs`；RED exit 1。
+- **evidence_refs**：`quality/tests/t001-red-evidence.json`
+- **covered_ac**：AC-CONV-001, AC-CONV-002, AC-CONV-003, AC-CONV-004, AC-GRILL-001, AC-CLARIFY-001, AC-CLARIFY-002
+- **review_fact**：与 T002 当前 GREEN 和独立最终 review 一起核对。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：RED 真实失败；未改写为通过。
 
 #### T002 — GREEN：最小扩展收敛交互合同
 
@@ -118,15 +118,15 @@ P2 消费明确的覆盖、目标、验收、收敛和 lifecycle 语义。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — GREEN Phase result reviewed with paired RED
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：既有技能合同与当前 runtime 收敛判定已接通；非法处置和缺维度不再假绿。
+- **executed_commands**：聚焦收敛与交互合同 GREEN；当前收敛回归 9/9。
+- **evidence_refs**：`quality/tests/T002-green.txt`, `quality/evidence/build-code/red-green-current.json`
+- **covered_ac**：AC-CONV-001, AC-CONV-002, AC-CONV-003, AC-CONV-004, AC-GRILL-001, AC-CLARIFY-001, AC-CLARIFY-002
+- **review_fact**：独立 review 的收敛假绿 finding 已修；见 `quality/evidence/build-code/independent-review-dispositions.json`。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：当前真实 handler 接收认证需求维度；无第五材料或第二状态机。
 
 ## Phase P2 — 语义分析与 authoring 防错
 
@@ -199,15 +199,15 @@ inconsistent/material_incomplete 是事实，不是 run gate。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：增加 facts 假绿、通用方向词豁免、中文歧义和无歧义跳过负例。
+- **executed_commands**：`npx vitest run tests/contract/requirement-convergence-regression.test.mjs`；RED exit 1，3 failed；handler RED exit 1。
+- **evidence_refs**：`quality/evidence/build-code/red-green-current.json`
+- **covered_ac**：AC-ANALYZE-001, AC-ANALYZE-002, AC-AUTHORING-001, AC-AUTHORING-002
+- **review_fact**：与 T004 当前 GREEN 和独立最终 review 一起核对。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：负例直接命中生产导出与 official handler seam。
 
 #### T004 — GREEN：扩展语义分析 profile 与 authoring 契约
 
@@ -243,15 +243,15 @@ inconsistent/material_incomplete 是事实，不是 run gate。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — GREEN Phase result reviewed with paired RED
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：收敛五维分别可判；direction authorization 必须明确；中文 Clarify 与显式 skip 可判。
+- **executed_commands**：收敛回归 9/9；spec-analyze completeness 37/37。
+- **evidence_refs**：`quality/evidence/build-code/red-green-current.json`, `quality/evidence/build-code/backend-testing-current.json`
+- **covered_ac**：AC-ANALYZE-001, AC-ANALYZE-002, AC-AUTHORING-001, AC-AUTHORING-002
+- **review_fact**：独立 review 的逐条覆盖与 Clarify 假绿 findings 已修；见 dispositions。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：生产校验被 official runner/handler 消费；不新增 analyzer。
 
 ## Phase P3 — 宿主、TaskHandle 与正式审查边界
 
@@ -325,15 +325,15 @@ bootstrap 影响所有任务；优先诊断与验证，失败时回滚当前改�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：增加无 session 非法调用、manifest-only store 和坏 index 三类失败合同。
+- **executed_commands**：host/bootstrap 聚焦 RED exit 1，3 failed。
+- **evidence_refs**：`quality/evidence/build-code/red-green-current.json`
+- **covered_ac**：AC-HOST-001, AC-HOST-002, AC-HOST-004, AC-TASK-001, AC-TASK-002, AC-REVIEW-001, AC-REVIEW-002, AC-REVIEW-003
+- **review_fact**：与 T006 当前 GREEN 和独立最终 review 一起核对。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：真实 CLI seam 先失败；没有用 mock 代替核心行为。
 
 #### T006 — GREEN：最小修改宿主与 TaskHandle seam
 
@@ -369,15 +369,15 @@ bootstrap 影响所有任务；优先诊断与验证，失败时回滚当前改�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — GREEN Phase result reviewed with paired RED
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：host 先校验调用再判 unavailable；existing bootstrap 复用官方幂等 store owner。
+- **executed_commands**：host/bootstrap 33/33；加启动邻接回归后 34/34。
+- **evidence_refs**：`quality/evidence/build-code/red-green-current.json`, `quality/evidence/build-code/backend-testing-current.json`
+- **covered_ac**：AC-HOST-001, AC-HOST-002, AC-HOST-004, AC-TASK-001, AC-TASK-002, AC-REVIEW-001, AC-REVIEW-002, AC-REVIEW-003
+- **review_fact**：独立 review 的无 session 参数吞错 finding 已修；bootstrap 未发现新增控制面问题。
+- **completed_at**：2026-08-29T06:38:44Z
+- **执行事实**：合法无 Codex session 仍结构化 unavailable；坏输入和损坏 store fail-loud。
 
 #### T007 — FINAL：全部适用 AC 与 dogfood 信号聚合
 
@@ -414,14 +414,14 @@ bootstrap 影响所有任务；优先诊断与验证，失败时回滚当前改�
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — FINAL aggregate reviewed with Phase reviews
-- **completed_at**：N/A — not completed
-- **执行事实**：N/A — not started
+- **status**：`incomplete`
+- **actual_changes**：四组聚焦合同与五阶段 E2E 已通过；未把中止的全量测试写成通过。
+- **executed_commands**：聚焦 46/46、host/bootstrap 34/34、五阶段 E2E 22 passed/1 skipped；`npm test` 按用户要求中止，exit 130。
+- **evidence_refs**：`quality/evidence/build-code/backend-testing-current.json`, `quality/tests/T007-final.txt`
+- **covered_ac**：AC-DOG-001 仅合同/E2E 部分覆盖；真实普通 close dogfood 未完成。
+- **review_fact**：独立 review 三项 findings 已处置；正式 wh-review 为 `MATERIAL_FORBIDDEN` unavailable，未重试；旧 T007 失败证据保留。
+- **completed_at**：N/A — aggregate not completed
+- **执行事实**：质量事实保持 incomplete；当前不能据此宣称 ordinary clean close。
 
 ## Dependency Graph
 

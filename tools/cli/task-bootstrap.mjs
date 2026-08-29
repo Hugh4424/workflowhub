@@ -35,6 +35,10 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     const unexpected = Object.keys(values).find((key) => !allowed.has(key));
     if (unexpected) throw new TypeError(`--${unexpected} is invalid for existing task bootstrap`);
     const task = openTask(values["task-path"], values.project, values.task);
+    // createTask publishes task.json atomically before workspace/store setup.
+    // Re-enter the existing official path through the idempotent store owner so
+    // a manifest-only directory is never returned as an initialized task.
+    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
     const runnerIdentity = values["runner-root"] && values.stage
       ? authenticateOfficialInvocation(task, { runnerRoot: values["runner-root"], stage: values.stage }).identity
       : undefined;

@@ -21,6 +21,45 @@ const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const completeConvergenceFacts = () => Object.fromEntries([
+  "requirement_coverage",
+  "goal_achievement",
+  "acceptance_clarity",
+  "solution_convergence",
+  "plain_language_card",
+].map((subject) => [subject, { status: "passed", evidence_refs: [], detail: `fixture ${subject}` }]));
+const completeDecisionLog = `# public decision
+
+## 原始需求
+| 需求 | 维度 | 决定 | 状态 |
+| --- | --- | --- | --- |
+| 核心目标 | goal | D-001 | covered |
+| 使用流程 | flow_or_surface | D-001 | covered |
+| 数据状态 | data_or_state | D-001 | covered |
+| 验收边界 | success_failure_acceptance | D-001 | covered |
+| 范围边界 | constraint_non_goal_defer | D-001 | covered |
+
+## 核心需求
+完成当前五阶段运行时夹具。
+
+## 核心目标
+当前阶段目标已确认并可执行。
+
+## 验收标准
+阶段结果可验证通过或失败。
+
+## 已选方向
+D-001：保持当前范围并完成当前夹具。
+
+## 范围
+只覆盖当前夹具。
+
+## 非目标
+不扩大公开运行时范围。
+
+## 风险与延期交接
+当前夹具风险已记录。
+`;
 const HISTORICAL_REGRESSION_CASES = Object.freeze([
   Object.freeze({
     id: "T01",
@@ -425,7 +464,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
   }
   const acceptanceSubjects = {
     "make-decision": ["scope", "non_goals", "risks"],
-    "build-spec": ["zero_major_ambiguities"],
+    "build-spec": ["zero_major_ambiguities", "clarify"],
     "build-plan": ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks"],
     "build-code": ["acceptance_criteria"],
     "verify-code": ["acceptance_criteria", "exceptions"],
@@ -650,6 +689,10 @@ describe("current vNext five-stage runtime", () => {
         ...currentEvidence,
         facts: {
           ...currentEvidence.facts,
+          completion_subjects: {
+            ...currentEvidence.facts.completion_subjects,
+            ...completeConvergenceFacts(),
+          },
           reviews: { direction: reviewFact(direction.resultRef), detail: reviewFact(detail.resultRef) },
         },
         evidence_refs: [
@@ -682,8 +725,7 @@ describe("current vNext five-stage runtime", () => {
 
   it("completes make-decision from the stage outcome and confirmation without a duplicate Talk receipt", () => {
     const state = fixture("public-make-decision-no-audit");
-    const decisionLog = "# public decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
-    state.artifacts.writeAtomic("decision-log.md", decisionLog);
+    state.artifacts.writeAtomic("decision-log.md", completeDecisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
@@ -1052,6 +1094,7 @@ describe("current vNext five-stage runtime", () => {
         const currentEvidence = evidence(state, stage);
         const facts = { ...currentEvidence.facts, source: "current-five-stage-test", stage };
         if (stage === "make-decision") {
+          Object.assign(facts.completion_subjects, completeConvergenceFacts());
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
           const direction = writeFormalReviewFixture({ task: state.task, stage, snapshotTree: snapshot.tree, reviewTrack: "direction" });
           const detail = writeFormalReviewFixture({ task: state.task, stage, snapshotTree: snapshot.tree, reviewTrack: "detail" });

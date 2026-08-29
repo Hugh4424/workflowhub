@@ -462,6 +462,56 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
+  it("validates private event invocations before the no-session fallback", () => {
+    const state = fixture();
+    const event = join(process.cwd(), "tools", "host", "workflowhub-codex-session-event.mjs");
+    const input = join(state.root, "spec-analyze.json");
+    const identityInput = join(state.root, "spec-analyze-identity.json");
+    try {
+      writeFileSync(input, "{not-json}\n");
+      writeFileSync(identityInput, `${JSON.stringify({ task_id: "other-task" })}\n`);
+      const env = { ...process.env, HOME: state.home };
+      delete env.CODEX_SESSION_ID;
+      delete env.CODEX_THREAD_ID;
+      const cases = [
+        { args: ["unsupported"], error: /usage:/i },
+        { args: ["start", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--task-id=bad task"], error: /task-id.*opaque identifier/i },
+        { args: ["start", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--unknown=value"], error: /invalid argument/i },
+        { args: ["start", "--stage=make-decision", "--stage=build-code", "--subject-kind=step", "--subject-id=talk-round-1"], error: /stage.*must not be repeated/i },
+        { args: ["start", "--subject-kind=step", "--subject-id=talk-round-1"], error: /--stage is required/i },
+        { args: ["start", "--stage=not-a-stage", "--subject-kind=step", "--subject-id=talk-round-1"], error: /unknown canonical stage/i },
+        { args: ["start", "--stage=make-decision", "--subject-kind=step", "--subject-id=not-declared"], error: /is not declared/i },
+        { args: ["finish", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--status=wat"], error: /unsupported session event status/i },
+        { args: ["finish", "--stage=build-code", "--subject-kind=skill", "--subject-id=backend-testing", "--trigger=yes"], error: /trigger.*true or false/i },
+        { args: ["finish", "--stage=build-code", "--subject-kind=skill", "--subject-id=backend-testing", "--executed=0"], error: /executed.*true or false/i },
+        { args: ["finish", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--summary="], error: /summary.*non-empty/i },
+        { args: ["finish", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--reason="], error: /reason.*non-empty/i },
+        { args: ["finish", "--stage=make-decision", "--subject-kind=step", "--subject-id=talk-round-1", "--evidence="], error: /evidence.*non-empty/i },
+        { args: ["record-spec-analyze", "--stage=make-decision", `--input=${join(state.root, "missing.json")}`], error: /ENOENT|no such file/i },
+        { args: ["record-spec-analyze", "--stage=make-decision", `--input=${input}`], error: /JSON|position|property name/i },
+        { args: ["record-spec-analyze", "--stage=make-decision", "--task-id=expected-task", `--input=${identityInput}`], error: /task identity mismatch/i },
+      ];
+
+      for (const sample of cases) {
+        const result = spawnSync(process.execPath, [event, ...sample.args], {
+          cwd: state.cwd, encoding: "utf8", env,
+        });
+        expect(result.status, `${sample.args.join(" ")}\n${result.stdout}`).toBe(1);
+        expect(result.stderr).toMatch(sample.error);
+        expect(result.stdout).not.toMatch(/"status":"unavailable"/);
+      }
+
+      const valid = spawnSync(process.execPath, [event, "finish", "--stage=build-code", "--subject-kind=skill", "--subject-id=backend-testing", "--task-id=expected-task", "--status=not_applicable", "--summary=not needed", "--reason=not triggered", "--evidence=quality/tests/not-applicable.json", "--trigger=false", "--executed=false", "--version=1.0.0"], {
+        cwd: state.cwd, encoding: "utf8", env,
+      });
+      expect(valid.status, valid.stderr).toBe(0);
+      expect(JSON.parse(valid.stdout)).toMatchObject({ status: "unavailable", stage: "build-code" });
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("uses the project hook payload and then resolves that exact source for monitoring", () => {
     const state = fixture();
     const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");

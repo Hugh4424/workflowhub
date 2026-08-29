@@ -1,0 +1,24 @@
+{
+  "schema_version": "workflowhub-red-green-evidence.v1",
+  "task_id": "make-decision-requirement-convergence-20260828",
+  "stage": "build-code",
+  "captured_at": "2026-08-29T06:38:44Z",
+  "snapshot_tree": "940d388df9664457937ae6cedea45300f3a69295",
+  "pairs": [
+    {
+      "scope": "convergence facts and direction fidelity",
+      "red": { "command": "npx vitest run tests/contract/requirement-convergence-regression.test.mjs", "exit_code": 1, "failed_tests": 3 },
+      "green": { "command": "npx vitest run tests/contract/requirement-convergence-regression.test.mjs", "exit_code": 0, "passed_tests": 9 }
+    },
+    {
+      "scope": "authenticated requirement context reaches the real handler",
+      "red": { "command": "npx vitest run tests/contract/requirement-convergence-regression.test.mjs", "exit_code": 1, "failed_tests": 1, "actual_before": "requirement_coverage=passed" },
+      "green": { "command": "npx vitest run tests/contract/requirement-convergence-regression.test.mjs", "exit_code": 0, "actual_after": "requirement_coverage=missing" }
+    },
+    {
+      "scope": "host event validation and existing task bootstrap integrity",
+      "red": { "command": "npx vitest run tests/m15-codex-session-hook.test.mjs tests/contract/task-bootstrap-integrity.test.mjs", "exit_code": 1, "failed_tests": 3 },
+      "green": { "command": "npx vitest run tests/m15-codex-session-hook.test.mjs tests/contract/task-bootstrap-integrity.test.mjs", "exit_code": 0, "passed_tests": 33 }
+    }
+  ]
+}

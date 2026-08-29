@@ -61,7 +61,7 @@ const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "quality/evidence/", spec: "quality/evidence/", plan: "quality/evidence/", tasks: "quality/evidence/",
   interaction: "quality/evidence/interactions/",
-  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
+  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", clarify: "quality/tests/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
   audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/", ui_qa: "quality/evidence/browser-qa/",
@@ -70,7 +70,7 @@ const NAMESPACE = Object.freeze({
   quality_risk_acceptance: "quality/evidence/risk-acceptances/",
   stage_outcomes: "quality/evidence/stage-outcomes/",
 });
-const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", ui_qa: "browser-qa" });
+const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", clarify: "spec-clarify", ui_qa: "browser-qa" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -438,6 +438,25 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
     },
     evidence: item.evidence,
   };
+}
+
+function clarifyFacts(worker, invocation) {
+  const result = testFacts(worker, invocation, "clarify");
+  const ref = invocation.receipts.clarify;
+  const value = object(worker.readReceipt(ref).value, "clarify receipt");
+  if (value.trigger !== true || typeof value.reason !== "string" || value.reason.trim() === "") {
+    throw materialIncomplete("build-spec clarify receipt must record trigger=true and a concrete reason");
+  }
+  const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: value.lifecycle_rounds });
+  if (!lifecycle.ok) {
+    throw materialIncomplete(`build-spec clarify receipt does not prove ask -> wait -> reply -> resume: ${lifecycle.errors.join("; ")}`);
+  }
+  const snapshot = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
+  if (value.snapshot_tree !== snapshot.tree || value.material_revision !== worker.currentMaterialRevision) {
+    throw new Error("build-spec clarify receipt is not bound to the current snapshot and material revision");
+  }
+  if (result.facts.exit_code !== 0) throw materialIncomplete("build-spec clarify receipt did not complete successfully");
+  return result;
 }
 
 function unavailableTestFacts(worker, name, reason) {
@@ -2117,7 +2136,11 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision", reviewTrack: "direction" });
   const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision", reviewTrack: "detail" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
-  const convergence = analyzeDecisionConvergence(currentDecisionLog);
+  const convergence = analyzeDecisionConvergence(currentDecisionLog, {
+    originalRequirement: worker.authenticatedRequirementContext?.originalRequirement ?? "",
+    requirementMessages: worker.authenticatedRequirementContext?.requirementMessages ?? [],
+    requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
+  });
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
     facts: {
@@ -2182,7 +2205,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
   const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
-  const clarify = input.receipts?.clarify === undefined ? null : testFacts(worker, input, "clarify");
+  const clarify = input.receipts?.clarify === undefined ? null : clarifyFacts(worker, input);
   const ui = buildSpecUiFacts(worker, input);
   const review = safeReviewFacts(worker, input);
   const dispositions = findingDispositions([review], input);
@@ -2198,18 +2221,17 @@ HANDLERS.set("build-spec", async (worker, input) => {
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
   const specEvidence = { ref: item.ref, sha256: item.content_hash ?? item.evidence.sha256 };
-  const clarifyStatus = clarify ? "passed"
-    : directionFidelity.clarify.trigger === false ? "passed"
-    : directionFidelity.ok ? "passed"
+  const clarifyStatus = directionFidelity.ok && (clarify || directionFidelity.clarify.trigger === false)
+    ? "passed"
     : "missing";
   const completionSubjects = {
     zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
     clarify: subjectFact(
       clarifyStatus,
       [specEvidence, ...(clarify?.evidence ? [clarify.evidence] : [])].filter(Boolean),
-      clarify ? "spec-clarify evidence is recorded"
+      clarify && directionFidelity.ok ? "verified spec-clarify ask -> wait -> reply -> resume evidence is recorded"
         : directionFidelity.clarify.trigger === false ? "spec explicitly records no material ambiguity"
-        : directionFidelity.ok ? "spec direction fidelity is confirmed"
+        : directionFidelity.clarify.trigger === true ? "spec-clarify trigger=true requires a verified lifecycle receipt"
         : directionFidelity.errors.join("; "),
     ),
   };
