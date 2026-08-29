@@ -11,6 +11,7 @@ import { bootstrapStage, assertWorkspace } from "../../../runtime/stage/stage-co
 import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
+import { runSimpleReview } from "./simple-review-runner.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const HOST_PATH = /(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g;
@@ -203,6 +204,8 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, same
 }
 
 export async function runReviewRound(input) {
+  return runSimpleReview(input);
+  /* Legacy task/workspace-bound review path retained temporarily for compatibility cleanup. */
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
     if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
@@ -250,7 +253,7 @@ export async function runReviewRound(input) {
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null, reviewKind);
   const hostProvider = input.host_provider ?? input.hostProvider;
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null;
-  const materialRevision = stage === "verify-code" || (stage === "make-decision" && reviewTrack === "detail")
+  const materialRevision = stage === "verify-code"
     ? trusted.kernel.currentVNextMaterialRevision() : null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack, reviewKind);
   if (route === null) {
