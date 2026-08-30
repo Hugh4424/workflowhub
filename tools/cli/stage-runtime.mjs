@@ -7,7 +7,6 @@ import { basename, resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import yaml from "js-yaml";
 import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 
 import {
@@ -28,13 +27,9 @@ import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { appendMonitoringFacts, initializeTaskStore, readMonitoringFacts } from "../../runtime/task/task-store.mjs";
-import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
-import { createRegisteredCodexSource, parseRegisteredCodexTranscript, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { createRegisteredCodexSource, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
 import { isDshTranscriptPath, normalizeDshTranscript, readDshTranscriptText } from "../../runtime/evidence/dsh-transcript.mjs";
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
-import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
-import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
 import { bindCodexSessionTask, buildWorkflowHubSessionInput, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 import { publishCurrentWorkflowHubSession } from "../host/workflowhub-stage-agent-bridge.mjs";
 
@@ -46,9 +41,7 @@ const DESIGN_ARTIFACTS = Object.freeze({
 const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
-const MONITORING_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
 const CODEX_SESSION_ID = /^[A-Za-z0-9._:-]{8,160}$/;
-const CODEX_ROLLOUT_STARTED_AT = "WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT";
 
 function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
   const hasProject = typeof values.project === "string" && values.project.trim() !== "";
@@ -97,12 +90,6 @@ function safeRolloutId(value) {
   return String(value).replace(/[^A-Za-z0-9._:-]/g, "_");
 }
 
-function rolloutTimestamp(record) {
-  const timestamp = record?.timestamp ?? record?.payload?.timestamp ?? record?.payload?.info?.timestamp;
-  const parsed = Date.parse(typeof timestamp === "string" ? timestamp : "");
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function isSafeCodexRolloutPath(candidate, { home, threadId }) {
   const sessionsRoot = resolve(home, ".codex", "sessions");
   const target = resolve(candidate);
@@ -114,7 +101,7 @@ function isSafeCodexRolloutPath(candidate, { home, threadId }) {
     : null;
 }
 
-function locateCodexRollout({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+function locateCodexRequirementTranscript({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
   const sessionId = currentCodexSessionId(env);
   const handoff = readCurrentCodexSession({
     cwd,
@@ -165,17 +152,6 @@ function locateDshTranscript({ env = process.env, home = homedir(), cwd = proces
   // is an unavailable source, never an error that drops sidecar facts.
   if (!target || !existsSync(target) || !statSync(target).isFile()) return null;
   return { sessionId: handoffSessionId, target, requirementMessages };
-}
-
-function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
-  const raw = env[CODEX_ROLLOUT_STARTED_AT];
-  if (raw === undefined || raw === null || String(raw).trim() === "") return now;
-  const text = String(raw).trim();
-  const numeric = /^\d+$/.test(text) ? Number(text) : Date.parse(text);
-  if (!Number.isSafeInteger(numeric) || numeric < 0) {
-    throw new TypeError(`${CODEX_ROLLOUT_STARTED_AT} must be Unix milliseconds or an RFC3339 timestamp`);
-  }
-  return numeric;
 }
 
 function codexUserInputText(outer) {
@@ -229,7 +205,7 @@ function* readUtf8Lines(path) {
   }
 }
 
-function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER, requirementMessages = [] }) {
+function normalizeCodexRequirementTranscript(raw, { taskId, runId, attemptId, stage, sessionId, requirementMessages = [] }) {
   const records = [];
   const selected = selectedRequirementMessages(requirementMessages);
   const selectedById = new Map(selected.map((message) => [message.id, message]));
@@ -237,112 +213,36 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
   const lines = typeof raw === "string" || Buffer.isBuffer(raw) || raw instanceof Uint8Array
     ? String(raw).split(/\r?\n/)
     : raw;
-  let index = 0;
+  let lineIndex = 0;
   for (const line of lines) {
-    const lineIndex = index;
-    index += 1;
+    const currentLine = lineIndex;
+    lineIndex += 1;
     if (!line.trim()) continue;
     let outer;
     try { outer = JSON.parse(line); } catch { continue; }
     if (!outer || typeof outer !== "object" || !outer.payload || typeof outer.payload !== "object") continue;
-    const occurredAt = rolloutTimestamp(outer);
-    const payload = outer.payload;
-    const payloadType = typeof payload.type === "string" ? payload.type : "unknown";
-    const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${lineIndex}-${payloadType}`);
-    const common = {
+    const userText = codexUserInputText(outer);
+    if (userText === null) continue;
+    const userMessageId = codexUserMessageId(outer, outer.payload, currentLine);
+    const selectedMessage = selectedById.get(userMessageId);
+    if (!selectedMessage) continue;
+    records.push(JSON.stringify({
+      id: selectedMessage.id,
+      type: "requirement_message",
       task_id: taskId,
       run_id: runId,
       stage,
       ...(attemptId ? { attempt_id: attemptId } : {}),
-    };
-    // Original requirements are a pre-task-binding snapshot, not stage-window
-    // telemetry.  Re-read only the saved user-message ids and bind the
-    // current bytes to their frozen hashes.  Nothing else in the transcript
-    // can become a requirement message.
-    const userText = codexUserInputText(outer);
-    const userMessageId = codexUserMessageId(outer, payload, lineIndex);
-    const selectedMessage = userText === null ? null : selectedById.get(userMessageId);
-    if (selectedMessage) {
-      records.push(JSON.stringify({
-        id: selectedMessage.id,
-        type: "requirement_message",
-        ...common,
-        session_id: sessionId,
-        source_version: "v1",
-        order: selectedMessage.order,
-        content: userText,
-        content_hash: selectedMessage.content_hash,
-      }));
-      emittedRequirementIds.add(selectedMessage.id);
-      continue;
-    }
-    if (occurredAt !== null && (occurredAt < startedAtMs || occurredAt >= endedAtMs)) continue;
-    if (outer.type === "event_msg" && payloadType === "token_count") {
-      // Codex records usage as event_msg/token_count rather than as a
-      // response_item/message.  Keep the per-turn usage (not the cumulative
-      // total) so the monitoring adapter can deduplicate and aggregate it as
-      // an ordinary token fact without inventing step or skill attribution.
-      // total_token_usage is cumulative for the rollout and cannot be safely
-      // assigned to this stage window.  Only the per-turn usage is eligible.
-      const usage = payload.info?.last_token_usage;
-      const inputTokens = usage?.input_tokens;
-      const outputTokens = usage?.output_tokens;
-      const totalTokens = usage?.total_tokens;
-      if (occurredAt !== null && Number.isInteger(inputTokens) && inputTokens >= 0
-          && Number.isInteger(outputTokens) && outputTokens >= 0
-          && Number.isInteger(totalTokens) && totalTokens >= 0) {
-        records.push(JSON.stringify({
-          id: `message-${sourceEventId}`,
-          type: "message",
-          ...common,
-          usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens },
-          grain: "message",
-        }));
-      } else {
-        records.push(JSON.stringify({
-          id: `message-${sourceEventId}`,
-          type: "message",
-          ...common,
-          usage: {},
-          grain: "message",
-        }));
-      }
-      continue;
-    }
-    if (outer.type === "response_item" && payloadType === "custom_tool_call") {
-      const toolId = safeRolloutId(payload.id ?? `${lineIndex}-tool`);
-      records.push(JSON.stringify({
-        id: `tool-${toolId}`,
-        type: "tool_use",
-        ...common,
-        tool_use: { id: `tool-${toolId}`, name: typeof payload.name === "string" ? payload.name : null },
-        grain: "stage",
-      }));
-      continue;
-    }
-    const eventType = `${outer.type ?? "rollout"}/${payloadType}`;
-    // Some host session metadata records reuse the thread id as payload.id.
-    // Generic transcript events need the rollout line boundary as part of
-    // their identity, otherwise a normal append-only session becomes a false
-    // typed-event conflict.
-    const genericEventId = `${sourceEventId}-${lineIndex}`;
-    records.push(JSON.stringify({
-      id: `event-${genericEventId}`,
-      type: "transcript_event",
-      fact_type: "transcript_event",
-      ...common,
-      value: {
-        event_id: `event-${genericEventId}`,
-        event_type: eventType,
-        ...(occurredAt === null ? {} : { timestamp: new Date(occurredAt).toISOString() }),
-      },
+      session_id: sessionId,
+      source_version: "v1",
+      order: selectedMessage.order,
+      content: userText,
+      content_hash: selectedMessage.content_hash,
     }));
+    emittedRequirementIds.add(selectedMessage.id);
   }
   for (const message of selected) {
     if (emittedRequirementIds.has(message.id)) continue;
-    // Preserve a concrete failure when the transcript no longer contains a
-    // bound source message instead of silently treating its requirement as
-    // absent.
     records.push(JSON.stringify({
       id: message.id,
       type: "requirement_message",
@@ -364,8 +264,8 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
  * The launcher owns the host path and turns it into a private reader capability.
  * Runtime facts only receive the opaque thread reference and normalized events.
  */
-export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, stage = null, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
-  const located = locateCodexRollout({ env, home, cwd });
+export function resolveRequirementSource({ context, task_id, run_id, attempt_id, stage = null, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+  const located = locateCodexRequirementTranscript({ env, home, cwd });
   if (!located) {
     const dsh = locateDshTranscript({ env, home, cwd });
     if (!dsh) return null;
@@ -406,15 +306,13 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
     source_version: "v1",
     cli_version: env.CODEX_CLI_VERSION ?? "codex-host",
     adapter_version: "codex-rollout-adapter.v1",
-    capabilities: ["transcript_event", "token", "tool_use", "requirement_message"],
-    reader: createTranscriptSourceReader(() => normalizeCodexRollout(readUtf8Lines(located.target), {
+      capabilities: ["requirement_message"],
+    reader: createTranscriptSourceReader(() => normalizeCodexRequirementTranscript(readUtf8Lines(located.target), {
       taskId: task_id ?? context?.identity?.taskId,
       runId: run_id ?? context?.workflowRunId,
       attemptId: attempt_id ?? context?.attempt_id ?? null,
       stage: stage ?? context?.stage ?? null,
       sessionId: safeRolloutId(located.threadId),
-      startedAtMs,
-      endedAtMs,
       requirementMessages: located.requirementMessages,
     })),
   });
@@ -445,13 +343,12 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
       stage_outcome: stageOutcome,
     })).slice(0, 32)}`;
   const requirementAuthentication = stage === "make-decision"
-    ? parseRegisteredRequirementTranscript(resolveDefaultMonitoringSource({
+    ? parseRegisteredRequirementTranscript(resolveRequirementSource({
       context,
       task_id: taskId,
       run_id: context.workflowRunId,
       attempt_id: attemptId,
       stage,
-      startedAtMs: resolveRolloutStartedAt(),
       cwd,
     }), { stage })
     : null;
@@ -477,486 +374,6 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
     attempt_id: attemptId,
     receipts: { ...(input.receipts ?? {}), stage_outcomes: published.ref },
   };
-}
-
-export function monitoringTopology(repoRoot = RUNNER_ROOT) {
-  return {
-    stages: CANONICAL_STAGE_SLUGS.map((stage) => {
-      const manifest = loadStageManifest(stage, repoRoot);
-      const skillManifest = yaml.load(readFileSync(`${repoRoot}/workflows/${stage}/skill-deps.yaml`, "utf8"));
-      return {
-        id: stage,
-        steps: manifest.steps.map((step) => ({ id: String(step.step_id), slug: step.step_slug, order: step.order })),
-        skills: (Array.isArray(skillManifest?.skills) ? skillManifest.skills : []).map((skill) => ({
-          id: String(skill.name),
-          trigger: null,
-          trigger_condition: String(skill.trigger ?? "unknown"),
-          execution: String(skill.execution ?? "unknown"),
-        })),
-      };
-    }),
-  };
-}
-
-function deriveMonitoringAttemptId(context, stageOutcome) {
-  const explicitAttempt = context.attempt_id ?? stageOutcome?.attempt_id;
-  const qualityRefs = Array.isArray(stageOutcome?.quality_fact_refs)
-    ? stageOutcome.quality_fact_refs.filter((ref) => typeof ref === "string" && ref.trim())
-    : [];
-  return typeof explicitAttempt === "string" && explicitAttempt.trim()
-    ? explicitAttempt
-    : qualityRefs.length ? `attempt-${sha256(JSON.stringify(qualityRefs)).slice(0, 32)}` : null;
-}
-
-function bindStageOutcomeAttemptId(context, stageOutcome) {
-  if (!stageOutcome || typeof stageOutcome !== "object" || stageOutcome.attempt_id || typeof stageOutcome.stage_outcome_ref !== "string") return stageOutcome;
-  try {
-    const record = JSON.parse(context.task.readRecord(stageOutcome.stage_outcome_ref));
-    return typeof record?.attempt_id === "string" && record.attempt_id.trim()
-      ? { ...stageOutcome, attempt_id: record.attempt_id }
-      : stageOutcome;
-  } catch {
-    return stageOutcome;
-  }
-}
-
-function stageOutcomeSessionId(context, stageOutcome) {
-  const direct = stageOutcome?.producer?.session_id;
-  if (typeof direct === 'string' && direct.trim()) return direct;
-  const ref = stageOutcome?.stage_outcome_ref;
-  if (typeof ref !== 'string' || !ref.trim()) return null;
-  try {
-    const record = JSON.parse(context.task.readRecord(ref));
-    return typeof record?.producer?.session_id === 'string' && record.producer.session_id.trim()
-      ? record.producer.session_id
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeOutcomeStatus(outcome, kind) {
-  const semanticStatus = typeof outcome?.status === "string" ? outcome.status : null;
-  if (semanticStatus === "completed" || semanticStatus === "failed") {
-    const value = { outcome: semanticStatus };
-    if (typeof outcome?.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
-    return { status: "present", value, reason: null, error: null };
-  }
-  if (semanticStatus === "skipped" || semanticStatus === "not_applicable") {
-    return { status: semanticStatus, value: null, reason: outcome.reason ?? `${kind}_outcome_${semanticStatus}`, error: outcome.error ?? null };
-  }
-  if (semanticStatus === "incomplete" || semanticStatus === "unavailable" || semanticStatus === "unknown") {
-    return { status: semanticStatus, value: null, reason: outcome.reason ?? `${kind}_outcome_${semanticStatus}`, error: outcome.error ?? null };
-  }
-  return {
-    status: semanticStatus === null ? "unavailable" : "unsupported",
-    value: null,
-    reason: `${kind}_outcome_${semanticStatus ?? "unavailable"}`,
-    error: semanticStatus === null ? null : "UNSUPPORTED_OUTCOME_STATUS",
-  };
-}
-
-function normalizeOutcomeCost(outcome) {
-  const cost = outcome?.cost;
-  if (!cost || typeof cost !== 'object' || Array.isArray(cost)) return null;
-  const status = ['recorded', 'partial', 'unavailable'].includes(cost.status) ? cost.status : null;
-  const durationMs = cost.duration_ms;
-  const tokens = cost.tokens;
-  if (!status) return null;
-  if (status === 'recorded'
-      && Number.isSafeInteger(durationMs) && durationMs >= 0
-      && Number.isSafeInteger(tokens) && tokens >= 0) {
-    return { status, duration_ms: durationMs, tokens };
-  }
-  if (status === 'partial') {
-    const durationRecorded = Number.isSafeInteger(durationMs) && durationMs >= 0;
-    const tokensRecorded = Number.isSafeInteger(tokens) && tokens >= 0;
-    if (durationRecorded === tokensRecorded || typeof cost.reason !== 'string' || !cost.reason.trim()) return null;
-    return { status, duration_ms: durationMs ?? null, tokens: tokens ?? null, reason: cost.reason.trim() };
-  }
-  if (status === 'unavailable'
-      && (durationMs === null || durationMs === undefined)
-      && (tokens === null || tokens === undefined)
-      && typeof cost.reason === 'string' && cost.reason.trim()) {
-    return { status, duration_ms: null, tokens: null, reason: cost.reason.trim() };
-  }
-  return null;
-}
-
-function outcomeCostFacts({ task, factIdentity, stage, kind, id, stepSlug = null, skillId = null, outcome }) {
-  const cost = normalizeOutcomeCost(outcome);
-  if (!cost) return [];
-  const subject = `${kind}:${id}`;
-  const evidenceRefs = [
-    ...normalizeEvidenceRefs(outcome?.evidence_refs),
-    ...(typeof outcome?.stage_outcome_ref === 'string' && outcome.stage_outcome_ref.trim()
-      ? [outcome.stage_outcome_ref]
-      : []),
-  ];
-  const common = {
-    ...task,
-    stage,
-    step_id: kind === 'step' ? id : null,
-    step_slug: kind === 'step' ? stepSlug : null,
-    skill_id: kind === 'skill' ? skillId : null,
-    coverage: { observed: 1, expected: 1 },
-    evidence_refs: evidenceRefs,
-  };
-  const tokenPresent = Number.isSafeInteger(cost.tokens) && cost.tokens >= 0;
-  const durationPresent = Number.isSafeInteger(cost.duration_ms) && cost.duration_ms >= 0;
-  const tokenStatus = tokenPresent ? 'present' : 'unavailable';
-  const durationStatus = durationPresent ? 'present' : 'unavailable';
-  return [
-    createMonitoringFact({
-      ...common,
-      fact_id: `token:${factIdentity}:${subject}`,
-      fact_type: 'token',
-      status: tokenStatus,
-      value: tokenPresent ? { message_id: `stage-outcome:${factIdentity}:${subject}`, tokens: cost.tokens, grain: 'stage_outcome' } : null,
-      coverage: { observed: tokenPresent ? 1 : 0, expected: 1 },
-      reason: tokenPresent ? null : (cost.reason ?? 'tokens_unavailable'),
-    }),
-    createMonitoringFact({
-      ...common,
-      fact_id: `duration:${factIdentity}:${subject}`,
-      fact_type: 'duration',
-      status: durationStatus,
-      value: durationPresent ? { duration_ms: cost.duration_ms, event_id: `stage-outcome:${factIdentity}:${subject}`, grain: 'stage_outcome' } : null,
-      coverage: { observed: durationPresent ? 1 : 0, expected: 1 },
-      reason: durationPresent ? null : (cost.reason ?? 'duration_unavailable'),
-    }),
-  ];
-}
-
-function normalizeEvidenceRefs(value) {
-  return Array.isArray(value)
-    ? value.map((entry) => typeof entry === "string" ? entry : entry?.ref).filter((ref) => typeof ref === "string" && ref.trim())
-    : [];
-}
-
-function outcomeCoverage(status) {
-  return { observed: ["unknown", "unavailable"].includes(status) ? 0 : 1, expected: 1 };
-}
-
-function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
-  const stage = typeof context.stage === "string" ? context.stage : null;
-  const attemptId = deriveMonitoringAttemptId(context, stageOutcome);
-  const sessionId = stageOutcomeSessionId(context, stageOutcome);
-  const factIdentity = `${context.workflowRunId ?? "unknown"}:${attemptId ?? "default"}`;
-  const source = {
-    kind: "stage",
-    ref: `stage:${stage ?? "unknown"}`,
-    source_id: `stage:${stage ?? "unknown"}`,
-    source_version: "stage-runtime.v1",
-  };
-  const task = {
-    task_id: context.identity.taskId,
-    project_name: context.identity.projectName,
-    run_id: context.workflowRunId ?? null,
-    attempt_id: attemptId,
-    session_id: sessionId,
-    stage,
-    source,
-    observed_at: now().toISOString(),
-  };
-  const stageOutcomeStatus = typeof stageOutcome?.stage_outcome_status === "string"
-    ? stageOutcome.stage_outcome_status
-    : stageOutcome?.status;
-  const stageOutcomeDiagnostic = stageOutcome?.stage_outcome_diagnostic;
-  const stageState = normalizeOutcomeStatus(
-    stageOutcomeDiagnostic && typeof stageOutcomeDiagnostic === "object"
-      ? { status: "unavailable", reason: stageOutcomeDiagnostic.reason, error: stageOutcomeDiagnostic.error_code ?? null }
-      : stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
-    "stage",
-  );
-  const records = [createMonitoringFact({
-    ...task,
-    fact_id: `stage:${factIdentity}:${stage ?? "unknown"}`,
-    fact_type: "stage",
-    status: stageState.status,
-    value: stageState.value,
-    reason: stageState.reason,
-    error: stageState.error,
-    coverage: outcomeCoverage(stageState.status),
-    evidence_refs: typeof stageOutcome?.stage_outcome_ref === "string" ? [stageOutcome.stage_outcome_ref] : [],
-  })];
-  records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'stage', id: stage ?? 'unknown', outcome: stageOutcome }));
-  if (!stage) return records;
-  const stageTopology = (topology?.stages ?? []).find((entry) => entry.id === stage);
-  if (!stageTopology) throw new Error(`monitoring topology missing stage: ${stage}`);
-  const stepOutcomes = new Map((Array.isArray(stageOutcome?.step_outcomes) ? stageOutcome.step_outcomes : [])
-    .filter((outcome) => outcome && outcome.step_id !== undefined && outcome.step_id !== null)
-    .map((outcome) => [String(outcome.step_id), outcome]));
-  for (const declared of stageTopology.steps ?? []) {
-    const id = String(declared.id);
-    const outcome = stepOutcomes.get(id);
-    const state = outcome
-      ? normalizeOutcomeStatus(outcome, "step")
-      : { status: 'unavailable', value: null, reason: 'step_outcome_unavailable', error: null };
-    const value = state.status === 'present' ? state.value : null;
-    records.push(createMonitoringFact({
-      ...task,
-      fact_id: `step:${factIdentity}:${stage}:${id}`,
-      fact_type: "step",
-      step_id: id,
-      step_slug: typeof outcome?.step_slug === "string" ? outcome.step_slug : (typeof declared.slug === 'string' ? declared.slug : null),
-      status: state.status,
-      value,
-      reason: state.reason,
-      error: state.error,
-      coverage: outcomeCoverage(state.status),
-      evidence_refs: normalizeEvidenceRefs(outcome?.evidence_refs),
-    }));
-    records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'step', id, stepSlug: typeof outcome?.step_slug === 'string' ? outcome.step_slug : declared.slug, outcome }));
-  }
-  const skillOutcomes = new Map((Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [])
-    .filter((outcome) => outcome && typeof outcome.skill_id === 'string')
-    .map((outcome) => [outcome.skill_id, outcome]));
-  for (const declared of stageTopology.skills ?? []) {
-    const id = String(declared.id);
-    const outcome = skillOutcomes.get(id);
-    let state = outcome
-      ? normalizeOutcomeStatus(outcome, "skill")
-      : { status: 'unavailable', value: null, reason: 'skill_outcome_unavailable', error: null };
-    let value = state.value;
-    if (state.status === "present") {
-      value = {};
-      if (typeof outcome?.trigger === "boolean") value.trigger = outcome.trigger;
-      if (typeof outcome?.executed === "boolean") value.executed = outcome.executed;
-      if (typeof outcome?.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
-      if (typeof outcome?.version === "string" && outcome.version.trim()) value.version = outcome.version;
-      if (typeof outcome?.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
-      if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
-        state = { status: "unavailable", value: null, reason: "skill_outcome_unavailable", error: null };
-        value = null;
-      }
-    }
-    records.push(createMonitoringFact({
-      ...task,
-      fact_id: `skill:${factIdentity}:${stage}:${id}`,
-      fact_type: "skill",
-      skill_id: id,
-      skill_version: typeof outcome?.version === "string" ? outcome.version : null,
-      status: state.status,
-      value,
-      reason: state.reason,
-      error: state.error,
-      coverage: outcomeCoverage(state.status),
-      evidence_refs: normalizeEvidenceRefs(outcome?.evidence_refs),
-    }));
-    records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'skill', id, skillId: id, outcome }));
-  }
-  return records;
-}
-
-function qualityMonitoringFacts({ context, stageOutcome, now }) {
-  const rawRefs = Array.isArray(stageOutcome?.quality_fact_refs)
-    ? [...new Set(stageOutcome.quality_fact_refs.filter((ref) => typeof ref === "string"))]
-    : [];
-  const refs = rawRefs.filter((ref) => /^quality\/facts\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref));
-  const attemptId = deriveMonitoringAttemptId(context, stageOutcome);
-  const records = [];
-  const independentReviewSubjects = new Set(["independent_review", "direction_review", "detail_review", "same_build_integration_review"]);
-  const qualitySource = (ref, sourceVersion = "quality-fact.v1") => ({
-    kind: "quality",
-    ref: `quality:${sha256(ref).slice(0, 24)}`,
-    source_id: "quality-owner",
-    source_version: sourceVersion,
-  });
-  const unavailableQualityFact = (ref, error, evidenceRef = ref) => {
-    const code = error?.code;
-    const missing = code === "ENOENT";
-    const unsupported = ["INVALID_QUALITY_FACT_REF", "UNSUPPORTED_QUALITY_FACT_KIND"].includes(code);
-    const bindingConflict = ["QUALITY_FACT_TASK_MISMATCH", "QUALITY_FACT_STAGE_MISMATCH"].includes(code);
-    const status = missing ? "missing" : unsupported ? "unsupported" : bindingConflict ? "conflict" : "unavailable";
-    return createMonitoringFact({
-      task_id: context.identity.taskId,
-      project_name: context.identity.projectName,
-      stage: context.stage ?? null,
-      run_id: context.workflowRunId ?? null,
-      attempt_id: attemptId,
-      fact_id: `quality:fact:${status}:${attemptId ?? "default"}:${sha256(ref).slice(0, 32)}`,
-      fact_type: "source_status",
-      status,
-      value: null,
-      reason: missing ? "quality_fact_record_missing" : unsupported ? "quality_fact_unsupported" : bindingConflict ? "quality_fact_binding_conflict" : "quality_fact_record_unavailable",
-      error: missing ? null : (error?.code ? String(error.code) : "INVALID_QUALITY_FACT"),
-      source: qualitySource(ref),
-      observed_at: now().toISOString(),
-      coverage: { observed: 0, expected: 1 },
-      evidence_refs: [evidenceRef],
-    });
-  };
-  for (const ref of rawRefs.filter((candidate) => !refs.includes(candidate))) {
-    records.push(unavailableQualityFact(ref, Object.assign(new Error("invalid quality fact ref"), { code: "INVALID_QUALITY_FACT_REF" }), `quality-ref:${sha256(ref).slice(0, 24)}`));
-  }
-  for (const ref of refs) {
-    let value;
-    let raw;
-    try {
-      raw = context.task.readRecord(ref);
-      value = JSON.parse(raw);
-    } catch (error) {
-      records.push(unavailableQualityFact(ref, error));
-      continue;
-    }
-    const supportedKinds = new Set(["review", "test", "acceptance_criterion", "confirmation"]);
-    const bindingError = !value || value.task_id !== context.identity.taskId
-      ? "QUALITY_FACT_TASK_MISMATCH"
-      : typeof value.kind !== "string" || !supportedKinds.has(value.kind)
-        ? "UNSUPPORTED_QUALITY_FACT_KIND"
-        : value.stage && context.stage && value.stage !== context.stage
-          ? "QUALITY_FACT_STAGE_MISMATCH"
-          : null;
-    if (bindingError) {
-      records.push(unavailableQualityFact(ref, Object.assign(new Error("invalid quality fact"), { code: bindingError })));
-      continue;
-    }
-    const qualityStatus = (valueStatus, present) => {
-      if (present) return "present";
-      if (valueStatus === "missing") return "missing";
-      if (valueStatus === "skipped") return "skipped";
-      if (valueStatus === "not_applicable") return "not_applicable";
-      if (valueStatus === "conflict") return "conflict";
-      if (valueStatus === "unsupported") return "unsupported";
-      if (valueStatus === "incomplete") return "incomplete";
-      if (valueStatus === "unknown") return "unknown";
-      return "unavailable";
-    };
-    const source = qualitySource(ref, value.schema_version ?? "quality-fact.v1");
-    const common = {
-      task_id: context.identity.taskId,
-      project_name: context.identity.projectName,
-      stage: value.stage ?? context.stage ?? null,
-      run_id: context.workflowRunId ?? null,
-      attempt_id: attemptId,
-      source,
-      observed_at: now().toISOString(),
-      evidence_refs: [ref],
-    };
-    if (value.kind === "review") {
-      const present = ["recorded", "passed", "failed"].includes(value.status);
-      records.push(createMonitoringFact({
-        ...common,
-        fact_id: `quality:review:${attemptId ?? "default"}:${sha256(ref)}`,
-        fact_type: "review",
-        status: qualityStatus(value.status, present),
-        value: present ? {
-          invoked: true,
-          independent: independentReviewSubjects.has(value.subject),
-          outcome: value.status,
-          freshness: "current",
-          source_ref: ref,
-        } : null,
-        reason: present ? null : `quality_review_${value.status ?? "unavailable"}`,
-        coverage: { observed: present ? 1 : 0, expected: 1 },
-      }));
-    } else if (value.kind === "test") {
-      const present = value.status === "passed" || value.status === "failed";
-      records.push(createMonitoringFact({
-        ...common,
-        fact_id: `quality:test:${attemptId ?? "default"}:${sha256(ref)}`,
-        fact_type: "test",
-        status: qualityStatus(value.status, present),
-        value: present ? {
-          invoked: true,
-          outcome: value.status,
-          freshness: "current",
-          source_ref: ref,
-        } : null,
-        reason: present ? null : `quality_test_${value.status ?? "unavailable"}`,
-        coverage: { observed: present ? 1 : 0, expected: 1 },
-      }));
-    } else if (value.kind === "acceptance_criterion") {
-      const present = ["passed", "failed"].includes(value.status);
-      records.push(createMonitoringFact({
-        ...common,
-        fact_id: `quality:acceptance:${attemptId ?? "default"}:${sha256(ref)}`,
-        fact_type: "acceptance_criterion",
-        status: qualityStatus(value.status, present),
-        value: present ? {
-          acceptance_criterion_id: value.subject,
-          outcome: value.status,
-          freshness: "current",
-          source_ref: ref,
-        } : null,
-        reason: present ? null : `quality_acceptance_${value.status ?? "unavailable"}`,
-        coverage: { observed: present ? 1 : 0, expected: 1 },
-      }));
-    } else if (value.kind === "confirmation") {
-      const present = ["passed", "failed"].includes(value.status);
-      records.push(createMonitoringFact({
-        ...common,
-        fact_id: `quality:confirmation:${attemptId ?? "default"}:${sha256(ref)}`,
-        fact_type: "confirmation",
-        status: qualityStatus(value.status, present),
-        value: present ? {
-          subject: value.subject,
-          outcome: value.status,
-          freshness: "current",
-          source_ref: ref,
-        } : null,
-        reason: present ? null : `quality_confirmation_${value.status ?? "unavailable"}`,
-        coverage: { observed: present ? 1 : 0, expected: 1 },
-      }));
-    }
-  }
-  if (context.stage === "verify-code" || stageOutcome?.stage === "verify-code") {
-    const verifyRef = "quality/verify.json";
-    const commonVerify = {
-      task_id: context.identity.taskId,
-      project_name: context.identity.projectName,
-      stage: "verify-code",
-      run_id: context.workflowRunId ?? null,
-      attempt_id: attemptId,
-      fact_type: "verify",
-      source: { kind: "quality", ref: "quality:verify", source_id: "quality-owner", source_version: "quality-verify.v1" },
-      observed_at: now().toISOString(),
-      evidence_refs: [verifyRef],
-      coverage: { observed: 0, expected: 1 },
-    };
-    try {
-      const verifyRaw = context.task.readRecord(verifyRef);
-      const verify = JSON.parse(verifyRaw);
-      const verifyDigest = sha256(verifyRaw);
-      const bindingConflict = verify.task_id !== context.identity.taskId || verify.stage !== "verify-code";
-      const present = !bindingConflict && ["passed", "failed"].includes(verify.status);
-      const incomplete = verify.status === "incomplete";
-      const verifyValue = present ? {
-        invoked: true,
-        ...(typeof verify.fresh === "boolean" ? { fresh: verify.fresh } : {}),
-        outcome: verify.status,
-        source_ref: verifyRef,
-      } : null;
-      records.push(createMonitoringFact({
-        task_id: context.identity.taskId,
-        project_name: context.identity.projectName,
-        stage: "verify-code",
-        run_id: context.workflowRunId ?? null,
-        attempt_id: attemptId,
-        fact_id: `quality:verify:${attemptId ?? "default"}:${verifyDigest}`,
-        fact_type: "verify",
-        status: present ? "present" : bindingConflict ? "conflict" : verify.status === "missing" ? "missing" : incomplete ? "incomplete" : verify.status === "unknown" ? "unknown" : "unavailable",
-        value: verifyValue,
-        reason: present ? null : bindingConflict ? "verify_binding_conflict" : verify.status === "missing" ? "quality_verify_record_missing" : incomplete ? "verify_incomplete" : "verify_freshness_unavailable",
-        error: bindingConflict ? "VERIFY_SOURCE_BINDING_MISMATCH" : null,
-        source: { ...commonVerify.source, source_version: verify.schema_version ?? "quality-verify.v1" },
-        observed_at: now().toISOString(),
-        coverage: { observed: present ? 1 : 0, expected: 1 },
-        evidence_refs: [verifyRef],
-      }));
-    } catch (error) {
-      records.push(createMonitoringFact({
-        ...commonVerify,
-        fact_id: `quality:verify:unavailable:${attemptId ?? "default"}:${sha256(String(error?.code ?? error?.message ?? "read_error")).slice(0, 32)}`,
-        status: error?.code === "ENOENT" ? "missing" : "unavailable",
-        value: null,
-        reason: error?.code === "ENOENT" ? "quality_verify_record_missing" : "quality_verify_record_unavailable",
-        error: error?.code && error.code !== "ENOENT" ? String(error.code) : null,
-      }));
-    }
-  }
-  return records;
 }
 
 export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
@@ -1113,59 +530,6 @@ function parseArgs(argv) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
-}
-
-export async function runMonitoringSidecar({ context, services = {}, stageOutcome = null, now = () => new Date() } = {}) {
-  if (!context?.task || !context?.storageRoot) throw new TypeError("launcher context with storageRoot is required for monitoring sidecar");
-  const boundStageOutcome = bindStageOutcomeAttemptId(context, stageOutcome);
-  const attemptId = deriveMonitoringAttemptId(context, boundStageOutcome);
-  const monitoringContext = attemptId === (context.attempt_id ?? null) ? context : { ...context, attempt_id: attemptId };
-  const sidecarEndedAtMs = now().getTime();
-  const binding = typeof services.resolveMonitoringSource === "function"
-    ? await services.resolveMonitoringSource({ context: monitoringContext, taskPath: context.task.taskPath, task_id: context.identity.taskId, run_id: context.workflowRunId, endedAtMs: sidecarEndedAtMs })
-    : null;
-  const parsed = parseRegisteredCodexTranscript(binding, {
-    project_name: monitoringContext.identity.projectName,
-    task_id: monitoringContext.identity.taskId,
-    stage: monitoringContext.stage ?? null,
-    run_id: monitoringContext.workflowRunId ?? null,
-    attempt_id: attemptId,
-    now,
-  });
-  const existing = new Set(readMonitoringFacts(monitoringContext.task.taskPath).map((record) => record?.fact_id).filter(Boolean));
-  const topology = services.monitoringTopology ?? monitoringTopology(RUNNER_ROOT);
-  const stageFacts = stageMonitoringFacts({ context: monitoringContext, stageOutcome: boundStageOutcome, topology, now });
-  const qualityFacts = qualityMonitoringFacts({ context: monitoringContext, stageOutcome: boundStageOutcome, now });
-  const freshRecords = [...parsed.records, ...qualityFacts, ...stageFacts].filter((record) => !existing.has(record.fact_id));
-  if (freshRecords.length) appendMonitoringFacts(monitoringContext.task.taskPath, { task_id: monitoringContext.identity.taskId, records: freshRecords });
-  const facts = readMonitoringFacts(monitoringContext.task.taskPath);
-  const projectionStatus = { present: "current", missing: "partial", skipped: "partial", not_applicable: "partial", unknown: "partial", unavailable: "partial", unsupported: "partial", incomplete: "partial", conflict: "fatal" }[parsed.status] ?? "partial";
-  const projectionErrors = parsed.status === "conflict"
-    ? ["monitoring source binding conflict"]
-    : parsed.status === "present" ? [] : [`monitoring source status: ${parsed.status}`];
-  const projection = publishTaskMonitoringProjection({ storageRoot: monitoringContext.storageRoot, projectName: monitoringContext.identity.projectName, taskId: monitoringContext.identity.taskId, facts, topology, generatedAt: now().toISOString(), status: projectionStatus, errors: projectionErrors });
-  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: monitoringContext.storageRoot, generatedAt: now().toISOString(), topology });
-  return Object.freeze({ status: parsed.status, fact_refs: projection.value.source_refs, projection_ref: projection.path, global_snapshot: snapshot.outputData, diagnostics: projection.value.diagnostics });
-}
-
-export function publishStaleMonitoringSnapshot({ context, services = {}, message, now = () => new Date() } = {}) {
-  if (!context?.task || !context.storageRoot || !context.identity) throw new TypeError('launcher context with task, identity, and storageRoot is required');
-  if (typeof message !== 'string' || !message.trim()) throw new TypeError('monitoring stale message is required');
-  const generatedAt = now().toISOString();
-  const facts = readMonitoringFacts(context.task.taskPath);
-  const topology = services.monitoringTopology ?? monitoringTopology(RUNNER_ROOT);
-  const projection = publishTaskMonitoringProjection({
-    storageRoot: context.storageRoot,
-    projectName: context.identity.projectName,
-    taskId: context.identity.taskId,
-    facts,
-    topology,
-    generatedAt,
-    status: 'stale',
-    errors: [message],
-  });
-  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: context.storageRoot, generatedAt, topology, preferDerived: true });
-  return Object.freeze({ projection, snapshot });
 }
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
@@ -1355,112 +719,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       receipts: { ...(suppliedInput.receipts ?? {}) },
       },
     });
-    // The current WorkflowHub session runs before this public delivery command. A plain
-    // Date.now() here starts the window too late and drops the real session's
-    // transcript and token events. The project hook records the exact session
-    // source; the private event marker records semantic boundaries.
-    const monitoringStartedAt = resolveRolloutStartedAt(process.env);
-    const monitoringServices = services.monitoring === false
-      ? services
-      : {
-        ...services,
-        resolveMonitoringSource: services.resolveMonitoringSource ?? ((sourceInput) => resolveDefaultMonitoringSource({
-          ...sourceInput,
-          startedAtMs: monitoringStartedAt,
-          cwd,
-        })),
-      };
-    let attempt;
-    try {
-      attempt = await runOfficialStage(values.stage, context, controlledInput);
-    } catch (error) {
-      // A missing or stale current-session outcome is an execution fact, not a
-      // reason to hide the gap. Preserve the fail-loud run error and publish
-      // the existing monitoring facts as unknown so status cannot look green.
-      if (error?.code === "MATERIAL_INCOMPLETE"
-          && CANONICAL_STAGE_SLUGS.includes(values.stage)
-          && services.monitoring !== false
-          && context.storageRoot
-          && context.task?.taskPath) {
-        try {
-          // Some hosts create the task handle before initializing the facts
-          // store. Initialize the existing store only so this missing-outcome
-          // fact can be recorded; the original run error remains authoritative.
-          initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
-          const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
-          await runSidecar({
-            context,
-            services: monitoringServices,
-            stageOutcome: {
-              attempt_id: `missing-stage-outcome-${values.stage}`,
-              stage_outcome_status: "unavailable",
-              step_outcomes: [],
-              skill_outcomes: [],
-              quality_fact_refs: [],
-            },
-          });
-        } catch (monitoringError) {
-          const message = `monitoring missing-outcome fact failed: ${monitoringError instanceof Error ? monitoringError.message : String(monitoringError)}`;
-          try {
-            if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error: monitoringError });
-            else process.emitWarning(message, { code: "WORKFLOWHUB_MONITORING_MISSING_OUTCOME" });
-          } catch (warningError) {
-            process.emitWarning(`monitoring missing-outcome warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
-          }
-        }
-      }
-      throw error;
-    }
-    if (CANONICAL_STAGE_SLUGS.includes(values.stage) && services.monitoring !== false && context.storageRoot && context.task?.taskPath) {
-      try {
-        // A successful official run may be the first writer for this task.
-        // Establish the canonical facts store before the single monitoring
-        // sidecar reads or appends it; the sidecar must not depend on a prior
-        // failed run having created the file.
-        initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
-        const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
-        const monitoringStageOutcome = attempt?.stage_outcome_ref
-          ? bindStageOutcomeAttemptId(context, attempt)
-          : {
-            ...attempt,
-            stage_outcome_status: "unavailable",
-            step_outcomes: [],
-            skill_outcomes: [],
-          };
-        await runSidecar({ context, services: monitoringServices, stageOutcome: monitoringStageOutcome });
-      }
-      catch (error) {
-        const message = `monitoring sidecar failed: ${error instanceof Error ? error.message : String(error)}`;
-        try {
-          if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error });
-          else process.emitWarning(message, { code: "WORKFLOWHUB_MONITORING_SIDECAR" });
-        } catch (warningError) {
-          process.emitWarning(`monitoring warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
-        }
-        let fallbackError = null;
-        try {
-          const publishStale = services.publishStaleMonitoringSnapshot ?? publishStaleMonitoringSnapshot;
-          publishStale({ context, services: monitoringServices, message });
-        } catch (candidateError) {
-          fallbackError = candidateError;
-          try {
-            if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error: candidateError });
-            else process.emitWarning(`monitoring stale fallback failed: ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`, { code: "WORKFLOWHUB_MONITORING_FALLBACK" });
-          } catch (warningError) {
-            process.emitWarning(`monitoring fallback warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
-          }
-        }
-        if (fallbackError) {
-          const publicationError = new Error(
-            `${message}; stale fallback also failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
-            { cause: fallbackError },
-          );
-          publicationError.code = "WORKFLOWHUB_MONITORING_PUBLICATION_FAILED";
-          throw publicationError;
-        }
-      }
-    }
-    return attempt;
+    return runOfficialStage(values.stage, context, controlledInput);
   }
   if (command === "confirm") {
     return context.kernel.publishHumanConfirmation(values.stage, {
