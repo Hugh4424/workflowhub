@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "js-yaml";
@@ -24,7 +24,7 @@ import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { readMonitoringFacts } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { createRequirementAuthenticationFixture, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 import {
   buildWorkflowHubSessionInput,
@@ -1358,6 +1358,49 @@ describe("vNext official stage completion", () => {
     expect(outcome.value.spec_analyze.result.status).toBe("material_incomplete");
     const result = await runOfficialStage("build-code", contextFor("build-code", state), { receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "build-code", stage_outcome_status: "unavailable", quality_status: "incomplete" });
+  });
+  it("guards the official stage run against monitoring fact and projection side effects", () => {
+    const state = fixture("vnext-stage-run-no-monitoring-side-effect");
+    initializeTaskStore(state.task.taskPath, { taskId: state.task.identity.taskId });
+    const outcome = writeStageOutcomeFixture({
+      task: state.task,
+      kernel: state.kernel,
+      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
+      candidateWorkspace: state.candidate,
+      stage: "build-spec",
+      attemptId: "attempt-no-monitoring-side-effect",
+      status: "completed",
+    });
+    const inputPath = join(state.root, "no-monitoring-side-effect-input.json");
+    writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+    const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
+    const env = { ...process.env, HOME: state.root, WORKFLOWHUB_TASK_DIR: state.root };
+    delete env.CODEX_SESSION_ID;
+    delete env.CODEX_THREAD_ID;
+    delete env.CODEX_ROLLOUT_PATH;
+    delete env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+    delete env.CODEX_CLI_VERSION;
+    const result = spawnSync(process.execPath, [
+      runtime,
+      "run",
+      "--action=execute",
+      "--stage=build-spec",
+      "--project=WorkflowHub",
+      "--task=vnext-stage-run-no-monitoring-side-effect",
+      `--input=${inputPath}`,
+    ], { cwd: state.root, env, encoding: "utf8" });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const officialResult = JSON.parse(result.stdout);
+    expect(officialResult).toMatchObject({
+      stage: "build-spec",
+      stage_outcome_status: "completed",
+      stage_outcome_ref: outcome.ref,
+    });
+    const factsPath = join(state.task.taskPath, "facts.jsonl");
+    expect(existsSync(factsPath)).toBe(true);
+    const taskFacts = readTaskFacts(state.task.taskPath);
+    expect(taskFacts.filter((record) => record?.fact_type !== undefined)).toHaveLength(0);
+    expect(existsSync(join(state.root, "Projects", "WorkflowHub", "monitoring"))).toBe(false);
   });
   it("publishes one missing AC fact per current spec even without implementation/test receipts", async () => {
     const state = fixture("build-code-ac-skeleton");

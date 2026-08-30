@@ -18,17 +18,26 @@ export function parseCanonicalReviewerOutput(raw, options = {}) {
   return parseReviewerOutput(raw, options);
 }
 
-function adapterOf(provider) {
+// `dsh-code-review` is the canonical verify-code skill id, and older DSH
+// review records used that id as the provider label while correctly declaring
+// the underlying adapter as `dsh`. Keep this compatibility mapping explicit
+// and centralized; arbitrary provider/adapter mismatches must still fail
+// authentication.
+const PROVIDER_ADAPTER_ALIASES = new Map([
+  ["dsh-code-review", "dsh"],
+]);
+
+export function providerAdapter(provider) {
   if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z0-9](?:[a-z0-9-]|\.(?=[a-z0-9]))*)?$/.test(provider)) return null;
-  return provider.split("/", 1)[0];
+  return PROVIDER_ADAPTER_ALIASES.get(provider) ?? provider.split("/", 1)[0];
 }
 function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = false, requireConfigId = false } = {}) {
   const provider = item?.provider;
-  const adapter = item?.identity?.adapter ?? adapterOf(provider);
+  const adapter = item?.identity?.adapter ?? providerAdapter(provider);
   const explicitSourceId = Object.hasOwn(item ?? {}, "source_id") ? item.source_id : item?.identity?.source_id;
   if (typeof provider !== "string" || provider.trim() === "" || typeof adapter !== "string" || adapter === "") return null;
   if (requireIdentity && !Object.hasOwn(item ?? {}, "identity")) return null;
-  if (Object.hasOwn(item ?? {}, "identity") && (!item.identity || typeof item.identity !== "object" || item.identity.provider !== provider || item.identity.adapter !== adapterOf(provider) || typeof item.identity.source_id !== "string" || item.identity.source_id.trim() === "")) return null;
+  if (Object.hasOwn(item ?? {}, "identity") && (!item.identity || typeof item.identity !== "object" || item.identity.provider !== provider || item.identity.adapter !== providerAdapter(provider) || typeof item.identity.source_id !== "string" || item.identity.source_id.trim() === "")) return null;
   if (requireConfigId && (typeof item?.identity?.config_id !== "string" || item.identity.config_id.trim() === "")) return null;
   if (Object.hasOwn(item ?? {}, "source_id") && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
   if (requireSourceId && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
@@ -243,7 +252,7 @@ export function authenticateCanonicalReviewResult({
     if (spec && !executionMatches) {
       invalid(`provider execution does not match pinned profile ${item.provider}`);
     }
-    if (item.execution?.adapter !== undefined && item.execution.adapter !== adapterOf(item.provider)) {
+    if (item.execution?.adapter !== undefined && item.execution.adapter !== providerAdapter(item.provider)) {
       invalid(`provider execution adapter does not match provider ${item.provider}`);
     }
   }

@@ -1,13 +1,20 @@
 import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { isHistoricalMonitoringFact, isMonitoringFact, validateMonitoringFact } from "../evidence/monitoring-facts.mjs";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
 const HASH = /^[a-f0-9]{64}$/;
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const FACT_KEYS = Object.freeze(["task_id", "stage", "material_digest", "source_digest", "invocation_id", "source", "status", "content_hash", "created_at", "output_ref"]);
+const HISTORICAL_FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "acceptance_criterion", "confirmation", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"]);
+const HISTORICAL_FACT_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete", "partial", "fatal"]);
+const HISTORICAL_SOURCE_KINDS = new Set(["stage", "registered_codex", "task", "fact", "quality", "derived", "unknown"]);
+const HISTORICAL_FACT_SCHEMA = ["monitoring", "fact.v1"].join("-");
+const HISTORICAL_FACT_KEYS = Object.freeze(["schema_version", "fact_id", "task_id", "project_name", "fact_type", "stage", "step_id", "step_slug", "skill_id", "session_id", "subagent_id", "run_id", "attempt_id", "status", "value", "reason", "error", "observed_at", "source", "coverage", "contract_version", "collector_version", "adapter_version", "skill_version", "evidence_refs"]);
+const HISTORICAL_FACT_KEY_SET = new Set(HISTORICAL_FACT_KEYS);
+const HISTORICAL_LEGACY_FACT_KEY_SET = new Set(HISTORICAL_FACT_KEYS.filter((key) => key !== "step_slug"));
+const HISTORICAL_SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const FORBIDDEN_INDEX_KEYS = new Set(["current", "parent", "previous", "generation", "selector", "successor"]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -86,12 +93,6 @@ function withStoreLock(root, operation) {
   try { return operation(); } finally { closeSync(fd); rmSync(lock, { force: true }); }
 }
 
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
-}
-
 function initialIndex(taskId, verifyHash = null) {
   return {
     schema_version: "task-index.v1",
@@ -110,14 +111,62 @@ function initialIndex(taskId, verifyHash = null) {
   };
 }
 
+function plainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function nonEmptyHistoricalText(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function validHistoricalFactKeys(value) {
+  const keys = Object.keys(value);
+  return keys.every((key) => HISTORICAL_FACT_KEY_SET.has(key))
+    && (keys.length === HISTORICAL_FACT_KEYS.length
+      || (keys.length === HISTORICAL_LEGACY_FACT_KEY_SET.size && keys.every((key) => HISTORICAL_LEGACY_FACT_KEY_SET.has(key))));
+}
+
+function validateHistoricalMonitoringFact(value, taskId, projectName) {
+  if (!plainRecord(value) || value.schema_version !== HISTORICAL_FACT_SCHEMA) throw new Error("schema_version is invalid");
+  if (!validHistoricalFactKeys(value)) throw new Error("required fields are missing or unsupported fields are present");
+  if (value.task_id !== taskId) throw new Error("task identity mismatch");
+  if (value.project_name !== projectName) throw new Error("project identity mismatch");
+  for (const key of ["fact_id", "task_id", "project_name"]) {
+    if (!nonEmptyHistoricalText(value[key]) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(value[key])) throw new Error(`${key} is invalid`);
+  }
+  if (!HISTORICAL_FACT_TYPES.has(value.fact_type)) throw new Error("fact_type is invalid");
+  if (value.stage !== null && !STAGES.has(value.stage)) throw new Error("stage is invalid");
+  for (const key of ["step_id", "step_slug", "skill_id", "session_id", "subagent_id", "run_id", "attempt_id"]) {
+    if (!(key in value)) continue;
+    if (value[key] !== null && (!nonEmptyHistoricalText(value[key]) || !HISTORICAL_SAFE_REF.test(value[key]))) throw new Error(`${key} is invalid`);
+  }
+  if (!HISTORICAL_FACT_STATUSES.has(value.status)) throw new Error("status is invalid");
+  if (value.status === "present" && !plainRecord(value.value)) throw new Error("present fact requires an object value");
+  if (value.status !== "present" && value.value !== null) throw new Error("non-present fact value must be null");
+  for (const key of ["reason", "error"]) {
+    if (value[key] !== null && !nonEmptyHistoricalText(value[key])) throw new Error(`${key} is invalid`);
+  }
+  if (value.status !== "present" && !value.reason && !value.error) throw new Error("non-present fact requires reason or error");
+  if (!nonEmptyHistoricalText(value.observed_at) || !Number.isFinite(Date.parse(value.observed_at))) throw new Error("observed_at is invalid");
+  if (!plainRecord(value.source) || Object.keys(value.source).sort().join("\0") !== ["kind", "ref", "source_id", "source_version"].sort().join("\0")) throw new Error("source shape is invalid");
+  if (!HISTORICAL_SOURCE_KINDS.has(value.source.kind) || !nonEmptyHistoricalText(value.source.ref) || !HISTORICAL_SAFE_REF.test(value.source.ref) || !nonEmptyHistoricalText(value.source.source_id) || !HISTORICAL_SAFE_REF.test(value.source.source_id) || !nonEmptyHistoricalText(value.source.source_version)) throw new Error("source is invalid");
+  if (!plainRecord(value.coverage) || Object.keys(value.coverage).sort().join("\0") !== ["expected", "observed"].sort().join("\0") || !Number.isInteger(value.coverage.observed) || value.coverage.observed < 0 || (value.coverage.expected !== null && (!Number.isInteger(value.coverage.expected) || value.coverage.expected < 0 || value.coverage.observed > value.coverage.expected))) throw new Error("coverage is invalid");
+  if (!nonEmptyHistoricalText(value.contract_version) || !nonEmptyHistoricalText(value.collector_version)) throw new Error("collector or contract version is invalid");
+  for (const key of ["adapter_version", "skill_version"]) {
+    if (value[key] !== null && !nonEmptyHistoricalText(value[key])) throw new Error(`${key} is invalid`);
+  }
+  if (!Array.isArray(value.evidence_refs) || value.evidence_refs.some((ref) => !nonEmptyHistoricalText(ref) || !HISTORICAL_SAFE_REF.test(ref))) throw new Error("evidence_refs is invalid");
+  return value;
+}
+
 function parseFactRecords(raw, taskId, projectName) {
   if (raw === "") return [];
   return raw.trimEnd().split("\n").map((line, index) => {
     let value;
     try { value = JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
-    if (isMonitoringFact(value) || isHistoricalMonitoringFact(value)) {
-      if (value.task_id !== taskId) throw new Error(`monitoring fact task identity mismatch on line ${index + 1}`);
-      if (value.project_name !== projectName) throw new Error(`monitoring fact project identity mismatch on line ${index + 1}`);
+    if (value?.schema_version === HISTORICAL_FACT_SCHEMA) {
+      try { validateHistoricalMonitoringFact(value, taskId, projectName); }
+      catch (error) { throw new Error(`historical monitoring fact is invalid on line ${index + 1}: ${error.message}`); }
       return Object.freeze({ kind: "monitoring", value });
     }
     if (["quality-fact.v1", "quality-verify.v1"].includes(value?.schema_version)) {
@@ -206,15 +255,6 @@ export function readTaskFacts(taskRoot) {
   return parseFactRecords(raw, identity.taskId, identity.projectName).map(({ value }) => value);
 }
 
-/** Read only monitoring facts; legacy task facts remain outside this consumer's contract. */
-export function readMonitoringFacts(taskRoot) {
-  const identity = assertRoot(taskRoot);
-  const raw = readFileSync(safeRecordPath(identity.root, "facts.jsonl"), "utf8");
-  return parseFactRecords(raw, identity.taskId, identity.projectName)
-    .filter(({ kind }) => kind === "monitoring")
-    .map(({ value }) => value);
-}
-
 export function readTaskIndex(taskRoot) {
   const identity = assertRoot(taskRoot);
   return validateIndex(JSON.parse(readFileSync(safeRecordPath(identity.root, "index.json"), "utf8")), identity.taskId);
@@ -270,75 +310,6 @@ export function appendTaskFact(taskRoot, input, options = {}) {
       throw error;
     }
     return Object.freeze({ ref, sha256: sha256(lineRaw), value: Object.freeze(record) });
-  });
-}
-
-export function appendMonitoringFacts(taskRoot, { task_id: taskId, records } = {}, options = {}) {
-  const identity = assertRoot(taskRoot, taskId);
-  if (!Array.isArray(records) || records.length === 0) throw new TypeError("monitoring records must be a non-empty array");
-  records.forEach((record) => {
-    validateMonitoringFact(record);
-    if (record.task_id !== identity.taskId) throw new Error("monitoring fact task identity mismatch");
-    if (record.project_name !== identity.projectName) throw new Error("monitoring fact project identity mismatch");
-  });
-  return withStoreLock(identity.root, () => {
-    const factsPath = safeRecordPath(identity.root, "facts.jsonl");
-    const oldFactsRaw = readFileSync(factsPath, "utf8");
-    const parsedRecords = parseFactRecords(oldFactsRaw, identity.taskId, identity.projectName);
-    const existingById = new Map();
-    for (const [index, entry] of parsedRecords.entries()) {
-      if (isMonitoringFact(entry.value) || isHistoricalMonitoringFact(entry.value)) existingById.set(entry.value.fact_id, { value: entry.value, ref: `facts.jsonl#${index + 1}` });
-    }
-    const incomingById = new Map();
-    const batchIds = new Set();
-    const newRecords = [];
-    for (const record of records) {
-      if (batchIds.has(record.fact_id)) throw new Error(`duplicate monitoring fact id in batch: ${record.fact_id}`);
-      batchIds.add(record.fact_id);
-      const prior = existingById.get(record.fact_id);
-      if (prior) {
-        if (canonical(prior.value) !== canonical(record)) throw new Error(`monitoring fact id conflict: ${record.fact_id}`);
-        continue;
-      }
-      const pending = { value: record, ref: null };
-      incomingById.set(record.fact_id, pending);
-      newRecords.push(record);
-    }
-    if (newRecords.length === 0) {
-      return Object.freeze({
-        refs: Object.freeze(records.map((record) => existingById.get(record.fact_id)?.ref ?? incomingById.get(record.fact_id)?.ref)),
-        records: Object.freeze(records),
-        idempotent: true,
-      });
-    }
-    const lines = newRecords.map((record) => `${JSON.stringify(record)}\n`);
-    const separator = oldFactsRaw === "" || oldFactsRaw.endsWith("\n") ? "" : "\n";
-    const nextFactsRaw = oldFactsRaw + separator + lines.join("");
-    const oldIndex = readTaskIndex(identity.root);
-    const nextIndex = structuredClone(oldIndex);
-    const startingLine = oldFactsRaw === "" ? 1 : oldFactsRaw.trimEnd().split("\n").length + 1;
-    newRecords.forEach((record, offset) => {
-      const lineRaw = lines[offset];
-      const ref = `facts.jsonl#${startingLine + offset}`;
-      incomingById.get(record.fact_id).ref = ref;
-      nextIndex.facts.push(indexRef({
-        ref, sha256: sha256(lineRaw), schema: "monitoring-fact.v1", task_id: identity.taskId, stage: record.stage ?? undefined,
-        logical_ref: ref, content_hash: sha256(JSON.stringify(record)), version: "v1", related_task_id: identity.taskId,
-        external_raw_ref: record.source.ref, external_governance_archive_ref: null,
-      }));
-    });
-    try {
-      atomicWrite(identity.root, "facts.jsonl", nextFactsRaw, { testHooks: options.testHooks, hookName: "beforeFactsRename" });
-      atomicWrite(identity.root, "index.json", `${JSON.stringify(nextIndex, null, 2)}\n`, { testHooks: options.indexTestHooks, hookName: "beforeIndexRename" });
-    } catch (error) {
-      try { atomicWrite(identity.root, "facts.jsonl", oldFactsRaw); } catch {}
-      throw error;
-    }
-    return Object.freeze({
-      refs: Object.freeze(records.map((record) => existingById.get(record.fact_id)?.ref ?? incomingById.get(record.fact_id)?.ref)),
-      records: Object.freeze(records),
-      idempotent: false,
-    });
   });
 }
 

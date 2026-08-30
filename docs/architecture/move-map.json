@@ -628,12 +628,31 @@
     },
     {
       "source": "scripts/collect-task-facts.mjs",
-      "destination": "tools/cli/collect-task-facts.mjs",
-      "status": "move",
-      "sha256_before": "290432c5016fb230961dc0d70f271c5c045541a407f9977de35381e34528e5db",
-      "bytes": 3548,
-      "sha256_after": "889fb10c1e8ddb00485daa5aa8f2263253d01f7c6e0cee2f7ebc5360f394a5d7",
-      "content_change": "import/path-only"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "one-shot fact collection CLI has no current consumer after M15 monitoring retirement",
+      "content_change": "removed in M15 retirement; generic task facts remain available through current task writers"
+    },
+    {
+      "source": "config/transcript-sources.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "empty transcript registry had no consumer after the orphan fact-collection CLI was removed",
+      "content_change": "removed in M15 retirement; requirement sources use explicit host-bound adapters"
+    },
+    {
+      "source": "config/runtime-fact-sources.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "empty runtime fact registry had no consumer after the orphan fact-collection CLI was removed",
+      "content_change": "removed in M15 retirement; generic task facts use current task writers"
+    },
+    {
+      "source": "config/runtime-fact-v2-sources.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "empty v2 runtime fact registry had no consumer after the orphan fact-collection CLI was removed",
+      "content_change": "removed in M15 retirement; no replacement registry was added"
     },
     {
       "source": "scripts/migrate-task-v2.mjs",
@@ -1582,21 +1601,19 @@
     },
     {
       "source": "runtime/evidence/monitoring-facts.mjs",
-      "destination": "runtime/evidence/monitoring-facts.mjs",
-      "status": "add",
-      "owner": "M15 monitoring facts producer",
-      "consumer": "M15 diagnostics/projector only",
-      "delete_condition": "remove with M15 monitoring sidecar when its consumer is retired",
-      "content_change": "new typed monitoring fact validator and append contract"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "M15 monitoring fact producer has no current consumer after sidecar retirement; historical task facts remain read-only",
+      "content_change": "removed in M15 retirement; task-store keeps read-only historical schema classification"
     },
     {
       "source": "runtime/evidence/codex-transcript-adapter.mjs",
       "destination": "runtime/evidence/codex-transcript-adapter.mjs",
-      "status": "add",
+      "status": "modify",
       "owner": "registered source adapter",
-      "consumer": "M15 monitoring facts collector",
+      "consumer": "authenticated requirement-message source construction for stage outcome and self-recording paths",
       "delete_condition": "remove when registered source contract is retired",
-      "content_change": "new explicit binding adapter; no native session discovery"
+      "content_change": "trimmed in M15 retirement to requirement-message authentication and source construction; no monitoring facts or native session discovery"
     },
     {
       "source": "runtime/stage/stage-agent-outcome-adapter.mjs",
@@ -1618,84 +1635,73 @@
     },
     {
       "source": "runtime/schemas/monitoring-fact.v1.json",
-      "destination": "runtime/schemas/monitoring-fact.v1.json",
-      "status": "add",
-      "owner": "M15 monitoring facts contract",
-      "consumer": "monitoring-facts validator and task-store reader",
-      "delete_condition": "remove with monitoring-fact.v1 contract retirement",
-      "content_change": "new versioned schema"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "M15 monitoring fact schema has no current consumer after monitoring contract retirement",
+      "content_change": "removed in M15 retirement; historical rows are not an active schema contract"
     },
     {
       "source": "runtime/evidence/monitoring-diagnostics.mjs",
-      "destination": "runtime/evidence/monitoring-diagnostics.mjs",
-      "status": "add",
-      "owner": "M15 diagnostics producer",
-      "consumer": "M15 project projector",
-      "delete_condition": "remove with M15 diagnostics consumer retirement",
-      "content_change": "new deterministic stage/step/skill and cost diagnostic derivation"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "M15 diagnostics producer has no current consumer after projector retirement",
+      "content_change": "removed in M15 retirement"
     },
     {
       "source": "runtime/schemas/monitoring-projection.v1.json",
-      "destination": "runtime/schemas/monitoring-projection.v1.json",
-      "status": "add",
-      "owner": "M15 projection contract",
-      "consumer": "monitoring projector and static monitoring view",
-      "delete_condition": "remove with the derived monitoring projection retirement",
-      "content_change": "new versioned derived projection schema"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "M15 projection schema has no current consumer after derived projection retirement",
+      "content_change": "removed in M15 retirement; frozen external page is not a live schema consumer"
     },
     {
       "source": "runtime/evidence/monitoring-projector.mjs",
-      "destination": "runtime/evidence/monitoring-projector.mjs",
-      "status": "add",
-      "owner": "M15 derived monitoring projector",
-      "consumer": "static monitoring HTML and data.js bundle",
-      "delete_condition": "remove when the static view is replaced by an explicitly authorized consumer",
-      "content_change": "new task projection and globally rebuilt static bundle; never a canonical task source"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "M15 derived projector has no current consumer; the external page is retained as a frozen snapshot",
+      "content_change": "removed in M15 retirement; no static bundle is rebuilt"
+    },
+    {
+      "source": "runtime/evidence/monitoring-page.html",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "repository monitoring page template has no current consumer; the external frozen page is retained outside the repository",
+      "content_change": "removed in M15 retirement; external snapshot is not generated by runtime code"
     },
     {
       "source": "tests/m15-monitoring-facts.test.mjs",
-      "destination": "tests/m15-monitoring-facts.test.mjs",
-      "status": "add",
-      "owner": "M15 fact contract tests",
-      "consumer": "M15 build-code verification",
-      "delete_condition": "remove with monitoring-fact.v1 retirement",
-      "content_change": "focused fact contract and compatibility coverage"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested retired M15 monitoring fact contract",
+      "content_change": "removed in T-300; generic facts coverage remains"
     },
     {
       "source": "tests/m15-codex-transcript-adapter.test.mjs",
-      "destination": "tests/m15-codex-transcript-adapter.test.mjs",
-      "status": "add",
-      "owner": "M15 source adapter tests",
-      "consumer": "M15 build-code verification",
-      "delete_condition": "remove with registered source adapter retirement",
-      "content_change": "focused registered Codex source coverage"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested the retired M15 monitoring adapter surface",
+      "content_change": "removed in T-300; requirement self-recording coverage remains in shared tests"
     },
     {
       "source": "tests/m15-monitoring-diagnostics.test.mjs",
-      "destination": "tests/m15-monitoring-diagnostics.test.mjs",
-      "status": "add",
-      "owner": "M15 diagnostics tests",
-      "consumer": "M15 build-code verification",
-      "delete_condition": "remove with diagnostics retirement",
-      "content_change": "focused diagnostic and aggregation oracle coverage"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested retired M15 diagnostics producer",
+      "content_change": "removed in T-300"
     },
     {
       "source": "tests/m15-monitoring-projector.test.mjs",
-      "destination": "tests/m15-monitoring-projector.test.mjs",
-      "status": "add",
-      "owner": "M15 projector tests",
-      "consumer": "M15 build-code verification",
-      "delete_condition": "remove with projector retirement",
-      "content_change": "projection, bundle, HTML and atomic publication coverage"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested retired M15 projector and static publication path",
+      "content_change": "removed in T-300"
     },
     {
       "source": "tests/m15-monitoring-integration.test.mjs",
-      "destination": "tests/m15-monitoring-integration.test.mjs",
-      "status": "add",
-      "owner": "M15 runtime integration tests",
-      "consumer": "M15 build-code and verify-code evidence",
-      "delete_condition": "remove with stage sidecar retirement",
-      "content_change": "private source seam and stage sidecar integration coverage"
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested retired M15 stage sidecar integration",
+      "content_change": "removed in T-300; official stage-run negative coverage remains"
     },
     {
       "source": "tests/integration/vnext-official-stage-run.test.mjs",
@@ -1990,7 +1996,7 @@
       "destination": "runtime/evidence/dsh-transcript.mjs",
       "status": "add",
       "owner": "DSH (non-Codex) session transcript adapter",
-      "consumer": "tools/cli/stage-runtime.mjs resolveDefaultMonitoringSource; tools/host/workflowhub-codex-session-state.mjs snapshot/repair; tests/dsh-transcript.test.mjs",
+      "consumer": "tools/cli/stage-runtime.mjs requirement source resolution; tools/host/workflowhub-codex-session-state.mjs snapshot/repair; tests/dsh-transcript.test.mjs",
       "delete_condition": "remove only when DSH is retired as a supported host or the adapter is superseded by a host-neutral transcript seam",
       "content_change": "multi-frame zstd decoder, DSH transcript locator/normalizer, hash-bound requirement message snapshot"
     },
@@ -2001,7 +2007,7 @@
       "owner": "DSH transcript adapter test suite",
       "consumer": "local vitest suite and CI regression evidence",
       "delete_condition": "remove with runtime/evidence/dsh-transcript.mjs",
-      "content_change": "frame walking, requirement message extraction, session binding, empty-snapshot repair, monitoring source round-trip tests"
+      "content_change": "frame walking, requirement message extraction, session binding, and empty-snapshot repair coverage"
     },
     {
       "source": "docs/adr/0020-close-five-actions-quality-transcription.md",
@@ -2017,18 +2023,18 @@
       "destination": "tools/cli/stage-runtime.mjs",
       "status": "modify",
       "owner": "public stage-runtime CLI",
-      "consumer": "official run/status/confirm/authorize commands and registered monitoring source resolution",
+      "consumer": "official run/status/confirm/authorize commands and registered requirement source resolution",
       "delete_condition": "revert only when host transcript resolution is moved to a stable plugin interface",
-      "content_change": "DSH transcript source fallback in resolveDefaultMonitoringSource; locateDshTranscript mirrors Codex locate contract"
+      "content_change": "DSH requirement source fallback in resolveRequirementSource; locateDshTranscript mirrors Codex locate contract"
     },
     {
       "source": "tools/host/workflowhub-codex-session-state.mjs",
       "destination": "tools/host/workflowhub-codex-session-state.mjs",
       "status": "modify",
       "owner": "Codex/DSH session handoff state",
-      "consumer": "task-bootstrap, session hooks, stage-runtime monitoring source resolution",
+      "consumer": "task-bootstrap, session hooks, and requirement snapshot/repair",
       "delete_condition": "revert only when session handoff is replaced by a host-neutral state seam",
-      "content_change": "accept DSH transcript paths; snapshot from DSH transcripts; repair empty requirement snapshots when a transcript becomes available"
+      "content_change": "accept DSH transcript paths; snapshot from DSH transcripts; repair empty requirement snapshots when a transcript becomes available; no token usage projection"
     },
     {
       "source": "runtime/stage/stage-content-contracts.mjs",

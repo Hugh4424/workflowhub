@@ -18,7 +18,7 @@ import {
   readCurrentCodexSession,
   registerCodexSession,
 } from "../tools/host/workflowhub-codex-session-state.mjs";
-import { resolveDefaultMonitoringSource } from "../tools/cli/stage-runtime.mjs";
+import { resolveRequirementSource } from "../tools/cli/stage-runtime.mjs";
 import { parseRegisteredRequirementTranscript } from "../runtime/evidence/codex-transcript-adapter.mjs";
 
 function dshUserLine({ id, text, time, kind = "user" }) {
@@ -131,7 +131,7 @@ describe("dsh requirement authentication through the registered source", () => {
   });
 });
 
-describe("dsh host session binding and monitoring source", () => {
+describe("dsh host session binding and requirement source", () => {
   it("registers a dsh transcript path and snapshots requirements at bind time", () => {
     const state = fixture();
     writeTranscript(state, [
@@ -160,12 +160,12 @@ describe("dsh host session binding and monitoring source", () => {
     ]);
   });
 
-  it("authenticates requirement messages via resolveDefaultMonitoringSource", () => {
+  it("authenticates requirement messages via resolveRequirementSource", () => {
     const state = fixture();
     writeTranscript(state, [`${dshUserLine({ id: "m1", text: "开工需求", time: 100 })}\n`]);
     registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.transcript, cwd: state.cwd, home: state.home, observedAtMs: 0 });
     const bound = bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 500 });
-    const source = resolveDefaultMonitoringSource({
+    const source = resolveRequirementSource({
       task_id: state.taskId,
       run_id: "run-1",
       stage: "make-decision",

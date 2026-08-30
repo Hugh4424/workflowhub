@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { aggregateCanonicalProviderResults } from "./canonical-review-result.mjs";
+import { aggregateCanonicalProviderResults, providerAdapter } from "./canonical-review-result.mjs";
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
@@ -44,7 +44,7 @@ function buildPolicy(result) {
   const providers = result.provider_results?.map((item) => item.provider) ?? [];
   const effectiveProfiles = providers.map((provider) => ({
     provider,
-    adapter: adapterOf(provider),
+    adapter: providerAdapter(provider),
     model: result.provider_results.find((item) => item.provider === provider)?.identity?.model ?? null,
     effort: null,
     thinking: null,
@@ -71,14 +71,11 @@ function buildPolicy(result) {
   };
   return { policy, policy_snapshot_hash: policyHash(policy) };
 }
-function adapterOf(provider) {
-  return provider.split("/")[0] ?? "unknown";
-}
 function normalizeIdentity(item, provider) {
   if (!item || typeof item !== "object") return null;
   return {
     provider,
-    adapter: adapterOf(provider),
+    adapter: providerAdapter(provider),
     source_id: typeof item.source_id === "string" && item.source_id.trim() !== "" ? item.source_id : provider,
     config_id: typeof item.config_id === "string" && item.config_id.trim() !== "" ? item.config_id : provider,
     model: item.model ?? "unknown",
@@ -208,7 +205,7 @@ export function recordSimpleReviewResult({ task, result }) {
     raw_output_ref: null,
     error: item.error ?? null,
     execution: {
-      adapter: adapterOf(item.provider),
+      adapter: providerAdapter(item.provider),
       model: item.identity?.model ?? "unknown",
       effort: null,
       thinking: null,

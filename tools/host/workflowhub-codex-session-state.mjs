@@ -426,30 +426,6 @@ export function readCurrentCodexSession({ cwd = process.cwd(), stage = null, ses
   });
 }
 
-function tokenUsageBetween(transcriptPath, startedAtMs, endedAtMs) {
-  if (!transcriptPath) return null;
-  let raw;
-  try { raw = readFileSync(transcriptPath, "utf8"); } catch { return null; }
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let observed = 0;
-  for (const line of raw.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    let outer;
-    try { outer = JSON.parse(line); } catch { continue; }
-    if (outer?.type !== "event_msg" || outer?.payload?.type !== "token_count") continue;
-    const timestamp = Date.parse(typeof outer.timestamp === "string" ? outer.timestamp : "");
-    if (!Number.isFinite(timestamp) || timestamp < startedAtMs || timestamp >= endedAtMs) continue;
-    const usage = outer.payload.info?.last_token_usage;
-    if (!Number.isInteger(usage?.input_tokens) || !Number.isInteger(usage?.output_tokens)
-      || usage.input_tokens < 0 || usage.output_tokens < 0) continue;
-    inputTokens += usage.input_tokens;
-    outputTokens += usage.output_tokens;
-    observed += 1;
-  }
-  return observed > 0 ? { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens } : null;
-}
-
 function resolveSessionTaskId(session, taskId, { allowUnbound = false } = {}) {
   const requested = taskId === null || taskId === undefined ? null : safeId(taskId, "task_id");
   const bound = session?.task_binding?.task_id ? safeId(session.task_binding.task_id, "task_binding.task_id") : null;
@@ -655,7 +631,6 @@ export function finishCodexSessionEvent({ taskId = null, stage, subjectKind, sub
   if (!event) throw new Error(`no open WorkflowHub session event for ${stage}/${subjectKind}/${id}`);
   const ended = nowMs(endedAtMs);
   if (ended < event.started_at_ms) throw new Error("session event ended before it started");
-  const usage = tokenUsageBetween(current.session.transcript_path, event.started_at_ms, ended);
   event.ended_at_ms = ended;
   event.status = status;
   event.result_summary = typeof resultSummary === "string" && resultSummary.trim() ? resultSummary.trim() : `${subjectKind} ${id} finished with status ${status}`;
@@ -666,11 +641,9 @@ export function finishCodexSessionEvent({ taskId = null, stage, subjectKind, sub
     event.executed = typeof executed === "boolean" ? executed : status === "completed";
     event.version = typeof version === "string" && version.trim() ? version.trim() : "workflowhub-session";
   }
-  if (usage) event.usage = usage;
-  else event.usage_reason = "codex_token_count_unavailable_for_event_window";
   current.session.last_seen_at_ms = ended;
   const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
-  return Object.freeze({ event_id: event.event_id, session_id: current.session.session_id, usage, state_path: statePath });
+  return Object.freeze({ event_id: event.event_id, session_id: current.session.session_id, state_path: statePath });
 }
 
 export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd = process.cwd(), sessionId = null } = {}) {
@@ -829,7 +802,6 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     ...(entry.parent_subject_id ? { parent_subject_id: entry.parent_subject_id } : {}),
     ...(entry.reason ? { reason: entry.reason } : {}),
     evidence: entry.evidence ?? [],
-    ...(entry.usage ? { usage: entry.usage } : {}),
     ...(entry.subject_kind === "skill" ? {
       trigger: entry.trigger,
       executed: entry.executed,

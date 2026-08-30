@@ -17,7 +17,7 @@ import {
   sessionHandoffPath,
   startCodexSessionEvent,
 } from "../tools/host/workflowhub-codex-session-state.mjs";
-import { resolveDefaultMonitoringSource } from "../tools/cli/stage-runtime.mjs";
+import { resolveRequirementSource } from "../tools/cli/stage-runtime.mjs";
 import { createRegisteredCodexSource, parseRegisteredRequirementTranscript } from "../runtime/evidence/codex-transcript-adapter.mjs";
 import { createTranscriptSourceReader } from "../runtime/evidence/fact-collector.mjs";
 
@@ -152,7 +152,7 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
-  it("registers the exact hook transcript and measures a semantic event without a second agent", () => {
+  it("registers the exact hook transcript and records a semantic event without token usage", () => {
     const state = fixture();
     try {
       registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
@@ -165,8 +165,8 @@ describe("WorkflowHub current Codex session handoff", () => {
         subject_kind: "step",
         subject_id: "run-tests",
         status: "completed",
-        usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 },
       })]);
+      expect(session.events[0].usage).toBeUndefined();
       expect(session.events[0].evidence).toEqual([{ ref: "quality/tests/current.json" }]);
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
@@ -189,7 +189,7 @@ describe("WorkflowHub current Codex session handoff", () => {
       }]);
 
       // A concurrent sub-agent thread must not steal the session handoff.
-      const source = resolveDefaultMonitoringSource({
+      const source = resolveRequirementSource({
         context: { stage: "make-decision" },
         task_id: state.taskId,
         run_id: "run-real-user-requirement",
@@ -207,7 +207,7 @@ describe("WorkflowHub current Codex session handoff", () => {
       expect(authenticated.messages[0].content).toBeUndefined();
       expect(authenticated.messages[0].message_class).toBeUndefined();
 
-      const explicitSource = resolveDefaultMonitoringSource({
+      const explicitSource = resolveRequirementSource({
         context: { stage: "make-decision" },
         task_id: state.taskId,
         run_id: "run-explicit-real-user-requirement",
@@ -288,7 +288,7 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
-  it("uses half-open transcript windows so a boundary token is not counted twice", () => {
+  it("does not project transcript token counts into semantic events", () => {
     const state = fixture();
     try {
       appendFileSync(state.rollout, `${JSON.stringify({
@@ -300,7 +300,7 @@ describe("WorkflowHub current Codex session handoff", () => {
       bind(state);
       startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 1000 });
       finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, endedAtMs: 2000, status: "completed", resultSummary: "boundary test" });
-      expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" }).events[0].usage).toEqual({ input_tokens: 7, output_tokens: 3, total_tokens: 10 });
+      expect(buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" }).events[0].usage).toBeUndefined();
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
       rmSync(state.root, { recursive: true, force: true });
@@ -397,7 +397,7 @@ describe("WorkflowHub current Codex session handoff", () => {
           // complete when all of its own declared subjects are terminal.
           status_value: stage === "verify-code" ? "completed" : "incomplete",
         });
-        const source = resolveDefaultMonitoringSource({
+        const source = resolveRequirementSource({
           context: { stage },
           task_id: state.taskId,
           run_id: `run-${stage}`,
@@ -512,7 +512,7 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
-  it("uses the project hook payload and then resolves that exact source for monitoring", () => {
+  it("uses the project hook payload and then resolves that exact requirement source", () => {
     const state = fixture();
     const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
     try {
@@ -524,7 +524,7 @@ describe("WorkflowHub current Codex session handoff", () => {
       });
       expect(result.status).toBe(0);
       expect(JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8")).sessions[0]).toMatchObject({ session_id: state.sessionId, transcript_path: state.rollout });
-      const source = resolveDefaultMonitoringSource({
+      const source = resolveRequirementSource({
         context: { stage: "build-code" },
         task_id: "task-hook-source",
         run_id: "run-hook-source",

@@ -114,6 +114,25 @@ describe("review record route", () => {
     expect(attempt.error.code).toBe("ROUTE_UNAVAILABLE");
   });
 
+  it("keeps the DSH adapter identity aligned with the canonical provider alias", () => {
+    const task = makeTask();
+    const result = baseResult();
+    result.stage = "verify-code";
+    result.provider_results = [{
+      provider: "dsh-code-review",
+      status: "completed",
+      identity: { provider: "dsh-code-review", adapter: "dsh", source_id: "codex-session-dsh-review", config_id: "dsh-config", model: null },
+      error: null,
+      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+      usage: null,
+    }];
+    result.findings = [];
+    const refs = recordSimpleReviewResult({ task, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.provider_attempts[0].identity).toMatchObject({ provider: "dsh-code-review", adapter: "dsh" });
+    expect(attempt.provider_attempts[0].execution.adapter).toBe("dsh");
+  });
+
   it("fails loudly on invalid input", async () => {
     const task = makeTask();
     expect(() => recordSimpleReviewResult({ task, result: {} })).toThrow();

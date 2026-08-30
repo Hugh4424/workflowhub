@@ -53,6 +53,58 @@ describe("review layering", () => {
     expect(result.adjudication.clusters).toEqual([]);
   });
 
+  it("accepts the canonical DSH provider identity when the provider id names its review skill", () => {
+    const provider = "dsh-code-review";
+    const identity = {
+      provider,
+      adapter: "dsh",
+      source_id: "codex-session-dsh-review",
+    };
+    const result = aggregateCanonicalProviderResults([
+      { provider, identity, review: { findings: [] } },
+    ]);
+    expect(result.status).toBe("available");
+    expect(result.valid[0]).toMatchObject({ provider, identity });
+  });
+
+  it("authenticates the DSH alias through the full canonical review chain", () => {
+    const provider = "dsh-code-review";
+    const review = { findings: [] };
+    const attempt = {
+      version: "wh-review-attempt.v1",
+      provider_attempts: [{
+        provider,
+        identity: { provider, adapter: "dsh", source_id: "codex-session-dsh-review" },
+        status: "completed",
+        output_ref: "quality/reviews/provider.output.json",
+        execution: { adapter: "dsh" },
+      }],
+    };
+    const result = {
+      provider_results: [{ provider, output: review }],
+      findings: [],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    };
+    expect(() => authenticateCanonicalReviewResult({
+      attempt,
+      result,
+      providerOutputs: [{ ref: "quality/reviews/provider.output.json", provider, review }],
+    })).not.toThrow();
+  });
+
+  it("does not generalize the DSH compatibility mapping to arbitrary adapter mismatches", () => {
+    const provider = "opencode/pax3.8";
+    const result = aggregateCanonicalProviderResults([
+      {
+        provider,
+        identity: { provider, adapter: "codex", source_id: "wrong-adapter" },
+        review: { findings: [] },
+      },
+    ]);
+    expect(result.status).toBe("unavailable");
+    expect(result.valid).toEqual([]);
+  });
+
   it("does not authenticate a formal review from the retired legacy policy", () => {
     const provider = "pi/coding";
     const review = { findings: [] };

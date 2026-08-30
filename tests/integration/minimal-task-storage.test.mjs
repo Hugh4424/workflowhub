@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -73,6 +73,48 @@ describe("minimal task storage", () => {
     const index = readTaskIndex(root);
     expect(index.facts.map(({ ref }) => ref)).toEqual([first.ref, second.ref]);
     expect(JSON.stringify(index)).not.toMatch(/parent|previous|generation|selector|successor|current/);
+  });
+
+  it("fails loudly on malformed historical monitoring rows", () => {
+    const base = {
+      schema_version: ["monitoring", "fact.v1"].join("-"),
+      fact_id: "fact-1",
+      task_id: "minimal-task",
+      project_name: "legacy",
+      fact_type: "stage",
+      stage: "build-code",
+      step_id: null,
+      step_slug: null,
+      skill_id: null,
+      session_id: null,
+      subagent_id: null,
+      run_id: null,
+      attempt_id: null,
+      status: "present",
+      value: { outcome: "completed" },
+      reason: null,
+      error: null,
+      observed_at: "2026-08-30T00:00:00Z",
+      source: { kind: "stage", ref: "ref-1", source_id: "source-1", source_version: "v1" },
+      coverage: { expected: 1, observed: 1 },
+      contract_version: "v1",
+      collector_version: "v1",
+      adapter_version: null,
+      skill_version: null,
+      evidence_refs: [],
+    };
+    const malformed = [
+      Object.fromEntries(Object.entries(base).filter(([key]) => key !== "coverage")),
+      { ...base, status: "bogus" },
+      { ...base, value: [] },
+      { ...base, coverage: { expected: 0, observed: 1 } },
+    ];
+    for (const value of malformed) {
+      const root = taskRoot();
+      initializeTaskStore(root, { taskId: "minimal-task" });
+      appendFileSync(join(root, "facts.jsonl"), `${JSON.stringify(value)}\n`);
+      expect(() => readTaskFacts(root)).toThrow(/historical monitoring fact is invalid/);
+    }
   });
 
   it("stores quality facts and verify summary in separate quality paths", () => {
