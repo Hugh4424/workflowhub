@@ -199,19 +199,36 @@ function bindAcceptanceCoverageEvidence(packet, evidence, identity) {
   if (!Array.isArray(packet?.acceptance_coverage)) return packet;
   const evidenceByRef = new Map(evidence.map((entry) => [entry.ref, entry]));
   const evidenceByKind = new Map(evidence.map((entry) => [entry.kind, entry]));
-  const packetEvidenceByRef = new Map((packet.evidence ?? []).map((entry) => [entry?.ref, entry]));
+  const packetEvidenceByRef = new Map((packet.evidence ?? []).flatMap((entry) => [
+    [entry?.ref, entry],
+    [entry?.canonical_ref, entry],
+  ].filter(([key]) => typeof key === "string" && key.length > 0)));
   const packetEvidenceByKind = new Map((packet.evidence ?? []).map((entry) => [entry?.kind, entry]));
+  const inferLogicalKind = (ref) => {
+    if (typeof ref !== "string") return null;
+    if (/implementation/i.test(ref)) return "implementation";
+    if (/test|receipt/i.test(ref)) return "tests";
+    if (/ac[-_]?trace|acceptance/i.test(ref)) return "ac-trace";
+    return null;
+  };
   const bindCoverageEvidenceRef = (ref) => {
     if (typeof ref !== "string") return ref;
     const packetEntry = packetEvidenceByRef.get(ref);
-    const logicalRef = packetEntry?.kind ?? ref;
-    return evidenceByKind.get(logicalRef)?.ref ?? evidenceByRef.get(ref)?.ref ?? ref;
+    const logicalRef = packetEntry?.kind ?? inferLogicalKind(ref) ?? ref;
+    return evidenceByKind.get(logicalRef)?.canonical_ref
+      ?? evidenceByKind.get(logicalRef)?.ref
+      ?? evidenceByRef.get(ref)?.canonical_ref
+      ?? evidenceByRef.get(ref)?.ref
+      ?? ref;
   };
   const bindEvidence = (entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
-    const packetEntry = packetEvidenceByRef.get(entry.ref);
-    const logicalRef = packetEntry?.kind ?? entry.ref;
-    const current = evidenceByRef.get(entry.ref) ?? evidenceByKind.get(logicalRef);
+    const packetEntry = packetEvidenceByRef.get(entry.ref)
+      ?? packetEvidenceByKind.get(entry.kind);
+    const logicalRef = packetEntry?.kind ?? entry.kind ?? inferLogicalKind(entry.ref) ?? entry.ref;
+    const current = evidenceByRef.get(entry.ref)
+      ?? evidenceByRef.get(packetEntry?.ref)
+      ?? evidenceByKind.get(logicalRef);
     if (!current) return entry;
     return {
       ...entry,
@@ -221,7 +238,9 @@ function bindAcceptanceCoverageEvidence(packet, evidence, identity) {
     };
   };
   const enrichEvidence = (entry) => {
-    const packetEntry = packetEvidenceByRef.get(entry?.ref) ?? packetEvidenceByKind.get(entry?.kind);
+    const packetEntry = packetEvidenceByRef.get(entry?.ref)
+      ?? packetEvidenceByKind.get(entry?.kind)
+      ?? packetEvidenceByKind.get(inferLogicalKind(entry?.ref));
     return packetEntry?.test_result && !entry?.test_result
       ? { ...entry, test_result: packetEntry.test_result }
       : entry;
