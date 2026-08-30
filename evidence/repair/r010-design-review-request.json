@@ -1,6 +1,0 @@
-{
-  "version": 4,
-  "host_provider": "codex",
-  "prompt": "请独立审查这份 vNext stage/正式 close 修复方案。只读取冻结附件中的 review-packet.v1.json、manifest.json、changes.diff 和 context/ 文件。重点判断：1) 根因是否与代码证据一致；2) 方案是否保持 vNext single-write、没有恢复 accepted/results 或引入兼容桥；3) public 五阶段回归测试是否真的能证明用户入口可用；4) 从 test receipt 认证 snapshot_commit 的 close 修复是否完整、不会引入第二事实源；5) MATERIAL_INCOMPLETE 错误改进是否必要且不会扩大复杂度；6) 是否遗漏会继续造成 stage 阻塞的关键点。请按“必须修正 / 建议修正 / 可接受”给出具体意见，并指出对应文件和风险。不要修改文件，不要输出泛泛的流程建议。",
-  "continuation": null
-}

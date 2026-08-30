@@ -1,6 +1,0 @@
-{
-  "version": 4,
-  "host_provider": "codex",
-  "prompt": "请只审查冻结附件中的当前 WorkflowHub v3 候选。重点判断：1) vNext 是否保持四材料、single-write、quality fact/publication，不恢复 accepted.json、results/* 或 legacy writer；2) public 五阶段是否真实可推进，材料缺失、失败、unavailable、拒绝确认是否 fail-loud 且不留下误导性 active run；3) close 是否从已认证 test receipt 绑定 snapshot_commit/tree/parent；4) 风险暂停/接受是否仍是单一 writer、绑定 finding/card/review/snapshot/reply，且不把证据变成推进许可证；5) reference-audit 对 stage-review-disposition 的分类是否符合当前 plan 的 KEEP_UNTIL_MIGRATION 与 vNext 必需风险能力，是否存在真正未审计的 live residual；6) current plan/tasks、CONSTITUTION.md 与 checklist 是否一致；7) 是否新增不必要复杂度或兼容状态。请按“必须修正 / 建议修正 / 可接受”输出，给出具体文件和行号。只给审查意见，不修改文件；provider unavailable/invalid 不得被当作 pass。",
-  "continuation": null
-}

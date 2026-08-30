@@ -1,6 +1,0 @@
-{
-  "version": 4,
-  "host_provider": "codex",
-  "prompt": "请独立审查当前 vNext stage/close 修复实现是否可合并。只读取冻结附件。重点检查：1) vNext 是否仍是单写入模型，是否错误恢复 accepted.json/results/*/legacy writer；2) public stage-runtime 的五阶段推进、MATERIAL_INCOMPLETE、status freshness 与失败副作用；3) confirm:decision 是否同时发布 canonical confirmation 与 quality fact，是否保持幂等且不把 audit 变成推进许可证；4) close 是否从已认证 test receipt 正确恢复 snapshot_commit，是否覆盖 clean head、dirty snapshot、tree/parent/extra-parent 错配；5) AC 非空约束、正式 publication/close 边界和 WorkflowHub 宪法 F3/F4/F8/F9/Q1/Q2/Q3；6) 是否引入新增复杂度或遗漏仍会造成 stage 阻塞。请按“必须修正 / 建议修正 / 可接受”输出，给出具体文件、行号和最小修复建议。不要修改文件。",
-  "continuation": null
-}

@@ -1,9 +1,0 @@
-{
-  "schema_version": "workflowhub-final-gate-fact.v1",
-  "kind": "focused_final",
-  "snapshot_tree": "fc398f620e886d4a4e32b7696a56044123acda7245d38a3522745db1f018a215",
-  "command": "npx vitest run tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs tests/integration/mutation-guards.test.mjs tests/e2e/release-acceptance.test.mjs tests/contract/final-coverage.test.mjs --maxWorkers=1",
-  "exit_code": 0,
-  "observed": { "test_files": 6, "tests": 25, "passed": 25 },
-  "provenance": "Current-tree focused matrix execution observed after source cleanup and Skill Bundle hash repair; no full or E2E rerun was performed for this evidence regeneration."
-}
