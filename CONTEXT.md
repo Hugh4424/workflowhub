@@ -55,7 +55,15 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 **执行记录（execution record）**：
 统一外置记录进度、指标与回溯信息的产物。
 
-**每次调用身份（per-invocation identity）**：
+**close 三义**：
+"close" 在 workflowhub 里同时指三件事，阅读代码/文档时需按上下文区分：
+1. **交付动作集**：五个物理动作——commit、merge、archive、push、cleanup——由 task-close CLI 编排，开始前一次人工确认，每个动作单独授权。
+2. **阶段收口**：某个 stage 结束时按合同整理执行记录、确认完成判据并向下游交接的收尾。
+3. **质量记录归档**：把测试、审查、AC、风险接受等质量事实写入外置记录的整理动作。
+三者都遵循宪法 F7、F9、Q1；交付动作集只记物理事实，不写质量结论。
+
+**审查闭环（review closure）**：
+一个 stage 的某条审查面只做一轮独立异源审查；审查返回的每条 finding 都在当前任务内处置为 `fixed`/`rejected_invalid`/`accepted_risk`/`needs_human` 之一，处置完即闭环。只有当上一轮审查未返回任何语义建议，并且具体传输或材料问题已经改变时，才允许重新发起审查。"零 findings" 不是闭环条件，也不是阶段通过条件。
 正式入口在一次 run 开始前，对调用方显式提供的 WorkflowHub Git 顶层做认证后写入的
 create-only 记录。它绑定 task、stage、run、干净的已提交来源、合同内容校验值和能力，
 不把绝对 runner 路径写入任务清单，也不产生质量结论。

@@ -167,6 +167,48 @@ RISK-001
       });
     });
 
+    it("derives authenticated message classes from hash-bound coverage outputs", () => {
+      const decisionLog = `## 原始需求
+| 需求 | 摘要 | 决定 | 消息类别 | 状态 |
+| --- | --- | --- | --- | --- |
+| R-001 | 目标需求 | D-001 | goal | covered |
+| R-002 | 流程需求 | D-002 | flow_or_surface | covered |
+
+## 核心需求
+R-001 与 R-002。
+
+## 核心目标
+目标已确认并可执行。
+
+## 验收标准
+验收结果可验证通过或失败，含边界条件。
+
+## 已选方向
+保持当前范围。
+
+## 风险与延期交接
+风险已记录。
+`;
+      const messages = [{
+        id: "msg-auth-1",
+        order: 1,
+        content_hash: "a".repeat(64),
+      }];
+      const outputs = [
+        { message_id: "msg-auth-1", message_hash: "a".repeat(64), message_class: "goal", axis_id: "goal", impact: "high", disposition: "represented", decision_ids: ["D-001"], requirement_ids: ["R-001"] },
+        { message_id: "msg-auth-1", message_hash: "a".repeat(64), message_class: "flow_or_surface", axis_id: "flow", impact: "high", disposition: "represented", decision_ids: ["D-002"], requirement_ids: ["R-002"] },
+      ];
+      const bound = analyzeDecisionConvergence(decisionLog, { requirementMessages: messages, requirementCoverageOutputs: outputs });
+      expect(bound.errors.filter((error) => /class is missing|required dimension|does not bind authenticated message/.test(error))).toEqual([]);
+      expect(bound.facts.requirement_coverage).toBe("passed");
+
+      // Without class-bearing coverage outputs the authenticated message
+      // still fails loudly: identity alone is not a semantic classification.
+      const unbound = analyzeDecisionConvergence(decisionLog, { requirementMessages: messages, requirementCoverageOutputs: [] });
+      expect(unbound.facts.requirement_coverage).toBe("missing");
+      expect(unbound.errors.join("; ")).toMatch(/class is missing/);
+    });
+
     it("reports missing requirement coverage, goal achievement, acceptance clarity, solution convergence, and plain-language card", async () => {
       const state = makeDecisionFixture("p1-red-coverage");
       const decisionLog = `# 当前决策

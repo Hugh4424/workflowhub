@@ -1,0 +1,1452 @@
+{
+  "schema_version": "dead-code-scan-report.v1",
+  "generated_at": "2026-08-30T00:14:13.056Z",
+  "root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-simplicity-close-repair-20260829",
+  "scan_options": {
+    "verify": true,
+    "targets_count": null,
+    "mode": "default"
+  },
+  "entries": [
+    {
+      "target": "core/parse-framework-config.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/anti-host-bad/claude-hook.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/anti-host-bad/claude-path.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/anti-host-bad/hardcoded-path.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/anti-host-bad/repo-root-climb.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/anti-host-bad/source-derived.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-badjson.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-fail.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-missing-id.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-ok.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-other.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "fixtures/components/dummy-wrong-id.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "metrics/adapters/host-adapter.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "runtime/evidence/capability-doctor.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "runtime/evidence/receipt-schema.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "runtime/task/task-index.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "scripts/constitution-mapping-check.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "scripts/dead-code-scan.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "scripts/dual-track-evaluate.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "skills/anysearch/scripts/anysearch_cli.js",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "skills/debate/pk-rules.test.ts",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "skills/diagnosing-bugs/scripts/validate-diagnosis.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "skills/test-routing-advisor/scripts/route.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "skills/wh-review/scripts/lib/safe-id.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/baseline.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/boundary-confirm.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/build-code-diff-only.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/build-code-target.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/canonical-source.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/close/cleanup-resume-finalize.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/close/close-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/close/freshness-consistency.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/build-code-apply-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/confirmation-authorization.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/core-runtime-layering.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/doctor-interface.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/execution-identity.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/filled-plan-task-production.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/final-coverage.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/five-stage-spec-analyze-wiring.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/four-material-non-gate-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/frontend-component-quality-static.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/governance-startup-event-early-failure.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/integration-review-subject.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/legacy-zero.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/make-decision-artifact-path.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/make-decision-interaction-publication.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/material-producer-consumer-roundtrip.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/material-workspace.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/phase-quality-handoff.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/public-behavior-baseline.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/reference-audit.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/repository-governance.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/repository-inventory.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/requirement-convergence-regression.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/review-layering.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/review-materials-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/runner-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/runtime-facade.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/spec-analyze-completeness.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/spec-stage-artifact-closure.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-completion.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-interaction-batching.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-order-and-host-interaction.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-progress-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-routing-and-concrete-testing.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-skill-consumer-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/stage-skill-invocation-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/status-derivation.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/task-bootstrap-integrity.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/task-handle.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/ui-frontend-governance.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/ui-skill-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/ui-stage-integration.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/verify-architect-acceptance.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/verify-final-coverage.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/workflow-quality-regression.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/workspace-binding.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract/workspace-cleanup.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/contract-freeze.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/decision-log-content-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/deferred-acceptance-semantics.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/dsh-transcript.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/e2e/stage-runtime-five-stage-e2e.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/e2e/vnext-five-stage-current.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/execution-record.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/facts-subschema.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/final-cutover-guards.red.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/five-stage-facts-v2.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/fixtures/derived-review-provider.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/helpers/read-only-runner-fixture.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/host-independence.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/distribution-closure.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/execution-snapshot-isolation.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/first-three-stage-cutover.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/governance-diagnostics-non-gate.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/governance-learning-non-gate.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/history-read-only.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/interrupted-same-task-recovery.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/journal-replacement.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/mini-task-a-resume.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/mini-task-delivery.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/minimal-task-storage.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/mutation-guards.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/projection-replacement.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/quality-store-concurrency.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/review-test-close-freshness-matrix.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/runner-clean-install.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/task-fact-index-consistency.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/verify-freshness-selection.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/vnext-delivery-close.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/vnext-official-stage-run.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/integration/wh-review-v3-broker-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/interaction-quality-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/knowledge-card.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/left-shift/left-shift-suite.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m12-reuse-registry.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m14a-audit-contract-layer.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-codex-session-hook.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-codex-transcript-adapter.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-monitoring-diagnostics.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-monitoring-facts.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-monitoring-integration.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-monitoring-projector.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/m15-stage-outcome-stop-hook.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/metrics-smoke.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/metrics-taskhandle-v2.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/moat-skills-phase1.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/moat-skills-phase2.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/official-component-receipts.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/official-make-decision-cli.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/p0-foundation-contracts.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/per-invocation-doc-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/per-invocation-execution-identity.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/requirement-lineage.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/requirements-completeness-audit-acceptance.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/reuse-registry.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/review/review-record-route.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/skill-provenance-strict.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/smoke.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/spec-content-profile.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/spike-intake-design.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-completion-facts.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-decision-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-interaction-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-plan-task-contract-v3.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-plan-task-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-quality.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-review-cost-policy.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/stage-risk-acceptance.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/step-manifest.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/task-record-paths-check.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/verify-code-design-alignment.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/verify-code-facts.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/verify-code-freshness.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/verify-requirement-replay-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/vitest-resource-policy.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/workflow-v2-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tests/workflowhub-multica-sync.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/check-anti-host.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/check-contract.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/check-extensibility.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/check-metrics-schema.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/check-task-record-paths.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/collect-task-facts.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/noop.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/run-checks.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/run-wh-review-audit-e2e.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/run-wh-review-provider-smoke.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/smoke-local-skill-dispatch.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/source-manifest.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/task-close.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/validate-field-mapping.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/cli/verify-structure.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/host/workflowhub-codex-session-event.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/host/workflowhub-codex-session-hook.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/host/workflowhub-stage-agent-protocol.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "tools/host/workflowhub-stage-outcome-stop-hook.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "vitest.config.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    },
+    {
+      "target": "workflows/verify-code/phase-1-contract.test.mjs",
+      "type": "file",
+      "consumer_count": 0,
+      "consumers": [],
+      "zero_consumer": true,
+      "evidence": "no import references found"
+    }
+  ]
+}

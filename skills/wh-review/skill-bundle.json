@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "a01de035cffb009ff6c43a7847f54a3db184559f36e0177f6f92959be4f54d13"
+      "sha256": "b40c9aa2d78e883a146f46a1e62551816f4f2a813a53cc651fe7d12763ce5ce8"
     },
     {
       "path": "stage-skill-plan.json",

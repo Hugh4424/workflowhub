@@ -5,12 +5,13 @@ import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
-import { recordMissingRouteUnavailable, runReview, verifyFinal } from "./review-runner.mjs";
-import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
+import { verifyFinal } from "./review-runner.mjs";
+import { loadTrustedThirdReviewConfig, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace } from "../../../runtime/stage/stage-context.mjs";
 import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
+import { runSimpleReview } from "./simple-review-runner.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const HOST_PATH = /(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g;
@@ -39,6 +40,10 @@ export function resolveTrustedReviewSubject(input) {
     projectName,
     taskId,
     runnerRoot: RUNNER_ROOT,
+    // Trusted subject resolution only needs to read the existing task and
+    // workspace state. Keep it read-only so callers cannot accidentally
+    // prepare a worktree or trigger expensive material checks during binding.
+    readOnly: true,
   });
   if (stage === "make-decision") {
     const workspace = openCurrentTaskWorkspace(context.task);
@@ -198,131 +203,7 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, same
 }
 
 export async function runReviewRound(input) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
-  for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
-    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
-  }
-  for (const forbidden of ["providers", "provider_allowlist", "providerAllowlist"]) {
-    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; providers come from the configured 3rd-review tier`);
-  }
-  for (const forbidden of ["workflow_run_id", "workflowRunId"]) {
-    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is unsupported; wh-review writes immutable quality facts`);
-  }
-  for (const forbidden of [
-    "previous_result_ref", "previousResultRef", "review_round", "reviewRound", "review_delta", "reviewDelta",
-    "request_id", "requestId", "prior_attempt_refs", "priorAttemptRefs", "dispatch_sequence", "dispatchSequence",
-  ]) {
-    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is retired; callers cannot select prior review state`);
-  }
-  if (input.review_scope !== undefined || input.reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
-  for (const forbidden of ["review_delta", "response_ledger", "previous_review"]) {
-    if (Object.prototype.hasOwnProperty.call(input.materials ?? {}, forbidden)) {
-      throw new TypeError(`materials.${forbidden} is retired; provide the complete current review materials`);
-    }
-  }
-  if (Object.prototype.hasOwnProperty.call(input.materials ?? {}, "scope_revision")) {
-    throw new TypeError("materials.scope_revision is unsupported; update the current four materials and use the ordinary stage review");
-  }
-  if (input.format_correction_attempt_ref !== undefined || input.formatCorrectionAttemptRef !== undefined) {
-    throw new TypeError("format correction is retired; invalid reviewer output is terminal unavailable evidence");
-  }
-  if (input.previous_runtime_ids !== undefined || input.previousRuntimeIds !== undefined) {
-    throw new TypeError("runtime continuation is retired; review routing and reuse are runner-owned");
-  }
-  for (const [field, value] of [["task_path", input.task_path], ["project_name", input.project_name ?? input.projectName], ["task_id", input.task_id ?? input.taskId], ["stage", input.stage], ["host_provider", input.host_provider ?? input.hostProvider]]) {
-    if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${field} is required`);
-  }
-  if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials)) throw new TypeError("materials is required");
-  const reviewKind = input.review_kind ?? input.reviewKind ?? null;
-  if (reviewKind !== null && !["mini_task.design", "mini_task.implementation"].includes(reviewKind)) throw new TypeError("review_kind is unsupported");
-  const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
-  if (reviewTrack === "detail" && input.stage !== "make-decision") {
-    throw new TypeError("identity: detail review requires stage make-decision");
-  }
-  if (input.stage === "make-decision" && reviewTrack === "detail" && reviewKind !== null) {
-    throw new TypeError("identity: make-decision detail review cannot use review_kind");
-  }
-  const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null, reviewKind);
-  const hostProvider = input.host_provider ?? input.hostProvider;
-  const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null;
-  const materialRevision = stage === "verify-code" || (stage === "make-decision" && reviewTrack === "detail")
-    ? trusted.kernel.currentVNextMaterialRevision() : null;
-  const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack, reviewKind);
-  if (route === null) {
-    const result = await recordMissingRouteUnavailable({
-      ...trusted,
-      attachmentRoot: thirdReview.attachmentRoot,
-      stage,
-      phaseId,
-      reviewTrack,
-      reviewKind,
-      materialRevision,
-    });
-    const qualityFactIntent = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
-    return {
-      status: result.status,
-      attempt_ref: result.attemptRef,
-      result_ref: result.resultRef,
-      report_ref: result.reportRef,
-      snapshot_tree: result.snapshotTree,
-      material_id: result.materialId,
-      material_revision: result.materialRevision,
-      runtime_ids: result.runtimeIds,
-      subject_kind: result.subjectKind,
-      phase_id: result.phaseId,
-      review_scope: result.reviewScope,
-      base_tree: result.baseTree,
-      candidate_tree: result.candidateTree,
-      ...(qualityFactIntent ? { review_fact_intent: qualityFactIntent } : {}),
-      error_code: "REVIEW_ROUTE_UNAVAILABLE",
-      ...(result.errorCode ? { error_code: result.errorCode } : {}),
-      ...(reviewKind ? { review_kind: reviewKind } : {}),
-      ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
-    };
-  }
-  const profileSet = "initial";
-  const selection = selectTrustedReviewProviderSelection(thirdReview.config, hostProvider, route, profileSet);
-  const reviewPolicy = {
-    source: "wh_review.v2",
-    mode: route.mode,
-    minimum_heterologous: route.minimum_heterologous ?? 1,
-    requested_profiles: selection.requestedProfiles,
-    ...(selection.requestedProfileSpecs.length ? { requested_profile_specs: selection.requestedProfileSpecs } : {}),
-    eligible_profiles: selection.eligibleProfiles,
-    same_source_exclusions: selection.sameSourceExcluded,
-    effective_profiles: selection.effectiveProfiles,
-  };
-  const result = await runReview({
-    ...trusted, attachmentRoot: thirdReview.attachmentRoot,
-    stage, phaseId, reviewTrack, reviewKind, uiScope: input.ui_scope === true,
-    materialRevision,
-    materials: input.materials ?? {},
-    current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
-    directionSelection: input.direction_selection ?? input.directionSelection ?? null,
-    hostProvider,
-    // The broker owns adapter-level exclusion. Keep the complete configured
-    // group here so it can attest SAME_SOURCE rather than trusting a local
-    // pre-filter; policy still records the eligible heterologous quorum.
-    providers: selection.providers, reviewPolicy, providerClient: client,
-  });
-  const qualityFactIntent = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
-  let errorCode = null;
-  if (result.status === "unavailable" && result.attemptRef) {
-    const attempt = JSON.parse(trusted.task.readRecord(result.attemptRef));
-    errorCode = attempt.error?.code ?? null;
-  }
-  return {
-    status: result.status,
-    attempt_ref: result.attemptRef,
-    result_ref: result.resultRef,
-    report_ref: result.reportRef,
-    snapshot_tree: result.snapshotTree, material_id: result.materialId, material_revision: result.materialRevision, runtime_ids: result.runtimeIds,
-    subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
-    ...(qualityFactIntent ? { review_fact_intent: qualityFactIntent } : {}),
-    ...(errorCode ? { error_code: errorCode } : {}),
-    ...(reviewKind ? { review_kind: reviewKind } : {}),
-    ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
-  };
+  return runSimpleReview(input);
 }
 
 export function verifyFinalReview(input) {

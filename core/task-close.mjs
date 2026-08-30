@@ -902,148 +902,8 @@ function manualCleanupObservation(task, kernel) {
  * a normal task completion. The caller must have already executed the same
  * plan-bound physical executors used by normal close.
  */
-export function recordManualDeliveryClose({
-  task: taskHandle,
-  kernel: taskKernel,
-  sourceRef,
-  sourceHash,
-  planHash,
-  riskAccepted = false,
-  riskReason,
-  deferredItems = [],
-  qualityReasons = [],
-  physicalActionsCompleted = false,
-  physicalState,
-  now = () => new Date().toISOString(),
-} = {}) {
-  const task = assertTaskHandle(taskHandle);
-  const kernel = assertTaskKernel(taskKernel);
-  if (kernel.task !== task) throw new Error("manual delivery close TaskHandle/TaskKernel mismatch");
-  if (!/^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/.test(sourceRef ?? "")) throw new TypeError("manual delivery close sourceRef must be a prepared close plan");
-  const sourcePlanHash = sourceRef.slice("operations/close/plans/".length, -"/plan.json".length);
-  if (!HASH.test(planHash ?? "") || planHash !== sourcePlanHash) throw new TypeError("manual delivery close planHash must bind the prepared close plan");
-  if (riskAccepted !== true) throw new Error("manual close requires explicit risk acceptance (--risk-accepted=true)");
-  if (typeof riskReason !== "string" || riskReason.trim() === "") throw new TypeError("manual close riskReason is required");
-  if (!Array.isArray(deferredItems) || deferredItems.some((item) => typeof item !== "string" || item.trim() === "")) {
-    throw new TypeError("manual close deferredItems must be an array of non-empty strings");
-  }
-  if (!Array.isArray(qualityReasons) || qualityReasons.some((item) => typeof item !== "string" || item.trim() === "")) {
-    throw new TypeError("manual close qualityReasons must be an array of non-empty strings");
-  }
-  if (physicalActionsCompleted !== true) throw new Error("manual close must execute physical close actions before recording delivery");
-  const physical = plain(physicalState, "manual close physicalState");
-  const physicalMissing = physicalDeliveryMissing(physical);
-  if (physicalMissing.length > 0) throw new Error(`manual close physical delivery is incomplete: ${physicalMissing.join(", ")}`);
-  if (typeof now !== "function") throw new TypeError("manual delivery close now must be a function");
-  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-  const sourceRaw = task.readRecord(sourceRef);
-  const actualSourceHash = sha256(sourceRaw);
-  if (sourceHash !== undefined && sourceHash !== actualSourceHash) throw new Error("manual delivery close source ref hash is stale");
-  let prepared;
-  try { prepared = JSON.parse(sourceRaw); } catch { throw new Error("manual delivery close prepared plan is invalid JSON"); }
-  if (prepared?.schema_version !== "task-close-plan-record.v1"
-      || prepared.task_id !== task.identity.taskId
-      || prepared.plan_hash !== planHash
-      || closePlanHash(prepared.plan) !== planHash) {
-    throw new Error("manual delivery close requires the canonical prepared plan");
-  }
-  const preparedPlan = validatePlan(prepared.plan, task);
-  const preparedDelivery = validateDeliveryPlan(preparedPlan, task, kernel);
-  if (preparedDelivery.risk_close?.accepted !== true) throw new Error("manual delivery close requires a prepared risk close plan");
-  if (preparedPlan.steps.length !== DELIVERY_STEPS.length
-      || preparedPlan.steps.some((step, index) => step.step_id !== DELIVERY_STEPS[index][0] || step.operation !== DELIVERY_STEPS[index][1])) {
-    throw new Error("manual delivery close requires the fixed six-step delivery plan");
-  }
-  for (const [stepId] of DELIVERY_STEPS) {
-    const operationRef = `operations/close/plans/${planHash}/steps/${stepId}.json`;
-    let operation;
-    try { operation = JSON.parse(task.readRecord(operationRef)); } catch { throw new Error(`manual delivery close is missing operation fact: ${stepId}`); }
-    if (operation?.schema_version !== "task-close-operation.v1"
-        || operation.task_id !== task.identity.taskId
-        || operation.plan_hash !== planHash
-        || operation.step_id !== stepId
-        || operation.status !== "completed"
-        || !plain(operation.physical_state, `manual close operation ${stepId} physical state`)
-        || !HASH.test(operation.physical_state_hash ?? "")
-        || sha256(canonical(operation.physical_state)) !== operation.physical_state_hash) {
-      throw new Error(`manual delivery close operation fact is invalid: ${stepId}`);
-    }
-  }
-  const observed = inspectDeliveryCloseState({ task, kernel, plan: preparedPlan, allowRiskClose: true });
-  if (observed.physical_missing.length > 0) {
-    throw new Error(`manual delivery close physical state is not complete: ${observed.physical_missing.join(", ")}`);
-  }
-  const mismatchedPhysical = PHYSICAL_DELIVERY_FACTS.filter((key) => physical[key] !== observed.facts[key]);
-  if (mismatchedPhysical.length > 0) throw new Error(`manual delivery close physical facts do not match the Workspace: ${mismatchedPhysical.join(", ")}`);
-  const cleanup = physical.worktree_cleanup_scan ?? manualCleanupObservation(task, kernel);
-  const invocationId = `manual-risk-close:${sha256(canonical({
-    source_ref: sourceRef,
-    source_hash: actualSourceHash,
-    plan_hash: planHash,
-    risk_reason: riskReason,
-    deferred_items: deferredItems,
-    quality_reasons: qualityReasons,
-    physical_state: physical,
-  }))}`;
-  const facts = readTaskFacts(task.taskPath);
-  const existingFactIndex = facts.findIndex((fact) => fact.invocation_id === invocationId);
-  const existingFact = existingFactIndex === -1 ? undefined : facts[existingFactIndex];
-  if (existingFact) {
-    const existing = JSON.parse(task.readRecord(existingFact.output_ref));
-    return Object.freeze({ ...existing, output_ref: existingFact.output_ref, fact_ref: `facts.jsonl#${existingFactIndex + 1}`, fact: existingFact });
-  }
-  const recordedAt = now();
-  const payload = {
-    schema_version: "manual-risk-close.v1",
-    task_id: task.identity.taskId,
-    business_status: "delivered",
-    formal_status: "closed_with_risk",
-    status: "completed_with_risk",
-    risk_accepted: true,
-    risk_reason: riskReason,
-    deferred_items: [...deferredItems],
-    quality_reasons: [...qualityReasons],
-    physical_actions_completed: true,
-    deferred_operations: [],
-    physical_state: structuredClone(physical),
-    plan_hash: planHash,
-    source_ref: sourceRef,
-    source_hash: actualSourceHash,
-    source_digest: actualSourceHash,
-    source_digest_kind: "source_ref_sha256",
-    cleanup,
-    recorded_at: recordedAt,
-  };
-  const payloadRaw = `${JSON.stringify(payload, null, 2)}\n`;
-  const payloadHash = sha256(payloadRaw);
-  // vNext canonical records must stay in the quality namespace. This is a
-  // formal risk-close evidence record, not the physical operations close
-  // completion record.
-  const outputRef = `quality/evidence/manual-risk-close/${payloadHash}.json`;
-  const existingOutput = readOptional(task, outputRef);
-  if (existingOutput !== undefined && existingOutput !== payloadRaw) {
-    throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);
-  }
-  if (existingOutput === undefined) {
-    try { kernel.publishCanonicalRecord(outputRef, payloadRaw); }
-    catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      if (task.readRecord(outputRef) !== payloadRaw) throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);
-    }
-  }
-  const fact = appendTaskFact(task.taskPath, {
-    task_id: task.identity.taskId,
-    stage: "verify-code",
-    material_digest: inspectMaterialWorkspace(task.manifest.target_repo_root).material_digest,
-    source_digest: actualSourceHash,
-    invocation_id: invocationId,
-    source: "task-close/manual-risk-close",
-    status: "manual_risk_close",
-    content_hash: payloadHash,
-    created_at: recordedAt,
-    output_ref: outputRef,
-  });
-  return Object.freeze({ ...payload, output_ref: outputRef, fact_ref: fact.ref, fact: fact.value });
+export function recordManualDeliveryClose({} = {}) {
+  throw new Error("risk close is retired; use normal close with quality facts recorded separately");
 }
 
 export function closePlanHash(plan) { return sha256(canonical(plain(plan, "close plan"))); }
@@ -1203,17 +1063,11 @@ export async function closeDelivery({
   targetBranch,
   specSourcePath,
   specArchivePath,
-  reason = "user-requested-close",
-  deferredItems = [],
   now = () => new Date().toISOString(),
 } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
-  if (typeof reason !== "string" || reason.trim() === "") throw new TypeError("close reason must be non-empty");
-  if (!Array.isArray(deferredItems) || deferredItems.some((item) => typeof item !== "string" || item.trim() === "")) {
-    throw new TypeError("close deferredItems must be an array of non-empty strings");
-  }
   if (typeof now !== "function") throw new TypeError("close now must be a function");
   const existing = readOptional(task, "operations/close/completed.json");
   if (existing !== undefined) {
@@ -1233,23 +1087,18 @@ export async function closeDelivery({
     task,
     kernel,
     delivery: requested,
-    // One explicit close request accepts quality gaps as risk facts. This is
-    // not a second user-facing close path.
-    riskClose: true,
-    riskReason: reason.trim(),
-    deferredItems,
+    // Close is the single physical-delivery path. Quality gaps are recorded as
+    // facts but never block the five actions.
   });
   const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", now });
   const operations = new Set(DELIVERY_STEPS.map(([, operation]) => DELIVERY_AUTHORIZATIONS[operation]));
   for (const operation of operations) {
     kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmed.confirmation.human_confirmation_ref });
   }
-  const riskClose = prepared.plan.delivery.risk_close !== undefined;
   const executed = await executeClosePlan({
     task,
     kernel,
     plan: prepared.plan,
-    riskClose,
     closeConfirmationRef: confirmed.ref,
     executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan: prepared.plan }),
     deferCompletionRecord: true,
@@ -1260,12 +1109,8 @@ export async function closeDelivery({
     task_id: task.identity.taskId,
     plan_hash: prepared.plan_hash,
     status: "completed",
-    close_mode: riskClose ? "risk" : "normal",
-    quality_status: prepared.plan.delivery.quality_status,
-    quality_gaps: prepared.plan.delivery.quality_gaps,
-    product_release_status: prepared.plan.delivery.product_release?.status ?? "not_assessed",
+    close_mode: "normal",
     physical_state: structuredClone(executed.physical_state),
-    ...(riskClose ? { risk_record_ref: executed.output_ref } : {}),
     completed_at: now(),
   };
   return task.withRecordLock("locks/close.execution.lock", () => {
@@ -1300,10 +1145,16 @@ function completedRecord(task, planHash, step, observation, mode, now) {
     plan_hash: planHash,
     step_id: step.step_id,
     operation: step.operation,
+    action: step.step_id,
     status: "completed",
     completion_mode: mode,
     physical_state_hash: sha256(physical),
     physical_state: structuredClone(observation),
+    evidence: {
+      kind: "close_step_execution",
+      source: `operations/close/plans/${planHash}/steps/${step.step_id}.json`,
+      snapshot_tree: observation.snapshot_tree ?? null,
+    },
     completed_at: now(),
   };
 }
@@ -1411,16 +1262,19 @@ function exactDirectoryRenames(raw, source, archive) {
 }
 
 function archiveFacts(root, ref, delivery) {
+  const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
   if (!ref) return { commit: null, tree_preserved: false, only_renames: false };
   const log = gitResult(root, ["log", "-1", "--format=%H", ref, "--", delivery.spec_archive_path]);
   const commit = log.ok && /^[a-f0-9]{40}$/i.test(log.stdout) ? log.stdout.toLowerCase() : null;
   if (!commit) return { commit: null, tree_preserved: false, only_renames: false };
   const parent = gitResult(root, ["rev-parse", `${commit}^`]);
+  const parentContainsTask = parent.ok && contains(delivery.task_commit, parent.stdout.toLowerCase());
   const source = treeEntry(root, delivery.task_commit, delivery.spec_source_path);
   const archive = treeEntry(root, commit, delivery.spec_archive_path);
-  const treePreserved = parent.ok && parent.stdout.toLowerCase() === delivery.task_commit && source?.type === "tree" && archive?.type === "tree" && source.oid === archive.oid;
+  const treePreserved = parentContainsTask && source?.type === "tree" && archive?.type === "tree" && source.oid === archive.oid;
   const diff = gitResult(root, ["diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", "-z", `${commit}^`, commit]);
-  return { commit, tree_preserved: treePreserved, only_renames: treePreserved && diff.ok && exactDirectoryRenames(diff.stdout, delivery.spec_source_path, delivery.spec_archive_path) };
+  const onlyRenames = treePreserved && diff.ok && exactDirectoryRenames(diff.stdout, delivery.spec_source_path, delivery.spec_archive_path);
+  return { commit, tree_preserved: treePreserved, only_renames: onlyRenames };
 }
 
 function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
@@ -1429,7 +1283,7 @@ function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
   const dirtySource = sourceWorktreeStatus(root);
   if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
-  if (branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
+  if (expectedLocal !== null && branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
   if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
 }
 
@@ -1498,20 +1352,18 @@ function closeConfirmation(task, planHash, ref) {
 
 const DELIVERY_STEPS = Object.freeze([
   ["commit-delivery", "commit-delivery"],
-  ["archive-spec", "archive-spec"],
   ["merge-task-branch", "merge-task-branch"],
+  ["archive-spec", "archive-spec"],
   ["push-target-branch", "push-target-branch"],
-  ["remove-task-worktree", "remove-task-worktree"],
-  ["remove-task-branch", "remove-task-branch"],
+  ["cleanup", "cleanup"],
 ]);
 
 const DELIVERY_AUTHORIZATIONS = Object.freeze({
   "commit-delivery": "commit",
-  "archive-spec": "archive",
   "merge-task-branch": "merge",
+  "archive-spec": "archive",
   "push-target-branch": "push",
-  "remove-task-worktree": "cleanup",
-  "remove-task-branch": "cleanup",
+  "cleanup": "cleanup",
 });
 
 /** Freeze the concrete close actions before asking for their independent authorization. */
@@ -1520,22 +1372,12 @@ export function prepareDeliveryClosePlan({
   kernel: taskKernel,
   delivery: requested,
   allowMiniTaskFocused = false,
-  riskClose = false,
-  riskReason,
-  deferredItems = [],
 } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const input = plain(requested, "delivery close input");
-  if (!Array.isArray(deferredItems)) throw new TypeError("risk close deferredItems must be an array of non-empty strings");
-  if (riskClose !== true && (riskReason !== undefined || deferredItems.length > 0)) throw new Error("risk close fields require riskClose=true");
-  if (riskClose === true) {
-    if (typeof riskReason !== "string" || riskReason.trim() === "") throw new TypeError("risk close riskReason is required");
-    if (!Array.isArray(deferredItems) || deferredItems.some((item) => typeof item !== "string" || item.trim() === "")) {
-      throw new TypeError("risk close deferredItems must be an array of non-empty strings");
-    }
-  }
+  if (input.risk_close !== undefined) throw new Error("risk close is retired");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
@@ -1560,7 +1402,6 @@ export function prepareDeliveryClosePlan({
       allowMiniTaskFocused,
     });
   } catch (error) {
-    if (!riskClose) throw error;
     qualityReasons.push(`verify-code: ${error.message}`);
   }
   let productRelease = null;
@@ -1578,12 +1419,10 @@ export function prepareDeliveryClosePlan({
         evaluate_freshness: evaluateFactFreshness,
       });
     } catch (error) {
-      if (!riskClose) throw error;
       qualityReasons.push(`product-release: ${error.message}`);
     }
   }
   if (productRelease && productRelease.status !== "released") {
-    if (!riskClose) throw new Error(`delivery close requires product release: ${productRelease.reasons.join(", ")}`);
     qualityReasons.push(`product-release: ${productRelease.reasons.join(", ")}`);
   }
   let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
@@ -1596,7 +1435,6 @@ export function prepareDeliveryClosePlan({
     allowMiniTaskFocused ? "mini-task" : "ordinary",
   );
   if (!verifyFreshness.current) {
-    if (!riskClose) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
     qualityReasons.push(`verify-code freshness: ${verifyFreshness.reason}`);
   }
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
@@ -1644,14 +1482,6 @@ export function prepareDeliveryClosePlan({
       ...(productRelease ? { product_release: productRelease } : {}),
       quality_status: qualityReasons.length === 0 ? "observed" : "incomplete",
       quality_gaps: [...new Set(qualityReasons)],
-      ...(riskClose && qualityReasons.length > 0 ? {
-        risk_close: {
-          accepted: true,
-          reason: riskReason.trim(),
-          deferred_items: [...deferredItems],
-          quality_reasons: [...new Set(qualityReasons)],
-        },
-      } : {}),
     },
     steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
   };
@@ -1671,7 +1501,7 @@ export function prepareDeliveryClosePlan({
 }
 
 /** Read final delivery facts without performing fetch or any other Git write. */
-export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel, plan, allowRiskClose = false } = {}) {
+export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel, plan } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
@@ -1688,7 +1518,6 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
       allowMiniTaskFocused: delivery.close_mode === "mini-task",
     } : {});
   } catch (error) {
-    if (!allowRiskClose) throw error;
     verifyError = error;
   }
   const verifyFreshness = acceptedVerify
@@ -1711,12 +1540,16 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
   const pushed = merged && localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
   const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
-  const worktreeCleanup = !existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root));
+  const existingWorkspace = task.manifest.workspace_mode === "existing";
+  const worktreeCleanup = existingWorkspace ? true : (!existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root)));
   const worktreeCleanupScan = worktreeCleanup
     ? Object.freeze({ schema_version: "workflowhub-worktree-cleanup-scan.v1", status: "removed", worktree_root: resolve(delivery.worktree_root) })
     : inspectWorktreeCleanup(delivery.worktree_root);
   const formalCleanupSafe = worktreeCleanup || worktreeCleanupScan.safe === true;
-  const branchCleanup = !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
+  const branchCleanup = existingWorkspace ? true : !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
+  const cleanupFact = existingWorkspace
+    ? { skipped: true, reason: "authenticated existing Workspace is not task-owned; worktree directory and branch are preserved" }
+    : (worktreeCleanup && branchCleanup ? { removed: true } : { incomplete: true });
   const facts = {
     delivery_committed: merged,
     archive: archivePathExists && sourcePathAbsent && archiveCommitIncluded && archive.tree_preserved && archive.only_renames,
@@ -1731,6 +1564,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     formal_cleanup_safe: formalCleanupSafe,
     worktree_cleanup_scan: worktreeCleanupScan,
     branch_cleanup: branchCleanup,
+    cleanup: cleanupFact,
   };
   facts.verify_facts_fresh = verifyFreshness.current;
   if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
@@ -1751,7 +1585,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
-  if (delivery.risk_close !== undefined) throw new Error("risk close plan must be consumed by the single close action");
+  if (delivery.risk_close !== undefined) throw new Error("risk close is retired");
   const planHash = closePlanHash(plan);
   const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
   if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
@@ -1778,7 +1612,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
       return Object.freeze(completed);
     }
     const state = inspectDeliveryCloseState({ task, kernel, plan });
-    if (state.status !== "ready") throw new Error(`delivery close is incomplete: ${state.missing.join(", ")}`);
+    if (state.physical_missing.length > 0) throw new Error(`delivery close is incomplete: ${state.physical_missing.join(", ")}`);
     const completion = { schema_version: "task-close-completed.v1", task_id: task.identity.taskId, plan_hash: planHash, status: "completed", physical_state: structuredClone(state.facts), completed_at: now() };
     createOrVerify(task, "operations/close/completed.json", completion, "close completion");
     return Object.freeze(completion);
@@ -1817,13 +1651,13 @@ export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
   return Object.freeze(registry);
 }
 
-/** Mint the fixed six delivery executors for one prepared delivery plan. */
+/** Mint the fixed five delivery executors for one prepared delivery plan. */
 export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: taskKernel, plan } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   if (plan.steps.length !== DELIVERY_STEPS.length || plan.steps.some((step, index) => step.step_id !== DELIVERY_STEPS[index][0] || step.operation !== DELIVERY_STEPS[index][1])) {
-    throw new Error("delivery close plan must contain exactly the fixed six steps");
+    throw new Error("delivery close plan must contain exactly the fixed five steps in order commit→merge→archive→push→cleanup");
   }
   const root = delivery.target_repo_root;
   const worktree = delivery.worktree_root;
@@ -1831,7 +1665,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   const findArchive = () => {
     const taskTip = branchOid(root, delivery.task_branch);
     const targetTip = branchOid(root, delivery.target_branch);
-    const ref = taskTip && contains(delivery.task_commit, taskTip) ? delivery.task_branch : targetTip && contains(delivery.task_commit, targetTip) ? delivery.target_branch : null;
+    const ref = targetTip && contains(delivery.task_commit, targetTip) ? delivery.target_branch : taskTip && contains(delivery.task_commit, taskTip) ? delivery.task_branch : null;
     return archiveFacts(root, ref, delivery);
   };
   const published = () => {
@@ -1847,33 +1681,16 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     return { satisfied: value.commit !== null && value.tree_preserved && value.only_renames, archive_commit: value.commit, tree_oid: treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid ?? null };
   };
   const mergeState = () => {
-    const archive = findArchive();
     const target = branchOid(root, delivery.target_branch);
-    const parents = target ? gitResult(root, ["rev-list", "--parents", "-n", "1", target]).stdout.split(" ").slice(1) : [];
-    const mergeCommits = target
-      ? gitResult(root, ["rev-list", "--first-parent", "--merges", target]).stdout.split(/\s+/).filter(Boolean).map((commit) => ({
-        commit,
-        parents: gitResult(root, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(/\s+/).slice(1),
-      }))
-      : [];
-    const branchTip = branchOid(root, delivery.task_branch);
-    // Once close removes the task branch, the immutable second parent of the
-    // planned no-ff merge remains the authoritative published task tip.
-    const taskTip = branchTip ?? mergeCommits.find(({ parents: mergeParents }) => {
-      if (mergeParents.length !== 2 || mergeParents[0] !== delivery.target_baseline || !archive.commit) return false;
-      if (mergeParents[1] === archive.commit) return true;
-      const taskParents = gitResult(root, ["rev-list", "--parents", "-n", "1", mergeParents[1]]).stdout.split(/\s+/).slice(1);
-      return taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;
-    })?.parents[1] ?? null;
-    const taskParents = taskTip ? gitResult(root, ["rev-list", "--parents", "-n", "1", taskTip]).stdout.split(" ").slice(1) : [];
-    const taskTipIsArchived = taskTip === archive.commit;
-    const taskTipIsResolved = taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;
-    const plannedMerge = mergeCommits.find(({ parents: mergeParents }) => mergeParents.length === 2
-      && mergeParents[0] === delivery.target_baseline
-      && mergeParents[1] === taskTip)?.commit ?? null;
-    const satisfied = Boolean(archive.commit && taskTip && (taskTipIsArchived || taskTipIsResolved))
-      && plannedMerge !== null;
-    return { satisfied, target_oid: target, task_tip: taskTip, archive_commit: archive.commit, planned_merge_oid: plannedMerge, resolved: taskTipIsResolved };
+    if (!target) return { satisfied: false, target_oid: null, task_tip: null, archive_commit: null, planned_merge_oid: null, resolved: false };
+    const list = gitResult(root, ["rev-list", "--first-parent", target]).stdout.split(/\s+/).filter(Boolean);
+    for (const commit of list) {
+      const parents = gitResult(root, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(" ").slice(1);
+      if (parents.length === 2 && parents[0] === delivery.target_baseline && contains(delivery.task_commit, parents[1])) {
+        return { satisfied: true, target_oid: target, task_tip: parents[1], archive_commit: null, planned_merge_oid: commit, resolved: false };
+      }
+    }
+    return { satisfied: false, target_oid: target, task_tip: null, archive_commit: null, planned_merge_oid: null, resolved: false };
   };
   let removal;
   const registry = {
@@ -1904,23 +1721,23 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "archive-spec") return {
         probe: archived,
         execute: async () => {
-          targetPreflight(delivery);
-          if (!published().satisfied) throw new Error("verified snapshot is not published");
-          const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
-          if (existsSync(join(worktree, delivery.spec_source_path))) {
-          if (sourceWorktreeStatus(worktree) !== "") throw new Error("task source worktree changed before spec archive");
-            createArchiveParent(worktree, delivery.spec_archive_path);
-            git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
-          } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
+          targetPreflight(delivery, null);
+          if (!mergeState().satisfied) throw new Error("target branch is not merged before archive");
+          const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+          if (existsSync(join(root, delivery.spec_source_path))) {
+            if (sourceWorktreeStatus(root) !== "") throw new Error("target source worktree changed before spec archive");
+            createArchiveParent(root, delivery.spec_archive_path);
+            git(root, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
+          } else if (!existsSync(join(root, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
             throw new Error("partial spec archive does not match the planned directory move");
           }
           // Quality/evidence files are execution sidecars and are deliberately
           // outside the published source snapshot. Check only source bytes so
           // a live evidence write cannot block the exact spec-directory move.
-          if (unstagedSourcePaths(worktree).length > 0) throw new Error("spec archive contains unstaged source changes");
-          const moves = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+          if (unstagedSourcePaths(root).length > 0) throw new Error("spec archive contains unstaged source changes");
+          const moves = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (!exactDirectoryRenames(moves, delivery.spec_source_path, delivery.spec_archive_path)) throw new Error("spec archive is not an exact directory move");
-          git(worktree, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
+          git(root, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
         },
         verify: async (value) => value.satisfied && value.tree_oid === treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid,
       };
@@ -1928,7 +1745,6 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         probe: mergeState,
         execute: async () => {
           targetPreflight(delivery);
-          if (!archived().satisfied) throw new Error("spec archive is incomplete");
           plannedMergePreflight(delivery);
           targetPreflight(delivery);
           try {
@@ -1938,11 +1754,12 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             throw new Error(`merge-task-branch failed; target merge was aborted: ${error.message}`);
           }
         },
-        verify: async (value) => value.satisfied && value.archive_commit !== null,
+        verify: async (value) => value.satisfied && value.target_oid !== null,
       };
       if (step.operation === "push-target-branch") return {
         probe: () => { const merged = mergeState(); const remote = remoteOid(root, delivery.remote, delivery.target_branch); return { satisfied: merged.satisfied && remote === merged.target_oid, target_oid: merged.target_oid, remote_oid: remote }; },
         execute: async () => {
+          targetPreflight(delivery, null);
           const merged = mergeState();
           if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
           if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed before push");
@@ -1950,13 +1767,59 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         },
         verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
       };
-      if (step.operation === "remove-task-worktree") {
+      if (step.operation === "cleanup") {
+        const existingWorkspace = task.manifest.workspace_mode === "existing";
+        const branchRemover = {
+          probe: () => ({ satisfied: branchOid(root, delivery.task_branch) === null, task_branch: delivery.task_branch }),
+          execute: async () => {
+            if (!existingWorkspace && existsSync(worktree)) throw new Error("task worktree must be removed before branch cleanup");
+            const target = branchOid(root, delivery.target_branch);
+            const tip = branchOid(root, delivery.task_branch);
+            if (!tip || !contains(tip, target)) throw new Error("task branch is not merged into target");
+            git(root, ["branch", "-d", "--", delivery.task_branch]);
+          },
+          verify: async (value) => value.satisfied && value.task_branch === delivery.task_branch,
+        };
+        if (existingWorkspace) {
+          return {
+            probe: async () => {
+              const branchObservation = { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task branch and directory are preserved", task_branch: delivery.task_branch };
+              const worktreeObservation = { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: resolve(delivery.worktree_root) };
+              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+            },
+            execute: async () => {},
+            verify: async (value) => {
+              return value.worktree_cleanup?.skipped === true && value.branch_cleanup?.skipped === true;
+            },
+          };
+        }
         const effective = currentWorkspaceBinding(task, kernel, delivery);
         removal ??= createTaskWorktreeRemoval(task, {
           ...effective,
           worktreeRoot: delivery.worktree_root,
         });
-        return removal;
+        return {
+          probe: async () => {
+            const worktreeObservation = await removal.probe();
+            const branchObservation = branchRemover.probe();
+            if (worktreeObservation.satisfied && branchObservation.satisfied) {
+              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+            }
+            return { satisfied: false, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+          },
+          execute: async () => {
+            const worktreeObservation = await removal.probe();
+            if (!worktreeObservation.satisfied) await removal.execute();
+            const branchObservation = branchRemover.probe();
+            if (!branchObservation.satisfied) await branchRemover.execute();
+          },
+          verify: async (value) => {
+            if (!value.worktree_cleanup || !value.branch_cleanup) return false;
+            const worktreeVerified = await removal.verify(value.worktree_cleanup);
+            const branchVerified = await branchRemover.verify(value.branch_cleanup);
+            return worktreeVerified && branchVerified;
+          },
+        };
       }
       if (step.operation === "remove-task-branch") return {
         probe: () => ({ satisfied: branchOid(root, delivery.task_branch) === null, task_branch: delivery.task_branch }),
@@ -1988,20 +1851,13 @@ export async function executeClosePlan(options = {}) {
   const kernel = assertTaskKernel(options.kernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   const plan = validatePlan(options.plan, task);
-  const riskClose = options.riskClose === true;
-  const risk = plan.delivery?.risk_close;
-  if (risk !== undefined) {
-    if (!riskClose) throw new Error("risk close plan must be consumed by the single close action");
-    if (plan.delivery === undefined) throw new Error("risk close requires a delivery plan");
-  } else if (riskClose) {
-    throw new Error("risk close requires a prepared risk close plan");
-  }
+  if (plan.delivery?.risk_close !== undefined) throw new Error("risk close is retired");
   const planRaw = canonical(plan);
   const planHash = sha256(planRaw);
   const preparedRef = `operations/close/plans/${planHash}/plan.json`;
   const preparedRaw = readOptional(task, preparedRef);
   if (preparedRaw === undefined) {
-    throw new Error(`${riskClose ? "risk close" : "close execution"} requires a prepared close plan`);
+    throw new Error("close execution requires a prepared close plan");
   }
   let prepared;
   try { prepared = JSON.parse(preparedRaw); } catch { throw new Error("prepared close plan record is invalid JSON"); }
@@ -2051,7 +1907,6 @@ export async function executeClosePlan(options = {}) {
       if (completed.schema_version !== "task-close-completed.v1" || completed.status !== "completed") throw new Error("task close completed record is invalid");
       acceptedCompletion = completed;
     }
-    if (riskClose && acceptedCompletion) throw new Error("risk close plan conflicts with normal close completion");
 
     const consumedOperations = new Set();
     for (const step of plan.steps) {
@@ -2085,28 +1940,10 @@ export async function executeClosePlan(options = {}) {
       createOrVerify(task, recordPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id}`);
     }
 
-    const deliveryState = plan.delivery ? inspectDeliveryCloseState({ task, kernel, plan, allowRiskClose: riskClose }) : null;
+    const deliveryState = plan.delivery ? inspectDeliveryCloseState({ task, kernel, plan }) : null;
     if (deliveryState) {
-      const missing = riskClose ? deliveryState.physical_missing : deliveryState.missing;
-      if (missing.length > 0) throw new Error(`${riskClose ? "risk" : "delivery"} close is incomplete: ${missing.join(", ")}`);
-    }
-    if (riskClose) {
-      const sourceRef = `operations/close/plans/${planHash}/plan.json`;
-      const sourceRaw = task.readRecord(sourceRef);
-      return recordManualDeliveryClose({
-        task,
-        kernel,
-        sourceRef,
-        sourceHash: sha256(sourceRaw),
-        planHash,
-        riskAccepted: risk.accepted === true,
-        riskReason: risk.reason,
-        deferredItems: risk.deferred_items,
-        qualityReasons: risk.quality_reasons,
-        physicalActionsCompleted: true,
-        physicalState: deliveryState.facts,
-        now,
-      });
+      const missing = deliveryState.physical_missing;
+      if (missing.length > 0) throw new Error(`delivery close is incomplete: ${missing.join(", ")}`);
     }
     if (acceptedCompletion) return Object.freeze(acceptedCompletion);
     const completion = {

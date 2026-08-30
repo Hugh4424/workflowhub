@@ -8,6 +8,7 @@ import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
+import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 
 import {
   authenticateStageWriteBoundary,
@@ -30,6 +31,7 @@ import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snap
 import { appendMonitoringFacts, initializeTaskStore, readMonitoringFacts } from "../../runtime/task/task-store.mjs";
 import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
 import { createRegisteredCodexSource, parseRegisteredCodexTranscript, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { isDshTranscriptPath, normalizeDshTranscript, readDshTranscriptText } from "../../runtime/evidence/dsh-transcript.mjs";
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
@@ -137,6 +139,32 @@ function locateCodexRollout({ env = process.env, home = homedir(), cwd = process
   // stage/step/skill facts instead of dropping the whole sidecar write.
   if (!target) return null;
   return { threadId: handoffThreadId, target, requirementMessages };
+}
+
+/**
+ * DSH keeps the authentic session log at ~/.dsh/sessions/<cwd-key>/<session>/
+ * session.jsonl.zstd (concatenated zstd frames).  Mirror the Codex locate
+ * contract against the same session handoff: the frozen requirement snapshot
+ * comes from the task binding, and the transcript is re-read for hash
+ * verification — never synthesized.
+ */
+function locateDshTranscript({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+  const sessionId = currentCodexSessionId(env);
+  const handoff = readCurrentCodexSession({
+    cwd,
+    sessionId: typeof sessionId === "string" && CODEX_SESSION_ID.test(sessionId) ? sessionId : null,
+  });
+  if (handoff.status === "conflict") throw new Error("WorkflowHub session handoff has multiple active sessions for this workspace");
+  if (handoff.status !== "present") return null;
+  const requirementMessages = handoff.task_binding?.requirement_messages ?? [];
+  const handoffSessionId = handoff.session_id;
+  if (typeof handoffSessionId !== "string" || !CODEX_SESSION_ID.test(handoffSessionId)) throw new Error("WorkflowHub session handoff has an invalid session_id");
+  if (!handoff.transcript_path) return null;
+  const target = isDshTranscriptPath(handoff.transcript_path, { home, sessionId: handoffSessionId });
+  // Same honesty rule as the Codex path: an unreadable or foreign transcript
+  // is an unavailable source, never an error that drops sidecar facts.
+  if (!target || !existsSync(target) || !statSync(target).isFile()) return null;
+  return { sessionId: handoffSessionId, target, requirementMessages };
 }
 
 function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
@@ -338,7 +366,33 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId
  */
 export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, stage = null, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
   const located = locateCodexRollout({ env, home, cwd });
-  if (!located) return null;
+  if (!located) {
+    const dsh = locateDshTranscript({ env, home, cwd });
+    if (!dsh) return null;
+    const sessionRef = safeRolloutId(dsh.sessionId);
+    return createRegisteredCodexSource({
+      source_id: `dsh-session-${sessionRef}`,
+      source_ref: `dsh-transcript-${sessionRef}`,
+      registration_id: `launcher-dsh-${sessionRef}`,
+      required: true,
+      task_id: task_id ?? context?.identity?.taskId,
+      run_id: run_id ?? context?.workflowRunId,
+      session_id: sessionRef,
+      source_format: "jsonl",
+      source_version: "v1",
+      cli_version: env.DSH_CLI_VERSION ?? "dsh-host",
+      adapter_version: "dsh-transcript-adapter.v1",
+      capabilities: ["requirement_message"],
+      reader: createTranscriptSourceReader(() => normalizeDshTranscript(readDshTranscriptText(dsh.target), {
+        taskId: task_id ?? context?.identity?.taskId,
+        runId: run_id ?? context?.workflowRunId,
+        attemptId: attempt_id ?? context?.attempt_id ?? null,
+        stage: stage ?? context?.stage ?? null,
+        sessionId: sessionRef,
+        requirementMessages: dsh.requirementMessages,
+      })),
+    });
+  }
   const sourceRef = `codex-rollout-${safeRolloutId(located.threadId)}`;
   return createRegisteredCodexSource({
     source_id: `codex-thread-${safeRolloutId(located.threadId)}`,
@@ -929,6 +983,43 @@ export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
   });
 }
 
+function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot, materialRevision, materials, read, workspaceRoot, taskId }) {
+  const acceptanceEvidence = (fact.evidence ?? []).find((entry) => entry?.evidence_type === "acceptance_evidence" && typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
+  if (acceptanceEvidence && currentSnapshot?.tree && materialRevision) {
+    try {
+      const raw = read(acceptanceEvidence.ref);
+      const parsed = validateAcceptanceEvidence(JSON.parse(raw));
+      if (
+        parsed.freshness?.status === "current"
+        && parsed.freshness.snapshot_tree === currentSnapshot.tree
+        && parsed.freshness.material_revision === materialRevision
+        && parsed.freshness.evidence_freshness.every((entry) => entry.status === "current" && entry.sha256 === acceptanceEvidence.sha256)
+      ) {
+        return Object.freeze({
+          fact_ref: fact.ref,
+          status: "current",
+          authenticated: true,
+          reused: true,
+          dependencies: Object.freeze({ material: "current", tree: "current", fact: "current", evidence: "current" }),
+        });
+      }
+    } catch {
+      // Fall through to full freshness evaluation on any mismatch or validation failure.
+    }
+  }
+  if (!currentSnapshot?.tree || !materialRevision) {
+    return Object.freeze({ fact_ref: fact.ref, status: "unknown", authenticated: false });
+  }
+  return evaluateFactFreshness(
+    { ...fact, ref: fact.ref, sha256: factSha256 },
+    {
+      material_revision: materialRevision,
+      material_scope_revisions: stageMaterialScopeRevisions(materials),
+      snapshot_tree: currentSnapshot.tree,
+    },
+    { read, workspaceRoot, taskId },
+  );
+}
 function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials }) {
   return deriveCurrentProductRelease({
     task_id: context.identity.taskId,
@@ -1018,7 +1109,7 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "capture-tests", "run", "confirm", "authorize-operation"]).has(command)) {
+  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "run", "confirm", "authorize-operation"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
@@ -1086,6 +1177,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "review-risk-pause" && !values.input) {
     throw new TypeError(`${command} requires --input=<risk-input.json>`);
   }
+  if (command === "review-record" && !values.input) {
+    throw new TypeError(`${command} requires --input=<simple-review-result.json>`);
+  }
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) {
     throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   }
@@ -1104,7 +1198,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     readOnly: command === "status",
   });
   if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
-  const input = new Set(["review-risk-pause", "capture-tests", "run"]).has(command)
+  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "run"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
@@ -1149,15 +1243,17 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       } catch { continue; }
       if (value?.task_id !== context.task.identity.taskId || value?.stage !== values.stage) continue;
       const freshness = current
-        ? evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, {
-            material_revision: materialRevision,
-            material_scope_revisions: stageMaterialScopeRevisions(materials),
-            snapshot_tree: current.tree,
-        }, {
-          read: context.task.readRecord,
-          workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-          taskId: context.task.identity.taskId,
-        })
+        ? evaluateFreshnessWithReuse({
+            fact: { ...value, ref },
+            factRaw: raw,
+            factSha256: sha256(raw),
+            currentSnapshot: current,
+            materialRevision,
+            materials,
+            read: context.task.readRecord,
+            workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+            taskId: context.task.identity.taskId,
+          })
         : { status: "unknown", authenticated: false };
       observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
     }
@@ -1231,6 +1327,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       stage: values.stage,
       reviewResultRef: input.review_result_ref,
     });
+  }
+  if (command === "review-record") {
+    if (!input || typeof input !== "object" || Array.isArray(input) || !Object.prototype.hasOwnProperty.call(input, "result")) {
+      throw new TypeError("review-record input requires a 'result' field with the simple review public result");
+    }
+    const refs = recordSimpleReviewResult({ task: context.task, result: input.result });
+    return { status: "recorded", ...refs };
   }
   if (command === "run") {
     if (input !== undefined && (typeof input !== "object" || Array.isArray(input))) {
@@ -1408,6 +1511,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     "run:execute": "run",
     "run:draft": "artifact",
     "review:risk": "review-risk-pause",
+    "review:record": "review-record",
     "verify:execute": "capture-tests",
     "confirm:decision": "confirm",
     "authorize:commit": "authorize-operation",

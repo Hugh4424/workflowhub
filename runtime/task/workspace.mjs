@@ -540,7 +540,11 @@ export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
   const task = assertTaskHandle(taskHandle);
   const expected = acceptedWorkspaceExpectation(task);
   if (expected.mode === "existing") {
-    throw new Error("authenticated existing Workspace is not task-owned; task worktree removal is forbidden");
+    return Object.freeze({
+      probe: () => ({ satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: expected.worktreeRoot }),
+      execute: async () => {},
+      verify: async (value) => value?.satisfied === true && value?.skipped === true && value?.worktree_root === expected.worktreeRoot,
+    });
   }
   if (acceptedBinding?.taskId !== task.identity.taskId || acceptedBinding?.stage !== "make-decision") {
     throw new Error("authenticated accepted make-decision identity mismatch for worktree removal");
