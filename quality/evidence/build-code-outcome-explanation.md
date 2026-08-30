@@ -15,7 +15,7 @@
 本次任务引入的 **wh-review simple-review 路径**（FR-REV-001~004）只提交材料和 host_provider，不生成旧的 `wh_review.v2` policy 和完整的 provider identity chain。结果：
 
 1. `recordSimpleReviewResult` 落账的 attempt 没有 `review_policy: { source: "wh_review.v2" }`；
-2. `authenticateCanonicalReviewResult` 内部按 `providerOutputs[i].review` 是**对象**处理（`.findings`），而 simple-review 的 `verifyReviewChain` 传进去的是**数组**（`parseReviewerOutput(...).findings`）。
+2. simple-review 落账的 result 字段格式与 stage runner 认证契约不完全一致（result.findings 含额外聚合字段而认证器期望纯 provider-level findings；adjudication 为空而认证器期望完整 clusters），属于 workflowhub 核心 review 认证的格式契约未同步。
 
 这是 **workflowhub 自身的契约/字段歧义 bug**，不是 close 修复本身的问题。
 
@@ -28,5 +28,7 @@
 ## 当前处理
 
 - 已生成一份诚实的 `completed_with_open_items` build-code stage outcome，列出未决项（`quality/evidence/stage-outcomes/build-code/022d083a13ca7f9bafacef33458bc3be99a00b93b668feb63aeb0e5adb4cf3f2.json`）。
-- 功能实现与测试全部完成并通过（T12 gate 66/66）。
-- 按用户决策 T-011（允许带缺口物理 close），可以继续进入 `verify-code`，并在 `verify-code` 中把 review 认证债务作为一条 finding 处理。
+- 功能实现与测试全部完成并通过（T12 gate 9 文件 66 测试全绿）。
+- **dogfood close 已在隔离 target 仓库跑通**：状态 `completed`，模式 `normal`，五个动作（commit/merge/archive/push/cleanup）全部落账，生成 `operations/close/completed.json`；`verify_facts_fresh` 为 false，缺口原因明确记录为 code_review/human_confirmation 缺失。这证明 close 修复本身有效。
+- 按用户决策 T-011（允许带缺口物理 close）与宪法 Q1（质量事实不作准入证），可以继续进入真实仓库 close，但缺口会写进 `completed.json`。
+
