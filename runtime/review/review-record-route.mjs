@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { aggregateCanonicalProviderResults } from "./canonical-review-result.mjs";
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
@@ -154,22 +155,18 @@ export function recordSimpleReviewResult({ task, result }) {
     return { attempt_ref: attemptRef, result_ref: null };
   }
 
-  // available: assign stable ids and group findings by provider
-  const findingsWithId = (result.findings ?? []).map((finding) => ({
-    ...finding,
-    id: stableFindingId(finding),
-  }));
-
-  const providerAttemptRecords = [];
+  // available: canonicalize provider outputs and run aggregation
   const providerOutputContents = new Map();
+  const providerOutputRefs = new Map();
 
   for (let index = 0; index < result.provider_results.length; index += 1) {
     const item = result.provider_results[index];
-    const providerFindings = findingsWithId.filter((f) => f.provider === item.provider);
-    const outputContent = JSON.stringify({ findings: providerFindings.map(({ provider, id, ...rest }) => rest) });
+    const providerFindings = (result.findings ?? []).filter((f) => f.provider === item.provider);
+    const outputContent = JSON.stringify({ findings: providerFindings.map(({ provider, ...rest }) => rest) });
     providerOutputContents.set(item.provider, outputContent);
 
     const outputRef = `${providerDirRef}/${providerFileName(item.provider, index)}`;
+    providerOutputRefs.set(item.provider, outputRef);
     const outputRecord = {
       schema_version: "wh-review-provider-output.v1",
       task_id: taskId,
@@ -181,57 +178,49 @@ export function recordSimpleReviewResult({ task, result }) {
       evidence_anchor_valid: providerFindings.map(() => true),
     };
     taskHandle.writeRecordAtomic(outputRef, JSON.stringify(outputRecord));
+  }
 
-    providerAttemptRecords.push({
+  const providerOutputs = result.provider_results.map((item) => {
+    const content = providerOutputContents.get(item.provider);
+    return {
       provider: item.provider,
-      status: item.status === "completed" ? "completed" : "failed",
-      identity: normalizeIdentity(item.identity, item.provider),
-      session_id: null,
-      runtime_id: result.runtime_id ?? null,
-      output_ref: outputRef,
-      raw_output_ref: null,
-      error: item.error ?? null,
-      execution: {
-        adapter: adapterOf(item.provider),
-        model: item.identity?.model ?? "unknown",
-        effort: null,
-        thinking: null,
-        timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
-        usage: item.usage ?? null,
-        retry: { count: 0, progress_events: 0 },
-        runtime_id: result.runtime_id ?? "unknown",
-        session_file_path: null,
-      },
-    });
+      ...(item.identity ? { identity: normalizeIdentity(item.identity, item.provider) } : {}),
+      review: JSON.parse(content ?? "{\"findings\":[]}"),
+    };
+  });
+
+  const aggregation = aggregateCanonicalProviderResults(providerOutputs, 1, {
+    profilePriority: result.provider_results.map((item) => item.provider),
+    requireIdentity: false,
+    requireSourceId: false,
+  });
+  if (aggregation.status !== "available") {
+    throw new Error(`simple-review provider outputs could not be aggregated: ${JSON.stringify(aggregation.invalid_members ?? "quorum not satisfied")}`);
   }
 
-  const resultFindings = [];
-  const seen = new Map();
-  for (const finding of findingsWithId) {
-    const existing = seen.get(finding.id);
-    if (existing) {
-      existing.providers.push(finding.provider);
-      existing.finding_count += 1;
-      continue;
-    }
-    seen.set(finding.id, finding);
-    resultFindings.push({
-      provider: finding.provider,
-      id: finding.id,
-      severity: finding.severity,
-      path: finding.path,
-      line: finding.line ?? null,
-      issue: finding.issue,
-      root_cause: finding.root_cause,
-      recommendation: finding.recommendation,
-      providers: [finding.provider],
-      adapter_count: 1,
-      finding_count: 1,
-      disposition: "actionable",
-    });
-  }
+  const providerAttemptRecords = result.provider_results.map((item, index) => ({
+    provider: item.provider,
+    status: item.status === "completed" ? "completed" : "failed",
+    identity: normalizeIdentity(item.identity, item.provider),
+    session_id: null,
+    runtime_id: result.runtime_id ?? null,
+    output_ref: providerOutputRefs.get(item.provider),
+    raw_output_ref: null,
+    error: item.error ?? null,
+    execution: {
+      adapter: adapterOf(item.provider),
+      model: item.identity?.model ?? "unknown",
+      effort: null,
+      thinking: null,
+      timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
+      usage: item.usage ?? null,
+      retry: { count: 0, progress_events: 0 },
+      runtime_id: result.runtime_id ?? "unknown",
+      session_file_path: null,
+    },
+  }));
 
-  const adjudication = { version: "wh-review-adjudication.v1", clusters: [] };
+  const resultFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
 
   const policyResult = buildPolicy(result);
 
@@ -268,12 +257,9 @@ export function recordSimpleReviewResult({ task, result }) {
     snapshot_tree: tree,
     material_id: materialId,
     attempt_ref: attemptRef,
-    provider_results: result.provider_results.map((item) => ({
-      provider: item.provider,
-      output: { findings: JSON.parse(providerOutputContents.get(item.provider) ?? "{\"findings\":[]}").findings },
-    })),
+    provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
     findings: resultFindings,
-    adjudication,
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
 
   taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
