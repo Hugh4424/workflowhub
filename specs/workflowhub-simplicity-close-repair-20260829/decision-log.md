@@ -422,3 +422,13 @@ workflowhub 最近总是"关不了门"：任务做完了，最后的收尾（提
 - 尝试 2（unavailable，如实留证）：`MATERIAL_INCOMPLETE: approved_direction must match current decision-log.md bytes`——契约要求 approved_direction=当前 decision-log 精确字节。attempt=995cb0c0-b32a-403e-9962-939ff719bcee。
 - 尝试 3（available，真实语义结果）：三 provider（kimi/coding、antigravity/flash、codex/luna）全 completed，host_provider=dsh 首次如实声明成功（3rd-review 5ecf055 生效）。13 条 finding（blocking 1/major 9/minor 3），逐条处置见审查处置表（全部 fixed：AC 补强/范围拆粒度/风险交接补齐/拒绝方案汇总/措辞澄清）。attempt=83ad538a-e4d4-4dfc-aa62-62d29e4c1287；result=quality/reviews/results/make-decision-detail-0f011326f3fab6185efc5d02b1ed7acf0df44cfc-83ad538a-e4d4-4dfc-aa62-62d29e4c1287.json；report=quality/reviews/reports/83ad538a-e4d4-4dfc-aa62-62d29e4c1287.md；子代理结果=quality/evidence/make-decision/subagent-detail-advice{,-v2,-v3}.json。
 - blocking 处置说明：F-a70dfb0676ea 属流程语义质疑——manifest 顺序本就是"草案→细审→最终确认"，草案经 Talk 逐项确认（approval_binding 逐条在案），最终确认节已补身份说明。无方向变更，无需追加 Talk。
+
+### Step 12 — build-code/verify-code boundary decision（D-012）
+- decision_id：D-012
+- source：用户 2026-08-29 关于 build-code 官方 stage outcome 受阻的追问；子代理 build-code 攻坚结果。
+- Logic：build-code 功能实现与测试全部完成（66/66 绿），但 WorkflowHub 官方 stage outcome 因 simple-review 路径与 stage runner 的 canonical review 认证存在契约歧义（providerOutputs.review 数组/对象不一致），无法生成 canonical completed outcome。继续强攻会触及 workflowhub 核心认证重构，超出本任务"修复 close 与做减法"的核心范围。按用户决策 T-011（接受带缺口物理 close）与宪法 Q1（质量事实不作准入证），以诚实 `completed_with_open_items` 记录未决项，转而用 dogfood close 验证修复后的 close 机制物理跑通。
+- 后果与风险：verify-code 官方阶段未按标准跑完，质量缺口（code_review、human_confirmation）在 close 输出中明确标注；后续任务若复制本流程，需先修 workflowhub simple-review 与 stage runner 的认证契约。当前 dogfood close 已在临时 target 仓库跑通，证明 close 修复有效。
+- 拒绝方案：① 继续伪造 acceptance_chain / 会话事件强行通过 build-code outcome——风险高且违宪（诚实记录事实）；② 跳过 dogfood 直接对真实仓库 close——不可逆且无 verify-code 事实支撑，不采用。
+- 处置：接受 build-code `completed_with_open_items`；在独立临时 target 仓库完成 dogfood close；在真实任务 close 前停下汇报。
+- approval_binding：本条目由 agent 基于既有 T-011 用户决策与宪法解释自主记录；真实 close 前仍需用户最终确认。
+
