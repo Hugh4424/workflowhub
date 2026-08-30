@@ -426,6 +426,25 @@ workflowhub 最近总是"关不了门"：任务做完了，最后的收尾（提
 ### Step 12 — build-code/verify-code boundary decision（D-012）
 - decision_id：D-012
 - source：用户 2026-08-29 关于 build-code 官方 stage outcome 受阻的追问；子代理 build-code 攻坚结果。
+- Logic：build-code 功能实现与测试全部完成（66/66 绿），但 WorkflowHub 官方 stage outcome 因 simple-review 路径与 stage runner 的 canonical review 认证存在契约歧义（result.findings/adjudication 格式不一致），无法生成 canonical completed outcome。继续强攻会触及 workflowhub 核心认证重构，超出本任务"修复 close 与做减法"的核心范围。按用户决策 T-011（接受带缺口物理 close）与宪法 Q1（质量事实不作准入证），以诚实 `completed_with_open_items` 记录未决项，转而用 dogfood close 验证修复后的 close 机制物理跑通。
+- 后果与风险：verify-code 官方阶段未按标准跑完，质量缺口（code_review、human_confirmation）在 close 输出中明确标注；后续任务若复制本流程，需先修 workflowhub simple-review 与 stage runner 的认证契约。当前 dogfood close 已在临时 target 仓库跑通，证明 close 修复有效。
+- 拒绝方案：① 继续伪造 acceptance_chain / 会话事件强行通过 build-code outcome——风险高且违宪（诚实记录事实）；② 跳过 dogfood 直接对真实仓库 close——不可逆且无 verify-code 事实支撑，不采用。
+- 处置：接受 build-code `completed_with_open_items`；在独立临时 target 仓库完成 dogfood close；在真实任务 close 前停下汇报。
+- approval_binding：本条目由 agent 基于既有 T-011 用户决策与宪法解释自主记录；真实 close 前仍需用户最终确认。
+
+### Step 13 — workflowhub review 认证契约修复（D-013）
+- decision_id：D-013
+- source：用户 2026-08-29/30 选择"继续修 workflowhub 认证契约"；`authenticateCanonicalReviewResult` 对 simple-review result 的格式要求。
+- Logic：`recordSimpleReviewResult` 原来只把 provider outputs 简单拼成 result.findings，没有按 canonical review 契约生成 adjudication clusters，也没有把 result.findings 对齐到 `authenticateCanonicalReviewResult` 期望的 `{provider, ...cluster}` 格式。修复方式是复用同一个 aggregation 函数：在 `runtime/review/review-record-route.mjs` 中调用已导出的 `aggregateCanonicalProviderResults`，用它的 `findings`/`adjudication` 作为落账结果，provider_results 仍保持每 provider 原始 findings。这样 simple-review 产出与 wh_review.v2 认证契约对齐，不新增控制面。
+- 后果与风险：修改了核心 review 落账格式，必须保证 `tests/review/review-record-route.test.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`、`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs` 继续绿；格式变更可能影响旧 simple-review result 的重新读取，但旧 result 仍可被消费（它只读，不重跑落账）。
+- 拒绝方案：在 `authenticateCanonicalReviewResult` 里对 simple-review 单独开绿灯——会削弱认证，不可取；把 simple-review 结果改写成 wh_review.v2 attempt policy 但不走 aggregation——会重复 canonical 逻辑。
+- 处置：修改 `runtime/review/review-record-route.mjs`，导出 `aggregateCanonicalProviderResults` 已经可用（无需新增导出）。T12 gate 66/66 绿。
+- approval_binding：用户选择"继续修 workflowhub 认证契约"，本条目记录该修复决策。
+
+
+### Step 12 — build-code/verify-code boundary decision（D-012）
+- decision_id：D-012
+- source：用户 2026-08-29 关于 build-code 官方 stage outcome 受阻的追问；子代理 build-code 攻坚结果。
 - Logic：build-code 功能实现与测试全部完成（66/66 绿），但 WorkflowHub 官方 stage outcome 因 simple-review 路径与 stage runner 的 canonical review 认证存在契约歧义（providerOutputs.review 数组/对象不一致），无法生成 canonical completed outcome。继续强攻会触及 workflowhub 核心认证重构，超出本任务"修复 close 与做减法"的核心范围。按用户决策 T-011（接受带缺口物理 close）与宪法 Q1（质量事实不作准入证），以诚实 `completed_with_open_items` 记录未决项，转而用 dogfood close 验证修复后的 close 机制物理跑通。
 - 后果与风险：verify-code 官方阶段未按标准跑完，质量缺口（code_review、human_confirmation）在 close 输出中明确标注；后续任务若复制本流程，需先修 workflowhub simple-review 与 stage runner 的认证契约。当前 dogfood close 已在临时 target 仓库跑通，证明 close 修复有效。
 - 拒绝方案：① 继续伪造 acceptance_chain / 会话事件强行通过 build-code outcome——风险高且违宪（诚实记录事实）；② 跳过 dogfood 直接对真实仓库 close——不可逆且无 verify-code 事实支撑，不采用。
