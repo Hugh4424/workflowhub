@@ -61,12 +61,12 @@ function optionalCompletion(task) {
 function usage() {
   return [
     "Usage:",
-    "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=... [--risk-close=true --risk-reason=... --deferred-items=a,b]",
+    "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=...",
     "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout",
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... [--plan-hash=...]",
-    "  task-close.mjs close --task-path=... --project=... --task=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...] [--reason=...] [--deferred-items=a,b]",
+    "  task-close.mjs close --task-path=... --project=... --task=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
   ].join("\n");
 }
 
@@ -100,10 +100,6 @@ async function main() {
       ...(values["target-branch"] ? { targetBranch: values["target-branch"] } : {}),
       ...(values["spec-source"] ? { specSourcePath: values["spec-source"] } : {}),
       ...(values["spec-archive"] ? { specArchivePath: values["spec-archive"] } : {}),
-      reason: values.reason ?? "user-requested-close",
-      deferredItems: values["deferred-items"] === undefined
-        ? []
-        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
     });
     return finish(result, "operations/close/completed.json");
   }
@@ -114,7 +110,6 @@ async function main() {
       : { status: "not_completed", ref: "operations/close/completed.json" };
   }
   if (command === "prepare") {
-    const riskClose = values["risk-close"] === "true" || values["risk-accepted"] === "true";
     const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
       task_branch: required(values, "task-branch"),
       target_branch: required(values, "target-branch"),
@@ -122,15 +117,7 @@ async function main() {
       task_commit: required(values, "task-commit"),
       spec_source_path: required(values, "spec-source"),
       spec_archive_path: required(values, "spec-archive"),
-    },
-    riskClose,
-    ...(riskClose ? {
-      riskReason: required(values, "risk-reason"),
-      deferredItems: values["deferred-items"] === undefined
-        ? []
-        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
-    } : {}),
-    });
+    }});
     return finish(result, `operations/close/plans/${result.plan_hash}/plan.json`);
   }
   const plan = preparedPlan(task, required(values, "plan-hash"));
@@ -139,7 +126,7 @@ async function main() {
     return finish(result, result.ref);
   }
   if (command === "execute") {
-    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan must be consumed by the single close action");
+    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan is retired");
     const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
     const sourceRef = result.status === "completed"
       ? "operations/close/completed.json"

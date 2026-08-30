@@ -237,6 +237,20 @@ workflowhub 最近总是"关不了门"：任务做完了，最后的收尾（提
 - unresolved_items/owner: 无
 - Supersedes: none
 
+### D-011
+- question/final_option: build-plan 期间用户提出范围扩展：wh-review 优化（多轮审查无终止、审查前 Workspace/TaskHandle 校验未调用先失败、provider 成功后严格 v3 group 校验把成功判失败）是否并入本任务 → 并入，新增 FR-REV-001~004、AC-07 与 Phase 4（T13-T15）
+- recommendation/plain_language: 推荐并入；用户原话"我需要把wh-review的优化也放到当前任务中完成。添加新的phase和FR吧"；这三类浪费正是本任务要消除的"阻塞、流程"同根问题
+- decision: 范围扩展批准；wh-review 只认提交材料（main ef3171f53 已落地 simple-review-runner 作为输入事实合入）；本任务补集成收口（死路径删除、review 落账路由、测试对齐、一轮处置闭环术语）
+- source_type/reference/exact_excerpt: 用户指令（2026-08-29，DSH transcript 新需求消息）+ main commit ef3171f53 "feat(wh-review): simplify reviews to submitted materials"
+- approval_binding: approved（用户直接指令，2026-08-29）
+- facts_and_constraints: 不新增公共命令（review 落账复用现有 review behavior）；wh-review 不写任务状态（main 已定契约）；一轮审查+处置即闭环
+- Logic: 同根问题（审查可靠性/流程阻塞）随本任务一次修通 -> 不留第二个带病入口
+- choice_reason/impact: 消除审查"总是浪费时间、总是失败"的三类构造性根因；影响=skills/wh-review、tools/cli/stage-runtime.mjs、CONTEXT.md、spec/plan/tasks 增域
+- consequences_and_risks: build-plan 需按新材料重跑（FR 覆盖 15→19）；T3 的 readOnly 修复被 simple 路径取代成为死代码由 T13 删除
+- rejected_alternatives: 另起独立任务（用户明确拒绝："放到当前任务中完成"）
+- unresolved_items/owner: review 落账路由的 finding 稳定 id 契约在 T14 细化/主代理
+- Supersedes: D-010 范围护城河中"review 可靠性仅限左移防护"的隐含边界（wh-review 优化显式并入）
+
 ## 三轮 talk
 
 | talk_id | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |

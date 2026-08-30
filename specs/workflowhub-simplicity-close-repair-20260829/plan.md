@@ -57,22 +57,26 @@
 
 0. close 行为变更测试 RED（T0）。
 1. 实现 DSH transcript 读取与会话绑定（T1、T2）。
-2. 修复 wh-review workspace 绑定（T3）。
+2. 修复 wh-review workspace 绑定（T3；已被 main 的 simple 路径取代，遗留死代码由 T13 删除）。
 3. 重构 close 五个动作并删除 risk close（T4）。
 4. 实现 cleanup 分支、断点续跑与 finalize（T5）。
 5. 统一 close 与 status 事实新鲜度判定（T6）。
 6. 实现左移防护五件套（T7）。
 7. 死代码扫描与删除（T8）。
 8. 双轨事实评估结论报告（T9）。
-9. 宪法解释段与 checklist 同步（T10）。
-10. close 行为变更测试 GREEN（T12）。
-11. dogfood close 验收（T11，依赖 T12 GREEN 之后执行）。
+9. 删除 wh-review 旧 task/workspace 绑定审查路径死代码（T13）。
+10. 实现 review 落账路由与 finding 稳定 id（T14）。
+11. wh-review 测试对齐 simple 契约并端到端冒烟（T15）。
+12. 宪法解释段、checklist 同步与审查闭环术语（T10，核对全部 19 条 FR）。
+13. close 行为变更测试 GREEN（T12）。
+14. dogfood close 验收（T11，依赖 T12 GREEN 之后执行）。
 
 ## Test Strategy
 
 - **单元/回归**：`tests/dsh-transcript.test.mjs`、`tests/contract/requirement-convergence-regression.test.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`。
 - **close 机制 contract**：恒 risk 分离、existing 模式 close 可行、断点续跑、finalize 补记、material-only delta 对齐。
-- **左移防护测试**：cwd 错位写入被拒、review preflight 四类错误测试、fallback 分类测试、子代理崩溃占位测试、code_review 事件消费测试。
+- **左移防护测试**：cwd 错位写入被拒、review preflight 分类错误测试、fallback 分类测试、子代理崩溃占位测试、code_review 事件消费测试。
+- **审查优化测试**：simple 路径输入契约、宽松投影不被 v3 严格校验判失败、review 落账路由、旧死路径零消费者证据。
 - **减法交付测试**：死代码反向引用扫描证据、DSH 宿主可移植测试、双轨评估结论文件检查。
 - **dogfood**：本任务自身 close 生成的 completed.json。
 
@@ -100,6 +104,10 @@
 | FR-SUB-002 | `runtime/evidence/dsh-transcript.mjs` | DSH host bootstrap test | AC-06 | T1 |
 | FR-SUB-003 | `quality/evidence/dual-track-evaluation-report.md` | 报告存在且含计数来源检查 | AC-06 | T9 |
 | FR-EVAL-001 | `quality/evidence/dual-track-evaluation-report.md` | 报告存在且含计数来源检查 | AC-06 | T9 |
+| FR-REV-001 | `skills/wh-review/scripts/simple-review-runner.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs` | simple 路径输入契约测试 + 旧死路径零消费者证据 | AC-07 | T13、T15 |
+| FR-REV-002 | `skills/wh-review/scripts/review-provider-client.mjs`（strictProtocol 宽松投影）、`skills/wh-review/scripts/simple-review-runner.mjs`（提示词样板） | provider 成功不被 v3 严格校验判失败测试 + 提示词 sample 可解析测试 | AC-07 | T14、T15 |
+| FR-REV-003 | `tools/cli/stage-runtime.mjs`（review 落账路由） | 落账返回 result_ref 与 finding 稳定 id 测试 | AC-07 | T14 |
+| FR-REV-004 | `CONTEXT.md`、`skills/wh-review/SKILL.md` | 一轮处置闭环术语与文档检查 | AC-07 | T10、T15 |
 
 ## Constitution Check
 
@@ -222,11 +230,11 @@ ADR-0020 定义 close 为五个动作 + 确认（顺序：提交、合并、归�
 
 若 close 改动导致 dogfood close 无法完成，停止并人工收尾。
 
-## Phase 3: 减法、评估与 dogfood
+## Phase 3: 减法、评估、审查优化与宪法解释
 
 ### Goal
 
-删除死代码；产出双轨评估报告；同步宪法 checklist 并在 CONSTITUTION.md 治理边界节与 CONTEXT.md 增补三义解释段；GREEN 收口后本任务正常 close。
+删除死代码；产出双轨评估报告；完成 wh-review 审查优化集成收口（旧死路径删除、review 落账路由、测试对齐）；同步宪法 checklist 并在 CONSTITUTION.md 治理边界节与 CONTEXT.md 增补三义解释段与审查闭环术语。
 
 ### Files
 
@@ -239,21 +247,53 @@ ADR-0020 定义 close 为五个动作 + 确认（顺序：提交、合并、归�
 - `CONSTITUTION.md`（MODIFY）
 - `CONTEXT.md`（MODIFY）
 - `constitution-checklist.md`（MODIFY）
+- `skills/wh-review/scripts/wh-review-cli.mjs`（MODIFY，删除旧死路径）
+- `skills/wh-review/scripts/review-runner.mjs`（MODIFY/DELETE，按零消费者证据）
+- `skills/wh-review/scripts/simple-review-runner.mjs`（MODIFY）
+- `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`（MODIFY）
+- `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`（MODIFY）
+- `tools/cli/stage-runtime.mjs`（MODIFY，review 落账路由）
+- `tests/review/review-record-route.test.mjs`（NEW）
+
+### Tasks
+
+- T8、T9、T13、T14、T15、T10
+
+### Verify
+
+死代码扫描证据存在；评估报告存在且含计数来源；CONTEXT.md 含 close 三义段与审查闭环术语；checklist 新增四条判据；simple 路径只凭 stage/host_provider/materials 完成审查；review 落账返回 result_ref 且 finding 有稳定 id；wh-review 相关测试全绿。
+
+### Knowledge
+
+双轨合并推迟到后续任务；wh-review 不写任务状态是 main 已定契约，落账由调用 stage 经现有公共 review behavior 完成；一轮审查 + 处置即闭环。
+
+### STOP
+
+若宪法解释段被误读为新门禁，重新措辞；若落账路由需要新公共命令，回到现有 review behavior 内重新设计。
+
+## Phase 4: GREEN 收口与 dogfood
+
+### Goal
+
+全部实现完成后运行全量相关测试转绿（GREEN），随后本任务自身经官方路径正常 close（dogfood）。
+
+### Files
+
 - `tests/close/dogfood-close.test.mjs`（NEW）
 - `operations/close/completed.json`（NEW）
 
 ### Tasks
 
-- T8、T9、T10、T12、T11
+- T12、T11
 
 ### Verify
 
-死代码扫描证据存在；评估报告存在且含计数来源；CONTEXT.md 含 close 三义段；checklist 新增四条判据；T12 全量相关测试绿；completed.json 非 risk。
+T12 全量相关测试绿；completed.json 非 risk、含五动作落账与一次确认绑定、质量事实独立未漂白；dogfood 后双轨报告重新生成并校验一致。
 
 ### Knowledge
 
-双轨合并推迟到后续任务；本任务只评估；T11 dogfood 在 T12 GREEN 之后执行。
+T11 dogfood 在 T12 GREEN 之后执行；T12 失败先修实现真绿，不修改测试断言掩盖问题。
 
 ### STOP
 
-若宪法解释段被误读为新门禁，重新措辞；若 close 失败无法 finalize，人工收尾。
+若 close 失败无法 finalize，人工收尾。

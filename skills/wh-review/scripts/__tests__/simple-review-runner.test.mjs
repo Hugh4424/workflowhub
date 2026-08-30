@@ -55,4 +55,55 @@ describe("simple material-only review", () => {
     await expect(runSimpleReview({ stage: "make-decision", host_provider: "codex", materials: {} }))
       .rejects.toThrow("materials are required");
   });
+
+  it("marks a single provider as failed when its output is malformed and keeps other provider findings", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-bad-output-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", spec: "spec body" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      client: {
+        async runGroup() {
+          return {
+            runtimeId: "runtime-bad", outcome: "partial",
+            providers: [
+              {
+                provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+                output: "not-json", timing: null, usage: null,
+              },
+              {
+                provider: "model-b", status: "completed", identity: { provider: "model-b" }, error: null,
+                output: JSON.stringify({ findings: [{ severity: "major", path: "materials/02-spec.md", line: 3, issue: "gap", recommendation: "fix", root_cause: "missing test", evidence_kind: "direct", evidence: "none" }] }),
+                timing: null, usage: null,
+              },
+            ],
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({ status: "unavailable", stage: "build-code" });
+    expect(result.provider_results).toHaveLength(2);
+    expect(result.provider_results[0]).toMatchObject({ provider: "model-a", status: "failed", error: { code: "OUTPUT_INVALID" } });
+    expect(result.provider_results[1]).toMatchObject({ provider: "model-b", status: "completed" });
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({ severity: "major", path: "materials/02-spec.md", provider: "model-b" });
+    expect(result).not.toHaveProperty("error_code");
+    expect(result).not.toHaveProperty("attempt_ref");
+  });
+
+  it("RESULT_PROMPT contains a parseable sample finding", async () => {
+    const source = readFileSync(new URL("../simple-review-runner.mjs", import.meta.url), "utf8");
+    const match = source.match(/Example of a complete finding:\\n(\{[\s\S]*\})\\nExample of an empty result/);
+    expect(match).toBeTruthy();
+    const sample = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    const parsed = JSON.parse(sample);
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]).toHaveProperty("severity");
+    expect(parsed.findings[0]).toHaveProperty("evidence_kind");
+  });
 });

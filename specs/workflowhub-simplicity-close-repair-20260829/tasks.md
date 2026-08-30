@@ -163,7 +163,7 @@
 - **oracle**: existing 任务正常 close；finalize 写 completed.json 但不漂白质量。
 - **evidence_path**: `tests/close/...`
 - **STOP**: 若 cleanup 分支破坏 deterministic 任务，停止。
-- **recovery**: 回退 workspace.mjs 清理改动。
+- **recovery**: 回退 `core/task-close.mjs`、`runtime/task/workspace.mjs`、`tools/cli/task-close.mjs` 的本任务改动并保留测试 RED 事实。
 - **task risk**: 清理逻辑误删用户目录。
 
 ### T6. 统一 close 与 status 事实新鲜度判定
@@ -205,7 +205,7 @@
 - **并行**: []
 - **FR**: FR-LEFT-001、FR-LEFT-002、FR-LEFT-003、FR-LEFT-004、FR-LEFT-005
 - **AC**: AC-05
-- **动作**: 先补 `tests/left-shift/left-shift-suite.test.mjs` 五子项用例并确认失败（RED）；再实现至通过（GREEN）：FR-LEFT-001 在 `runtime/stage/stage-runner.mjs` 写入路径前断言任务身份、runner 执行身份一致且 cwd 位于任务 worktree 内，三者任一不满足即拒绝写入；FR-LEFT-002 在 `skills/wh-review/scripts/review-runner.mjs` 统一 preflight，把配置/材料/绑定/能力四类错误分开 fail-loud；FR-LEFT-003 在 `skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`tools/cli/stage-runtime.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-agent-outcome-adapter.mjs`、`tools/host/workflowhub-stage-agent-bridge.mjs` 六个真实 fallback 消费点统一拆为 invalid_input 与 unavailable 两类；FR-LEFT-004 复用现有 canonical receipt 接口：子代理超时/崩溃时由 `runtime/stage/stage-runner.mjs` 写入 `agent_outcome` 类 unavailable receipt（生产者，不新增持久对象），`runtime/stage/stage-content-contracts.mjs` 按现有 receipt 校验拒绝缺失结果（消费者），测试覆盖成功/超时/缺失/无效四类子代理结果的落账与消费路径；FR-LEFT-005 在 `tools/host/workflowhub-codex-session-event.mjs` 把 code_review 记录为一等会话事件，`runtime/stage/completion-predicates.mjs` 作为直接消费者据其判定 review 事实存在性。
+- **动作**: 先补 `tests/left-shift/left-shift-suite.test.mjs` 五子项用例并确认失败（RED）；再实现至通过（GREEN）：FR-LEFT-001 在 `runtime/stage/stage-runner.mjs` 写入路径前断言任务身份、runner 执行身份一致且 cwd 位于任务 worktree 内，三者任一不满足即拒绝写入；FR-LEFT-002 在 `skills/wh-review/scripts/simple-review-runner.mjs` 输入契约统一 preflight（main 已落地基础版），把缺 stage/缺 host_provider/缺 materials、route 未配置、provider 输出非法、传输失败分类 fail-loud；FR-LEFT-003 在 `tools/cli/stage-runtime.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-agent-outcome-adapter.mjs`、`tools/host/workflowhub-stage-agent-bridge.mjs` 四个存活 fallback 消费点统一拆为 invalid_input 与 unavailable 两类（wh-review 侧旧消费点随 T13 死代码删除，simple 路径错误分类由 T15 验收）；FR-LEFT-004 复用现有 canonical receipt 接口：子代理超时/崩溃时由 `runtime/stage/stage-runner.mjs` 写入 `agent_outcome` 类 unavailable receipt（生产者，不新增持久对象），`runtime/stage/stage-content-contracts.mjs` 按现有 receipt 校验拒绝缺失结果（消费者），测试覆盖成功/超时/缺失/无效四类子代理结果的落账与消费路径；FR-LEFT-005 在 `tools/host/workflowhub-codex-session-event.mjs` 把 code_review 记录为一等会话事件，`runtime/stage/completion-predicates.mjs` 作为直接消费者据其判定 review 事实存在性。
 - **精确文件**: `runtime/stage/stage-runner.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`runtime/stage/stage-content-contracts.mjs`、`runtime/stage/completion-predicates.mjs`、`tools/cli/stage-runtime.mjs`、`runtime/stage/stage-agent-outcome-adapter.mjs`、`tools/host/workflowhub-stage-agent-bridge.mjs`、`tools/host/workflowhub-codex-session-event.mjs`、`tests/left-shift/left-shift-suite.test.mjs`
 - **boundary**: 测试只验证 fail-loud 行为与事件消费；不验证完整 review 结果；不新增持久对象。
 - **输出**: AC-05 五子项测试全绿。
@@ -278,24 +278,24 @@
 
 - **ID**: T10
 - **Phase**: build-code
-- **goal**: 在 CONTEXT.md 增补"close 三义"解释段，在 constitution-checklist.md 新增 close 三义判据，并逐条核对 15 条 FR 的宪法依据。
+- **goal**: 在 CONTEXT.md 增补"close 三义"解释段与"审查闭环"术语，在 constitution-checklist.md 新增 close 三义判据，并逐条核对 19 条 FR 的宪法依据。
 - **design_state**: approved
 - **versioned_refs**: [specs/workflowhub-simplicity-close-repair-20260829/spec.md#ac-03]
 - **输入**: 宪法 F3/F4/F7/F9/Q1/Q2/F11；FR 依据字段。
-- **依赖**: [T1, T2, T3, T4, T5, T6, T7, T8, T9]
+- **依赖**: [T1, T2, T3, T4, T5, T6, T7, T8, T9, T13, T14, T15]
 - **并行**: []
 - **FR**: 所有 FR
 - **AC**: AC-03、AC-04
-- **动作**: 在 `CONSTITUTION.md` 治理边界节增补"close 三义"解释段（只解释不设门，不改条款编号与判据本文）；在 `CONTEXT.md` 增补同名术语解释；在 `constitution-checklist.md` 新增四条判据；用脚本逐条提取 spec.md 15 条 FR 的"依据"字段条款号，连同 AC-04 的 `git diff --name-only` 核对输出写入 `quality/evidence/constitution-mapping-checklist.md`，产物末尾给出四行结构化结论：新增公共命令：无 / 新增材料：无 / 新增 manifest 字段：无 / 新增控制面：无（每行附 diff 依据）。
+- **动作**: 在 `CONSTITUTION.md` 治理边界节增补"close 三义"解释段（只解释不设门，不改条款编号与判据本文）；在 `CONTEXT.md` 增补同名术语解释与"审查闭环"术语（一轮审查+处置即闭环、仅当上一轮未返回语义建议且传输/材料问题已改变时才重试）；在 `constitution-checklist.md` 新增四条判据；用脚本逐条提取 spec.md 19 条 FR 的"依据"字段条款号，连同 AC-04 的 `git diff --name-only` 核对输出写入 `quality/evidence/constitution-mapping-checklist.md`，产物末尾给出四行结构化结论：新增公共命令：无 / 新增材料：无 / 新增 manifest 字段：无 / 新增控制面：无（每行附 diff 依据）。
 - **精确文件**: `CONSTITUTION.md`、`CONTEXT.md`、`constitution-checklist.md`、`quality/evidence/constitution-mapping-checklist.md`
 - **boundary**: 只解释不设门；不新增门禁；不改宪法条款本文。
-- **输出**: CONSTITUTION.md 治理边界节与 CONTEXT.md 各增"close 三义"段；checklist 新增"close 三义判据"小节，含 CLOSE-F9、CLOSE-Q1、CLOSE-F7、CLOSE-F3 四条判据；FR 依据与 AC-04 核对结果写入 `quality/evidence/constitution-mapping-checklist.md` 供复核。
+- **输出**: CONSTITUTION.md 治理边界节与 CONTEXT.md 各增"close 三义"段、CONTEXT.md 增"审查闭环"术语；checklist 新增"close 三义判据"小节，含 CLOSE-F9、CLOSE-Q1、CLOSE-F7、CLOSE-F3 四条判据；FR 依据与 AC-04 核对结果写入 `quality/evidence/constitution-mapping-checklist.md` 供复核。
 - **Knowledge**: AC-03 要求每条 FR 标注宪法条款且 checklist 同步。
 - **verification_role**: manual
 - **paired_task**: T11
-- **gate_cmd**: `bash -c 'grep -q "close 三义" CONSTITUTION.md && grep -q "close 三义" CONTEXT.md && test $(grep -c "CLOSE-" constitution-checklist.md) -ge 4 && test $(grep -c "FR-" quality/evidence/constitution-mapping-checklist.md) -ge 15 && grep -q "git diff" quality/evidence/constitution-mapping-checklist.md && grep -q "新增公共命令：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增材料：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增 manifest 字段：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增控制面：无" quality/evidence/constitution-mapping-checklist.md && test $(node -e 'import("./runtime/interface/runtime-facade.mjs").then((m)=>console.log(m.RUNTIME_BEHAVIORS.length))') -eq 7 && test -z "$(git status --porcelain -- workflows/)" && test -z "$(git status --porcelain -- tools/cli/ | grep "^??")" && test $(ls specs/workflowhub-simplicity-close-repair-20260829/*.md | wc -l) -eq 4'`
+- **gate_cmd**: `bash -c 'grep -q "close 三义" CONSTITUTION.md && grep -q "close 三义" CONTEXT.md && grep -q "审查闭环" CONTEXT.md && test $(grep -c "CLOSE-" constitution-checklist.md) -ge 4 && test $(grep -c "FR-" quality/evidence/constitution-mapping-checklist.md) -ge 19 && grep -q "git diff" quality/evidence/constitution-mapping-checklist.md && grep -q "新增公共命令：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增材料：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增 manifest 字段：无" quality/evidence/constitution-mapping-checklist.md && grep -q "新增控制面：无" quality/evidence/constitution-mapping-checklist.md && test "$(node -e "import(\"./runtime/interface/runtime-facade.mjs\").then((m)=>console.log(m.RUNTIME_BEHAVIORS.join(\",\")))")" = "doctor,status,run,review,verify,confirm,authorize" && test -z "$(git status --porcelain -- workflows/)" && test -z "$(git status --porcelain -- tools/cli/ | grep "^??")" && test $(ls specs/workflowhub-simplicity-close-repair-20260829/*.md | wc -l) -eq 4'`
 - **expected_exit**: 0
-- **oracle**: 三处文件各含本次新增的"close 三义"文字与 CLOSE- 判据标记（文件未修改时命令必失败）；核对产物含 15 行以上 FR 依据提取结果、git diff 核对段与四行"无新增"结构化结论；并直接断言公共 runtime 行为仍为七类（活模块枚举）、workflows/ 清单零改动、tools/cli/ 零新增文件、specs 目录仍为四份材料，任一被违反时命令必失败。
+- **oracle**: 三处文件各含本次新增的"close 三义"文字与 CLOSE- 判据标记、CONTEXT.md 含"审查闭环"术语（文件未修改时命令必失败）；核对产物含 19 行以上 FR 依据提取结果、git diff 核对段与四行"无新增"结构化结论；并直接断言公共 runtime 行为精确等于既有七类（活模块枚举名比对）、workflows/ 清单零改动、tools/cli/ 零新增文件、specs 目录仍为四份材料，任一被违反时命令必失败。
 - **evidence_path**: `constitution-checklist.md`
 - **STOP**: 若 checklist 被误读为新门禁，重新措辞。
 - **recovery**: 回退 checklist 修改。
@@ -322,7 +322,7 @@
 - **paired_task**: T10
 - **gate_cmd**: `bash -c 'npx vitest run tests/close/dogfood-close.test.mjs && node scripts/dual-track-evaluate.mjs --write && node scripts/dual-track-evaluate.mjs --check'`
 - **expected_exit**: 0
-- **oracle**: 测试断言 completed.json 符合 plan 数据契约（五动作落账含 evidence_ref、close_mode 非 risk、confirmation_ref 绑定批次确认、不含质量字段）；任务存储存在 task-close CLI 生成的 close plan 记录链（prepare/confirm/execute/complete）与五阶段 completed 事实（质量事实独立存在、原值未改写）；dogfood 后重新生成并校验双轨报告；dogfood 执行前文件不存在，命令必失败。
+- **oracle**: 测试断言 completed.json 符合 plan 数据契约（五动作落账含 evidence_ref、close_mode 非 risk、confirmation_ref 绑定批次确认、不含质量字段）；任务存储存在 task-close CLI 生成的 close plan 记录链（prepare/confirm/execute/complete）与五阶段 completed 事实（质量事实独立存在、原值未改写）；dogfood 后重新生成并校验双轨报告；close 修复实现前运行该测试必失败（RED），修复后由测试驱动真实 close 再断言（GREEN）。
 - **evidence_path**: `operations/close/completed.json`
 - **STOP**: 若 close 失败且无法 finalize 补记，停止并人工收尾。
 - **recovery**: 手工完成五步并由 finalize 补记。
@@ -336,21 +336,102 @@
 - **design_state**: approved
 - **versioned_refs**: [specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-close-001]
 - **输入**: `tests/close/close-contract.test.mjs` 修复后的实现；T0-RED 失败记录。
-- **依赖**: [T0, T1, T2, T3, T4, T5, T6, T7, T8]
+- **依赖**: [T0, T1, T2, T3, T4, T5, T6, T7, T8, T13, T14, T15]
 - **并行**: []
 - **FR**: FR-CLOSE-001、FR-CLOSE-002
-- **AC**: AC-02、AC-05、AC-06
-- **动作**: 运行 close contract、左移防护、宿主移植与收敛回归全部相关测试，预期通过。
+- **AC**: AC-02、AC-05、AC-06、AC-07
+- **动作**: 运行 close contract、左移防护、宿主移植、收敛回归与 wh-review simple 契约全部相关测试，预期通过。
 - **精确文件**: `tests/close/close-contract.test.mjs`
 - **boundary**: 只运行测试并记录 GREEN 事实；不修改测试断言以掩盖问题。
 - **输出**: 测试退出码为 0；close contract 全绿。
 - **Knowledge**: F9 要求行为变更先 RED 再 GREEN；测试失败真报。
 - **verification_role**: GREEN
 - **paired_task**: T0
-- **gate_cmd**: `npx vitest run tests/close/close-contract.test.mjs tests/close/cleanup-resume-finalize.test.mjs tests/close/freshness-consistency.test.mjs tests/left-shift/left-shift-suite.test.mjs tests/dsh-transcript.test.mjs tests/contract/requirement-convergence-regression.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`
+- **gate_cmd**: `npx vitest run tests/close/close-contract.test.mjs tests/close/cleanup-resume-finalize.test.mjs tests/close/freshness-consistency.test.mjs tests/left-shift/left-shift-suite.test.mjs tests/dsh-transcript.test.mjs tests/contract/requirement-convergence-regression.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs tests/review/review-record-route.test.mjs`
 - **expected_exit**: 0
-- **oracle**: close contract、断点续跑/finalize、新鲜度一致性、左移防护、DSH 宿主、收敛回归、wh-review 绑定测试在修复后全部通过；dogfood 验收测试不属于本任务，由 T11 单独运行。
+- **oracle**: close contract、断点续跑/finalize、新鲜度一致性、左移防护、DSH 宿主、收敛回归、wh-review simple 契约与 review 落账路由测试在修复后全部通过；dogfood 验收测试不属于本任务，由 T11 单独运行。
 - **evidence_path**: `tests/close/close-contract.test.mjs`
 - **STOP**: 若测试仍失败，停止 dogfood close 并修复实现。
 - **recovery**: 回退 close 核心改动并重新运行 RED。
 - **task risk**: 测试覆盖不足导致假绿。
+
+### T13. 删除 wh-review 旧 task/workspace 绑定审查路径死代码
+
+- **ID**: T13
+- **Phase**: build-code
+- **goal**: 物理删除被 main 的 simple 路径取代的旧审查路径，不留死代码。
+- **design_state**: approved
+- **versioned_refs**: [specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-rev-001]
+- **输入**: main 合入的 `simple-review-runner.mjs`；旧 `runReviewRound` 死路径与 `review-runner.mjs` 旧流程。
+- **依赖**: [T7, T8]
+- **并行**: []
+- **FR**: FR-REV-001
+- **AC**: AC-07
+- **动作**: 删除 `wh-review-cli.mjs` 中 `return runSimpleReview(input)` 之后的旧 `runReviewRound` 死路径（包含 resolveTrustedReviewSubject、recordMissingRouteUnavailable 在该死路径内的独占辅助）；**保留 review-runner.mjs 中的记录辅助函数**（如 publishReviewFactOrThrow、recordUndispatchedUnavailable、subjectRecord、bundle 构建等），供 T14 记录路由复用；对 `review-runner.mjs` 做消费者分析，仅删除无存活消费者的**旧顶层执行入口**，内部记录辅助保留；在 `simple-review-runner.mjs` 保留最小输入契约（stage/host_provider/materials + route 可用性，旧字段忽略）；删除前后各跑一次 `scripts/dead-code-scan.mjs`，报告列出逐对象零引用证据。
+- **精确文件**: `skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/simple-review-runner.mjs`、`docs/architecture/move-map.json`
+- **boundary**: 不改变 simple 路径行为；不删除仍有存活消费者的代码（verifyFinal 等先确认消费者再定夺）。
+- **输出**: 旧死路径物理删除；扫描报告含逐对象零引用证据；move-map 同步。
+- **Knowledge**: F8/F10/F11 要求精简控制面；删除需证据不靠口头声明。
+- **verification_role**: evidence
+- **paired_task**: T15
+- **gate_cmd**: `bash -c 'node scripts/dead-code-scan.mjs --verify && ! grep -q "recordMissingRouteUnavailable" skills/wh-review/scripts/wh-review-cli.mjs'`
+- **expected_exit**: 0
+- **oracle**: 扫描 `--verify` 对删除标识符清单逐一断言零残留；wh-review-cli 不再引用旧落账辅助；任一仍有引用或报告为空时退出非 0。
+- **evidence_path**: `quality/evidence/dead-code-scan/report.json`
+- **STOP**: 若某待删对象仍有真实消费者，保留并在报告中说明保留理由。
+- **recovery**: 恢复删除的代码段并保留扫描事实。
+- **task risk**: 误删 verifyFinal 等仍有消费者的入口。
+
+### T14. 优化审查提示词样板并实现 review 落账路由
+
+- **ID**: T14
+- **Phase**: build-code
+- **goal**: 让各 provider 按统一样板返回 findings，并让调用 stage 经现有公共 review behavior 记录审查结果。
+- **design_state**: approved
+- **versioned_refs**: [specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-rev-002, specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-rev-003]
+- **输入**: runSimpleReview 返回的公共结果 JSON；现有 `review` behavior；现 RESULT_PROMPT。
+- **依赖**: [T13]
+- **并行**: []
+- **FR**: FR-REV-002、FR-REV-003
+- **AC**: AC-07
+- **动作**: 先写 `tests/review/review-record-route.test.mjs` 并确认失败（RED）；再做两件事至通过（GREEN）：①优化 `simple-review-runner.mjs` 的 RESULT_PROMPT——附带最终结果 sample（一条填好的完整 finding 示例：severity/path/line/issue/recommendation/root_cause/evidence_kind/evidence 全部按真实用法填写，外加空 findings 示例 `{"findings":[]}`），并写明输出纪律（只输出一个与 sample 同形的 JSON 对象；severity 仅 blocking|major|minor；evidence_kind 仅 direct|machine|inferred；path 用 bundle 相对路径；line 为该文件整数行号；不要 verdict/summary/pass-fail/第二个 JSON/markdown 多余说明），sample 本身必须能被 parseReviewerOutput 解析（测试断言），使各 provider 返回统一格式 findings；②在 `tools/cli/stage-runtime.mjs` 的现有 `review` behavior 内实现记录路由：输入为 runSimpleReview 的公共结果 JSON，校验其契约（status available/unavailable、findings 结构），复用 T13 保留的 `review-runner.mjs` 记录辅助构造不可变审查记录链（attempt、provider output、result）与质量事实；为每条 finding 分配稳定 id——`F-` 前缀 + 对 canonical JSON（按 path/line/issue/root_cause 键序序列化）取 sha256 前 12 位，同 id 重复 finding 合并为一条并记 provider 数；返回 result_ref 供 receipts.review 绑定；unavailable 结果落诚实 unavailable 事实，不改写为通过。
+- **精确文件**: `skills/wh-review/scripts/simple-review-runner.mjs`、`tools/cli/stage-runtime.mjs`、`tests/review/review-record-route.test.mjs`
+- **boundary**: 复用现有公共 review behavior，不新增公共命令；wh-review 本身仍不写任务状态；sample 只规范输出格式不限制审查内容。
+- **输出**: 提示词含可解析 sample 与输出纪律；available 结果落账返回 result_ref 且 findings 带稳定 id；unavailable 落诚实事实；非法输入 fail-loud。
+- **Knowledge**: F6 统一外置执行记录；质量事实不可漂白；统一格式让异源建议可比较。
+- **verification_role**: evidence
+- **paired_task**: T15
+- **gate_cmd**: `npx vitest run tests/review/review-record-route.test.mjs`
+- **expected_exit**: 0
+- **oracle**: 测试断言 RESULT_PROMPT 的 sample 可被 parseReviewerOutput 解析且字段完整、available 落账的 result_ref 可被 receipts.review 消费、finding id 稳定可引用、unavailable 不被改写、非法输入拒绝；路由或 sample 未实现时测试必失败。
+- **evidence_path**: `tests/review/review-record-route.test.mjs`
+- **STOP**: 若实现需要新增公共命令，停止并重新设计（回到现有 review behavior 内）。
+- **recovery**: 回退路由与提示词改动并保留 RED 事实。
+- **task risk**: 落账记录格式与 stage handler 消费契约不兼容；sample 过严导致 provider 照抄示例内容。
+
+### T15. wh-review 测试对齐 simple 契约与端到端冒烟
+
+- **ID**: T15
+- **Phase**: build-code
+- **goal**: 测试套件从旧契约对齐到 simple 契约，并用一次真实 dsh 宿主审查证明端到端可用。
+- **design_state**: approved
+- **versioned_refs**: [specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-rev-001, specs/workflowhub-simplicity-close-repair-20260829/spec.md#fr-rev-002]
+- **输入**: T13/T14 后的 wh-review 代码；当前 6 个失败测试。
+- **依赖**: [T13, T14]
+- **并行**: []
+- **FR**: FR-REV-001、FR-REV-002、FR-REV-004
+- **AC**: AC-07
+- **动作**: 重写 `wh-review-cli.test.mjs` 中断言旧契约的测试（旧校验消息、退役字段拒绝顺序、CLI 级 attempt 落账）为 simple 契约断言（输入分类报错、旧字段忽略、ROUTE_UNAVAILABLE 诚实返回、宽松投影）；补强 `simple-review-runner.test.mjs` 覆盖 provider 输出非法记单 provider failed 而非整体失败；执行一次真实 dsh 宿主 review 冒烟并把结果经 T14 路由落账。
+- **精确文件**: `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`、`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **boundary**: 不修改测试断言掩盖真实失败；冒烟失败记诚实事实。
+- **输出**: 两个测试文件全绿；dsh 冒烟结果落账有 result_ref。
+- **Knowledge**: F9 可证伪；F4 异源审查不锁死修复。
+- **verification_role**: evidence
+- **paired_task**: T13
+- **gate_cmd**: `npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **expected_exit**: 0
+- **oracle**: 两个测试文件全绿且断言的是 simple 契约（旧契约断言不存在）；provider 输出非法用例断言单 provider failed；测试未对齐时必失败。
+- **evidence_path**: `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **STOP**: 若冒烟暴露 simple 路径真实缺陷，回 T13/T14 修复后再验收。
+- **recovery**: 保留旧测试文件副本于 git 历史，不删除事实。
+- **task risk**: 冒烟依赖 broker 配置可用性，失败须区分能力缺失与实现缺陷。

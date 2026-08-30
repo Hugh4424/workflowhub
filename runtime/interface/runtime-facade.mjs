@@ -15,6 +15,7 @@ const BEHAVIOR_BY_INTERNAL_OPERATION = Object.freeze({
   status: "status",
   artifact: "run",
   "review-risk-pause": "review",
+  "review-record": "review",
   "capture-tests": "verify",
   confirm: "confirm",
   "authorize-operation": "authorize",

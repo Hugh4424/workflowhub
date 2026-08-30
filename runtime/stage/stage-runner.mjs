@@ -4,7 +4,7 @@ import { officialStageHandler } from "./stage-handlers.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
@@ -687,7 +687,29 @@ function plainResult(value) {
   return value;
 }
 
+function assertWriteBoundary(ctx) {
+  const task = ctx.task;
+  const kernel = ctx.kernel;
+  if (!task || kernel.task !== task) throw new Error("runner/task identity mismatch for write boundary");
+  const worktreeRoot = ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot;
+  if (!worktreeRoot) throw new Error("no task worktree bound for write boundary");
+  // cwd is outside the task worktree: fail-loud boundary reserved for CLI invocation;
+  // test runners may use sibling temp directories while still binding the same task.
+  if (process.env.WORKFLOWHUB_ENFORCE_CWD && !inside(process.cwd(), worktreeRoot)) {
+    throw new Error("cwd is outside the task worktree");
+  }
+}
+
+function inside(root, candidate) {
+  const path = relative(root, candidate);
+  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
 function publishVNextEvidence(ctx, ref, raw) {
+  assertWriteBoundary(ctx);
+  // Stage runner is the producer for the agent_outcome canonical receipt; a
+  // missing or invalid host result must be persisted as an unavailable fact
+  // through the existing canonical receipt writer, not left as a vacuum.
   try {
     return ctx.kernel.publishCanonicalRecord(ref, raw);
   } catch (error) {
@@ -1000,6 +1022,13 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
     refs: [{ ref: evidenceRef, sha256: evidenceHash }],
     snapshot_tree: snapshot.tree,
     summary: { actual_outcome: status, evidence_type: "stage quality fact" },
+    freshness: {
+      status: "current",
+      evaluated_at: new Date().toISOString(),
+      snapshot_tree: snapshot.tree,
+      material_revision: ctx.kernel.currentVNextMaterialRevision(),
+      evidence_freshness: [{ ref: evidenceRef, sha256: evidenceHash, status: "current" }],
+    },
   };
   const acceptanceRaw = `${JSON.stringify(acceptanceValue, null, 2)}\n`;
   const acceptanceHash = createHash("sha256").update(acceptanceRaw).digest("hex");

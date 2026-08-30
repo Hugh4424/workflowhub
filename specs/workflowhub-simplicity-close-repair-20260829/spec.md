@@ -245,14 +245,14 @@ workflowhub 最近进入收尾阶段时"关不了门"：任务 verify-code 之�
   - **场景**：SCN-005。
   - **验收**：AC-05。
 
-- **FR-LEFT-002**：review 统一 preflight 检查配置/材料/绑定/能力四类错误。
-  - **范围边界**：调用前按缺 review_track、缺 direction_selection、forbidden 字段、宿主不支持四类分类报错；输入错误记 invalid_input，不落 unavailable 事实。
+- **FR-LEFT-002**：review 统一 preflight 分类报错。
+  - **范围边界**：调用前按缺 stage/缺 host_provider/缺 materials、route 未配置、provider 输出非法、传输失败分类报错；输入错误记 invalid_input，不落 unavailable 事实；旧调用方多传的任务/工作区字段一律忽略，不成为审查门。
   - **依据**：D-007；PFACT-06；SCN-005；AC-05；宪法 F3、F4（质量靠异源审查，finding 不锁死修复）。
   - **场景**：SCN-005。
   - **验收**：AC-05。
 
 - **FR-LEFT-003**：fallback 拆 invalid_input 与 unavailable。
-  - **范围边界**：把调用方输入错误与能力缺失分开处理；删除通过消息正则猜测错误码的做法；不包含新增错误码体系。
+  - **范围边界**：把调用方输入错误与能力缺失分开处理；删除通过消息正则猜测错误码的做法；存活消费点为 stage-runtime、stage-runner、stage-agent-outcome-adapter、stage-agent-bridge 与 wh-review simple 路径错误分类；不包含新增错误码体系。
   - **依据**：D-007；PFACT-06；SCN-005；AC-05；宪法 F4、F9（可证伪不假绿）。
   - **场景**：SCN-005。
   - **验收**：AC-05。
@@ -306,6 +306,34 @@ workflowhub 最近进入收尾阶段时"关不了门"：任务 verify-code 之�
   - **依据**：D-009；PFACT-06；SCN-001；AC-06；宪法 F4、Q1。
   - **场景**：SCN-001。
   - **验收**：AC-06。
+
+### 审查优化域（REV）
+
+本域消除 wh-review 的三类长期浪费：审查前做过多的任务/工作区校验导致审查未调用先失败、provider 成功后严格 v3 group 校验把成功结果判失败、修复后无限复审没有终止规则。
+
+- **FR-REV-001**：审查输入只认提交材料。
+  - **范围边界**：wh-review 公共入口只校验 stage/host_provider/materials 与 route 可用性；不打开或校验 Workspace、TaskHandle、Git、快照、材料版本、阶段状态；旧调用方多传的任务/工作区字段一律忽略；旧 task/workspace 绑定审查路径死代码连零消费者证据一并删除。
+  - **依据**：D-007；PFACT-06；SCN-005；AC-07；宪法 F8（简单优先）、F11（控制面受限）、S8（技能可搬运不绑死宿主）。
+  - **场景**：SCN-005。
+  - **验收**：AC-07。
+
+- **FR-REV-002**：审查结果宽松协议投影与统一 findings 格式。
+  - **范围边界**：provider 成功返回后公共结果以宽松投影为准（provider/status/identity/error/timing/usage 与 findings）；严格 v3 group 校验不再使已成功的审查整体失败；单个 provider 输出非法只记该 provider 的 failed 事实；找不到 route 时返回诚实 unavailable；审查提示词附带最终结果 sample（一条填好的完整 finding 示例 + 空 findings 示例 + 字段枚举与路径/行号纪律），引导各 provider 返回统一格式 findings。
+  - **依据**：D-007；PFACT-06；SCN-005；AC-07；宪法 F9（可证伪不假绿）、F4（质量靠异源审查，finding 不锁死修复）。
+  - **场景**：SCN-005。
+  - **验收**：AC-07。
+
+- **FR-REV-003**：审查结果落账路径。
+  - **范围边界**：wh-review 不写任务状态；调用 stage 经现有公共 `review` behavior 把返回结果记录为不可变审查记录与质量事实并返回 result_ref 供 receipts.review 绑定；落账时为每条 finding 分配稳定 id 供 finding_dispositions 引用；不新增公共命令。
+  - **依据**：D-007；PFACT-06；SCN-005；AC-07；宪法 F6（统一外置执行记录）、F11（控制面受限）。
+  - **场景**：SCN-005。
+  - **验收**：AC-07。
+
+- **FR-REV-004**：审查一轮处置闭环。
+  - **范围边界**：每个 stage 每个审查面做一轮异源审查并逐条处置 findings（fixed/rejected_invalid/accepted_risk/needs_human）即闭环；仅当上一轮未返回任何语义建议且具体传输/材料问题已改变时才重试；不以"零 findings"为终止条件；规则写入 CONTEXT.md 术语。
+  - **依据**：D-007；PFACT-06；SCN-005；AC-07；宪法 F4、F8（简单优先）、Q1（质量事实不作准入证）。
+  - **场景**：SCN-005。
+  - **验收**：AC-07。
 
 ## 6. 模块划分
 
@@ -432,14 +460,14 @@ workflowhub 最近进入收尾阶段时"关不了门"：任务 verify-code 之�
   - **证据类型**：`test`。
 
 - [ ] **AC-03**：每条修复有宪法条款依据且 constitution-checklist.md 同步。
-  - **需求**：所有 FR（FR-CLOSE-001~005、FR-LEFT-001~005、FR-PORT-001、FR-EVAL-001、FR-SUB-001~003）。
+  - **需求**：所有 FR（FR-CLOSE-001~005、FR-LEFT-001~005、FR-PORT-001、FR-EVAL-001、FR-SUB-001~003、FR-REV-001~004）。
   验证：逐条核对 FR 的"依据"字段是否标注宪法条款号；检查 constitution-checklist.md 是否新增 F9 伪造通过、Q1 completed 三分、F7 cleanup ownership、F3 preflight 位置四条判据。
   - **通过条件**：每条 FR 都有宪法依据；checklist 已同步。
   - **失败条件**：出现无宪法依据的新机制；checklist 未同步。
   - **证据类型**：`manual`。
 
 - [ ] **AC-04**：不引入新推进门禁/新控制面/新概念对象。
-  - **需求**：FR-CLOSE-001~005、FR-LEFT-001~005、FR-PORT-001、FR-EVAL-001、FR-SUB-001~003。
+  - **需求**：FR-CLOSE-001~005、FR-LEFT-001~005、FR-PORT-001、FR-EVAL-001、FR-SUB-001~003、FR-REV-001~004。
   验证：比对公共 runtime 命令清单、四份材料清单、manifest 字段清单。
   - **通过条件**：公共 runtime 命令仍是七类；四份材料不变；manifest 无新字段；未新增门面、概念对象或控制面。
   - **失败条件**：新增公共命令、新增材料、manifest 新增字段、新增控制面或概念对象。
@@ -448,7 +476,7 @@ workflowhub 最近进入收尾阶段时"关不了门"：任务 verify-code 之�
 - [ ] **AC-05**：左移防护五子项各有验收入口测试。
   - **需求**：FR-LEFT-001、FR-LEFT-002、FR-LEFT-003、FR-LEFT-004、FR-LEFT-005。
   验证：运行各子项最小验收入口测试。
-  - **通过条件**：cwd 错位时写入被拒、review preflight 四类错误（缺 review_track/缺 direction_selection/forbidden 字段/宿主不支持）各有一条测试、fallback 错误分类测试、子代理崩溃占位证据测试、code_review 事件被完成判据直接消费测试全部通过。
+  - **通过条件**：cwd 错位时写入被拒、review preflight 分类错误（缺 stage/缺 host_provider/缺 materials、route 未配置、provider 输出非法）各有一条测试、fallback 错误分类测试、子代理崩溃占位证据测试、code_review 事件被完成判据直接消费测试全部通过。
   - **失败条件**：任一测试缺失或失败。
   - **证据类型**：`test`。
 
@@ -458,6 +486,13 @@ workflowhub 最近进入收尾阶段时"关不了门"：任务 verify-code 之�
   - **通过条件**：死代码删除有零消费者扫描证据；session 非 Codex 宿主支持有测试或文档化验收；双轨事实评估结论报告已作为 quality/evidence/ 下真实文件交付。
   - **失败条件**：任一证据缺失。
   - **证据类型**：`evidence`。
+
+- [ ] **AC-07**：wh-review 优化验收。
+  - **需求**：FR-REV-001、FR-REV-002、FR-REV-003、FR-REV-004。
+  验证：运行 wh-review simple 路径测试与 review 落账路由测试；检查旧 task/workspace 绑定审查路径死代码的零消费者删除证据；执行一次真实 dsh 宿主 review 端到端冒烟。
+  - **通过条件**：simple 路径只凭 stage/host_provider/materials 完成一次真实审查并返回 findings；严格 v3 校验不再使成功审查整体失败；review 落账返回可绑定的 result_ref；旧死路径删除有零消费者证据；相关测试全绿。
+  - **失败条件**：审查仍因 Workspace/TaskHandle/v3 严格校验失败；落账路径缺失；死代码无证据删除；任一测试红。
+  - **证据类型**：`test`。
 
 ## 12. 风险、未决与交接
 

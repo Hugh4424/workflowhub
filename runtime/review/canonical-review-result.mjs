@@ -171,6 +171,20 @@ export function conservativelyAssessUnattestedAnchors(items) {
 
 function policyFacts(attempt, fallbackMinimumReviewers) {
   const policy = attempt.review_policy ?? null;
+  if (policy === null && attempt.version === "wh-review-attempt.v1" && Array.isArray(attempt.provider_attempts)) {
+    // Simple-review attempts do not carry a wh_review.v2 policy; treat them as a
+    // single-quorum review with identity inferred from the completed providers.
+    const providers = attempt.provider_attempts.filter((p) => p.status === "completed");
+    if (providers.length > 0) {
+      return {
+        minimum: 1,
+        priority: providers.map((p) => p.provider),
+        eligible: new Set(providers.map((p) => p.provider)),
+        requireIdentity: false,
+        requireSourceId: false,
+      };
+    }
+  }
   if (policy?.source !== "wh_review.v2") invalid("formal review requires a wh_review.v2 policy");
   if (attempt.policy_snapshot_hash !== createHash("sha256").update(canonicalJson(policy)).digest("hex")) {
     invalid("review policy snapshot hash mismatch");

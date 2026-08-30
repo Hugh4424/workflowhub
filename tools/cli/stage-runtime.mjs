@@ -8,6 +8,7 @@ import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
+import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 
 import {
   authenticateStageWriteBoundary,
@@ -982,6 +983,43 @@ export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
   });
 }
 
+function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot, materialRevision, materials, read, workspaceRoot, taskId }) {
+  const acceptanceEvidence = (fact.evidence ?? []).find((entry) => entry?.evidence_type === "acceptance_evidence" && typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
+  if (acceptanceEvidence && currentSnapshot?.tree && materialRevision) {
+    try {
+      const raw = read(acceptanceEvidence.ref);
+      const parsed = validateAcceptanceEvidence(JSON.parse(raw));
+      if (
+        parsed.freshness?.status === "current"
+        && parsed.freshness.snapshot_tree === currentSnapshot.tree
+        && parsed.freshness.material_revision === materialRevision
+        && parsed.freshness.evidence_freshness.every((entry) => entry.status === "current" && entry.sha256 === acceptanceEvidence.sha256)
+      ) {
+        return Object.freeze({
+          fact_ref: fact.ref,
+          status: "current",
+          authenticated: true,
+          reused: true,
+          dependencies: Object.freeze({ material: "current", tree: "current", fact: "current", evidence: "current" }),
+        });
+      }
+    } catch {
+      // Fall through to full freshness evaluation on any mismatch or validation failure.
+    }
+  }
+  if (!currentSnapshot?.tree || !materialRevision) {
+    return Object.freeze({ fact_ref: fact.ref, status: "unknown", authenticated: false });
+  }
+  return evaluateFactFreshness(
+    { ...fact, ref: fact.ref, sha256: factSha256 },
+    {
+      material_revision: materialRevision,
+      material_scope_revisions: stageMaterialScopeRevisions(materials),
+      snapshot_tree: currentSnapshot.tree,
+    },
+    { read, workspaceRoot, taskId },
+  );
+}
 function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials }) {
   return deriveCurrentProductRelease({
     task_id: context.identity.taskId,
@@ -1071,7 +1109,7 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "capture-tests", "run", "confirm", "authorize-operation"]).has(command)) {
+  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "run", "confirm", "authorize-operation"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
@@ -1139,6 +1177,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "review-risk-pause" && !values.input) {
     throw new TypeError(`${command} requires --input=<risk-input.json>`);
   }
+  if (command === "review-record" && !values.input) {
+    throw new TypeError(`${command} requires --input=<simple-review-result.json>`);
+  }
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) {
     throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   }
@@ -1157,7 +1198,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     readOnly: command === "status",
   });
   if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
-  const input = new Set(["review-risk-pause", "capture-tests", "run"]).has(command)
+  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "run"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
@@ -1202,15 +1243,17 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       } catch { continue; }
       if (value?.task_id !== context.task.identity.taskId || value?.stage !== values.stage) continue;
       const freshness = current
-        ? evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, {
-            material_revision: materialRevision,
-            material_scope_revisions: stageMaterialScopeRevisions(materials),
-            snapshot_tree: current.tree,
-        }, {
-          read: context.task.readRecord,
-          workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-          taskId: context.task.identity.taskId,
-        })
+        ? evaluateFreshnessWithReuse({
+            fact: { ...value, ref },
+            factRaw: raw,
+            factSha256: sha256(raw),
+            currentSnapshot: current,
+            materialRevision,
+            materials,
+            read: context.task.readRecord,
+            workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+            taskId: context.task.identity.taskId,
+          })
         : { status: "unknown", authenticated: false };
       observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
     }
@@ -1284,6 +1327,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       stage: values.stage,
       reviewResultRef: input.review_result_ref,
     });
+  }
+  if (command === "review-record") {
+    if (!input || typeof input !== "object" || Array.isArray(input) || !Object.prototype.hasOwnProperty.call(input, "result")) {
+      throw new TypeError("review-record input requires a 'result' field with the simple review public result");
+    }
+    const refs = recordSimpleReviewResult({ task: context.task, result: input.result });
+    return { status: "recorded", ...refs };
   }
   if (command === "run") {
     if (input !== undefined && (typeof input !== "object" || Array.isArray(input))) {
@@ -1461,6 +1511,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     "run:execute": "run",
     "run:draft": "artifact",
     "review:risk": "review-risk-pause",
+    "review:record": "review-record",
     "verify:execute": "capture-tests",
     "confirm:decision": "confirm",
     "authorize:commit": "authorize-operation",

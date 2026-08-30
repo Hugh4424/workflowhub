@@ -56,7 +56,7 @@ describe("wh-review production CLI", () => {
       task_id: "task",
       stage: "make-decision",
       host_provider: "codex",
-    })).rejects.toThrow("materials is required");
+    })).rejects.toThrow("materials are required");
   });
 
   it("exports only current review operations and no resolution writer", async () => {
@@ -145,8 +145,8 @@ describe("wh-review production CLI", () => {
     } })).toThrow(/worktree-scoped final review/);
   });
 
-  it("fails loudly on retired response-ledger and round inputs", async () => {
-    const { runReviewRound } = await import(cli.href);
+  it("ignores retired response-ledger and round inputs", async () => {
+    const { runSimpleReview } = await import(new URL("../simple-review-runner.mjs", import.meta.url));
     for (const [field, value] of [
       ["previous_result_ref", "quality/reviews/results/old.json"],
       ["review_round", "incremental"],
@@ -155,20 +155,48 @@ describe("wh-review production CLI", () => {
       ["prior_attempt_refs", []],
       ["dispatch_sequence", 1],
     ]) {
-      await expect(runReviewRound({ task_path: "/tmp/task", stage: "build-code", [field]: value }))
-        .rejects.toThrow(/retired|prior review state/i);
+      const result = await runSimpleReview({
+        stage: "build-code",
+        host_provider: "codex",
+        materials: { raw: "current" },
+        [field]: value,
+      }, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-retired-"))), command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
+        selectProviders: () => ({ providers: ["other"] }),
+        client: {
+          async runGroup() {
+            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+          },
+        },
+      });
+      expect(result.status).toBe("available");
+      expect(result.findings).toHaveLength(0);
+      expect(result).not.toHaveProperty("error_code");
     }
-    await expect(runReviewRound({ task_path: "/tmp/task", stage: "build-code", materials: { response_ledger: {} } }))
-      .rejects.toThrow(/materials\.response_ledger.*retired/i);
+    const ledgerResult = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { raw: "current", response_ledger: {} },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ledger-"))), command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other"] }),
+      client: {
+        async runGroup() {
+          return { runtimeId: "r2", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+        },
+      },
+    });
+    expect(ledgerResult.status).toBe("available");
   });
 
-  it("uses immutable quality facts and no retired review-flow control plane", () => {
+  it("uses simple review path and no retired review-flow control plane", () => {
     const source = readFileSync(cli, "utf8");
     expect(source).toContain("ReviewProviderClient");
-    expect(source).toContain("runReview");
-    expect(source).toContain("recordMissingRouteUnavailable");
-    expect(source).not.toContain("route is required for");
-    expect(source).toContain('source: "wh_review.v2"');
+    expect(source).toContain("runSimpleReview");
+    expect(source).toContain("runReviewRound");
+    expect(source).not.toContain("recordMissingRouteUnavailable");
     for (const forbidden of [
       "qualityOnly",
       "withReviewFlowLock",
@@ -196,23 +224,48 @@ describe("wh-review production CLI", () => {
     }
   });
 
-  it("rejects the removed scope revision public input", async () => {
-    const { runReviewRound } = await import(cli.href);
-    await expect(runReviewRound({
-      task_path: "/tmp/task",
+  it("ignores the removed scope revision public input", async () => {
+    const { runSimpleReview } = await import(new URL("../simple-review-runner.mjs", import.meta.url));
+    const result = await runSimpleReview({
       stage: "build-code",
-      materials: { scope_revision: {} },
-    })).rejects.toThrow(/current four materials.*ordinary stage review/i);
+      host_provider: "codex",
+      materials: { raw: "x", scope_revision: {} },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-scope-"))), command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other"] }),
+      client: {
+        async runGroup() {
+          return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+        },
+      },
+    });
+    expect(result.status).toBe("available");
+    expect(result.findings).toHaveLength(0);
+    expect(result).not.toHaveProperty("error_code");
   });
 
-  it("rejects retired runtime continuation inputs before resolving a task", async () => {
-    const { runReviewRound } = await import(cli.href);
+  it("ignores retired runtime continuation inputs", async () => {
+    const { runSimpleReview } = await import(new URL("../simple-review-runner.mjs", import.meta.url));
     for (const field of ["previous_runtime_ids", "previousRuntimeIds"]) {
-      await expect(runReviewRound({
-        task_path: "/tmp/task",
+      const result = await runSimpleReview({
         stage: "build-code",
+        host_provider: "codex",
+        materials: { raw: "current" },
         [field]: { opencode: "old-runtime" },
-      })).rejects.toThrow(/runtime continuation is retired.*runner-owned/i);
+      }, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-runtime-"))), command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
+        selectProviders: () => ({ providers: ["other"] }),
+        client: {
+          async runGroup() {
+            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+          },
+        },
+      });
+      expect(result.status).toBe("available");
+      expect(result.findings).toHaveLength(0);
+      expect(result).not.toHaveProperty("error_code");
     }
   });
 
@@ -372,67 +425,28 @@ describe("wh-review production CLI", () => {
     expect(subject.kernel.currentVNextMaterialRevision()).toMatch(/^revision-[a-f0-9]{64}$/);
   });
 
-  it("returns unavailable and writes an immutable attempt when the run route is missing", async () => {
+  it("returns unavailable when the run route is missing without writing task state", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-route-missing-"))); roots.push(root);
-    const repo = join(root, "repo"); mkdirSync(repo);
-    execFileSync("git", ["init", "-q"], { cwd: repo });
-    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
-    const { prepareTaskWorkspace } = await import("../../../../runtime/task/workspace.mjs");
-    prepareTaskWorkspace(task);
-
     const home = join(root, "home");
-    const configDir = join(home, ".config", "workflowhub"); mkdirSync(configDir, { recursive: true });
-    const packetRoot = join(root, "packets"); mkdirSync(packetRoot);
-    const brokerConfig = join(root, "3rd-review.json");
-    writeFileSync(brokerConfig, JSON.stringify({
-      version: 4,
-      tiers: [["kimi"]],
-      providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
-      attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
-    }));
-    writeFileSync(join(configDir, "config.json"), JSON.stringify({
-      third_review: { command: [process.execPath, "/unused/3rd-review.mjs"], config: brokerConfig, attachment_root: packetRoot },
-    }));
+    mkdirSync(home, { recursive: true });
     const inputPath = join(root, "input.json");
     writeFileSync(inputPath, JSON.stringify({
-      task_path: taskPath,
-      project_name: "Demo",
-      task_id: "task",
-      stage: "make-decision",
-      review_track: "direction",
+      stage: "build-code",
       host_provider: "codex",
-      materials: { raw_requirement: "fixture requirement" },
+      materials: { raw: "fixture" },
     }));
 
     const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
       encoding: "utf8",
       env: { ...process.env, HOME: home },
     }));
-    expect(result).toMatchObject({ status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE" });
-    expect(result.attempt_ref).toBeTruthy();
-    const attempt = JSON.parse(task.readRecord(result.attempt_ref));
-    expect(attempt).toMatchObject({
-      terminal_status: "unavailable",
-      provider_attempts: [],
-      error: { code: "REVIEW_ROUTE_UNAVAILABLE", message: "workflowhub host wh_review route is unavailable for make-decision.direction" },
-    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: "ROUTE_UNAVAILABLE" } });
+    expect(result.attempt_ref).toBeUndefined();
+    expect(result).not.toHaveProperty("error_code");
   });
 
-  it("uses the production run entry for one broker request and preserves the failure", async () => {
+  it("uses the production run entry for one broker request and preserves provider failure", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-recovery-entry-"))); roots.push(root);
-    const repo = join(root, "repo"); mkdirSync(repo);
-    execFileSync("git", ["init", "-q"], { cwd: repo });
-    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
-    prepareTaskWorkspace(task);
-
     const home = join(root, "home");
     const configDir = join(home, ".config", "workflowhub"); mkdirSync(configDir, { recursive: true });
     const packetRoot = join(root, "packets"); mkdirSync(packetRoot);
@@ -487,11 +501,13 @@ process.stdout.write(JSON.stringify({
     }));
     const inputPath = join(root, "input.json");
     writeFileSync(inputPath, JSON.stringify({
-      task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision", review_track: "direction", host_provider: "codex",
+      stage: "make-decision",
+      review_track: "direction",
+      host_provider: "codex",
       direction_selection: { current_selection: "fixture choice" },
       materials: {
         raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
-        review_instructions: reviewInstructionsFor("make-decision", "direction"),
+        review_instructions: "Review the materials.",
       },
     }));
 
@@ -499,8 +515,10 @@ process.stdout.write(JSON.stringify({
       encoding: "utf8", env: { ...process.env, HOME: home, FAKE_REVIEW_COUNTER: counter },
     }));
     expect(Number(readFileSync(counter, "utf8"))).toBe(1);
-    expect(result).toMatchObject({ status: "unavailable", error_code: "AUTH" });
-    expect(result.attempt_ref).toBeTruthy();
-    expect(JSON.parse(task.readRecord(result.attempt_ref))).toMatchObject({ terminal_status: "unavailable", error: { code: "AUTH" } });
+    expect(result).toMatchObject({ status: "unavailable" });
+    expect(result).not.toHaveProperty("error_code");
+    expect(result).not.toHaveProperty("attempt_ref");
+    expect(result.provider_results).toHaveLength(1);
+    expect(result.provider_results[0]).toMatchObject({ provider: "kimi", status: "failed", error: { code: "AUTH" } });
   });
 });

@@ -10,7 +10,9 @@ import {
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
 
-const RESULT_PROMPT = "Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as {\"findings\":[{\"severity\":\"blocking|major|minor\",\"path\":\"materials/file\",\"line\":1,\"issue\":\"...\",\"recommendation\":\"...\",\"root_cause\":\"...\",\"evidence_kind\":\"direct|machine|inferred\",\"evidence\":\"...\"}]}. Do not output a verdict, summary, checklist, pass/fail, or a second JSON object.";
+const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "materials/02-approved_spec.md",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the bundle-relative path shown in the manifest.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
+
+const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\\n\\n${RESULT_SAMPLE}`;
 
 const FOCUS = Object.freeze({
   "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
@@ -102,8 +104,14 @@ export async function runSimpleReview(input, dependencies = {}) {
   const loadConfig = dependencies.loadConfig ?? loadTrustedThirdReviewConfig;
   const resolveRoute = dependencies.resolveRoute ?? resolveTrustedReviewRoute;
   const selectProviders = dependencies.selectProviders ?? selectTrustedReviewProviderSelection;
-  const trusted = loadConfig({ requestedStage: input.stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
-  const route = resolveRoute(trusted.whReview, input.stage, reviewTrack, reviewKind);
+  let trusted;
+  let route;
+  try {
+    trusted = loadConfig({ requestedStage: input.stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
+    route = resolveRoute(trusted.whReview, input.stage, reviewTrack, reviewKind);
+  } catch (error) {
+    return { status: "unavailable", stage: input.stage, review_track: reviewTrack, error: { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) } };
+  }
   if (!route) return { status: "unavailable", stage: input.stage, review_track: reviewTrack, error: { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" } };
   const selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
   const bundle = buildBundle(trusted.attachmentRoot, input);
@@ -128,7 +136,7 @@ export async function runSimpleReview(input, dependencies = {}) {
       }
       return publicProviderResult(item);
     });
-    const available = providers.some((item) => item.status === "completed");
+    const available = providers.length > 0 && providers.every((item) => item.status === "completed");
     return {
       status: available ? "available" : "unavailable",
       stage: input.stage,

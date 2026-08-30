@@ -1214,6 +1214,24 @@
       "content_change": "removed in R007 after consumer audit"
     },
     {
+      "source": "skills/wh-review/scripts/wh-review-cli.mjs",
+      "destination": null,
+      "status": "modified",
+      "reason": "T13 removed dead old review path from wh-review-cli",
+      "content_change": "removed legacy task/workspace-bound review body and unused imports; kept publishReviewFactOrThrow and verifyFinal for T14",
+      "sha256_after": "e30f686892cbc3e6cd95a9ffbd3b0c68b50bb5f81fb94e6b20a107d9e7e74ed7",
+      "bytes": 20220
+    },
+    {
+      "source": "skills/wh-review/scripts/review-runner.mjs",
+      "destination": null,
+      "status": "modified",
+      "reason": "T13 removed dead old review round path from review-runner",
+      "content_change": "removed runReview/runReviewFixture/runReviewOnce and helpers exclusively serving the old path; kept recordUndispatchedUnavailable, subjectRecord, sourceRecord, reviewCoverageRecord, findReusableReviewResult, publishReusedReviewResult, verifyFinal, recordMissingRouteUnavailable for T14",
+      "sha256_after": "49e4b2b15fc679d844a7458916741819a2a1f1e90cd21071c25ff50402e4a4f3",
+      "bytes": 67688
+    },
+    {
       "source": "core/journal-schema.mjs",
       "destination": "runtime/evidence/journal-schema.mjs",
       "status": "moved-R007",
@@ -2065,6 +2083,136 @@
       "consumer": "distribution-closure and stage-skill-invocation-contract tests",
       "delete_condition": "revert only when wh-review skill-bundle.json is restored to prior hash",
       "content_change": "update wh-review local_bundle_hash to match resolved bundle hash"
+    },
+    {
+      "source": "scripts/constitution-mapping-check.mjs",
+      "destination": "scripts/constitution-mapping-check.mjs",
+      "status": "add",
+      "owner": "T10 constitution mapping checklist generator",
+      "consumer": "T10/AC-03/AC-04 constitution-mapping-checklist.md",
+      "delete_condition": "remove when FR-to-constitution mapping no longer needs automated extraction",
+      "content_change": "new spec FR-to-constitution-clause extractor and AC-04 boundary reporter",
+      "sha256_before": "bda7d4d635a3d59f71bc51dd10ac8c02252faa5674d1600bc0a7136576a19630",
+      "bytes": 4586,
+      "sha256_after": "bda7d4d635a3d59f71bc51dd10ac8c02252faa5674d1600bc0a7136576a19630"
+    },
+    {
+      "source": "scripts/dead-code-scan.mjs",
+      "destination": "scripts/dead-code-scan.mjs",
+      "status": "add",
+      "owner": "dead-code scan workflow",
+      "consumer": "T8/T13 dead-code verification",
+      "delete_condition": "remove when dead-code scan is no longer needed or replaced",
+      "content_change": "implemented default scan resolving relative imports; flags exported identifiers and files with zero non-test consumers; --verify passes when report non-empty and all zero consumers",
+      "sha256_before": "9deff5551522593c0c762a350f501b2b210f9b85e88edafe958561e07ce6847d",
+      "bytes": 8454,
+      "sha256_after": "ace273e8b84372073ee833f0439dc76018140888b74c1a4153ccc62277599474"
+    },
+    {
+      "source": "scripts/dual-track-evaluate.mjs",
+      "destination": "scripts/dual-track-evaluate.mjs",
+      "status": "add",
+      "owner": "dual-track evaluation report",
+      "consumer": "T9 dual-track evaluation",
+      "delete_condition": "remove when dual-track merger is implemented or evaluation reports are no longer required",
+      "content_change": "new dual-track facts evaluator skeleton with tri-state conclusion",
+      "sha256_before": "8cb96e90623ea9f52f773cba9e465869ff431ceec8008f29b9637787bbe4bd7f",
+      "bytes": 5950,
+      "sha256_after": "8cb96e90623ea9f52f773cba9e465869ff431ceec8008f29b9637787bbe4bd7f"
+    },
+    {
+      "source": "tools/cli/task-close.mjs",
+      "destination": "tools/cli/task-close.mjs",
+      "status": "modify",
+      "owner": "task-close CLI",
+      "consumer": "T4 close core cleanup",
+      "delete_condition": "revert when risk close is restored",
+      "content_change": "removed --risk-close, --risk-reason, --deferred-items, --risk-accepted options and risk close branches",
+      "sha256_before": null,
+      "bytes": 7345,
+      "sha256_after": "7a9d9fe7992faa4d6003f0d6f09e7c891d4da7235833a6992f9a8373eef1fd9a"
+    },
+    {
+      "source": "tests/integration/manual-delivery-close.test.mjs",
+      "destination": "tests/integration/manual-delivery-close.test.mjs",
+      "status": "delete",
+      "owner": "close integration tests",
+      "consumer": "T4 close core cleanup",
+      "delete_condition": "restore when risk close mechanism is restored",
+      "content_change": "removed risk-close integration test",
+      "sha256_before": "deleted",
+      "bytes": null,
+      "sha256_after": null
+    },
+    {
+      "source": "core/task-close.mjs",
+      "destination": "core/task-close.mjs",
+      "status": "modify",
+      "owner": "task-close core",
+      "consumer": "T4/T5/T6",
+      "content_change": "removed risk close branches; finalized completeDeliveryClosePlan physical-only check",
+      "bytes": 111036,
+      "sha256_after": "3656651568be5cd9db3604565c98b3a2bd60c8e90545b6de783cb0c4aac85433"
+    },
+    {
+      "source": "runtime/stage/stage-runner.mjs",
+      "destination": "runtime/stage/stage-runner.mjs",
+      "status": "modify",
+      "owner": "stage-runner",
+      "consumer": "T7 FR-LEFT-001/004",
+      "content_change": "added assertWriteBoundary (task/kernel identity + worktree bound + env-gated cwd check)",
+      "bytes": 91435,
+      "sha256_after": "80e101c7cebd42154b454541be77509009ee96915d856db03d31b326e7947d63"
+    },
+    {
+      "source": "tests/close/close-contract.test.mjs",
+      "destination": "tests/close/close-contract.test.mjs",
+      "status": "add",
+      "owner": "close/left-shift tests",
+      "consumer": "T0/T5/T6/T7",
+      "content_change": "new test file for close",
+      "bytes": 7850,
+      "sha256_after": "ac6ed46211f98dcd853df65cf3736a13504977a7022b5d813eccc9259e413edc"
+    },
+    {
+      "source": "tests/close/cleanup-resume-finalize.test.mjs",
+      "destination": "tests/close/cleanup-resume-finalize.test.mjs",
+      "status": "add",
+      "owner": "close/left-shift tests",
+      "consumer": "T0/T5/T6/T7",
+      "content_change": "new test file for close",
+      "bytes": 6985,
+      "sha256_after": "3342cf94681251c08433c45c84751c32263efafb19e73aece2b187b46ce0bd04"
+    },
+    {
+      "source": "tests/close/freshness-consistency.test.mjs",
+      "destination": "tests/close/freshness-consistency.test.mjs",
+      "status": "add",
+      "owner": "close/left-shift tests",
+      "consumer": "T0/T5/T6/T7",
+      "content_change": "verify evaluateFactFreshness shared by task-close and completion-predicates; basic current/stale scenarios",
+      "bytes": 3081,
+      "sha256_after": "d7bb6a2c8bccdbe26483e694729f6c09eb89b869ee7fa8e4dc385ac371af4d2c"
+    },
+    {
+      "source": "tests/left-shift/left-shift-suite.test.mjs",
+      "destination": "tests/left-shift/left-shift-suite.test.mjs",
+      "status": "add",
+      "owner": "close/left-shift tests",
+      "consumer": "T0/T5/T6/T7",
+      "content_change": "verify write boundary, simple-review invalid_input/unavailable split, no regex guessing, consumers exist",
+      "bytes": 2817,
+      "sha256_after": "77daa2f28a2b5fa7fb390ccc697e9c7a94a905d95efd48868ccef9d62452e425"
+    },
+    {
+      "source": "tests/review/review-record-route.test.mjs",
+      "destination": "tests/review/review-record-route.test.mjs",
+      "status": "add",
+      "owner": "review record route tests",
+      "consumer": "T14",
+      "content_change": "RED placeholder for T14 review record route persistence",
+      "bytes": 309,
+      "sha256_after": "a1f11918f634b23a41c7998bc65a3a9dddf43ac88236df95d738b4872514db08"
     }
   ]
 }
