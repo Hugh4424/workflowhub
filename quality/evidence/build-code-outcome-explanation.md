@@ -29,6 +29,7 @@
 
 - 已生成一份诚实的 `completed_with_open_items` build-code stage outcome，列出未决项（`quality/evidence/stage-outcomes/build-code/022d083a13ca7f9bafacef33458bc3be99a00b93b668feb63aeb0e5adb4cf3f2.json`）。
 - 功能实现与测试全部完成并通过（T12 gate 9 文件 66 测试全绿）。
+- **已修复 workflowhub 核心 review 认证契约**：`runtime/review/review-record-route.mjs` 现在复用 `aggregateCanonicalProviderResults`，生成的 simple-review result 可通过 `authenticateCanonicalReviewResult`。`tests/review/review-record-route.test.mjs` 3/3 绿。
 - **dogfood close 已在隔离 target 仓库跑通**：状态 `completed`，模式 `normal`，五个动作（commit/merge/archive/push/cleanup）全部落账，生成 `operations/close/completed.json`；`verify_facts_fresh` 为 false，缺口原因明确记录为 code_review/human_confirmation 缺失。这证明 close 修复本身有效。
-- 按用户决策 T-011（允许带缺口物理 close）与宪法 Q1（质量事实不作准入证），可以继续进入真实仓库 close，但缺口会写进 `completed.json`。
+- **正在补齐 build-code 官方 stage outcome**：子代理 `8190c840` 在生成 implementation/test receipts、acceptance chain 和 spec-analyze session event，尝试让 `stage-runtime.mjs status --stage=build-code` 返回非 unavailable。
 
