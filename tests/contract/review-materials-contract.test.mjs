@@ -17,6 +17,7 @@ import {
   validateVerifyAcceptanceSummary,
   validateDiffIndexBundle,
   phaseDiffDeliveryForPath,
+  verifyCodeDiffDeliveryForPath,
   buildReviewMaterials,
   reviewInstructionsFor,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
@@ -183,6 +184,13 @@ describe("current review material and capture contracts", () => {
     expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
+  });
+
+  it("keeps verify-code implementation and test source provider-visible across project roots", () => {
+    expect(verifyCodeDiffDeliveryForPath("frontend/src/workbench-screen.tsx")).toBe("included");
+    expect(verifyCodeDiffDeliveryForPath("paperbuilder/application/position_comments.py")).toBe("included");
+    expect(verifyCodeDiffDeliveryForPath("tests/test_position_comments_application.py")).toBe("included");
+    expect(verifyCodeDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
   });
 
   it("uses the current canonical receipt writer through both build and verify capture wrappers", async () => {

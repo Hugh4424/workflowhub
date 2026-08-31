@@ -162,6 +162,11 @@ export function verifyCodeDiffDeliveryForPath(path) {
   return VERIFY_CODE_RELEVANT_TEST_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
+    // verify-code is used by projects outside WorkflowHub too.  A project
+    // path must not fall back to a summary merely because it is not in this
+    // runtime's own prefix list; otherwise the provider receives no code
+    // anchor for the actual subject under review.
+    || FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())
     ? "included"
     : "summary";
 }
