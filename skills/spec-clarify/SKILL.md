@@ -62,6 +62,13 @@ with a reason and zero open direction-changing questions. Never silently skip
 Clarify; the absence of ambiguity must be as explicit and reviewable as a real
 ask → wait → reply → resume cycle.
 
+For `trigger=true`, the host records the lifecycle with the current snapshot
+tree and material revision. Only the registered transcript may authenticate
+the assistant ask and matching user reply; the skill must not synthesize a
+test command, output, or reply receipt. A new Clarify start or a later
+`trigger=false` analysis clears any earlier host projection, and material
+drift leaves the receipt missing instead of rebinding the old conversation.
+
 ## 十个维度（Ten-dimension）completeness check
 
 Before handing a clarified direction to `build-spec`, the main agent checks

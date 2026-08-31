@@ -44,6 +44,8 @@ node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> -
 
 skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
 
+当 `spec-clarify trigger=true` 时，spec-analyze 输入同时携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。Codex host 只从已登记 transcript 认证被当前 `spec-clarify` skill 事件包围的 assistant ask 与 user reply；认证结果与这两个材料身份一起冻结。public run 仅在没有显式 `stage_outcomes` 且身份仍精确匹配时，生成同次 content-addressed `quality/evidence/interactions/` receipt。身份漂移、缺 transcript 或触发改为 false 都保持 Clarify incomplete/missing，不重绑旧回复。
+
 ## Portable dependencies
 
 Read inline packages declared in `skill-deps.yaml` directly in the same

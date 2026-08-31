@@ -10,7 +10,7 @@ import { captureExecutionSnapshot, isMaterialOnlySnapshotDelta } from "../task/g
 import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
-import { validateBuildCodePhaseEvidence } from "../stage/stage-content-contracts.mjs";
+import { validateBuildCodePhaseEvidence, validateInteractionLifecycleSequence } from "../stage/stage-content-contracts.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
@@ -211,6 +211,70 @@ export function writeCurrentImplementationReceipt({ task, workspace, version = "
   const raw = canonicalJson(value);
   const ref = `quality/evidence/implementation/${sha256(raw)}.json`;
   publishIdempotently({ task: safeTask, write: createTaskKernel(safeTask).publishCanonicalRecord, ref, raw, label: "implementation snapshot receipt" });
+  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
+}
+
+/** Publish the one current transcript-authenticated spec-clarify interaction receipt. */
+export function writeCanonicalSpecClarifyReceipt({
+  task, workspace, snapshotTree, materialRevision, reason, lifecycleRounds, transcript, version = "1.0.0",
+} = {}) {
+  const safeTask = assertTaskHandle(task);
+  const safeWorkspace = assertWorkspace(workspace);
+  if (!/^revision-[a-f0-9]{64}$/.test(materialRevision ?? "")) throw new TypeError("spec-clarify material revision is invalid");
+  if (!/^[a-f0-9]{40}$/.test(snapshotTree ?? "")) throw new TypeError("spec-clarify snapshot tree is invalid");
+  if (typeof reason !== "string" || reason.trim() === "") throw new TypeError("spec-clarify reason is required");
+  const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: lifecycleRounds });
+  if (!lifecycle.ok) throw new Error(`spec-clarify lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
+  if (!transcript || typeof transcript !== "object" || Array.isArray(transcript)
+      || typeof transcript.source_ref !== "string" || transcript.source_ref.trim() === ""
+      || typeof transcript.session_id !== "string" || transcript.session_id.trim() === ""
+      || typeof transcript.skill_event_id !== "string" || transcript.skill_event_id.trim() === ""
+      || !Number.isSafeInteger(transcript.skill_started_at_ms)
+      || !Number.isSafeInteger(transcript.skill_ended_at_ms)
+      || !Array.isArray(transcript.rounds) || transcript.rounds.length !== lifecycleRounds.length) {
+    throw new TypeError("spec-clarify authenticated transcript binding is incomplete");
+  }
+  for (const [index, round] of transcript.rounds.entries()) {
+    const events = lifecycleRounds[index]?.events;
+    const ask = events?.[0], reply = events?.[2];
+    if (!round || typeof round !== "object" || Array.isArray(round)
+        || round.round !== ask?.round
+        || typeof round.ask_message_id !== "string" || round.ask_message_id.trim() === ""
+        || typeof round.reply_message_id !== "string" || round.reply_message_id.trim() === ""
+        || round.card_hash !== ask?.card_hash || round.reply_hash !== reply?.reply_hash
+        || !Number.isSafeInteger(round.ask_occurred_at_ms) || !Number.isSafeInteger(round.reply_occurred_at_ms)
+        || round.ask_occurred_at_ms < transcript.skill_started_at_ms
+        || round.reply_occurred_at_ms <= round.ask_occurred_at_ms
+        || round.reply_occurred_at_ms > transcript.skill_ended_at_ms) {
+      throw new Error(`spec-clarify transcript round ${index + 1} is not bound to the lifecycle and skill event`);
+    }
+  }
+  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+  if (snapshot.tree !== snapshotTree) throw new Error("spec-clarify transcript identity is stale for the current snapshot");
+  const value = {
+    schema_version: "workflowhub-receipt.v1",
+    task_id: safeTask.identity.taskId,
+    stage: "build-spec",
+    producer: { stage: "build-spec", component: "spec-clarify", version },
+    trigger: true,
+    reason: reason.trim(),
+    lifecycle_rounds: structuredClone(lifecycleRounds),
+    transcript: structuredClone(transcript),
+    material_revision: materialRevision,
+    snapshot_head: snapshot.head,
+    snapshot_tree: snapshot.tree,
+    snapshot_commit: snapshot.commit,
+    source_digest: snapshot.source_digest,
+  };
+  const raw = canonicalJson(value);
+  const ref = `quality/evidence/interactions/${sha256(raw)}.json`;
+  publishIdempotently({
+    task: safeTask,
+    write: createTaskKernel(safeTask).publishCanonicalRecord,
+    ref,
+    raw,
+    label: "spec-clarify interaction receipt",
+  });
   return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
 }
 

@@ -9,6 +9,7 @@ const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "inc
 const GENERIC_CONSUMER = /(?:executed|package|event|monitoring|generic|stage-outcome)/i;
 const FORMAL_CONSUMERS = new Set([
   "stage-handlers#interactionAggregateFacts",
+  "stage-handlers#clarifyFacts",
   "stage-handlers#testFacts",
   "stage-handlers#officialStageHandler(\"make-decision\")",
   "stage-handlers#officialStageHandler(\"build-spec\")",

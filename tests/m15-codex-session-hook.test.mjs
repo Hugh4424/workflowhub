@@ -55,7 +55,97 @@ function appendCodexUserMessage(state, { id = "msg-requirement-source-1", text =
   })}\n`);
 }
 
+function appendCodexAssistantMessage(state, { id, text, timestamp } = {}) {
+  appendFileSync(state.rollout, `${JSON.stringify({
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "message",
+      id,
+      role: "assistant",
+      content: [{ type: "output_text", text }],
+    },
+  })}\n`);
+}
+
 describe("WorkflowHub current Codex session handoff", () => {
+  it("authenticates a resumed spec-clarify lifecycle from the registered transcript", () => {
+    const state = fixture();
+    state.sessionId = `session-clarify-${process.pid}-${Date.now()}`;
+    const askText = "这个规格要选择保守范围还是完整范围？";
+    const replyText = "选择完整范围。";
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home, observedAtMs: 0 });
+      bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 1000 });
+      startCodexSessionEvent({ taskId: state.taskId, stage: "build-spec", subjectKind: "skill", subjectId: "spec-clarify", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1500 });
+      appendCodexAssistantMessage(state, { id: "clarify-ask-1", text: askText, timestamp: "1970-01-01T00:00:02.000Z" });
+      appendCodexUserMessage(state, { id: "clarify-reply-1", text: replyText, timestamp: "1970-01-01T00:00:03.000Z" });
+      const cardHash = createHash("sha256").update(askText).digest("hex");
+      const replyHash = createHash("sha256").update(replyText).digest("hex");
+      const question = {
+        question_id: "scope",
+        axis: "范围",
+        independent: true,
+        options: [
+          { number: 1, label: "保守", meaning: "只做最小范围", consequence: "改动较少", risk: "收益延后" },
+          { number: 2, label: "完整", meaning: "完成当前范围", consequence: "一次解决", risk: "改动较多" },
+        ],
+        recommended_option: 2,
+        recommendation_reason: "直接解决当前问题",
+      };
+      const lifecycle = [{
+        interaction_type: "spec-clarify",
+        events: [
+          { event: "ask", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, questions: [question] },
+          { event: "wait", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, status: "waiting-for-user" },
+          { event: "reply", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, source: "user", reply_ref: "host-message://reply/spec-clarify-1", reply_hash: replyHash, answers: [{ question_id: "scope", number: 2 }], remaining_question_ids: [], re_ranked: true },
+          { event: "resume", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, reply_ref: "host-message://reply/spec-clarify-1", reply_hash: replyHash, status: "resumed" },
+        ],
+      }];
+      const value = {
+        schema_version: "workflowhub-spec-analyze-stage-outcome.v1",
+        task_id: state.taskId,
+        stage: "build-spec",
+        snapshot_tree: "a".repeat(40),
+        material_revision: `revision-${"b".repeat(64)}`,
+        packet: { clarify: { status: "resolved", trigger: true, reason: "需要确认范围", lifecycle_rounds: lifecycle } },
+        result: { status: "consistent" },
+      };
+      finishCodexSessionEvent({ taskId: state.taskId, stage: "build-spec", subjectKind: "skill", subjectId: "spec-clarify", status: "completed", trigger: true, executed: true, version: "1.0.0", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 3500 });
+
+      recordCodexSessionSpecAnalyze({ taskId: state.taskId, stage: "build-spec", value, cwd: state.cwd, sessionId: state.sessionId });
+
+      expect(readCurrentCodexSession({ cwd: state.cwd, stage: "build-spec", sessionId: state.sessionId }).spec_clarify).toMatchObject({
+        trigger: true,
+        reason: "需要确认范围",
+        lifecycle_rounds: lifecycle,
+        transcript: {
+          source_ref: `codex-rollout-${state.sessionId}`,
+          rounds: [{ ask_message_id: "clarify-ask-1", reply_message_id: "clarify-reply-1", card_hash: cardHash, reply_hash: replyHash }],
+        },
+      });
+      recordCodexSessionSpecAnalyze({
+        taskId: state.taskId,
+        stage: "build-spec",
+        cwd: state.cwd,
+        sessionId: state.sessionId,
+        value: {
+          schema_version: "workflowhub-spec-analyze-stage-outcome.v1",
+          task_id: state.taskId,
+          stage: "build-spec",
+          snapshot_tree: "a".repeat(40),
+          material_revision: `revision-${"b".repeat(64)}`,
+          packet: { clarify: { status: "resolved", trigger: false, reason: "当前规格已无方向歧义", open_direction_changing_questions: 0 } },
+          result: { status: "consistent" },
+        },
+      });
+      expect(readCurrentCodexSession({ cwd: state.cwd, stage: "build-spec", sessionId: state.sessionId }).spec_clarify).toBeNull();
+    } finally {
+      try { endCodexSession({ sessionId: state.sessionId, cwd: state.cwd }); } catch {}
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("authenticates requirement messages without retaining raw transcript content", () => {
     const state = fixture();
     const content = "用户要把当前需求完整落实到五阶段流程。";

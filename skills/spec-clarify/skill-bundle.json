@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": "spec-clarify",
   "files": [
-    { "path": "SKILL.md", "sha256": "af64423545be35b180aa7880efddcc3363bb034318133220dd6bd8abe5834f9d" }
+    { "path": "SKILL.md", "sha256": "ab8fec963bcbc0425315eec4db27f9e79354837d25f540f233343cad67011c96" }
   ],
   "sources": [
     {

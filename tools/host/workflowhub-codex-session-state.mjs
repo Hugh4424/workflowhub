@@ -23,6 +23,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, resolve, join } from "node:path";
 import { realpathSync } from "node:fs";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
+import { validateInteractionLifecycleSequence } from "../../runtime/stage/stage-content-contracts.mjs";
 import { isDshTranscriptPath, looksLikeDshTranscriptPath, readDshTranscriptText, snapshotDshRequirementMessages } from "../../runtime/evidence/dsh-transcript.mjs";
 
 const SCHEMA_VERSION = "workflowhub-codex-session-handoff.v1";
@@ -249,6 +250,83 @@ function codexUserInputText(outer) {
   return parts.length > 0 ? parts.join("\n") : null;
 }
 
+function codexConversationMessage(outer, lineIndex) {
+  const payload = outer?.payload;
+  if (outer?.type !== "response_item" || payload?.type !== "message"
+      || !new Set(["assistant", "user"]).has(payload?.role) || !Array.isArray(payload.content)) return null;
+  const expectedPart = payload.role === "assistant" ? "output_text" : "input_text";
+  const parts = payload.content
+    .filter((part) => part?.type === expectedPart && typeof part.text === "string" && part.text.trim() !== "")
+    .map((part) => part.text);
+  if (parts.length === 0) return null;
+  const content = parts.join("\n");
+  return Object.freeze({
+    id: codexUserMessageId(outer, payload, lineIndex),
+    role: payload.role,
+    occurred_at_ms: rolloutTimestamp(outer),
+    content_hash: createHash("sha256").update(content).digest("hex"),
+    line: lineIndex + 1,
+  });
+}
+
+function authenticateSpecClarifyTranscript(session, clarify) {
+  const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: clarify?.lifecycle_rounds });
+  if (!lifecycle.ok) throw new Error(`spec-clarify lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
+  if (!session.transcript_path || looksLikeDshTranscriptPath(session.transcript_path)) {
+    throw new Error("spec-clarify transcript authentication is unavailable for the current host transcript");
+  }
+  let raw;
+  try { raw = readFileSync(session.transcript_path, "utf8"); }
+  catch (error) { throw new Error(`spec-clarify registered transcript is unreadable: ${error.message}`); }
+  const boundAt = session.task_binding?.bound_at_ms;
+  if (!Number.isSafeInteger(boundAt)) throw new Error("spec-clarify requires the current bound task session");
+  const messages = raw.split(/\r?\n/).map((line, index) => {
+    if (!line.trim()) return null;
+    try { return codexConversationMessage(JSON.parse(line), index); } catch { return null; }
+  }).filter((message) => message && Number.isSafeInteger(message.occurred_at_ms) && message.occurred_at_ms > boundAt);
+  const usedLines = new Set();
+  let previousReplyLine = -1;
+  const rounds = clarify.lifecycle_rounds.map((round, index) => {
+    const ask = round.events[0];
+    const reply = round.events[2];
+    const askMatches = messages.filter((message) => message.role === "assistant" && message.content_hash === ask.card_hash && !usedLines.has(message.line));
+    const replyMatches = messages.filter((message) => message.role === "user" && message.content_hash === reply.reply_hash && !usedLines.has(message.line));
+    if (askMatches.length !== 1) throw new Error(`spec-clarify round ${index + 1} ask is missing or ambiguous in the registered transcript`);
+    if (replyMatches.length !== 1) throw new Error(`spec-clarify round ${index + 1} user reply is missing or ambiguous in the registered transcript`);
+    const askMessage = askMatches[0], replyMessage = replyMatches[0];
+    if (askMessage.line <= previousReplyLine || replyMessage.line <= askMessage.line) {
+      throw new Error(`spec-clarify round ${index + 1} transcript order does not prove ask before user reply`);
+    }
+    usedLines.add(askMessage.line); usedLines.add(replyMessage.line); previousReplyLine = replyMessage.line;
+    return Object.freeze({
+      round: ask.round,
+      ask_message_id: askMessage.id,
+      reply_message_id: replyMessage.id,
+      card_hash: ask.card_hash,
+      reply_hash: reply.reply_hash,
+      ask_occurred_at_ms: askMessage.occurred_at_ms,
+      reply_occurred_at_ms: replyMessage.occurred_at_ms,
+    });
+  });
+  const matchingSkills = session.events.filter((event) => event.stage === "build-spec"
+    && event.subject_kind === "skill" && event.subject_id === "spec-clarify"
+    && event.status === "completed" && event.trigger === true && event.executed === true
+    && event.started_at_ms <= rounds[0].ask_occurred_at_ms
+    && event.ended_at_ms >= rounds.at(-1).reply_occurred_at_ms);
+  if (matchingSkills.length !== 1) {
+    throw new Error("spec-clarify transcript is not enclosed by the completed current-session skill event");
+  }
+  const [skill] = matchingSkills;
+  return Object.freeze({
+    source_ref: `codex-rollout-${session.session_id}`,
+    session_id: session.session_id,
+    skill_event_id: skill.event_id,
+    skill_started_at_ms: skill.started_at_ms,
+    skill_ended_at_ms: skill.ended_at_ms,
+    rounds: Object.freeze(rounds),
+  });
+}
+
 /**
  * Freeze only the host-authenticated user-message identities that existed
  * before the task was bound.  The sidecar retains hashes, never raw prompt
@@ -322,6 +400,7 @@ export function registerCodexSession({ sessionId, transcriptPath, cwd = process.
     spec_analyze_by_task: existing?.spec_analyze_by_task && typeof existing.spec_analyze_by_task === "object" ? existing.spec_analyze_by_task : {},
     spec_analyze_by_task_stage: existing?.spec_analyze_by_task_stage && typeof existing.spec_analyze_by_task_stage === "object" ? existing.spec_analyze_by_task_stage : {},
     code_review_by_task_stage: existing?.code_review_by_task_stage && typeof existing.code_review_by_task_stage === "object" ? existing.code_review_by_task_stage : {},
+    spec_clarify_by_task_stage: existing?.spec_clarify_by_task_stage && typeof existing.spec_clarify_by_task_stage === "object" ? existing.spec_clarify_by_task_stage : {},
     task_binding: existing?.task_binding ?? null,
   };
   const sessions = state.sessions.filter((entry) => entry.session_id !== id);
@@ -423,6 +502,7 @@ export function readCurrentCodexSession({ cwd = process.cwd(), stage = null, ses
     spec_analyze_by_task: session.spec_analyze_by_task ?? {},
     spec_analyze_by_task_stage: session.spec_analyze_by_task_stage ?? {},
     code_review_by_task_stage: session.code_review_by_task_stage ?? {},
+    spec_clarify: stage === null ? null : session.spec_clarify_by_task_stage?.[session.task_binding?.task_id]?.[stage] ?? null,
   });
 }
 
@@ -602,6 +682,10 @@ export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subj
   if (sequenceBinding.restartsStage && current.session.spec_analyze_by_task_stage?.[task]?.[stage] !== undefined) {
     current.session.spec_analyze_by_task_stage[task][stage] = null;
   }
+  if (stage === "build-spec" && subjectKind === "skill" && id === "spec-clarify"
+      && current.session.spec_clarify_by_task_stage?.[task]?.[stage] !== undefined) {
+    current.session.spec_clarify_by_task_stage[task][stage] = null;
+  }
   const sequence = current.session.events.length + 1;
   const event = {
     event_id: eventId(current.session.session_id, task, stage, subjectKind, id, started, sequence),
@@ -677,9 +761,29 @@ export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd
       throw new TypeError(`spec_analyze ${field} identity is invalid`);
     }
   }
+  const clarify = stage === "build-spec" ? value.packet?.clarify_outcome ?? value.packet?.clarify : null;
+  let authenticatedClarify = null;
+  if (clarify?.trigger === true) {
+    if (!/^[a-f0-9]{40}$/.test(value.snapshot_tree ?? "")
+        || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")) {
+      throw new TypeError("spec-clarify authentication requires snapshot_tree and material_revision");
+    }
+    const transcript = authenticateSpecClarifyTranscript(current.session, clarify);
+    authenticatedClarify = Object.freeze({
+      trigger: true,
+      reason: text(clarify.reason, "spec-clarify reason"),
+      lifecycle_rounds: structuredClone(clarify.lifecycle_rounds),
+      transcript,
+      snapshot_tree: value.snapshot_tree,
+      material_revision: value.material_revision,
+    });
+  }
   current.session.spec_analyze_by_task_stage ??= {};
   current.session.spec_analyze_by_task_stage[task] ??= {};
   current.session.spec_analyze_by_task_stage[task][stage] = structuredClone(value);
+  current.session.spec_clarify_by_task_stage ??= {};
+  current.session.spec_clarify_by_task_stage[task] ??= {};
+  current.session.spec_clarify_by_task_stage[task][stage] = authenticatedClarify ? structuredClone(authenticatedClarify) : null;
   current.session.last_seen_at_ms = Date.now();
   const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
   return Object.freeze({ session_id: current.session.session_id, state_path: statePath });
@@ -845,6 +949,7 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     status_value: complete ? "completed" : "incomplete",
     events,
     spec_analyze: specAnalyze,
+    spec_clarify: stage ? current.spec_clarify ?? null : null,
     ...(stage === "verify-code" ? { code_review: codeReview } : {}),
     requirement_messages: frozenRequirementMessages(current.task_binding?.requirement_messages),
     ...(rejectedEvents.length > 0 ? {
