@@ -80,7 +80,7 @@ describe("public behavior baseline", () => {
       stage: "verify-code",
       exit_code: 0,
     });
-    expect(evidence.confirm.cases[0].result.json).toMatchObject({ value: { schema_version: "human-confirmation.v2" } });
+    expect(evidence.confirm.cases[0].result.json).toMatchObject({ value: { schema_version: "human-confirmation.v3" } });
     expect(evidence.authorize.cases[0].result.json).toMatchObject({ value: { schema_version: "irreversible-authorization.v1" } });
   });
 

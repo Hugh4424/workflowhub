@@ -13,7 +13,6 @@ import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-conte
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
-import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
@@ -33,11 +32,11 @@ const completeDecisionLog = `# public decision
 ## 原始需求
 | 需求 | 维度 | 决定 | 状态 |
 | --- | --- | --- | --- |
-| 核心目标 | goal | D-001 | covered |
-| 使用流程 | flow_or_surface | D-001 | covered |
-| 数据状态 | data_or_state | D-001 | covered |
-| 验收边界 | success_failure_acceptance | D-001 | covered |
-| 范围边界 | constraint_non_goal_defer | D-001 | covered |
+| R-FIXTURE-1 原始目标 | goal | D-FIXTURE-1 | covered |
+| R-FIXTURE-2 使用流程 | flow_or_surface | D-FIXTURE-2 | covered |
+| R-FIXTURE-3 数据状态 | data_or_state | D-FIXTURE-3 | covered |
+| R-FIXTURE-4 验收边界 | success_failure_acceptance | D-FIXTURE-4 | covered |
+| R-FIXTURE-5 范围边界 | constraint_non_goal_defer | D-FIXTURE-5 | covered |
 
 ## 核心需求
 完成当前五阶段运行时夹具。
@@ -269,9 +268,17 @@ function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", stat
 
 function publicConfirm(state, stage) {
   const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
+  const stepSlug = {
+    "make-decision": "approve-decision",
+    "build-spec": "freeze-spec",
+    "build-plan": "publish-plan-result",
+    "build-code": "authenticate-current-task-completion",
+    "verify-code": "approve-verification",
+  }[stage];
   const result = spawnSync(process.execPath, [
     runtime, "confirm", "--action=decision", `--stage=${stage}`, "--project=WorkflowHub",
     `--task=${state.task.identity.taskId}`, "--decision=accepted",
+    `--reply-text=fixture confirmation for ${stage}`, `--step-slug=${stepSlug}`,
   ], {
     cwd: state.repo,
     env: isolatedPublicRuntimeEnv(state),
@@ -510,15 +517,12 @@ describe("current vNext five-stage runtime", () => {
       stage_outcome_status: "unavailable",
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
     });
-    const facts = readTaskFacts(state.task.taskPath);
-    expect(facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fact_type: "source_status", status: "missing", reason: "no_registered_source" }),
-      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_invalid" }),
+    const invalidOutput = JSON.parse(result.stdout);
+    const qualityFacts = invalidOutput.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(qualityFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "acceptance_criterion", subject: "stage_end_spec_analyze", status: "missing" }),
+      expect.objectContaining({ kind: "review", subject: "independent_review", status: "missing" }),
     ]));
-    const declaredSteps = JSON.parse(readFileSync(join(process.cwd(), "workflows/build-spec/steps.json"), "utf8")).steps;
-    const declaredSkills = yaml.load(readFileSync(join(process.cwd(), "workflows/build-spec/skill-deps.yaml"), "utf8")).skills;
-    expect(facts.filter((fact) => fact.fact_type === "step" && fact.stage === "build-spec")).toHaveLength(declaredSteps.length);
-    expect(facts.filter((fact) => fact.fact_type === "skill" && fact.stage === "build-spec")).toHaveLength(declaredSkills.length);
   });
 
   it("allows public stage work without a host outcome and exposes the gap as unavailable", () => {
@@ -535,9 +539,9 @@ describe("current vNext five-stage runtime", () => {
       stage_outcome_status: "unavailable",
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
-    const facts = readTaskFacts(state.task.taskPath);
-    expect(facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_missing" }),
+    const qualityFacts = output.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(qualityFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "acceptance_criterion", subject: "stage_end_spec_analyze", status: "missing" }),
     ]));
   });
 
@@ -734,6 +738,7 @@ describe("current vNext five-stage runtime", () => {
     const confirmationResult = spawnSync(process.execPath, [
       runtime, "confirm", "--action=decision", "--stage=make-decision", "--project=WorkflowHub",
       `--task=${state.task.identity.taskId}`, "--decision=accepted",
+      "--reply-text=fixture accepted make-decision", "--step-slug=approve-decision",
     ], {
       cwd: state.repo,
       env: isolatedPublicRuntimeEnv(state),
@@ -778,6 +783,7 @@ describe("current vNext five-stage runtime", () => {
     const result = spawnSync(process.execPath, [
       runtime, "confirm", "--action=decision", "--stage=make-decision", "--project=WorkflowHub",
       `--task=${state.task.identity.taskId}`, "--decision=rejected",
+      "--reply-text=fixture rejected make-decision", "--step-slug=approve-decision",
     ], {
       cwd: state.repo,
       env: isolatedPublicRuntimeEnv(state),

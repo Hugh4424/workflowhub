@@ -5,8 +5,30 @@ const OID = /^[a-f0-9]{40,64}$/;
 const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const FULL_TEST_COMMAND = "npm test";
 const IMPLEMENTATION_DIFF_REF = /^quality\/evidence\/implementation\/[a-f0-9]{64}\.diff$/;
+const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const SAFE_PATH = /^(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+))(?:\/(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+)))*$/;
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
+
+// v1 remains readable for historical records. Only v2/v3 carry the material
+// and Workspace provenance required by current authorization and release
+// decisions, so callers must opt into the stricter current set explicitly.
+export const HUMAN_CONFIRMATION_VERSIONS = Object.freeze([
+  "human-confirmation.v1",
+  "human-confirmation.v2",
+  "human-confirmation.v3",
+]);
+export const CURRENT_HUMAN_CONFIRMATION_VERSIONS = Object.freeze([
+  "human-confirmation.v2",
+  "human-confirmation.v3",
+]);
+export function isHumanConfirmationVersion(value, { current = false } = {}) {
+  return (current ? CURRENT_HUMAN_CONFIRMATION_VERSIONS : HUMAN_CONFIRMATION_VERSIONS).includes(value?.schema_version);
+}
+
+export function isStageReflectionRef(value) {
+  return typeof value === "string" && value.startsWith(STAGE_REFLECTION_NAMESPACE) && STAGE_REFLECTION_REF.test(value);
+}
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -216,6 +238,25 @@ export function validateHumanConfirmation(value, {
   taskId, stage, subject, requireAccepted = false, requireSubjectRef = false,
 } = {}) {
   object(value, "human confirmation");
+  if (value.schema_version === "human-confirmation.v3") {
+    const allowed = new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "subject_ref", "material_revision", "snapshot_tree", "confirmed_at", "reply_text", "step_slug"]);
+    if (Object.keys(value).some((key) => !allowed.has(key))
+        || value.task_id !== taskId || value.stage !== stage
+        || !new Set(["accepted", "rejected"]).has(value.decision)
+        || (value.attempt_ref !== undefined && (typeof value.attempt_ref !== "string" || value.attempt_ref.trim() === ""))
+        || (value.subject_ref !== undefined && value.subject_ref !== null && typeof value.subject_ref !== "string")
+        || (requireSubjectRef && (typeof value.subject_ref !== "string" || value.subject_ref.trim() === ""))
+        || (subject !== undefined && value.subject_ref !== subject && value.attempt_ref !== subject)
+        || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+        || !OID.test(value.snapshot_tree ?? "")
+        || !Number.isFinite(Date.parse(value.confirmed_at))
+        || typeof value.reply_text !== "string" || value.reply_text.trim() === ""
+        || typeof value.step_slug !== "string" || value.step_slug.trim() === "") {
+      throw new Error("human confirmation v3 binding is invalid");
+    }
+    if (requireAccepted && value.decision !== "accepted") throw new Error("human confirmation was not accepted");
+    return value;
+  }
   if (value.schema_version === "human-confirmation.v2") {
     const allowed = new Set(["schema_version", "task_id", "stage", "decision", "subject_ref", "material_revision", "snapshot_tree", "confirmed_at"]);
     if (Object.keys(value).some((key) => !allowed.has(key))

@@ -5044,13 +5044,16 @@ const V2_AC = ACCEPTANCE_CRITERION_ID;
 
 export function activeAcceptanceCriterionIds(spec) {
   const text = String(spec ?? "");
-  const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|Acceptance Criteria)\s*$/mi);
+  const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/mi);
   const body = heading
     ? text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0]
     : text;
-  const headingIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
+  const listIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
     .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
     .filter(Boolean);
+  const tableIds = [...body.matchAll(new RegExp(String.raw`^\s*\|\s*(${ACCEPTANCE_CRITERION_SOURCE})\s*\|`, "gmi"))]
+    .map(([, id]) => id);
+  const headingIds = [...listIds, ...tableIds];
   const deferredIds = new Set([...text.matchAll(new RegExp(
     String.raw`\b(${ACCEPTANCE_CRITERION_SOURCE})\b[^\n]{0,180}\b(?:deferred|延期|不计入|not_applicable)\b`, "gi",
   ))].map(([, id]) => id));

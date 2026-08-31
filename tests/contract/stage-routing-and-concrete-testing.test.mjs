@@ -37,7 +37,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-spec")).toEqual([
       "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
       "ui-project-init", "design-source-readiness",
-      "plan-design-review", "wh-review", "spec-analyze",
+      "plan-design-review", "wh-review", "spec-analyze", "stage-reflection",
     ]);
     expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
       "conditional-spec-research", "spec-clarify", "spec-specify",
@@ -62,7 +62,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps Talk and Grill owned exclusively by make-decision", () => {
     expect(names("make-decision")).toEqual([
-      "talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review", "spec-analyze",
+      "talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review", "spec-analyze", "stage-reflection",
     ]);
     expect(stepSlugs("make-decision")).toEqual(expect.arrayContaining([
       "talk-round-1", "talk-round-2", "talk-round-3", "grill-with-docs",
@@ -80,7 +80,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
       "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
       "testing-system-blueprint",
       "frontend-component-quality",
-      "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review",
+      "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review", "stage-reflection",
     ]);
     expect(deps("build-plan").find(({ name }) => name === "spec-research"))
       .toMatchObject({ execution: "independent", trigger: "real_research_question", owner: "stage" });
@@ -147,7 +147,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "frontend-component-quality",
-      "fullstack-slice-testing", "wh-review", "spec-analyze",
+      "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection",
     ]);
     expect(stepSlugs("build-code")).toContain("inspect-and-route-actual-tests");
     expect(stepSlugs("build-code")).toContain("invoke-concrete-testing-skill");

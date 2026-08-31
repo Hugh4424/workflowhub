@@ -532,6 +532,22 @@ function parseArgs(argv) {
   return { command, values };
 }
 
+/**
+ * The current host owns the session-memory/LLM reflection executor.  Keep the
+ * runtime boundary explicit: a direct launcher without that capability must
+ * publish an honest failed reflection instead of synthesizing judgment facts.
+ */
+export function stageReflectionPublication(services = {}) {
+  if (!services || typeof services !== "object" || Array.isArray(services)) {
+    throw new TypeError("stage-runtime services must be an object");
+  }
+  if (services.stageReflectionExecutor === undefined) return Object.freeze({});
+  if (typeof services.stageReflectionExecutor !== "function") {
+    throw new TypeError("services.stageReflectionExecutor must be a function");
+  }
+  return Object.freeze({ runStageReflection: services.stageReflectionExecutor });
+}
+
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
@@ -696,7 +712,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (!input || typeof input !== "object" || Array.isArray(input) || !Object.prototype.hasOwnProperty.call(input, "result")) {
       throw new TypeError("review-record input requires a 'result' field with the simple review public result");
     }
-    const refs = recordSimpleReviewResult({ task: context.task, result: input.result });
+    const refs = recordSimpleReviewResult({
+      task: context.task,
+      result: input.result,
+      kernel: context.kernel,
+    });
     return { status: "recorded", ...refs };
   }
   if (command === "run") {
@@ -719,12 +739,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       receipts: { ...(suppliedInput.receipts ?? {}) },
       },
     });
-    return runOfficialStage(values.stage, context, controlledInput);
+    return runOfficialStage(values.stage, context, controlledInput, stageReflectionPublication(services));
   }
   if (command === "confirm") {
+    if (typeof values["reply-text"] !== "string" || values["reply-text"].trim() === "") throw new TypeError("confirm requires --reply-text=<user reply>");
+    if (typeof values["step-slug"] !== "string" || values["step-slug"].trim() === "") throw new TypeError("confirm requires --step-slug=<current step>");
     return context.kernel.publishHumanConfirmation(values.stage, {
       decision: values.decision,
       ...(values.attempt === undefined ? {} : { subject_ref: values.attempt }),
+      reply_text: values["reply-text"],
+      step_slug: values["step-slug"],
     });
   }
   if (command === "authorize-operation") {

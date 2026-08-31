@@ -91,7 +91,7 @@ describe("close resume and finalize (T5)", () => {
   it("resumes after physical actions are already done and skips already-completed steps", async () => {
     const state = baseFixture();
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery, allowMiniTaskFocused: true });
-    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed", replyText: "用户确认继续关闭。", stepSlug: "confirm-close-plan" });
     authorizeAll(state, confirmed.confirmation.human_confirmation_ref);
     const executors = createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan });
 
@@ -132,7 +132,7 @@ describe("close resume and finalize (T5)", () => {
   it("finalize records completed.json after physical actions are done", async () => {
     const state = baseFixture();
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery, allowMiniTaskFocused: true });
-    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed", replyText: "用户确认继续关闭。", stepSlug: "confirm-close-plan" });
     authorizeAll(state, confirmed.confirmation.human_confirmation_ref);
     const executors = createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan });
 

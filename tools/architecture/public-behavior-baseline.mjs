@@ -102,9 +102,13 @@ function prepareIsolatedCase(root, behavior, variant = "default") {
   const task = `public-behavior-${behavior}-${variant}`;
   const artifactRoot = join(repo, "specs", task);
   mkdirSync(artifactRoot, { recursive: true });
-  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
-    writeFileSync(join(artifactRoot, name), `# fixed baseline ${name}\n`, "utf8");
-  }
+  const materials = {
+    "decision-log.md": "# fixed baseline decision log\n\nR-001 原始需求；D-001 当前决定。\n",
+    "spec.md": "# fixed baseline spec\n\nFR-FIX-001 当前功能要求。\n\n- [ ] **AC-001**：当前功能结果可验证。\n",
+    "plan.md": "# fixed baseline plan\n\n当前计划复用现有入口。\n",
+    "tasks.md": "# fixed baseline tasks\n\nT001 当前任务。\n",
+  };
+  for (const [name, content] of Object.entries(materials)) writeFileSync(join(artifactRoot, name), content, "utf8");
   writeFileSync(join(repo, "README.md"), "fixed baseline repository\n", "utf8");
   git(repo, ["add", "."]);
   git(repo, ["commit", "-qm", "fixed public behavior baseline"]);
@@ -217,7 +221,7 @@ function collectCase(root, behavior, variant = "default", { stageOutcomeWriter =
       action = "decision";
     } else if (behavior === "authorize") {
       action = "commit";
-      const confirmation = setupAction(root, state, ["confirm", "--action=decision", ...common, "--stage=make-decision", "--attempt=HEAD", "--decision=accepted"]);
+      const confirmation = setupAction(root, state, ["confirm", "--action=decision", ...common, "--stage=make-decision", "--attempt=HEAD", "--decision=accepted", "--reply-text=fixture authorize confirmation", "--step-slug=approve-decision"]);
       setup.push(confirmation);
       if (confirmation.status !== 0 || !confirmation.json?.ref) throw new Error("baseline authorize setup could not publish confirmation");
       state.confirmationRef = confirmation.json.ref;
@@ -229,7 +233,7 @@ function collectCase(root, behavior, variant = "default", { stageOutcomeWriter =
     if (behavior === "run") args.push(`--input=${inputPath}`);
     if (behavior === "review") args.push(`--input=${inputPath}`);
     if (behavior === "verify") args.push(`--input=${inputPath}`);
-    if (behavior === "confirm") args.push("--decision=accepted");
+    if (behavior === "confirm") args.push("--decision=accepted", `--reply-text=fixture confirmation ${variant}`, "--step-slug=approve-decision");
     if (behavior === "authorize") args.push(`--subject-ref=${state.confirmationRef}`);
     const result = runCli(root, args, { env: state.env });
     const writeSet = listFiles(state.taskPath);
@@ -362,7 +366,7 @@ export function classifyComparison({ probe, baseline, candidate } = {}) {
     return "approved_internal_change";
   }
   if (probe === "confirm"
-      && candidate.result?.json?.value?.schema_version === "human-confirmation.v2"
+      && new Set(["human-confirmation.v2", "human-confirmation.v3"]).has(candidate.result?.json?.value?.schema_version)
       && /^(?:quality\/confirmations|evidence\/confirmations)\//.test(String(candidate.result?.json?.ref ?? ""))) {
     return "approved_internal_change";
   }

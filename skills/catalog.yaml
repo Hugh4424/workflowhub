@@ -12,6 +12,19 @@ projects:
   deepseek-harness: &deepseek { github_url: "https://github.com/deepseek-ai/deepseek-harness", commit: "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", commit_url: "https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
 
 skills:
+  - name: stage-reflection
+    path: skills/stage-reflection/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: a7b38cce469b7e6f7a0bfee662fdfa2a65a7e98af8554ad3a28cb71ccf8fae2d
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 每个 authoring stage 结束时产出轻量判断层复盘
+    design_idea: 用当前会话记忆、lessons 与本 stage outcome 生成可追溯判断，不制造质量分数或推进门禁
+    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    upstream: []
+    local_changes: workflowhub 原生技能；由各 authoring stage 显式挂载；仅写当前 task 复盘与仓外 lessons，不建立第二控制面
+    dependency_closure: [skills/stage-reflection]
+    update_policy: 随 stage-reflection schema、validator 与五阶段挂载合同一并审查
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
@@ -272,7 +285,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 86624304693bd9e1402ecbb71ef1adeb44bb8046d4c2e8445b116b8d59a6dffc
+    local_bundle_hash: ffaa18b63a57dd4ed3311c83f560d342e8a864319daabeec1bbb91a2ee86740a
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -285,7 +298,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3bd6d6ab7e8e2f700374b5e0931b389800cfe4bfe7a593e41a9040b2ae11fd16
+    local_bundle_hash: d506f82839cf57024fb5de785c366fa797f1782476d9d032f3f54c68e96e88cc
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A

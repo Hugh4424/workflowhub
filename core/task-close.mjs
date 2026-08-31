@@ -9,7 +9,7 @@ import { captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHO
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
-import { validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../runtime/review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
@@ -275,7 +275,19 @@ function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), 
     }
     return;
   }
-  if (value?.schema_version === "human-confirmation.v2") {
+  if (isHumanConfirmationVersion(value)) {
+    if (!isHumanConfirmationVersion(value, { current: true })) {
+      // v1 is readable historical evidence, but it has no subject/material/
+      // snapshot provenance and cannot satisfy a current passing close fact.
+      validateHumanConfirmation(value, {
+        taskId: task.identity.taskId,
+        stage: context.stage,
+        subject: value.attempt_ref,
+        requireAccepted: context.status === "passed",
+      });
+      if (context.status === "passed") throw new Error(`legacy human confirmation v1 cannot satisfy current evidence: ${binding.ref}`);
+      return;
+    }
     if (!treeMatches) throw new Error(`nested human confirmation is stale: ${binding.ref}`);
     validateHumanConfirmation(value, {
       taskId: task.identity.taskId,
@@ -562,7 +574,7 @@ function authenticatedQualityEvidence(task, fact) {
       // for older public callers. Formal delivery close only consumes the
       // current v2 verify-code confirmation, so keep that policy in this one
       // branch instead of validating the same evidence twice below.
-      if (value.schema_version !== "human-confirmation.v2"
+      if (!isHumanConfirmationVersion(value, { current: true })
           || value.stage !== "verify-code"
           || value.snapshot_tree !== fact.snapshot_tree) {
         throw new Error(`human confirmation is not an accepted current verify-code confirmation: ${entry.ref}`);
@@ -827,9 +839,17 @@ function currentVerifyFacts(task, expected = {}) {
   return Object.freeze({
     vnext: true,
     facts: {
-      ...Object.fromEntries(requiredSubjects.map((subject) => [subject, facts[subject]
-          ? { kind: facts[subject].fact.kind, snapshot_tree: facts[subject].fact.snapshot_tree, status: facts[subject].fact.status }
-          : null])),
+      ...Object.fromEntries(requiredSubjects.map((subject) => {
+        const fact = facts[subject]?.fact;
+        return [subject, fact
+          ? {
+            kind: fact.kind,
+            snapshot_tree: fact.snapshot_tree,
+            status: fact.status,
+            ...(fact.review_status === undefined ? {} : { review_status: fact.review_status }),
+          }
+          : null];
+      })),
     },
   });
 }
@@ -995,26 +1015,36 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, c
 }
 
 /** Persist one immutable, plan-bound close decision. */
-export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, outcome, now = () => new Date().toISOString() } = {}) {
+export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, outcome, replyText, stepSlug, now = () => new Date().toISOString() } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("close confirmation TaskHandle/TaskKernel mismatch");
   validatePlan(plan, task);
   if (!new Set(["confirmed", "rejected", "timeout"]).has(outcome)) throw new TypeError("close confirmation outcome must be confirmed, rejected, or timeout");
+  // A timeout is a boundary fact, not a user reply. Do not manufacture a
+  // human-confirmation record to represent the absence of a response.
+  if (outcome !== "timeout") {
+    if (typeof replyText !== "string" || replyText.trim() === "") throw new TypeError("close confirmation replyText is required from the user");
+    if (typeof stepSlug !== "string" || stepSlug.trim() === "") throw new TypeError("close confirmation stepSlug is required from the current step");
+  }
   if (typeof now !== "function") throw new TypeError("close confirmation now must be a function");
   const planHash = closePlanHash(plan);
   const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
-  const human = kernel.publishHumanConfirmation("verify-code", {
-    decision: outcome === "confirmed" ? "accepted" : "rejected",
-    subject_ref: `operations/close/plans/${planHash}/plan.json`,
-  });
+  const human = outcome === "timeout"
+    ? null
+    : kernel.publishHumanConfirmation("verify-code", {
+      decision: outcome === "confirmed" ? "accepted" : "rejected",
+      subject_ref: `operations/close/plans/${planHash}/plan.json`,
+      reply_text: replyText,
+      step_slug: stepSlug,
+    });
   const confirmation = {
     schema_version: "task-close-confirmation.v1",
     task_id: task.identity.taskId,
     plan_hash: planHash,
     outcome,
-    human_confirmation_ref: human.ref,
-    human_confirmation_hash: human.hash,
+    human_confirmation_ref: human?.ref ?? null,
+    human_confirmation_hash: human?.hash ?? null,
     confirmed_at: now(),
   };
   createOrVerify(task, ref, confirmation, "close confirmation");
@@ -1063,6 +1093,8 @@ export async function closeDelivery({
   targetBranch,
   specSourcePath,
   specArchivePath,
+  replyText,
+  stepSlug,
   now = () => new Date().toISOString(),
 } = {}) {
   const task = assertTaskHandle(taskHandle);
@@ -1090,7 +1122,7 @@ export async function closeDelivery({
     // Close is the single physical-delivery path. Quality gaps are recorded as
     // facts but never block the five actions.
   });
-  const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", now });
+  const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", replyText, stepSlug, now });
   const operations = new Set(DELIVERY_STEPS.map(([, operation]) => DELIVERY_AUTHORIZATIONS[operation]));
   for (const operation of operations) {
     kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmed.confirmation.human_confirmation_ref });
@@ -1341,11 +1373,16 @@ function closeConfirmation(task, planHash, ref) {
   if (Object.keys(confirmation).some((key) => !keys.has(key))) throw new Error("close confirmation contains unknown fields");
   if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("close confirmation identity is invalid");
   if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) throw new Error("close confirmation plan hash mismatch");
+  if (!["confirmed", "rejected", "timeout"].includes(confirmation.outcome)) throw new Error("close confirmation outcome is invalid");
+  if (confirmation.outcome === "timeout") {
+    if (confirmation.human_confirmation_ref !== null || confirmation.human_confirmation_hash !== null) throw new Error("timeout close confirmation must not bind a human confirmation");
+    return confirmation;
+  }
   if (typeof confirmation.human_confirmation_ref !== "string" || !HASH.test(confirmation.human_confirmation_hash ?? "")) throw new Error("close confirmation must bind a human confirmation");
   const humanRaw = task.readRecord(confirmation.human_confirmation_ref);
   if (sha256(humanRaw) !== confirmation.human_confirmation_hash) throw new Error("close confirmation human confirmation hash mismatch");
   const human = JSON.parse(humanRaw);
-  if (human.schema_version !== "human-confirmation.v2" || human.task_id !== task.identity.taskId || human.subject_ref !== `operations/close/plans/${planHash}/plan.json`) throw new Error("close confirmation human confirmation is not bound to this plan");
+  if (!isHumanConfirmationVersion(human, { current: true }) || human.task_id !== task.identity.taskId || human.subject_ref !== `operations/close/plans/${planHash}/plan.json`) throw new Error("close confirmation human confirmation is not bound to this plan");
   if (human.decision !== (confirmation.outcome === "confirmed" ? "accepted" : "rejected")) throw new Error("close confirmation human decision does not match its outcome");
   return confirmation;
 }

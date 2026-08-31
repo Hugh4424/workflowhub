@@ -6,8 +6,10 @@
 
 ## 先记住三条规则
 
-1. 当前任务的需求真相只有四份材料：`decision-log.md`、`spec.md`、`plan.md`、
-   `tasks.md`。原始需求和历史记录是来源与事实，不是第五份当前材料。
+1. 当前任务的需求真相只有认证 worktree 中 `specs/<task-id>/` 下的四份材料：
+   `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`。原始需求和历史记录是来源与事实，
+   不是第五份当前材料。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、
+   `index.json` 等执行文件，不替代 worktree 材料；这只是落点约定，不是新 gate。
 2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
    真实暴露。

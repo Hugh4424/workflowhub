@@ -64,6 +64,11 @@ Available:
 }
 ```
 
+For completed providers, the simple runner may also include
+`evidence_anchor_valid`, a boolean per returned finding. It is computed against
+the submitted bundle path and line; callers must preserve it when recording the
+canonical attempt/result and must not replace an unknown anchor with `true`.
+
 Unavailable:
 
 ```json

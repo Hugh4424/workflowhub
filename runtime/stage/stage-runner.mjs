@@ -2,9 +2,10 @@ import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, relative, isAbsolute, sep } from "node:path";
+import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
@@ -13,12 +14,14 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { validateCanonicalTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
+import { lessonEntryRef, mergeLessonObservation } from "../../tools/cli/append-lesson-observation.mjs";
+import { validateReflectionValue } from "../../tools/cli/validate-stage-reflection.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -36,10 +39,17 @@ const UPSTREAM_INPUT = Object.freeze({
 });
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
+const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
+const DEFAULT_REFLECTION_TIMEOUT_MS = 30_000;
+
+export function isStageReflectionRef(value) {
+  return typeof value === "string" && value.startsWith(STAGE_REFLECTION_NAMESPACE) && STAGE_REFLECTION_REF.test(value);
+}
 
 function outcomeError(message) {
   const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
@@ -650,7 +660,7 @@ function upstreamForStage(ctx, stage) {
     : null;
 }
 
-function workerContext(ctx, publication = {}) {
+function workerContext(ctx, publication = {}, reflectionScheduler = null) {
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
@@ -661,6 +671,7 @@ function workerContext(ctx, publication = {}) {
     ...(ctx.candidateWorkspace ? { candidateWorkspace: ctx.candidateWorkspace } : {}),
     ...(ctx.workspace ? { workspace: ctx.workspace } : {}),
     ...(ctx.artifacts ? { artifacts: ctx.artifacts } : {}),
+    ...(typeof reflectionScheduler === "function" ? { runStageEndReflection: reflectionScheduler } : {}),
   });
 }
 
@@ -687,6 +698,268 @@ function plainResult(value) {
   return value;
 }
 
+function stageFailureDiagnostic(error, reason) {
+  const summary = error instanceof Error ? error.message : String(error);
+  return Object.freeze({
+    status: "failed",
+    reason,
+    error_code: typeof error?.code === "string" && error.code.trim() !== ""
+      ? error.code
+      : "STAGE_EXECUTION_FAILED",
+    error_summary: summary,
+  });
+}
+
+const STAGE_REFLECTION_STATUSES = new Set(["completed", "failed"]);
+
+function stageReflectionRef(stage) {
+  return `quality/stage-reflection/${stage}.json`;
+}
+
+function reflectionStorageRoot(ctx) {
+  if (typeof ctx.storageRoot === "string" && isAbsolute(ctx.storageRoot)) return ctx.storageRoot;
+  const taskPath = ctx.task?.taskPath;
+  if (typeof taskPath !== "string" || !isAbsolute(taskPath)) {
+    throw new Error("stage reflection requires an absolute task path or storage root");
+  }
+  return dirname(dirname(dirname(dirname(taskPath))));
+}
+
+function reflectionTimestamp(value) {
+  if (value === undefined || value === null) return new Date().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && value.trim() !== "") return value;
+  throw new TypeError("stage reflection timestamp must be an ISO string or Date");
+}
+
+function assertReflectionPublicationAvailable(ctx, reflectionRef) {
+  try {
+    ctx.task.readRecord(reflectionRef);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  const conflict = new Error(`stage reflection ${reflectionRef} already exists (fixed-path conflict)`);
+  conflict.code = "EEXIST";
+  throw conflict;
+}
+
+function runStageReflectionPrelude(ctx, stage, reflectionRef, observation, now, timeoutMs) {
+  const script = join(REPOSITORY_ROOT, "tools/cli/append-lesson-observation.mjs");
+  const child = spawnSync(process.execPath, [
+    script,
+    `--root=${reflectionStorageRoot(ctx)}`,
+    `--proj=${ctx.identity.projectName}`,
+    `--stage=${stage}`,
+    `--task-id=${ctx.identity.taskId}`,
+    `--text=${observation}`,
+    `--reflection-ref=${reflectionRef}`,
+  ], { encoding: "utf8", timeout: timeoutMs });
+  if (child.error) throw child.error;
+  if (child.status !== 0) {
+    const detail = String(child.stderr || child.stdout || "").trim();
+    throw new Error(`stage reflection raw lesson prelude failed${detail ? `: ${detail}` : ""}`);
+  }
+  let value;
+  try { value = JSON.parse(String(child.stdout ?? "").trim()); }
+  catch (error) { throw new Error(`stage reflection raw lesson prelude returned invalid JSON: ${error.message}`); }
+  if (value?.status !== "appended") throw new Error(`stage reflection raw lesson prelude was not appended: ${value?.error?.summary ?? "unknown error"}`);
+  return Object.freeze({ status: "appended", path: value.path, entry: value.entry, observed_at: now });
+}
+
+async function executeReflectionWithDeadline(execute, input, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  const execution = Promise.resolve().then(() => execute({ ...input, signal: controller.signal }));
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const error = new Error(`stage reflection timed out after ${timeoutMs}ms`);
+      error.code = "STAGE_REFLECTION_TIMEOUT";
+      reject(error);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([execution, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function reflectionRecord(ctx, stage, stageStatus, generatedAt, value, error = null) {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? structuredClone(value) : {};
+  if (record.schema_version !== "stage-reflection.v1"
+      || record.record_kind !== "judgment"
+      || record.task_id !== ctx.identity.taskId
+      || record.stage !== stage
+      || record.stage_status !== stageStatus
+      || typeof record.generated_at !== "string"
+      || !["ok", "degraded", "failed"].includes(record.status)
+      || !Array.isArray(record.judgments)
+      || !Array.isArray(record.interventions)
+      || !Array.isArray(record.lessons_added)) {
+    if (!error) throw new Error("stage reflection executor returned an invalid stage-reflection.v1 record");
+  }
+  if (error) {
+    return {
+      schema_version: "stage-reflection.v1",
+      record_kind: "judgment",
+      task_id: ctx.identity.taskId,
+      stage,
+      stage_status: stageStatus,
+      generated_at: generatedAt,
+      status: "failed",
+      error: { summary: error.message },
+      judgments: [],
+      interventions: [],
+      lessons_added: [],
+    };
+  }
+  if (record.error !== null && (typeof record.error !== "object" || Array.isArray(record.error))) {
+    throw new Error("stage reflection error must be null or an object");
+  }
+  return record;
+}
+
+function reflectionSeverity(value) {
+  const weights = { low: 1, medium: 2, high: 3 };
+  return (value?.judgments ?? [])
+    .map((judgment) => judgment?.severity)
+    .filter((severity) => Object.hasOwn(weights, severity))
+    .sort((left, right) => weights[right] - weights[left])[0] ?? "medium";
+}
+
+/**
+ * Run the declared non-blocking stage-end reflection step. The machine lesson
+ * observation is appended before the optional current-session reflection
+ * executor is called, so an absent, timed-out, or failed reflection remains
+ * observable without changing the stage result.
+ */
+export async function runStageEndReflection(context, {
+  stageStatus = "completed",
+  execute,
+  observation = null,
+  stageOutcome = null,
+  stageOutcomeDiagnostic = null,
+  generatedAt,
+  now,
+  timeoutMs = DEFAULT_REFLECTION_TIMEOUT_MS,
+} = {}) {
+  const ctx = assertContext(context, context?.stage);
+  const stage = ctx.stage;
+  if (!STAGE_REFLECTION_STATUSES.has(stageStatus)) throw new TypeError("stage reflection stageStatus must be completed or failed");
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new TypeError("stage reflection timeoutMs must be a positive safe integer");
+  const declaredStep = loadStageManifest(stage, REPOSITORY_ROOT).steps.find((step) => step.on_stage_end === true);
+  if (!declaredStep) throw new Error(`stage ${stage} does not declare an on_stage_end reflection step`);
+  const reflectionRef = stageReflectionRef(stage);
+  const observedAt = reflectionTimestamp(now);
+  const generated = reflectionTimestamp(generatedAt ?? observedAt);
+  const lessonText = typeof observation === "string" && observation.trim() !== ""
+    ? observation.trim()
+    : `stage ${stage} ended with status ${stageStatus}; current-session reflection was scheduled`;
+  let prelude = null;
+  try {
+    prelude = runStageReflectionPrelude(ctx, stage, reflectionRef, lessonText, observedAt, timeoutMs);
+  } catch (error) {
+    prelude = Object.freeze({ status: "failed", error: error.message });
+  }
+
+  let value;
+  let reflectionStatus = "completed";
+  let reflectionError = null;
+  try {
+    if (typeof execute !== "function") throw new Error("stage reflection executor was not provided");
+    const executed = await executeReflectionWithDeadline(execute, {
+      taskId: ctx.identity.taskId,
+      stage,
+      stageStatus,
+      reflectionRef,
+      prelude,
+      stageOutcome,
+      stageOutcomeDiagnostic,
+      step: Object.freeze({ ...declaredStep }),
+    }, timeoutMs);
+    value = executed?.value && typeof executed.value === "object" && !Array.isArray(executed.value)
+      ? executed.value
+      : executed;
+    value = reflectionRecord(ctx, stage, stageStatus, generated, value);
+    if (prelude?.status === "failed") {
+      // The raw-observation write is a required machine boundary.  A failed
+      // prelude is therefore a failed reflection, not merely degraded input;
+      // do not let a successful executor response hide that write failure or
+      // claim merged lessons that were never safely based on the prelude.
+      value = {
+        ...value,
+        status: "failed",
+        error: { summary: prelude.error ?? "stage reflection raw lesson prelude failed" },
+        lessons_added: [],
+      };
+    }
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    const validation = validateReflectionValue({
+      storageRoot: reflectionStorageRoot(ctx),
+      taskRoot: ctx.task.taskPath,
+      project: ctx.identity.projectName,
+      taskId: ctx.identity.taskId,
+      stage,
+      reflectionRef,
+      now: observedAt,
+      input: value,
+      raw,
+    });
+    value = validation.reflection;
+    if (value.status !== "failed" && prelude?.entry?.entry_id) {
+      // The reflection record is immutable and is published after lesson
+      // merge. Refuse a known fixed-path conflict before changing lessons;
+      // otherwise a failed publication would leave a merged row with no
+      // corresponding successful reflection record.
+      assertReflectionPublicationAvailable(ctx, reflectionRef);
+      const merged = mergeLessonObservation({
+        root: reflectionStorageRoot(ctx),
+        proj: ctx.identity.projectName,
+        stage,
+        taskId: ctx.identity.taskId,
+        rawEntryId: prelude.entry.entry_id,
+        severity: reflectionSeverity(value),
+        now: observedAt,
+      });
+      const lessonRef = merged.ref ?? lessonEntryRef(stage, merged.entry.entry_id);
+      value = {
+        ...value,
+        lessons_added: [...new Set([...(value.lessons_added ?? []), lessonRef])],
+      };
+    }
+  } catch (error) {
+    reflectionStatus = "failed";
+    reflectionError = error instanceof Error ? error : new Error(String(error));
+    value = reflectionRecord(ctx, stage, stageStatus, generated, null, reflectionError);
+  }
+
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  let record = null;
+  try {
+    record = ctx.kernel.publishCanonicalRecord(reflectionRef, raw);
+  } catch (error) {
+    reflectionStatus = "failed";
+    reflectionError ??= error instanceof Error ? error : new Error(String(error));
+  }
+  if (value.status === "failed") reflectionStatus = "failed";
+  if (prelude?.status === "failed") {
+    reflectionStatus = "failed";
+    reflectionError ??= new Error(prelude.error);
+  }
+  return Object.freeze({
+    status: reflectionStatus,
+    step_status: reflectionStatus === "completed" ? "completed" : "failed",
+    reflection_status: value.status,
+    ref: record?.ref ?? null,
+    sha256: record?.sha256 ?? createHash("sha256").update(raw).digest("hex"),
+    persisted: record !== null,
+    prelude,
+    ...(reflectionError ? { error: reflectionError.message } : {}),
+  });
+}
+
 function assertWriteBoundary(ctx) {
   const task = ctx.task;
   const kernel = ctx.kernel;
@@ -695,7 +968,7 @@ function assertWriteBoundary(ctx) {
   if (!worktreeRoot) throw new Error("no task worktree bound for write boundary");
   // cwd is outside the task worktree: fail-loud boundary reserved for CLI invocation;
   // test runners may use sibling temp directories while still binding the same task.
-  if (process.env.WORKFLOWHUB_ENFORCE_CWD && !inside(process.cwd(), worktreeRoot)) {
+  if (process.env.WORKFLOWHUB_ENFORCE_CWD && !inside(worktreeRoot, process.cwd())) {
     throw new Error("cwd is outside the task worktree");
   }
 }
@@ -955,7 +1228,7 @@ function confirmationEvidenceStatus(task, candidate) {
     const raw = task.readRecord(candidate.ref);
     if (candidate.sha256 && createHash("sha256").update(raw).digest("hex") !== candidate.sha256) return { status: "unavailable" };
     const record = JSON.parse(raw);
-    if (record?.schema_version !== "human-confirmation.v2" || !new Set(["accepted", "rejected"]).has(record.decision)) return { status: "unavailable" };
+    if (!isHumanConfirmationVersion(record) || !new Set(["accepted", "rejected"]).has(record.decision)) return { status: "unavailable" };
     return { status: record.decision === "accepted" ? "passed" : "failed" };
   } catch {
     return { status: "unavailable" };
@@ -1321,15 +1594,90 @@ export async function runStage(stage, context, handler, publication = {}, intern
   const upstream = upstreamForStage(ctx, stage);
   const vNextPreflightSnapshot = internal?.preflightSnapshot ?? ctx.kernel.currentVNextSnapshot();
   const vNextPreflightMaterials = internal?.preflightMaterials ?? currentMaterialBinding(ctx);
-  const result = plainResult(await handler(workerContext(ctx, publication), upstream, {
-    snapshot: vNextPreflightSnapshot,
-    materials: vNextPreflightMaterials,
-  }));
+  const hasReflectionSchedule = Object.prototype.hasOwnProperty.call(internal ?? {}, "stageReflection");
+  const reflectionOptions = hasReflectionSchedule ? internal.stageReflection : null;
+  if (reflectionOptions !== null
+      && (!reflectionOptions || typeof reflectionOptions !== "object" || Array.isArray(reflectionOptions))) {
+    throw new TypeError("stageReflection options must be an object");
+  }
+  if (reflectionOptions !== null) {
+    const declaredStep = loadStageManifest(stage, REPOSITORY_ROOT).steps.find((step) => step.on_stage_end === true);
+    if (!declaredStep || declaredStep.blocking !== false) {
+      throw new Error(`stage ${stage} must declare a non-blocking on_stage_end reflection step`);
+    }
+  }
+  let reflectionPromise = null;
+  const reflectionInput = internal?.stageReflectionInput;
+  if (reflectionInput !== undefined
+      && (!reflectionInput || typeof reflectionInput !== "object" || Array.isArray(reflectionInput))) {
+    throw new TypeError("stageReflectionInput must be an object");
+  }
+  const currentReflectionInput = () => reflectionInput ? { ...reflectionInput } : {};
+  const scheduleReflection = reflectionOptions === null
+    ? null
+    : (options = {}) => {
+      if (reflectionPromise === null) {
+        reflectionPromise = Promise.resolve()
+          .then(() => runStageEndReflection(ctx, { ...reflectionOptions, ...currentReflectionInput(), ...options }))
+          .catch((error) => Object.freeze({
+            status: "failed",
+            step_status: "failed",
+            reflection_status: "failed",
+            ref: null,
+            sha256: null,
+            persisted: false,
+            prelude: null,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      return reflectionPromise;
+    };
+  let result;
+  try {
+    result = plainResult(await handler(workerContext(ctx, publication, scheduleReflection), upstream, {
+      snapshot: vNextPreflightSnapshot,
+      materials: vNextPreflightMaterials,
+    }));
+  } catch (error) {
+    if (scheduleReflection !== null) {
+      const diagnostic = stageFailureDiagnostic(error, "stage_handler_failed");
+      const reflection = await scheduleReflection({
+        stageStatus: "failed",
+        stageOutcomeDiagnostic: diagnostic,
+        observation: `stage ${stage} ended with handler failure: ${diagnostic.error_summary}`,
+      });
+      if (reflection.status === "failed" && error && typeof error === "object") {
+        error.reflection_error = reflection.error ?? "stage reflection failed";
+      }
+    }
+    throw error;
+  }
 
-  return publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials);
+  let published;
+  try {
+    published = publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials);
+  } catch (error) {
+    if (scheduleReflection !== null) {
+      const diagnostic = stageFailureDiagnostic(error, "stage_publication_failed");
+      const reflection = await scheduleReflection({
+        stageStatus: "failed",
+        stageOutcomeDiagnostic: diagnostic,
+        observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
+      });
+      if (reflection.status === "failed" && error && typeof error === "object") {
+        error.reflection_error = reflection.error ?? "stage reflection failed";
+      }
+    }
+    throw error;
+  }
+  if (scheduleReflection === null) return published;
+  const stageReflection = await scheduleReflection({
+    stageStatus: reflectionInput?.stageStatus ?? reflectionOptions.stageStatus ?? "completed",
+  });
+  return Object.freeze({ ...published, stage_reflection: stageReflection });
 }
 
-function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null) {
+function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, reflectionScheduler = null) {
   const artifactDir = ctx.artifacts
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
@@ -1344,6 +1692,7 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       if (typeof target === "string" && target.trim() !== "") consumerInvocations.add(target);
     },
     hasConsumerInvocation: (target) => consumerInvocations.has(target),
+    ...(typeof reflectionScheduler === "function" ? { runStageEndReflection: reflectionScheduler } : {}),
     ...(typeof invocation.attempt_id === "string" && invocation.attempt_id.trim() ? { currentAttemptId: invocation.attempt_id } : {}),
     ...(authenticatedRequirementContext ? {
       authenticatedRequirementContext: Object.freeze({
@@ -1568,6 +1917,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
   const handlerInput = structuredClone(input);
+  const stageReflectionInput = {};
   // attempt_id is a runtime binding claim, not a stage-handler input. Keep it
   // visible to outcome authentication while keeping the handler contract
   // limited to receipts and quality disclosures.
@@ -1577,6 +1927,13 @@ export function runOfficialStage(stage, context, invocation, publication) {
     ctx,
     async (worker, _upstream, preflight) => {
       const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
+      const stageOutcomeStatus = stageOutcome.value?.value?.status ?? stageOutcome.diagnostic?.status ?? "unavailable";
+      Object.assign(stageReflectionInput, {
+        stageStatus: stageOutcomeStatus === "completed" ? "completed" : "failed",
+        stageOutcome: stageOutcome.value,
+        stageOutcomeDiagnostic: stageOutcome.diagnostic,
+        observation: `official ${stage} stage ended; stage outcome status ${stageOutcomeStatus}`,
+      });
       // A missing/invalid host outcome is a quality fact, not a work permit.
       // Keep its diagnostic on the returned result and let the current stage
       // continue with its own authenticated receipts.
@@ -1591,7 +1948,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
           items: rows.map((row) => ({
             ...row,
             evidence_refs: Array.isArray(row.evidence_refs)
-              ? row.evidence_refs.map((entry) => ({ ref: entry.ref, sha256: entry.hash ?? entry.sha256 }))
+              ? row.evidence_refs.map((entry) => ({ ref: entry.canonical_ref ?? entry.ref, sha256: entry.hash ?? entry.sha256 }))
               : [],
           })),
         };
@@ -1666,8 +2023,16 @@ export function runOfficialStage(stage, context, invocation, publication) {
             })),
         }
         : null;
-      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext);
-      const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
+      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, worker.runStageEndReflection);
+      officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
+      const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
+      // The concrete reflection is published only after the stage result has
+      // crossed the single write boundary. Keep an internal result marker so
+      // the authenticated stage-outcome consumer binding can observe that the
+      // declared reflection result is scheduled before final publication.
+      let handlerResult = typeof officialWorker.runStageEndReflection === "function"
+        ? { ...verifiedHandlerResult, stage_reflection: { status: "scheduled" } }
+        : verifiedHandlerResult;
       const skillConsumerBindings = consumeSkillOutcomeBindings(officialWorker, handlerInput, stageOutcome, handlerResult);
       if (stage === "verify-code" && stageOutcome.value?.code_review?.quality_review_ref) {
         const reviewFacts = handlerResult.facts?.code_review ?? {};
@@ -1713,5 +2078,11 @@ export function runOfficialStage(stage, context, invocation, publication) {
       };
     },
     publication,
+    {
+      stageReflectionInput,
+      stageReflection: {
+        ...(typeof publication?.runStageReflection === "function" ? { execute: publication.runStageReflection } : {}),
+      },
+    },
   );
 }

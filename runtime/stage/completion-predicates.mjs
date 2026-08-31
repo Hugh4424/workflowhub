@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
+import { isHumanConfirmationVersion } from "../evidence/canonical-evidence-validators.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const DERIVED = new WeakSet();
@@ -531,7 +532,12 @@ export function deriveProductRelease({
   } else {
     productObject(confirmation, "verify_confirmation");
     if (!productCurrent(confirmation)) productReason(reasons, "verify_confirmation_not_current");
-    if (confirmation.schema_version !== "human-confirmation.v2"
+    if (isHumanConfirmationVersion(confirmation) && !isHumanConfirmationVersion(confirmation, { current: true })) {
+      // v1 is intentionally readable but has no material/snapshot provenance;
+      // preserve it as historical input without promoting it to a release.
+      productReason(reasons, "verify_confirmation_legacy_v1_not_current");
+    }
+    if (!isHumanConfirmationVersion(confirmation, { current: true })
         || typeof confirmation.task_id !== "string" || confirmation.task_id.trim() === ""
         || confirmation.stage !== "verify-code"
         || !/^revision-[a-f0-9]{64}$/.test(confirmation.material_revision ?? "")
@@ -644,7 +650,7 @@ export function deriveCurrentProductRelease({
       if (!binding) continue;
       try {
         const human = JSON.parse(read(binding.ref));
-        if (human?.schema_version === "human-confirmation.v2"
+        if (isHumanConfirmationVersion(human, { current: true })
             && (human.snapshot_tree === snapshotTree
               || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, human.snapshot_tree, snapshotTree, taskId)))) {
           confirmation = {

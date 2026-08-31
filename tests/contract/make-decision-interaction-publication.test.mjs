@@ -86,6 +86,8 @@ function draft(state) {
   const confirmation = state.kernel.publishHumanConfirmation("make-decision", {
     decision: "accepted",
     subject_ref: decisionRef,
+    reply_text: "fixture accepted make-decision",
+    step_slug: "approve-decision",
   });
   const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
   return {
@@ -413,6 +415,17 @@ describe("P2 formal wiring contract", () => {
     };
     const failedDeliveryResult = await handler(failedDelivery.worker, failedDelivery.invocation);
     expect(failedDeliveryResult.facts.contract_facts.delivery_contract.status).toBe("incomplete");
+  });
+
+  it("accepts the current change_impact contract shape at the build-code boundary", async () => {
+    const workerState = qaWorker();
+    delete workerState.invocation.contract_facts.impact;
+    workerState.invocation.contract_facts.change_impact = { impact: "ui" };
+    const handler = (await import("../../runtime/stage/stage-handlers.mjs")).officialStageHandler("build-code");
+    const result = await handler(workerState.worker, workerState.invocation);
+    expect(result.facts.contract_facts.change_impact).toMatchObject({ status: "passed", impact: "ui" });
+    expect(result.facts.ui_qa.status).toBe("passed");
+    expect(workerState.calls()).toBe(1);
   });
 
   it("does not let an unverified non-UI label skip browser QA", async () => {

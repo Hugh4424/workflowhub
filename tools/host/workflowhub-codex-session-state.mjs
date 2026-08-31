@@ -570,7 +570,8 @@ function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parent
       const dependency = manifest.steps.find((entry) => entry.step_id === dependencyId);
       const previous = dependency ? projectedEvents.findLast((entry) => entry.stage === stage
         && entry.subject_kind === "step" && entry.subject_id === dependency.step_slug) : null;
-      if (!previous || previous.status !== "completed") {
+      const nonBlockingStageEnd = step.on_stage_end === true && step.blocking === false;
+      if (!previous || (previous.status !== "completed" && !nonBlockingStageEnd)) {
         throw new Error(`${stage} step sequence invalid: dependency ${dependency?.step_slug ?? dependencyId} must be completed before ${subjectId}`);
       }
     }

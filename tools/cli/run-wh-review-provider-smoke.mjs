@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
-import { runReview } from "../../skills/wh-review/scripts/review-runner.mjs";
+import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 function required(input, key) { if (input[key] === undefined || input[key] === null || input[key] === "") throw new Error(`provider smoke requires explicit ${key}`); return input[key]; }
 function absolute(input, key) { const value = required(input, key); if (!isAbsolute(value)) throw new Error(`${key} must be absolute`); return resolve(value); }
@@ -16,8 +16,17 @@ export async function runProviderSmoke(input) {
   if (!Array.isArray(providers) || providers.length === 0) throw new Error("providers must be a non-empty array");
   mkdirSync(reviewDataRoot, { recursive: true }); mkdirSync(attachmentRoot, { recursive: true }); mkdirSync(dirname(evidencePath), { recursive: true });
   const providerClient = new ReviewProviderClient({ command, config });
-  const result = await runReview({ sourceRoot, targetRepoRoot, reviewDataRoot, attachmentRoot, taskId: required(input, "task_id"), stage: required(input, "stage"), reviewTrack: input.review_track ?? null,
-    materials, hostProvider: required(input, "host_provider"), providers, providerClient });
+  const result = await runSimpleReview({
+    stage: required(input, "stage"),
+    review_track: input.review_track ?? null,
+    host_provider: required(input, "host_provider"),
+    materials,
+  }, {
+    loadConfig: () => ({ attachmentRoot, whReview: {}, config: {} }),
+    resolveRoute: () => ({ mode: "provider-smoke" }),
+    selectProviders: () => ({ providers }),
+    client: providerClient,
+  });
   const evidence = { version: 1, kind: "real-provider-smoke", input: { source_root: sourceRoot, target_repo_root: targetRepoRoot, review_data_root: reviewDataRoot, attachment_root: attachmentRoot, config, providers, task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null }, result };
   writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, { flag: "wx" }); return { ...result, evidencePath };
 }

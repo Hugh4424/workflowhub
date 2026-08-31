@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://workflowhub.local/runtime/schemas/stage-reflection.v1.json",
+  "title": "WorkflowHub stage reflection judgment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_kind",
+    "task_id",
+    "stage",
+    "stage_status",
+    "generated_at",
+    "status",
+    "error",
+    "judgments",
+    "interventions",
+    "lessons_added"
+  ],
+  "properties": {
+    "schema_version": { "const": "stage-reflection.v1" },
+    "record_kind": { "const": "judgment" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "stage_status": { "enum": ["completed", "failed"] },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["ok", "degraded", "failed"] },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary"],
+          "properties": { "summary": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "judgments": { "type": "array", "items": { "$ref": "#/$defs/judgment" } },
+    "interventions": { "type": "array", "items": { "$ref": "#/$defs/intervention" } },
+    "lessons_added": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/safe_ref" }, { "$ref": "#/$defs/lesson_ref" }] } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["ok", "degraded"] } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "safe_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*\\.\\.)quality/(?:evidence|tests|reviews|confirmations|stage-reflection)/[^\\s]+$"
+    },
+    "lesson_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^lessons/(?:make-decision|build-spec|build-plan|build-code|verify-code)\\.jsonl#[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "subject_kind",
+        "classification",
+        "severity",
+        "reason",
+        "evidence_refs",
+        "confidence",
+        "next_review_trigger"
+      ],
+      "properties": {
+        "subject_id": { "type": "string", "minLength": 1 },
+        "subject_kind": { "enum": ["step", "skill"] },
+        "classification": { "enum": ["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"] },
+        "severity": { "enum": ["high", "medium", "low"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/safe_ref" } },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "next_review_trigger": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "confidence": { "const": "high" } }, "required": ["confidence"] },
+          "then": { "properties": { "evidence_refs": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmation_ref", "step_slug", "reply_text", "attribution", "confidence"],
+      "properties": {
+        "confirmation_ref": {
+          "type": "string",
+          "pattern": "^(?!.*\\.\\.)quality/confirmations/[a-f0-9]{64}\\.json$"
+        },
+        "step_slug": { "type": "string", "minLength": 1 },
+        "reply_text": { "type": ["string", "null"], "minLength": 1 },
+        "attribution": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "reply_text": { "type": "null" } }, "required": ["reply_text"] },
+          "then": { "properties": { "confidence": { "enum": ["medium", "low"] } } }
+        }
+      ]
+    }
+  }
+}

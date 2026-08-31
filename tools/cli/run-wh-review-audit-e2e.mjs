@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runReviewFixture } from "../../skills/wh-review/scripts/review-runner.mjs";
+import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 
 const oid = "1".repeat(40); const materialId = "a".repeat(64);
@@ -29,11 +29,22 @@ export async function runAuditFixture({ outputRoot } = {}) {
   const records = [];
   for (const [stage, reviewTrack] of stages) {
     const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, providers: providers.map(providerResult) }) };
-    const result = await runReviewFixture({ task, attachmentRoot, taskId: "audit-e2e", stage, reviewTrack, hostProvider: "codex", providers: ["kimi"], providerClient,
-      ...(stage === "make-decision" && reviewTrack === "direction" ? { directionSelection: { current_selection: "fixture choice", selection_rationale: "fixture only" } } : {}),
-      ...(stage === "make-decision" && reviewTrack === "direction" ? { materials: { raw_requirement: "fixture requirement", objective_facts: ["fixture fact"] } } : {}),
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, attachmentRoot, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }) });
-    records.push({ stage, review_track: reviewTrack, status: result.status, snapshot_tree: result.snapshotTree, material_id: result.materialId, attempt_ref: result.attemptRef, result_ref: result.resultRef });
+    const result = await runSimpleReview({
+      stage,
+      review_track: reviewTrack,
+      host_provider: "codex",
+      materials: {
+        raw_requirement: "fixture requirement",
+        objective_facts: ["fixture fact"],
+        ...(stage === "make-decision" && reviewTrack === "direction" ? { current_selection: "fixture choice", selection_rationale: "fixture only" } : {}),
+      },
+    }, {
+      loadConfig: () => ({ attachmentRoot, whReview: {}, config: {} }),
+      resolveRoute: () => ({ mode: "fixture" }),
+      selectProviders: () => ({ providers: ["kimi"] }),
+      client: providerClient,
+    });
+    records.push({ stage, review_track: reviewTrack, status: result.status, snapshot_tree: source.snapshotTree, material_id: result.material_id ?? materialId, attempt_ref: null, result_ref: null });
   }
   const evidenceRef = "fixtures/fake-broker-audit.json";
   task.createRecordAtomic(evidenceRef, `${JSON.stringify({ version: 1, kind: "fake-broker", fixture_only: true, is_real_e2e: false, records }, null, 2)}\n`);

@@ -74,14 +74,14 @@ function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) 
   for (const subject of ["scope", "non_goals", "risks", "talk_clarify", "stage_end_spec_analyze", "finding_dispositions"]) {
     publishFixtureFact("make-decision", "acceptance_criterion", subject);
   }
-  kernel.publishHumanConfirmation("make-decision", { decision: "accepted", subject_ref: "fixture/make-decision" });
+  kernel.publishHumanConfirmation("make-decision", { decision: "accepted", subject_ref: "fixture/make-decision", reply_text: "fixture accepted make-decision", step_slug: "approve-decision" });
   for (const subject of ["zero_major_ambiguities", "stage_end_spec_analyze", "finding_dispositions"]) {
     publishFixtureFact("build-spec", "acceptance_criterion", subject);
   }
   for (const subject of ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks", "stage_end_spec_analyze", "finding_dispositions"]) {
     publishFixtureFact("build-plan", "acceptance_criterion", subject);
   }
-  kernel.publishHumanConfirmation("build-plan", { decision: "accepted", subject_ref: "fixture/build-plan" });
+  kernel.publishHumanConfirmation("build-plan", { decision: "accepted", subject_ref: "fixture/build-plan", reply_text: "fixture accepted build-plan", step_slug: "publish-plan-result" });
   publishFixtureFact("build-code", "test", "risk_tests_fresh");
   publishFixtureFact("build-code", "acceptance_criterion", "acceptance_criteria");
   publishFixtureFact("build-code", "acceptance_criterion", "stage_end_spec_analyze");
@@ -139,7 +139,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewVerdict = "pass", reviewFindingSeverity = "major", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDisposition = undefined, reviewVerdict = "pass", reviewFindingSeverity = "major", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -249,6 +249,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewVerdi
     const raw = task.readRecord(ref);
     kernel.publishVNextQualityFact("verify-code", {
       kind: "review", status: reviewStatus, subject: "code_review",
+      ...(reviewDisposition === undefined ? {} : { review_status: reviewDisposition }),
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
   }
@@ -260,7 +261,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewVerdi
   ]) {
     if (omitSubjects.includes(subject)) continue;
     if (subject === "human_confirmation") {
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code", reply_text: "fixture accepted verify-code", step_slug: "approve-verification" });
       continue;
     }
     const ref = `quality/evidence/verify-code/${subject}.json`;
@@ -273,8 +274,8 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewVerdi
   }
   if (duplicateHumanConfirmation) {
     if (!omitSubjects.includes("human_confirmation")) {
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-old" });
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-old", reply_text: "fixture accepted verify-code old", step_slug: "approve-verification" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new", reply_text: "fixture accepted verify-code new", step_slug: "approve-verification" });
     }
   }
   seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot });
@@ -326,8 +327,8 @@ describe("vNext formal delivery close", () => {
   });
 
   it("accepts the verify-code code-review fact without a second integration review", () => {
-    const state = fixture({ crossStageIntegrationReview: true });
-    expect(() => prepareDeliveryClosePlan({
+    const state = fixture({ crossStageIntegrationReview: true, reviewDisposition: "clean" });
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -335,7 +336,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    });
+    expect(result.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/verify-code freshness/),
+    ]));
   });
 
   it("does not let an unavailable current code review reach the close consumer", () => {

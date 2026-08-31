@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
-import { validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 import { normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
 import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
@@ -52,6 +52,13 @@ function currentMaterialContent(worker, name) {
     evidence: null,
   });
 }
+
+function captureWorkerSnapshot(worker) {
+  if (typeof worker.snapshotWorkspace === "function") return worker.snapshotWorkspace();
+  if (typeof worker.candidateWorkspace?.captureSnapshot === "function") return worker.candidateWorkspace.captureSnapshot();
+  return null;
+}
+
 function materialIncomplete(message) {
   const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
   error.code = "MATERIAL_INCOMPLETE";
@@ -68,11 +75,13 @@ const NAMESPACE = Object.freeze({
   direction_risk_acceptance: "quality/evidence/risk-acceptances/",
   detail_risk_acceptance: "quality/evidence/risk-acceptances/",
   quality_risk_acceptance: "quality/evidence/risk-acceptances/",
+  stage_reflection: "quality/stage-reflection/",
   stage_outcomes: "quality/evidence/stage-outcomes/",
 });
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", clarify: "spec-clarify", ui_qa: "browser-qa" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json$/;
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
 const COMPLETION_COPY = Object.freeze({
@@ -221,6 +230,7 @@ function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
   if (name === "interaction") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "confirmation") return /^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "stage_reflection") return STAGE_REFLECTION_REF.test(ref);
   if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
@@ -613,11 +623,7 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     };
   }
 
-  const snapshot = typeof worker.snapshotWorkspace === "function"
-    ? worker.snapshotWorkspace()
-    : typeof worker.candidateWorkspace?.captureSnapshot === "function"
-      ? worker.candidateWorkspace.captureSnapshot()
-      : null;
+  const snapshot = captureWorkerSnapshot(worker);
   const qaBinding = contractFacts.qa_binding ?? invocation.qa_binding ?? {};
   const binding = {
     task_id: worker.identity.taskId,
@@ -839,7 +845,7 @@ function buildCodeContractFacts(invocation = {}, currentSnapshotTree = null) {
   const impact = deriveChangeImpact({
     ...impactInputs,
     ...(censusInput ? { census: censusInput } : {}),
-    declared_impact: supplied.impact?.impact ?? supplied.declared_impact,
+    declared_impact: supplied.change_impact?.impact ?? supplied.impact?.impact ?? supplied.declared_impact,
   });
   const requiresUiFacts = impact.impact === "ui" || impact.impact === "fullstack";
   const impactFact = { status: impact.status === "derived" ? "passed" : "unknown", impact: impact.impact, evidence_refs: impact.evidence_refs, unknown_reasons: impact.unknown_reasons, basis: impact.basis };
@@ -987,7 +993,9 @@ function confirmationFacts(worker, invocation, { requireV2 = false } = {}) {
   const contentHash = ref.slice("quality/confirmations/".length, -".json".length);
   if (record.sha256 !== contentHash) throw new Error("human confirmation ref is not content-addressed to its canonical bytes");
   const value = validateHumanConfirmation(record.value, { taskId: worker.identity.taskId, stage: worker.stage, requireAccepted: false });
-  if (requireV2 && value.schema_version !== "human-confirmation.v2") throw new Error("build-plan confirmation must use human-confirmation.v2");
+  // Generic stage readers accept v1/v2/v3 without rewriting history. The
+  // build-plan current-material path still requires provenance-bearing v2/v3.
+  if (requireV2 && !isHumanConfirmationVersion(value, { current: true })) throw new Error("build-plan confirmation must use human-confirmation.v2 or human-confirmation.v3");
   return { facts: { decision: value.decision, confirmation_ref: ref, confirmation_hash: record.sha256, snapshot_tree: value.snapshot_tree }, evidence: { ref, sha256: record.sha256 } };
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
@@ -1103,7 +1111,7 @@ function sameStringSet(left, right) {
 
 function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
   if (expectedTree === actualTree) return true;
-  const root = worker.workspace?.worktreeRoot;
+  const root = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot;
   if (!root) return false;
   return isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, worker.identity.taskId);
 }
@@ -1188,17 +1196,19 @@ function authenticatedImplementationChanged(worker, implementation) {
       || record.snapshot_tree !== implementation.snapshot_tree) {
     throw new Error("implementation diff evidence does not bind the current execution baseline and snapshot");
   }
+  const worktreeRoot = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot;
+  if (!worktreeRoot) throw new Error("build-code requires an authenticated Workspace for implementation diff verification");
   const tracked = execFileSync(
     "git",
     ["diff", "--no-renames", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
-    { cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    { cwd: worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   ).trim().split("\n").filter(Boolean);
   const untracked = (Array.isArray(record.untracked) ? record.untracked : []).map((entry) => {
     if (!entry || typeof entry.path !== "string" || !/^[a-f0-9]{40}$/.test(entry.blob_oid ?? "")) {
       throw new Error("implementation diff evidence contains an invalid untracked entry");
     }
     const blob = execFileSync("git", ["hash-object", "--", entry.path], {
-      cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      cwd: worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
     if (blob !== entry.blob_oid) throw new Error(`implementation untracked evidence hash mismatch: ${entry.path}`);
     return entry.path;
@@ -1550,9 +1560,9 @@ function requirementReplayFacts(worker, verification, currentTree) {
     text(value.source_id, `requirement_replay[${index}].source_id`);
     if (seen.has(value.source_id)) throw new Error(`duplicate requirement replay source: ${value.source_id}`);
     if (!new Set(["pass", "fail", "unknown", "deferred", "unavailable"]).has(value.status)) throw new Error(`requirement_replay[${index}].status is invalid`);
+    const replayRoot = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot;
     const replaySnapshotMatches = value.snapshot_tree === currentTree
-      || (worker.workspace?.worktreeRoot
-        && isMaterialOnlySnapshotDelta(worker.workspace.worktreeRoot, value.snapshot_tree, currentTree, worker.identity.taskId));
+      || (replayRoot && isMaterialOnlySnapshotDelta(replayRoot, value.snapshot_tree, currentTree, worker.identity.taskId));
     if (!replaySnapshotMatches) throw new Error(`requirement_replay ${value.source_id} does not bind the current snapshot`);
     if (!Array.isArray(value.linked_ids) || value.linked_ids.length === 0 || value.linked_ids.some((id) => typeof id !== "string" || id.trim() === "")) throw new Error(`requirement_replay ${value.source_id}.linked_ids is invalid`);
     if (!Array.isArray(value.evidence_refs)) throw new Error(`requirement_replay ${value.source_id}.evidence_refs is invalid`);
@@ -1669,7 +1679,7 @@ function unavailableReviewFacts(worker, invocation, name, expectedTrack, produce
   let item = null;
   try { item = receipt(worker, invocation, name, producerStage); }
   catch { /* The missing receipt is itself the disclosed quality warning. */ }
-  const snapshot = item?.value?.snapshot_tree ?? worker.snapshotWorkspace?.().tree ?? null;
+  const snapshot = item?.value?.snapshot_tree ?? captureWorkerSnapshot(worker)?.tree ?? null;
   return {
     facts: {
       status: "unavailable",
@@ -2412,11 +2422,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
 HANDLERS.set("build-code", async (worker, input) => {
   // Implementation and test facts describe quality; they are not the work
   // authority.  A vNext run with only the four materials stays runnable.
-  const currentSnapshotTree = typeof worker.snapshotWorkspace === "function"
-    ? worker.snapshotWorkspace()?.tree ?? null
-    : typeof worker.candidateWorkspace?.captureSnapshot === "function"
-      ? worker.candidateWorkspace.captureSnapshot()?.tree ?? null
-      : null;
+  const currentSnapshotTree = captureWorkerSnapshot(worker)?.tree ?? null;
   recordConsumerInvocation(worker, "stage-handlers#buildCodeContractFacts");
   const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
   if (worker.manifest?.record_model === "vnext-single-write"
@@ -2424,12 +2430,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
     const current = currentMaterialContent(worker, "tasks.md");
-    const capture = typeof worker.snapshotWorkspace === "function"
-      ? worker.snapshotWorkspace
-      : typeof worker.candidateWorkspace?.captureSnapshot === "function"
-        ? worker.candidateWorkspace.captureSnapshot
-        : null;
-    const snapshot = typeof capture === "function" ? capture() : null;
+    const snapshot = captureWorkerSnapshot(worker);
     const acceptanceCoverage = input.acceptance_coverage === undefined
       ? (() => {
         const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
@@ -2514,7 +2515,8 @@ HANDLERS.set("build-code", async (worker, input) => {
     acceptanceCoverage: coverage,
     formalRecordStatus: integrationAudit.formal_record_status,
   });
-  const current = worker.snapshotWorkspace();
+  const current = captureWorkerSnapshot(worker);
+  if (!current) throw new Error("build-code requires an authenticated Workspace snapshot");
   if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
     missingItems.push("current Workspace snapshot differs from the reviewed implementation; quality warning only");
   }
