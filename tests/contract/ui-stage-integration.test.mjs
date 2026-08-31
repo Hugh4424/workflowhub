@@ -285,6 +285,64 @@ test("Chinese acceptance checklist tables exclude historical AC references outsi
   assert.deepEqual(ids, ["AC-001", "AC-002"]);
 });
 
+test("table AC identities reject overlong digits and attached letters", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "## Acceptance Criteria",
+    "| AC ID | Acceptance |",
+    "| --- | --- |",
+    "| AC-0012 | compact digits exceed the grammar |",
+    "| AC-UI-0012 | namespaced digits exceed the grammar |",
+    "| AC-001X | compact identity has an attached letter |",
+    "| AC-UI-001X | namespaced identity has an attached letter |",
+  ].join("\n"));
+  assert.deepEqual(ids, []);
+});
+
+test("acceptance body state examples do not defer the criterion", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "## Acceptance Criteria",
+    "- **AC-STATE-001**: preserves status: deferred and not_applicable outcomes as visible states.",
+  ].join("\n"));
+  assert.deepEqual(ids, ["AC-STATE-001"]);
+});
+
+test("explicit acceptance title and status metadata defer the criterion", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "## Acceptance Criteria",
+    "- **AC-DEFER-001（延期）**: postponed by an explicit title marker.",
+    "- **AC-DEFER-002** [status: not_applicable]: postponed by explicit metadata.",
+    "| AC ID | Acceptance | Status |",
+    "| --- | --- | --- |",
+    "| AC-DEFER-003 | postponed by table metadata | deferred |",
+  ].join("\n"));
+  assert.deepEqual(ids, []);
+});
+
+test("acceptance title and table identity prose do not act as deferred labels", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "## Acceptance Criteria",
+    "- **AC-TITLE-001 deferred outcomes remain visible**: title prose is not metadata.",
+    "| AC ID | Acceptance |",
+    "| --- | --- |",
+    "| AC-TITLE-002 deferred outcomes remain visible | table identity prose is not metadata |",
+  ].join("\n"));
+  assert.deepEqual(ids, ["AC-TITLE-001", "AC-TITLE-002"]);
+});
+
+test("structured deferred metadata remains explicit when ordinary prose follows", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "## Acceptance Criteria",
+    "- **AC-META-001** [status: deferred] postponed.",
+    "- **AC-META-002**（状态：延期） 延后处理。",
+    "- **AC-META-003** status: deferred — postponed.",
+    "- **AC-META-004** status: deferred: postponed.",
+    "- **AC-META-005** status: deferred. postponed.",
+    "- **AC-META-006** 状态：延期：延后处理。",
+    "- **AC-META-007** 状态：延期。延后处理。",
+  ].join("\n"));
+  assert.deepEqual(ids, []);
+});
+
 test("design gaps remain unknown facts and never become a UI gate", () => {
   const unknown = alignUiDesignEvidence({
     uiContract: {

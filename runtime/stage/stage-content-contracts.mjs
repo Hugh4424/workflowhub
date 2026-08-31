@@ -5048,15 +5048,41 @@ export function activeAcceptanceCriterionIds(spec) {
   const body = heading
     ? text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0]
     : text;
-  const listIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
+  const listEntries = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*([^\n]*)/gm)];
+  const listIds = listEntries
     .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
     .filter(Boolean);
-  const tableIds = [...body.matchAll(new RegExp(String.raw`^\s*\|\s*(${ACCEPTANCE_CRITERION_SOURCE})\s*\|`, "gmi"))]
-    .map(([, id]) => id);
+  const tableEntries = [];
+  const bodyLines = body.split(/\r?\n/);
+  for (let index = 0; index < bodyLines.length;) {
+    if (!/^\s*\|/.test(bodyLines[index])) { index += 1; continue; }
+    const rows = [];
+    while (index < bodyLines.length && /^\s*\|/.test(bodyLines[index])) {
+      rows.push(analyzeMarkdownTableCells(bodyLines[index]));
+      index += 1;
+    }
+    const header = rows[0] ?? [];
+    const separatorOffset = rows[1]?.every((cell) => /^:?-{3,}:?$/.test(cell)) ? 2 : 1;
+    const statusIndex = header.findIndex((cell) => /^(?:status|状态|disposition|处置|scope|计入状态)$/i.test(cell));
+    for (const row of rows.slice(separatorOffset)) {
+      const match = row[0]?.match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])(.*)$`, "i"));
+      if (match) tableEntries.push({ id: match[1], titleSuffix: match[2], status: statusIndex >= 0 ? row[statusIndex] : null });
+    }
+  }
+  const tableIds = tableEntries.map(({ id }) => id);
   const headingIds = [...listIds, ...tableIds];
-  const deferredIds = new Set([...text.matchAll(new RegExp(
-    String.raw`\b(${ACCEPTANCE_CRITERION_SOURCE})\b[^\n]{0,180}\b(?:deferred|延期|不计入|not_applicable)\b`, "gi",
-  ))].map(([, id]) => id));
+  const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
+  const explicitMetadata = /^\s*(?:[[(（]\s*(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）]|(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s—–:：,，;；.。-]))/i;
+  const deferredIds = new Set(listEntries.flatMap(([, label, suffix]) => {
+    const match = label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(.*)$`, "i"));
+    if (!match) return [];
+    return explicitDeferredLabel.test(match[2].trim()) || explicitMetadata.test(suffix) ? [match[1]] : [];
+  }));
+  for (const entry of tableEntries) {
+    if (explicitDeferredLabel.test(entry.titleSuffix.trim()) || /^(?:deferred|延期|不计入|not_applicable)$/i.test(entry.status ?? "")) {
+      deferredIds.add(entry.id);
+    }
+  }
   return [...new Set(headingIds.length ? headingIds : identifiers(text, ACCEPTANCE_CRITERION_ID))]
     .filter((id) => !deferredIds.has(id));
 }
