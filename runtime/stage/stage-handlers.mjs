@@ -68,7 +68,7 @@ const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "quality/evidence/", spec: "quality/evidence/", plan: "quality/evidence/", tasks: "quality/evidence/",
   interaction: "quality/evidence/interactions/",
-  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", clarify: "quality/tests/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
+  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", clarify: "quality/evidence/interactions/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
   audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/", ui_qa: "quality/evidence/browser-qa/",
@@ -229,6 +229,7 @@ const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
   if (name === "interaction") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "clarify") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "confirmation") return /^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "stage_reflection") return STAGE_REFLECTION_REF.test(ref);
   if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
@@ -451,9 +452,12 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
 }
 
 function clarifyFacts(worker, invocation) {
-  const result = testFacts(worker, invocation, "clarify");
-  const ref = invocation.receipts.clarify;
-  const value = object(worker.readReceipt(ref).value, "clarify receipt");
+  recordConsumerInvocation(worker, "stage-handlers#clarifyFacts");
+  const item = receipt(worker, invocation, "clarify");
+  const { value } = item;
+  if (item.evidence.sha256 !== item.ref.match(/([a-f0-9]{64})\.json$/)?.[1]) {
+    throw new Error("build-spec clarify receipt ref is not content-addressed to its immutable bytes");
+  }
   if (value.trigger !== true || typeof value.reason !== "string" || value.reason.trim() === "") {
     throw materialIncomplete("build-spec clarify receipt must record trigger=true and a concrete reason");
   }
@@ -465,8 +469,43 @@ function clarifyFacts(worker, invocation) {
   if (value.snapshot_tree !== snapshot.tree || value.material_revision !== worker.currentMaterialRevision) {
     throw new Error("build-spec clarify receipt is not bound to the current snapshot and material revision");
   }
-  if (result.facts.exit_code !== 0) throw materialIncomplete("build-spec clarify receipt did not complete successfully");
-  return result;
+  const transcript = object(value.transcript, "clarify transcript binding");
+  text(transcript.source_ref, "clarify transcript source_ref");
+  text(transcript.session_id, "clarify transcript session_id");
+  text(transcript.skill_event_id, "clarify transcript skill_event_id");
+  if (!Number.isSafeInteger(transcript.skill_started_at_ms) || !Number.isSafeInteger(transcript.skill_ended_at_ms)
+      || !Array.isArray(transcript.rounds) || transcript.rounds.length !== value.lifecycle_rounds.length) {
+    throw materialIncomplete("build-spec clarify receipt transcript binding is incomplete");
+  }
+  for (const [index, round] of transcript.rounds.entries()) {
+    const ask = value.lifecycle_rounds[index]?.events?.[0];
+    const reply = value.lifecycle_rounds[index]?.events?.[2];
+    if (!object(round, `clarify transcript round ${index + 1}`)
+        || round.round !== ask?.round
+        || round.card_hash !== ask?.card_hash || round.reply_hash !== reply?.reply_hash
+        || typeof round.ask_message_id !== "string" || round.ask_message_id.trim() === ""
+        || typeof round.reply_message_id !== "string" || round.reply_message_id.trim() === ""
+        || !Number.isSafeInteger(round.ask_occurred_at_ms) || !Number.isSafeInteger(round.reply_occurred_at_ms)
+        || round.ask_occurred_at_ms < transcript.skill_started_at_ms
+        || round.reply_occurred_at_ms <= round.ask_occurred_at_ms
+        || round.reply_occurred_at_ms > transcript.skill_ended_at_ms) {
+      throw materialIncomplete(`build-spec clarify transcript round ${index + 1} is not bound to the lifecycle`);
+    }
+  }
+  return {
+    facts: {
+      trigger: true,
+      reason: value.reason,
+      session_id: transcript.session_id,
+      source_ref: transcript.source_ref,
+      lifecycle: lifecycle.facts,
+      snapshot_tree: value.snapshot_tree,
+      material_revision: value.material_revision,
+      receipt_ref: item.ref,
+      receipt_hash: item.evidence.sha256,
+    },
+    evidence: item.evidence,
+  };
 }
 
 function unavailableTestFacts(worker, name, reason) {

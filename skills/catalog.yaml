@@ -137,8 +137,8 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 4957d11d7aa5cddb9736304f0510d67f825e50451ff549ef1c7fda275385fb5d
-    last_reviewed_at: "2026-07-14"
+    local_bundle_hash: 3f3d95f7b55808a2fcdf3514bc6f1fb55006044af2548bc8a6169e1945d7784d
+    last_reviewed_at: "2026-08-31"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、独立问题成批、依赖问题拆批写回

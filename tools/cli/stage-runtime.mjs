@@ -17,6 +17,7 @@ import {
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import {
   validateAcceptanceEvidence,
+  writeCanonicalSpecClarifyReceipt,
 } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/capture.mjs";
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
@@ -329,10 +330,27 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   const taskId = context?.identity?.taskId;
   const session = buildWorkflowHubSessionInput({ cwd, stage, taskId, sessionId: currentCodexSessionId(process.env) });
   if (session.status !== "present") return input;
+  let boundInput = input;
+  if (stage === "build-spec" && session.spec_clarify && input?.receipts?.clarify === undefined) {
+    const currentMaterialRevision = context.kernel.currentVNextMaterialRevision();
+    const currentSnapshot = context.kernel.currentVNextSnapshot();
+    if (session.spec_clarify.material_revision !== currentMaterialRevision
+        || session.spec_clarify.snapshot_tree !== currentSnapshot.tree) return boundInput;
+    const receipt = writeCanonicalSpecClarifyReceipt({
+      task: context.task,
+      workspace: context.workspace ?? context.candidateWorkspace,
+      snapshotTree: session.spec_clarify.snapshot_tree,
+      materialRevision: session.spec_clarify.material_revision,
+      reason: session.spec_clarify.reason,
+      lifecycleRounds: session.spec_clarify.lifecycle_rounds,
+      transcript: session.spec_clarify.transcript,
+    });
+    boundInput = { ...input, receipts: { ...(input.receipts ?? {}), clarify: receipt.ref } };
+  }
   const stageOutcome = stage === "verify-code" ? session.code_review : session.spec_analyze;
-  if (!stageOutcome || typeof stageOutcome !== "object" || Array.isArray(stageOutcome)) return input;
-  const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
-    ? input.attempt_id
+  if (!stageOutcome || typeof stageOutcome !== "object" || Array.isArray(stageOutcome)) return boundInput;
+  const attemptId = typeof boundInput?.attempt_id === "string" && boundInput.attempt_id.trim()
+    ? boundInput.attempt_id
     : `attempt-${sha256(JSON.stringify({
       task_id: taskId,
       stage,
@@ -370,9 +388,9 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
     },
   });
   return {
-    ...input,
+    ...boundInput,
     attempt_id: attemptId,
-    receipts: { ...(input.receipts ?? {}), stage_outcomes: published.ref },
+    receipts: { ...(boundInput.receipts ?? {}), stage_outcomes: published.ref },
   };
 }
 

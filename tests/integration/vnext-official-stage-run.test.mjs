@@ -34,7 +34,9 @@ import {
   sessionHandoffPath,
   startCodexSessionEvent,
   recordCodexSessionSpecAnalyze,
+  endCodexSession,
 } from "../../tools/host/workflowhub-codex-session-state.mjs";
+import { bindCurrentSessionOutcome } from "../../tools/cli/stage-runtime.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
@@ -305,6 +307,141 @@ async function runUiSourceBindingCase(testCase, contractFacts) {
 }
 
 describe("vNext official stage completion", () => {
+  it("publishes and consumes a dedicated transcript-authenticated spec-clarify receipt", async () => {
+    const state = fixture("vnext-spec-clarify-receipt");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    artifacts.writeAtomic("spec.md", artifacts.read("spec.md").replace(
+      "spec-clarify trigger=false reason=夹具没有方向性歧义 open_direction_changing_questions=0。",
+      "spec-clarify trigger=true reason=用户已选择完整范围 open_direction_changing_questions=0。",
+    ));
+    const askText = "这个规格要选择保守范围还是完整范围？";
+    const replyText = "选择完整范围。";
+    const cardHash = sha256(askText), replyHash = sha256(replyText);
+    const lifecycleRounds = [{
+      interaction_type: "spec-clarify",
+      events: [
+        { event: "ask", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, questions: [{
+          question_id: "scope", axis: "范围", independent: true,
+          options: [
+            { number: 1, label: "保守", meaning: "只做最小范围", consequence: "改动较少", risk: "收益延后" },
+            { number: 2, label: "完整", meaning: "完成当前范围", consequence: "一次解决", risk: "改动较多" },
+          ],
+          recommended_option: 2, recommendation_reason: "直接解决当前问题",
+        }] },
+        { event: "wait", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, status: "waiting-for-user" },
+        { event: "reply", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, source: "user", reply_ref: "host-message://reply/spec-clarify-1", reply_hash: replyHash, answers: [{ question_id: "scope", number: 2 }], remaining_question_ids: [], re_ranked: true },
+        { event: "resume", round: 1, card_ref: "host-message://ask/spec-clarify-1", card_hash: cardHash, reply_ref: "host-message://reply/spec-clarify-1", reply_hash: replyHash, status: "resumed" },
+      ],
+    }];
+    const review = publishReviewFixture({ ...state, kernel });
+    const outcome = stageOutcome(state, "build-spec", { workspace, artifacts, attemptId: "attempt-spec-clarify-receipt" });
+    const snapshot = state.candidate.captureSnapshot();
+    const materialRevision = kernel.currentVNextMaterialRevision();
+    const context = {
+      stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
+      workspace, artifacts,
+    };
+    const sessionId = `session-spec-clarify-${process.pid}-${Date.now()}`;
+    const home = join(state.root, "home");
+    const transcript = join(home, ".codex", "sessions", "2026", "08", "31", `rollout-${sessionId}.jsonl`);
+    mkdirSync(join(home, ".codex", "sessions", "2026", "08", "31"), { recursive: true });
+    writeFileSync(transcript, "");
+    const previousSessionId = process.env.CODEX_SESSION_ID;
+    try {
+      process.env.CODEX_SESSION_ID = sessionId;
+      registerCodexSession({ sessionId, transcriptPath: transcript, cwd: process.cwd(), home, observedAtMs: 0 });
+      bindCodexSessionTask({ projectName: "WorkflowHub", taskId: state.task.identity.taskId, taskPath: state.task.taskPath, cwd: process.cwd(), sessionId, boundAtMs: 1000 });
+      const execution = stageAgentExecution("build-spec");
+      let clock = 2000;
+      for (const step of execution.steps) {
+        const startedAtMs = clock;
+        const endedAtMs = clock + (step.step_slug === "spec-clarify" ? 500 : 100);
+        startCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "step", subjectId: step.step_slug, cwd: process.cwd(), sessionId, startedAtMs });
+        if (step.step_slug === "spec-clarify") {
+          startCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "skill", subjectId: "spec-clarify", parentSubjectId: step.step_slug, cwd: process.cwd(), sessionId, startedAtMs: startedAtMs + 100 });
+          finishCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "skill", subjectId: "spec-clarify", status: "completed", trigger: true, executed: true, version: "1.0.0", cwd: process.cwd(), sessionId, endedAtMs: startedAtMs + 400 });
+        }
+        finishCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "step", subjectId: step.step_slug, status: "completed", cwd: process.cwd(), sessionId, endedAtMs });
+        clock = endedAtMs + 100;
+      }
+      for (const skill of execution.skills.filter(({ skill_id }) => skill_id !== "spec-clarify")) {
+        startCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "skill", subjectId: skill.skill_id, cwd: process.cwd(), sessionId, startedAtMs: clock });
+        finishCodexSessionEvent({ taskId: state.task.identity.taskId, stage: "build-spec", subjectKind: "skill", subjectId: skill.skill_id, status: "completed", trigger: true, executed: true, version: skill.version, cwd: process.cwd(), sessionId, endedAtMs: clock + 100 });
+        clock += 200;
+      }
+      const clarifyStep = execution.steps.find(({ step_slug }) => step_slug === "spec-clarify");
+      const clarifyStepStart = 2000 + execution.steps.slice(0, clarifyStep.order - 1)
+        .reduce((total, step) => total + (step.step_slug === "spec-clarify" ? 600 : 200), 0);
+      writeFileSync(transcript, [
+        JSON.stringify({ timestamp: new Date(clarifyStepStart + 200).toISOString(), type: "response_item", payload: { type: "message", id: "clarify-ask-1", role: "assistant", content: [{ type: "output_text", text: askText }] } }),
+        JSON.stringify({ timestamp: new Date(clarifyStepStart + 300).toISOString(), type: "response_item", payload: { type: "message", id: "clarify-reply-1", role: "user", content: [{ type: "input_text", text: replyText }] } }),
+      ].join("\n") + "\n");
+      execution.spec_analyze.packet.clarify = {
+        task_id: state.task.identity.taskId,
+        stage: "build-spec",
+        snapshot_tree: snapshot.tree,
+        material_revision: materialRevision,
+        status: "resolved",
+        trigger: true,
+        reason: "用户已选择完整范围",
+        lifecycle_rounds: lifecycleRounds,
+      };
+      execution.spec_analyze.evidence_subjects.spec = { subject_kind: "step", subject_id: execution.steps[1].step_slug };
+      recordCodexSessionSpecAnalyze({
+        taskId: state.task.identity.taskId,
+        stage: "build-spec",
+        cwd: process.cwd(),
+        sessionId,
+        value: {
+          schema_version: "workflowhub-spec-analyze-stage-outcome.v1",
+          task_id: state.task.identity.taskId,
+          stage: "build-spec",
+          snapshot_tree: snapshot.tree,
+          material_revision: materialRevision,
+          ...execution.spec_analyze,
+          result: { status: "consistent" },
+        },
+      });
+      const controlled = bindCurrentSessionOutcome({
+        context,
+        stage: "build-spec",
+        cwd: process.cwd(),
+        input: { receipts: { review: review.ref } },
+      });
+      expect(controlled.receipts.clarify).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
+      const clarify = JSON.parse(state.task.readRecord(controlled.receipts.clarify));
+      expect(clarify).not.toHaveProperty("command");
+      expect(clarify).toMatchObject({ task_id: state.task.identity.taskId, stage: "build-spec", trigger: true, producer: { component: "spec-clarify" }, transcript: { session_id: sessionId } });
+
+      const result = await runOfficialStage("build-spec", context, controlled);
+
+      const clarifyFact = result.quality_fact_refs
+        .map((ref) => JSON.parse(state.task.readRecord(ref)))
+        .find((fact) => fact.subject === "clarify");
+      expect(clarifyFact).toMatchObject({ status: "passed" });
+
+      const explicitInput = { receipts: { review: review.ref, stage_outcomes: outcome.ref } };
+      expect(bindCurrentSessionOutcome({ context, stage: "build-spec", cwd: process.cwd(), input: explicitInput }))
+        .toEqual(explicitInput);
+
+      writeFileSync(join(workspace.worktreeRoot, "clarify-snapshot-drift.txt"), "non-material snapshot drift\n");
+      const stale = bindCurrentSessionOutcome({
+        context,
+        stage: "build-spec",
+        cwd: process.cwd(),
+        input: { receipts: { review: review.ref } },
+      });
+      expect(stale.receipts).toEqual({ review: review.ref });
+    } finally {
+      try { endCodexSession({ sessionId, cwd: process.cwd() }); } catch {}
+      if (previousSessionId === undefined) delete process.env.CODEX_SESSION_ID;
+      else process.env.CODEX_SESSION_ID = previousSessionId;
+    }
+  });
+
   it("rejects a session event that belongs to another stage", () => {
     const state = fixture("workflowhub-session-stage-boundary");
     const context = contextFor("make-decision", state);
