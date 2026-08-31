@@ -15,6 +15,18 @@ import { validateUiDesignLoopFact } from "../../runtime/stage/stage-content-cont
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const repoRoot = new URL("../..", import.meta.url).pathname;
 
+function decisionLogWithUiApplicability(result) {
+  const reason = result === "ui" ? "fixture includes a page consumer" : "fixture has no page or frontend consumer";
+  return `# Fixture decision\n\n## UI applicability\n\`\`\`json\n${JSON.stringify({
+    result,
+    sources: {
+      raw_requirement: { conclusion: result, reason },
+      project_inventory: { conclusion: result, reason },
+      planned_or_changed_frontend_fact: { conclusion: result, reason },
+    },
+  }, null, 2)}\n\`\`\`\n`;
+}
+
 function readManifest(stage) {
   return yaml.load(readFileSync(join(repoRoot, "workflows", stage, "skill-deps.yaml"), "utf8"));
 }
@@ -136,12 +148,14 @@ describe("stage Skill declaration to formal consumer contract", () => {
       manifest: { record_model: "vnext-single-write" },
       currentMaterialRevision: `revision-${"b".repeat(64)}`,
       snapshotWorkspace: () => ({ tree: "a".repeat(40) }),
+      readArtifact: () => "# Fixture decision\n",
     };
     const unknown = await officialStageHandler("verify-code")(worker, { contract_facts: {} });
     expect(unknown.facts.component_quality).toMatchObject({ status: "unknown", applicability: "unknown" });
     expect(unknown.missing_items).toContain("component quality applicability is unknown");
 
-    const nonUi = await officialStageHandler("verify-code")(worker, { contract_facts: { impact: "non_ui" } });
+    const nonUiWorker = { ...worker, readArtifact: () => decisionLogWithUiApplicability("non_ui") };
+    const nonUi = await officialStageHandler("verify-code")(nonUiWorker, { contract_facts: { impact: "non_ui" } });
     expect(nonUi.facts.component_quality).toMatchObject({ status: "not_applicable", applicability: "non_ui" });
   });
 

@@ -16,6 +16,7 @@ import {
   executeClosePlan,
   inspectDeliveryCloseState,
   prepareDeliveryClosePlan,
+  recordManualDeliveryClose,
 } from "../../core/task-close.mjs";
 
 const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -58,12 +59,19 @@ function optionalCompletion(task) {
   catch (error) { if (error?.code === "ENOENT") return null; throw error; }
 }
 
+function optionalRiskClose(values) {
+  if (values["risk-close"] === undefined) return undefined;
+  try { return JSON.parse(values["risk-close"]); }
+  catch { throw new TypeError("--risk-close must be JSON"); }
+}
+
 function usage() {
   return [
     "Usage:",
     "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=...",
     "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout [--reply-text=...] [--step-slug=...] (reply and step required unless timeout)",
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs manual-close --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... [--plan-hash=...]",
     "  task-close.mjs close --task-path=... --project=... --task=... --reply-text=... --step-slug=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
@@ -72,10 +80,10 @@ function usage() {
 
 async function main() {
   const { command, values } = args(process.argv.slice(2));
-  if (!new Set(["prepare", "confirm", "execute", "complete", "status", "close"]).has(command)) throw new TypeError(usage());
+  if (!new Set(["prepare", "confirm", "execute", "manual-close", "complete", "status", "close"]).has(command)) throw new TypeError(usage());
   // A retry after governed worktree removal must be able to reconcile the
   // remaining branch-cleanup step without reopening the deleted Workspace.
-  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "complete", "execute"]).has(command) });
+  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "complete", "execute", "manual-close"]).has(command) });
   const boundary = command === "status" ? null : authenticateWriteBoundary({
     task,
     stage: "verify-code",
@@ -112,6 +120,7 @@ async function main() {
       : { status: "not_completed", ref: "operations/close/completed.json" };
   }
   if (command === "prepare") {
+    const riskClose = optionalRiskClose(values);
     const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
       task_branch: required(values, "task-branch"),
       target_branch: required(values, "target-branch"),
@@ -119,6 +128,7 @@ async function main() {
       task_commit: required(values, "task-commit"),
       spec_source_path: required(values, "spec-source"),
       spec_archive_path: required(values, "spec-archive"),
+      ...(riskClose === undefined ? {} : { risk_close: riskClose }),
     }});
     return finish(result, `operations/close/plans/${result.plan_hash}/plan.json`);
   }
@@ -136,12 +146,22 @@ async function main() {
     return finish(result, result.ref);
   }
   if (command === "execute") {
-    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan is retired");
+    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plans must use manual-close");
     const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
     const sourceRef = result.status === "completed"
       ? "operations/close/completed.json"
       : required(values, "confirmation-ref");
     return finish(result, sourceRef);
+  }
+  if (command === "manual-close") {
+    const result = await recordManualDeliveryClose({
+      task,
+      kernel,
+      plan,
+      closeConfirmationRef: required(values, "confirmation-ref"),
+      executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }),
+    });
+    return finish(result, "operations/close/manual-risk-close.json");
   }
   if (command === "complete") {
     const result = await completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });

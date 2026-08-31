@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../runtime/task/git-worktree-snapshot.mjs";
+import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
@@ -32,6 +32,16 @@ const PHYSICAL_DELIVERY_FACTS = Object.freeze([
   "worktree_cleanup",
   "formal_cleanup_safe",
   "branch_cleanup",
+]);
+const PHYSICAL_DELIVERY_STATE_KEYS = Object.freeze([
+  ...PHYSICAL_DELIVERY_FACTS,
+  "archive_commit",
+  "archive_blob_preserved",
+  "archive_only_rename",
+  "local_target_oid",
+  "remote_target_oid",
+  "worktree_cleanup_scan",
+  "cleanup",
 ]);
 
 function plain(value, label) {
@@ -61,6 +71,13 @@ function sha256(value) { return createHash("sha256").update(value).digest("hex")
 function physicalDeliveryMissing(state) {
   const facts = state?.facts ?? state;
   return PHYSICAL_DELIVERY_FACTS.filter((name) => facts?.[name] !== true);
+}
+
+function physicalStateForRecord(state) {
+  const facts = state?.facts ?? state;
+  return Object.fromEntries(PHYSICAL_DELIVERY_STATE_KEYS
+    .filter((name) => Object.prototype.hasOwnProperty.call(facts ?? {}, name))
+    .map((name) => [name, structuredClone(facts[name])]));
 }
 
 export function authenticateReviewEvidence(task, result) {
@@ -922,8 +939,53 @@ function manualCleanupObservation(task, kernel) {
  * a normal task completion. The caller must have already executed the same
  * plan-bound physical executors used by normal close.
  */
-export function recordManualDeliveryClose({} = {}) {
-  throw new Error("risk close is retired; use normal close with quality facts recorded separately");
+export async function recordManualDeliveryClose({
+  task: taskHandle,
+  kernel: taskKernel,
+  plan,
+  closeConfirmationRef,
+  executors,
+  now = () => new Date().toISOString(),
+} = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("manual risk close TaskHandle/TaskKernel mismatch");
+  const delivery = validateDeliveryPlan(plan, task, kernel);
+  if (delivery.risk_close === undefined) throw new Error("manual risk close requires delivery.risk_close");
+  if (typeof now !== "function") throw new TypeError("manual risk close now must be a function");
+  const planHash = closePlanHash(plan);
+  const confirmation = closeConfirmation(task, planHash, closeConfirmationRef);
+  if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
+
+  await executeClosePlan({
+    task,
+    kernel,
+    plan,
+    closeConfirmationRef,
+    executors,
+    deferCompletionRecord: true,
+    manualRiskClose: true,
+    now,
+  });
+
+  const state = inspectDeliveryCloseState({ task, kernel, plan });
+  if (state.physical_missing.length > 0) throw new Error(`manual risk close is incomplete: ${state.physical_missing.join(", ")}`);
+  const record = {
+    schema_version: "manual-risk-close.v1",
+    task_id: task.identity.taskId,
+    plan_hash: planHash,
+    status: "delivered_with_risk",
+    close_mode: "manual-risk-close",
+    close_confirmation_ref: closeConfirmationRef,
+    human_confirmation_ref: confirmation.human_confirmation_ref,
+    risk_close: structuredClone(delivery.risk_close),
+    physical_state: physicalStateForRecord(state),
+    recorded_at: now(),
+  };
+  return task.withRecordLock("locks/close.execution.lock", () => {
+    createOrVerify(task, "operations/close/manual-risk-close.json", record, "manual risk close");
+    return Object.freeze(record);
+  });
 }
 
 export function closePlanHash(plan) { return sha256(canonical(plain(plan, "close plan"))); }
@@ -986,9 +1048,11 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, c
     const fact = required[index];
     const kind = requiredKinds[subject];
     return !fact || fact.kind !== kind || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === ""
-      || !qualityPredicateSatisfied(fact, kind, closeMode === "mini-task"
-        ? { stage: "verify-code", subject, review_status: fact.review_status }
-        : {});
+      || !qualityPredicateSatisfied(fact, kind, {
+        stage: "verify-code",
+        subject,
+        review_status: fact.review_status,
+      });
   });
   if (missing.length) {
     const state = existsSync(worktreeRoot) ? "current verify-code quality facts are incomplete" : "current verify-code quality facts are incomplete after worktree removal";
@@ -1345,15 +1409,8 @@ function validateDeliveryPlan(plan, task, kernel) {
   repositoryPath(delivery.spec_archive_path, "delivery spec_archive_path");
   if (delivery.spec_source_path === delivery.spec_archive_path) throw new Error("delivery spec source and archive paths must differ");
   if (delivery.risk_close !== undefined) {
-    const risk = plain(delivery.risk_close, "delivery risk close");
-    if (risk.accepted !== true) throw new Error("delivery risk close must record accepted=true");
-    if (typeof risk.reason !== "string" || risk.reason.trim() === "") throw new TypeError("delivery risk close reason is required");
-    if (!Array.isArray(risk.deferred_items) || risk.deferred_items.some((item) => typeof item !== "string" || item.trim() === "")) {
-      throw new TypeError("delivery risk close deferred_items must be an array of non-empty strings");
-    }
-    if (!Array.isArray(risk.quality_reasons) || risk.quality_reasons.some((item) => typeof item !== "string" || item.trim() === "")) {
-      throw new TypeError("delivery risk close quality_reasons must be an array of non-empty strings");
-    }
+    validateRiskClose(delivery.risk_close);
+    validateRiskCloseQualityReasons(delivery.risk_close, delivery.quality_gaps);
   }
   for (const branch of [delivery.task_branch, delivery.target_branch]) {
     if (!gitResult(delivery.target_repo_root, ["check-ref-format", "--branch", branch]).ok) throw new TypeError(`invalid Git branch: ${branch}`);
@@ -1361,6 +1418,33 @@ function validateDeliveryPlan(plan, task, kernel) {
   if (delivery.task_branch === delivery.target_branch) throw new Error("task branch and target branch must differ");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(delivery.remote)) throw new TypeError("delivery remote must be an explicit remote name");
   return delivery;
+}
+
+function validateRiskClose(value) {
+  const risk = plain(value, "delivery risk close");
+  if (risk.accepted !== true) throw new Error("delivery risk close must record accepted=true");
+  if (typeof risk.reason !== "string" || risk.reason.trim() === "") throw new TypeError("delivery risk close reason is required");
+  if (!Array.isArray(risk.deferred_items) || risk.deferred_items.length === 0 || risk.deferred_items.some((item) => typeof item !== "string" || item.trim() === "")) {
+    throw new TypeError("delivery risk close deferred_items must be a non-empty array of non-empty strings");
+  }
+  if (!Array.isArray(risk.quality_reasons) || risk.quality_reasons.length === 0 || risk.quality_reasons.some((item) => typeof item !== "string" || item.trim() === "")) {
+    throw new TypeError("delivery risk close quality_reasons must be a non-empty array of non-empty strings");
+  }
+  return risk;
+}
+
+function validateRiskCloseQualityReasons(risk, qualityGaps) {
+  const expected = [...new Set((Array.isArray(qualityGaps) ? qualityGaps : [])
+    .filter((item) => typeof item === "string" && item.trim() !== "")
+    .map((item) => item.trim()))].sort();
+  const supplied = [...new Set(risk.quality_reasons.map((item) => item.trim()))].sort();
+  if (expected.length === 0) {
+    throw new Error("delivery risk close requires at least one current quality gap");
+  }
+  if (expected.length !== supplied.length || expected.some((item, index) => item !== supplied[index])) {
+    throw new Error("delivery risk close quality_reasons must exactly match current quality_gaps");
+  }
+  return risk;
 }
 
 function closeConfirmation(task, planHash, ref) {
@@ -1414,7 +1498,7 @@ export function prepareDeliveryClosePlan({
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const input = plain(requested, "delivery close input");
-  if (input.risk_close !== undefined) throw new Error("risk close is retired");
+  const riskClose = input.risk_close === undefined ? undefined : validateRiskClose(input.risk_close);
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
@@ -1422,6 +1506,7 @@ export function prepareDeliveryClosePlan({
   const workspace = openCurrentTaskWorkspace(task);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
   const currentSnapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
   const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
   const materialRevision = currentMaterialRevision(task, worktree);
@@ -1515,7 +1600,8 @@ export function prepareDeliveryClosePlan({
       target_baseline: targetBaseline,
       remote_target_baseline: remoteTargetBaseline,
       merge_strategy: "--no-ff --no-edit",
-      close_mode: allowMiniTaskFocused ? "mini-task" : "ordinary",
+      close_mode: riskClose ? "manual-risk-close" : allowMiniTaskFocused ? "mini-task" : "ordinary",
+      ...(riskClose ? { risk_close: structuredClone(riskClose) } : {}),
       ...(productRelease ? { product_release: productRelease } : {}),
       quality_status: qualityReasons.length === 0 ? "observed" : "incomplete",
       quality_gaps: [...new Set(qualityReasons)],
@@ -1622,7 +1708,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
-  if (delivery.risk_close !== undefined) throw new Error("risk close is retired");
+  if (delivery.risk_close !== undefined) throw new Error("risk close plans must be recorded through recordManualDeliveryClose");
   const planHash = closePlanHash(plan);
   const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
   if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
@@ -1650,7 +1736,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
     }
     const state = inspectDeliveryCloseState({ task, kernel, plan });
     if (state.physical_missing.length > 0) throw new Error(`delivery close is incomplete: ${state.physical_missing.join(", ")}`);
-    const completion = { schema_version: "task-close-completed.v1", task_id: task.identity.taskId, plan_hash: planHash, status: "completed", physical_state: structuredClone(state.facts), completed_at: now() };
+    const completion = { schema_version: "task-close-completed.v1", task_id: task.identity.taskId, plan_hash: planHash, status: "completed", physical_state: physicalStateForRecord(state), completed_at: now() };
     createOrVerify(task, "operations/close/completed.json", completion, "close completion");
     return Object.freeze(completion);
   });
@@ -1736,6 +1822,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         probe: published,
         execute: async () => {
           targetPreflight(delivery);
+          assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
           const tip = branchOid(root, delivery.task_branch);
           if (tip !== delivery.task_commit) {
             const parent = gitResult(root, ["rev-parse", `${delivery.task_commit}^`]).stdout.toLowerCase();
@@ -1750,6 +1837,11 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             }
             throw new Error("task worktree bytes changed before snapshot publish");
           }
+          // The first check closes the plan→executor gap. Recheck after the
+          // snapshot too: these paths are deliberately excluded from that
+          // snapshot, so a concurrent sidecar write must never be erased by
+          // the reset that follows.
+          assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
           if (sourceWorktreeStatus(worktree) !== "") throw new Error("published task source worktree is not clean");
         },
@@ -1846,7 +1938,14 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           },
           execute: async () => {
             const worktreeObservation = await removal.probe();
-            if (!worktreeObservation.satisfied) await removal.execute();
+            if (!worktreeObservation.satisfied) {
+              // A sidecar can be produced after commit publication (for
+              // example by a merge hook). Do not let the generic worktree
+              // remover delete bytes that have not been published to task
+              // storage.
+              assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
+              await removal.execute();
+            }
             const branchObservation = branchRemover.probe();
             if (!branchObservation.satisfied) await branchRemover.execute();
           },
@@ -1888,7 +1987,12 @@ export async function executeClosePlan(options = {}) {
   const kernel = assertTaskKernel(options.kernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   const plan = validatePlan(options.plan, task);
-  if (plan.delivery?.risk_close !== undefined) throw new Error("risk close is retired");
+  const manualRiskClose = plan.delivery?.risk_close !== undefined;
+  if (manualRiskClose !== (options.manualRiskClose === true)) {
+    throw new Error(manualRiskClose
+      ? "risk close plans must be recorded through recordManualDeliveryClose"
+      : "manual risk close execution requires delivery.risk_close");
+  }
   const planRaw = canonical(plan);
   const planHash = sha256(planRaw);
   const preparedRef = `operations/close/plans/${planHash}/plan.json`;
@@ -1982,13 +2086,21 @@ export async function executeClosePlan(options = {}) {
       const missing = deliveryState.physical_missing;
       if (missing.length > 0) throw new Error(`delivery close is incomplete: ${missing.join(", ")}`);
     }
+    if (manualRiskClose) {
+      if (acceptedCompletion) throw new Error("manual risk close conflicts with a normal completion record");
+      return Object.freeze({
+        status: "delivered_with_risk",
+        close_mode: "manual-risk-close",
+        physical_state: deliveryState ? physicalStateForRecord(deliveryState) : {},
+      });
+    }
     if (acceptedCompletion) return Object.freeze(acceptedCompletion);
     const completion = {
       schema_version: "task-close-completed.v1",
       task_id: task.identity.taskId,
       plan_hash: planHash,
       status: "completed",
-      ...(deliveryState ? { physical_state: structuredClone(deliveryState.facts) } : {}),
+      ...(deliveryState ? { physical_state: physicalStateForRecord(deliveryState) } : {}),
       completed_at: now(),
     };
     if (!options.deferCompletionRecord) createOrVerify(task, "operations/close/completed.json", completion, "close completion");

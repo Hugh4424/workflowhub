@@ -443,6 +443,10 @@ test("UI validators require state evidence, confirmation consistency, and compon
   const validContract = {
     page_or_region: "settings-page",
     design_status: "ready",
+    design_authority: {
+      design: { document_kind: "design", path: "Design.md", content_sha256: "a".repeat(64), revision: "design-r1", anchor_id: "design-root" },
+      experience: { document_kind: "experience", path: "Experience.md", content_sha256: "b".repeat(64), revision: "experience-r1", anchor_id: "experience-root" },
+    },
     design_revision: "Design.md@v1",
     missing_items: [],
     fallback_visual_basis: "component fixture",
@@ -460,6 +464,7 @@ test("UI validators require state evidence, confirmation consistency, and compon
   };
   assert.equal(validateUiContract(validContract).ok, true);
   assert.equal(validateUiContract({ ...validContract, page_or_region: undefined }).ok, false);
+  assert.equal(validateUiContract({ ...validContract, design_authority: undefined }).ok, false);
   assert.equal(validateUiContract({ ...validContract, states: [{ ...state, name: undefined }] }).ok, false);
   assert.equal(validateUiContract({ ...validContract, states: [{ ...state, interaction_flow: undefined }] }).ok, false);
   assert.equal(validateUiContract({ ...validContract, design_revision: "unknown" }).ok, false);

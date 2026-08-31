@@ -177,6 +177,8 @@ describe("close contract (T0-RED)", () => {
     expect(completed).not.toHaveProperty("quality_gaps");
     expect(completed).not.toHaveProperty("product_release_status");
     expect(completed).not.toHaveProperty("risk_record_ref");
+    expect(completed.physical_state).not.toHaveProperty("verify_facts_fresh");
+    expect(completed.physical_state).not.toHaveProperty("verify_facts_fresh_reason");
   });
 
   it("close plan has exactly five ordered actions: commit, merge, archive, push, cleanup", async () => {

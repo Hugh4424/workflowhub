@@ -943,6 +943,8 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   return Object.freeze({
     status: "present",
     host: "codex",
+    source_id: `codex/${current.session_id}`,
+    source_family: "codex",
     session_id: current.session_id,
     task_id: task,
     source_ref: `${current.transcript_path ? "codex-rollout" : "codex-session"}-${current.session_id}`,

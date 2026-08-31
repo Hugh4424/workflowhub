@@ -3,12 +3,44 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runSimpleReview } from "../simple-review-runner.mjs";
+import {
+  createSimpleReviewPacket,
+  dispatchFrozenProviderInput,
+  rehydrateProviderInput,
+  runSimpleReview,
+  serializeProviderInput,
+} from "../simple-review-runner.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("simple material-only review", () => {
+  it("rehydrates and dispatches only the exact serialized provider input", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-")));
+    roots.push(attachmentRoot);
+    const packet = createSimpleReviewPacket({ stage: "verify-code", materials: { implementation: "A bytes", tests: "test bytes" } });
+    const bytes = serializeProviderInput({
+      packet, hostProvider: "codex", providers: ["other/model"], reviewMode: "single_round", prompt: "review exact bytes",
+    });
+    const restored = rehydrateProviderInput(bytes, attachmentRoot);
+    expect(restored.materials.materialId).toBe(packet.material_id);
+    expect(readFileSync(join(restored.materials.bundleRoot, "materials/01-implementation.md"), "utf8")).toBe("A bytes");
+    restored.materials.dispose();
+
+    const seen = [];
+    await dispatchFrozenProviderInput({
+      bytes,
+      attachmentRoot,
+      client: { async runGroup(request) {
+        seen.push({ strictProtocol: request.strictProtocol, materialId: request.materials.materialId,
+          implementation: readFileSync(join(request.materials.bundleRoot, "materials/01-implementation.md"), "utf8") });
+        return { outcome: "completed" };
+      } },
+    });
+    expect(seen).toEqual([{ strictProtocol: true, materialId: packet.material_id, implementation: "A bytes" }]);
+    expect(() => rehydrateProviderInput(Buffer.from("{}"), attachmentRoot)).toThrow(/invalid/);
+  });
+
   it("reviews submitted bytes without Workspace or TaskHandle", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-")));
     roots.push(attachmentRoot);

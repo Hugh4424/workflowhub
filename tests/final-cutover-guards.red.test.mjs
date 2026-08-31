@@ -55,6 +55,16 @@ describe("final cutover guard contracts", () => {
     stage_outcomes: worker.stageOutcomeRef ?? verifyStageOutcomeRef,
   });
   const completedBuildCodeDocuments = () => {
+    const decisionLog = [
+      "# Decision",
+      "",
+      "## UI applicability",
+      "",
+      "```json",
+      "{\"result\":\"non_ui\",\"sources\":{\"raw_requirement\":{\"conclusion\":\"non_ui\",\"reason\":\"fixture is a backend-only contract test\"},\"project_inventory\":{\"conclusion\":\"non_ui\",\"reason\":\"fixture has no page consumer\"},\"planned_or_changed_frontend_fact\":{\"conclusion\":\"non_ui\",\"reason\":\"fixture changes no frontend\"}}}",
+      "```",
+      "",
+    ].join("\n");
     const spec = `# Specification
 
 ## Requirements
@@ -125,6 +135,7 @@ Stop on fixture setup failure.
 
 ${completion}`;
     return {
+      "decision-log": decisionLog,
       spec,
       plan,
       tasks: `# Tasks

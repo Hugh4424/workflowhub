@@ -77,9 +77,16 @@ describe("five-stage completion predicates derive only from quality facts", () =
       expect(deriveStageCompletion(stage, observations(stage))).toMatchObject({ stage, status: "completed", missing: [] });
     });
     for (const subject of Object.keys(STAGE_PREDICATES[stage])) {
-      it(`${stage} remains incomplete without ${subject}`, () => {
+      const legacyUiApplicability = stage === "make-decision" && subject === "ui_applicability";
+      it(legacyUiApplicability
+        ? "make-decision keeps pre-ui-applicability historical observations readable"
+        : `${stage} remains incomplete without ${subject}`, () => {
         const facts = observations(stage).filter((entry) => entry.fact.value.subject !== subject);
-        expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "in_progress", missing: [subject] });
+        if (legacyUiApplicability) {
+          expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "completed", missing: [] });
+        } else {
+          expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "in_progress", missing: [subject] });
+        }
       });
     }
   }

@@ -1011,7 +1011,7 @@ describe("current vNext five-stage runtime", () => {
     const specSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
     const specRun = publicRun(state, "build-spec", { receipts: { review: specReview.resultRef } });
-    expect(specRun.status).toBe("completed");
+    expect(specRun.status, JSON.stringify(specRun, null, 2)).toBe("completed");
     expect(specRun.stage_outcome_summary.spec_analyze).toMatchObject({ status: "consistent" });
     expect(specRun.completion.missing).not.toContain("traceability");
     expect(publicStatus(state, "build-spec")).toMatchObject({ work_status: "ready", quality_status: "completed" });

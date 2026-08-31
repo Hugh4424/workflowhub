@@ -21,6 +21,14 @@ const MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
 // outside authenticated snapshots so an unrelated host integration cannot
 // contaminate the current task's diff, review packet, or page provenance.
 export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/", "quality/", ".multica/"]);
+// Every execution snapshot exclusion is also a close-time structural error:
+// otherwise its bytes could disappear from the delivery branch. The two
+// supplements are known execution products that snapshots otherwise include.
+// All must be published to task storage rather than carried by the branch.
+export const CLOSE_EXECUTION_SIDECAR_PREFIXES = Object.freeze([
+  ...EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
+  "qa-artifacts/",
+]);
 const CURRENT_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
 
 function isCurrentMaterialPath(path, taskId = null) {
@@ -58,10 +66,51 @@ function gitText(root, args) { return String(git(root, args)).trim(); }
 // makes addPath receive an empty basename and fail before the real files are
 // considered. Filter only those placeholders here; ordinary untracked files
 // remain part of the snapshot.
-function gitPaths(root, args) {
+function gitListedPaths(root, args) {
   return Buffer.from(git(root, args, { encoding: "buffer" })).toString("utf8")
     .split("\0")
-    .filter((path) => path !== "" && !path.endsWith("/"));
+    .filter((path) => path !== "");
+}
+
+function gitPaths(root, args) {
+  return gitListedPaths(root, args)
+    .filter((path) => !path.endsWith("/"));
+}
+
+function matchesPrefix(path, prefixes) {
+  return prefixes.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix));
+}
+
+function currentTaskSidecarPrefix(taskId) {
+  if (taskId === undefined || taskId === null) return null;
+  if (typeof taskId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
+    throw new TypeError("close sidecar taskId must be a task identifier");
+  }
+  return `tasks/${taskId}/`;
+}
+
+/** Read repository paths that would otherwise make close publish execution sidecars. */
+export function listCloseExecutionSidecarPaths(root, { taskId } = {}) {
+  const taskSidecarPrefix = currentTaskSidecarPrefix(taskId);
+  const paths = new Set([
+    ...gitListedPaths(root, ["ls-files", "-z"]),
+    ...gitListedPaths(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
+    ...gitListedPaths(root, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]),
+  ]);
+  const prefixes = taskSidecarPrefix === null
+    ? CLOSE_EXECUTION_SIDECAR_PREFIXES
+    : [...CLOSE_EXECUTION_SIDECAR_PREFIXES, taskSidecarPrefix];
+  return Object.freeze([...paths].filter((path) => matchesPrefix(path, prefixes)).sort());
+}
+
+/** Close must fail before it commits a worktree containing an execution sidecar. */
+export function assertNoCloseExecutionSidecars(root, options = {}) {
+  const paths = listCloseExecutionSidecarPaths(root, options);
+  if (paths.length === 0) return paths;
+  const error = new Error(`CLOSE_EXECUTION_SIDECAR_PATHS: ${paths.join(", ")}; publish execution artifacts to task storage before close`);
+  error.code = "CLOSE_EXECUTION_SIDECAR_PATHS";
+  error.paths = paths;
+  throw error;
 }
 
 function gitCommonDir(root) {

@@ -1,7 +1,7 @@
 # 实现计划：[填写：功能名]
 
 - **Input**：`[填写：decision-log.md ref]`、`[填写：spec.md ref]`
-- **Template version**：`plan-task.v3`
+- **Template version**：`plan-task.v4`
 
 ## Quick Read
 

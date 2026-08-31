@@ -81,6 +81,42 @@
         "fixture_only": { "type": "boolean" }
       }
     },
+    "executionEnvironmentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "revision", "endpoint", "runtime_id"],
+      "properties": {
+        "kind": { "enum": ["local", "staging", "production"] },
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "revision": { "$ref": "#/$defs/nonEmpty" },
+        "endpoint": { "$ref": "#/$defs/nonEmpty" },
+        "runtime_id": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "executionDataIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "revision", "source", "dataset_id", "fixture_only"],
+      "properties": {
+        "kind": { "enum": ["seeded", "live", "sanitized"] },
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "revision": { "$ref": "#/$defs/nonEmpty" },
+        "source": { "$ref": "#/$defs/nonEmpty" },
+        "dataset_id": { "$ref": "#/$defs/nonEmpty" },
+        "fixture_only": { "const": false }
+      }
+    },
+    "acceptanceScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "sample", "scenario", "tier"],
+      "properties": {
+        "source": { "$ref": "#/$defs/nonEmpty" },
+        "sample": { "$ref": "#/$defs/nonEmpty" },
+        "scenario": { "$ref": "#/$defs/nonEmpty" },
+        "tier": { "const": "browser" }
+      }
+    },
     "component": {
       "type": "object",
       "additionalProperties": false,
@@ -178,6 +214,7 @@
         "route": { "$ref": "#/$defs/nonEmpty" },
         "page": { "$ref": "#/$defs/nonEmpty" },
         "scenario": { "$ref": "#/$defs/nonEmpty" },
+        "acceptance_scenario": { "$ref": "#/$defs/acceptanceScenario" },
         "tool": { "$ref": "#/$defs/nonEmpty" },
         "engine": { "$ref": "#/$defs/nonEmpty" },
         "session": { "$ref": "#/$defs/nonEmpty" },
@@ -192,6 +229,8 @@
         "api_identity": { "$ref": "#/$defs/identity" },
         "dto_identity": { "$ref": "#/$defs/identity" },
         "browser_profile": { "$ref": "#/$defs/identity" },
+        "environment_identity": { "$ref": "#/$defs/executionEnvironmentIdentity" },
+        "data_identity": { "$ref": "#/$defs/executionDataIdentity" },
         "evidence_ref": { "$ref": "#/$defs/nonEmpty" },
         "evidence_hash": { "$ref": "#/$defs/sha256" },
         "cancellation": { "$ref": "#/$defs/cancellation" },
@@ -307,6 +346,18 @@
         "engine_switch": { "const": "no" }
       },
       "allOf": [
+        {
+          "if": { "required": ["acceptance_scenario"] },
+          "then": {
+            "required": ["environment_identity", "data_identity"],
+            "properties": {
+              "fixture": {
+                "required": ["fixture_only"],
+                "properties": { "fixture_only": { "const": false } }
+              }
+            }
+          }
+        },
         {
           "if": { "properties": { "result": { "const": "pass" } }, "required": ["result"] },
           "then": {

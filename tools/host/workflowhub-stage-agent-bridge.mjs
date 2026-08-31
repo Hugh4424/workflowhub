@@ -112,6 +112,8 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     attemptId,
     workflowRunId: context.workflowRunId,
     host: requiredText(session.host, "session.host"),
+    sourceId: requiredText(session.source_id, "session.source_id"),
+    sourceFamily: requiredText(session.source_family, "session.source_family"),
     sessionId: requiredText(session.session_id, "session.session_id"),
     sourceRef: requiredText(session.source_ref, "session.source_ref"),
     now: () => clock,
@@ -180,6 +182,8 @@ async function runBridge(input) {
         attemptId,
         workflowRunId: context.workflowRunId,
         host: requiredText(input.unavailable.host, "unavailable.host"),
+        sourceId: requiredText(input.unavailable.source_id, "unavailable.source_id"),
+        sourceFamily: requiredText(input.unavailable.source_family, "unavailable.source_family"),
         agentRunId: requiredText(input.unavailable.agent_run_id, "unavailable.agent_run_id"),
         reason: requiredText(input.unavailable.reason, "unavailable.reason"),
       });

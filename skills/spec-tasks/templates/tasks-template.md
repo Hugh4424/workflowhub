@@ -1,7 +1,7 @@
 # 任务清单：[填写：功能名]
 
 - **Input**：`[填写：decision-log.md ref]`、`[填写：spec.md ref]`、`[填写：plan.md ref]`
-- **Template version**：`plan-task.v3`
+- **Template version**：`plan-task.v4`
 
 ## Phase P1 — [填写：阶段名]
 
@@ -48,6 +48,24 @@
 - **scenarios / commands / expected exit / oracle**：[填写：成功、失败、状态或 seam 场景与相同命令/oracle]
 - **fixtures_services**：[填写：fixture、服务和清理责任 / N/A — reason]
 - **coverage limits**：[填写：本命令覆盖范围和明确未覆盖项]
+
+##### Delivery contract fields (新计划必须显式填写)
+
+在每张新任务卡按需添加 `acceptance_role`（`implementation` 或 `acceptance`）和 `ui_scope`
+（`ui`、`fullstack` 或 `non_ui`）。最终验收卡唯一使用 `acceptance`，并额外写
+`acceptance_data` JSON：`[{"source":"...","sample":"...","scenario":"...","tier":"browser|service|command"}]`
+和 `e2e_scope`：`ui|fullstack|high_risk_user_visible|not_required`。矩阵固定为：`ui=ui+browser`、
+`fullstack=fullstack+browser+service`、`high_risk_user_visible=non_ui/ui/fullstack` 分别对应
+`service/browser/browser+service`、`not_required=non_ui`。高风险卡还必须写
+`e2e_decision_refs` JSON（至少 `D6`,`D7`）和 `e2e_risk_decision_ref`：后者是当前任务 make-decision
+的当前风险 D 段，且该段唯一写入下面 Markdown 源码行（JSON 必须在反引号内）：
+
+```md
+- **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"user_declaration"}`
+```
+
+其中 `basis` 也可为 `three_inputs`；该 D 段必须被本任务 spec 引用，且不得用 D6/D7 全局政策代替。UI 计划必须另有一张
+`ui_scope=ui` 且 `acceptance_role=implementation` 的实现卡；四个场景字段均不得省略或写占位值。
 
 ##### UI phase/task fields (仅 UI scope 填写)
 

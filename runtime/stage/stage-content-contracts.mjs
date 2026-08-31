@@ -75,6 +75,7 @@ export const UI_STATE_CONTRACT_FIELDS = Object.freeze([
 export const UI_CONTRACT_FIELDS = Object.freeze([
   "page_or_region",
   "design_status",
+  "design_authority",
   "missing_items",
   "fallback_visual_basis",
   "constraints",
@@ -1390,6 +1391,12 @@ export function validateUiContract(value) {
     if (field === "page_or_region") continue;
     if (value[field] === undefined || value[field] === null) errors.push(`ui contract is missing ${field}`);
   }
+  const designAuthority = object(value.design_authority) ? value.design_authority : null;
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    if (!completeProjectSourceIdentity(designAuthority?.[kind])) {
+      errors.push(`ui contract design_authority must bind ${label} by path, content_sha256, revision, and explicit anchor`);
+    }
+  }
   if (!Array.isArray(value.missing_items)) errors.push("ui contract missing_items must be an array");
   for (const [index, item] of (Array.isArray(value.missing_items) ? value.missing_items : []).entries()) {
     if (!explicitFact(item)) errors.push(`ui contract missing_items[${index}] must include a non-empty reasoned fact`);
@@ -2197,8 +2204,9 @@ function parseCoverageRows(markdown) {
   return rows;
 }
 
-function meaningfulSectionBody(markdown, headingPattern) {
+function markdownSectionBody(markdown, headingPattern) {
   const lines = String(markdown ?? "").split(/\r?\n/);
+  let latest = null;
   for (let start = 0; start < lines.length; start += 1) {
     const heading = lines[start].match(/^(#{1,3})\s*(.+?)\s*$/);
     if (!heading || !headingPattern.test(heading[2])) continue;
@@ -2208,12 +2216,196 @@ function meaningfulSectionBody(markdown, headingPattern) {
       if (nextHeading && nextHeading[1].length <= heading[1].length) break;
       body.push(lines[index]);
     }
-    const meaningful = body.map((line) => line.replace(/^\s*[-*|]\s*/, "").replace(/[`|]/g, "").trim())
-      .find((line) => line !== ""
-        && !/^[-: ]+$/.test(line)
-        && !/^(?:(?:R|D|AC|FR|RISK)-[A-Za-z0-9_-]+[，,;；:\s]*)+$/i.test(line));
-    if (meaningful) return meaningful;
+    latest = body.join("\n");
   }
+  return latest;
+}
+
+function explicitUiQuestion(value) {
+  const question = value?.user_question ?? value?.question ?? value?.talk_question;
+  if (nonEmptyString(question)) return true;
+  return object(question) && [question.prompt, question.text, question.question]
+    .some((candidate) => nonEmptyString(candidate));
+}
+
+/**
+ * Read the one recomputable UI applicability fact from the current decision
+ * log. The existing three-input validator remains the sole merger; this
+ * reader only owns the decision-log representation and unknown-question seam.
+ */
+export function readUiApplicabilityFromDecisionLog(decisionLogMarkdown) {
+  const body = markdownSectionBody(decisionLogMarkdown, /^(?:UI applicability|UI 判定|界面判定)$/i);
+  if (body === null) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze(["decision-log is missing the UI applicability fact"]),
+      missing_items: Object.freeze([
+        "UI applicability is missing: record the three input facts in decision-log.md",
+        "UI applicability is missing: ask the user whether this task changes a page, interaction, or frontend component",
+      ]),
+    });
+  }
+  const jsonBlocks = [...body.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/gi)];
+  if (jsonBlocks.length !== 1) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze([`UI applicability section must contain exactly one JSON fact; found ${jsonBlocks.length}`]),
+      missing_items: Object.freeze(["UI applicability is missing: record exactly one JSON fact with all three inputs"]),
+    });
+  }
+  let value;
+  try {
+    value = JSON.parse(jsonBlocks[0][1]);
+  } catch (error) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze([`UI applicability JSON is invalid: ${error.message}`]),
+      missing_items: Object.freeze(["UI applicability is missing: repair the decision-log JSON fact"]),
+    });
+  }
+  const validation = validateUiApplicability(value);
+  const applicability = value?.result ?? value?.conclusion ?? "unknown";
+  const errors = [...validation.errors];
+  const missingItems = validation.errors.map((error) => `UI applicability: ${error}`);
+  if (validation.ok && applicability === "unknown") {
+    if (!explicitUiQuestion(value)) {
+      errors.push("unknown UI applicability must record the real user question");
+      missingItems.push("UI applicability is unknown: ask the user whether this task changes a page, interaction, or frontend component");
+    }
+    errors.push("unknown UI applicability requires a user reply/ruling and updated source facts");
+    missingItems.push("UI applicability is unknown: preserve the user reply/ruling, update the source fact it resolves, and recompute");
+  }
+  return Object.freeze({
+    status: validation.ok && applicability !== "unknown" ? "recorded" : "missing",
+    applicability: UI_APPLICABILITY_RESULTS.includes(applicability) ? applicability : "unknown",
+    value,
+    errors: Object.freeze(errors),
+    missing_items: Object.freeze([...new Set(missingItems)]),
+  });
+}
+
+function parseConvergenceRows(body) {
+  const rows = body.split(/\r?\n/)
+    .filter((line) => /^\s*\|/.test(line))
+    .map((line) => {
+      const cells = line.split("|").map((cell) => cell.trim());
+      if (cells[0] === "") cells.shift();
+      if (cells.at(-1) === "") cells.pop();
+      return cells;
+    })
+    .filter((cells) => cells.length >= 4 && !cells.every((cell) => /^[-: ]+$/.test(cell)));
+  return rows.length === 0 ? { columns: null, rows: [] } : { columns: rows[0].map((value) => value.toLowerCase()), rows: rows.slice(1) };
+}
+
+function convergenceDimension(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (/^(?:目标|goal|target)$/.test(normalized)) return "goal";
+  if (/^(?:范围|scope)$/.test(normalized)) return "scope";
+  if (/^(?:方案|solution|direction)$/.test(normalized)) return "solution";
+  if (/^(?:验收|acceptance)$/.test(normalized)) return "acceptance";
+  return null;
+}
+
+function substantiveConvergenceText(value) {
+  const text = String(value ?? "").trim();
+  return text.length > 1
+    && !/^(?:n\/?a|none|无|未知|unknown|tbd|todo|待定|待确认|未回答|缺失|-)$/i.test(text)
+    && !/(?:未回答|待确认|待定|\btbd\b|\btodo\b|未知|\bunknown\b|缺失)/i.test(text);
+}
+
+function recordedUserAnswer(value) {
+  const text = String(value ?? "").trim();
+  if (!substantiveConvergenceText(text)) return false;
+  if (/无新需求|no_new_requirement/i.test(text)) return true;
+  if (!/(?:用户|user)/i.test(text)) return false;
+  const answer = text.replace(/(?:用户|user)\s*(?:(?:已)?(?:确认|回答|答复|选择|回复|confirmed|answered|replied|selected))?/gi, "").trim();
+  return substantiveConvergenceText(answer);
+}
+
+function concreteMaterialReference(value) {
+  const text = String(value ?? "").trim();
+  return substantiveConvergenceText(text)
+    && /(?:\b(?:R|D|F|FR|AC|PFACT)-?[A-Za-z0-9][A-Za-z0-9_-]*\b|(?:decision-log|spec|plan|tasks)\.md(?:[:#][^\s]+)?)/i.test(text);
+}
+
+function labelledSubstantiveValue(text, label) {
+  const match = new RegExp(`${label}\\s*(?:[:：=]|是)?\\s*([^；;。\\n]+)`, "i").exec(String(text ?? ""));
+  return match !== null && substantiveConvergenceText(match[1]);
+}
+
+function structuredConvergenceFacts(decisionLogMarkdown) {
+  const body = markdownSectionBody(decisionLogMarkdown, /^(?:收敛检查|convergence check)$/i);
+  const hasCurrentUiFact = markdownSectionBody(decisionLogMarkdown, /^(?:UI applicability|UI 判定|界面判定)$/i) !== null;
+  const emptyFacts = { goal: false, scope: false, solution: false, acceptance: false };
+  if (body === null) {
+    return hasCurrentUiFact
+      ? { present: true, facts: emptyFacts, errors: ["current decision-log with UI applicability must contain its four-dimension convergence table"] }
+      : { present: false, facts: {}, errors: [] };
+  }
+  const { columns, rows } = parseConvergenceRows(body);
+  if (!columns) return { present: true, facts: emptyFacts, errors: ["decision convergence check must contain its four-dimension table"] };
+  const indexFor = (names) => columns.findIndex((column) => names.some((name) => column.includes(name)));
+  const dimensionIndex = indexFor(["维度", "dimension"]);
+  const answerIndex = indexFor(["用户答案", "answer", "无新需求"]);
+  const referenceIndex = indexFor(["事实", "材料", "reference"]);
+  const acceptanceIndex = indexFor(["可执行验收", "acceptance"]);
+  if ([dimensionIndex, answerIndex, referenceIndex, acceptanceIndex].some((index) => index < 0)) {
+    return { present: true, facts: emptyFacts, errors: ["decision convergence table must include dimension, user answer, material reference, and executable acceptance columns"] };
+  }
+  const errors = [];
+  const byDimension = new Map();
+  for (const row of rows) {
+    const dimension = convergenceDimension(row[dimensionIndex]);
+    if (!dimension) continue;
+    if (byDimension.has(dimension)) {
+      errors.push(`decision convergence ${dimension} has duplicate rows`);
+      continue;
+    }
+    byDimension.set(dimension, { answer: row[answerIndex] ?? "", reference: row[referenceIndex] ?? "", acceptance: row[acceptanceIndex] ?? "" });
+  }
+  const facts = {};
+  for (const dimension of ["goal", "scope", "solution", "acceptance"]) {
+    const row = byDimension.get(dimension);
+    if (!row) {
+      facts[dimension] = false;
+      errors.push(`decision convergence ${dimension} is missing`);
+      continue;
+    }
+    let valid = true;
+    if (!recordedUserAnswer(row.answer)) {
+      valid = false;
+      errors.push(`decision convergence ${dimension} is missing a real user answer or no_new_requirement record`);
+    }
+    if (!concreteMaterialReference(row.reference)) {
+      valid = false;
+      errors.push(`decision convergence ${dimension} is missing a concrete fact or material reference`);
+    }
+    if (dimension === "solution" && (!labelledSubstantiveValue(row.answer, "(?:取舍|tradeoff)")
+        || !labelledSubstantiveValue(row.answer, "(?:被拒方案|被拒选项|rejected option)")
+        || !(/无未决项|no open items/i.test(row.answer) || labelledSubstantiveValue(row.answer, "(?:未决项|open item)")))) {
+      valid = false;
+      errors.push("decision convergence solution is missing tradeoff, rejected option, or open-item disposition");
+    }
+    if (dimension === "acceptance" && (!labelledSubstantiveValue(row.acceptance, "(?:场景|scenario)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:数据来源|data source)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:通过|pass)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:失败|fail)"))) {
+      valid = false;
+      errors.push("decision convergence acceptance is missing scenario, data source, pass, or fail criterion");
+    }
+    facts[dimension] = valid;
+  }
+  return { present: true, facts, errors };
+}
+
+function meaningfulSectionBody(markdown, headingPattern) {
+  const body = markdownSectionBody(markdown, headingPattern);
+  if (body === null) return "";
+  const meaningful = body.split(/\r?\n/).map((line) => line.replace(/^\s*[-*|]\s*/, "").replace(/[`|]/g, "").trim())
+    .find((line) => line !== ""
+      && !/^[-: ]+$/.test(line)
+      && !/^(?:(?:R|D|AC|FR|RISK)-[A-Za-z0-9_-]+[，,;；:\s]*)+$/i.test(line));
+  if (meaningful) return meaningful;
   return "";
 }
 
@@ -2239,16 +2431,27 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const directionBody = meaningfulSectionBody(text, /^(?:决定|decision|方案|direction|已选方向|selected direction|结论)$/i);
   const riskBody = meaningfulSectionBody(text, /^(?:开放问题|风险|延期|未决|风险与延期交接|open questions|risks|deferred)$/i);
   const coreRequirementBody = meaningfulSectionBody(text, /^(?:核心需求|core requirement)$/i);
+  const structuredConvergence = structuredConvergenceFacts(text);
 
   const requirementCoverage = hasSection(/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/im)
     || /(?:R-001|原始需求|requirement).*(?:D-001|决定|decision)/i.test(text);
-  const goalAchievement = goalBody !== "" && /(?:实现|达成|确认|可执行|完成|achiev|executable|confirmed)/i.test(goalBody);
-  const acceptanceClarity = acceptanceBody !== "" && /(?:可验证|通过|失败|条件|边界|verify|pass|fail|condition|boundary)/i.test(acceptanceBody);
-  const solutionConvergence = directionBody !== "" && riskBody !== "";
+  let goalAchievement = goalBody !== "" && /(?:实现|达成|确认|可执行|完成|achiev|executable|confirmed)/i.test(goalBody);
+  let scope = meaningfulSectionBody(text, /^(?:范围|scope|目标、用户流程与边界)$/i) !== "";
+  let acceptanceClarity = acceptanceBody !== "" && /(?:可验证|通过|失败|条件|边界|verify|pass|fail|condition|boundary)/i.test(acceptanceBody);
+  let solutionConvergence = directionBody !== "" && riskBody !== "";
   const plainLanguageCard = coreRequirementBody !== "" && goalBody !== "" && directionBody !== "";
+
+  if (structuredConvergence.present) {
+    goalAchievement = structuredConvergence.facts.goal === true;
+    scope = structuredConvergence.facts.scope === true;
+    solutionConvergence = structuredConvergence.facts.solution === true;
+    acceptanceClarity = structuredConvergence.facts.acceptance === true;
+    errors.push(...structuredConvergence.errors);
+  }
 
   if (!requirementCoverage) errors.push("decision-log does not present a requirement-to-decision coverage matrix");
   if (!goalAchievement) errors.push("decision-log does not state the core goal achievement");
+  if (!scope) errors.push("decision-log does not state the scoped user flow, surface, or functional boundary");
   if (!acceptanceClarity) errors.push("decision-log does not make acceptance criteria explicit");
   if (!solutionConvergence) errors.push("decision-log does not show a converged solution with open items");
   if (!plainLanguageCard) errors.push("decision-log end card is missing core requirement, core goal, or selected direction");
@@ -2344,6 +2547,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
     facts: Object.freeze({
       requirement_coverage: completeRequirementCoverage ? "passed" : "missing",
       goal_achievement: goalAchievement ? "passed" : "missing",
+      scope: scope ? "passed" : "missing",
       acceptance_clarity: acceptanceClarity ? "passed" : "missing",
       solution_convergence: solutionConvergence ? "passed" : "missing",
       plain_language_card: plainLanguageCard ? "passed" : "missing",
@@ -2818,6 +3022,8 @@ const TASK_FIELDS_V3 = Object.freeze([
   "evidence_path", "STOP", "recovery", "task risk",
 ]);
 const PLAN_TASK_V3 = "plan-task.v3";
+const PLAN_TASK_V4 = "plan-task.v4";
+const SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS = new Set([PLAN_TASK_V3, PLAN_TASK_V4]);
 const CURRENT_CONSTITUTION_CLAUSE_IDS = Object.freeze([
   // Deliberate governance snapshot: update this list with constitution-checklist.md.
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11",
@@ -3978,9 +4184,14 @@ function validateStructuredSpecContracts({ markdown, packet, identity }) {
     type: "acceptance_contract_gap", artifact: "spec", anchor: "验收标准/失败条件", message: error,
   });
 
-  const mappingStart = markdown.search(/^###\s+来源与决策映射\s*$/m);
+  // Accept the section depth used by the current spec (`##`) as well as the
+  // nested `###` form used by older fixtures.
+  const mappingStart = markdown.search(/^###{0,1}\s+来源与决策映射\s*$/m);
   const mapping = mappingStart < 0 ? "" : markdown.slice(mappingStart);
-  if (mappingStart < 0 || !/\bR-\d+\b/.test(mapping) || !/\bD-\d+\b/.test(mapping)
+  // Current decision logs use both the original compact `D1` form and the
+  // normalized `D-001` form used by generic fixtures.  The analyzer must
+  // recognize either spelling without inventing a second decision source.
+  if (mappingStart < 0 || !/\bR-[A-Za-z0-9_-]+\b/.test(mapping) || !/\bD(?:-\d+|\d+)\b/.test(mapping)
       || !/\bFR-[A-Z][A-Z0-9]*-\d{3}\b/.test(mapping) || !/\bAC-[A-Za-z0-9_-]+\b/.test(mapping)) {
     addStageContractError(errors, findings, {
       type: "traceability_gap", artifact: "spec", anchor: "来源与决策映射",
@@ -4003,10 +4214,20 @@ function validateStructuredSpecContracts({ markdown, packet, identity }) {
     });
   }
 
-  const pfactLines = markdown.split(/\r?\n/).filter((line) => /^\s*-\s+\*\*PFACT-[^*]+\*\*/.test(line));
-  for (const line of pfactLines) {
+  const markdownLines = markdown.split(/\r?\n/);
+  const pfactLineIndexes = markdownLines
+    .map((line, index) => /^\s*-\s+\*\*PFACT-[^*]+\*\*/.test(line) ? index : -1)
+    .filter((index) => index >= 0);
+  for (const [position, lineIndex] of pfactLineIndexes.entries()) {
+    const line = markdownLines[lineIndex];
     const id = line.match(/\*\*(PFACT-[^*]+)\*\*/)?.[1] ?? "PFACT";
-    const states = line.match(/\b(?:verified|inferred|unknown|not_applicable)\b/gi) ?? [];
+    const nextPfact = pfactLineIndexes[position + 1] ?? markdownLines.length;
+    const nextSection = markdownLines.slice(lineIndex + 1, nextPfact).findIndex((candidate) => /^\s*##\s+/.test(candidate));
+    const end = nextSection >= 0 ? lineIndex + 1 + nextSection : nextPfact;
+    // A PFACT's state is commonly declared on the following `status` line;
+    // inspect the whole card while keeping neighboring facts out of scope.
+    const block = markdownLines.slice(lineIndex, end).join("\n");
+    const states = block.match(/\b(?:verified|inferred|unknown|not_applicable)\b/gi) ?? [];
     if (states.length !== 1) addStageContractError(errors, findings, {
       type: "pfact_contract_gap", artifact: "spec", anchor: id,
       message: `${id} must declare exactly one PFACT state: verified, inferred, unknown, or not_applicable`,
@@ -4253,6 +4474,9 @@ function validateStageMaterialContracts({ stage, materials, packet, evidenceByRe
       spec: typeof materials?.spec === "string" ? materials.spec : "",
       plan: typeof materials?.plan === "string" ? materials.plan : "",
       tasks: typeof materials?.tasks === "string" ? materials.tasks : "",
+      decisionLog: typeof (materials?.decisionLog ?? materials?.decision_log ?? materials?.["decision-log.md"]) === "string"
+        ? (materials.decisionLog ?? materials.decision_log ?? materials["decision-log.md"])
+        : null,
     });
     for (const error of [...structural.errors, ...executable.errors]) addStageContractError(errors, findings, {
       type: "plan_task_contract_gap", artifact: "plan/tasks", anchor: "plan-task.v3", message: error,
@@ -4625,33 +4849,35 @@ export function validatePlanTaskContract({
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
   const planVersion = templateVersion(plan);
   const tasksVersion = templateVersion(tasks);
-  const isV3 = planVersion === PLAN_TASK_V3 || tasksVersion === PLAN_TASK_V3;
+  const isPlanTask = SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(planVersion)
+    || SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(tasksVersion);
+  const templateLabel = planVersion ?? tasksVersion ?? "plan-task";
   for (const [label, version] of [["plan", planVersion], ["tasks", tasksVersion]]) {
-    if (version !== null && version !== PLAN_TASK_V3) {
+    if (version !== null && !SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(version)) {
       errors.push(`${label} uses unsupported explicit template version: ${version}`);
     }
   }
-  if (isV3 && (planVersion !== PLAN_TASK_V3 || tasksVersion !== PLAN_TASK_V3)) {
-    errors.push("plan and tasks must use the same plan-task.v3 template version");
+  if (isPlanTask && (planVersion !== tasksVersion || !SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(planVersion))) {
+    errors.push("plan and tasks must use the same supported plan-task template version");
   }
-  if (isV3 && (placeholderOrTemplateNoise(plan) || placeholderOrTemplateNoise(tasks))) {
+  if (isPlanTask && (placeholderOrTemplateNoise(plan) || placeholderOrTemplateNoise(tasks))) {
     errors.push("generated plan/tasks must not retain placeholders, template comments, or filler");
   }
-  if (isV3) {
+  if (isPlanTask) {
     errors.push(...markdownStructureErrors(plan, "plan"), ...markdownStructureErrors(tasks, "tasks"));
   }
 
   const planSections = markdownSections(plan, 2);
   const findPlanSection = (name) => planSections.find(({ heading }) =>
     PLAN_SECTION_ALIASES[name].some((pattern) => pattern.test(heading)));
-  for (const heading of isV3 ? PLAN_SECTIONS_V3 : PLAN_SECTIONS) {
+  for (const heading of isPlanTask ? PLAN_SECTIONS_V3 : PLAN_SECTIONS) {
     const section = findPlanSection(heading);
     const body = section?.body ?? (heading === "Rollback and Recovery" && /风险与回滚/.test(plan) ? "declared per Phase" : undefined);
     if (body === undefined || body.trim() === "") errors.push(`plan section missing or empty: ${heading}`);
   }
   const constitution = findPlanSection("Constitution Check")?.body ?? "";
   const constitutionIds = identifiers(constitution, /\b(?:F(?:11|10|[1-9])|Q[1-3]|S[1-8])\b/g);
-  if (isV3) {
+  if (isPlanTask) {
     const binding = parseConstitutionBinding(plan);
     if (!binding || binding.artifact_kind !== "constitution"
         || typeof binding.ref !== "string" || binding.ref.trim() === ""
@@ -4677,7 +4903,7 @@ export function validatePlanTaskContract({
       errors.push("plan Non-goals must preserve accepted source refs");
     }
     if (/^##\s+Verification Mapping\s*$/mi.test(plan)) {
-      errors.push("plan-task.v3 uses one Requirement and Verification Traceability authority");
+      errors.push(`${templateLabel} uses one Requirement and Verification Traceability authority`);
     }
     const globalConstraints = markdownSections(
       `## Technical Context\n${findPlanSection("Technical Context")?.body ?? ""}`,
@@ -4720,7 +4946,7 @@ export function validatePlanTaskContract({
     errors.push(`Constitution Check must enumerate all ${CURRENT_CONSTITUTION_CLAUSE_IDS.length} clauses; found ${constitutionIds.length}`);
   }
 
-  const planPhaseRows = phaseRows(plan, isV3 ? PHASE_FIELDS_V3 : PHASE_FIELDS, errors, "plan");
+  const planPhaseRows = phaseRows(plan, isPlanTask ? PHASE_FIELDS_V3 : PHASE_FIELDS, errors, "plan");
 
   const parsedTasks = taskBlocks(tasks);
   if (parsedTasks.length === 0) errors.push("tasks document has no task blocks");
@@ -4729,7 +4955,7 @@ export function validatePlanTaskContract({
   if (duplicateIds.length) errors.push(`duplicate task ID: ${[...new Set(duplicateIds)].join(", ")}`);
   const activeAcSet = new Set(activeAcceptanceCriterionIds(spec));
   const taskRows = parsedTasks.map((task, index) => {
-    for (const field of isV3 ? TASK_FIELDS_V3 : TASK_FIELDS) {
+    for (const field of isPlanTask ? TASK_FIELDS_V3 : TASK_FIELDS) {
       if (!(field in task.fields) || task.fields[field].trim() === "") errors.push(`${task.heading_id ?? `task ${index + 1}`} is missing ${field}`);
     }
     if (task.fields.ID && task.fields.ID !== task.heading_id) errors.push(`task heading/ID mismatch: ${task.heading_id} != ${task.fields.ID}`);
@@ -4753,14 +4979,14 @@ export function validatePlanTaskContract({
   for (const task of taskRows) {
     for (const dependency of task.dependencies) {
       if (!knownTasks.has(dependency)) errors.push(`${task.id} has unknown dependency ${dependency}`);
-      else if (isV3 && taskRows.find(({ id }) => id === dependency).order >= task.order) {
+      else if (isPlanTask && taskRows.find(({ id }) => id === dependency).order >= task.order) {
         errors.push(`${task.id} dependency ${dependency} must appear before its consumer`);
       }
     }
   }
   if (cycleIn(taskRows)) errors.push("task dependency graph contains a cycle");
 
-  if (isV3) {
+  if (isPlanTask) {
     const tasksPhaseRows = phaseRows(tasks, PHASE_FIELDS_V3, errors, "tasks");
     if (planPhaseRows.length !== tasksPhaseRows.length) {
       errors.push("plan/tasks Phase counts must match");
@@ -4863,8 +5089,8 @@ export function validatePlanTaskContract({
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
   const acceptedAcs = activeAcceptanceCriterionIds(spec);
-  if (isV3 && acceptedFrs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted FR");
-  if (isV3 && acceptedAcs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted AC");
+  if (isPlanTask && acceptedFrs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted FR`);
+  if (isPlanTask && acceptedAcs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted AC`);
   const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
   const referencedAcs = [...new Set(taskRows.flatMap(({ acs }) => acs))];
   for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
@@ -4874,7 +5100,7 @@ export function validatePlanTaskContract({
 
   const completionTasks = parsedTasks.map((task) => taskCompletionFact(task, completionEvidence));
   const facts = Object.freeze({
-    template_version: isV3 ? PLAN_TASK_V3 : "legacy-v1",
+    template_version: isPlanTask ? templateLabel : "legacy-v1",
     phase_count: planPhaseRows.length,
     task_count: taskRows.length,
     phase_rows: Object.freeze(planPhaseRows.map((row) => Object.freeze({
@@ -4913,7 +5139,161 @@ export function validatePlanTaskContract({
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }
 
-export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
+const E2E_SCOPES = new Set(["ui", "fullstack", "high_risk_user_visible", "not_required"]);
+
+function taskFieldText(value) {
+  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1").trim();
+}
+
+function parseE2eDecisionRefs(value, { knownDecisionRefs = null } = {}) {
+  const raw = taskFieldText(value);
+  if (raw === "") return { refs: [], errors: ["e2e_decision_refs is required for high_risk_user_visible"] };
+  let refs;
+  try { refs = JSON.parse(raw); } catch { return { refs: [], errors: ["e2e_decision_refs must be a JSON array"] }; }
+  if (!Array.isArray(refs) || refs.length === 0 || refs.some((ref) => typeof ref !== "string" || !/^D\d+$/.test(ref))) {
+    return { refs: [], errors: ["e2e_decision_refs must be a non-empty D<number> JSON array"] };
+  }
+  if (new Set(refs).size !== refs.length) return { refs: [], errors: ["e2e_decision_refs must not contain duplicates"] };
+  const errors = [];
+  for (const required of ["D6", "D7"]) if (!refs.includes(required)) errors.push(`e2e_decision_refs must include ${required}`);
+  if (knownDecisionRefs) {
+    for (const ref of refs) if (!knownDecisionRefs.has(ref)) errors.push(`e2e_decision_refs references unknown ${ref}`);
+  }
+  return { refs, errors };
+}
+
+function parseE2eRiskDecisionRef(value, { knownDecisionRefs = null } = {}) {
+  const ref = taskFieldText(value);
+  if (!/^D\d+$/.test(ref)) return { ref: null, errors: ["e2e_risk_decision_ref must be a D<number> task risk decision"] };
+  const errors = [];
+  if (["D6", "D7"].includes(ref)) errors.push("e2e_risk_decision_ref must be a task risk decision, not D6 or D7 policy");
+  if (knownDecisionRefs && !knownDecisionRefs.has(ref)) errors.push(`e2e_risk_decision_ref references unknown ${ref}`);
+  return { ref, errors };
+}
+
+function decisionSection(decisionLog, ref) {
+  if (typeof decisionLog !== "string" || decisionLog.trim() === "") return null;
+  const heading = new RegExp(`^###\\s+${ref}\\b[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3}\\s+|(?![\\s\\S]))`, "m");
+  return decisionLog.match(heading)?.[1] ?? null;
+}
+
+function parseHighRiskDecisionFact(decisionLog, ref) {
+  const section = decisionSection(decisionLog, ref);
+  if (section === null) return { errors: [`${ref} is missing from current decision-log`] };
+  const matches = [...section.matchAll(/\*\*high_risk_fact\*\*[：:]\s*`([^`]+)`/gi)];
+  if (matches.length !== 1) return { errors: [`${ref} must contain exactly one structured high_risk_fact`] };
+  let fact;
+  try { fact = JSON.parse(matches[0][1]); } catch { return { errors: [`${ref} high_risk_fact must be JSON`] }; }
+  if (!fact || typeof fact !== "object" || Array.isArray(fact)
+      || Object.keys(fact).some((key) => !new Set(["classification", "basis"]).has(key))) {
+    return { errors: [`${ref} high_risk_fact has unsupported fields`] };
+  }
+  if (fact.classification !== "high_risk_user_visible") {
+    return { errors: [`${ref} high_risk_fact classification must be high_risk_user_visible`] };
+  }
+  if (!new Set(["user_declaration", "three_inputs"]).has(fact.basis)) {
+    return { errors: [`${ref} high_risk_fact basis must be user_declaration or three_inputs`] };
+  }
+  return { errors: [] };
+}
+
+function planTaskTemplateVersion(tasks) {
+  return tasks.match(/^\s*-\s*\*\*Template version\*\*[：:]\s*`?([^`\n]+)`?\s*$/m)?.[1].trim() ?? null;
+}
+
+function acceptanceE2eScope({ row, scenarios = [], knownDecisionRefs = null, specDecisionRefs = null, decisionLog = null }) {
+  const hasField = (name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const hasScope = hasField("e2e_scope");
+  const hasDecisionRefs = hasField("e2e_decision_refs");
+  const hasRiskDecisionRef = hasField("e2e_risk_decision_ref");
+  if (!hasScope && !hasDecisionRefs && !hasRiskDecisionRef) return { scope: null, decisionRefs: [], riskDecisionRef: null, errors: [] };
+  const errors = [];
+  const scope = taskFieldText(row.fields.e2e_scope).toLowerCase();
+  if (!hasScope || !E2E_SCOPES.has(scope)) {
+    errors.push("e2e_scope must be ui, fullstack, high_risk_user_visible, or not_required");
+    return { scope, decisionRefs: [], riskDecisionRef: null, errors };
+  }
+
+  let decisionRefs = [];
+  let riskDecisionRef = null;
+  if (scope === "high_risk_user_visible") {
+    const parsed = parseE2eDecisionRefs(row.fields.e2e_decision_refs, { knownDecisionRefs });
+    decisionRefs = parsed.refs;
+    errors.push(...parsed.errors);
+    const risk = parseE2eRiskDecisionRef(row.fields.e2e_risk_decision_ref, { knownDecisionRefs: specDecisionRefs });
+    riskDecisionRef = risk.ref;
+    errors.push(...risk.errors);
+    if (riskDecisionRef !== null) errors.push(...parseHighRiskDecisionFact(decisionLog, riskDecisionRef).errors);
+  } else if (hasDecisionRefs && taskFieldText(row.fields.e2e_decision_refs) !== "") {
+    errors.push(`${scope} e2e_scope must not declare e2e_decision_refs`);
+  } else if (hasRiskDecisionRef && taskFieldText(row.fields.e2e_risk_decision_ref) !== "") {
+    errors.push(`${scope} e2e_scope must not declare e2e_risk_decision_ref`);
+  }
+
+  const uiScope = taskFieldText(row.fields.ui_scope).toLowerCase();
+  const tiers = new Set(scenarios.map((scenario) => taskFieldText(scenario?.tier).toLowerCase()));
+  const requireTier = (tier) => {
+    if (!tiers.has(tier)) errors.push(`${scope} e2e_scope requires acceptance_data tier=${tier}`);
+  };
+  if (scope === "ui") {
+    if (uiScope !== "ui") errors.push("ui e2e_scope requires ui_scope=ui");
+    requireTier("browser");
+  } else if (scope === "fullstack") {
+    if (uiScope !== "fullstack") errors.push("fullstack e2e_scope requires ui_scope=fullstack");
+    requireTier("browser");
+    requireTier("service");
+  } else if (scope === "high_risk_user_visible") {
+    if (!new Set(["non_ui", "ui", "fullstack"]).has(uiScope)) {
+      errors.push("high_risk_user_visible e2e_scope requires ui_scope=non_ui|ui|fullstack");
+    } else if (uiScope === "non_ui") {
+      requireTier("service");
+    } else if (uiScope === "ui") {
+      requireTier("browser");
+    } else {
+      requireTier("browser");
+      requireTier("service");
+    }
+  } else if (uiScope !== "non_ui") {
+    errors.push("not_required e2e_scope requires ui_scope=non_ui");
+  } else if (tiers.has("browser")) {
+    // A non-UI task may still declare service/command acceptance checks, but a
+    // browser scenario is an explicit UI execution contract. Keeping it on a
+    // `not_required` card silently reintroduces an external UI dogfood path
+    // that the scope declaration says is out of scope.
+    errors.push("not_required e2e_scope cannot declare browser acceptance");
+  }
+  return { scope, decisionRefs, riskDecisionRef, errors };
+}
+
+// `not_required` is a positive non-UI declaration, not a caller-controlled
+// escape hatch.  The only source allowed to make that declaration is the
+// current make-decision fact; a missing or unresolved fact must keep the
+// later execution/review boundary visible.
+function notRequiredUiApplicabilityGate(decisionLog) {
+  const source = readUiApplicabilityFromDecisionLog(decisionLog);
+  if (source.status === "recorded" && source.applicability === "non_ui") {
+    return Object.freeze({ errors: Object.freeze([]), requiresIndependentVerdict: false });
+  }
+  const state = source.status === "recorded" ? source.applicability : source.status;
+  return Object.freeze({
+    errors: Object.freeze([`not_required e2e_scope requires decision-log ui_applicability=non_ui; current state is ${state}`]),
+    requiresIndependentVerdict: true,
+  });
+}
+
+function uiImplementationReferenceErrors(row) {
+  const refs = parseReferenceList(row.fields.versioned_refs);
+  const required = [
+    ["design-authority", "design authority"],
+    ["ui-contract", "UI contract"],
+  ];
+  return required.flatMap(([id, label]) => refs.some((ref) => validReference(ref)
+    && ref.artifact_kind === "evidence" && ref.id === id)
+    ? []
+    : [`${row.id} UI implementation requires a hash-bound ${label} evidence ReferenceBinding`]);
+}
+
+export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionLog = null } = {}) {
   const errors = [];
   const concreteFile = (value) => {
     const path = String(value).trim();
@@ -5003,7 +5383,191 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
     }
   }
 
+  // The delivery contract is opt-in for older readable cards, but once a plan
+  // declares any of its explicit fields it must not infer a missing final
+  // acceptance or UI implementation task from phase names or headings.
+  const hasField = (row, name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const e2eFields = ["e2e_scope", "e2e_decision_refs", "e2e_risk_decision_ref"];
+  const deliveryRows = rows.filter((row) => hasField(row, "acceptance_role")
+    || hasField(row, "acceptance_data") || e2eFields.some((field) => hasField(row, field)));
+  if (deliveryRows.length > 0) {
+    const concreteText = (value) => typeof value === "string"
+      && value.trim() !== ""
+      && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+    const acceptanceRows = rows.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "acceptance");
+    if (acceptanceRows.length === 0) errors.push("delivery contract requires an explicit acceptance_role=acceptance task");
+    const finalAcceptance = acceptanceRows.at(-1);
+    if (finalAcceptance && finalAcceptance.order !== rows.length - 1) {
+      errors.push(`${finalAcceptance.id} acceptance task must be the final task`);
+    }
+    for (const row of deliveryRows) {
+      if (!concreteText(row.fields.acceptance_role)) errors.push(`${row.id} delivery contract requires acceptance_role`);
+      if (!concreteText(row.fields.ui_scope)) errors.push(`${row.id} delivery contract requires ui_scope`);
+    }
+    const knownDecisionRefs = new Set([...(typeof decisionLog === "string" ? decisionLog : "").matchAll(/^###\s+(D\d+)\b/gm)].map(([, ref]) => ref));
+    const specDecisionRefs = new Set([...spec.matchAll(/\bD\d+\b/g)].map(([ref]) => ref));
+    const templateVersion = planTaskTemplateVersion(tasks);
+    const requiresTypedE2e = templateVersion === "plan-task.v4";
+    const e2eRows = rows.filter((row) => e2eFields.some((field) => hasField(row, field)));
+    for (const row of e2eRows) {
+      if (row.id !== finalAcceptance?.id) errors.push(`${row.id} e2e_* fields are allowed only on the final acceptance task`);
+    }
+    if (requiresTypedE2e && !hasField(finalAcceptance ?? { fields: {} }, "e2e_scope")) {
+      errors.push(`${finalAcceptance?.id ?? "final acceptance task"} plan-task.v4 requires e2e_scope`);
+    }
+    for (const row of acceptanceRows) {
+      const raw = String(row.fields.acceptance_data ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+      let scenarios = null;
+      try { scenarios = JSON.parse(raw); } catch { /* reported below */ }
+      if (!Array.isArray(scenarios) || scenarios.length === 0) {
+        errors.push(`${row.id} acceptance_data must be a non-empty JSON array`);
+        continue;
+      }
+      for (const [index, scenario] of scenarios.entries()) {
+        for (const field of ["source", "sample", "scenario", "tier"]) {
+          if (!concreteText(scenario?.[field])) errors.push(`${row.id} acceptance_data[${index}].${field} is required`);
+        }
+        if (concreteText(scenario?.tier) && !["browser", "service", "command"].includes(scenario.tier.trim())) {
+          errors.push(`${row.id} acceptance_data[${index}].tier is unsupported`);
+        }
+      }
+      if (row.id === finalAcceptance?.id && (requiresTypedE2e || e2eFields.some((field) => hasField(row, field)))) {
+        const e2e = acceptanceE2eScope({ row, scenarios, knownDecisionRefs, specDecisionRefs, decisionLog });
+        for (const error of e2e.errors) errors.push(`${row.id} ${error}`);
+      }
+    }
+    if (requiresTypedE2e && taskFieldText(finalAcceptance?.fields.e2e_scope).toLowerCase() === "not_required") {
+      for (const error of notRequiredUiApplicabilityGate(decisionLog).errors) {
+        errors.push(`${finalAcceptance.id} ${error}`);
+      }
+    }
+    const uiRows = rows.filter((row) => ["ui", "fullstack"].includes(String(row.fields.ui_scope ?? "").trim()));
+    const uiImplementationRows = uiRows.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "implementation");
+    if (uiRows.length > 0 && uiImplementationRows.length === 0) {
+      errors.push("UI delivery contract requires a separate ui_scope=ui|fullstack implementation task");
+    }
+    for (const row of uiImplementationRows) errors.push(...uiImplementationReferenceErrors(row));
+  }
+
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+}
+
+/**
+ * Project the one explicit acceptance_data source used by build-code. This is
+ * deliberately narrower than the plan validator: it never infers scenarios
+ * from headings or prose, and it preserves an invalid declared contract as an
+ * unavailable execution input rather than inventing a fallback.
+ */
+export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec = null } = {}) {
+  if (typeof tasks !== "string" || tasks.trim() === "") {
+    throw new TypeError("acceptance execution projection requires tasks content");
+  }
+  const rows = taskBlocks(tasks);
+  const hasField = (row, name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const e2eFields = ["e2e_scope", "e2e_decision_refs", "e2e_risk_decision_ref"];
+  const declared = rows.filter((row) => hasField(row, "acceptance_role")
+    || hasField(row, "acceptance_data") || e2eFields.some((field) => hasField(row, field)));
+  if (declared.length === 0) {
+    return Object.freeze({
+      status: "not_applicable",
+      requires_execution: false,
+      requires_independent_verdict: false,
+      scenarios: Object.freeze([]),
+      errors: Object.freeze([]),
+    });
+  }
+  const errors = [];
+  const scenarios = [];
+  const templateVersion = planTaskTemplateVersion(tasks);
+  const requiresTypedE2e = templateVersion === "plan-task.v4";
+  const concrete = (value) => typeof value === "string" && value.trim() !== ""
+    && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+  const acceptanceRows = declared.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "acceptance");
+  if (acceptanceRows.length === 0) errors.push("delivery contract has no acceptance_role=acceptance task");
+  const finalAcceptance = acceptanceRows.at(-1);
+  for (const row of rows.filter((row) => e2eFields.some((field) => hasField(row, field)))) {
+    if (row.heading_id !== finalAcceptance?.heading_id) errors.push(`${row.heading_id ?? "task"} e2e_* fields are allowed only on the final acceptance task`);
+  }
+  if (requiresTypedE2e && !hasField(finalAcceptance ?? { fields: {} }, "e2e_scope")) {
+    errors.push(`${finalAcceptance?.heading_id ?? "final acceptance task"} plan-task.v4 requires e2e_scope`);
+  }
+  const knownDecisionRefs = new Set([...(typeof decisionLog === "string" ? decisionLog : "").matchAll(/^###\s+(D\d+)\b/gm)].map(([, ref]) => ref));
+  const specDecisionRefs = new Set([...(typeof spec === "string" ? spec : "").matchAll(/\bD\d+\b/g)].map(([ref]) => ref));
+  const legacyTemplate = templateVersion !== PLAN_TASK_V4;
+  let legacyScopeMissing = false;
+  let finalE2eScope = null;
+  for (const row of acceptanceRows) {
+    const raw = String(row.fields.acceptance_data ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+    let data;
+    try { data = JSON.parse(raw); } catch { data = null; }
+    const isFinal = row.heading_id === finalAcceptance?.heading_id;
+    const hasE2eField = e2eFields.some((field) => hasField(row, field));
+    const e2e = isFinal && (requiresTypedE2e || hasE2eField)
+      ? acceptanceE2eScope({ row, scenarios: Array.isArray(data) ? data : [], knownDecisionRefs, specDecisionRefs, decisionLog })
+      : { scope: null, decisionRefs: [], riskDecisionRef: null, errors: [] };
+    if (isFinal) finalE2eScope = e2e.scope;
+    if (isFinal && !hasE2eField) legacyScopeMissing = true;
+    for (const error of e2e.errors) errors.push(`${row.heading_id ?? "acceptance task"} ${error}`);
+    if (!Array.isArray(data) || data.length === 0) {
+      errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data must be a non-empty JSON array`);
+      continue;
+    }
+    for (const [index, scenario] of data.entries()) {
+      if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)
+          || Object.keys(scenario).some((key) => !new Set(["source", "sample", "scenario", "tier"]).has(key))) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}] has unsupported fields`);
+        continue;
+      }
+      const missing = ["source", "sample", "scenario", "tier"].filter((field) => !concrete(scenario[field]));
+      if (missing.length > 0) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}] is missing ${missing.join(", ")}`);
+        continue;
+      }
+      const tier = scenario.tier.trim();
+      if (!new Set(["browser", "service", "command"]).has(tier)) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].tier is unsupported`);
+        continue;
+      }
+      scenarios.push(Object.freeze({
+        task_id: row.heading_id,
+        acceptance_criterion_ids: Object.freeze(identifiers(row.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)),
+        ui_scope: String(row.fields.ui_scope ?? "").trim(),
+        ...(e2e.scope === null ? {} : { e2e_scope: e2e.scope }),
+        ...(e2e.decisionRefs.length === 0 ? {} : { e2e_decision_refs: Object.freeze([...e2e.decisionRefs]) }),
+        ...(e2e.riskDecisionRef === null ? {} : { e2e_risk_decision_ref: e2e.riskDecisionRef }),
+        source: scenario.source.trim(),
+        sample: scenario.sample.trim(),
+        scenario: scenario.scenario.trim(),
+        tier,
+      }));
+    }
+  }
+  const notRequiredUiGate = finalE2eScope === "not_required"
+    ? notRequiredUiApplicabilityGate(decisionLog)
+    : { errors: [], requiresIndependentVerdict: false };
+  errors.push(...notRequiredUiGate.errors);
+  const malformedContract = errors.length > 0 || legacyScopeMissing || legacyTemplate;
+  const requiresIndependentVerdict = malformedContract || declared.some((row) => {
+    const e2eScope = taskFieldText(row.fields.e2e_scope).toLowerCase();
+    if (E2E_SCOPES.has(e2eScope)) return e2eScope !== "not_required";
+    // Legacy cards remain readable. Their pre-existing UI/fullstack trigger
+    // is retained as an execution requirement, but later verification must
+    // still refuse a passed verdict without current typed scope evidence.
+    return ["ui", "fullstack"].includes(taskFieldText(row.fields.ui_scope).toLowerCase());
+  }) || notRequiredUiGate.requiresIndependentVerdict;
+  return Object.freeze({
+    status: errors.length === 0 && !legacyScopeMissing && !legacyTemplate ? "ready" : "unavailable",
+    // A declared delivery contract remains execution-bound even when malformed.
+    // Treating an invalid array as absent let a caller re-introduce stage-agent
+    // coverage and bypass the physical-execution boundary.
+    requires_execution: true,
+    requires_independent_verdict: requiresIndependentVerdict,
+    eligible_for_pass: errors.length === 0 && !legacyScopeMissing && !legacyTemplate,
+    legacy_template: legacyTemplate,
+    legacy_scope_missing: legacyScopeMissing,
+    scenarios: Object.freeze(scenarios),
+    errors: Object.freeze(errors),
+  });
 }
 
 export function buildPlanTaskContract({
@@ -5148,9 +5712,11 @@ export function validatePlanTaskContractV2({ spec, plan, tasks, specRef, specHas
     if (typeof ref !== "string" || ref.trim() === "" || !HASH.test(hash ?? "")) errors.push(`${name} artifact ref/hash is required`);
     else if (sha256(({ spec, plan, tasks })[name] ?? "") !== hash) errors.push(`${name} content hash binding mismatch`);
   }
-  if (templateVersion(plan ?? "") === PLAN_TASK_V3 || templateVersion(tasks ?? "") === PLAN_TASK_V3) {
+  if (SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(templateVersion(plan ?? ""))
+      || SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(templateVersion(tasks ?? ""))) {
     const structural = validatePlanTaskContract({ spec, plan, tasks });
-    for (const error of structural.errors) errors.push(`plan-task.v3: ${error}`);
+    const templateLabel = templateVersion(plan ?? "") ?? templateVersion(tasks ?? "") ?? "plan-task";
+    for (const error of structural.errors) errors.push(`${templateLabel}: ${error}`);
   }
   const acceptedFrs = identifiers(spec ?? "", V2_FR);
   const acceptedAcs = activeAcceptanceCriterionIds(spec ?? "");

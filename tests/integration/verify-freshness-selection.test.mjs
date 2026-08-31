@@ -483,4 +483,97 @@ describe("verify selects facts by freshness", () => {
       authenticated: true,
     });
   });
+
+  it("marks e2e acceptance stale when a hash-correct nested execution stage is semantically incomplete", () => {
+    const taskId = "nested-e2e-freshness";
+    const materialRevision = `revision-${"a".repeat(64)}`;
+    const snapshotTree = "b".repeat(40);
+    const records = new Map();
+    const put = (ref, value) => {
+      const raw = `${JSON.stringify(value)}\n`;
+      records.set(ref, raw);
+      return { ref, sha256: sha256(raw) };
+    };
+    const executionStage = put("quality/evidence/stage-quality/build-code/acceptance-execution.json", {
+      schema_version: "stage-quality-evidence.v1",
+      task_id: taskId,
+      stage: "build-code",
+      subject: "acceptance_execution",
+      status: "passed",
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      subject_fact: { status: "passed", detail: "hash-correct but no execution items", evidence_refs: [] },
+    });
+    const executionAcceptance = put("quality/evidence/acceptance/build-code/acceptance-execution.json", {
+      schema_version: "acceptance-evidence.v1",
+      acceptance_criterion_id: "acceptance_execution",
+      result: "pass",
+      refs: [executionStage],
+      snapshot_tree: snapshotTree,
+      freshness: {
+        status: "current",
+        evaluated_at: "2026-08-31T00:00:00.000Z",
+        snapshot_tree: snapshotTree,
+        material_revision: materialRevision,
+        evidence_freshness: [{ ...executionStage, status: "current" }],
+      },
+    });
+    const e2eStage = put("quality/evidence/stage-quality/verify-code/e2e-acceptance.json", {
+      schema_version: "stage-quality-evidence.v1",
+      task_id: taskId,
+      stage: "verify-code",
+      subject: "e2e_acceptance",
+      status: "passed",
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      subject_fact: {
+        status: "passed",
+        evidence_refs: [
+          executionAcceptance,
+          { ref: "quality/reviews/results/independent.json", sha256: "c".repeat(64) },
+          { ref: "quality/confirmations/e2e.json", sha256: "d".repeat(64) },
+        ],
+      },
+    });
+    const e2eFactEvidence = put("quality/evidence/acceptance/verify-code/e2e-acceptance.json", {
+      schema_version: "acceptance-evidence.v1",
+      acceptance_criterion_id: "e2e_acceptance",
+      result: "pass",
+      refs: [e2eStage],
+      snapshot_tree: snapshotTree,
+    });
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "quality-nested-e2e-freshness",
+      task_id: taskId,
+      stage: "verify-code",
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      kind: "acceptance_criterion",
+      status: "passed",
+      subject: "e2e_acceptance",
+      recorded_at: "2026-08-31T00:00:00.000Z",
+      evidence: [{ ...e2eFactEvidence, evidence_type: "acceptance_evidence" }],
+    };
+    const factRaw = `${JSON.stringify(fact)}\n`;
+    records.set("quality/facts/e2e.json", factRaw);
+
+    const result = evaluateFactFreshness({
+      ...fact,
+      ref: "quality/facts/e2e.json",
+      sha256: sha256(factRaw),
+    }, { material_revision: materialRevision, snapshot_tree: snapshotTree }, {
+      read(ref) {
+        if (!records.has(ref)) {
+          const error = new Error("missing");
+          error.code = "ENOENT";
+          throw error;
+        }
+        return records.get(ref);
+      },
+    });
+    expect(result.status).toBe("stale");
+    expect(result.authenticated).toBe(false);
+    expect(result.dependencies[`evidence:${e2eFactEvidence.ref}`]).toBe("stale");
+  });
 });

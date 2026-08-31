@@ -12,7 +12,7 @@
 - [ ] **F4 质量靠异源审查与人，finding 不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
 - [ ] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。→ [CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
 - [ ] **F6 统一外置执行记录** — 判据：正式写入是否认证当次干净已提交内容，且未把 runner 永久绑定任务或把旧身份记录当准入 gate。→ [CONSTITUTION.md#f6-统一外置执行记录](CONSTITUTION.md#f6-统一外置执行记录)
-- [ ] **F7 三处正常确认保留不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权)
+- [ ] **F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；`ui_applicability=ui` 时 build-spec 是否展示原型并取得第四处限定确认（UI 设计确认事实须含 `display_before_reply` 与 `human_approved`）；非 UI/build-code 是否不新增日常确认；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
 - [ ] **F8 简单优先** — 判据：正常工具升级是否由每次调用认证解决，未继续复制 runner 或追加 replacement 链。→ [CONSTITUTION.md#f8-简单优先](CONSTITUTION.md#f8-简单优先)
 - [ ] **F9 可证伪不假绿** — 判据：推进资格、publication 真实性和完成判据是否分别证伪，dirty 内容是否拒绝伪装成 HEAD，缺质量工作是否保持进行中。→ [CONSTITUTION.md#f9-可证伪不假绿](CONSTITUTION.md#f9-可证伪不假绿)
 - [ ] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建** — 判据：自动化(CI/校验/机器基建)是否真实收益大于长期维护成本、不为"机器可校验"本身预堆基建、能实跑的优先实跑。→ [CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建](CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建)
@@ -44,13 +44,15 @@
 
 **治理同步记录（2026-08-25）**：新增 F11“正常执行优先、控制面受限”；F1-F10、Q1-Q3、S1-S8 原编号保持不变；条目数由 21 增至 22。
 
+**治理同步记录（2026-08-30）**：F7 修订为三处正常确认加第四处限定确认（UI 设计确认）：仅 `ui_applicability=ui` 由 build-spec 展示原型后取得 `display_before_reply` 与 `human_approved` 确认事实；非 UI 和 build-code 不增加日常确认。条目数仍为 22，未新增条款。
+
 ## close 三义判据（非宪法新增条款，仅作可复核解释清单）
 
 以下四项判据不新增宪法条款，也不作为阶段推进或完成 gate；仅用于本次任务落地时复核宪法既有条款是否被正确解释。每条回指 `CONSTITUTION.md` 治理边界节中的"close 三义"解释。
 
 - [ ] **F9 可证伪不假绿** — 判据：五个交付动作是否只在真实执行成功后才落账；失败/缺项时是否保持"未成功"状态，而不是把 risk/人为动作改写成正常完成。→ [CONSTITUTION.md#f9-可证伪不假绿](CONSTITUTION.md#f9-可证伪不假绿)
 - [ ] **Q1 质量事实不作准入证，完成质量不降级** — 判据：质量事实（测试、审查、AC）是否独立记录；completed.json 等物理交付记录是否不写 quality_status/product_release_status；质量缺口是否诚实地用缺失/风险接受事实承接，不漂白。→ [CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级](CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级)
-- [ ] **F7 三处正常确认保留，不可逆操作独立授权** — 判据：cleanup 等不可逆动作是否在阶段确认之外再经独立 authorize 授权；阶段确认是否不等于"可以开始清理"。→ [CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权)
+- [ ] **F7 三处正常确认与 UI 限定设计确认** — 判据：UI 原型确认是否不等于 cleanup 等不可逆动作授权；不可逆动作是否在任一阶段确认之外再经独立 authorize 授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
 - [ ] **F3 四材料决定推进，正式发布保持结构真实** — 判据：close 相关的 preflight（task/worktree/runtime 身份、hash、写集合）是否在正式写成功前 fail-loud，而不是到了清理阶段才报身份错误。→ [CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实)
 
 - **CLOSE-F9**：close 动作测试中不得伪造通过或把未完成状态漂白为完成；所有 GREEN 必须来自真实实现修复，completed.json 不写入 quality_status/product_release_status。

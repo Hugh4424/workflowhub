@@ -115,6 +115,13 @@ return, identity mismatch, browser failure, cancellation, or cleanup failure
 is retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.
 No public Runner, QA command, or persistent QA control object is created.
 
+For a declared browser acceptance scenario, build-code passes the four-field
+`acceptance_scenario` to the private controlled-QA adapter. The adapter must
+first persist direct `browser-qa-evidence.v1` bytes, then return the matching
+canonical `{ref,sha256}` and payload. Missing or mismatched source, sample,
+scenario, tier, task, attempt, material, snapshot, or invocation remains
+`unavailable`; a normal QA run remains compatible without this optional field.
+
 ## Work loop
 
 1. Read all four materials and select the next incomplete Task. Write a small

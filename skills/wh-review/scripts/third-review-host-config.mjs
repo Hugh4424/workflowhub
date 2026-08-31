@@ -1,4 +1,5 @@
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -420,6 +421,17 @@ function effectiveProfile(config, provider) {
   };
 }
 
+function brokerConfigId(provider, configured) {
+  return createHash("sha256").update(JSON.stringify({
+    id: provider,
+    source_id: configured.source_id ?? provider,
+    model: configured.model ?? null,
+    effort: configured.effort ?? null,
+    thinking: configured.thinking ?? null,
+    deadline_ms: null,
+  }), "utf8").digest("hex");
+}
+
 function sameSourceProfile(_config, provider, hostProvider) {
   // WorkflowHub route/profile keys are the only configured dispatch identity.
   // Broker identity.source_id remains result provenance and is validated at
@@ -494,6 +506,12 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
       eligibleProfiles: selected,
       requestedProfiles: dispatchProfiles,
       requestedProfileSpecs: tier.flatMap((provider) => configuredRoute?.profile_specs?.[provider] ? [configuredRoute.profile_specs[provider]] : []),
+      provider_identities: Object.freeze(Object.fromEntries(dispatchProfiles.map((provider) => [provider, Object.freeze({
+        source_id: typeof config.providers[provider]?.source_id === "string" && config.providers[provider].source_id.trim() !== ""
+          ? config.providers[provider].source_id
+          : null,
+        config_id: brokerConfigId(provider, config.providers[provider]),
+      })]))),
       sameSourceExcluded,
       effectiveProfiles: selected.map((provider) => effectiveProfile(config, provider)),
     };

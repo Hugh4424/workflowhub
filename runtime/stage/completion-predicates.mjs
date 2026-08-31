@@ -55,6 +55,7 @@ export const STAGE_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({
     scope: "acceptance_criterion",
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
+    ui_applicability: "acceptance_criterion",
     requirement_coverage: "acceptance_criterion",
     goal_achievement: "acceptance_criterion",
     acceptance_clarity: "acceptance_criterion",
@@ -177,17 +178,35 @@ export function deriveStageCompletion(stage, observations = []) {
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
   const requirements = {
     ...STAGE_PREDICATES[stage],
-    // UI design is conditional. It becomes a real build-spec completion
-    // subject only when the current handler observed an applicable UI fact;
-    // ordinary non-UI runs keep the existing five-stage predicate set.
+    // UI applicability is a new conditional subject. Current make-decision
+    // handler runs always publish it (including an explicit missing fact),
+    // while historical observations that predate the fact remain readable.
+    ...(stage === "make-decision" && !observations.some((observation) => {
+      const fact = observation?.fact?.value ?? observation?.fact;
+      return fact?.stage === stage
+        && fact.kind === "acceptance_criterion"
+        && fact.subject === "ui_applicability";
+    }) ? { ui_applicability: undefined } : {}),
+    // UI design is conditional. The official build-spec handler reads the
+    // current decision-log UI fact and only publishes this subject for that
+    // logged UI branch; quality facts do not duplicate applicability data.
     ...(stage === "build-spec" && observations.some((observation) => {
       const fact = observation?.fact?.value ?? observation?.fact;
       return fact?.stage === stage
         && fact.kind === "acceptance_criterion"
-        && fact.subject === "ui_design"
-        && fact.applicability !== "non_ui";
+        && fact.subject === "ui_design";
     }) ? { ui_design: "acceptance_criterion" } : {}),
+    // E2E acceptance is conditional on a current build-code execution fact.
+    // The verify handler emits this subject only after private canonical
+    // readers have authenticated its execution/review/confirmation chain.
+    ...(stage === "verify-code" && observations.some((observation) => {
+      const fact = observation?.fact?.value ?? observation?.fact;
+      return fact?.stage === stage
+        && fact.kind === "acceptance_criterion"
+        && fact.subject === "e2e_acceptance";
+    }) ? { e2e_acceptance: "acceptance_criterion" } : {}),
   };
+  if (requirements.ui_applicability === undefined) delete requirements.ui_applicability;
   const satisfied = new Map();
   const conflicts = new Set();
   const candidates = new Map();

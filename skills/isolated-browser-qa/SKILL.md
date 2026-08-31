@@ -236,6 +236,13 @@ The canonical stage-content envelope supplies the task, run, and Workspace
 snapshot binding. Cookie, token, password, authorization, API-key, secret, and
 profile content must never be included in evidence.
 
+For a declared browser acceptance scenario only, also write
+`acceptance_scenario={source,sample,scenario,tier:"browser"}` into the direct
+canonical `browser-qa-evidence.v1` JSON bytes before returning its `{ref,sha256}`.
+The callback payload and stored bytes must carry the same four fields and the
+same task, attempt, material, snapshot, and invocation binding. Ordinary QA
+does not require this optional field.
+
 For non-UI scope, publish only `applicability: not_applicable` and a reason.
 This disclosure is not a global browser Gate.
 

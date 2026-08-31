@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
+import Ajv2020 from "ajv/dist/2020.js";
 
 import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
+import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
 import { STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
@@ -11,6 +14,14 @@ const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 const REVIEW_STATUSES = new Set(["clean", "findings", "resolved", "unavailable"]);
 const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
+const browserQaValidator = new Ajv2020({ allErrors: true, strict: false }).compile(browserQaSchema);
+
+function validateBrowserQaEvidence(value) {
+  if (!browserQaValidator(value)) {
+    throw new Error(`browser QA evidence schema is invalid: ${(browserQaValidator.errors ?? []).map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ")}`);
+  }
+  return value;
+}
 
 // Only reviews explicitly declared advisory by the stage contract can survive
 // an arbitrary later snapshot. Required verify-code facts still go stale for
@@ -78,6 +89,195 @@ function expectedPassed(status, passed, failed, nonterminal) {
   // failure.
   if (status === "missing") return nonterminal === "inconclusive" || nonterminal === "deferred";
   return false;
+}
+
+function readBoundJson(binding, read, dependencies, key) {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)
+      || typeof binding.ref !== "string" || binding.ref.trim() === ""
+      || !HASH.test(binding.sha256 ?? "")) {
+    dependencies[key] = "stale";
+    return null;
+  }
+  const raw = readBound(binding, read, dependencies, key);
+  if (raw === undefined) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    dependencies[key] = "stale";
+    return null;
+  }
+}
+
+function sameAcceptanceScenario(left, right) {
+  return left && typeof left === "object" && !Array.isArray(left)
+    && right && typeof right === "object" && !Array.isArray(right)
+    && ["source", "sample", "scenario", "tier"].every((field) => left[field] === right[field]);
+}
+
+function authenticatePublishedAttachment(binding, read, dependencies, key) {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)
+      || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) {
+    throw new Error("browser attachment binding is invalid");
+  }
+  const publication = readBoundJson(binding, read, dependencies, key);
+  if (!publication) throw new Error("browser attachment is unavailable");
+  const allowed = new Set([
+    "schema_version", "source_path", "content_sha256", "content_encoding", "content_base64", "publisher", "recorded_at",
+  ]);
+  if (Object.keys(publication).some((field) => !allowed.has(field))
+      || publication.schema_version !== "workflowhub-evidence-publication.v1"
+      || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
+      || publication.source_path.startsWith("/") || publication.source_path.split(/[\\/]/).includes("..")
+      || !HASH.test(publication.content_sha256 ?? "")
+      || publication.content_encoding !== "base64"
+      || typeof publication.content_base64 !== "string"
+      || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
+      || typeof publication.recorded_at !== "string" || publication.recorded_at.trim() === "") {
+    throw new Error("browser attachment publication metadata is invalid");
+  }
+  const bytes = Buffer.from(publication.content_base64, "base64");
+  if (bytes.toString("base64") !== publication.content_base64
+      || sha256(bytes) !== publication.content_sha256
+      || binding.ref !== `quality/evidence/browser-qa/${publication.content_sha256}.json`) {
+    throw new Error("browser attachment publication content is not authenticated");
+  }
+}
+
+function authenticateBrowserAcceptance(value, fact, scenario, read, dependencies, key) {
+  validateBrowserQaEvidence(value);
+  if (value.task_id !== fact.task_id || value.stage !== "build-code"
+      || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
+      || value.result !== "pass" || value.acceptance_scenario?.tier !== "browser"
+      || !sameAcceptanceScenario(value.acceptance_scenario, scenario)
+      || value.cancellation?.status !== "not_cancelled"
+      || value.cleanup?.status !== "completed"
+      || value.fixture?.fixture_only !== false
+      || value.data_identity?.source !== scenario.source
+      || value.data_identity?.dataset_id !== scenario.sample
+      || value.data_identity?.fixture_only !== false
+      || String(value.service_identity?.instance ?? "").toLowerCase() === "fixture") {
+    throw new Error("browser acceptance identity or outcome is not current");
+  }
+  const screenshots = Array.isArray(value.screenshots) ? value.screenshots : [];
+  const screenshotRefs = Array.isArray(value.visual?.screenshot_refs) ? value.visual.screenshot_refs : [];
+  if (screenshots.length === 0 || screenshotRefs.length !== screenshots.length
+      || new Set(screenshots.map((entry) => entry?.ref)).size !== screenshots.length
+      || new Set(screenshotRefs).size !== screenshotRefs.length
+      || screenshots.some((entry) => !screenshotRefs.includes(entry?.ref))) {
+    throw new Error("browser acceptance screenshots are incomplete");
+  }
+  screenshots.forEach((screenshot, index) => authenticatePublishedAttachment(
+    { ref: screenshot?.ref, sha256: screenshot?.hash }, read, dependencies, `${key}:screenshot:${index}`,
+  ));
+  if (typeof value.test?.output_ref !== "string" || !HASH.test(value.test?.output_hash ?? "")) {
+    throw new Error("browser acceptance test output binding is invalid");
+  }
+  const outputRaw = readBound({ ref: value.test.output_ref, sha256: value.test.output_hash }, read, dependencies, `${key}:test-output`);
+  if (outputRaw === undefined) throw new Error("browser acceptance test output is unavailable");
+}
+
+function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, key) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.schema_version !== "stage-quality-evidence.v1"
+      || value.task_id !== fact.task_id || value.stage !== "build-code"
+      || value.subject !== "acceptance_execution" || value.status !== "passed"
+      || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
+      || value.subject_fact?.status !== "passed"
+      || !Array.isArray(value.subject_fact?.execution_items) || value.subject_fact.execution_items.length === 0) {
+    throw new Error("nested acceptance execution stage evidence is invalid");
+  }
+  const executionBinding = value.subject_fact.execution_binding;
+  if (!executionBinding || typeof executionBinding.stage_outcome_ref !== "string"
+      || !/^quality\/evidence\/stage-outcomes\/build-code\/[a-f0-9]{64}\.json$/.test(executionBinding.stage_outcome_ref)
+      || !HASH.test(executionBinding.stage_outcome_hash ?? "")) {
+    throw new Error("nested acceptance execution stage outcome binding is invalid");
+  }
+  const outcomeKey = `${key}:stage-outcome`;
+  const outcome = readBoundJson({ ref: executionBinding.stage_outcome_ref, sha256: executionBinding.stage_outcome_hash }, read, dependencies, outcomeKey);
+  if (!outcome || outcome.schema_version !== "workflowhub-stage-outcomes.v1"
+      || outcome.task_id !== fact.task_id || outcome.stage !== "build-code"
+      || outcome.status !== "completed" || outcome.material_revision !== fact.material_revision
+      || outcome.snapshot_tree !== fact.snapshot_tree) {
+    throw new Error("nested acceptance execution stage outcome is not current");
+  }
+  const seen = new Set();
+  for (const [index, item] of value.subject_fact.execution_items.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+        || item.task_id !== fact.task_id || item.status !== "executed" || item.tier !== "browser"
+        || typeof item.source !== "string" || item.source.trim() === ""
+        || typeof item.sample !== "string" || item.sample.trim() === ""
+        || typeof item.scenario !== "string" || item.scenario.trim() === ""
+        || !Array.isArray(item.evidence_refs) || item.evidence_refs.length === 0) {
+      throw new Error(`nested acceptance execution item ${index + 1} is invalid`);
+    }
+    const scenarioKey = JSON.stringify([item.source, item.sample, item.scenario, item.tier]);
+    if (seen.has(scenarioKey)) throw new Error("nested acceptance execution contains duplicate scenarios");
+    seen.add(scenarioKey);
+    for (const [refIndex, reference] of item.evidence_refs.entries()) {
+      const browserKey = `${key}:browser:${index}:${refIndex}`;
+      if (!/^quality\/evidence\/browser-qa\/[A-Za-z0-9._-]+\.json$/.test(reference?.ref ?? "")) {
+        throw new Error("nested browser evidence ref is outside the canonical namespace");
+      }
+      const browser = readBoundJson(reference, read, dependencies, browserKey);
+      if (!browser) throw new Error("nested browser evidence is unavailable");
+      authenticateBrowserAcceptance(browser, fact, item, read, dependencies, browserKey);
+    }
+  }
+}
+
+function authenticateE2eAcceptanceStageQuality(value, fact, read, dependencies, key) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.schema_version !== "stage-quality-evidence.v1"
+      || value.task_id !== fact.task_id || value.stage !== "verify-code"
+      || value.subject !== "e2e_acceptance" || value.status !== "passed"
+      || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
+      || value.subject_fact?.status !== "passed" || !Array.isArray(value.subject_fact?.evidence_refs)) {
+    throw new Error("nested e2e acceptance stage evidence is invalid");
+  }
+  const refs = value.subject_fact.evidence_refs;
+  const required = { execution: false, review: false, confirmation: false };
+  if (refs.length !== 3) throw new Error("nested e2e acceptance must bind execution, review, and confirmation");
+  for (const [index, reference] of refs.entries()) {
+    const nestedKey = `${key}:chain:${index}`;
+    const ref = reference?.ref ?? "";
+    const nested = readBoundJson(reference, read, dependencies, nestedKey);
+    if (!nested) throw new Error("nested e2e acceptance chain record is unavailable");
+    if (/^quality\/evidence\/acceptance\/build-code\//.test(ref)) {
+      if (required.execution) throw new Error("nested e2e acceptance has duplicate execution evidence");
+      required.execution = true;
+      const acceptance = validateAcceptanceEvidence(nested);
+      if (acceptance.acceptance_criterion_id !== "acceptance_execution" || acceptance.result !== "pass"
+          || acceptance.snapshot_tree !== fact.snapshot_tree || acceptance.refs.length !== 1
+          || acceptance.freshness?.status !== "current"
+          || acceptance.freshness?.snapshot_tree !== fact.snapshot_tree
+          || acceptance.freshness?.material_revision !== fact.material_revision) {
+        throw new Error("nested execution acceptance is not current");
+      }
+      const executionKey = `${nestedKey}:execution-stage`;
+      const executionStage = readBoundJson(acceptance.refs[0], read, dependencies, executionKey);
+      if (!executionStage) throw new Error("nested execution stage evidence is unavailable");
+      authenticateE2eExecutionStageQuality(executionStage, fact, read, dependencies, executionKey);
+    } else if (/^quality\/reviews\/results\//.test(ref)) {
+      if (required.review) throw new Error("nested e2e acceptance has duplicate review evidence");
+      required.review = true;
+      validateSchema("result", nested);
+      if (nested.task_id !== fact.task_id || nested.stage !== "verify-code"
+          || nested.material_revision !== fact.material_revision || nested.snapshot_tree !== fact.snapshot_tree
+          || Object.hasOwn(nested, "verdict")) throw new Error("nested e2e review provenance is invalid");
+    } else if (/^quality\/confirmations\//.test(ref)) {
+      if (required.confirmation) throw new Error("nested e2e acceptance has duplicate confirmation evidence");
+      required.confirmation = true;
+      validateHumanConfirmation(nested, { taskId: fact.task_id, stage: "verify-code", requireAccepted: true });
+      if (nested.material_revision !== fact.material_revision || nested.snapshot_tree !== fact.snapshot_tree) {
+        throw new Error("nested e2e confirmation provenance is invalid");
+      }
+    } else {
+      throw new Error("nested e2e acceptance chain ref is outside its canonical namespace");
+    }
+  }
+  if (!required.execution || !required.review || !required.confirmation) {
+    throw new Error("nested e2e acceptance chain is incomplete");
+  }
 }
 
 function authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot = false }) {
@@ -178,7 +378,14 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       for (const nested of acceptance.refs) {
         const nestedKey = `${key}:nested:${nested.ref}`;
         const nestedRaw = readBound(nested, read, dependencies, nestedKey);
-        if (nestedRaw !== undefined) dependencies[nestedKey] = "current";
+        if (nestedRaw !== undefined) {
+          if (fact.stage === "verify-code" && fact.subject === "e2e_acceptance") {
+            let nestedValue;
+            try { nestedValue = JSON.parse(nestedRaw); } catch { throw new Error("nested e2e acceptance stage evidence is not JSON"); }
+            authenticateE2eAcceptanceStageQuality(nestedValue, fact, read, dependencies, nestedKey);
+          }
+          dependencies[nestedKey] = "current";
+        }
       }
     } else if (evidence.evidence_type === "human_confirmation") {
       const closeConfirmation = fact.subject === "close_confirmation";
