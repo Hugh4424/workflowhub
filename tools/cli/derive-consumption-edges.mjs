@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,7 +16,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const allowed = new Set(["root"]);
+  const allowed = new Set(["root", "now"]);
   const values = {};
   for (const argument of argv) {
     const equals = argument.indexOf("=");
@@ -28,7 +29,8 @@ function parseArgs(argv) {
     values[name] = value;
   }
   if (!isAbsolute(values.root ?? "")) fail("--root must be an absolute storage root");
-  return { root: resolve(values.root) };
+  if (values.now !== undefined && !Number.isFinite(Date.parse(values.now))) fail("--now must be an ISO-compatible timestamp");
+  return { root: resolve(values.root), now: values.now ?? new Date().toISOString() };
 }
 
 function assertTrustedPath(root, path, label) {
@@ -201,19 +203,32 @@ function isLater(source, consumer) {
   return consumerStage > sourceStage || (consumerStage === sourceStage && consumerPosition > sourcePosition);
 }
 
-function deriveTask(project, taskId, taskRoot, storageRoot) {
+function deriveTask(project, taskId, taskRoot, storageRoot, scannedAt) {
   assertTrustedPath(storageRoot, taskRoot, "task path");
   const stageData = STAGES.map((stage) => ({ stage, ...readOutcomeFiles(taskRoot, project, taskId, stage, storageRoot) }));
   const outcomeLedgerComplete = stageData.every((entry) => entry.files.length > 0 && entry.invalid.length === 0);
   const records = stageData.flatMap((entry) => subjectRecords(entry.stage, entry.records, taskRoot, storageRoot));
   const outputLedgerComplete = records.every((record) => record.outputs_complete);
   const consumerScanComplete = outcomeLedgerComplete && outputLedgerComplete;
+  const scopeRevision = stageData
+    .flatMap((entry) => entry.files.map((file) => `${entry.stage}/${file}`))
+    .sort()
+    .join("\n");
   const consumerScan = {
+    schema_version: "consumer-scan-proof.v1",
+    project,
+    task_id: taskId,
     status: consumerScanComplete ? "complete" : "unknown",
+    coverage_status: consumerScanComplete ? "complete" : "partial",
     scope: "all-current-stage-outcome-files",
     stage_count: STAGES.length,
+    expected_stage_set: STAGES,
+    scanned_stage_set: stageData.filter((entry) => entry.files.length > 0 && entry.invalid.length === 0).map((entry) => entry.stage),
     outcome_file_count: stageData.reduce((count, entry) => count + entry.files.length, 0),
     subject_count: records.length,
+    scanned_at: scannedAt,
+    scope_revision: hashScopeRevision(scopeRevision),
+    diagnostics: stageData.flatMap(({ invalid }) => invalid),
   };
   const outputs = [];
   const edges = [];
@@ -265,11 +280,22 @@ function deriveTask(project, taskId, taskRoot, storageRoot) {
       ...consumerScan,
       zero_consumption_proof: consumerScan.status === "complete",
     },
+    consumer_scan_proof: {
+      ...consumerScan,
+      registered_output_refs: outputs.map((entry) => ({ ref: entry.ref, source: entry.source, consumer_count: entry.consumer_count, freshness: "current" })),
+      zero_consumption: consumerScan.status === "complete" && outputs.length > 0 && outputs.every((entry) => entry.consumer_count === 0),
+      source_subject: "tools/cli/derive-consumption-edges.mjs",
+      source_refs: stageData.flatMap((entry) => entry.files.map((file) => `quality/evidence/stage-outcomes/${entry.stage}/${file}`)),
+    },
     diagnostics: stageData.flatMap(({ invalid }) => invalid),
   };
 }
 
-export function deriveConsumptionEdges(root) {
+function hashScopeRevision(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export function deriveConsumptionEdges(root, { now = new Date().toISOString() } = {}) {
   const storageRoot = resolve(root);
   assertTrustedPath(storageRoot, storageRoot, "storage root");
   if (!realDirectory(storageRoot, "storage root")) fail(`storage root does not exist: ${storageRoot}`);
@@ -278,19 +304,19 @@ export function deriveConsumptionEdges(root) {
   for (const project of childDirectories(projectsRoot, storageRoot)) {
     const projectTasksRoot = join(projectsRoot, project, "tasks");
     for (const taskId of childDirectories(projectTasksRoot, storageRoot)) {
-      tasks.push(deriveTask(project, taskId, join(projectTasksRoot, taskId), storageRoot));
+      tasks.push(deriveTask(project, taskId, join(projectTasksRoot, taskId), storageRoot, now));
     }
   }
   return {
     schema_version: "consumption-edges.v1",
-    generated_at: new Date().toISOString(),
+    generated_at: now,
     tasks,
   };
 }
 
 function main() {
-  const { root } = parseArgs(process.argv.slice(2));
-  console.log(JSON.stringify(deriveConsumptionEdges(root), null, 2));
+  const { root, now } = parseArgs(process.argv.slice(2));
+  console.log(JSON.stringify(deriveConsumptionEdges(root, { now }), null, 2));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

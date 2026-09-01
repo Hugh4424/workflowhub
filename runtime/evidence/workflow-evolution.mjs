@@ -487,7 +487,7 @@ function withCandidateRecordIdentity(record) {
   return { ...payload, record_id: recordId, candidate_record_id: recordId };
 }
 
-function observationsToRecords(inventory, now, snapshotId, generation) {
+function observationsToRecords(inventory, now, snapshotId, generation, storageRoot) {
   const observations = Array.isArray(inventory.observations) ? inventory.observations : [];
   const groups = new Map();
   const seenObservations = new Map();
@@ -512,12 +512,21 @@ function observationsToRecords(inventory, now, snapshotId, generation) {
     const proofs = (Array.isArray(inventory.consumer_proofs ?? inventory.consumerProofs) ? (inventory.consumer_proofs ?? inventory.consumerProofs) : []).filter(Boolean);
     const expectedStages = [...STAGES].sort();
     const taskProofs = [...tasks].map((taskId) => proofs.find((candidate) => candidate.project === inventory.project && candidate.task_id === taskId));
+    const sourceRefIsAuthentic = (taskId, ref) => {
+      if (typeof ref !== "string" || !/^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref)) return false;
+      const path = join(storageRoot, "Projects", inventory.project, "tasks", taskId, ...ref.split("/"));
+      try {
+        const stat = lstatSync(path);
+        if (!stat.isFile() || stat.isSymbolicLink()) return false;
+        return hashBytes(readFileSync(path)) === ref.slice(ref.lastIndexOf("/") + 1, -5);
+      } catch { return false; }
+    };
     const validProof = (proof) => {
       if (!proof || proof.schema_version !== "consumer-scan-proof.v1" || proof.coverage_status !== "complete" || proof.zero_consumption !== true || typeof proof.scope_revision !== "string" || proof.scope_revision === "") return false;
       if (proof.project !== inventory.project || !tasks.has(proof.task_id)
         || proof.source_subject !== "tools/cli/derive-consumption-edges.mjs"
         || !Array.isArray(proof.source_refs) || proof.source_refs.length === 0
-        || proof.source_refs.some((ref) => typeof ref !== "string" || !ref.startsWith("quality/evidence/stage-outcomes/") || ref.includes(".."))
+        || proof.source_refs.some((ref) => !sourceRefIsAuthentic(proof.task_id, ref))
         || !Array.isArray(proof.diagnostics) || proof.diagnostics.length !== 0) return false;
       const expected = [...new Set(proof.expected_stage_set ?? [])].sort(); const scanned = [...new Set(proof.scanned_stage_set ?? [])].sort();
       const scannedAt = Date.parse(proof.scanned_at ?? ""); const current = Number.isFinite(scannedAt) && scannedAt <= Date.parse(now) && scannedAt >= Date.parse(now) - WINDOW_MS;
@@ -570,7 +579,7 @@ export function refreshEvolutionSnapshot(input = {}) {
     const generation = (prior?.commit.publication_generation ?? 0) + 1;
     const snapshotId = hashBytes(canonical(`${canonicalInventory.input_inventory_hash}\0${attemptId}\0${generation}`)); const batchId = randomUUID();
     const priorByGroup = new Map((prior?.rows ?? []).filter((entry) => entry.record_kind === "candidate" && entry.row_status === "active").map((entry) => [entry.candidate_group_id, entry]));
-    const records = observationsToRecords({ project, ...inventory }, now, snapshotId, generation).map((record) => {
+    const records = observationsToRecords({ project, ...inventory }, now, snapshotId, generation, storageRoot).map((record) => {
       const priorRecord = priorByGroup.get(record.candidate_group_id);
       return withCandidateRecordIdentity({ ...record, ...(priorRecord ? { revision: priorRecord.revision, lifecycle_status: priorRecord.lifecycle_status } : {}), batch_id: batchId, snapshot_content_id: canonicalInventory.input_inventory_hash });
     });

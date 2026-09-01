@@ -118,6 +118,33 @@ describe("derive-consumption-edges", () => {
     expect(output.tasks.find((task) => task.task_id === "task-edges").scan_status).toBe("partial");
   });
 
+  it("publishes the frozen task-bound consumer scan proof shape", () => {
+    const f = fixture();
+    for (const stage of ["make-decision", "build-spec", "verify-code"]) {
+      writeOutcome(f.root, stage, "task-edges", {
+        schema_version: "workflowhub-stage-outcomes.v1",
+        task_id: "task-edges",
+        stage,
+        step_outcomes: [],
+        skill_outcomes: [],
+      });
+    }
+    const task = run(f.root).tasks.find((entry) => entry.task_id === "task-edges");
+    expect(task.consumer_scan_proof).toMatchObject({
+      schema_version: "consumer-scan-proof.v1",
+      project: "Demo",
+      task_id: "task-edges",
+      coverage_status: "partial",
+      expected_stage_set: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
+      scanned_stage_set: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
+      source_subject: "tools/cli/derive-consumption-edges.mjs",
+    });
+    expect(task.consumer_scan_proof).not.toHaveProperty("stage_set");
+    expect(task.consumer_scan_proof.registered_output_refs.length).toBeGreaterThan(0);
+    expect(task.consumer_scan_proof.registered_output_refs[0]).toEqual(expect.objectContaining({ consumer_count: expect.any(Number), freshness: "current" }));
+    expect(task.consumer_scan_proof.zero_consumption).toBe(false);
+  });
+
   it("does not call an incomplete subject reference ledger a zero-consumption scan", () => {
     const f = fixture();
     for (const stage of ["make-decision", "build-spec", "verify-code"]) {

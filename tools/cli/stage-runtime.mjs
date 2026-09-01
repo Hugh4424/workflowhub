@@ -378,6 +378,8 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
     input: {
       session: {
         host: session.host,
+        source_id: session.source_id,
+        source_family: session.source_family,
         session_id: session.session_id,
         task_id: session.task_id,
         source_ref: session.source_ref,

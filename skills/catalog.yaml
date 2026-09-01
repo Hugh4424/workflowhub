@@ -15,7 +15,8 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a7b38cce469b7e6f7a0bfee662fdfa2a65a7e98af8554ad3a28cb71ccf8fae2d
+    local_bundle_hash: b2137d9932027de06f30428c286aba43ed2769567a731cda88c5e49ae684e043
+    m16_contract: consumer-scan-proof.v1
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 每个 authoring stage 结束时产出轻量判断层复盘

@@ -96,13 +96,24 @@ describe("M16 candidate and tax contract", () => {
       storageRoot, project: "Demo", attemptId: "a1", now: "2026-08-31T00:00:00Z",
       inventory: { project: "Demo", observations: [item], consumer_proofs: [{
         schema_version: "consumer-scan-proof.v1", project: "Demo", task_id: item.task_id,
-        coverage_status: "complete", zero_consumption: true, scope_revision: "caller-asserted",
+        coverage_status: "complete", zero_consumption: true, scope_revision: "a".repeat(64),
         expected_stage_set: stages, scanned_stage_set: stages, scanned_at: "2026-08-31T00:00:00Z",
-        registered_output_refs: [{ consumer_count: 0 }],
+        registered_output_refs: [{ ref: "quality/evidence/output.md", source: { stage: "build-spec", subject_kind: "step", subject_id: "spec-clarify" }, consumer_count: 0, freshness: "current" }],
+        source_subject: "tools/cli/derive-consumption-edges.mjs",
+        source_refs: [`quality/evidence/stage-outcomes/build-spec/${"b".repeat(64)}.json`],
+        diagnostics: [],
       }] },
     });
     expect(result.status).toBe("ok");
     expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("validates the task-level consumer proof shape and rejects the retired stage_set shape", async () => {
+    const mod = await loadModule();
+    const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+    const proof = { schema_version: "consumer-scan-proof.v1", project: "Demo", task_id: "task-1", coverage_status: "complete", zero_consumption: true, expected_stage_set: stages, scanned_stage_set: stages, scanned_at: "2026-08-31T00:00:00Z", scope_revision: "a".repeat(64), registered_output_refs: [{ ref: "quality/evidence/out.md", source: { stage: "build-spec", subject_kind: "step", subject_id: "spec-clarify" }, consumer_count: 0, freshness: "current" }], source_subject: "tools/cli/derive-consumption-edges.mjs", source_refs: [`quality/evidence/stage-outcomes/build-spec/${"b".repeat(64)}.json`], diagnostics: [] };
+    expect(() => mod.validateWorkflowEvolutionDefinition("consumer_scan_proof", proof)).not.toThrow();
+    expect(() => mod.validateWorkflowEvolutionDefinition("consumer_scan_proof", { ...proof, stage_set: stages })).toThrow(/schema invalid/);
   });
 
   it("binds quality tax to caller time and conservative sample/confidence states", async () => {

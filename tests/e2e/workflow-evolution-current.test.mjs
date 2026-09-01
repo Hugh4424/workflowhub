@@ -1,0 +1,15 @@
+import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { refreshEvolutionSnapshot, readCurrentEvolutionProjection } from "../../runtime/evidence/workflow-evolution.mjs";
+describe("M16 current snapshot seam", () => {
+  it("returns the latest complete committed snapshot and preserves generation", () => {
+    const root = mkdtempSync(join(tmpdir(), "m16-current-"));
+    try {
+      const first = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "a1", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00.000Z" });
+      const current = readCurrentEvolutionProjection({ storageRoot: root, project: "Demo", expectedIdentity: { snapshot_id: first.snapshot_id } });
+      expect(current.status).toBe("ok"); expect(current.snapshot_id).toBe(first.snapshot_id); expect(current.publication_generation).toBe(1);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});

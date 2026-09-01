@@ -28,6 +28,10 @@ grade、quality verdict、release/acceptance 结论，也不阻断 stage、repai
 输入缺失必须保留 `unknown`，不能用编号、文件存在、默认成功或历史任务补全。冷启动
 允许 `evidence_refs: []`，但对应判断的 `confidence` 不能是 `high`。
 
+复盘可被 M16 候选池消费的扫描证明必须使用
+`consumer-scan-proof.v1`，明确 `project/task_id/expected_stage_set/scanned_at/scope_revision`
+和 `coverage_status`；`partial`、`unknown`、`unavailable`、`stale` 均不得推导零消费。
+
 ## 机器前奏与顺序
 
 主 runner 在调用本技能前，先无条件调用

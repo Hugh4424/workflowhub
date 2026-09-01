@@ -425,6 +425,12 @@ describe("vNext official stage completion", () => {
         cwd: process.cwd(),
         input: { receipts: { review: review.ref } },
       });
+      const currentSessionOutcome = JSON.parse(state.task.readRecord(controlled.receipts.stage_outcomes));
+      expect(currentSessionOutcome.producer).toMatchObject({
+        kind: "workflowhub-session",
+        source_id: `codex/${sessionId}`,
+        source_family: "codex",
+      });
       expect(controlled.receipts.clarify).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
       const clarify = JSON.parse(state.task.readRecord(controlled.receipts.clarify));
       expect(clarify).not.toHaveProperty("command");
@@ -509,6 +515,8 @@ describe("vNext official stage completion", () => {
       attemptId: "attempt-workflowhub-session",
       workflowRunId: context.workflowRunId,
       host: "codex-desktop",
+      sourceId: "codex/session-1",
+      sourceFamily: "codex",
       sessionId: "session-1",
       sourceRef: "codex-rollout-thread-session",
       now: () => clock,
@@ -581,6 +589,8 @@ describe("vNext official stage completion", () => {
       attemptId: "attempt-workflowhub-session-not-applicable",
       workflowRunId: context.workflowRunId,
       host: "codex-test",
+      sourceId: "codex/session-not-applicable",
+      sourceFamily: "codex",
       sessionId: "session-not-applicable",
       sourceRef: "codex-session-not-applicable",
       now: () => clock,

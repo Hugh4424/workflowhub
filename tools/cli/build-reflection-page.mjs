@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot } from "../../runtime/evidence/workflow-evolution.mjs";
+import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot, resolveTargetRef } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const CLASSIFICATIONS = ["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"];
@@ -337,6 +337,25 @@ function runDeriveConsumptionEdges(root, now) {
   }
 }
 
+function authorityForTarget(project, stageSlug, judgment) {
+  const hashFile = (ref) => createHash("sha256").update(readFileSync(join(repositoryRoot, ref))).digest("hex");
+  const manifestRef = `workflows/${stageSlug}/steps.json`;
+  const manifest = JSON.parse(readFileSync(join(repositoryRoot, manifestRef), "utf8"));
+  const manifestHash = hashFile(manifestRef);
+  const moveMapRef = "docs/architecture/move-map.json";
+  const moveMap = JSON.parse(readFileSync(join(repositoryRoot, moveMapRef), "utf8"));
+  const catalogRef = "skills/catalog.yaml";
+  const catalog = readFileSync(join(repositoryRoot, catalogRef), "utf8");
+  const skills = [...catalog.matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].map((match) => ({ id: match[1], version: match[2].replaceAll('"', ""), authority: catalogRef, authority_sha256: hashFile(catalogRef) }));
+  const authorities = {
+    stages: [{ stage: stageSlug, version: manifest.schema_version, authority: manifestRef, authority_sha256: manifestHash }],
+    steps: (manifest.steps ?? []).map((entry) => ({ slug: entry.step_slug, version: manifest.schema_version, authority: manifestRef, authority_sha256: manifestHash })),
+    skills,
+    surfaces: (moveMap.moves ?? moveMap.entries ?? []).flatMap((entry) => [entry.source, entry.destination].filter(Boolean).map((id) => ({ id, version: moveMap.schema_version ?? "1", authority: moveMapRef, authority_sha256: hashFile(moveMapRef) }))),
+  };
+  return resolveTargetRef({ projectId: project, targetKind: judgment.subject_kind, targetId: judgment.subject_id, authorities });
+}
+
 function projectOverall(tasks, nowMs) {
   const scoped = new Map();
   for (const task of tasks) {
@@ -428,6 +447,7 @@ function project({ root, tasksRoot, now }) {
   const status = tasks.length === 0 ? "empty" : hasUnavailable ? "degraded" : "ok";
   const observations = [];
   const interventions = [];
+  const authorityErrors = [];
   const materialIdentities = ["skills/catalog.yaml", "docs/architecture/move-map.json"].map((ref) => ({
     ref,
     sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, ref))).digest("hex"),
@@ -440,14 +460,16 @@ function project({ root, tasksRoot, now }) {
       const confirmationSha256 = safeConfirmationRef ? createHash("sha256").update(readFileSync(join(tasksRoot, task.task_id, safeConfirmationRef))).digest("hex") : null;
       if (safeConfirmationRef && confirmationSha256) materialIdentities.push({ ref: `${task.task_id}/${safeConfirmationRef}`, sha256: confirmationSha256 });
       for (const judgment of stage.judgments) {
-        const target = { target_kind: judgment.subject_kind, target_id: judgment.subject_id, target_version: "1", authority: `${stage.stage}:${stage.reflection_ref ?? "unknown"}` };
-        observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef ?? stage.reflection_ref ?? `quality/stage-reflection/${stage.stage}.json`, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: target, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
+        const resolved = authorityForTarget(project, stage.stage, judgment);
+        if (resolved.status !== "ok") { authorityErrors.push({ task_id: task.task_id, stage: stage.stage, subject_id: judgment.subject_id, status: resolved.status }); continue; }
+        observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef ?? stage.reflection_ref ?? `quality/stage-reflection/${stage.stage}.json`, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: resolved.target_ref, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
       }
       for (const intervention of stage.interventions ?? []) interventions.push({ project, task_id: task.task_id, confirmation_ref: intervention.confirmation_ref ?? stage.reflection_ref, intervention_stage: stage.stage, occurred_at: stage.generated_at ?? now, primary_attribution_stage: intervention.attribution });
     }
   }
   let evolution = { schema_version: "workflow-evolution.v1", status: "unavailable", candidates: [], quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" }, diagnostics: [{ summary: "evolution snapshot unavailable" }] };
   try {
+    if (authorityErrors.length > 0) throw new Error(`target authority resolution failed: ${JSON.stringify(authorityErrors)}`);
     const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter(Boolean);
     const inventory = buildInputInventory({ project, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
     const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory: inventory.inventory, now });

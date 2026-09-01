@@ -91,7 +91,7 @@ function makeFixture() {
   writeJson(join(taskA, "quality/stage-reflection/build-spec.json"), reflection("task-a", "build-spec", {
     judgments: [
       {
-        subject_id: "step-alpha",
+        subject_id: "spec-clarify",
         subject_kind: "step",
         classification: "simplify",
         severity: "high",
@@ -101,7 +101,7 @@ function makeFixture() {
         next_review_trigger: "下一次 build-spec 再出现重复输入时",
       },
       {
-        subject_id: "step-alpha",
+        subject_id: "spec-clarify",
         subject_kind: "step",
         classification: "simplify",
         severity: "high",
@@ -111,7 +111,7 @@ function makeFixture() {
         next_review_trigger: "下一次 build-spec 再出现重复输入时",
       },
       {
-        subject_id: "step-beta",
+        subject_id: "spec-specify",
         subject_kind: "step",
         classification: "optimize",
         severity: "medium",
@@ -121,7 +121,7 @@ function makeFixture() {
         next_review_trigger: "下一次阶段耗时超过基线时",
       },
       {
-        subject_id: "step-stable",
+        subject_id: "read-decision-log",
         subject_kind: "step",
         classification: "keep",
         severity: "low",
@@ -131,7 +131,7 @@ function makeFixture() {
         next_review_trigger: "下一次同类任务完成时",
       },
     ],
-    interventions: [intervention("step-alpha")],
+    interventions: [intervention("spec-clarify")],
     lessons_added: ["quality/stage-reflection/build-spec.json"],
   }));
   writeJson(join(taskA, "quality/stage-reflection/build-code.json"), reflection("task-a", "build-code", {
@@ -148,7 +148,7 @@ function makeFixture() {
 
   writeJson(join(taskB, "quality/stage-reflection/build-spec.json"), reflection("task-b", "build-spec", {
     judgments: [{
-      subject_id: "step-alpha",
+      subject_id: "spec-clarify",
       subject_kind: "step",
       classification: "simplify",
       severity: "high",
@@ -157,12 +157,12 @@ function makeFixture() {
       confidence: "high",
       next_review_trigger: "下一次 build-spec 出现同职责步骤时",
     }],
-    interventions: [intervention("step-alpha")],
+    interventions: [intervention("spec-clarify")],
   }));
   writeJson(join(taskB, "quality/stage-reflection/build-plan.json"), reflection("task-b", "build-plan", {
     status: "degraded",
     judgments: [{
-      subject_id: "skill-gamma",
+      subject_id: "stage-reflection",
       subject_kind: "skill",
       classification: "add",
       severity: "low",
@@ -171,7 +171,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次 build-plan 复盘时",
     }],
-    interventions: [intervention("skill-gamma")],
+    interventions: [intervention("stage-reflection")],
   }));
   writeFileSync(join(taskB, "quality/stage-reflection/verify-code.json"), "{\"not\":\"a reflection\"}\n");
   for (const stage of stages) {
@@ -183,7 +183,7 @@ function makeFixture() {
   writeJson(join(taskOld, "quality/stage-reflection/build-spec.json"), reflection("task-old", "build-spec", {
     generated_at: "2026-07-01T12:00:00.000Z",
     judgments: [{
-      subject_id: "old-step",
+      subject_id: "spec-clarify",
       subject_kind: "step",
       classification: "simplify",
       severity: "high",
@@ -192,7 +192,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次真实任务出现时",
     }],
-    interventions: [intervention("old-step")],
+    interventions: [intervention("spec-clarify")],
   }));
 
   const lessonsRoot = join(root, "Projects", project, "lessons");
@@ -253,11 +253,10 @@ describe("build-reflection-page projection", () => {
       expect(data.filters.classifications).toEqual(expect.arrayContaining(["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"]));
 
       const pending = data.overall_pending;
-      expect(pending[0]).toMatchObject({ subject_id: "step-alpha", classification: "simplify", frequency: 2, score: 6 });
+      expect(pending[0]).toMatchObject({ subject_id: "spec-clarify", classification: "simplify", frequency: 2, score: 6 });
       expect(pending[0].source_task_stages).toHaveLength(2);
-      expect(pending.some((entry) => entry.subject_id === "step-alpha" && entry.frequency > 2)).toBe(false);
-      expect(pending.some((entry) => entry.subject_id === "old-step")).toBe(false);
-      expect(pending.some((entry) => entry.subject_id === "step-stable")).toBe(false);
+      expect(pending.some((entry) => entry.subject_id === "spec-clarify" && entry.frequency > 2)).toBe(false);
+      expect(pending.some((entry) => entry.subject_id === "read-decision-log")).toBe(false);
 
       const taskA = data.tasks.find((task) => task.task_id === "task-a");
       const taskB = data.tasks.find((task) => task.task_id === "task-b");
@@ -274,7 +273,7 @@ describe("build-reflection-page projection", () => {
       });
       expect(taskA.stages.find((stage) => stage.stage === "build-spec").interventions[0]).toMatchObject({
         reply_text: "保留当前步骤，下一轮再看。",
-        step_slug: "step-alpha",
+        step_slug: "spec-clarify",
       });
       const missingRef = taskB.stages.find((stage) => stage.stage === "build-plan").judgments[0].evidence_refs[0];
       expect(missingRef).toMatchObject({ ref: "quality/evidence/missing.md", safe_ref: null, state: "unavailable" });
@@ -338,5 +337,19 @@ describe("build-reflection-page projection", () => {
       rmSync(root, { recursive: true, force: true });
       rmSync(outside, { recursive: true, force: true });
     }
+  });
+
+  it("keeps the page visible but refuses to publish evolution for a foreign target", () => {
+    const fixture = makeFixture();
+    try {
+      const path = join(fixture.tasksRoot, "task-a/quality/stage-reflection/build-spec.json");
+      const value = JSON.parse(readFileSync(path, "utf8"));
+      value.judgments[0].subject_id = "foreign-step";
+      writeJson(path, value);
+      expect(() => runCli(fixture)).not.toThrow();
+      const data = readProjectedData(join(fixture.out, "data.js"));
+      expect(data.evolution.status).toBe("unavailable");
+      expect(data.evolution.diagnostics[0].summary).toContain("target authority resolution failed");
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 });

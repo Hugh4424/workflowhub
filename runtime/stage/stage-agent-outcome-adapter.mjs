@@ -641,6 +641,8 @@ export function publishStageAgentOutcome({
       kind: provenance.kind,
       host: provenance.host,
       agent_run_id: provenance.agent_run_id,
+      ...(provenance.source_id ? { source_id: provenance.source_id } : {}),
+      ...(provenance.source_family ? { source_family: provenance.source_family } : {}),
       ...(provenance.session_id ? { session_id: provenance.session_id } : {}),
       ...(provenance.source_ref ? { source_ref: provenance.source_ref } : {}),
     },
@@ -715,7 +717,7 @@ function sessionManifest(stage) {
  */
 export function createWorkflowHubSessionRecorder({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-workflowhub-session-1", workflowRunId = null,
-  host, sessionId, sourceRef, requirementAuthentication = null,
+  host, sourceId, sourceFamily, sessionId, sourceRef, requirementAuthentication = null,
 } = {}) {
   const safeTask = assertTaskHandle(task);
   const safeKernel = assertTaskKernel(kernel);
@@ -723,6 +725,8 @@ export function createWorkflowHubSessionRecorder({
   const active = activeWorkspace({ workspace, candidateWorkspace });
   const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
   const safeHost = text(host, "host");
+  const safeSourceId = text(sourceId, "sourceId");
+  const safeSourceFamily = text(sourceFamily, "sourceFamily");
   const safeSessionId = text(sessionId, "sessionId");
   const safeSourceRef = text(sourceRef, "sourceRef");
   if (safeSourceRef.startsWith("/") || safeSourceRef.includes("..") || safeSourceRef.includes("\\")) {
@@ -856,7 +860,7 @@ export function createWorkflowHubSessionRecorder({
       }
       const execution = {
         status: resolvedStatus,
-        provenance: { kind: "workflowhub-session", host: safeHost, agent_run_id: safeSessionId, session_id: safeSessionId, source_ref: safeSourceRef },
+        provenance: { kind: "workflowhub-session", host: safeHost, source_id: safeSourceId, source_family: safeSourceFamily, agent_run_id: safeSessionId, session_id: safeSessionId, source_ref: safeSourceRef },
         steps,
         skills,
         ...(stage === "verify-code"
