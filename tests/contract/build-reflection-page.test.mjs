@@ -300,6 +300,12 @@ describe("build-reflection-page projection", () => {
       expect(html).toContain("const activateView =");
       expect(html).toContain("id=\"task-filter\"");
       expect(html).toContain("judgment");
+      expect(html).toContain("ready: \"ready\"");
+      for (const state of ["empty", "error", "insufficient_samples", "unavailable", "stale", "unverified", "not_checked", "not_applicable"]) {
+        expect(html).toContain(`${state}: \"${state}\"`);
+      }
+      expect(html).toContain("grid-template-columns: minmax(0, 1fr)");
+      expect(html).not.toMatch(/\b(fetch|XMLHttpRequest|setTimeout|setInterval)\s*\(/);
       expect(html).not.toContain("href=\"quality/evidence/../../etc/passwd\"");
       expect(readFileSync(fixture.legacy, "utf8")).toBe(legacyBefore);
 

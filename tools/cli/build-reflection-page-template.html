@@ -64,7 +64,9 @@
     .state-ok { color: var(--signal); }
     .state-failed, .state-fatal { color: var(--danger); }
     .state-degraded, .state-stale { color: var(--warn); }
-    .state-unknown, .state-unavailable, .state-empty { color: var(--quiet); }
+    .state-unknown, .state-unavailable, .state-empty, .state-not-checked, .state-not-applicable { color: var(--quiet); }
+    .state-insufficient_samples, .state-unverified { color: var(--warn); }
+    .state-error { color: var(--danger); }
     .counts { display: flex; flex-wrap: wrap; gap: 5px 10px; min-height: 25px; margin: 10px 0; color: var(--muted); font-size: 11px; }
     .count strong { color: var(--text); }
     .judgment, .intervention { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
@@ -92,8 +94,8 @@
       .views { width: 100%; margin: 0 0 8px; }
       .layout { display: block; }
       .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; }
-      .task-list { display: flex; overflow-x: auto; }
-      .task-item { min-width: 190px; }
+      .task-list { display: grid; grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
+      .task-item { min-width: 0; }
       .content { padding-top: 18px; }
     }
   </style>
@@ -125,7 +127,7 @@
       <main class="content">
         <div id="global-state" class="global-state"></div>
         <div class="state-legend" aria-label="状态说明">
-          <span>unknown=未知</span><span>unavailable=不可用</span><span>degraded=降级</span><span>failed=失败</span><span>empty=空数据</span><span>fatal=投影失败</span><span>stale=过期</span>
+          <span>unknown=未知</span><span>unavailable=不可用</span><span>degraded=降级</span><span>failed=失败</span><span>error=错误</span><span>empty=空数据</span><span>fatal=投影失败</span><span>stale=过期</span><span>insufficient_samples=样本不足</span><span>not_checked=未检查</span><span>not_applicable=不适用</span><span>unverified=未验证</span>
         </div>
         <section id="reference-panel" class="global-state" hidden>
           <strong>受控证据引用</strong>
@@ -171,12 +173,12 @@
   <script>
     (() => {
       const data = globalThis.__WH_MONITOR_DATA__;
-      const stateNames = new Set(["unknown", "unavailable", "degraded", "failed", "empty", "fatal", "stale", "ok", "ready"]);
+      const stateNames = new Set(["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "stale", "insufficient_samples", "not_checked", "not_applicable", "unverified", "ok", "ready"]);
       let selectedTaskId = data?.tasks?.[0]?.task_id || "all";
       const el = (id) => document.getElementById(id);
       const text = (node, value) => { node.textContent = value === null || value === undefined || value === "" ? "unknown" : String(value); return node; };
       const option = (label, value) => { const node = document.createElement("option"); node.value = value; node.textContent = label; return node; };
-      const stateLabel = (value) => ({ ok: "ok", ready: "ready", unknown: "unknown", unavailable: "unavailable", degraded: "degraded", failed: "failed", empty: "empty", fatal: "fatal", stale: "stale" }[value] || "unknown");
+      const stateLabel = (value) => ({ ok: "ok", ready: "ready", unknown: "unknown", unavailable: "unavailable", degraded: "degraded", failed: "failed", error: "error", empty: "empty", fatal: "fatal", stale: "stale", insufficient_samples: "insufficient_samples", not_checked: "not_checked", not_applicable: "not_applicable", unverified: "unverified" }[value] || "unknown");
       const classificationLabel = (value) => ({ keep: "保留", optimize: "优化", simplify: "简化", merge: "合并", remove_candidate: "移除候选", add: "新增", needs_evidence: "需要证据" }[value] || value);
       const make = (tag, className, value) => { const node = document.createElement(tag); if (className) node.className = className; if (value !== undefined) text(node, value); return node; };
       const addField = (parent, name, value) => { const row = make("div", "field"); row.appendChild(make("span", "field-name", `${name}: `)); if (value instanceof Node) row.appendChild(value); else row.appendChild(document.createTextNode(value === null || value === undefined || value === "" ? "unknown" : String(value))); parent.appendChild(row); };
