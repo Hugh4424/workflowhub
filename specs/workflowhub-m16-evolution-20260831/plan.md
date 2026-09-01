@@ -121,9 +121,9 @@
 - **State owner**：`buildReflectionPage()` 生成的 frozen `workflowhub-reflection-page.v1` ViewModel；页面无运行时数据 owner。
 - **Typed ViewModel**：vanilla JS，无 TypeScript；组合 schema 与 contract test 是类型边界。
 - **CSS/token owner**：`build-reflection-page-template.html` 的 `#evolution-trends` 局部 selector；禁止 global override 与 `!important`。
-- **Fixture / viewport**：`tests/fixtures/workflow-evolution/extreme.json` + setup 生成 manifest；default、empty、error、insufficient_samples、unavailable、stale、unverified 和三区块混合态各生成独立静态页面；每页跑 390×844、1280×800。
-- **Browser / a11y / performance**：T007 是 browser evidence 唯一 producer，固定用 `isolated-browser-qa` 驱动 `agent-browser` 单引擎；25 个页面（21 个单区状态页 + 4 个混合页）各跑 390×844 与 1280×800，共 50 组，检查 keyboard、focus order、4.5:1/3:1 对比度、overflow、展开证据、console/network，并机器断言证据链接 exact accessible-name 字段及展开控件 name/aria-expanded 同步。T010 不启动 browser、不生成/刷新/改写 evidence，只验证 T007 exact manifest/current bindings并原样透传 manifest status/exit matrix。
-- **Screenshot handoff**：`quality/evidence/browser-qa/m16-monitor/` 写 `browser-qa-evidence.v1` manifest，绑定 snapshot/tool/skill identity、planned/observed groups、assertions、artifact refs、task-owned server PID、session/server/temp cleanup 与 `passed|qa_failed|unavailable`。`qa_failed` 只在 QA 命令真实执行且 exit 非 0 时使用；tool unavailable 时为 incomplete，QA `exit_code` 必须 absent，orchestrator 可用独立 non-zero probe exit，禁止伪造 exit 0。
+- **Fixture / viewport**：`tests/fixtures/workflow-evolution/extreme.json` + setup 生成 manifest；当前 runner 服务单页 `workflowhub-monitor.html`，在 390×844、1280×800 两个 viewport 各采集一次，共 2 组。
+- **Browser / a11y / performance**：T007 是 browser evidence 唯一 producer，固定用 `isolated-browser-qa` 驱动 `agent-browser` 单引擎；单页 `workflowhub-monitor.html` 在 390×844 与 1280×800 各跑一次，共 2 组，runner 仅以 canonical manifest checks 断言页面可打开、Evolution tab 可达、预期文案出现、无页面错误、无外部运行时网络请求及两张截图存在。keyboard/focus order、对比度、overflow 与展开控件同步不在当前 runner 的通过条件内。T010 不启动 browser、不生成/刷新/改写 evidence，只验证 T007 exact manifest/current bindings并原样透传 manifest status/exit matrix。
+- **Screenshot handoff**：`quality/evidence/browser-qa/m16-monitor/` 写 `browser-qa-evidence.v1` manifest，绑定 snapshot/tool/skill identity、planned/observed groups、assertions、artifact refs `m16-monitor-390x844.png` 与 `m16-monitor-1280x800.png`、task-owned server PID、session/server/temp cleanup 与 `passed|qa_failed|unavailable`。`qa_failed` 只在 QA 命令真实执行且 exit 非 0 时使用；tool unavailable 时为 incomplete，QA `exit_code` 必须 absent，orchestrator 可用独立 non-zero probe exit，禁止伪造 exit 0。
 - **Coverage limits**：不覆盖 Design/Experience 视觉权威、Safari/移动真机、生产部署或跨主机性能。
 - **N/A / unknown reason**：Design/Experience/preview/screenshot identity 当前 `not_bindable`；仅复用现有视觉基线。
 
@@ -258,7 +258,7 @@
 - **PLAN-RISK-002 仓外并发**：影响 POOL/EDIT/NEG/T002-T004；锁/CAS 失败保持旧字节并返回 conflict/failed。
 - **RISK-003 lock failure mapping**：lease 上限处理 crash-deadlock；tombstone 只暂停并隔离已过期旧 writer；每次写前 fencing 防旧 writer 恢复与 ABA 删除。三者任一身份/时序无法证明即 failed/零写，不以盲删锁恢复。
 - **PLAN-RISK-003 monitor 回归**：影响 PAGE/T005-T007；既有 task view 任何断言失败即 STOP 回 P2。
-- **PLAN-RISK-004 UI 来源缺失**：影响 PAGE-003/T007；没有真实 browser evidence 不得宣称视觉/a11y 完成。
+- **PLAN-RISK-004 UI 来源缺失**：影响 PAGE-003/T007；没有真实 browser evidence 不得宣称视觉完成；a11y 仍需独立事实，当前 runner 不提供。
 - **PLAN-RISK-005 public surface 扩张**：影响 GOV/T008-T010；`RUNTIME_BEHAVIORS` 或 stage action 增加即 STOP 回 spec/decision。
 - **PLAN-RISK-006 intentional UI serialization**：保持 `T009→T007` 以绑定 current move-map；这是有意串行。UI 失败发现较晚时必须回 T006 并重跑 T008-T010；接受此成本，不改依赖。
 
@@ -378,7 +378,7 @@ UI 只读同次 frozen ViewModel；任何区域失败不得清空其他区域；
 
 ### Done
 
-P2 的 AC-PAGE-001～003、AC-POOL-004～005 有合同事实；browser 事实留给 P3/T007，不能在 P2 提前声明。
+P2 的 AC-PAGE-001～003 有合同事实；pool FR 仅作状态传播 seam，不转移 AC ownership；browser 事实留给 P3/T007，不能在 P2 提前声明。
 
 ### Risks and rollback
 
@@ -398,7 +398,7 @@ P2 的 AC-PAGE-001～003、AC-POOL-004～005 有合同事实；browser 事实留
 
 ### Tasks
 
-- `T008 RED production-only governance/e2e contract`；`T009 创建 test-only browser/review/aggregate checks（不进 move-map）并完成 production-only move-map 双向闭合`；`T007 只生成绑定 T009 frozen hash 的 browser/a11y evidence`；`T010 对产品面只读，task-quality 仅有 immutable review receipt 与 atomic single aggregate 两类受控写入`。
+- `T008 RED production-only governance/e2e contract`；`T009 创建 test-only browser/review/aggregate checks（不进 move-map）并完成 production-only move-map 双向闭合`；`T007 只生成绑定 T009 frozen hash 的 browser evidence`；`T010 对产品面只读，task-quality 仅有 immutable review receipt 与 atomic single aggregate 两类受控写入`。
 
 ### Verify
 
