@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const canonicalChecks = ["open", "evolution_tab", "content", "no_page_errors", "no_runtime_requests", "viewport_390x844", "viewport_1280x800"];
@@ -19,6 +19,7 @@ try {
     const paths = Object.fromEntries(process.argv.slice(3).map((arg) => { const index = arg.indexOf("="); return [arg.slice(2, index), resolve(arg.slice(index + 1))]; }));
     const checkKeys = Object.keys(value.checks ?? {}).sort();
     const viewports = value.viewports;
+    const manifestRoot = dirname(resolve(process.argv[2]));
     if (!hashes || requiredHashes.some((key) => !/^[a-f0-9]{64}$/.test(hashes[key] ?? ""))
         || !sameArray(checkKeys, [...canonicalChecks].sort()) || canonicalChecks.some((key) => value.checks[key] !== true)
         || !sameArray(value.assertions, canonicalAssertions)
@@ -26,7 +27,13 @@ try {
         || !Array.isArray(viewports) || viewports.length !== 2
         || viewports[0]?.width !== 390 || viewports[0]?.height !== 844
         || viewports[1]?.width !== 1280 || viewports[1]?.height !== 800
-        || viewports.some((viewport) => !/^[a-f0-9]{64}$/.test(viewport?.snapshot_sha256 ?? ""))) process.exit(22);
+        || viewports.some((viewport) => !/^[a-f0-9]{64}$/.test(viewport?.snapshot_sha256 ?? "") || !/^[A-Za-z0-9._-]+\.png$/.test(viewport?.evidence_ref ?? ""))
+        || !Array.isArray(value.evidence) || value.evidence.length !== 2) process.exit(22);
+    for (const viewport of viewports) {
+      const bytes = readFileSync(join(manifestRoot, viewport.evidence_ref));
+      if (createHash("sha256").update(bytes).digest("hex") !== viewport.snapshot_sha256
+          || !value.evidence.some((entry) => entry?.ref === viewport.evidence_ref && entry.sha256 === viewport.snapshot_sha256)) process.exit(22);
+    }
     for (const [name, key] of [["page", "page_sha256"], ["data", "data_sha256"], ["move-map", "move_map_sha256"], ["fixture", "fixture_sha256"]]) {
       if (!paths[name] || createHash("sha256").update(readFileSync(paths[name])).digest("hex") !== hashes[key]) process.exit(22);
     }

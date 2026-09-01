@@ -39,15 +39,17 @@ function passedManifest(identities) {
     assertions: canonicalAssertions,
     checks: canonicalChecks,
     viewports: [
-      { width: 390, height: 844, snapshot_sha256: sha("narrow") },
-      { width: 1280, height: 800, snapshot_sha256: sha("wide") },
+      { width: 390, height: 844, evidence_ref: "narrow.png", snapshot_sha256: sha("narrow-image") },
+      { width: 1280, height: 800, evidence_ref: "wide.png", snapshot_sha256: sha("wide-image") },
     ],
+    evidence: [{ ref: "narrow.png", sha256: sha("narrow-image") }, { ref: "wide.png", sha256: sha("wide-image") }],
     material_identity: identities,
   };
 }
 describe("M16 browser evidence manifest", () => {
   it("maps authenticated manifest states to the canonical exit matrix", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-browser-manifest-")); roots.push(root);
+    writeFileSync(join(root, "narrow.png"), "narrow-image"); writeFileSync(join(root, "wide.png"), "wide-image");
     const materialArgs = [];
     const identities = {};
     for (const [name, key] of [["page", "page_sha256"], ["data", "data_sha256"], ["move-map", "move_map_sha256"], ["fixture", "fixture_sha256"]]) { const path = join(root, name); writeFileSync(path, name); identities[key] = createHash("sha256").update(name).digest("hex"); materialArgs.push(`--${name}=${path}`); }
@@ -60,6 +62,7 @@ describe("M16 browser evidence manifest", () => {
 
   it("rejects a passed claim that is not bound to page, data, move-map and fixture bytes", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-browser-manifest-")); roots.push(root);
+    writeFileSync(join(root, "narrow.png"), "narrow-image"); writeFileSync(join(root, "wide.png"), "wide-image");
     const path = join(root, "forged-pass.json");
     writeFileSync(path, `${JSON.stringify({ schema_version: "browser-qa-evidence.v1", status: "passed", engine: "agent-browser", login_reused: false, cleanup: "complete", checks: { open: true } })}\n`);
     expect(spawnSync(process.execPath, [validator, path]).status).toBe(22);
@@ -67,6 +70,7 @@ describe("M16 browser evidence manifest", () => {
 
   it("rejects a pass after any bound material changes", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-browser-manifest-")); roots.push(root);
+    writeFileSync(join(root, "narrow.png"), "narrow-image"); writeFileSync(join(root, "wide.png"), "wide-image");
     const paths = Object.fromEntries(["page", "data", "move-map", "fixture"].map((name) => { const path = join(root, name); writeFileSync(path, name); return [name, path]; }));
     const material_identity = { page_sha256: createHash("sha256").update("page").digest("hex"), data_sha256: createHash("sha256").update("data").digest("hex"), move_map_sha256: createHash("sha256").update("move-map").digest("hex"), fixture_sha256: createHash("sha256").update("fixture").digest("hex") };
     const manifest = join(root, "pass.json"); writeFileSync(manifest, `${JSON.stringify(passedManifest(material_identity))}\n`);
@@ -76,6 +80,7 @@ describe("M16 browser evidence manifest", () => {
 
   it("rejects passed claims missing any canonical check, assertion, viewport, session or completed cleanup", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-browser-manifest-")); roots.push(root);
+    writeFileSync(join(root, "narrow.png"), "narrow-image"); writeFileSync(join(root, "wide.png"), "wide-image");
     const paths = Object.fromEntries(["page", "data", "move-map", "fixture"].map((name) => { const path = join(root, name); writeFileSync(path, name); return [name, path]; }));
     const identities = { page_sha256: sha("page"), data_sha256: sha("data"), move_map_sha256: sha("move-map"), fixture_sha256: sha("fixture") };
     const mutations = [
@@ -84,6 +89,7 @@ describe("M16 browser evidence manifest", () => {
       (value) => { value.assertions.pop(); },
       (value) => { value.viewports.pop(); },
       (value) => { value.viewports[0].width = 391; },
+      (value) => { value.evidence[0].sha256 = "0".repeat(64); },
       (value) => { delete value.session; },
       (value) => { value.cleanup = "pending"; },
     ];

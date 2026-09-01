@@ -98,6 +98,11 @@
       "required": ["schema_version", "project", "task_id", "coverage_status", "zero_consumption", "expected_stage_set", "scanned_stage_set", "scanned_at", "scope_revision", "registered_output_refs", "source_subject", "source_refs", "diagnostics"],
       "properties": {
         "schema_version": {"const": "consumer-scan-proof.v1"},
+        "status": {"enum": ["complete", "unknown"]},
+        "scope": {"const": "all-current-stage-outcome-files"},
+        "stage_count": {"type": "integer", "minimum": 0},
+        "outcome_file_count": {"type": "integer", "minimum": 0},
+        "subject_count": {"type": "integer", "minimum": 0},
         "project": {"type": "string", "minLength": 1},
         "task_id": {"type": "string", "minLength": 1},
         "coverage_status": {"enum": ["complete", "partial", "unknown", "unavailable", "stale"]},

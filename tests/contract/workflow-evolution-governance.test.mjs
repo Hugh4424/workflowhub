@@ -39,11 +39,11 @@ describe("M16 governance registration", () => {
     expect(review).not.toContain('status: "unavailable"');
     const redGate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs"), "utf8");
     expect(redGate).toContain("EXPECTED_BASELINE_SHA256");
-    expect(redGate).toContain('phase === "red" && exitCode === 0');
+    expect(redGate).toContain('phase === "red" && exitCode !== 1');
     expect(redGate).toContain("material_sha256");
     const baseline = JSON.parse(readFileSync(resolve(root, "tests/fixtures/workflow-evolution/red-baseline.v1.json"), "utf8"));
-    expect(baseline.tests).toEqual(["tests/contract/public-behavior-baseline.test.mjs"]);
-    expect(baseline.tests.some((ref) => ref.includes("quality/"))).toBe(false);
+    expect(baseline.tests).toEqual([{ ref: "tests/contract/public-behavior-baseline.test.mjs", sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }]);
+    expect(baseline.tests.some((entry) => entry.ref.includes("quality/"))).toBe(false);
     expect(redWrapper).not.toContain("stage-reflection-e2e-constructed.test.mjs");
     expect(redWrapper).toContain("red-baseline.v1.json");
   });

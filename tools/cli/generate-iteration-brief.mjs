@@ -42,18 +42,25 @@ function source(path, expectedHash, name) {
 function ledgerEntries(raw) { const out = []; let start = 0; while (start < raw.length) { const newline = raw.indexOf(0x0a, start); if (newline === -1) { out.push({ start, end: raw.length, complete: false, bytes: raw.subarray(start) }); break; } let end = newline; if (end > start && raw[end - 1] === 0x0d) end -= 1; out.push({ start, end: newline + 1, complete: true, bytes: raw.subarray(start, end) }); start = newline + 1; } return out; }
 function parseLedgerEntry(entry) { if (!entry.complete) return null; try { return JSON.parse(entry.bytes.toString("utf8")); } catch { return null; } }
 function validLedgerAbort(raw, start, entry, value) { const suffixEnd = start + value.observed_suffix_length; return value?.record_kind === "batch_abort" && value.abandoned_start_offset === start && Number.isInteger(value.observed_suffix_length) && suffixEnd <= entry.start && hash(raw.subarray(0, start)) === value.last_committed_prefix_hash && hash(raw.subarray(start, suffixEnd)) === value.observed_suffix_hash && /^[\r\n]*$/.test(raw.subarray(suffixEnd, entry.start).toString("utf8")); }
+function assertEnvelope(value, kind, ledgerKind, name) {
+  const keys = kind === "batch_begin" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id"]
+    : kind === "batch_commit" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "count", "content_hash", "status"]
+      : ["schema_version", "record_kind", "ledger_kind", "batch_id", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"];
+  if (!value || value.schema_version !== "workflow-evolution.v1" || value.record_kind !== kind || value.ledger_kind !== ledgerKind
+      || Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `${name} ${kind} envelope schema invalid`);
+}
 function scan(path, name) {
   if (!existsSync(path)) return { status: "unavailable", reason: `${name}_missing`, refs: [], records: [] };
   const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null;
   for (const entry of ledgerEntries(raw)) {
     const value = parseLedgerEntry(entry);
-    if (recoveryStart !== null) { if (validLedgerAbort(raw, recoveryStart, entry, value)) { recoveryStart = null; open = null; } else if (value?.record_kind === "batch_begin" || value?.record_kind === "batch_commit") throw fail("failed", `${name} has an unclosed abandoned region`); continue; }
+    if (recoveryStart !== null) { if (value?.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); if (!validLedgerAbort(raw, recoveryStart, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); recoveryStart = null; open = null; } else if (value?.record_kind === "batch_begin" || value?.record_kind === "batch_commit") throw fail("failed", `${name} has an unclosed abandoned region`); continue; }
     if (!value) { recoveryStart = open?.start ?? entry.start; continue; }
-    if (!open) { if (value.record_kind !== "batch_begin" || value.ledger_kind !== ledgerKind) throw fail("failed", `${name} has an unexpected record`); open = { start: entry.start, begin: value, rows: [] }; continue; }
-    if (value.record_kind === "batch_abort") { if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
+    if (!open) { assertEnvelope(value, "batch_begin", ledgerKind, name); open = { start: entry.start, begin: value, rows: [] }; continue; }
+    if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `${name} has a nested batch`);
     if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id) throw fail("failed", `${name} row identity mismatch`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
-    if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
+    assertEnvelope(value, "batch_commit", ledgerKind, name); if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
     records.push(...open.rows); open = null;
   }
   if (recoveryStart !== null || open !== null) throw fail("failed", `${name} has a malformed terminal tail`);

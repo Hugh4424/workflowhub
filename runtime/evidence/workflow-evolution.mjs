@@ -145,21 +145,22 @@ function assertCurrentTargetAuthority(target) {
   try { const stat = lstatSync(path); if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("not a real file"); bytes = readFileSync(path); }
   catch (error) { throw fail("stale_source", `target authority is unreadable: ${error.message}`); }
   if (hashBytes(bytes) !== target.authority_sha256) throw fail("stale_source", "target authority hash is stale");
-  let matches = 0;
+  let matches = 0; let expectedVersion;
   if (target.target_kind === "stage" || target.target_kind === "step") {
     if (!/^workflows\/(make-decision|build-spec|build-plan|build-code|verify-code)\/steps\.json$/.test(ref)) throw fail("stale_source", "target manifest authority is not current");
     const manifest = JSON.parse(bytes.toString("utf8"));
-    matches = target.target_kind === "stage" ? Number(manifest.stage_slug === target.target_id) : (manifest.steps ?? []).filter((entry) => entry.step_slug === target.target_id).length;
+    matches = target.target_kind === "stage" ? Number(manifest.stage_slug === target.target_id) : (manifest.steps ?? []).filter((entry) => entry.step_slug === target.target_id).length; expectedVersion = String(manifest.schema_version);
   } else if (target.target_kind === "skill") {
     if (ref !== "skills/catalog.yaml") throw fail("stale_source", "skill authority is not the current catalog");
-    matches = [...bytes.toString("utf8").matchAll(/^\s*- name:\s*([^\s#]+)/gm)].filter((entry) => entry[1] === target.target_id).length;
+    const skillMatches = [...bytes.toString("utf8").matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].filter((entry) => entry[1] === target.target_id); matches = skillMatches.length; expectedVersion = skillMatches[0]?.[2]?.replaceAll('"', "");
   } else {
     if (ref !== "docs/architecture/move-map.json") throw fail("stale_source", "surface authority is not the current move-map");
     const map = JSON.parse(bytes.toString("utf8")); const found = new Set();
     for (const [index, entry] of (map.entries ?? []).entries()) if (entry.source === target.target_id || entry.destination === target.target_id) found.add(index);
-    matches = found.size;
+    matches = found.size; expectedVersion = String(map.schema_version ?? "1");
   }
   if (matches !== 1) throw fail(matches === 0 ? "invalid_target" : "stale_source", `target must map to exactly one current authority entry: ${target.target_id}`);
+  if (target.target_version !== expectedVersion) throw fail("stale_source", `target version is stale: ${target.target_id}`);
 }
 
 export function resolveTargetRef(input = {}) {
@@ -645,6 +646,7 @@ export function refreshEvolutionSnapshot(input = {}) {
     const proofPayload = (proof) => Object.fromEntries(Object.entries(proof ?? {}).filter(([key]) => !["candidate_snapshot_id", "candidate_snapshot_content_id", "publication_generation", "proof_identity"].includes(key)));
     const usedProofs = new Set(initial.commits.flatMap((entry) => entry.rows.filter((row) => row.record_kind === "publication_proof").flatMap((row) => row.source_proofs ?? [])).map((proof) => proof.proof_identity ?? hashBytes(canonical(proofPayload(proof)))));
     const inputProofs = inventory.consumer_proofs ?? inventory.consumerProofs ?? [];
+    for (const proof of inputProofs) validateWorkflowEvolutionDefinition("consumer_scan_proof", proof);
     const freshProofs = inputProofs.filter((proof) => !usedProofs.has(hashBytes(canonical(proofPayload(proof)))));
     const records = observationsToRecords({ project, ...inventory, consumer_proofs: freshProofs }, now, snapshotId, generation, storageRoot).map((record) => {
       const priorRecord = priorByGroup.get(record.candidate_group_id);

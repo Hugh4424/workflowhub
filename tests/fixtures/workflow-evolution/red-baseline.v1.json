@@ -1,1 +1,1 @@
-{"schema_version":"workflow-evolution-red-baseline.v1","suite":"all","tests":["tests/contract/public-behavior-baseline.test.mjs"]}
+{"schema_version":"workflow-evolution-red-baseline.v1","suite":"all","tests":[{"ref":"tests/contract/public-behavior-baseline.test.mjs","sha256":"8ca59d1737d42eb7205ca0007ef8d6a3790996cdc4b0d4f240ad0f25bb91961e"}]}

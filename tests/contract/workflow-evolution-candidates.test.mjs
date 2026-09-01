@@ -118,6 +118,14 @@ describe("M16 candidate and tax contract", () => {
     expect(existsSync(candidateLedger(storageRoot))).toBe(false);
   });
 
+  it("rejects stale target versions and unknown proof fields", async () => {
+    const mod = await loadModule();
+    const staleRoot = root(); const stale = observation("version"); stale.target_ref.version = "1.0.0";
+    expect(mod.refreshEvolutionSnapshot({ storageRoot: staleRoot, project: "Demo", attemptId: "stale-version", inventory: { observations: [stale] }, now: "2026-08-31T00:00:00Z" })).toMatchObject({ status: "stale_source" });
+    const proof = { schema_version: "consumer-scan-proof.v1", project: "Demo", task_id: "task-version", coverage_status: "complete", zero_consumption: true, expected_stage_set: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"], scanned_stage_set: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"], scanned_at: "2026-08-31T00:00:00Z", scope_revision: "a".repeat(64), registered_output_refs: [{ ref: "quality/x", source: { stage: "build-spec", subject_kind: "step", subject_id: "spec-clarify" }, consumer_count: 0, freshness: "current" }], source_subject: "tools/cli/derive-consumption-edges.mjs", source_refs: [`quality/evidence/stage-outcomes/build-spec/${"b".repeat(64)}.json`], diagnostics: [], attacker_nonce: "bypass" };
+    expect(() => mod.refreshEvolutionSnapshot({ storageRoot: root(), project: "Demo", attemptId: "unknown-proof-field", inventory: { observations: [observation("version")], consumer_proofs: [proof] }, now: "2026-08-31T00:00:00Z" })).toThrow(/consumer_scan_proof schema invalid/);
+  });
+
   it("validates the task-level consumer proof shape and rejects the retired stage_set shape", async () => {
     const mod = await loadModule();
     const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
