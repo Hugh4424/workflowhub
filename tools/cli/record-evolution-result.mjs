@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { acquireProjectLock, recordCandidateTransition, resolveTargetRef, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, recordCandidateTransition, resolveTargetRef, validateWorkflowEvolutionDefinition, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const EDIT_OUTCOMES = new Set(["improved", "unchanged", "regressed", "inconclusive", "reverted"]);
@@ -35,23 +35,37 @@ function encoded(value) { return Buffer.from(`${JSON.stringify(value)}\n`); }
 function entries(raw) { const out = []; let start = 0; while (start < raw.length) { const newline = raw.indexOf(0x0a, start); if (newline === -1) { out.push({ start, end: raw.length, complete: false, bytes: raw.subarray(start) }); break; } let end = newline; if (end > start && raw[end - 1] === 0x0d) end -= 1; out.push({ start, end: newline + 1, complete: true, bytes: raw.subarray(start, end) }); start = newline + 1; } return out; }
 function parsed(entry) { if (!entry.complete) return null; try { return JSON.parse(entry.bytes.toString("utf8")); } catch { return null; } }
 function validAbort(raw, start, entry, value) { const suffixEnd = start + value.observed_suffix_length; return value?.record_kind === "batch_abort" && value.abandoned_start_offset === start && Number.isInteger(value.observed_suffix_length) && suffixEnd <= entry.start && hash(raw.subarray(0, start)) === value.last_committed_prefix_hash && hash(raw.subarray(start, suffixEnd)) === value.observed_suffix_hash && /^[\r\n]*$/.test(raw.subarray(suffixEnd, entry.start).toString("utf8")); }
+function assertEnvelope(value, kind, ledgerKind) {
+  try { validateWorkflowEvolutionDefinition(kind, value); } catch (error) { throw fail("failed", `${ledgerKind} ${kind} envelope schema invalid: ${error.message}`); }
+  const keys = kind === "batch_begin" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "publication_generation"]
+    : kind === "batch_commit" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "count", "content_hash", "publication_generation", "status"]
+      : ["schema_version", "record_kind", "ledger_kind", "batch_id", "publication_generation", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"];
+  if (value.schema_version !== "workflow-evolution.v1" || value.record_kind !== kind || value.ledger_kind !== ledgerKind
+      || Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `${ledgerKind} ${kind} envelope schema invalid`);
+}
 function scanLedger(path, ledgerKind) {
   const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0); const records = []; let open = null; let recoveryStart = null; let committedEnd = 0; let latestPublicationGeneration = 0;
   for (const entry of entries(raw)) {
     const value = parsed(entry);
     if (recoveryStart !== null) {
-      if (validAbort(raw, recoveryStart, entry, value)) { recoveryStart = null; open = null; committedEnd = entry.end; continue; }
+      if (value?.record_kind === "batch_abort") {
+        assertEnvelope(value, "batch_abort", ledgerKind);
+        if (value.publication_generation === (open?.begin?.publication_generation ?? (latestPublicationGeneration + 1))
+            && (open?.begin?.batch_id === undefined || value.batch_id === open.begin.batch_id)
+            && validAbort(raw, recoveryStart, entry, value)) { recoveryStart = null; open = null; committedEnd = entry.end; continue; }
+      }
       throw fail("failed", `corruption occurs before a later ${ledgerKind} ledger record at byte ${entry.start}`);
     }
     if (!value) { recoveryStart = open?.start ?? entry.start; continue; }
-    if (!open) { if (value.record_kind !== "batch_begin" || value.ledger_kind !== ledgerKind) throw fail("failed", `unexpected ${ledgerKind} ledger row at byte ${entry.start}`); open = { start: entry.start, begin: value, rows: [] }; continue; }
-    if (value.record_kind === "batch_abort") { if (!validAbort(raw, open.start, entry, value)) throw fail("failed", `unauthenticated ledger abort at byte ${entry.start}`); open = null; committedEnd = entry.end; continue; }
+    if (!open) { assertEnvelope(value, "batch_begin", ledgerKind); if (value.publication_generation !== latestPublicationGeneration + 1) throw fail("failed", `${ledgerKind} publication generation is not contiguous at byte ${entry.start}`); open = { start: entry.start, begin: value, rows: [] }; continue; }
+    if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind); if (value.batch_id !== open.begin.batch_id || value.publication_generation !== open.begin.publication_generation || !validAbort(raw, open.start, entry, value)) throw fail("failed", `unauthenticated ledger abort at byte ${entry.start}`); open = null; committedEnd = entry.end; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `nested ledger batch at byte ${entry.start}`);
-    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id) throw fail("failed", `ledger row batch identity mismatch at byte ${entry.start}`); open.rows.push(value); continue; }
-    if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `committed ledger integrity mismatch at byte ${entry.start}`);
+    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `ledger row batch identity mismatch at byte ${entry.start}`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${ledgerKind} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
+    assertEnvelope(value, "batch_commit", ledgerKind);
+    if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id || value.publication_generation !== open.begin.publication_generation || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `committed ledger integrity mismatch at byte ${entry.start}`);
     records.push(...open.rows); committedEnd = entry.end; latestPublicationGeneration = Number.isInteger(value.publication_generation) ? value.publication_generation : latestPublicationGeneration; open = null;
   }
-  const suffixStart = recoveryStart ?? open?.start ?? null; return { raw, records, committedEnd, latestPublicationGeneration, terminalSuffix: suffixStart === null ? null : { start: suffixStart, bytes: raw.subarray(suffixStart), publication_generation: open?.begin?.publication_generation ?? null } };
+  const suffixStart = recoveryStart ?? open?.start ?? null; return { raw, records, committedEnd, latestPublicationGeneration, terminalSuffix: suffixStart === null ? null : { start: suffixStart, bytes: raw.subarray(suffixStart), batch_id: open?.begin?.batch_id ?? null, publication_generation: open?.begin?.publication_generation ?? null } };
 }
 function assertLock(lock, attemptId) {
   const value = JSON.parse(readFileSync(lock.lockHandle.path, "utf8"));
@@ -61,7 +75,7 @@ function appendLine(path, value, lock, attemptId) { mkdirSync(dirname(path), { r
 function recoverTail(path, ledgerKind, lock, attemptId) {
   const state = scanLedger(path, ledgerKind); if (!state.terminalSuffix) return state; const suffix = state.terminalSuffix;
   if (state.raw.length && state.raw.at(-1) !== 0x0a) { assertLock(lock, attemptId); const fd = openSync(path, "a"); try { writeFileSync(fd, "\n"); fsyncSync(fd); } finally { closeSync(fd); } assertLock(lock, attemptId); }
-  appendLine(path, { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: ledgerKind, batch_id: "unparseable-or-uncommitted", publication_generation: suffix.publication_generation ?? (state.latestPublicationGeneration + 1), reason: "terminal_uncommitted_suffix", last_committed_prefix_hash: hash(state.raw.subarray(0, suffix.start)), abandoned_start_offset: suffix.start, observed_suffix_length: suffix.bytes.length, observed_suffix_hash: hash(suffix.bytes) }, lock, attemptId);
+  appendLine(path, { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: ledgerKind, batch_id: suffix.batch_id ?? "unparseable-or-uncommitted", publication_generation: suffix.publication_generation ?? (state.latestPublicationGeneration + 1), reason: "terminal_uncommitted_suffix", last_committed_prefix_hash: hash(state.raw.subarray(0, suffix.start)), abandoned_start_offset: suffix.start, observed_suffix_length: suffix.bytes.length, observed_suffix_hash: hash(suffix.bytes) }, lock, attemptId);
   const recovered = scanLedger(path, ledgerKind); if (recovered.terminalSuffix) throw fail("failed", "ledger recovery did not close terminal suffix"); return recovered;
 }
 function appendBatch(path, ledgerKind, value, lock, attemptId, expectedPrefixHash) {
@@ -147,7 +161,17 @@ function negativeResult(payload, attemptId, editState, negatives, project, repos
   const sameFailure = negatives.filter((entry) => entry.failure_identity === payload.failure_identity); const current = heads(sameFailure, "negative_id");
   if (sameFailure.length === 0 && payload.supersedes != null) throw fail("stale_source", "first failure identity cannot supersede a record");
   if (sameFailure.length > 0 && (current.length !== 1 || payload.supersedes !== current[0].negative_id)) throw fail("stale_source", "negative correction must supersede the same failure identity current head");
-  return { ...payload, ...decision, schema_version: "workflow-evolution.v1", record_kind: "negative-result", attempt_id: attemptId, attempted_edit_id: editId, attempted_edit_head_sha256: hash(editState.raw.subarray(0, editState.committedEnd)) };
+  return {
+    schema_version: "workflow-evolution.v1", record_kind: "negative-result",
+    negative_id: payload.negative_id, attempt_id: attemptId, attempted_edit_id: editId,
+    attempted_edit_head_sha256: hash(editState.raw.subarray(0, editState.committedEnd)),
+    failure_identity: payload.failure_identity, ...decision, approval: true, target_ref: payload.target_ref,
+    failure_domain: payload.failure_domain, failure_kind: payload.failure_kind, observed_at: payload.observed_at,
+    changed_surface: payload.changed_surface, before_facts_ref: payload.before_facts_ref, before_facts_sha256: payload.before_facts_sha256,
+    after_facts_ref: payload.after_facts_ref, after_facts_sha256: payload.after_facts_sha256,
+    validation_method: payload.validation_method, revert_ref: payload.revert_ref, revert_sha256: payload.revert_sha256,
+    status: payload.status, failure_evidence_refs: payload.failure_evidence_refs, supersedes: payload.supersedes ?? null,
+  };
 }
 
 function main() {

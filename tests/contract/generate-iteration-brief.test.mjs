@@ -101,6 +101,18 @@ describe("M16 iteration brief", () => {
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
+  it("rejects a batch commit whose generation differs from its begin", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-a", publication_generation: 1 };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-a", count: 0, content_hash: sha256(canonical([])), publication_generation: 2, status: "committed" };
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(commit)}\n`);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=commit-generation-forge"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("committed batch integrity mismatch");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
   it.each(["batch_begin", "batch_commit", "batch_abort"])("rejects a %s envelope without publication_generation", (kind) => {
     const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
     try {

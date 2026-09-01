@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -9,6 +9,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 const root = join(import.meta.dirname, "../..");
 const cli = join(root, "tools/cli/record-evolution-result.mjs");
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const canonical = (value) => value === null || typeof value !== "object" ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
 
 function setup() {
   const storage = mkdtempSync(join(tmpdir(), "m16-ledger-"));
@@ -71,6 +72,31 @@ describe("M16 ledgers", () => {
       const before = readFileSync(path);
       const second = run(fixture.storage, "attempted-edit", fixture.payload);
       expect(first.status).toBe(0); expect(second.status).not.toBe(0); expect(readFileSync(path)).toEqual(before);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects malformed batch envelopes and rows already present in the ledger", () => {
+    const fixture = setup();
+    try {
+      const path = join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"); mkdirSync(join(fixture.storage, "Projects/Demo"), { recursive: true });
+      const batch = "legacy"; const row = { record_kind: "attempted-edit", ledger_batch_id: batch, attempt_id: "legacy", legacy_before_facts: [] };
+      const begin = { record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: batch, attempt_id: "legacy", publication_generation: 1 };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: batch, attempt_id: "legacy", publication_generation: 2, count: 1, content_hash: sha(canonical([row])), status: "committed" };
+      writeFileSync(path, `${JSON.stringify(begin)}\n${JSON.stringify(row)}\n${JSON.stringify(commit)}\n`); const before = readFileSync(path);
+      const result = run(fixture.storage, "attempted-edit", fixture.payload);
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed" }); expect(readFileSync(path)).toEqual(before);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects an authenticated abort whose generation does not match the abandoned batch", () => {
+    const fixture = setup();
+    try {
+      const path = join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"); mkdirSync(join(fixture.storage, "Projects/Demo"), { recursive: true });
+      const torn = Buffer.from('{"record_kind":"batch_begin"');
+      const abort = { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: "attempted-edit", batch_id: "b", publication_generation: 99, reason: "torn", last_committed_prefix_hash: sha(Buffer.alloc(0)), abandoned_start_offset: 0, observed_suffix_length: torn.length, observed_suffix_hash: sha(torn) };
+      writeFileSync(path, Buffer.concat([torn, Buffer.from(`\n${JSON.stringify(abort)}\n`)])); const before = readFileSync(path);
+      const result = run(fixture.storage, "attempted-edit", fixture.payload);
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed" }); expect(readFileSync(path)).toEqual(before);
     } finally { fixture.cleanup(); }
   });
 

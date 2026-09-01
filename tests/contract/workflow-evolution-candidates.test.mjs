@@ -380,6 +380,19 @@ describe("M16 candidate and tax contract", () => {
     expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" }).publication_generation).toBe(2);
   });
 
+  it.each([
+    ["wrong schema", { schema_version: "forged.v1", publication_generation: 2 }],
+    ["wrong generation", { schema_version: "workflow-evolution.v1", publication_generation: 99 }],
+  ])("rejects an authenticated candidate abort with %s", async (_label, override) => {
+    const mod = await loadModule(); const storageRoot = root();
+    const first = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a1", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" });
+    const ledger = candidateLedger(storageRoot); const prefix = readFileSync(ledger); const torn = Buffer.from('{"record_kind":"batch_begin"');
+    const abort = { ...override, record_kind: "batch_abort", batch_id: "torn", reason: "torn", last_committed_prefix_hash: createHash("sha256").update(prefix).digest("hex"), abandoned_start_offset: prefix.length, observed_suffix_length: torn.length, observed_suffix_hash: createHash("sha256").update(torn).digest("hex") };
+    appendFileSync(ledger, Buffer.concat([torn, Buffer.from(`\n${JSON.stringify(abort)}\n`)])); const before = readFileSync(ledger);
+    const result = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a2", inventory: { project: "Demo", observations: [] }, now: "2026-09-01T00:00:00Z" });
+    expect(result).toMatchObject({ status: "failed", error: { code: "failed" } }); expect(readFileSync(ledger)).toEqual(before); expect(first.status).toBe("ok");
+  });
+
   it("fails closed on a forged committed batch without modifying the ledger", async () => {
     const mod = await loadModule();
     const storageRoot = root();

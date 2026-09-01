@@ -424,6 +424,14 @@ function validAbort(raw, recoveryStart, entry, abort) {
   return /^[\r\n]*$/.test(raw.subarray(suffixEnd, entry.start).toString("utf8"));
 }
 
+function assertCandidateAbort(abort, expectedGeneration, expectedBatchId, offset) {
+  try { validateWorkflowEvolutionDefinition("batch_abort", abort); } catch (error) { throw fail("failed", `batch_abort schema invalid at byte ${offset}: ${error.message}`); }
+  const keys = ["schema_version", "record_kind", "batch_id", "publication_generation", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"];
+  if (abort.schema_version !== SCHEMA_VERSION || abort.publication_generation !== expectedGeneration
+      || (expectedBatchId !== null && abort.batch_id !== expectedBatchId)
+      || Object.keys(abort).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `batch_abort identity invalid at byte ${offset}`);
+}
+
 function scanCandidateLedger(path) {
   assertLedgerFile(path);
   const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0);
@@ -435,6 +443,9 @@ function scanCandidateLedger(path) {
   for (const entry of ledgerEntries(raw)) {
     const value = parseEntry(entry);
     if (recoveryStart !== null) {
+      if (value?.record_kind === "batch_abort") {
+        assertCandidateAbort(value, recoveryPublicationGeneration ?? ((commits.at(-1)?.commit.publication_generation ?? 0) + 1), recoveryBatchId, entry.start);
+      }
       if (value?.record_kind === "batch_abort" && validAbort(raw, recoveryStart, entry, value)) {
         recoveryStart = null;
         recoveryBatchId = null;
@@ -458,6 +469,7 @@ function scanCandidateLedger(path) {
       continue;
     }
     if (value.record_kind === "batch_abort") {
+      assertCandidateAbort(value, open.begin.publication_generation, open.begin.batch_id, entry.start);
       if (!validAbort(raw, open.start, entry, value)) throw fail("failed", `batch_abort does not authenticate abandoned bytes at byte ${entry.start}`);
       open = null;
       continue;

@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 68943,
-      "sha256_after": "90a2e38d612fa431c80a7da634ad52235ded7ea2bba7e4ad0193d7c588b86d18"
+      "bytes": 70057,
+      "sha256_after": "42701907d632334b07da3cc5b8fca423be19aa28c98742daac6c4d637917454d"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 24538,
-      "sha256_after": "25262305b8d0a99902976d29e7623a3b647b3aacf63caa3109e463e3e655e8a8"
+      "bytes": 24608,
+      "sha256_after": "53dec5618836bb842a26d0a6d947855de03eb56ce07b89390bdd2fa0d7121acd"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",
@@ -2343,8 +2343,8 @@
       "consumer": "maintainer terminal outcome recording",
       "delete_condition": "remove when M16 ledgers are retired",
       "content_change": "private candidate and ledger adapter",
-      "bytes": 23124,
-      "sha256_after": "4ac3c896c08a9d1b36ff4239f8ff0199539367c5a08d5d077f3498bf255f41e1"
+      "bytes": 25952,
+      "sha256_after": "8afa3375a84bdb56f93c02c68a57f714060f36e9497bad6d8e2e8fbf09f5f15e"
     },
     {
       "source": "tools/cli/check-skill-updates.mjs",
