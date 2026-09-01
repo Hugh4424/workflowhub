@@ -10,6 +10,9 @@ case "$suite" in
   monitor) tests=(tests/contract/build-reflection-page.test.mjs) ;;
   governance) tests=(tests/contract/workflow-evolution-governance.test.mjs tests/e2e/workflow-evolution-current.test.mjs tests/contract/public-behavior-baseline.test.mjs) ;;
 esac
+if [[ "$suite" == "governance" ]]; then
+  export WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR=1
+fi
 phase="${GATE_PHASE:-green}"
 if [[ "$suite" == "pool-tax" && "$phase" != "red" ]]; then
   tests+=(tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-reflection-skill-contract.test.mjs)

@@ -49,6 +49,7 @@ describe("M16 governance registration", () => {
     expect(baseline.tests.some((entry) => entry.ref.includes("quality/"))).toBe(false);
     expect(redWrapper).not.toContain("stage-reflection-e2e-constructed.test.mjs");
     expect(redWrapper).toContain("red-baseline.v1.json");
+    expect(redWrapper).toContain('export WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR=1');
   });
   it("rejects forged exit and hash arguments by reading the canonical suite output", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "workflowhub-red-authenticity-")); temporaryRoots.push(temporaryRoot);
