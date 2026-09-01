@@ -4,6 +4,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameS
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { acquireProjectLock } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -162,6 +163,20 @@ function atomicWriteRows(path, rows) {
   }
 }
 
+function acquireLessonMergeLock(storageRoot, project) {
+  const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
+  let last;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const lock = acquireProjectLock({ storageRoot, project, attemptId: `lesson-merge-${randomUUID()}` });
+    if (lock.status === "ok") return lock;
+    last = lock;
+    const transientUnreadable = lock.status === "failed" && lock.error?.summary?.startsWith("lock is unreadable:");
+    if (lock.status !== "conflict" && !transientUnreadable) break;
+    Atomics.wait(waitBuffer, 0, 0, 10);
+  }
+  fail(last?.error?.summary ?? "lesson merge project lock is unavailable");
+}
+
 export function appendLessonObservation({ root, proj, stage, taskId, text, reflectionRef, now = new Date().toISOString(), entryId = randomUUID() }) {
   validateLessonIdentity({ proj, stage, taskId });
   if (typeof reflectionRef !== "string" || !REF.test(reflectionRef) || !reflectionRef.endsWith(`/${stage}.json`)) {
@@ -221,70 +236,75 @@ export function mergeLessonObservation({
   assertDirectoryChain(storageRoot, ["Projects", proj, "lessons"], "lessons");
   assertDirectory(lessonsRoot, "lessons");
   const path = join(lessonsRoot, `${stage}.jsonl`);
-  const rows = readLessonRows(path);
-  const rawIndex = rows.findIndex((row) => row.entry_kind === "raw_observation" && row.entry_id === rawEntryId);
-  if (rawIndex < 0) fail(`raw lesson ${rawEntryId} is unavailable`);
-  const raw = rows[rawIndex];
-  if (raw.task_id !== taskId || raw.stage !== stage) fail("raw lesson identity does not match the requested task and stage");
+  const lock = acquireLessonMergeLock(storageRoot, proj);
+  try {
+    const rows = readLessonRows(path);
+    const rawIndex = rows.findIndex((row) => row.entry_kind === "raw_observation" && row.entry_id === rawEntryId);
+    if (rawIndex < 0) fail(`raw lesson ${rawEntryId} is unavailable`);
+    const raw = rows[rawIndex];
+    if (raw.task_id !== taskId || raw.stage !== stage) fail("raw lesson identity does not match the requested task and stage");
 
   const existingMerged = rows.find((row) => row.entry_kind === "merged_lesson"
     && sourceRefs(row).some((source) => source.task_id === taskId && source.raw_entry_id === rawEntryId));
-  if (raw.merged === true && !existingMerged) {
-    fail("raw lesson is marked merged but no merged lesson source exists");
-  }
-  if (raw.merged !== true && existingMerged) {
-    fail("raw lesson has a merged lesson source but merged flag is false");
-  }
-  if (raw.merged === true) {
-    return {
-      status: "already_merged",
-      path: `Projects/${proj}/lessons/${stage}.jsonl`,
-      ref: lessonEntryRef(stage, existingMerged.entry_id),
-      entry: existingMerged,
-    };
-  }
-  if (raw.merged !== false) fail("raw lesson merged flag must be false before merge");
+    if (raw.merged === true && !existingMerged) {
+      fail("raw lesson is marked merged but no merged lesson source exists");
+    }
+    if (raw.merged !== true && existingMerged) {
+      fail("raw lesson has a merged lesson source but merged flag is false");
+    }
+    if (raw.merged === true) {
+      return {
+        status: "already_merged",
+        path: `Projects/${proj}/lessons/${stage}.jsonl`,
+        ref: lessonEntryRef(stage, existingMerged.entry_id),
+        entry: existingMerged,
+      };
+    }
+    if (raw.merged !== false) fail("raw lesson merged flag must be false before merge");
 
-  const lessonText = normalizedLesson(lesson || raw.text);
-  if (!lessonText) fail("lesson must be non-empty");
-  const matchingIndexes = rows
-    .map((row, index) => ({ row, index }))
-    .filter(({ row }) => row.entry_kind === "merged_lesson" && normalizedLesson(row.lesson) === lessonText);
-  const canonical = matchingIndexes[0]?.row ?? null;
-  const mergedEntryId = canonical?.entry_id ?? randomUUID();
-  if (!SEGMENT.test(mergedEntryId)) fail("merged lesson entry_id must be one safe path segment");
-  const priorSources = matchingIndexes.flatMap(({ row }) => sourceRefs(row));
-  const allSources = new Map(priorSources.map((source) => [sourceKey(source), source]));
-  allSources.set(sourceKey({ task_id: taskId, raw_entry_id: rawEntryId }), { task_id: taskId, raw_entry_id: rawEntryId });
-  const priorCount = matchingIndexes.reduce((sum, { row }) => {
-    const count = Number.isSafeInteger(row.occurrence_count) && row.occurrence_count > 0 ? row.occurrence_count : sourceRefs(row).length;
-    return sum + count;
-  }, 0);
-  const supersedes = [...new Set(matchingIndexes.slice(1).map(({ row }) => row.entry_id).filter((entryId) => SEGMENT.test(entryId ?? "")))];
-  const merged = {
-    entry_kind: "merged_lesson",
-    entry_id: mergedEntryId,
-    merged_at: now,
-    stage,
-    lesson: canonical?.lesson ?? lessonText,
-    severity: severityWeight(canonical?.severity) >= severityWeight(severity) ? canonical.severity : severity,
-    occurrence_count: priorCount + 1,
-    source_refs: [...allSources.values()],
-    supersedes: [...new Set([...(canonical?.supersedes ?? []), ...supersedes])],
-  };
-  const next = rows
-    .filter((_row, index) => !matchingIndexes.slice(1).some((entry) => entry.index === index))
-    .map((row) => row.entry_id === rawEntryId ? { ...row, merged: true } : row);
-  const canonicalIndex = next.findIndex((row) => row.entry_kind === "merged_lesson" && row.entry_id === mergedEntryId);
-  if (canonicalIndex >= 0) next[canonicalIndex] = merged;
-  else next.push(merged);
-  atomicWriteRows(path, next);
-  return {
-    status: "merged",
-    path: `Projects/${proj}/lessons/${stage}.jsonl`,
-    ref: lessonEntryRef(stage, merged.entry_id),
-    entry: merged,
-  };
+    const lessonText = normalizedLesson(lesson || raw.text);
+    if (!lessonText) fail("lesson must be non-empty");
+    const matchingIndexes = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.entry_kind === "merged_lesson" && normalizedLesson(row.lesson) === lessonText);
+    const canonical = matchingIndexes[0]?.row ?? null;
+    const mergedEntryId = canonical?.entry_id ?? randomUUID();
+    if (!SEGMENT.test(mergedEntryId)) fail("merged lesson entry_id must be one safe path segment");
+    const priorSources = matchingIndexes.flatMap(({ row }) => sourceRefs(row));
+    const allSources = new Map(priorSources.map((source) => [sourceKey(source), source]));
+    allSources.set(sourceKey({ task_id: taskId, raw_entry_id: rawEntryId }), { task_id: taskId, raw_entry_id: rawEntryId });
+    const priorCount = matchingIndexes.reduce((sum, { row }) => {
+      const count = Number.isSafeInteger(row.occurrence_count) && row.occurrence_count > 0 ? row.occurrence_count : sourceRefs(row).length;
+      return sum + count;
+    }, 0);
+    const supersedes = [...new Set(matchingIndexes.slice(1).map(({ row }) => row.entry_id).filter((entryId) => SEGMENT.test(entryId ?? "")))];
+    const merged = {
+      entry_kind: "merged_lesson",
+      entry_id: mergedEntryId,
+      merged_at: now,
+      stage,
+      lesson: canonical?.lesson ?? lessonText,
+      severity: severityWeight(canonical?.severity) >= severityWeight(severity) ? canonical.severity : severity,
+      occurrence_count: priorCount + 1,
+      source_refs: [...allSources.values()],
+      supersedes: [...new Set([...(canonical?.supersedes ?? []), ...supersedes])],
+    };
+    const next = rows
+      .filter((_row, index) => !matchingIndexes.slice(1).some((entry) => entry.index === index))
+      .map((row) => row.entry_id === rawEntryId ? { ...row, merged: true } : row);
+    const canonicalIndex = next.findIndex((row) => row.entry_kind === "merged_lesson" && row.entry_id === mergedEntryId);
+    if (canonicalIndex >= 0) next[canonicalIndex] = merged;
+    else next.push(merged);
+    atomicWriteRows(path, next);
+    return {
+      status: "merged",
+      path: `Projects/${proj}/lessons/${stage}.jsonl`,
+      ref: lessonEntryRef(stage, merged.entry_id),
+      entry: merged,
+    };
+  } finally {
+    lock.release();
+  }
 }
 
 function main() {

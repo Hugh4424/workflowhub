@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 import { appendLessonObservation, mergeLessonObservation } from "../../tools/cli/append-lesson-observation.mjs";
 
@@ -29,6 +29,21 @@ function run(root, extra = []) {
     "--reflection-ref=quality/stage-reflection/build-code.json",
     ...rest,
   ], { cwd: repoRoot, encoding: "utf8", stdio: "pipe" });
+}
+
+function runMerge(root, taskId, rawEntryId, now) {
+  const moduleRef = new URL("../../tools/cli/append-lesson-observation.mjs", import.meta.url).href;
+  const script = `import { mergeLessonObservation } from ${JSON.stringify(moduleRef)};
+const result = mergeLessonObservation({ root: process.argv[1], proj: "Demo", stage: "build-code", taskId: process.argv[2], rawEntryId: process.argv[3], lesson: "并发合并也必须保留全部来源", severity: "medium", now: process.argv[4] });
+console.log(JSON.stringify(result));`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script, root, taskId, rawEntryId, now], { cwd: repoRoot, encoding: "utf8" });
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
 }
 
 afterEach(() => {
@@ -143,6 +158,36 @@ describe("lessons JSONL lifecycle", () => {
       rawEntryId: second.entry.entry_id,
       severity: "high",
     }).status).toBe("already_merged");
+  });
+
+  it("serializes concurrent merges so neither source lesson is lost", async () => {
+    const root = mkdtempSync(join(tmpdir(), "stage-reflection-lessons-"));
+    roots.push(root);
+    mkdirSync(join(root, "Projects", "Demo", "tasks", "task-concurrent-1"), { recursive: true });
+    mkdirSync(join(root, "Projects", "Demo", "tasks", "task-concurrent-2"), { recursive: true });
+    appendLessonObservation({ root, proj: "Demo", stage: "build-code", taskId: "task-concurrent-1", text: "并发合并也必须保留全部来源", reflectionRef: "quality/stage-reflection/build-code.json", entryId: "raw-concurrent-1" });
+    appendLessonObservation({ root, proj: "Demo", stage: "build-code", taskId: "task-concurrent-2", text: "并发合并也必须保留全部来源", reflectionRef: "quality/stage-reflection/build-code.json", entryId: "raw-concurrent-2" });
+
+    const results = await Promise.all([
+      runMerge(root, "task-concurrent-1", "raw-concurrent-1", "2026-08-31T00:04:00.000Z"),
+      runMerge(root, "task-concurrent-2", "raw-concurrent-2", "2026-08-31T00:05:00.000Z"),
+    ]);
+    expect(results.map((result) => result.status), results.map((result) => result.stderr).join("\n")).toEqual([0, 0]);
+    expect(results.map((result) => JSON.parse(result.stdout).status).sort()).toEqual(["merged", "merged"]);
+
+    const path = join(root, "Projects", "Demo", "lessons", "build-code.jsonl");
+    const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(rows.filter((row) => row.entry_kind === "raw_observation")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entry_id: "raw-concurrent-1", merged: true }),
+      expect.objectContaining({ entry_id: "raw-concurrent-2", merged: true }),
+    ]));
+    const mergedRows = rows.filter((row) => row.entry_kind === "merged_lesson");
+    expect(mergedRows).toHaveLength(1);
+    expect(mergedRows[0]).toMatchObject({ occurrence_count: 2 });
+    expect(mergedRows[0].source_refs).toEqual(expect.arrayContaining([
+      { task_id: "task-concurrent-1", raw_entry_id: "raw-concurrent-1" },
+      { task_id: "task-concurrent-2", raw_entry_id: "raw-concurrent-2" },
+    ]));
   });
 
   it("returns structured failure and does not merge or rewrite existing rows", () => {

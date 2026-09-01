@@ -343,7 +343,7 @@ export function acquireProjectLock(input = {}) {
     if (!sameEpoch && !recovery) return { status: "failed", error: { code: "failed", summary: "project lock belongs to another boot or session epoch" } };
     const recoveryValid = Boolean(recovery && typeof recovery === "object" && !Array.isArray(recovery)
       && (recovery.schema_version === undefined || recovery.schema_version === "manual-recovery.v1"));
-    if (!sameEpoch && (!recoveryValid || recovery.current_lock_sha256 !== hashBytes(currentRaw)
+    if (!sameEpoch && (!expired || !recoveryValid || recovery.current_lock_sha256 !== hashBytes(currentRaw)
       || recovery.old_boot_id !== current.boot_id || recovery.new_boot_id !== bootId
       || recovery.old_boot_id === recovery.new_boot_id || typeof recovery.nonce !== "string" || recovery.nonce.trim() === ""
       || typeof (recovery.operator_identity ?? recovery.operator) !== "string" || (recovery.operator_identity ?? recovery.operator).trim() === ""

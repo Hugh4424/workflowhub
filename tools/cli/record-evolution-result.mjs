@@ -13,6 +13,7 @@ const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+function monotonicMs() { return Number(process.hrtime.bigint() / 1_000_000n); }
 function required(value, name) { if (typeof value !== "string" || value.trim() === "") throw fail("invalid_input", `${name} is required`); return value; }
 function parseArgs(argv) { const out = {}; for (const arg of argv) { const index = arg.indexOf("="); if (!arg.startsWith("--") || index < 3) throw fail("invalid_input", `invalid argument: ${arg}`); out[arg.slice(2, index)] = arg.slice(index + 1); } return out; }
 function inputValue(options) { if (options.input) return JSON.parse(readFileSync(resolve(options.input), "utf8")); if (options.json) return JSON.parse(options.json); return {}; }
@@ -75,6 +76,7 @@ function scanLedger(path, ledgerKind) {
 function assertLock(lock, attemptId) {
   const value = JSON.parse(readFileSync(lock.lockHandle.path, "utf8"));
   if (value.owner_token !== lock.ownerToken || value.fencing_token !== lock.fencingToken || value.attempt_id !== attemptId) throw fail("stale_source", "project lock authority is stale");
+  if (!Number.isInteger(value.lease_deadline_monotonic_ms) || monotonicMs() > value.lease_deadline_monotonic_ms) throw fail("stale_source", "project lock lease expired");
 }
 function appendLine(path, value, lock, attemptId) { mkdirSync(dirname(path), { recursive: true }); const existed = existsSync(path); assertLock(lock, attemptId); const fd = openSync(path, "a"); try { writeFileSync(fd, encoded(value)); fsyncSync(fd); } finally { closeSync(fd); } if (!existed) { const parent = openSync(dirname(path), "r"); try { fsyncSync(parent); } finally { closeSync(parent); } } assertLock(lock, attemptId); }
 function recoverTail(path, ledgerKind, lock, attemptId) {

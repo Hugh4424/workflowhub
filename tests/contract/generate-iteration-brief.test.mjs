@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { hostname } from "node:os";
 import { createHash } from "node:crypto";
 const root = join(import.meta.dirname, "../..");
 const cli = join(root, "tools/cli/generate-iteration-brief.mjs");
@@ -47,6 +48,35 @@ describe("M16 iteration brief", () => {
       const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--target-version=1", `--authority=${authority}`, `--authority-sha256=${sha256(bytes)}`], { encoding: "utf8" });
       expect(result.status).not.toBe(0);
       expect(JSON.parse(result.stdout)).toMatchObject({ status: "stale_source" });
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("refuses an expired project lock without changing the lock or brief", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects", "Demo");
+      const lockPath = join(projectRoot, ".workflowhub-evolution.lock");
+      const lock = {
+        schema_version: "workflow-evolution.v1",
+        project: "Demo",
+        attempt_id: "live-attempt",
+        owner_token: "live-owner",
+        fencing_token: "live-fence",
+        pid: process.pid,
+        host_id: hostname(),
+        boot_id: process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local",
+        session_epoch: process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local",
+        acquired_monotonic_ms: 0,
+        lease_deadline_monotonic_ms: 1,
+      };
+      mkdirSync(projectRoot, { recursive: true });
+      writeFileSync(lockPath, `${JSON.stringify(lock)}\n`);
+      const before = readFileSync(lockPath);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=expired-lock"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "conflict" });
+      expect(readFileSync(lockPath)).toEqual(before);
+      expect(readFileSync(join(projectRoot, "iteration-brief.md"), { encoding: "utf8", flag: "a+" })).toBe("");
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 

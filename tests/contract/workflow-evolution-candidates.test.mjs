@@ -478,6 +478,33 @@ describe("M16 candidate and tax contract", () => {
     expect(first.release()).toEqual({ status: "ok" });
   });
 
+  it("rejects cross-boot recovery while the lock lease is still valid without changing the lock", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "old-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
+    const lockPath = first.lockHandle.path;
+    const lockValue = JSON.parse(readFileSync(lockPath, "utf8"));
+    const current = { ...lockValue, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: Number.MAX_SAFE_INTEGER };
+    writeFileSync(lockPath, `${JSON.stringify(current)}\n`);
+    const before = readFileSync(lockPath);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(before).digest("hex"),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "recovery-nonce",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "a".repeat(64),
+    };
+    const second = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "new-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
+    expect(second).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
+    expect(readFileSync(lockPath)).toEqual(before);
+    expect(existsSync(`${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`)).toBe(false);
+    expect(first.release()).toEqual({ status: "ok" });
+  });
+
   it("inherits lifecycle and revision on refresh while invalidating old transition authority", async () => {
     const mod = await loadModule();
     const storageRoot = root();

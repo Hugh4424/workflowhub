@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import Ajv2020 from "ajv/dist/2020.js";
 
 const root = join(import.meta.dirname, "../..");
@@ -51,6 +51,35 @@ describe("M16 ledgers", () => {
       expect(result.status).not.toBe(0);
       expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid_input" });
       expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("refuses an expired project lock without changing the lock or ledger", () => {
+    const fixture = setup();
+    try {
+      const projectRoot = join(fixture.storage, "Projects", "Demo");
+      mkdirSync(projectRoot, { recursive: true });
+      const lockPath = join(projectRoot, ".workflowhub-evolution.lock");
+      const lock = {
+        schema_version: "workflow-evolution.v1",
+        project: "Demo",
+        attempt_id: "live-attempt",
+        owner_token: "live-owner",
+        fencing_token: "live-fence",
+        pid: process.pid,
+        host_id: hostname(),
+        boot_id: process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local",
+        session_epoch: process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local",
+        acquired_monotonic_ms: 0,
+        lease_deadline_monotonic_ms: 1,
+      };
+      writeFileSync(lockPath, `${JSON.stringify(lock)}\n`);
+      const before = readFileSync(lockPath);
+      const result = run(fixture.storage, "attempted-edit", fixture.payload);
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "conflict" });
+      expect(readFileSync(lockPath)).toEqual(before);
+      expect(existsSync(join(projectRoot, "attempted-edits.jsonl"))).toBe(false);
     } finally { fixture.cleanup(); }
   });
 
