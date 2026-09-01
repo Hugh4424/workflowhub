@@ -81,7 +81,14 @@ function makeFixture() {
   for (const [taskRoot, taskId] of [[taskA, "task-a"], [taskB, "task-b"], [taskOld, "task-old"]]) {
     for (const stepSlug of ["spec-clarify", "stage-reflection"]) {
       const stage = stepSlug === "spec-clarify" ? "build-spec" : "build-plan";
-      const value = {
+      const value = taskId === "task-b" && stepSlug === "spec-clarify" ? {
+        schema_version: "human-confirmation.v1",
+        task_id: taskId,
+        stage,
+        attempt_ref: "legacy-attempt.json",
+        decision: "accepted",
+        confirmed_at: "2026-08-30T12:00:00.000Z",
+      } : {
         schema_version: "human-confirmation.v3",
         task_id: taskId,
         stage,
@@ -267,6 +274,7 @@ describe("build-reflection-page projection", () => {
       expect(Array.isArray(data.evolution.candidates[0].source_observations[0].evidence_refs)).toBe(true);
       expect(data.evolution.source_inventory_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(data.evolution.quality_tax).toMatchObject({ label: "未验证，待真实任务数据" });
+      expect(data.evolution.quality_tax.sample_count).toBe(3);
       expect(data.judgment_layer).toMatchObject({ record_kind: "judgment", is_fact: false });
       expect(data.filters.tasks).toEqual(["task-a", "task-b", "task-empty", "task-old"]);
       expect(data.filters.stages).toEqual(stages);

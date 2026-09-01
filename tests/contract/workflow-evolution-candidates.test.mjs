@@ -40,8 +40,15 @@ function candidateLedger(storageRoot) {
   return join(storageRoot, "Projects", "Demo", "evolution-candidates.jsonl");
 }
 
-function authenticateTaxItem(storageRoot, item) {
-  const value = {
+function authenticateTaxItem(storageRoot, item, { legacy = false } = {}) {
+  const value = legacy ? {
+    schema_version: "human-confirmation.v1",
+    task_id: item.task_id,
+    stage: item.intervention_stage,
+    attempt_ref: "legacy-attempt.json",
+    decision: "accepted",
+    confirmed_at: item.occurred_at,
+  } : {
     schema_version: "human-confirmation.v3",
     task_id: item.task_id,
     stage: item.intervention_stage,
@@ -937,6 +944,8 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     expect(run(10, 1).confidence).toBe("medium");
     expect(run(10, 2).confidence).toBe("medium");
     expect(run(10, 3).confidence).toBe("low");
+    const legacy = authenticateTaxItem(storageRoot, { project: "Demo", task_id: "tax-legacy", confirmation_ref: "tax-confirmation-legacy", step_slug: "build-code-step", intervention_stage: "build-code", occurred_at: "2026-08-30T00:00:00Z", primary_attribution_stage: "upstream_omission:build-plan" }, { legacy: true });
+    expect(mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: [legacy] })).toMatchObject({ status: "ok", sample_count: 1, denominator: 1 });
     const boundary = run(2, 0);
     const withBoundary = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: [...boundary.interventions.map((entry) => ({ ...entry, source_ref: entry.source_ref })), make(100, false, "2026-08-01T00:00:00Z"), make(101, false, "2026-07-31T23:59:59Z")] });
     expect(withBoundary.sample_count).toBe(3);
