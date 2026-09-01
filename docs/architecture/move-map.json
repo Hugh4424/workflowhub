@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 67578,
-      "sha256_after": "6558b06e73fbd224eded7dddd905696e7293dcface96784a389f6d3edbdbf3f9"
+      "bytes": 68496,
+      "sha256_after": "e0ad72dfd66b9a84b7853dca26f75d953c114b1908190ff224ca3f8e395a096b"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",

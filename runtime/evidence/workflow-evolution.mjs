@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 
@@ -623,6 +623,24 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
         const taskStat = lstatSync(taskRoot);
         if (!taskStat.isDirectory() || taskStat.isSymbolicLink()) return null;
         const trustedTaskRoot = realpathSync(taskRoot);
+        const trustedOutputRef = (ref) => {
+          if (typeof ref !== "string" || !ref.startsWith("quality/") || isAbsolute(ref) || ref.includes("..")) return false;
+          const outputPath = join(taskRoot, ...ref.split("/"));
+          let cursor = taskRoot;
+          for (const segment of ref.split("/")) {
+            cursor = join(cursor, segment);
+            let stat;
+            try { stat = lstatSync(cursor); } catch { return false; }
+            if (stat.isSymbolicLink() || (cursor !== outputPath && !stat.isDirectory())) return false;
+            if (cursor === outputPath && !stat.isFile()) return false;
+          }
+          let realOutputPath;
+          try { realOutputPath = realpathSync(outputPath); } catch { return false; }
+          const relativeOutputPath = relative(trustedTaskRoot, realOutputPath);
+          return !isAbsolute(relativeOutputPath)
+            && relativeOutputPath !== ".."
+            && !relativeOutputPath.startsWith(`..${sep}`);
+        };
         for (const stage of STAGES) {
           const directory = join(taskRoot, "quality/evidence/stage-outcomes", stage);
           const directoryStat = lstatSync(directory);
@@ -641,7 +659,7 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
                 const subjectId = kind === "step" ? subject.step_slug ?? subject.step_id : subject.skill_id ?? subject.skill_slug;
                 if (typeof subjectId !== "string" || !Array.isArray(subject.input_refs) || !Array.isArray(subject.output_refs ?? subject.evidence_refs ?? [])) return null;
                 const outputRefs = [...new Set([...(subject.output_refs ?? []), ...(subject.evidence_refs ?? []).map((entry) => entry?.ref).filter(Boolean)])];
-                if (outputRefs.some((ref) => typeof ref !== "string" || !ref.startsWith("quality/") || ref.includes("..") || !existsSync(join(taskRoot, ...ref.split("/"))))) return null;
+                if (outputRefs.some((ref) => !trustedOutputRef(ref))) return null;
                 records.push({ stage, position: position++, subject_kind: kind, subject_id: subjectId, input_refs: subject.input_refs, output_refs: outputRefs });
               }
             }

@@ -132,6 +132,81 @@ describe("M16 candidate and tax contract", () => {
     expect(() => mod.refreshEvolutionSnapshot({ storageRoot: root(), project: "Demo", attemptId: "unknown-proof-field", inventory: { observations: [observation("version")], consumer_proofs: [proof] }, now: "2026-08-31T00:00:00Z" })).toThrow(/consumer_scan_proof schema invalid/);
   });
 
+  it("does not treat symlinked stage outcome outputs outside the task as complete proof", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const outsideRoot = root();
+    const taskId = "task-symlink-output";
+    const taskRoot = join(storageRoot, "Projects/Demo/tasks", taskId);
+    const outputRoot = join(taskRoot, "quality/evidence");
+    mkdirSync(outputRoot, { recursive: true });
+    const externalOutput = join(outsideRoot, "outside-output.md");
+    const externalEvidence = join(outsideRoot, "outside-evidence.md");
+    writeFileSync(externalOutput, "outside output\n");
+    writeFileSync(externalEvidence, "outside evidence\n");
+    symlinkSync(externalOutput, join(outputRoot, "evil-output.md"));
+    symlinkSync(externalEvidence, join(outputRoot, "evil-evidence.md"));
+
+    const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+    const sourceRefs = [];
+    const registered = [];
+    for (const stage of stages) {
+      const stageDirectory = join(taskRoot, "quality/evidence/stage-outcomes", stage);
+      mkdirSync(stageDirectory, { recursive: true });
+      const value = {
+        schema_version: "workflowhub-stage-outcomes.v1",
+        task_id: taskId,
+        stage,
+        step_outcomes: [{
+          step_slug: `${stage}-step`,
+          input_refs: [],
+          output_refs: ["quality/evidence/evil-output.md"],
+          evidence_refs: [{ ref: "quality/evidence/evil-evidence.md" }],
+        }],
+        skill_outcomes: [],
+      };
+      const raw = `${JSON.stringify(value)}\n`;
+      const filename = `${createHash("sha256").update(raw).digest("hex")}.json`;
+      writeFileSync(join(stageDirectory, filename), raw);
+      const sourceRef = `quality/evidence/stage-outcomes/${stage}/${filename}`;
+      sourceRefs.push(sourceRef);
+      registered.push(
+        { ref: "quality/evidence/evil-output.md", source: { stage, subject_kind: "step", subject_id: `${stage}-step` }, consumer_count: 0, freshness: "current" },
+        { ref: "quality/evidence/evil-evidence.md", source: { stage, subject_kind: "step", subject_id: `${stage}-step` }, consumer_count: 0, freshness: "current" },
+      );
+    }
+    const proof = {
+      schema_version: "consumer-scan-proof.v1",
+      project: "Demo",
+      task_id: taskId,
+      status: "complete",
+      coverage_status: "complete",
+      zero_consumption: true,
+      scope: "all-current-stage-outcome-files",
+      stage_count: stages.length,
+      outcome_file_count: sourceRefs.length,
+      subject_count: stages.length,
+      expected_stage_set: stages,
+      scanned_stage_set: stages,
+      scanned_at: "2026-08-31T00:00:00Z",
+      scope_revision: createHash("sha256").update(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).sort().join("\n")).digest("hex"),
+      registered_output_refs: registered,
+      source_subject: "tools/cli/derive-consumption-edges.mjs",
+      source_refs: sourceRefs,
+      diagnostics: [],
+    };
+    const result = mod.refreshEvolutionSnapshot({
+      storageRoot,
+      project: "Demo",
+      attemptId: "symlink-output",
+      now: "2026-08-31T00:00:00Z",
+      inventory: { project: "Demo", observations: [observation("symlink-output")], consumer_proofs: [proof] },
+    });
+    expect(result).toMatchObject({ status: "ok", records: [{ tier: "reference_only", evidence_status: "unknown", machine_signals: { zero_consumption: "unknown" } }] });
+    expect(readFileSync(externalOutput, "utf8")).toBe("outside output\n");
+    expect(readFileSync(externalEvidence, "utf8")).toBe("outside evidence\n");
+  });
+
   it("validates the task-level consumer proof shape and rejects the retired stage_set shape", async () => {
     const mod = await loadModule();
     const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
