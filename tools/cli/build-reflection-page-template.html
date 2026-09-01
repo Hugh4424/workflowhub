@@ -109,8 +109,9 @@
     </header>
     <div class="toolbar">
       <div class="views" role="tablist" aria-label="视图">
-        <button id="task-tab" class="view-tab active" type="button" role="tab">任务视图</button>
-        <button id="overall-tab" class="view-tab" type="button" role="tab">Overall pending</button>
+        <button id="task-tab" class="view-tab active" type="button" role="tab" aria-selected="true" aria-controls="task-view">任务视图</button>
+        <button id="overall-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="overall-pending">Overall pending</button>
+        <button id="evolution-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="evolution-view">Evolution</button>
       </div>
       <div class="filter"><label for="task-filter">任务</label><select id="task-filter"></select></div>
       <div class="filter"><label for="stage-filter">stage</label><select id="stage-filter"></select></div>
@@ -142,6 +143,26 @@
         <section id="overall-pending" class="view" role="tabpanel" hidden>
           <h2 class="section-title">Overall pending · 30 天判断聚合</h2>
           <div id="pending-list" class="pending-list"></div>
+        </section>
+        <section id="evolution-view" class="view" role="tabpanel" hidden>
+          <h2 class="section-title">Evolution · 候选总览</h2>
+          <div id="evolution-state" class="global-state"></div>
+          <section aria-labelledby="evolution-action-title">
+            <h3 id="evolution-action-title">建议行动</h3>
+            <div id="evolution-action-state" class="state-copy"></div>
+            <div id="evolution-action-suggested" class="pending-list"></div>
+            <button id="evolution-action-more" type="button" hidden>显示更多</button>
+          </section>
+          <section aria-labelledby="evolution-reference-title">
+            <h3 id="evolution-reference-title">仅供参考</h3>
+            <div id="evolution-reference-state" class="state-copy"></div>
+            <div id="evolution-reference-only" class="pending-list"></div>
+            <button id="evolution-reference-more" type="button" hidden>显示更多</button>
+          </section>
+          <section aria-labelledby="evolution-tax-title">
+            <h3 id="evolution-tax-title">前期质量税</h3>
+            <div id="evolution-tax" class="pending-card"></div>
+          </section>
         </section>
       </main>
     </div>
@@ -245,6 +266,62 @@
         if (entries.length === 0) { list.appendChild(make("p", "empty-copy", "empty: 暂无 pending 判断。")); return; }
         entries.forEach((entry) => { const card = make("article", "pending-card"); card.appendChild(make("div", "pending-score", `score ${entry.score}`)); card.appendChild(make("h3", "pending-title", `${entry.subject_kind}:${entry.subject_id}`)); addField(card, "classification", classificationLabel(entry.classification)); addField(card, "severity", entry.severity); addField(card, "frequency", entry.frequency); addField(card, "reason", entry.reason); addField(card, "suggested_action", classificationLabel(entry.suggested_action)); addField(card, "first_seen", entry.first_seen); addField(card, "recent_seen", entry.recent_seen); addField(card, "source_task_stages", entry.source_task_stages.map((source) => `${source.task_id}/${source.stage}`).join(", ")); card.appendChild(make("div", "pending-source", "judgment · 非事实")); list.appendChild(card); });
       };
+      const evolutionLimits = { action_suggested: 20, reference_only: 20 };
+      const sortEvolutionCandidates = (left, right) => (right.priority_score ?? 0) - (left.priority_score ?? 0)
+        || (right.frequency ?? 0) - (left.frequency ?? 0)
+        || String(right.recent_seen || "").localeCompare(String(left.recent_seen || ""))
+        || String(left.candidate_id || "").localeCompare(String(right.candidate_id || ""));
+      const candidateEvidence = (entry) => (entry.source_observations || []).flatMap((observation) =>
+        (observation.evidence_refs || []).map((evidence) => ({ observation, evidence })));
+      const renderCandidate = (entry) => {
+        const card = make("article", "pending-card");
+        const subject = entry.target_ref?.target_id || "unknown";
+        const stages = [...new Set((entry.source_observations || []).map((item) => item.stage).filter(Boolean))].join(", ") || "unknown";
+        card.appendChild(make("div", "pending-score", entry.tier || "reference_only"));
+        card.appendChild(make("h4", "pending-title", `${entry.target_ref?.target_kind || "target"}:${subject}`));
+        addField(card, "stage", stages); addField(card, "subject", subject); addField(card, "classification", classificationLabel(entry.classification));
+        addField(card, "frequency", entry.frequency); addField(card, "priority_score", entry.priority_score); addField(card, "confidence", entry.confidence);
+        addField(card, "freshness", entry.freshness); addField(card, "validation_status", entry.validation_status);
+        const evidence = candidateEvidence(entry); const evidenceWrap = make("div", "field"); evidenceWrap.appendChild(make("span", "field-name", "evidence_refs: "));
+        if (evidence.length === 0) evidenceWrap.appendChild(document.createTextNode("unknown"));
+        evidence.forEach(({ observation, evidence: item }, index) => {
+          if (index > 0) evidenceWrap.appendChild(document.createTextNode(", "));
+          const safe = item?.safe_ref; const kind = item?.ref?.split("/")?.[1] || "evidence";
+          if (!safe) { evidenceWrap.appendChild(make("span", "ref-unavailable", "unavailable")); return; }
+          const link = make("a", "ref", safe); link.href = `#ref=${encodeURIComponent(safe)}`; link.dataset.ref = safe;
+          link.setAttribute("aria-label", `subject=${subject}; task=${observation.task_id || "unknown"}; evidence=${kind}`);
+          if (index >= 1) link.hidden = true;
+          evidenceWrap.appendChild(link);
+        });
+        card.appendChild(evidenceWrap);
+        if (evidence.length > 1) {
+          const toggle = make("button", "", "展开全部证据"); toggle.type = "button"; toggle.setAttribute("aria-expanded", "false");
+          toggle.addEventListener("click", () => { const expanded = toggle.getAttribute("aria-expanded") !== "true"; toggle.setAttribute("aria-expanded", String(expanded)); toggle.textContent = expanded ? "收起证据" : "展开全部证据"; [...evidenceWrap.querySelectorAll("a")].slice(1).forEach((node) => { node.hidden = !expanded; }); });
+          card.appendChild(toggle);
+        }
+        card.appendChild(make("div", "pending-source", "judgment · 非事实 · 不等于删除许可"));
+        return card;
+      };
+      const renderEvolutionTier = (evolution, tier, listId, stateId, moreId) => {
+        const list = el(listId); list.replaceChildren(); const state = el(stateId); const more = el(moreId);
+        if (evolution.status !== "ok") { text(state, `${stateLabel(evolution.status)}: 当前分区不可用。`); more.hidden = true; return; }
+        const entries = (Array.isArray(evolution.candidates) ? evolution.candidates : []).filter((entry) => entry.tier === tier).sort(sortEvolutionCandidates);
+        text(state, entries.length === 0 ? "empty: 暂无候选数据。" : `ok: 共 ${entries.length} 条。`);
+        entries.slice(0, evolutionLimits[tier]).forEach((entry) => list.appendChild(renderCandidate(entry)));
+        more.hidden = entries.length <= evolutionLimits[tier];
+        more.onclick = () => { evolutionLimits[tier] += 20; renderEvolutionTier(evolution, tier, listId, stateId, moreId); };
+      };
+      const renderEvolution = () => {
+        const evolution = data.evolution || {};
+        text(el("evolution-state"), `${stateLabel(evolution.status)} · snapshot=${evolution.snapshot_id || "unknown"}`);
+        renderEvolutionTier(evolution, "action_suggested", "evolution-action-suggested", "evolution-action-state", "evolution-action-more");
+        renderEvolutionTier(evolution, "reference_only", "evolution-reference-only", "evolution-reference-state", "evolution-reference-more");
+        const tax = evolution.quality_tax || {};
+        const taxNode = el("evolution-tax"); taxNode.replaceChildren();
+        addField(taxNode, "quality_tax", tax.ratio === null || tax.ratio === undefined ? "insufficient_samples" : tax.ratio);
+        addField(taxNode, "sample_status", tax.sample_status || "unknown"); addField(taxNode, "unknown_count", tax.unknown_count ?? "unknown");
+        taxNode.appendChild(make("div", "pending-source", "未验证，待真实任务数据 · 不是质量裁决或 stage gate"));
+      };
       const render = () => { renderTask(); renderPending(); };
       const populate = () => {
         const taskFilter = el("task-filter"); taskFilter.replaceChildren(option("全部任务", "all")); (data.filters?.tasks || []).forEach((task) => taskFilter.appendChild(option(task, task))); if (selectedTaskId !== "all") taskFilter.value = selectedTaskId;
@@ -260,8 +337,17 @@
       populate();
       el("task-filter").addEventListener("change", () => { if (el("task-filter").value !== "all") selectedTaskId = el("task-filter").value; render(); });
       ["stage-filter", "classification-filter"].forEach((id) => el(id).addEventListener("change", render));
-      el("task-tab").addEventListener("click", () => { el("task-filter").value = selectedTaskId; el("task-view").hidden = false; el("overall-pending").hidden = true; el("task-tab").classList.add("active"); el("overall-tab").classList.remove("active"); render(); });
-      el("overall-tab").addEventListener("click", () => { el("task-filter").value = "all"; el("task-view").hidden = true; el("overall-pending").hidden = false; el("task-tab").classList.remove("active"); el("overall-tab").classList.add("active"); renderPending(); });
+      const activateView = (name) => {
+        for (const [view, tab] of [["task-view", "task-tab"], ["overall-pending", "overall-tab"], ["evolution-view", "evolution-tab"]]) {
+          const active = view === name;
+          el(view).hidden = !active;
+          el(tab).classList.toggle("active", active);
+          el(tab).setAttribute("aria-selected", String(active));
+        }
+      };
+      el("task-tab").addEventListener("click", () => { el("task-filter").value = selectedTaskId; activateView("task-view"); render(); });
+      el("overall-tab").addEventListener("click", () => { el("task-filter").value = "all"; activateView("overall-pending"); renderPending(); });
+      el("evolution-tab").addEventListener("click", () => { activateView("evolution-view"); renderEvolution(); });
       render();
     })();
   </script>

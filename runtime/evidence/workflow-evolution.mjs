@@ -526,7 +526,7 @@ function observationsToRecords(inventory, now, snapshotId, generation) {
     const recentEntries = entries.filter((entry) => Date.parse(entry.observation.occurred_at) >= Date.parse(now) - WINDOW_MS);
     const repeat = new Set(recentEntries.map((entry) => entry.observation.task_id)).size >= 2;
     const tier = zero || repeat ? "action_suggested" : "reference_only";
-    const sourceObservations = entries.map((entry) => ({ observation_id: entry.observationId, task_id: entry.observation.task_id, confirmation_ref: entry.observation.confirmation_ref, occurred_at: entry.observation.occurred_at }));
+    const sourceObservations = entries.map((entry) => ({ observation_id: entry.observationId, task_id: entry.observation.task_id, stage: entry.observation.stage ?? "unknown", confirmation_ref: entry.observation.confirmation_ref, occurred_at: entry.observation.occurred_at, evidence_refs: Array.isArray(entry.observation.evidence_refs) ? entry.observation.evidence_refs.map(plain) : [] }));
     const sourceIdentities = normalizedIdentities(inventory.source_identities ?? inventory.sourceIdentities, sourceObservations.map((entry) => entry.observation_id));
     const observationMaterials = entries.flatMap((entry) => entry.observation.material_identities ?? entry.observation.materialIdentities ?? []);
     const materialIdentities = normalizedIdentities(inventory.material_identities ?? inventory.materialIdentities, observationMaterials);
@@ -538,6 +538,7 @@ function observationsToRecords(inventory, now, snapshotId, generation) {
       schema_version: SCHEMA_VERSION, record_kind: "candidate", candidate_group_id: groupId, candidate_id: `${groupId}:candidate`, snapshot_id: snapshotId, publication_generation: generation, revision: 1,
       target_ref: entries[0].target, classification: entries[0].observation.classification ?? "needs_evidence", tier, frequency: tasks.size, first_seen: first, recent_seen: recent,
       severity: entries.some((entry) => entry.observation.severity === "high") ? "high" : entries.some((entry) => entry.observation.severity === "medium") ? "medium" : "low",
+      confidence: entries.some((entry) => entry.observation.confidence === "low") ? "low" : entries.some((entry) => entry.observation.confidence === "medium") ? "medium" : "high",
       priority_score: entries.length, judgment_layer: "judgment", is_fact: false,
       lifecycle_status: "open", row_status: "active", freshness: "current", evidence_status: zero ? "complete" : "unknown", sample_status: tasks.size >= 5 ? "sufficient" : "insufficient_samples", validation_status: "unverified", source_observations: sourceObservations,
       source_identities: sourceIdentities, material_identities: materialIdentities, human_confirmation_ref: confirmationRef, human_confirmation_sha256: confirmationSha256,

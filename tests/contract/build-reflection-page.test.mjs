@@ -76,6 +76,17 @@ function makeFixture() {
     mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true });
     writeFileSync(join(taskRoot, "quality/evidence/build-spec.md"), "fixture evidence\n");
   }
+  const confirmationRef = `quality/confirmations/${"a".repeat(64)}.json`;
+  for (const taskRoot of [taskA, taskB, taskOld]) {
+    writeJson(join(taskRoot, confirmationRef), { schema_version: "human-confirmation.v2", accepted: true });
+  }
+  const intervention = (stepSlug) => ({
+    confirmation_ref: confirmationRef,
+    step_slug: stepSlug,
+    reply_text: "保留当前步骤，下一轮再看。",
+    attribution: "human",
+    confidence: "high",
+  });
 
   writeJson(join(taskA, "quality/stage-reflection/build-spec.json"), reflection("task-a", "build-spec", {
     judgments: [
@@ -120,13 +131,7 @@ function makeFixture() {
         next_review_trigger: "下一次同类任务完成时",
       },
     ],
-    interventions: [{
-      confirmation_ref: `quality/confirmations/${"a".repeat(64)}.json`,
-      step_slug: "step-alpha",
-      reply_text: "保留当前步骤，下一轮再看。",
-      attribution: "human",
-      confidence: "high",
-    }],
+    interventions: [intervention("step-alpha")],
     lessons_added: ["quality/stage-reflection/build-spec.json"],
   }));
   writeJson(join(taskA, "quality/stage-reflection/build-code.json"), reflection("task-a", "build-code", {
@@ -152,6 +157,7 @@ function makeFixture() {
       confidence: "high",
       next_review_trigger: "下一次 build-spec 出现同职责步骤时",
     }],
+    interventions: [intervention("step-alpha")],
   }));
   writeJson(join(taskB, "quality/stage-reflection/build-plan.json"), reflection("task-b", "build-plan", {
     status: "degraded",
@@ -165,6 +171,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次 build-plan 复盘时",
     }],
+    interventions: [intervention("skill-gamma")],
   }));
   writeFileSync(join(taskB, "quality/stage-reflection/verify-code.json"), "{\"not\":\"a reflection\"}\n");
   for (const stage of stages) {
@@ -185,6 +192,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次真实任务出现时",
     }],
+    interventions: [intervention("old-step")],
   }));
 
   const lessonsRoot = join(root, "Projects", project, "lessons");
@@ -229,6 +237,16 @@ describe("build-reflection-page projection", () => {
 
       expect(readFileSync(dataPath, "utf8")).toContain("Object.freeze(");
       expect(data.schema_version).toBe("workflowhub-reflection-page.v1");
+      expect(data.evolution).toMatchObject({ schema_version: "workflow-evolution.v1" });
+      expect(data.evolution.status).toBe("ok");
+      expect(data.evolution.publication_generation).toBe(1);
+      expect(Array.isArray(data.evolution.candidates)).toBe(true);
+      expect(data.evolution.candidates.length).toBeGreaterThan(0);
+      expect(data.evolution.candidates[0]).toEqual(expect.objectContaining({ confidence: expect.stringMatching(/^(high|medium|low)$/), priority_score: expect.any(Number), freshness: "current" }));
+      expect(data.evolution.candidates[0].source_observations[0].stage).toBe("build-spec");
+      expect(Array.isArray(data.evolution.candidates[0].source_observations[0].evidence_refs)).toBe(true);
+      expect(data.evolution.source_inventory_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(data.evolution.quality_tax).toMatchObject({ label: "未验证，待真实任务数据" });
       expect(data.judgment_layer).toMatchObject({ record_kind: "judgment", is_fact: false });
       expect(data.filters.tasks).toEqual(["task-a", "task-b", "task-empty", "task-old"]);
       expect(data.filters.stages).toEqual(stages);
@@ -268,10 +286,30 @@ describe("build-reflection-page projection", () => {
       expect(data.states).toEqual(expect.arrayContaining(["unknown", "unavailable", "degraded", "failed", "empty", "fatal", "stale"]));
       expect(html).toContain("id=\"task-view\"");
       expect(html).toContain("id=\"overall-pending\"");
+      expect(html).toContain("id=\"evolution-view\"");
+      expect(html.indexOf("建议行动")).toBeLessThan(html.indexOf("仅供参考"));
+      expect(html.indexOf("仅供参考")).toBeLessThan(html.indexOf("前期质量税"));
+      expect(html).toContain("id=\"evolution-action-suggested\"");
+      expect(html).toContain("id=\"evolution-reference-only\"");
+      expect(html).toContain("const sortEvolutionCandidates =");
+      expect(html).toContain("显示更多");
+      expect(html).toContain("展开全部证据");
+      expect(html).toContain("收起证据");
+      expect(html).toContain("aria-expanded");
+      expect(html).toContain("subject=${subject}; task=${observation.task_id || \"unknown\"}; evidence=${kind}");
+      expect(html).toContain("aria-selected=\"false\"");
+      expect(html).toContain("const activateView =");
       expect(html).toContain("id=\"task-filter\"");
       expect(html).toContain("judgment");
       expect(html).not.toContain("href=\"quality/evidence/../../etc/passwd\"");
       expect(readFileSync(fixture.legacy, "utf8")).toBe(legacyBefore);
+
+      expect(() => runCli(fixture)).not.toThrow();
+      const second = readProjectedData(dataPath);
+      expect(second.evolution.status).toBe("ok");
+      expect(second.evolution.publication_generation).toBe(2);
+      expect(second.evolution.snapshot_id).not.toBe(data.evolution.snapshot_id);
+      expect(second.evolution.snapshot_content_id).toBe(data.evolution.snapshot_content_id);
     } finally {
       if (process.env.WORKFLOWHUB_KEEP_PAGE_FIXTURE !== "1") rmSync(fixture.root, { recursive: true, force: true });
     }

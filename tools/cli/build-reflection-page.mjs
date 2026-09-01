@@ -2,10 +2,11 @@
 
 import Ajv from "ajv";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const CLASSIFICATIONS = ["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"];
@@ -19,6 +20,7 @@ const REFLECTION_FILE = /^(make-decision|build-spec|build-plan|build-code|verify
 const schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v1.json", import.meta.url), "utf8"));
 const validateSchema = new Ajv({ allErrors: true, strict: false }).compile(schema);
 const template = readFileSync(new URL("./build-reflection-page-template.html", import.meta.url), "utf8");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function fail(message, code = "REFLECTION_PAGE_FAILED") {
   const error = new Error(message);
@@ -320,9 +322,9 @@ function readLessons(root, project, diagnostics) {
   return { by_stage: byStage, count: Object.values(byStage).reduce((sum, entries) => sum + entries.length, 0) };
 }
 
-function runDeriveConsumptionEdges(root) {
+function runDeriveConsumptionEdges(root, now) {
   const script = fileURLToPath(new URL("./derive-consumption-edges.mjs", import.meta.url));
-  const result = spawnSync(process.execPath, [script, `--root=${root}`], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [script, `--root=${root}`, `--now=${now}`], { encoding: "utf8" });
   if (result.error) fail(`derive-consumption-edges failed to start: ${result.error.message}`);
   if (result.status !== 0) fail(`derive-consumption-edges failed: ${result.stdout || result.stderr}`.trim());
   try {
@@ -416,7 +418,7 @@ function project({ root, tasksRoot, now }) {
         || refs.has(defaultRef);
     });
   }
-  const derived = runDeriveConsumptionEdges(root);
+  const derived = runDeriveConsumptionEdges(root, now);
   const taskEdges = derived.tasks
     .filter((entry) => entry.project === project)
     .flatMap((entry) => (entry.edges ?? []).map((edge) => ({ ...edge, project, task_id: entry.task_id })));
@@ -424,6 +426,36 @@ function project({ root, tasksRoot, now }) {
   diagnostics.push(...taskDiagnostics.map((entry) => ({ state: "unavailable", summary: entry.reason ?? "consumption edge diagnostic" })));
   const hasUnavailable = diagnostics.length > 0 || tasks.some((task) => task.state === "unavailable");
   const status = tasks.length === 0 ? "empty" : hasUnavailable ? "degraded" : "ok";
+  const observations = [];
+  const interventions = [];
+  const materialIdentities = ["skills/catalog.yaml", "docs/architecture/move-map.json"].map((ref) => ({
+    ref,
+    sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, ref))).digest("hex"),
+  }));
+  for (const task of tasks) {
+    for (const stage of task.stages) {
+      if (stage.reflection_ref && stage.input_sha256) materialIdentities.push({ ref: `${task.task_id}/${stage.reflection_ref}`, sha256: stage.input_sha256 });
+      const confirmationRef = stage.interventions.find((entry) => typeof entry.confirmation_ref === "string")?.confirmation_ref;
+      const safeConfirmationRef = confirmationRef ? availableRef(join(tasksRoot, task.task_id), confirmationRef, root) : null;
+      const confirmationSha256 = safeConfirmationRef ? createHash("sha256").update(readFileSync(join(tasksRoot, task.task_id, safeConfirmationRef))).digest("hex") : null;
+      if (safeConfirmationRef && confirmationSha256) materialIdentities.push({ ref: `${task.task_id}/${safeConfirmationRef}`, sha256: confirmationSha256 });
+      for (const judgment of stage.judgments) {
+        const target = { target_kind: judgment.subject_kind, target_id: judgment.subject_id, target_version: "1", authority: `${stage.stage}:${stage.reflection_ref ?? "unknown"}` };
+        observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef ?? stage.reflection_ref ?? `quality/stage-reflection/${stage.stage}.json`, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: target, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
+      }
+      for (const intervention of stage.interventions ?? []) interventions.push({ project, task_id: task.task_id, confirmation_ref: intervention.confirmation_ref ?? stage.reflection_ref, intervention_stage: stage.stage, occurred_at: stage.generated_at ?? now, primary_attribution_stage: intervention.attribution });
+    }
+  }
+  let evolution = { schema_version: "workflow-evolution.v1", status: "unavailable", candidates: [], quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" }, diagnostics: [{ summary: "evolution snapshot unavailable" }] };
+  try {
+    const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter(Boolean);
+    const inventory = buildInputInventory({ project, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
+    const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory: inventory.inventory, now });
+    const tax = computeQualityTaxProjection({ inventory: inventory.inventory, interventions, asOf: now });
+    evolution = refresh.status === "ok" ? { ...readCurrentEvolutionProjection({ storageRoot: root, project, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result }), snapshot_content_id: inventory.input_inventory_hash } : { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }] };
+  } catch (error) {
+    evolution = { ...evolution, status: "unavailable", diagnostics: [{ summary: error.message }] };
+  }
   return {
     schema_version: "workflowhub-reflection-page.v1",
     generated_at: now,
@@ -449,6 +481,7 @@ function project({ root, tasksRoot, now }) {
     },
     tasks,
     overall_pending: projectOverall(tasks, nowMs),
+    evolution,
     lessons,
     consumption_edges: taskEdges,
     diagnostics,
