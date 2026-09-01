@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 24608,
-      "sha256_after": "53dec5618836bb842a26d0a6d947855de03eb56ce07b89390bdd2fa0d7121acd"
+      "bytes": 25377,
+      "sha256_after": "d5d8527400bba588301230c142a1bd249af82e3cdbdc25c3006a39eb2da6c6cb"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",
