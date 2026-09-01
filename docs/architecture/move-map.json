@@ -2251,8 +2251,8 @@
       "delete_condition": "remove when stage outcome consumption edges are no longer consumed",
       "content_change": "new read-only derivation of later consumer edges with unknown fallback",
       "sha256_before": null,
-      "bytes": 11262,
-      "sha256_after": "e718d686df8e84dfec8e9801fa81094a32c789e8116668359c9aeac7e2a1f135"
+      "bytes": 14045,
+      "sha256_after": "ca1a7d9f1173901c2db3494cea302625be51ea0921b6e7c6ab58f779bf679b31"
     },
     {
       "source": "tools/cli/append-lesson-observation.mjs",
@@ -2287,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 21074,
-      "sha256_after": "4e5e2dc0601596989349a298ba8a2e5337d604859cd64e1e83040fc8aded418d"
+      "bytes": 26299,
+      "sha256_after": "37fe3876beb04d74833a7d6c69a7fa5dde199d0f164e07d5d8698a48f903dd20"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2299,8 +2299,99 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 20462,
-      "sha256_after": "bd8731e9ff67385fc282028dce17bb796bfc90d9a8fb406c6f2561a9c411f174"
+      "bytes": 27523,
+      "sha256_after": "259837938ff7f9a3c205b787c03fb8bc327a84b0e12b58ba44f6083e1f09f0f1"
+    },
+    {
+      "source": "runtime/evidence/workflow-evolution.mjs",
+      "destination": "runtime/evidence/workflow-evolution.mjs",
+      "status": "add",
+      "owner": "M16 evolution data-plane",
+      "consumer": "build-reflection-page and private evolution adapters",
+      "delete_condition": "remove when M16 data-plane is retired",
+      "content_change": "candidate, tax, proof, lock and projection contracts",
+      "bytes": 51525,
+      "sha256_after": "c823cdd55b8d2f0cb8fe87ff586df12af972c48da0d4ccbdf915c44023fce74c"
+    },
+    {
+      "source": "runtime/schemas/workflow-evolution.v1.json",
+      "destination": "runtime/schemas/workflow-evolution.v1.json",
+      "status": "add",
+      "owner": "M16 evolution schema",
+      "consumer": "workflow-evolution deep module and governance checks",
+      "delete_condition": "remove with M16 data-plane",
+      "content_change": "combined versioned M16 definitions",
+      "bytes": 10210,
+      "sha256_after": "10d1705269b35a4f312c1ca44f27e3de9e42be2f1402fbe59008dc3d7e79889f"
+    },
+    {
+      "source": "tools/cli/generate-iteration-brief.mjs",
+      "destination": "tools/cli/generate-iteration-brief.mjs",
+      "status": "add",
+      "owner": "M16 brief adapter",
+      "consumer": "maintainer on-demand iteration brief",
+      "delete_condition": "remove when M16 brief is retired",
+      "content_change": "private seven-section brief writer",
+      "bytes": 19506,
+      "sha256_after": "34eadafc4cba500b864f74f20867ada4d81f3cee42e8fe5e5aaeb75b64ccff9e"
+    },
+    {
+      "source": "tools/cli/record-evolution-result.mjs",
+      "destination": "tools/cli/record-evolution-result.mjs",
+      "status": "add",
+      "owner": "M16 ledger adapter",
+      "consumer": "maintainer terminal outcome recording",
+      "delete_condition": "remove when M16 ledgers are retired",
+      "content_change": "private candidate and ledger adapter",
+      "bytes": 19741,
+      "sha256_after": "4ed71134b716077987f989e837c1d6c6cadb565381005cd77482ec07f4e2e62b"
+    },
+    {
+      "source": "tools/cli/check-skill-updates.mjs",
+      "destination": "tools/cli/check-skill-updates.mjs",
+      "status": "add",
+      "owner": "M16 skill receipt adapter",
+      "consumer": "iteration brief external update section",
+      "delete_condition": "remove when M16 external update slot is retired",
+      "content_change": "caller-owned skill receipt checker",
+      "bytes": 6455,
+      "sha256_after": "a41f660ee96c172da4f737edef9c37a7bc2c5882855cdfe48fd9aa52c7218bcd"
+    },
+    {
+      "source": "Projects/<project>/evolution-candidates.jsonl",
+      "destination": "Projects/<project>/evolution-candidates.jsonl",
+      "status": "logical-object",
+      "owner": "M16 evolution data-plane",
+      "consumer": "monitor projection and current brief",
+      "delete_condition": "remove with M16 task-store retention policy",
+      "content_change": "append-only candidate snapshots"
+    },
+    {
+      "source": "Projects/<project>/attempted-edits.jsonl",
+      "destination": "Projects/<project>/attempted-edits.jsonl",
+      "status": "logical-object",
+      "owner": "M16 evolution data-plane",
+      "consumer": "iteration brief and ledger audit",
+      "delete_condition": "remove with M16 task-store retention policy",
+      "content_change": "terminal attempted edit facts"
+    },
+    {
+      "source": "Projects/<project>/negative-results.jsonl",
+      "destination": "Projects/<project>/negative-results.jsonl",
+      "status": "logical-object",
+      "owner": "M16 evolution data-plane",
+      "consumer": "iteration brief and negative writer validation",
+      "delete_condition": "remove with M16 task-store retention policy",
+      "content_change": "negative result facts and supersession"
+    },
+    {
+      "source": "Projects/<project>/iteration-brief.md",
+      "destination": "Projects/<project>/iteration-brief.md",
+      "status": "logical-object",
+      "owner": "M16 brief adapter",
+      "consumer": "maintainer reading current iteration brief",
+      "delete_condition": "remove when M16 brief is retired",
+      "content_change": "atomic current brief projection"
     }
   ]
 }

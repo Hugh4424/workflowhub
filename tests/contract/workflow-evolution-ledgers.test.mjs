@@ -1,0 +1,130 @@
+import { createHash } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+const root = join(import.meta.dirname, "../..");
+const cli = join(root, "tools/cli/record-evolution-result.mjs");
+const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+function setup() {
+  const storage = mkdtempSync(join(tmpdir(), "m16-ledger-"));
+  const facts = mkdtempSync(join(tmpdir(), "m16-ledger-facts-"));
+  const file = (name, bytes) => { const path = join(facts, name); writeFileSync(path, bytes); return { path, sha256: sha(bytes) }; };
+  const decision = file("decision-log.md", "# Decision Log\n\n### D-1 (test)\n- approval_binding: accepted\n\n- status: accepted\n");
+  const before = file("before.json", '{"value":1}\n');
+  const after = file("after.json", '{"value":2}\n');
+  const revert = file("revert.json", '{"value":1}\n');
+  const authority = file("stage-manifest.json", '{"stage":"build-plan","version":"1"}\n');
+  const targetRef = { project_id: "Demo", target_kind: "stage", target_id: "build-plan", target_version: "1", authority_ref: authority.path, authority_sha256: authority.sha256 };
+  const payload = { attempt_id: "attempt-1", edit_record_id: "edit-1", decision_id: "D-1", decision_ref: decision.path, decision_sha256: decision.sha256, approval: true, changed_surface: "workflow", before_facts_ref: before.path, before_facts_sha256: before.sha256, before_observed_at: "2026-08-30T00:00:00Z", after_facts_ref: after.path, after_facts_sha256: after.sha256, after_observed_at: "2026-08-30T01:00:00Z", observed_at: "2026-08-30T02:00:00Z", validation_method: "focused-test", outcome: "regressed", revert_ref: revert.path, revert_sha256: revert.sha256, evidence_refs: ["evidence:1"], supersedes: null, target_ref: targetRef };
+  return { storage, facts, payload, cleanup: () => { rmSync(storage, { recursive: true, force: true }); rmSync(facts, { recursive: true, force: true }); } };
+}
+
+function run(storage, kind, payload) {
+  return spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", `--record-kind=${kind}`, `--attempt-id=${payload.attempt_id}`, `--json=${JSON.stringify(payload)}`], { encoding: "utf8", cwd: payload.decision_ref ? join(payload.decision_ref, "..") : undefined });
+}
+
+describe("M16 ledgers", () => {
+  it("records an approved terminal attempted edit as a committed framed batch", () => {
+    const fixture = setup();
+    try {
+      const result = run(fixture.storage, "attempted-edit", fixture.payload);
+      expect(result.status, result.stdout).toBe(0);
+      const records = readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+      expect(records.map((entry) => entry.record_kind)).toEqual(["batch_begin", "attempted-edit", "batch_commit"]);
+      expect(records[2]).toMatchObject({ count: 1, status: "committed" });
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects every attempted edit without a verified revert reference before writing", () => {
+    const fixture = setup();
+    try {
+      const { revert_ref, revert_sha256, ...payload } = fixture.payload;
+      const result = run(fixture.storage, "attempted-edit", payload);
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid_input" });
+      expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects negative results without the frozen D24 identity after classification", () => {
+    const fixture = setup();
+    try {
+      const result = run(fixture.storage, "negative-result", { ...fixture.payload, negative_id: "neg-1", failure_identity: "failure-1", failure_domain: "process", failure_kind: "workflow_regression", evidence_status: "complete", independent_before_after_evidence: true, failure_evidence_refs: ["failure:1"], attempted_edit_id: "edit-1", status: "active" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "wrong_domain", error: { code: "wrong_domain" } });
+      expect(existsSync(join(fixture.storage, "Projects/Demo/negative-results.jsonl"))).toBe(false);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects a duplicate attempted-edit identity without appending", () => {
+    const fixture = setup();
+    try {
+      const first = run(fixture.storage, "attempted-edit", fixture.payload);
+      const path = join(fixture.storage, "Projects/Demo/attempted-edits.jsonl");
+      const before = readFileSync(path);
+      const second = run(fixture.storage, "attempted-edit", fixture.payload);
+      expect(first.status).toBe(0); expect(second.status).not.toBe(0); expect(readFileSync(path)).toEqual(before);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("authenticates a torn terminal batch before appending the next effective head", () => {
+    const fixture = setup();
+    try {
+      expect(run(fixture.storage, "attempted-edit", fixture.payload).status).toBe(0);
+      const path = join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"); const prefix = readFileSync(path); const torn = Buffer.from('{"record_kind":"batch_begin","ledger_kind":"attempted-edit"'); appendFileSync(path, torn);
+      const corrected = run(fixture.storage, "attempted-edit", { ...fixture.payload, edit_record_id: "edit-2", supersedes: "edit-1" });
+      expect(corrected.status, corrected.stdout).toBe(0);
+      const bytes = readFileSync(path); expect(bytes.subarray(0, prefix.length)).toEqual(prefix);
+      const records = bytes.toString("utf8").split("\n").flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
+      expect(records.filter((entry) => entry.record_kind === "batch_abort")).toHaveLength(1);
+      expect(records.filter((entry) => entry.record_kind === "batch_commit")).toHaveLength(2);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects D24 authority on an attempted edit before any framed write", () => {
+    const fixture = setup();
+    try {
+      const result = run(fixture.storage, "attempted-edit", { ...fixture.payload, d24_boundary: { schema_version: "d24-eval-boundary.v1" } });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid_input" });
+      expect(readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), { encoding: "utf8", flag: "a+" })).toBe("");
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects a target authority hash mismatch before writing", () => {
+    const fixture = setup();
+    try {
+      const result = run(fixture.storage, "attempted-edit", { ...fixture.payload, target_ref: { ...fixture.payload.target_ref, authority_sha256: "0".repeat(64) } });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid_input" });
+      expect(readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), { encoding: "utf8", flag: "a+" })).toBe("");
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects caller-asserted approval when the decision entry is not accepted", () => {
+    const fixture = setup();
+    try {
+      writeFileSync(fixture.payload.decision_ref, "# Decision Log\n\n### D-1\n- approval_binding: pending\n");
+      const payload = { ...fixture.payload, decision_sha256: sha(readFileSync(fixture.payload.decision_ref)) };
+      const result = run(fixture.storage, "attempted-edit", payload);
+      expect(result.status).not.toBe(0);
+      expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects a negative result until a torn attempted-edit tail is recovered and rebound", async () => {
+    const fixture = setup();
+    try {
+      expect(run(fixture.storage, "attempted-edit", fixture.payload).status).toBe(0);
+      appendFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), '{"record_kind":"batch_begin"');
+      const { D24_EVAL_BOUNDARY } = await import("../../runtime/evidence/workflow-evolution.mjs");
+      const result = run(fixture.storage, "negative-result", { ...fixture.payload, negative_id: "neg-1", failure_identity: "failure-1", failure_domain: "process", failure_kind: "workflow_regression", evidence_status: "complete", independent_before_after_evidence: true, failure_evidence_refs: ["failure:1"], attempted_edit_id: "edit-1", status: "active", d24_boundary: D24_EVAL_BOUNDARY });
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout).record.attempted_edit_head_sha256).toMatch(/^[a-f0-9]{64}$/);
+    } finally { fixture.cleanup(); }
+  });
+});

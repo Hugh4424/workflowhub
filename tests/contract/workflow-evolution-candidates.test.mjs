@@ -63,6 +63,30 @@ describe("M16 candidate and tax contract", () => {
     expect(group1?.canonicalBytes).not.toContain("t1");
   });
 
+  it("deduplicates identical observations and rejects conflicting bytes for one observation identity", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const item = { ...observation("same"), classification: "simplify", severity: "low" };
+    const first = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "dedupe", inventory: { project: "Demo", observations: [item, structuredClone(item)] }, now: "2026-08-31T00:00:00Z" });
+    expect(first.records[0]).toMatchObject({ priority_score: 1 });
+    expect(first.records[0].source_observations).toHaveLength(1);
+    const before = readFileSync(candidateLedger(storageRoot));
+    const conflict = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "conflict", inventory: { project: "Demo", observations: [item, { ...item, severity: "high" }] }, now: "2026-08-31T00:00:00Z" });
+    expect(conflict).toMatchObject({ status: "conflict", error: { code: "conflict" } });
+    expect(readFileSync(candidateLedger(storageRoot))).toEqual(before);
+  });
+
+  it("keeps remove candidates pending and exposes the complete reusable ablation contract", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const remove = { ...observation("remove"), classification: "remove_candidate" };
+    const result = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "remove", inventory: { project: "Demo", observations: [remove] }, now: "2026-08-31T00:00:00Z" });
+    expect(result.records[0]).toMatchObject({ classification: "remove_candidate", removal_status: "pending" });
+    const protocol = { schema_version: "ablation-protocol.v1", protocol_id: "abl-1", candidate_id: result.records[0].candidate_id, decision_id: "D-1", hypothesis: "removal preserves behavior", control_facts_ref: "facts:before", treatment_facts_ref: "facts:after", preserve_behaviors: ["build-plan output"], validation_method: "focused-test", success_oracle: "same output", failure_oracle: "output differs", revert_condition: "any regression", status: "deferred", evidence_refs: ["evidence:1"] };
+    expect(() => mod.validateWorkflowEvolutionDefinition("ablation_protocol", protocol)).not.toThrow();
+    expect(() => mod.validateWorkflowEvolutionDefinition("ablation_protocol", { schema_version: "ablation-protocol.v1", status: "deferred" })).toThrow(/schema invalid/);
+  });
+
   it("does not promote an unbound caller-asserted consumer proof to action_suggested", async () => {
     const mod = await loadModule();
     const storageRoot = root();

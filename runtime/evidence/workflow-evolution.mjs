@@ -490,10 +490,17 @@ function withCandidateRecordIdentity(record) {
 function observationsToRecords(inventory, now, snapshotId, generation) {
   const observations = Array.isArray(inventory.observations) ? inventory.observations : [];
   const groups = new Map();
+  const seenObservations = new Map();
   for (const observation of observations) {
     const target = normalizeTargetRef({ ...(observation.target_ref ?? observation.targetRef), project_id: inventory.project });
     const group = deriveCandidateGroupId({ projectId: inventory.project, targetRef: target, interventionKind: observation.intervention_kind ?? observation.interventionKind, interventionPayload: observation.intervention_payload ?? observation.interventionPayload ?? {} });
     const identity = deriveObservationId({ projectId: inventory.project, targetRef: target, taskId: observation.task_id ?? observation.taskId, confirmationRef: observation.confirmation_ref ?? observation.confirmationRef, occurredAt: observation.occurred_at ?? observation.occurredAt, interventionKind: observation.intervention_kind ?? observation.interventionKind, interventionPayload: observation.intervention_payload ?? observation.interventionPayload ?? {} });
+    const observationBytes = canonical(observation);
+    if (seenObservations.has(identity.observation_id)) {
+      if (seenObservations.get(identity.observation_id) !== observationBytes) throw fail("conflict", `observation identity has conflicting bytes: ${identity.observation_id}`);
+      continue;
+    }
+    seenObservations.set(identity.observation_id, observationBytes);
     const item = { observation, groupId: group.candidate_group_id, observationId: identity.observation_id, target };
     if (!groups.has(item.groupId)) groups.set(item.groupId, []); groups.get(item.groupId).push(item);
   }
@@ -540,7 +547,7 @@ function observationsToRecords(inventory, now, snapshotId, generation) {
       severity: entries.some((entry) => entry.observation.severity === "high") ? "high" : entries.some((entry) => entry.observation.severity === "medium") ? "medium" : "low",
       confidence: entries.some((entry) => entry.observation.confidence === "low") ? "low" : entries.some((entry) => entry.observation.confidence === "medium") ? "medium" : "high",
       priority_score: entries.length, judgment_layer: "judgment", is_fact: false,
-      lifecycle_status: "open", row_status: "active", freshness: "current", evidence_status: zero ? "complete" : "unknown", sample_status: tasks.size >= 5 ? "sufficient" : "insufficient_samples", validation_status: "unverified", source_observations: sourceObservations,
+      lifecycle_status: "open", row_status: "active", freshness: "current", evidence_status: zero ? "complete" : "unknown", sample_status: tasks.size >= 5 ? "sufficient" : "insufficient_samples", validation_status: "unverified", ...((entries[0].observation.classification ?? "needs_evidence") === "remove_candidate" ? { removal_status: "pending" } : {}), source_observations: sourceObservations,
       source_identities: sourceIdentities, material_identities: materialIdentities, human_confirmation_ref: confirmationRef, human_confirmation_sha256: confirmationSha256,
       machine_signals: { zero_consumption: zero ? true : "unknown", repeat_intervention: repeat }, related_targets: [], open_decision: null, supersedes: null,
     };

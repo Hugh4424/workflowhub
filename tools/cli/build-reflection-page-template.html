@@ -282,6 +282,7 @@
         addField(card, "stage", stages); addField(card, "subject", subject); addField(card, "classification", classificationLabel(entry.classification));
         addField(card, "frequency", entry.frequency); addField(card, "priority_score", entry.priority_score); addField(card, "confidence", entry.confidence);
         addField(card, "freshness", entry.freshness); addField(card, "validation_status", entry.validation_status);
+        if (entry.classification === "remove_candidate") addField(card, "removal_status", entry.removal_status === "pending" ? "待裁决" : "unknown");
         const evidence = candidateEvidence(entry); const evidenceWrap = make("div", "field"); evidenceWrap.appendChild(make("span", "field-name", "evidence_refs: "));
         if (evidence.length === 0) evidenceWrap.appendChild(document.createTextNode("unknown"));
         evidence.forEach(({ observation, evidence: item }, index) => {
