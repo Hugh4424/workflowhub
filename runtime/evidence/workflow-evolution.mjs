@@ -394,7 +394,7 @@ function acquireProjectGuard(directory) {
               && Number.isInteger(reclaim.lease_deadline_monotonic_ms)
               && monotonicMs() > reclaim.lease_deadline_monotonic_ms
               && !processIsAlive(reclaim.pid)) {
-              try { unlinkSync(reclaimPath); fsyncParent(reclaimPath); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
+              return { status: "conflict", error: { code: "conflict", summary: "stale project lock guard reclaim reservation requires operator cleanup" } };
             }
             waitForProjectLock();
             continue;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 
@@ -600,6 +600,7 @@ describe("M16 candidate and tax contract", () => {
       confirmation_ref: "confirmation:recovery",
       confirmation_sha256: "b".repeat(64),
     };
+    writeFileSync(join(dirname(lockPath), ".workflowhub-evolution.guard"), `${JSON.stringify({ schema_version: "workflowhub-project-guard.v1", owner_token: "stale-guard", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
     const script = `import { acquireProjectLock } from ${JSON.stringify(moduleUrl.href)};
 const result = acquireProjectLock({ storageRoot: process.argv[1], project: "Demo", attemptId: process.argv[2], bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: JSON.parse(process.argv[3]) });
 if (result.status === "ok") { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100); result.release(); }
@@ -612,12 +613,29 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
       child.stderr.on("data", (chunk) => { stderr += chunk; });
       child.on("close", (status) => done({ status, stdout, stderr }));
     });
-    const results = await Promise.all(Array.from({ length: 8 }, (_value, index) => run(index)));
+    const results = await Promise.all(Array.from({ length: 16 }, (_value, index) => run(index)));
     expect(results.every((result) => result.status === 0), results.map((result) => result.stderr).join("\n")).toBe(true);
     const statuses = results.map((result) => JSON.parse(result.stdout).status);
     expect(statuses.filter((status) => status === "ok")).toHaveLength(1);
     expect(statuses.every((status) => ["ok", "conflict", "replayed_recovery"].includes(status)), statuses.join(",")).toBe(true);
     expect(first.release()).toEqual({ status: "ok" });
+  });
+
+  it("fails closed when a stale guard reclaim reservation is already present", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "guard-reservation-seed" });
+    const lockPath = first.lockHandle.path;
+    expect(first.release()).toEqual({ status: "ok" });
+    const guardPath = join(dirname(lockPath), ".workflowhub-evolution.guard");
+    const reclaimPath = `${guardPath}.reclaim`;
+    writeFileSync(guardPath, `${JSON.stringify({ schema_version: "workflowhub-project-guard.v1", owner_token: "stale-guard", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
+    writeFileSync(reclaimPath, `${JSON.stringify({ schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: "stale-reclaim", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
+    const result = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "guard-reservation-blocked" });
+    expect(result).toMatchObject({ status: "conflict", error: { code: "conflict" } });
+    expect(readFileSync(guardPath, "utf8")).toContain("stale-guard");
+    expect(readFileSync(reclaimPath, "utf8")).toContain("stale-reclaim");
+    expect(existsSync(lockPath)).toBe(false);
   });
 
   it("rejects a replayed recovery while the lock path is between reclaim and recreation", async () => {
