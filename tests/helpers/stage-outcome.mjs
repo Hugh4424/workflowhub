@@ -307,6 +307,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   });
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1", task_id: task.identity.taskId, stage, attempt_id: attemptId, status,
+    producer: { kind: "stage-agent", host: "fixture-host", source_id: "fixture/executor", source_family: "fixture", agent_run_id: attemptId },
     snapshot_tree: snapshot.tree, material_revision: revision,
     material_hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : sha256(content)])),
     steps_manifest_ref: stepsManifestRef, steps_manifest_hash: sha256(stepsManifestRaw),

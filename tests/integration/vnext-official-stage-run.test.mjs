@@ -10,7 +10,7 @@ import yaml from "js-yaml";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { brandTaskKernel } from "../../core/task-capability.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
+import { authenticateCurrentBuildCodeStageOutcome, publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
 import {
   createWorkflowHubSessionRecorder,
   publishStageAgentOutcome,
@@ -307,6 +307,20 @@ async function runUiSourceBindingCase(testCase, contractFacts) {
 }
 
 describe("vNext official stage completion", () => {
+  it("authenticates exactly one current completed build-code outcome for wh-review", () => {
+    const state = fixture("current-build-code-review-subject");
+    const outcome = stageOutcome(state, "build-code", { attemptId: "build-current-1" });
+    const authenticated = authenticateCurrentBuildCodeStageOutcome(contextFor("build-code", state));
+    expect(authenticated).toMatchObject({
+      ref: outcome.ref,
+      sha256: outcome.sha256,
+      actor: { source_kind: "stage-agent", source_id: "fixture/executor", run_id: "build-current-1" },
+      value: { status: "completed", stage: "build-code" },
+    });
+    stageOutcome(state, "build-code", { attemptId: "build-current-2" });
+    expect(() => authenticateCurrentBuildCodeStageOutcome(contextFor("build-code", state))).toThrow(/exactly one current completed build-code outcome/);
+  });
+
   it("publishes and consumes a dedicated transcript-authenticated spec-clarify receipt", async () => {
     const state = fixture("vnext-spec-clarify-receipt");
     const workspace = openCurrentTaskWorkspace(state.task);

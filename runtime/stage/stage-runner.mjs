@@ -627,6 +627,45 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
 }
 
 /**
+ * Resolve the one current, completed build-code execution that a verify-code
+ * reviewer may inspect. Historical, stale, incomplete, and ambiguously
+ * duplicated outcomes are not review authority.
+ */
+export function authenticateCurrentBuildCodeStageOutcome(context = {}) {
+  const task = assertTaskHandle(context.task);
+  const kernel = assertTaskKernel(context.kernel);
+  if (kernel.task !== task) throw outcomeError("build-code outcome TaskHandle/TaskKernel mismatch");
+  const identity = context.identity ?? task.identity;
+  if (identity?.taskId !== task.identity.taskId) throw outcomeError("build-code outcome task identity mismatch");
+  const authenticated = [];
+  for (const ref of task.listCanonicalStageOutcomeRefs("build-code")) {
+    let raw;
+    let candidate;
+    try { raw = task.readRecord(ref); candidate = JSON.parse(raw); }
+    catch { continue; }
+    if (candidate?.status !== "completed") continue;
+    try {
+      const current = authenticateStageOutcome({ ...context, task, kernel, identity, workflowRunId: candidate.run_id ?? null }, "build-code", { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+      const producer = outcomeObject(current.value.producer, "build-code stage outcome producer");
+      const sourceId = outcomeText(producer.source_id, "build-code stage outcome producer.source_id");
+      const sourceFamily = outcomeText(producer.source_family, "build-code stage outcome producer.source_family");
+      if (sourceFamily !== sourceId.split("/")[0]) throw outcomeError("build-code stage outcome producer source identity mismatch");
+      authenticated.push(Object.freeze({
+        ...current,
+        raw,
+        actor: Object.freeze({
+          source_kind: outcomeText(producer.kind, "build-code stage outcome producer.kind"),
+          source_id: sourceId,
+          run_id: outcomeText(producer.agent_run_id, "build-code stage outcome producer.agent_run_id"),
+        }),
+      }));
+    } catch { /* Only a fully authenticated current outcome is eligible. */ }
+  }
+  if (authenticated.length !== 1) throw outcomeError("exactly one current completed build-code outcome is required");
+  return authenticated[0];
+}
+
+/**
  * An external Stage Agent outcome is diagnostic execution evidence, not a
  * permission to run the current WorkflowHub handler. A missing or invalid
  * handoff remains visible as an unavailable diagnostic so the normal stage can
