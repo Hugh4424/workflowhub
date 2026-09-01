@@ -6,6 +6,7 @@ import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
+import { validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const STAGE_INDEX = new Map(STAGES.map((value, index) => [value, index]));
@@ -13,6 +14,7 @@ const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const LOCK_LEASE_MS = 15_000;
 const SCHEMA_VERSION = "workflow-evolution.v1";
 const D24_SCHEMA_VERSION = "d24-eval-boundary.v1";
+const CONFIRMATION_REF = /^quality\/confirmations\/([a-f0-9]{64})\.json$/;
 const EVOLUTION_SCHEMA = JSON.parse(readFileSync(new URL("../schemas/workflow-evolution.v1.json", import.meta.url), "utf8"));
 const AJV = new Ajv2020({ allErrors: true, strict: false });
 const DEFINITION_VALIDATORS = new Map();
@@ -234,7 +236,7 @@ export function deriveCandidateGroupId(input = {}) {
 export function buildInputInventory(input = {}) {
   const project = requiredString(input.project ?? input.projectId ?? input.project_id, "project");
   const rawInputs = input.rawInputs ?? input.raw_inputs ?? input.inventory ?? {};
-  const inventory = plain({ project, ...rawInputs });
+  const inventory = plain({ ...rawInputs, project });
   const canonicalBytes = canonical(inventory);
   const inputInventoryHash = hashBytes(canonicalBytes);
   const identities = trustedEvolutionIdentities(input.producerIdentity ?? input.producer_identity, input.schemaIdentity ?? input.schema_identity);
@@ -292,6 +294,45 @@ function validateTaxSource(item, identity, inventory) {
   return null;
 }
 
+function authenticatedTaxConfirmation(item, identity, storageRoot) {
+  const ref = identity.confirmationRef;
+  const match = CONFIRMATION_REF.exec(ref);
+  if (!match || typeof storageRoot !== "string" || storageRoot.trim() === "") return { error: "confirmation_ref_unavailable" };
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identity.project) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identity.taskId)) return { error: "confirmation_identity_invalid" };
+  const root = resolve(storageRoot);
+  const segments = ["Projects", identity.project, "tasks", identity.taskId, "quality", "confirmations", `${match[1]}.json`];
+  let path = root;
+  try {
+    for (const segment of segments) {
+      path = join(path, segment);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink() || (segment !== segments.at(-1) && !stat.isDirectory()) || (segment === segments.at(-1) && !stat.isFile())) return { error: "confirmation_path_untrusted" };
+    }
+    const raw = readFileSync(path, "utf8");
+    if (hashBytes(raw) !== match[1]) return { error: "confirmation_hash_mismatch" };
+    const value = JSON.parse(raw);
+    const stage = item.intervention_stage ?? item.interventionStage;
+    const step = item.step_slug ?? item.stepSlug;
+    validateHumanConfirmation(value, { taskId: identity.taskId, stage, subject: step });
+    if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at) || !Number.isFinite(Date.parse(value.confirmed_at))) return { error: "confirmation_time_invalid" };
+    const confirmedStep = value.step_slug ?? value.subject_ref;
+    if (typeof confirmedStep !== "string" || confirmedStep.trim() === "") return { error: "confirmation_step_missing" };
+    if (step !== undefined && step !== confirmedStep) return { error: "confirmation_step_mismatch" };
+    return { ref, sha256: match[1], value };
+  } catch (error) {
+    return { error: error?.code === "ENOENT" ? "confirmation_missing" : "confirmation_invalid" };
+  }
+}
+
+function unavailableTax(asOf, summary) {
+  const end = Date.parse(asOf);
+  return {
+    schema_version: "quality-tax.v1", status: "unavailable", error: { code: "identity_conflict", summary },
+    sample_count: 0, unknown_count: 0, ratio: null, confidence: "unavailable", sample_status: "insufficient_samples",
+    window_start: new Date(end - WINDOW_MS).toISOString(), window_end: asOf, generated_at: asOf, source_refs: [],
+  };
+}
+
 export function computeQualityTaxProjection(input = {}) {
   const asOf = input.asOf ?? input.as_of;
   requiredString(asOf, "asOf");
@@ -308,7 +349,9 @@ export function computeQualityTaxProjection(input = {}) {
     const stage = item.intervention_stage ?? item.interventionStage;
     if (!STAGE_INDEX.has(stage)) continue;
     const sourceError = validateTaxSource(item, identity, input.inventory);
-    if (sourceError) return { status: "unavailable", error: { code: "identity_conflict", summary: sourceError }, sample_count: 0, unknown_count: 0, ratio: null, confidence: "unavailable", sample_status: "insufficient_samples", window_start: new Date(end - WINDOW_MS).toISOString(), window_end: asOf, generated_at: asOf, source_refs: [] };
+    if (sourceError) return unavailableTax(asOf, sourceError);
+    const confirmation = authenticatedTaxConfirmation(item, identity, input.storageRoot ?? input.storage_root ?? input.inventory?.storageRoot ?? input.inventory?.storage_root);
+    if (confirmation.error) return unavailableTax(asOf, confirmation.error);
     const key = identity.key;
     const itemBytes = canonical(item);
     const previous = byIdentity.get(key);
@@ -318,7 +361,7 @@ export function computeQualityTaxProjection(input = {}) {
     }
     byIdentity.set(key, itemBytes);
     const result = attribution(stage, item.primary_attribution_stage ?? item.primaryAttributionStage);
-    valid.push({ key, identity, item, result, occurred });
+    valid.push({ key, identity, item, result, occurred, confirmation: confirmation.value });
     const sourceRef = item.source_ref ?? item.sourceRef ?? item.source?.ref;
     if (typeof sourceRef === "string" && sourceRef.trim() !== "") sourceRefs.add(sourceRef);
     if (result.status === "attributed") numerator += 1; else unknownCount += 1;
@@ -337,7 +380,7 @@ export function computeQualityTaxProjection(input = {}) {
     windowStart: new Date(end - WINDOW_MS).toISOString(), windowEnd: asOf, generatedAt: asOf,
     validation_status: "unverified", label: "未验证，待真实任务数据", source_refs: [...sourceRefs].sort(),
     source_identities: normalizedIdentities(input.sourceIdentities ?? input.source_identities, []),
-    interventions: valid.map(({ key, identity, item, result }) => ({
+    interventions: valid.map(({ key, identity, item, result, confirmation }) => ({
       intervention_id: `tax-intervention.v1:${hashBytes(canonical({ project: identity.project, task_id: identity.taskId, confirmation_ref: identity.confirmationRef }))}`,
       project: identity.project, task_id: identity.taskId, confirmation_ref: identity.confirmationRef,
       intervention_stage: item.intervention_stage ?? item.interventionStage,
@@ -346,7 +389,7 @@ export function computeQualityTaxProjection(input = {}) {
       primary_attribution_stage: item.primary_attribution_stage ?? item.primaryAttributionStage ?? null,
       attribution_status: result.status, unknown_reason: result.status === "unknown" ? result.reason : null,
       source_ref: item.source_ref ?? item.sourceRef ?? item.source?.ref ?? null,
-      source_schema_version: item.source_schema_version ?? item.sourceSchemaVersion ?? item.source?.schema_version ?? null,
+      source_schema_version: confirmation.schema_version,
     })),
   };
   return Object.freeze(output);

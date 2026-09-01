@@ -40,6 +40,28 @@ function candidateLedger(storageRoot) {
   return join(storageRoot, "Projects", "Demo", "evolution-candidates.jsonl");
 }
 
+function authenticateTaxItem(storageRoot, item) {
+  const value = {
+    schema_version: "human-confirmation.v3",
+    task_id: item.task_id,
+    stage: item.intervention_stage,
+    decision: "accepted",
+    subject_ref: item.step_slug,
+    material_revision: `revision-${"c".repeat(64)}`,
+    snapshot_tree: "d".repeat(40),
+    confirmed_at: item.occurred_at,
+    reply_text: "继续记录这次人工介入。",
+    step_slug: item.step_slug,
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const digest = createHash("sha256").update(raw).digest("hex");
+  const ref = `quality/confirmations/${digest}.json`;
+  const path = join(storageRoot, "Projects", "Demo", "tasks", item.task_id, ref);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, raw);
+  return { ...item, confirmation_ref: ref };
+}
+
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
@@ -71,6 +93,17 @@ describe("M16 candidate and tax contract", () => {
     expect(group1?.candidateGroupId).toBe(group2?.candidateGroupId);
     expect(first?.canonicalBytes).not.toContain("t2");
     expect(group1?.canonicalBytes).not.toContain("t1");
+  });
+
+  it("binds raw inventory identity to the caller project", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const inventory = mod.buildInputInventory({ project: "Demo", inventory: { project: "Attacker", observations: [] } });
+    expect(inventory.inventory.project).toBe("Demo");
+    const refresh = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "project-binding", inventory: { project: "Attacker", observations: [] }, now: "2026-08-31T00:00:00Z" });
+    expect(refresh.status).toBe("ok");
+    expect(existsSync(join(storageRoot, "Projects/Demo/evolution-candidates.jsonl"))).toBe(true);
+    expect(existsSync(join(storageRoot, "Projects/Attacker/evolution-candidates.jsonl"))).toBe(false);
   });
 
   it("deduplicates identical observations and rejects conflicting bytes for one observation identity", async () => {
@@ -224,10 +257,33 @@ describe("M16 candidate and tax contract", () => {
         { project: "Demo", task_id: "t2", confirmation_ref: "c2", intervention_stage: "build-code", occurred_at: "2026-08-29T00:00:00Z", primary_attribution_stage: "free text" },
       ], stageManifest: { stages: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     });
+    expect(result?.status).toBe("unavailable");
     expect(result?.generatedAt ?? result?.generated_at).toBe("2026-08-31T00:00:00Z");
     expect(result?.sampleStatus ?? result?.sample_status).toBe("insufficient_samples");
     expect(result?.confidence).toBe("unavailable");
-    expect(result?.unknownCount ?? result?.unknown_count).toBe(1);
+    expect(result?.unknownCount ?? result?.unknown_count).toBe(0);
+  });
+
+  it.each([
+    ["missing", (item) => ({ ...item, confirmation_ref: `quality/confirmations/${"f".repeat(64)}.json` })],
+    ["hash", (item) => ({ ...item, confirmation_ref: `quality/confirmations/${"0".repeat(64)}.json` })],
+    ["schema", (item) => ({ ...item, _invalid_schema: true })],
+    ["step", (item) => ({ ...item, step_slug: "other-step" })],
+  ])("keeps %s confirmation out of the quality-tax denominator", async (kind, mutate) => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const base = { project: "Demo", task_id: `tax-${kind}`, intervention_stage: "build-code", step_slug: "build-code-step", occurred_at: "2026-08-30T00:00:00Z", primary_attribution_stage: "upstream_omission:build-plan" };
+    const authenticated = authenticateTaxItem(storageRoot, base);
+    if (kind === "schema") {
+      const path = join(storageRoot, "Projects", "Demo", "tasks", authenticated.task_id, authenticated.confirmation_ref);
+      const value = JSON.parse(readFileSync(path, "utf8")); value.schema_version = "not-a-confirmation";
+      const raw = `${JSON.stringify(value, null, 2)}\n`; writeFileSync(path, raw);
+      const digest = authenticated.confirmation_ref.slice("quality/confirmations/".length, -".json".length);
+      expect(createHash("sha256").update(raw).digest("hex")).not.toBe(digest);
+    }
+    const item = mutate(authenticated);
+    const result = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf: "2026-08-31T00:00:00Z", interventions: [item] });
+    expect(result).toMatchObject({ status: "unavailable", sample_count: 0, ratio: null, confidence: "unavailable" });
   });
 
   it("rejects unknown target authorities instead of guessing from free text", async () => {
@@ -870,9 +926,10 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
 
   it("computes tax window, identity de-duplication, and exact 4/5/9/10 confidence thresholds", async () => {
     const mod = await loadModule();
+    const storageRoot = root();
     const asOf = "2026-08-31T00:00:00Z";
-    const make = (index, unknown = false, occurredAt = "2026-08-30T00:00:00Z") => ({ project: "Demo", task_id: `tax-task-${index}`, confirmation_ref: `tax-confirmation-${index}`, intervention_stage: "build-code", occurred_at: occurredAt, primary_attribution_stage: unknown ? "free text" : "upstream_omission:build-plan", source_ref: `quality/confirmations/${index}.json` });
-    const run = (count, unknownCount = 0) => mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: Array.from({ length: count }, (_value, index) => make(index, index < unknownCount)) });
+    const make = (index, unknown = false, occurredAt = "2026-08-30T00:00:00Z") => authenticateTaxItem(storageRoot, { project: "Demo", task_id: `tax-task-${index}`, confirmation_ref: `tax-confirmation-${index}`, step_slug: "build-code-step", intervention_stage: "build-code", occurred_at: occurredAt, primary_attribution_stage: unknown ? "free text" : "upstream_omission:build-plan", source_ref: `quality/confirmations/${index}.json` });
+    const run = (count, unknownCount = 0) => mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: Array.from({ length: count }, (_value, index) => make(index, index < unknownCount)) });
     expect(run(4, 1)).toMatchObject({ sample_count: 4, unknown_count: 1, ratio: null, sample_status: "insufficient_samples", confidence: "unavailable" });
     expect(run(5, 1)).toMatchObject({ sample_count: 5, numerator: 4, unknown_count: 1, ratio: 0.8, sample_status: "sufficient", confidence: "low" });
     expect(run(9, 1).confidence).toBe("low");
@@ -881,12 +938,10 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     expect(run(10, 2).confidence).toBe("medium");
     expect(run(10, 3).confidence).toBe("low");
     const boundary = run(2, 0);
-    const exactStart = make(100, false, "2026-08-01T00:00:00Z");
-    const outside = make(101, false, "2026-07-31T23:59:59Z");
-    const withBoundary = mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [...boundary.interventions.map((entry) => ({ ...entry, source_ref: entry.source_ref })), exactStart, outside] });
+    const withBoundary = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: [...boundary.interventions.map((entry) => ({ ...entry, source_ref: entry.source_ref })), make(100, false, "2026-08-01T00:00:00Z"), make(101, false, "2026-07-31T23:59:59Z")] });
     expect(withBoundary.sample_count).toBe(3);
-    const duplicate = make(200); const same = mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [duplicate, structuredClone(duplicate)] });
+    const duplicate = make(200); const same = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: [duplicate, structuredClone(duplicate)] });
     expect(same.sample_count).toBe(1);
-    expect(mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [duplicate, { ...duplicate, primary_attribution_stage: "free text" }] })).toMatchObject({ status: "unavailable", error: { code: "identity_conflict" } });
+    expect(mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf, interventions: [duplicate, { ...duplicate, primary_attribution_stage: "free text" }] })).toMatchObject({ status: "unavailable", error: { code: "identity_conflict" } });
   });
 });

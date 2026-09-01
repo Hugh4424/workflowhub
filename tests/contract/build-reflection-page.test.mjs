@@ -76,14 +76,32 @@ function makeFixture() {
     mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true });
     writeFileSync(join(taskRoot, "quality/evidence/build-spec.md"), "fixture evidence\n");
   }
-  const confirmationRef = (stepSlug) => `quality/confirmations/${(stepSlug === "spec-clarify" ? "a" : "b").repeat(64)}.json`;
-  for (const taskRoot of [taskA, taskB, taskOld]) {
+  const confirmationRefs = new Map();
+  const confirmationRef = (taskId, stepSlug) => confirmationRefs.get(`${taskId}/${stepSlug}`);
+  for (const [taskRoot, taskId] of [[taskA, "task-a"], [taskB, "task-b"], [taskOld, "task-old"]]) {
     for (const stepSlug of ["spec-clarify", "stage-reflection"]) {
-      writeJson(join(taskRoot, confirmationRef(stepSlug)), { schema_version: "human-confirmation.v2", accepted: true });
+      const stage = stepSlug === "spec-clarify" ? "build-spec" : "build-plan";
+      const value = {
+        schema_version: "human-confirmation.v3",
+        task_id: taskId,
+        stage,
+        decision: "accepted",
+        subject_ref: stepSlug,
+        material_revision: `revision-${"c".repeat(64)}`,
+        snapshot_tree: "d".repeat(40),
+        confirmed_at: "2026-08-30T12:00:00.000Z",
+        reply_text: "保留当前步骤，下一轮再看。",
+        step_slug: stepSlug,
+      };
+      const raw = `${JSON.stringify(value, null, 2)}\n`;
+      const ref = `quality/confirmations/${createHash("sha256").update(raw).digest("hex")}.json`;
+      confirmationRefs.set(`${taskId}/${stepSlug}`, ref);
+      mkdirSync(join(taskRoot, "quality/confirmations"), { recursive: true });
+      writeFileSync(join(taskRoot, ref), raw);
     }
   }
-  const intervention = (stepSlug) => ({
-    confirmation_ref: confirmationRef(stepSlug),
+  const intervention = (taskId, stepSlug) => ({
+    confirmation_ref: confirmationRef(taskId, stepSlug),
     step_slug: stepSlug,
     reply_text: "保留当前步骤，下一轮再看。",
     attribution: "human",
@@ -133,7 +151,7 @@ function makeFixture() {
         next_review_trigger: "下一次同类任务完成时",
       },
     ],
-    interventions: [intervention("spec-clarify")],
+    interventions: [intervention("task-a", "spec-clarify")],
     lessons_added: ["quality/stage-reflection/build-spec.json"],
   }));
   writeJson(join(taskA, "quality/stage-reflection/build-code.json"), reflection("task-a", "build-code", {
@@ -159,7 +177,7 @@ function makeFixture() {
       confidence: "high",
       next_review_trigger: "下一次 build-spec 出现同职责步骤时",
     }],
-    interventions: [intervention("spec-clarify")],
+    interventions: [intervention("task-b", "spec-clarify")],
   }));
   writeJson(join(taskB, "quality/stage-reflection/build-plan.json"), reflection("task-b", "build-plan", {
     status: "degraded",
@@ -173,7 +191,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次 build-plan 复盘时",
     }],
-    interventions: [intervention("stage-reflection")],
+    interventions: [intervention("task-b", "stage-reflection")],
   }));
   writeFileSync(join(taskB, "quality/stage-reflection/verify-code.json"), "{\"not\":\"a reflection\"}\n");
   for (const stage of stages) {
@@ -194,7 +212,7 @@ function makeFixture() {
       confidence: "low",
       next_review_trigger: "下一次真实任务出现时",
     }],
-    interventions: [intervention("spec-clarify")],
+    interventions: [intervention("task-old", "spec-clarify")],
   }));
 
   const lessonsRoot = join(root, "Projects", project, "lessons");

@@ -7,6 +7,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot, resolveTargetRef } from "../../runtime/evidence/workflow-evolution.mjs";
+import { validateHumanConfirmation } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const CLASSIFICATIONS = ["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"];
@@ -15,6 +16,7 @@ const SEVERITY_WEIGHT = { high: 3, medium: 2, low: 1 };
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const SAFE_REF = /^quality\/(?:evidence|tests|reviews|confirmations|stage-reflection)\/(?!.*\.\.)[A-Za-z0-9._/-]+$/;
+const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
 const SAFE_LESSON_REF = /^lessons\/(make-decision|build-spec|build-plan|build-code|verify-code)\.jsonl#([A-Za-z0-9][A-Za-z0-9._-]*)$/;
 const REFLECTION_FILE = /^(make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v1.json", import.meta.url), "utf8"));
@@ -107,6 +109,28 @@ function availableRef(taskRoot, ref, storageRoot) {
   assertTrustedPath(storageRoot, path, "evidence reference");
   const stat = statOf(path);
   return stat && stat.isFile() && !stat.isSymbolicLink() ? lexicalRef : null;
+}
+
+function authenticatedConfirmation(taskRoot, storageRoot, project, taskId, stage, intervention) {
+  const ref = intervention?.confirmation_ref;
+  if (typeof ref !== "string" || !CONFIRMATION_REF.test(ref)) return null;
+  const path = join(taskRoot, ...ref.split("/"));
+  try {
+    assertTrustedPath(storageRoot, path, "confirmation reference");
+    const stat = statOf(path);
+    if (!stat || stat.isSymbolicLink() || !stat.isFile()) return null;
+    const raw = readFileSync(path, "utf8");
+    const expectedHash = ref.slice("quality/confirmations/".length, -".json".length);
+    if (createHash("sha256").update(raw).digest("hex") !== expectedHash) return null;
+    const value = JSON.parse(raw);
+    validateHumanConfirmation(value, { taskId, stage, subject: intervention.step_slug });
+    if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at) || !Number.isFinite(Date.parse(value.confirmed_at))) return null;
+    const step = value.step_slug ?? value.subject_ref;
+    if (typeof step !== "string" || step.trim() === "" || (intervention.step_slug !== undefined && step !== intervention.step_slug)) return null;
+    return { ref, sha256: expectedHash, value };
+  } catch {
+    return null;
+  }
 }
 
 function availableLessonRef(root, project, ref) {
@@ -455,16 +479,22 @@ function project({ root, tasksRoot, now }) {
   for (const task of tasks) {
     for (const stage of task.stages) {
       if (stage.reflection_ref && stage.input_sha256) materialIdentities.push({ ref: `${task.task_id}/${stage.reflection_ref}`, sha256: stage.input_sha256 });
-      const confirmationRef = stage.interventions.find((entry) => typeof entry.confirmation_ref === "string")?.confirmation_ref;
-      const safeConfirmationRef = confirmationRef ? availableRef(join(tasksRoot, task.task_id), confirmationRef, root) : null;
-      const confirmationSha256 = safeConfirmationRef ? createHash("sha256").update(readFileSync(join(tasksRoot, task.task_id, safeConfirmationRef))).digest("hex") : null;
+      const taskRoot = join(tasksRoot, task.task_id);
+      const authenticated = stage.interventions
+        .map((entry) => authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, entry))
+        .find(Boolean) ?? null;
+      const safeConfirmationRef = authenticated?.ref ?? null;
+      const confirmationSha256 = authenticated?.sha256 ?? null;
       if (safeConfirmationRef && confirmationSha256) materialIdentities.push({ ref: `${task.task_id}/${safeConfirmationRef}`, sha256: confirmationSha256 });
       for (const judgment of stage.judgments) {
         const resolved = authorityForTarget(project, stage.stage, judgment);
         if (resolved.status !== "ok") { authorityErrors.push({ task_id: task.task_id, stage: stage.stage, subject_id: judgment.subject_id, status: resolved.status }); continue; }
-        observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef ?? stage.reflection_ref ?? `quality/stage-reflection/${stage.stage}.json`, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: resolved.target_ref, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
+        observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: resolved.target_ref, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
       }
-      for (const intervention of stage.interventions ?? []) interventions.push({ project, task_id: task.task_id, confirmation_ref: intervention.confirmation_ref ?? stage.reflection_ref, intervention_stage: stage.stage, occurred_at: stage.generated_at ?? now, primary_attribution_stage: intervention.attribution });
+      for (const intervention of stage.interventions ?? []) {
+        const confirmation = authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, intervention);
+        interventions.push({ project, task_id: task.task_id, confirmation_ref: confirmation?.ref ?? intervention.confirmation_ref ?? null, confirmation_sha256: confirmation?.sha256 ?? null, intervention_stage: stage.stage, step_slug: intervention.step_slug, occurred_at: stage.generated_at ?? now, primary_attribution_stage: intervention.attribution });
+      }
     }
   }
   let evolution = { schema_version: "workflow-evolution.v1", status: "unavailable", candidates: [], quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" }, diagnostics: [{ summary: "evolution snapshot unavailable" }] };
@@ -475,7 +505,7 @@ function project({ root, tasksRoot, now }) {
     const schemaIdentity = { ref: "runtime/schemas/workflow-evolution.v1.json", sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, "runtime/schemas/workflow-evolution.v1.json"))).digest("hex") };
     const inventory = buildInputInventory({ project, producerIdentity, schemaIdentity, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
     const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory, now });
-    const tax = computeQualityTaxProjection({ inventory: inventory.inventory, interventions, asOf: now });
+    const tax = computeQualityTaxProjection({ storageRoot: root, inventory: inventory.inventory, interventions, asOf: now });
     evolution = refresh.status === "ok" ? { ...readCurrentEvolutionProjection({ storageRoot: root, project, expectedIdentity: { snapshot_id: refresh.snapshot_id, producer_identity: producerIdentity, schema_identity: schemaIdentity }, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result }), snapshot_content_id: inventory.input_inventory_hash } : { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }] };
   } catch (error) {
     evolution = { ...evolution, status: "unavailable", diagnostics: [{ summary: error.message }] };

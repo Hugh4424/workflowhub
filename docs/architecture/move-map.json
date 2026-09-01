@@ -2287,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 28914,
-      "sha256_after": "1607118616de09683e292bb3809bc69ad8bba9b7753378278cba40f92d51b320"
+      "bytes": 30457,
+      "sha256_after": "c06be6c9d60efb3b8c44fd5bff7462716d074cd331f52e1cacec8b5d08d284cf"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2299,8 +2299,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 28127,
-      "sha256_after": "8b25b7c72afda5d98b52d92f7699d0bb559858bd36befd17229cf407a0c7e6c4"
+      "bytes": 28160,
+      "sha256_after": "69bc061e78ee31b46e78061d098df712d3c7d9838093b273967f8dd312f869f3"
     },
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 95663,
-      "sha256_after": "57637003df07aa122069c46b9d8b4ae3c13a1084bce52fbdae78c2e54b469eb1"
+      "bytes": 98192,
+      "sha256_after": "cd04d2883921efe2f54a40621a0b1ef8b49c410f42fdd65b4f422705f41897df"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 28546,
-      "sha256_after": "031910407141eecb3467c0089f6d9a23aa006e7e229af7d19855f11954e41592"
+      "bytes": 28889,
+      "sha256_after": "60db258b282bc51965b47db535a1d1cb7e3de935fdefb1f6dd070ee8d8c6a3ae"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",

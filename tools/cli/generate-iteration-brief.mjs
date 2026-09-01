@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { acquireProjectLock, assertProjectLockCurrent, readCurrentEvolutionProjection, resolveTargetRef, validateWorkflowEvolutionDefinition } from "../../runtime/evidence/workflow-evolution.mjs";
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
@@ -11,16 +11,17 @@ function parse(argv) { const out = {}; for (const arg of argv) { const i = arg.i
 function canonical(value) { if (value === null || typeof value !== "object") return JSON.stringify(value); if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; }
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 function currentAuthorities(repositoryRoot) {
+  const authorityRef = (path) => relative(repositoryRoot, path).split(sep).join("/");
   const stages = []; const steps = [];
   for (const stage of STAGES) {
     const authority = join(repositoryRoot, "workflows", stage, "steps.json"); const bytes = readFileSync(authority); const manifest = JSON.parse(bytes);
-    stages.push({ stage, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
-    for (const entry of manifest.steps ?? []) steps.push({ slug: entry.step_slug, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
+    stages.push({ stage, version: String(manifest.schema_version), authority: authorityRef(authority), authority_sha256: hash(bytes) });
+    for (const entry of manifest.steps ?? []) steps.push({ slug: entry.step_slug, version: String(manifest.schema_version), authority: authorityRef(authority), authority_sha256: hash(bytes) });
   }
   const catalogAuthority = join(repositoryRoot, "skills/catalog.yaml"); const catalogBytes = readFileSync(catalogAuthority); const catalog = catalogBytes.toString("utf8");
-  const skills = [...catalog.matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].map((match) => ({ id: match[1], version: match[2].replaceAll('"', ""), authority: catalogAuthority, authority_sha256: hash(catalogBytes) }));
+  const skills = [...catalog.matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].map((match) => ({ id: match[1], version: match[2].replaceAll('"', ""), authority: authorityRef(catalogAuthority), authority_sha256: hash(catalogBytes) }));
   const moveMapAuthority = join(repositoryRoot, "docs/architecture/move-map.json"); const moveMapBytes = readFileSync(moveMapAuthority); const moveMap = JSON.parse(moveMapBytes);
-  const surfaces = (moveMap.entries ?? []).flatMap((entry) => [...new Set([entry.source, entry.destination].filter(Boolean))].map((id) => ({ id, version: String(moveMap.schema_version), authority: moveMapAuthority, authority_sha256: hash(moveMapBytes) })));
+  const surfaces = (moveMap.entries ?? []).flatMap((entry) => [...new Set([entry.source, entry.destination].filter(Boolean))].map((id) => ({ id, version: String(moveMap.schema_version), authority: authorityRef(moveMapAuthority), authority_sha256: hash(moveMapBytes) })));
   return { stages, steps, skills, surfaces };
 }
 function target(options, repositoryRoot) {
@@ -147,7 +148,8 @@ function briefBodyHash(raw) {
 }
 function verifyCurrentBriefSources(projectRoot, repositoryRoot, header) {
   const target = header.target_ref;
-  if (!target?.authority_ref || !existsSync(resolve(target.authority_ref)) || hash(readFileSync(resolve(target.authority_ref))) !== target.authority_sha256) throw fail("stale_source", "current brief target authority identity is stale");
+  const authorityPath = resolve(repositoryRoot, target?.authority_ref ?? "");
+  if (!target?.authority_ref || !existsSync(authorityPath) || hash(readFileSync(authorityPath)) !== target.authority_sha256) throw fail("stale_source", "current brief target authority identity is stale");
   const current = targetRefForCurrentRepository(repositoryRoot, target);
   if (canonical(current) !== canonical(target)) throw fail("stale_source", "current brief target no longer matches repository authority");
   const sources = header.source_hashes ?? {};
@@ -203,7 +205,8 @@ function main() {
   const decision = source(options["decision-log"], options["decision-log-sha256"], "decision_log"); const spec = source(options.spec, options["spec-sha256"], "spec"); const projectRoot = join(storageRoot, "Projects", project);
   const projection = readCurrentEvolutionProjection({ storageRoot, project, expectedIdentity: options["snapshot-id"] ? { snapshot_id: options["snapshot-id"] } : undefined });
   if (projection.status === "stale_source" || projection.status === "failed") throw fail(projection.error?.code ?? projection.status, projection.error?.summary ?? "candidate projection invalid");
-  const candidateState = projection.status === "ok" ? { status: projection.candidates.length ? "ready" : "empty", reason: projection.candidates.length ? null : "complete_scan_no_matches", refs: [join(projectRoot, "evolution-candidates.jsonl")], records: projection.candidates } : { status: "unavailable", reason: "candidate_snapshot_unavailable", refs: [], records: [] };
+  const activeCandidates = projection.status === "ok" ? projection.candidates.filter((entry) => entry.row_status === "active") : [];
+  const candidateState = projection.status === "ok" ? { status: activeCandidates.length ? "ready" : "empty", reason: activeCandidates.length ? null : "complete_scan_no_matches", refs: [join(projectRoot, "evolution-candidates.jsonl")], records: activeCandidates } : { status: "unavailable", reason: "candidate_snapshot_unavailable", refs: [], records: [] };
   const negatives = scan(join(projectRoot, "negative-results.jsonl"), "negative_results", project, repositoryRoot); const edits = scan(join(projectRoot, "attempted-edits.jsonl"), "attempted_edits", project, repositoryRoot); const materials = materialSections(decision, spec);
   const sections = [section("candidates", candidateState, targetRef), section("negative_results", negatives, targetRef), section("attempted_edits", edits, targetRef), skillSection(options["skill-update-receipt"], targetRef), materials.retained, materials.open, { section_id: "market_comparison", status: "not_checked", reason_code: "DE-003", source_refs: [], items: [] }];
   assertBriefContentIsFacts(sections);

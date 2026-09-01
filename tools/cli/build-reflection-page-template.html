@@ -308,7 +308,7 @@
       const renderEvolutionTier = (evolution, tier, listId, stateId, moreId) => {
         const list = el(listId); list.replaceChildren(); const state = el(stateId); const more = el(moreId);
         if (evolution.status !== "ok") { text(state, `${stateLabel(evolution.status)}: 当前分区不可用。`); more.hidden = true; return; }
-        const entries = (Array.isArray(evolution.candidates) ? evolution.candidates : []).filter((entry) => entry.tier === tier).sort(sortEvolutionCandidates);
+        const entries = (Array.isArray(evolution.candidates) ? evolution.candidates : []).filter((entry) => entry.row_status === "active" && entry.tier === tier).sort(sortEvolutionCandidates);
         text(state, entries.length === 0 ? "empty: 暂无候选数据。" : `ok: 共 ${entries.length} 条。`);
         entries.slice(0, evolutionLimits[tier]).forEach((entry) => list.appendChild(renderCandidate(entry)));
         more.hidden = entries.length <= evolutionLimits[tier];

@@ -224,4 +224,39 @@ describe("M16 iteration brief", () => {
       expect(JSON.parse(read.stdout).header.target_ref.authority_ref).toMatch(authoritySuffix);
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
+
+  it("renders only active candidate rows while retaining superseded history in the ledger", async () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-active-candidates-"));
+    try {
+      const evolution = await import("../../runtime/evidence/workflow-evolution.mjs");
+      const manifestRef = "workflows/build-plan/steps.json";
+      const manifestBytes = readFileSync(join(root, manifestRef));
+      const observation = {
+        task_id: "brief-task",
+        confirmation_ref: "legacy-confirmation",
+        confirmation_sha256: "a".repeat(64),
+        occurred_at: "2026-08-30T00:00:00Z",
+        intervention_kind: "retry",
+        intervention_payload: { reason: "same" },
+        target_ref: { kind: "stage", id: "build-plan", version: JSON.parse(manifestBytes).schema_version, authority: manifestRef, authority_sha256: sha256(manifestBytes) },
+      };
+      const first = evolution.refreshEvolutionSnapshot({ storageRoot: storage, project: "Demo", attemptId: "candidate-first", inventory: { observations: [observation] }, now: "2026-08-31T00:00:00Z" });
+      expect(first.status).toBe("ok");
+      const candidate = first.records[0];
+      const lock = evolution.acquireProjectLock({ storageRoot: storage, project: "Demo", attemptId: "candidate-supersede" });
+      const transitioned = evolution.recordCandidateTransition({ storageRoot: storage, project: "Demo", attemptId: "candidate-supersede", currentSnapshotId: first.snapshot_id, candidateId: candidate.candidate_id, candidateRecordId: candidate.candidate_record_id, expectedRevision: candidate.revision, currentSourceIdentities: candidate.source_identities, currentMaterialIdentities: candidate.material_identities, humanConfirmation: { ref: candidate.human_confirmation_ref, sha256: candidate.human_confirmation_sha256 }, lifecycleStatus: "superseded", lockAuthority: lock });
+      expect(transitioned.status).toBe("ok");
+      expect(lock.release().status).toBe("ok");
+
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=brief-active-filter"], { encoding: "utf8" });
+      expect(result.status, result.stdout).toBe(0);
+      const raw = readFileSync(join(storage, "Projects/Demo/iteration-brief.md"), "utf8");
+      const candidates = JSON.parse(raw.match(/## Candidates\n\n```json\n([\s\S]*?)\n```/)[1]);
+      expect(candidates.items).toHaveLength(1);
+      expect(candidates.items[0]).toMatchObject({ row_status: "active", lifecycle_status: "open" });
+      expect(evolution.readCurrentEvolutionProjection({ storageRoot: storage, project: "Demo" }).candidates).toEqual(expect.arrayContaining([expect.objectContaining({ row_status: "historical", lifecycle_status: "superseded" })]));
+      const template = readFileSync(join(root, "tools/cli/build-reflection-page-template.html"), "utf8");
+      expect(template).toContain('entry.row_status === "active" && entry.tier === tier');
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
 });
