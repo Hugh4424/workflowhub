@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -322,6 +322,21 @@ function validProjectLock(value, project) {
     && Number.isInteger(value.lease_deadline_monotonic_ms)
     && value.lease_deadline_monotonic_ms > value.acquired_monotonic_ms;
 }
+function validManualRecoveryAuthority(recovery, current, currentRaw, project, bootId) {
+  return Boolean(recovery && typeof recovery === "object" && !Array.isArray(recovery)
+    && (recovery.schema_version === undefined || recovery.schema_version === "manual-recovery.v1")
+    && validProjectLock(current, project)
+    && monotonicMs() > current.lease_deadline_monotonic_ms
+    && recovery.current_lock_sha256 === hashBytes(currentRaw)
+    && recovery.old_boot_id === current.boot_id
+    && recovery.new_boot_id === bootId
+    && recovery.old_boot_id !== recovery.new_boot_id
+    && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
+    && typeof (recovery.operator_identity ?? recovery.operator) === "string" && (recovery.operator_identity ?? recovery.operator).trim() !== ""
+    && typeof recovery.issued_at === "string" && Number.isFinite(Date.parse(recovery.issued_at))
+    && typeof recovery.confirmation_ref === "string" && recovery.confirmation_ref.trim() !== ""
+    && typeof recovery.confirmation_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.confirmation_sha256));
+}
 function fsyncParent(path) {
   const fd = openSync(dirname(path), "r");
   try { fsyncSync(fd); } finally { closeSync(fd); }
@@ -332,10 +347,19 @@ function hasRecoveryTombstone(path, lockHash) {
   try { return readdirSync(dirname(path)).some((name) => name.startsWith(prefix) && name.endsWith(`-${lockHash}`)); }
   catch (error) { if (error?.code === "ENOENT") return false; throw error; }
 }
-function acquireProjectGuard(directory) {
+function acquireProjectGuard(directory, recoveryContext = null) {
   const path = join(directory, ".workflowhub-evolution.guard");
   const ownerToken = randomUUID();
   const value = { schema_version: "workflowhub-project-guard.v1", owner_token: ownerToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
+  const reclaimPath = `${path}.reclaim`;
+  const reclaimToken = randomUUID();
+  const releaseReclaim = () => {
+    try {
+      const current = JSON.parse(readFileSync(reclaimPath, "utf8"));
+      if (current.owner_token !== reclaimToken) return;
+      unlinkSync(reclaimPath); fsyncParent(reclaimPath);
+    } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  };
   const handle = () => ({
     status: "ok",
     path,
@@ -352,6 +376,7 @@ function acquireProjectGuard(directory) {
     },
   });
   for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (existsSync(reclaimPath)) return { status: "conflict", error: { code: "conflict", summary: "stale project lock guard reclaim reservation requires operator cleanup" } };
     let fd;
     try {
       fd = openSync(path, "wx");
@@ -367,7 +392,76 @@ function acquireProjectGuard(directory) {
         && Number.isInteger(current.lease_deadline_monotonic_ms)
         && monotonicMs() > current.lease_deadline_monotonic_ms
         && !processIsAlive(current.pid)) {
-        return { status: "conflict", error: { code: "conflict", summary: "project lock guard is expired; manual cleanup is required" } };
+        if (!recoveryContext?.authorized) return { status: "conflict", error: { code: "conflict", summary: "project lock guard is expired; manual cleanup is required" } };
+        try {
+          if (hashBytes(readFileSync(recoveryContext.lockPath)) !== recoveryContext.currentLockSha256) return { status: "conflict", error: { code: "conflict", summary: "project lock authority changed during recovery" } };
+        } catch (lockError) {
+          if (lockError?.code === "ENOENT") return { status: "conflict", error: { code: "conflict", summary: "project lock authority is unavailable" } };
+          throw lockError;
+        }
+        let reclaimFd;
+        let reclaimOwned = false;
+        try {
+          reclaimFd = openSync(reclaimPath, "wx");
+          try {
+            writeFileSync(reclaimFd, `${JSON.stringify({ schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: reclaimToken, pid: process.pid, current_lock_sha256: recoveryContext.currentLockSha256, recovery_nonce: recoveryContext.recoveryNonce, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS })}\n`);
+            fsyncSync(reclaimFd);
+          } finally { closeSync(reclaimFd); reclaimFd = undefined; }
+          fsyncParent(reclaimPath);
+          reclaimOwned = true;
+        } catch (reclaimError) {
+          if (reclaimFd !== undefined) { try { closeSync(reclaimFd); } catch {} }
+          if (reclaimError?.code === "EEXIST") return { status: "conflict", error: { code: "conflict", summary: "stale project lock guard reclaim reservation is held" } };
+          throw reclaimError;
+        }
+        try {
+          if (hashBytes(readFileSync(recoveryContext.lockPath)) !== recoveryContext.currentLockSha256) {
+            releaseReclaim();
+            return { status: "conflict", error: { code: "conflict", summary: "project lock authority changed during recovery" } };
+          }
+        } catch (lockError) {
+          if (reclaimOwned) releaseReclaim();
+          if (lockError?.code === "ENOENT") return { status: "conflict", error: { code: "conflict", summary: "project lock authority is unavailable" } };
+          throw lockError;
+        }
+        let staleGuardRaw;
+        try { staleGuardRaw = readFileSync(path, "utf8"); }
+        catch (readError) {
+          releaseReclaim();
+          if (readError?.code === "ENOENT") return { status: "conflict", error: { code: "conflict", summary: "project lock guard changed during recovery" } };
+          throw readError;
+        }
+        const staleGuardHash = hashBytes(staleGuardRaw);
+        const staleGuardTombstone = join(dirname(path), `.workflowhub-evolution.guard-recovered-${staleGuardHash}`);
+        const staleGuardTombstoneFile = join(staleGuardTombstone, "guard.json");
+        let guardMoved = false;
+        try {
+          const observed = readFileSync(path, "utf8");
+          if (hashBytes(observed) !== staleGuardHash) {
+            releaseReclaim();
+            return { status: "conflict", error: { code: "conflict", summary: "project lock guard changed during recovery" } };
+          }
+          mkdirSync(staleGuardTombstone);
+          renameSync(path, staleGuardTombstoneFile);
+          guardMoved = true;
+          fsyncParent(path);
+          let replacementFd;
+          try {
+            replacementFd = openSync(path, "wx");
+            try { writeFileSync(replacementFd, `${JSON.stringify(value)}\n`); fsyncSync(replacementFd); } finally { closeSync(replacementFd); replacementFd = undefined; }
+            fsyncParent(path);
+          } catch (replacementError) {
+            if (replacementFd !== undefined) { try { closeSync(replacementFd); } catch {} }
+            throw replacementError;
+          }
+          try { unlinkSync(staleGuardTombstoneFile); rmdirSync(staleGuardTombstone); fsyncParent(path); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
+          releaseReclaim(); reclaimOwned = false;
+          return handle();
+        } catch (recoveryError) {
+          if (!guardMoved && reclaimOwned) releaseReclaim();
+          if (recoveryError?.code === "EEXIST" && existsSync(staleGuardTombstone)) return { status: "conflict", error: { code: "conflict", summary: "stale project lock guard recovery was already claimed" } };
+          throw recoveryError;
+        }
       }
       return { status: "conflict", error: { code: "conflict", summary: "project lock guard is held" } };
     }
@@ -396,7 +490,21 @@ export function acquireProjectLock(input = {}) {
     && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
     && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
     ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
-  const guard = acquireProjectGuard(dirname(path));
+  const bootId = input.bootId ?? input.boot_id ?? process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local";
+  const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
+  let recoveryAuthorizedForGuard = false;
+  if (recovery && existsSync(path)) {
+    try {
+      const currentRaw = readFileSync(path, "utf8");
+      recoveryAuthorizedForGuard = validManualRecoveryAuthority(recovery, JSON.parse(currentRaw), currentRaw, project, bootId);
+    } catch { recoveryAuthorizedForGuard = false; }
+  }
+  const guard = acquireProjectGuard(dirname(path), recoveryAuthorizedForGuard ? {
+    authorized: true,
+    lockPath: path,
+    currentLockSha256: recovery.current_lock_sha256,
+    recoveryNonce: recovery.nonce,
+  } : null);
   if (guard.status !== "ok") return guard;
   let guardTransferred = false;
   try {
@@ -408,8 +516,6 @@ export function acquireProjectLock(input = {}) {
   }
   const now = monotonicMs();
   const ownerToken = input.ownerToken ?? input.owner_token ?? randomUUID();
-  const bootId = input.bootId ?? input.boot_id ?? process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local";
-  const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
   const fencingToken = `${ownerToken}:${randomUUID()}:${now}`;
   const value = { schema_version: SCHEMA_VERSION, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, pid: process.pid, host_id: hostname(), boot_id: bootId, session_epoch: String(sessionEpoch), acquired_monotonic_ms: now, lease_deadline_monotonic_ms: now + LOCK_LEASE_MS };
   if (existsSync(path)) {
@@ -422,15 +528,7 @@ export function acquireProjectLock(input = {}) {
     const expired = Number.isFinite(current.lease_deadline_monotonic_ms) && now > current.lease_deadline_monotonic_ms;
     if (sameEpoch && (!expired || processIsAlive(current.pid))) return { status: "conflict", error: { code: "conflict", summary: "project lock is held by a live process" } };
     if (!sameEpoch && !recovery) return { status: "failed", error: { code: "failed", summary: "project lock belongs to another boot or session epoch" } };
-    const recoveryValid = Boolean(recovery && typeof recovery === "object" && !Array.isArray(recovery)
-      && (recovery.schema_version === undefined || recovery.schema_version === "manual-recovery.v1"));
-    if (!sameEpoch && (!expired || !recoveryValid || recovery.current_lock_sha256 !== hashBytes(currentRaw)
-      || recovery.old_boot_id !== current.boot_id || recovery.new_boot_id !== bootId
-      || recovery.old_boot_id === recovery.new_boot_id || typeof recovery.nonce !== "string" || recovery.nonce.trim() === ""
-      || typeof (recovery.operator_identity ?? recovery.operator) !== "string" || (recovery.operator_identity ?? recovery.operator).trim() === ""
-      || typeof recovery.issued_at !== "string" || !Number.isFinite(Date.parse(recovery.issued_at))
-      || typeof recovery.confirmation_ref !== "string" || recovery.confirmation_ref.trim() === ""
-      || typeof recovery.confirmation_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(recovery.confirmation_sha256))) {
+    if (!sameEpoch && !validManualRecoveryAuthority(recovery, current, currentRaw, project, bootId)) {
       return { status: "stale_source", error: { code: "stale_source", summary: "manual recovery authority is invalid or lock is not expired" } };
     }
     const lockAuthorityHash = hashBytes(currentRaw);

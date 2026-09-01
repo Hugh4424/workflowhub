@@ -504,6 +504,86 @@ describe("M16 candidate and tax contract", () => {
     expect(first.release()).toEqual({ status: "ok" });
   });
 
+  it("uses the current-lock recovery authority to reclaim a crashed writer guard", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "crashed-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
+    const lockPath = first.lockHandle.path;
+    const guardPath = join(dirname(lockPath), ".workflowhub-evolution.guard");
+    const lockValue = JSON.parse(readFileSync(lockPath, "utf8"));
+    const expiredLock = { ...lockValue, pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    writeFileSync(lockPath, `${JSON.stringify(expiredLock)}\n`);
+    const before = readFileSync(lockPath);
+    const staleGuard = { ...JSON.parse(readFileSync(guardPath, "utf8")), pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    writeFileSync(guardPath, `${JSON.stringify(staleGuard)}\n`);
+    const guardBeforeRecovery = readFileSync(guardPath);
+    const blocked = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "unauthorized-recovery", bootId: "new-boot", sessionEpoch: "new-session" });
+    expect(blocked).toMatchObject({ status: "conflict", error: { code: "conflict" } });
+    expect(readFileSync(lockPath)).toEqual(before);
+    expect(readFileSync(guardPath)).toEqual(guardBeforeRecovery);
+    expect(existsSync(`${lockPath}.tombstone-unauthorized-recovery-${createHash("sha256").update(before).digest("hex")}`)).toBe(false);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(before).digest("hex"),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "crashed-writer-recovery",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "e".repeat(64),
+    };
+    const recovered = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "recovered-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
+    expect(recovered).toMatchObject({ status: "ok", project: "Demo", lockHandle: { attemptId: "recovered-attempt" } });
+    expect(JSON.parse(readFileSync(lockPath, "utf8"))).toMatchObject({ attempt_id: "recovered-attempt", boot_id: "new-boot", session_epoch: "new-session" });
+    expect(existsSync(`${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`)).toBe(true);
+    expect(JSON.parse(readFileSync(guardPath, "utf8"))).toMatchObject({ schema_version: "workflowhub-project-guard.v1", pid: process.pid });
+    expect(recovered.release()).toEqual({ status: "ok" });
+  });
+
+  it("allows one recovery to claim crashed writer guard state under contention", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "crashed-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
+    const lockPath = first.lockHandle.path;
+    const guardPath = join(dirname(lockPath), ".workflowhub-evolution.guard");
+    const lockValue = JSON.parse(readFileSync(lockPath, "utf8"));
+    writeFileSync(lockPath, `${JSON.stringify({ ...lockValue, pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
+    const before = readFileSync(lockPath);
+    writeFileSync(guardPath, `${JSON.stringify({ ...JSON.parse(readFileSync(guardPath, "utf8")), pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(before).digest("hex"),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "crashed-writer-concurrent-recovery",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "f".repeat(64),
+    };
+    const script = `import { acquireProjectLock } from ${JSON.stringify(moduleUrl.href)};
+const result = acquireProjectLock({ storageRoot: process.argv[1], project: "Demo", attemptId: process.argv[2], bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: JSON.parse(process.argv[3]) });
+if (result.status === "ok") { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100); result.release(); }
+console.log(JSON.stringify({ status: result.status, error: result.error ?? null }));`;
+    const run = (index) => new Promise((done) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script, storageRoot, `crashed-recovery-${index}`, JSON.stringify(recovery)], { cwd: resolve(import.meta.dirname, "../.."), encoding: "utf8" });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (status) => done({ status, stdout, stderr }));
+    });
+    const results = await Promise.all(Array.from({ length: 16 }, (_value, index) => run(index)));
+    expect(results.every((result) => result.status === 0), results.map((result) => result.stderr).join("\n")).toBe(true);
+    const statuses = results.map((result) => JSON.parse(result.stdout).status);
+    expect(statuses.filter((status) => status === "ok")).toHaveLength(1);
+    expect(statuses.every((status) => ["ok", "conflict", "replayed_recovery"].includes(status)), statuses.join(",")).toBe(true);
+    expect(existsSync(guardPath)).toBe(false);
+    expect(existsSync(lockPath)).toBe(false);
+    expect(existsSync(`${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`)).toBe(true);
+  }, 30000);
+
   it("fails closed when transition lock lease identity is missing, invalid, or expired", async () => {
     const mod = await loadModule();
     const storageRoot = root();
