@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -339,27 +339,38 @@ function acquireProjectGuard(directory) {
   const path = join(directory, ".workflowhub-evolution.guard");
   const ownerToken = randomUUID();
   const value = { schema_version: "workflowhub-project-guard.v1", owner_token: ownerToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
+  const reclaimPath = `${path}.reclaim`;
+  const reclaimToken = randomUUID();
+  const reclaimValue = { schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: reclaimToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
+  const releaseReclaim = () => {
+    try {
+      const current = JSON.parse(readFileSync(reclaimPath, "utf8"));
+      if (current.owner_token !== reclaimToken) return;
+      unlinkSync(reclaimPath); fsyncParent(reclaimPath);
+    } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  };
+  const handle = () => ({
+    status: "ok",
+    path,
+    ownerToken,
+    release() {
+      try {
+        const current = JSON.parse(readFileSync(path, "utf8"));
+        if (current.owner_token !== ownerToken) return { status: "stale_source" };
+        unlinkSync(path); fsyncParent(path); return { status: "ok" };
+      } catch (error) {
+        if (error?.code === "ENOENT") return { status: "ok" };
+        throw error;
+      }
+    },
+  });
   for (let attempt = 0; attempt < 500; attempt += 1) {
     let fd;
     try {
       fd = openSync(path, "wx");
       try { writeFileSync(fd, `${JSON.stringify(value)}\n`); fsyncSync(fd); } finally { closeSync(fd); fd = undefined; }
       fsyncParent(path);
-      return {
-        status: "ok",
-        path,
-        ownerToken,
-        release() {
-          try {
-            const current = JSON.parse(readFileSync(path, "utf8"));
-            if (current.owner_token !== ownerToken) return { status: "stale_source" };
-            unlinkSync(path); fsyncParent(path); return { status: "ok" };
-          } catch (error) {
-            if (error?.code === "ENOENT") return { status: "ok" };
-            throw error;
-          }
-        },
-      };
+      return handle();
     } catch (error) {
       if (fd !== undefined) { try { closeSync(fd); } catch {} }
       if (error?.code !== "EEXIST") throw error;
@@ -369,8 +380,38 @@ function acquireProjectGuard(directory) {
         && Number.isInteger(current.lease_deadline_monotonic_ms)
         && monotonicMs() > current.lease_deadline_monotonic_ms
         && !processIsAlive(current.pid)) {
-        try { unlinkSync(path); fsyncParent(path); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
-        continue;
+        let reclaimFd;
+        try {
+          reclaimFd = openSync(reclaimPath, "wx");
+          try { writeFileSync(reclaimFd, `${JSON.stringify(reclaimValue)}\n`); fsyncSync(reclaimFd); } finally { closeSync(reclaimFd); reclaimFd = undefined; }
+          fsyncParent(reclaimPath);
+        } catch (reclaimError) {
+          if (reclaimFd !== undefined) { try { closeSync(reclaimFd); } catch {} }
+          if (reclaimError?.code === "EEXIST") {
+            let reclaim;
+            try { reclaim = JSON.parse(readFileSync(reclaimPath, "utf8")); } catch { waitForProjectLock(); continue; }
+            if (reclaim?.schema_version === "workflowhub-project-guard-reclaim.v1"
+              && Number.isInteger(reclaim.lease_deadline_monotonic_ms)
+              && monotonicMs() > reclaim.lease_deadline_monotonic_ms
+              && !processIsAlive(reclaim.pid)) {
+              try { unlinkSync(reclaimPath); fsyncParent(reclaimPath); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
+            }
+            waitForProjectLock();
+            continue;
+          }
+          throw reclaimError;
+        }
+        try {
+          const replacement = `${path}.tmp-${reclaimToken}`;
+          const replacementFd = openSync(replacement, "wx");
+          try { writeFileSync(replacementFd, `${JSON.stringify(value)}\n`); fsyncSync(replacementFd); } finally { closeSync(replacementFd); }
+          renameSync(replacement, path);
+          fsyncParent(path);
+          return handle();
+        } finally {
+          try { unlinkSync(`${path}.tmp-${reclaimToken}`); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
+          releaseReclaim();
+        }
       }
       waitForProjectLock();
     }
@@ -395,6 +436,10 @@ export function acquireProjectLock(input = {}) {
     return { status: "stale_source", error: { code: "stale_source", summary: "manual recovery requires the current lock" } };
   }
   const path = existsSync(existingPath) ? existingPath : lockPath(storageRoot, project);
+  const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
+    && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
+    && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
+    ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
   const guard = acquireProjectGuard(dirname(path));
   if (guard.status !== "ok") return guard;
   try {
@@ -410,13 +455,6 @@ export function acquireProjectLock(input = {}) {
   const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
   const fencingToken = `${ownerToken}:${randomUUID()}:${now}`;
   const value = { schema_version: SCHEMA_VERSION, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, pid: process.pid, host_id: hostname(), boot_id: bootId, session_epoch: String(sessionEpoch), acquired_monotonic_ms: now, lease_deadline_monotonic_ms: now + LOCK_LEASE_MS };
-  const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
-    && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
-    && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
-    ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
-  if (!existsSync(path) && recoveryTombstone && existsSync(recoveryTombstone)) {
-    return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
-  }
   if (existsSync(path)) {
     let currentRaw;
     let current;
