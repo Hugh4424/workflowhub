@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -339,16 +339,6 @@ function acquireProjectGuard(directory) {
   const path = join(directory, ".workflowhub-evolution.guard");
   const ownerToken = randomUUID();
   const value = { schema_version: "workflowhub-project-guard.v1", owner_token: ownerToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
-  const reclaimPath = `${path}.reclaim`;
-  const reclaimToken = randomUUID();
-  const reclaimValue = { schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: reclaimToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
-  const releaseReclaim = () => {
-    try {
-      const current = JSON.parse(readFileSync(reclaimPath, "utf8"));
-      if (current.owner_token !== reclaimToken) return;
-      unlinkSync(reclaimPath); fsyncParent(reclaimPath);
-    } catch (error) { if (error?.code !== "ENOENT") throw error; }
-  };
   const handle = () => ({
     status: "ok",
     path,
@@ -380,38 +370,7 @@ function acquireProjectGuard(directory) {
         && Number.isInteger(current.lease_deadline_monotonic_ms)
         && monotonicMs() > current.lease_deadline_monotonic_ms
         && !processIsAlive(current.pid)) {
-        let reclaimFd;
-        try {
-          reclaimFd = openSync(reclaimPath, "wx");
-          try { writeFileSync(reclaimFd, `${JSON.stringify(reclaimValue)}\n`); fsyncSync(reclaimFd); } finally { closeSync(reclaimFd); reclaimFd = undefined; }
-          fsyncParent(reclaimPath);
-        } catch (reclaimError) {
-          if (reclaimFd !== undefined) { try { closeSync(reclaimFd); } catch {} }
-          if (reclaimError?.code === "EEXIST") {
-            let reclaim;
-            try { reclaim = JSON.parse(readFileSync(reclaimPath, "utf8")); } catch { waitForProjectLock(); continue; }
-            if (reclaim?.schema_version === "workflowhub-project-guard-reclaim.v1"
-              && Number.isInteger(reclaim.lease_deadline_monotonic_ms)
-              && monotonicMs() > reclaim.lease_deadline_monotonic_ms
-              && !processIsAlive(reclaim.pid)) {
-              return { status: "conflict", error: { code: "conflict", summary: "stale project lock guard reclaim reservation requires operator cleanup" } };
-            }
-            waitForProjectLock();
-            continue;
-          }
-          throw reclaimError;
-        }
-        try {
-          const replacement = `${path}.tmp-${reclaimToken}`;
-          const replacementFd = openSync(replacement, "wx");
-          try { writeFileSync(replacementFd, `${JSON.stringify(value)}\n`); fsyncSync(replacementFd); } finally { closeSync(replacementFd); }
-          renameSync(replacement, path);
-          fsyncParent(path);
-          return handle();
-        } finally {
-          try { unlinkSync(`${path}.tmp-${reclaimToken}`); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
-          releaseReclaim();
-        }
+        return { status: "conflict", error: { code: "conflict", summary: "project lock guard is expired; manual cleanup is required" } };
       }
       waitForProjectLock();
     }

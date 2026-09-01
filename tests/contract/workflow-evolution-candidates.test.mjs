@@ -600,7 +600,6 @@ describe("M16 candidate and tax contract", () => {
       confirmation_ref: "confirmation:recovery",
       confirmation_sha256: "b".repeat(64),
     };
-    writeFileSync(join(dirname(lockPath), ".workflowhub-evolution.guard"), `${JSON.stringify({ schema_version: "workflowhub-project-guard.v1", owner_token: "stale-guard", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
     const script = `import { acquireProjectLock } from ${JSON.stringify(moduleUrl.href)};
 const result = acquireProjectLock({ storageRoot: process.argv[1], project: "Demo", attemptId: process.argv[2], bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: JSON.parse(process.argv[3]) });
 if (result.status === "ok") { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100); result.release(); }
@@ -629,12 +628,26 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     expect(first.release()).toEqual({ status: "ok" });
     const guardPath = join(dirname(lockPath), ".workflowhub-evolution.guard");
     const reclaimPath = `${guardPath}.reclaim`;
-    writeFileSync(guardPath, `${JSON.stringify({ schema_version: "workflowhub-project-guard.v1", owner_token: "stale-guard", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
-    writeFileSync(reclaimPath, `${JSON.stringify({ schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: "stale-reclaim", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`);
-    const result = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "guard-reservation-blocked" });
-    expect(result).toMatchObject({ status: "conflict", error: { code: "conflict" } });
-    expect(readFileSync(guardPath, "utf8")).toContain("stale-guard");
-    expect(readFileSync(reclaimPath, "utf8")).toContain("stale-reclaim");
+    const guardBefore = `${JSON.stringify({ schema_version: "workflowhub-project-guard.v1", owner_token: "stale-guard", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`;
+    const reclaimBefore = `${JSON.stringify({ schema_version: "workflowhub-project-guard-reclaim.v1", owner_token: "stale-reclaim", pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 })}\n`;
+    writeFileSync(guardPath, guardBefore);
+    writeFileSync(reclaimPath, reclaimBefore);
+    const script = `import { acquireProjectLock } from ${JSON.stringify(moduleUrl.href)};
+const result = acquireProjectLock({ storageRoot: process.argv[1], project: "Demo", attemptId: process.argv[2] });
+console.log(JSON.stringify({ status: result.status, error: result.error ?? null }));`;
+    const run = (index) => new Promise((done) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script, storageRoot, `guard-reservation-blocked-${index}`], { cwd: resolve(import.meta.dirname, "../.."), encoding: "utf8" });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (status) => done({ status, stdout, stderr }));
+    });
+    const results = await Promise.all(Array.from({ length: 16 }, (_value, index) => run(index)));
+    expect(results.every((result) => result.status === 0), results.map((result) => result.stderr).join("\n")).toBe(true);
+    expect(results.map((result) => JSON.parse(result.stdout).status).every((status) => status === "conflict")).toBe(true);
+    expect(readFileSync(guardPath, "utf8")).toBe(guardBefore);
+    expect(readFileSync(reclaimPath, "utf8")).toBe(reclaimBefore);
     expect(existsSync(lockPath)).toBe(false);
   });
 
