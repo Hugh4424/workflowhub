@@ -76,12 +76,14 @@ function makeFixture() {
     mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true });
     writeFileSync(join(taskRoot, "quality/evidence/build-spec.md"), "fixture evidence\n");
   }
-  const confirmationRef = `quality/confirmations/${"a".repeat(64)}.json`;
+  const confirmationRef = (stepSlug) => `quality/confirmations/${(stepSlug === "spec-clarify" ? "a" : "b").repeat(64)}.json`;
   for (const taskRoot of [taskA, taskB, taskOld]) {
-    writeJson(join(taskRoot, confirmationRef), { schema_version: "human-confirmation.v2", accepted: true });
+    for (const stepSlug of ["spec-clarify", "stage-reflection"]) {
+      writeJson(join(taskRoot, confirmationRef(stepSlug)), { schema_version: "human-confirmation.v2", accepted: true });
+    }
   }
   const intervention = (stepSlug) => ({
-    confirmation_ref: confirmationRef,
+    confirmation_ref: confirmationRef(stepSlug),
     step_slug: stepSlug,
     reply_text: "保留当前步骤，下一轮再看。",
     attribution: "human",
