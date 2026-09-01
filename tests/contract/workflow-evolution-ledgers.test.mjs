@@ -75,6 +75,16 @@ describe("M16 ledgers", () => {
     } finally { fixture.cleanup(); }
   });
 
+  it("rejects an attempted edit with an extra row field before writing any framed bytes", () => {
+    const fixture = setup();
+    try {
+      const result = run(fixture.storage, "attempted-edit", { ...fixture.payload, unexpected: "must-not-be-persisted" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed", error: { code: "failed" } });
+      expect(readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), { encoding: "utf8", flag: "a+" })).toBe("");
+    } finally { fixture.cleanup(); }
+  });
+
   it("rejects malformed batch envelopes and rows already present in the ledger", () => {
     const fixture = setup();
     try {

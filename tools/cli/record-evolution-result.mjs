@@ -43,6 +43,11 @@ function assertEnvelope(value, kind, ledgerKind) {
   if (value.schema_version !== "workflow-evolution.v1" || value.record_kind !== kind || value.ledger_kind !== ledgerKind
       || Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `${ledgerKind} ${kind} envelope schema invalid`);
 }
+function assertLedgerRow(value, ledgerKind, batchId, attemptId) {
+  if (value.ledger_batch_id !== batchId || value.attempt_id !== attemptId) throw fail("failed", `${ledgerKind} row batch identity mismatch`);
+  try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); }
+  catch (error) { throw fail("failed", `${ledgerKind} row schema invalid: ${error.message}`); }
+}
 function scanLedger(path, ledgerKind) {
   const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0); const records = []; let open = null; let recoveryStart = null; let committedEnd = 0; let latestPublicationGeneration = 0;
   for (const entry of entries(raw)) {
@@ -60,7 +65,7 @@ function scanLedger(path, ledgerKind) {
     if (!open) { assertEnvelope(value, "batch_begin", ledgerKind); if (value.publication_generation !== latestPublicationGeneration + 1) throw fail("failed", `${ledgerKind} publication generation is not contiguous at byte ${entry.start}`); open = { start: entry.start, begin: value, rows: [] }; continue; }
     if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind); if (value.batch_id !== open.begin.batch_id || value.publication_generation !== open.begin.publication_generation || !validAbort(raw, open.start, entry, value)) throw fail("failed", `unauthenticated ledger abort at byte ${entry.start}`); open = null; committedEnd = entry.end; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `nested ledger batch at byte ${entry.start}`);
-    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `ledger row batch identity mismatch at byte ${entry.start}`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${ledgerKind} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
+    if (value.record_kind !== "batch_commit") { assertLedgerRow(value, ledgerKind, open.begin.batch_id, open.begin.attempt_id); open.rows.push(value); continue; }
     assertEnvelope(value, "batch_commit", ledgerKind);
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id || value.publication_generation !== open.begin.publication_generation || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `committed ledger integrity mismatch at byte ${entry.start}`);
     records.push(...open.rows); committedEnd = entry.end; latestPublicationGeneration = Number.isInteger(value.publication_generation) ? value.publication_generation : latestPublicationGeneration; open = null;
@@ -79,7 +84,7 @@ function recoverTail(path, ledgerKind, lock, attemptId) {
   const recovered = scanLedger(path, ledgerKind); if (recovered.terminalSuffix) throw fail("failed", "ledger recovery did not close terminal suffix"); return recovered;
 }
 function appendBatch(path, ledgerKind, value, lock, attemptId, expectedPrefixHash) {
-  const state = scanLedger(path, ledgerKind); if (state.terminalSuffix || hash(state.raw) !== expectedPrefixHash) throw fail("conflict", "ledger head changed before append"); const batchId = randomUUID(); const publicationGeneration = state.latestPublicationGeneration + 1; const row = { ...value, ledger_batch_id: batchId };
+  const state = scanLedger(path, ledgerKind); if (state.terminalSuffix || hash(state.raw) !== expectedPrefixHash) throw fail("conflict", "ledger head changed before append"); const batchId = randomUUID(); const publicationGeneration = state.latestPublicationGeneration + 1; const row = { ...value, ledger_batch_id: batchId }; assertLedgerRow(row, ledgerKind, batchId, attemptId);
   const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId, publication_generation: publicationGeneration }; const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId, count: 1, content_hash: hash(canonical([row])), publication_generation: publicationGeneration, status: "committed" };
   appendLine(path, begin, lock, attemptId); appendLine(path, row, lock, attemptId); const beforeCommit = scanLedger(path, ledgerKind); if (!beforeCommit.terminalSuffix || beforeCommit.terminalSuffix.start !== state.raw.length || !beforeCommit.terminalSuffix.bytes.equals(Buffer.concat([encoded(begin), encoded(row)]))) throw fail("stale_source", "uncommitted ledger bytes changed"); appendLine(path, commit, lock, attemptId); const complete = scanLedger(path, ledgerKind); if (complete.terminalSuffix || complete.records.at(-1)?.ledger_batch_id !== batchId) throw fail("failed", "ledger commit is not current"); return row;
 }
