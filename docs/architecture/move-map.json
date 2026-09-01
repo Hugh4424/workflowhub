@@ -2287,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 30457,
-      "sha256_after": "c06be6c9d60efb3b8c44fd5bff7462716d074cd331f52e1cacec8b5d08d284cf"
+      "bytes": 30618,
+      "sha256_after": "c119ac89f42595549460f486517dfaff3335f6f29e73022c0336fc88ff8b50c3"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 98192,
-      "sha256_after": "cd04d2883921efe2f54a40621a0b1ef8b49c410f42fdd65b4f422705f41897df"
+      "bytes": 98355,
+      "sha256_after": "d65479512ef223ce1c61901b4e52c43ce86812cf26a5ca1d31fa1e91219dbb7e"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
