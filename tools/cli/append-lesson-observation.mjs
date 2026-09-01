@@ -204,8 +204,13 @@ export function appendLessonObservation({ root, proj, stage, taskId, text, refle
     const stat = lstatSync(path);
     if (stat.isSymbolicLink() || !stat.isFile()) fail("lesson index must be a regular file");
   }
-  const prior = existsSync(path) ? readFileSync(path, "utf8") : "";
-  appendFileSync(path, `${prior.length > 0 && !prior.endsWith("\n") ? "\n" : ""}${JSON.stringify(row)}\n`, "utf8");
+  const lock = acquireLessonMergeLock(storageRoot, proj);
+  try {
+    const prior = existsSync(path) ? readFileSync(path, "utf8") : "";
+    appendFileSync(path, `${prior.length > 0 && !prior.endsWith("\n") ? "\n" : ""}${JSON.stringify(row)}\n`, "utf8");
+  } finally {
+    lock.release();
+  }
   return { status: "appended", path: `Projects/${proj}/lessons/${stage}.jsonl`, entry: row };
 }
 

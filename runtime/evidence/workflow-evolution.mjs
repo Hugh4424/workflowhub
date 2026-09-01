@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -355,9 +355,24 @@ export function acquireProjectLock(input = {}) {
     const lockAuthorityHash = hashBytes(currentRaw);
     const nonce = sameEpoch ? `auto-${lockAuthorityHash.slice(0, 24)}` : recovery.nonce;
     const tombstone = `${path}.tombstone-${nonce}-${lockAuthorityHash}`;
-    if (existsSync(tombstone)) return { status: sameEpoch ? "failed" : "replayed_recovery", error: { code: sameEpoch ? "failed" : "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
-    try { renameSync(path, tombstone); fsyncParent(path); }
-    catch (error) { return { status: "failed", error: { code: "failed", summary: `lock reclaim failed: ${error.message}` } }; }
+    try {
+      const observedRaw = readFileSync(path, "utf8");
+      if (hashBytes(observedRaw) !== lockAuthorityHash) return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed before recovery" } };
+      linkSync(path, tombstone);
+      if (hashBytes(readFileSync(tombstone, "utf8")) !== lockAuthorityHash) {
+        unlinkSync(tombstone);
+        return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed during recovery" } };
+      }
+      if (hashBytes(readFileSync(path, "utf8")) !== lockAuthorityHash) {
+        unlinkSync(tombstone);
+        return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed during recovery" } };
+      }
+      unlinkSync(path);
+      fsyncParent(path);
+    } catch (error) {
+      if (error?.code === "EEXIST") return { status: sameEpoch ? "failed" : "replayed_recovery", error: { code: sameEpoch ? "failed" : "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
+      return { status: "failed", error: { code: "failed", summary: `lock reclaim failed: ${error.message}` } };
+    }
   }
   try {
     const fd = openSync(path, "wx"); writeFileSync(fd, `${JSON.stringify(value)}\n`); fsyncSync(fd); closeSync(fd); fsyncParent(path);
@@ -372,7 +387,7 @@ export function acquireProjectLock(input = {}) {
       unlinkSync(path); fsyncParent(path); return { status: "ok" };
     } catch (error) { if (error.code === "ENOENT") return { status: "ok" }; throw error; }
   };
-  return { status: "ok", lockHandle: Object.freeze({ path, attemptId, ownerToken, fencingToken }), lock_handle: Object.freeze({ path, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken }), ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken, leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release };
+  return { status: "ok", lockHandle: Object.freeze({ path, project, attemptId, ownerToken, fencingToken }), lock_handle: Object.freeze({ path, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken }), project, ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken, leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release };
 }
 
 function assertLedgerFile(path) {
@@ -588,7 +603,11 @@ function assertLockCurrent(lock) {
   catch { throw fail("stale_source", "lock is unavailable"); }
   const token = lock.fencingToken ?? lock.fencing_token ?? lock.lockHandle.fencingToken ?? lock.lockHandle.fencing_token;
   if (value.owner_token !== (lock.ownerToken ?? lock.owner_token) || value.fencing_token !== token) throw fail("stale_source", "lock fencing is stale");
-  if (Number.isFinite(value.lease_deadline_monotonic_ms) && monotonicMs() > value.lease_deadline_monotonic_ms) throw fail("stale_source", "lock lease expired");
+  const expectedProject = lock.project ?? lock.project_id ?? lock.lockHandle.project ?? lock.lockHandle.project_id;
+  const expectedAttempt = lock.attemptId ?? lock.attempt_id ?? lock.lockHandle.attemptId ?? lock.lockHandle.attempt_id;
+  if (!expectedProject || !validProjectLock(value, expectedProject) || value.project !== expectedProject
+    || value.attempt_id !== expectedAttempt
+    || !Number.isInteger(value.lease_deadline_monotonic_ms) || monotonicMs() > value.lease_deadline_monotonic_ms) throw fail("stale_source", "lock authority or lease is invalid");
   return value;
 }
 

@@ -46,6 +46,21 @@ console.log(JSON.stringify(result));`;
   });
 }
 
+function runAppendObservation(root, taskId, rawEntryId, now) {
+  const moduleRef = new URL("../../tools/cli/append-lesson-observation.mjs", import.meta.url).href;
+  const script = `import { appendLessonObservation } from ${JSON.stringify(moduleRef)};
+const result = appendLessonObservation({ root: process.argv[1], proj: "Demo", stage: "build-code", taskId: process.argv[2], text: "并发合并也必须保留全部来源", reflectionRef: "quality/stage-reflection/build-code.json", now: process.argv[4], entryId: process.argv[3] });
+console.log(JSON.stringify(result));`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script, root, taskId, rawEntryId, now], { cwd: repoRoot, encoding: "utf8" });
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -187,6 +202,30 @@ describe("lessons JSONL lifecycle", () => {
     expect(mergedRows[0].source_refs).toEqual(expect.arrayContaining([
       { task_id: "task-concurrent-1", raw_entry_id: "raw-concurrent-1" },
       { task_id: "task-concurrent-2", raw_entry_id: "raw-concurrent-2" },
+    ]));
+  });
+
+  it("serializes an append interleaved with merge without overwriting the new raw row", async () => {
+    const root = mkdtempSync(join(tmpdir(), "stage-reflection-lessons-"));
+    roots.push(root);
+    mkdirSync(join(root, "Projects", "Demo", "tasks", "task-interleaved-merge"), { recursive: true });
+    mkdirSync(join(root, "Projects", "Demo", "tasks", "task-interleaved-append"), { recursive: true });
+    appendLessonObservation({ root, proj: "Demo", stage: "build-code", taskId: "task-interleaved-merge", text: "并发合并也必须保留全部来源", reflectionRef: "quality/stage-reflection/build-code.json", entryId: "raw-interleaved-merge" });
+    const path = join(root, "Projects", "Demo", "lessons", "build-code.jsonl");
+    const padding = Array.from({ length: 30000 }, (_value, index) => JSON.stringify({ entry_kind: "raw_observation", entry_id: `padding-${index}`, task_id: "task-padding", stage: "build-code", text: "padding", merged: false })).join("\n");
+    writeFileSync(path, `${readFileSync(path, "utf8")}${padding}\n`, "utf8");
+
+    const merge = runMerge(root, "task-interleaved-merge", "raw-interleaved-merge", "2026-08-31T00:06:00.000Z");
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const append = runAppendObservation(root, "task-interleaved-append", "raw-interleaved-append", "2026-08-31T00:07:00.000Z");
+    const results = await Promise.all([merge, append]);
+    expect(results.map((result) => result.status), results.map((result) => result.stderr).join("\n")).toEqual([0, 0]);
+
+    const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entry_id: "raw-interleaved-merge", merged: true }),
+      expect.objectContaining({ entry_id: "raw-interleaved-append", merged: false, task_id: "task-interleaved-append" }),
+      expect.objectContaining({ entry_kind: "merged_lesson", occurrence_count: 1, source_refs: [{ task_id: "task-interleaved-merge", raw_entry_id: "raw-interleaved-merge" }] }),
     ]));
   });
 
