@@ -54,7 +54,13 @@ function assertAbortIdentity(value, expectedBatchId, expectedPublicationGenerati
   if ((expectedBatchId !== null && value.batch_id !== expectedBatchId)
       || (expectedPublicationGeneration !== null && value.publication_generation !== expectedPublicationGeneration)) throw fail("failed", `${name} batch_abort identity mismatch`);
 }
-function scan(path, name) {
+function verifyBriefTargetRef(value, project, repositoryRoot) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("failed", "brief source target_ref is missing");
+  if (value.project_id !== project) throw fail("stale_source", "brief source target project is stale");
+  const current = targetRefForCurrentRepository(repositoryRoot, value);
+  if (canonical(current) !== canonical(value)) throw fail("stale_source", "brief source target authority is stale");
+}
+function scan(path, name, project, repositoryRoot) {
   if (!existsSync(path)) return { status: "unavailable", reason: `${name}_missing`, refs: [], records: [] };
   const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null; let recoveryBatchId = null; let recoveryPublicationGeneration = null; let latestPublicationGeneration = 0;
   for (const entry of ledgerEntries(raw)) {
@@ -64,7 +70,13 @@ function scan(path, name) {
     if (!open) { assertEnvelope(value, "batch_begin", ledgerKind, name); if (value.publication_generation !== latestPublicationGeneration + 1) throw fail("failed", `${name} publication generation is not contiguous`); open = { start: entry.start, begin: value, rows: [] }; continue; }
     if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); assertAbortIdentity(value, open.begin.batch_id, open.begin.publication_generation, name); if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `${name} has a nested batch`);
-    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `${name} row identity mismatch`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
+    if (value.record_kind !== "batch_commit") {
+      if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `${name} row identity mismatch`);
+      try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); }
+      verifyBriefTargetRef(value.target_ref, project, repositoryRoot);
+      for (const related of value.related_targets ?? []) verifyBriefTargetRef(related, project, repositoryRoot);
+      open.rows.push(value); continue;
+    }
     assertEnvelope(value, "batch_commit", ledgerKind, name); if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id || value.publication_generation !== open.begin.publication_generation || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
     records.push(...open.rows); latestPublicationGeneration = value.publication_generation; open = null;
   }
@@ -94,7 +106,23 @@ function skillSection(path, targetRef) {
   if (!path) return { section_id: "external_skill_updates", status: "not_checked", reason_code: "receipt_not_supplied", source_refs: [], items: [] };
   let receipt; try { receipt = JSON.parse(readFileSync(resolve(path), "utf8")); } catch { return { section_id: "external_skill_updates", status: "unavailable", reason_code: "receipt_unreadable", source_refs: [resolve(path)], items: [] }; }
   const identityPayload = Object.fromEntries(Object.entries(receipt).filter(([key]) => key !== "receipt_id")); const expected = `skill-update-check.v1:${hash(canonical(identityPayload))}`;
-  if (receipt.schema_version !== "skill-update-check.v1" || receipt.receipt_id !== expected || receipt.installed_identity?.skill_id !== targetRef.target_id || receipt.installed_identity?.version !== targetRef.target_version) return { section_id: "external_skill_updates", status: "unavailable", reason_code: "receipt_identity_mismatch", source_refs: [resolve(path)], items: [] };
+  const installed = receipt.installed_identity; const catalog = receipt.catalog_identity; const validIdentity = (value) => value && typeof value === "object"
+    && value.skill_id === targetRef.target_id && typeof value.version === "string" && value.version === targetRef.target_version
+    && typeof value.content_sha256 === "string" && /^[a-f0-9]{64}$/.test(value.content_sha256)
+    && Object.hasOwn(value, "authority");
+  const sameInstalledCatalog = validIdentity(installed) && validIdentity(catalog)
+    && canonical(installed) === canonical(catalog);
+  const upstreamReady = (receipt.status === "current" || receipt.status === "update_available")
+    && typeof receipt.upstream_url === "string" && receipt.upstream_url !== ""
+    && typeof receipt.upstream_response_sha256 === "string" && /^[a-f0-9]{64}$/.test(receipt.upstream_response_sha256)
+    && receipt.upstream_identity && typeof receipt.upstream_identity === "object"
+    && receipt.upstream_identity.skill_id === targetRef.target_id
+    && typeof receipt.upstream_identity.version === "string"
+    && typeof receipt.upstream_identity.content_sha256 === "string"
+    && /^[a-f0-9]{64}$/.test(receipt.upstream_identity.content_sha256);
+  if (receipt.schema_version !== "skill-update-check.v1" || receipt.receipt_id !== expected || !sameInstalledCatalog
+    || typeof receipt.checked_at !== "string" || !Number.isFinite(Date.parse(receipt.checked_at))
+    || ((receipt.status === "current" || receipt.status === "update_available") && !upstreamReady)) return { section_id: "external_skill_updates", status: "unavailable", reason_code: "receipt_identity_mismatch", source_refs: [resolve(path)], items: [] };
   return { section_id: "external_skill_updates", status: receipt.status === "current" || receipt.status === "update_available" ? "ready" : "unavailable", reason_code: receipt.reason, source_refs: [resolve(path)], items: [receipt] };
 }
 function assertLock(lock, attemptId) {
@@ -145,11 +173,25 @@ function targetRefForCurrentRepository(repositoryRoot, targetRef) {
   if (result.status !== "ok") throw fail(result.error?.code ?? result.status, result.error?.summary ?? "current target authority is unavailable");
   return result.target_ref;
 }
+const FORBIDDEN_BRIEF_CONTENT = [
+  /把[^\n]{0,160}(?:改成|改为|替换为)/u,
+  /(?:自动|系统)(?:地)?(?:决定|修改|创建|生成|应用)/u,
+  /(?:建议|推荐)\s*(?:改|调整|方案|做)/u,
+  /\b(?:proposed[_ -]?solution|auto(?:matic)?[_ -]?(?:decision|task|write)|create[_ -]?task)\b/i,
+];
+function assertBriefContentIsFacts(sections) {
+  const visit = (value, path) => {
+    if (typeof value === "string" && FORBIDDEN_BRIEF_CONTENT.some((pattern) => pattern.test(value))) throw fail("invalid_input", `brief content contains forbidden decision text at ${path}`);
+    if (Array.isArray(value)) value.forEach((entry, index) => visit(entry, `${path}[${index}]`));
+    else if (value && typeof value === "object") Object.entries(value).forEach(([key, child]) => visit(child, `${path}.${key}`));
+  };
+  visit(sections, "sections");
+}
 function render(envelope) {
   const lines = ["# Iteration brief", "", `<!-- workflow-evolution-brief:${Buffer.from(canonical(envelope.header)).toString("base64")} -->`, "", `- schema_version: ${envelope.header.schema_version}`, `- project: ${envelope.header.project}`, `- brief_attempt_id: ${envelope.header.brief_attempt_id}`, `- generated_at: ${envelope.header.generated_at}`, `- target: ${JSON.stringify(envelope.header.target_ref)}`, `- status: ${envelope.header.status}`, `- snapshot_id: ${envelope.header.snapshot_id ?? "unknown"}`, ""];
   const labels = { candidates: "Candidates", negative_results: "Negative results", attempted_edits: "Attempted edits", external_skill_updates: "External skill updates", retained_behavior: "Retained behavior", open_decisions: "Open decisions", market_comparison: "Market comparison" };
   for (const value of envelope.sections) lines.push(`## ${labels[value.section_id]}`, "", "```json", JSON.stringify(value, null, 2), "```", "");
-  lines.push("本简报只包含事实、状态和证据引用，不提供改法、不自动修改。"); return `${lines.join("\n")}\n`;
+  lines.push("本简报只包含事实、状态和证据引用。"); return `${lines.join("\n")}\n`;
 }
 
 function main() {
@@ -162,8 +204,9 @@ function main() {
   const projection = readCurrentEvolutionProjection({ storageRoot, project, expectedIdentity: options["snapshot-id"] ? { snapshot_id: options["snapshot-id"] } : undefined });
   if (projection.status === "stale_source" || projection.status === "failed") throw fail(projection.error?.code ?? projection.status, projection.error?.summary ?? "candidate projection invalid");
   const candidateState = projection.status === "ok" ? { status: projection.candidates.length ? "ready" : "empty", reason: projection.candidates.length ? null : "complete_scan_no_matches", refs: [join(projectRoot, "evolution-candidates.jsonl")], records: projection.candidates } : { status: "unavailable", reason: "candidate_snapshot_unavailable", refs: [], records: [] };
-  const negatives = scan(join(projectRoot, "negative-results.jsonl"), "negative_results"); const edits = scan(join(projectRoot, "attempted-edits.jsonl"), "attempted_edits"); const materials = materialSections(decision, spec);
+  const negatives = scan(join(projectRoot, "negative-results.jsonl"), "negative_results", project, repositoryRoot); const edits = scan(join(projectRoot, "attempted-edits.jsonl"), "attempted_edits", project, repositoryRoot); const materials = materialSections(decision, spec);
   const sections = [section("candidates", candidateState, targetRef), section("negative_results", negatives, targetRef), section("attempted_edits", edits, targetRef), skillSection(options["skill-update-receipt"], targetRef), materials.retained, materials.open, { section_id: "market_comparison", status: "not_checked", reason_code: "DE-003", source_refs: [], items: [] }];
+  assertBriefContentIsFacts(sections);
   const status = sections.every((entry) => ["ready", "empty", "not_applicable"].includes(entry.status)) ? "ready" : "degraded"; const observedCurrentHash = currentHash(path);
   const sourceHashes = { candidates: existsSync(join(projectRoot, "evolution-candidates.jsonl")) ? hash(readFileSync(join(projectRoot, "evolution-candidates.jsonl"))) : null, negatives: existsSync(join(projectRoot, "negative-results.jsonl")) ? negatives.rawHash : null, edits: existsSync(join(projectRoot, "attempted-edits.jsonl")) ? edits.rawHash : null, decision: decision.sha256 ?? null, spec: spec.sha256 ?? null };
   let header = { schema_version: "workflow-evolution-brief.v1", project, brief_attempt_id: attemptId, generated_at: generatedAt, target_ref: targetRef, snapshot_id: projection.snapshot_id ?? null, decision_log_ref: decision.ref ?? null, decision_log_sha256: decision.sha256 ?? null, spec_ref: spec.ref ?? null, spec_sha256: spec.sha256 ?? null, source_hashes: sourceHashes, status };

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { acquireProjectLock, assertProjectLockCurrent, recordCandidateTransition, resolveTargetRef, validateWorkflowEvolutionDefinition, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
 
@@ -92,7 +92,14 @@ function appendBatch(path, ledgerKind, value, lock, attemptId, expectedPrefixHas
 function iso(value, name) { required(value, name); const parsed = Date.parse(value); if (!Number.isFinite(parsed) || !value.endsWith("Z")) throw fail("invalid_input", `${name} must be a UTC timestamp`); return parsed; }
 function verifyFile(ref, sha256, name) {
   const path = resolve(required(ref, `${name}_ref`)); if (!SHA256.test(required(sha256, `${name}_sha256`))) throw fail("invalid_input", `${name}_sha256 is invalid`);
-  let bytes; try { bytes = readFileSync(path); } catch { throw fail("unavailable", `${name} is unreadable`); }
+  let bytes; try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw fail("unavailable", `${name} is not an immutable regular file`);
+    bytes = readFileSync(path);
+  } catch (error) {
+    if (error?.code === "unavailable") throw error;
+    throw fail("unavailable", `${name} is unreadable`);
+  }
   if (hash(bytes) !== sha256) throw fail("stale_source", `${name} hash is stale`); return { path, bytes };
 }
 function verifyDecision(payload) {
@@ -106,7 +113,27 @@ function verifyDecision(payload) {
   if (start < 0 || !section.some((line) => /approval_binding\s*:\s*accepted\b/i.test(line))) throw fail("stale_source", "decision_id is not present in an accepted decision binding");
   return { decision_ref: ref, decision_sha256: sha256, decision_id: decisionId };
 }
-function heads(records, idField) { const superseded = new Set(records.map((entry) => entry.supersedes).filter(Boolean)); return records.filter((entry) => !superseded.has(entry[idField])); }
+function heads(records, idField) {
+  const byId = new Map();
+  for (const entry of records) {
+    const id = entry?.[idField];
+    if (typeof id !== "string" || id === "") throw fail("failed", `${idField} chain contains an invalid identity`);
+    if (byId.has(id)) throw fail("failed", `${idField} chain contains a duplicate identity`);
+    byId.set(id, entry);
+  }
+  const superseded = new Set();
+  for (const entry of records) {
+    if (entry.supersedes == null) continue;
+    if (entry.supersedes === entry[idField] || !byId.has(entry.supersedes)) throw fail("failed", `${idField} supersedes reference is dangling`);
+    superseded.add(entry.supersedes);
+    const seen = new Set([entry[idField]]); let cursor = entry.supersedes;
+    while (cursor) {
+      if (seen.has(cursor)) throw fail("failed", `${idField} supersedes chain contains a cycle`);
+      seen.add(cursor); cursor = byId.get(cursor)?.supersedes ?? null;
+    }
+  }
+  return records.filter((entry) => !superseded.has(entry[idField]));
+}
 function verifyTargetRef(value, project, repositoryRoot) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("invalid_input", "target_ref is required");
   for (const field of ["project_id", "target_kind", "target_id", "target_version", "authority_ref", "authority_sha256"]) required(value[field], `target_ref.${field}`);
@@ -123,6 +150,7 @@ function verifyTargetRef(value, project, repositoryRoot) {
   return value;
 }
 function attemptedEdit(payload, attemptId, records, project, repositoryRoot) {
+  if (payload.attempt_id !== undefined && payload.attempt_id !== attemptId) throw fail("stale_source", "attempt identity fields disagree");
   if (payload.d24_boundary !== undefined || payload.d24_eval_boundary !== undefined) throw fail("invalid_input", "attempted-edit must not consume D24 boundary");
   const decision = verifyDecision(payload);
   for (const field of ["changed_surface", "before_facts_ref", "before_facts_sha256", "before_observed_at", "after_facts_ref", "after_facts_sha256", "after_observed_at", "observed_at", "validation_method", "revert_ref", "revert_sha256", "outcome"]) required(payload[field], field);
@@ -131,6 +159,16 @@ function attemptedEdit(payload, attemptId, records, project, repositoryRoot) {
   if (before.path === after.path || payload.before_facts_sha256 === payload.after_facts_sha256) throw fail("invalid_input", "before and after facts must be distinct immutable snapshots");
   const beforeAt = iso(payload.before_observed_at, "before_observed_at"); const afterAt = iso(payload.after_observed_at, "after_observed_at"); const observedAt = iso(payload.observed_at, "observed_at");
   if (!(beforeAt < afterAt && afterAt <= observedAt)) throw fail("invalid_input", "fact observation times are not ordered");
+  const factObservedAt = (bytes, name) => {
+    let value;
+    try { value = JSON.parse(bytes.toString("utf8")); } catch { return; }
+    const claimed = value?.observed_at ?? value?.observedAt;
+    if (claimed !== undefined) iso(claimed, `${name}.observed_at`);
+    return claimed;
+  };
+  const beforeFactAt = factObservedAt(before.bytes, "before_facts"); const afterFactAt = factObservedAt(after.bytes, "after_facts");
+  if (beforeFactAt !== undefined && beforeFactAt !== payload.before_observed_at) throw fail("stale_source", "before fact observed_at does not match its canonical fact");
+  if (afterFactAt !== undefined && afterFactAt !== payload.after_observed_at) throw fail("stale_source", "after fact observed_at does not match its canonical fact");
   if (!Array.isArray(payload.evidence_refs) || payload.evidence_refs.length === 0) throw fail("invalid_input", "evidence_refs are required");
   verifyTargetRef(payload.target_ref, project, repositoryRoot);
   verifyFile(payload.revert_ref, payload.revert_sha256, "revert");
@@ -143,12 +181,14 @@ function attemptedEdit(payload, attemptId, records, project, repositoryRoot) {
 }
 function checkD24(payload) {
   const d24 = payload.d24_boundary ?? payload.d24_eval_boundary;
-  if (!d24 || d24.schema_version !== D24_EVAL_BOUNDARY.schema_version || d24.schema_ref !== D24_EVAL_BOUNDARY.schema_ref || d24.sha256 !== D24_EVAL_BOUNDARY.sha256 || d24.canonical_bytes !== D24_EVAL_BOUNDARY.canonical_bytes) throw fail("wrong_domain", "D24 boundary identity mismatch");
+  if (!d24 || canonical(d24) !== canonical(D24_EVAL_BOUNDARY)) throw fail("wrong_domain", "D24 boundary identity mismatch");
 }
 function negativeResult(payload, attemptId, editState, negatives, project, repositoryRoot) {
+  if (payload.attempt_id !== undefined && payload.attempt_id !== attemptId) throw fail("stale_source", "attempt identity fields disagree");
   const edits = editState.records;
   if (payload.classification_status === "unavailable" || payload.evidence_status !== "complete" || payload.independent_before_after_evidence !== true) throw fail("classification_unavailable", "independent before/after mechanism evidence is unavailable");
-  if (D24_DOMAINS.has(payload.failure_domain) || payload.mixed_domain === true) { checkD24(payload); throw fail("wrong_domain", "failure belongs to D24 evaluation authority"); }
+  const d24Domain = D24_DOMAINS.has(payload.failure_domain) || D24_DOMAINS.has(payload.changed_surface) || payload.mixed_domain === true || payload.domain === "mixed";
+  if (d24Domain) { checkD24(payload); throw fail("wrong_domain", "failure belongs to D24 evaluation authority"); }
   checkD24(payload);
   if (!FAILURE_DOMAINS.has(payload.failure_domain) || !FAILURE_KINDS.has(payload.failure_kind)) throw fail("wrong_domain", "failure is outside the M16 mechanism domain");
   const decision = verifyDecision(payload);
@@ -167,6 +207,12 @@ function negativeResult(payload, attemptId, editState, negatives, project, repos
   const sameFailure = negatives.filter((entry) => entry.failure_identity === payload.failure_identity); const current = heads(sameFailure, "negative_id");
   if (sameFailure.length === 0 && payload.supersedes != null) throw fail("stale_source", "first failure identity cannot supersede a record");
   if (sameFailure.length > 0 && (current.length !== 1 || payload.supersedes !== current[0].negative_id)) throw fail("stale_source", "negative correction must supersede the same failure identity current head");
+  if (current.length === 1 && payload.supersedes === current[0].negative_id) {
+    for (const [field, incoming] of [["decision_id", decision.decision_id], ["attempted_edit_id", editId], ["failure_domain", payload.failure_domain], ["failure_kind", payload.failure_kind]]) {
+      if (current[0][field] !== incoming) throw fail("stale_source", `negative correction changed immutable ${field}`);
+    }
+    if (canonical(current[0].target_ref) !== canonical(payload.target_ref)) throw fail("stale_source", "negative correction changed immutable target_ref");
+  }
   return {
     schema_version: "workflow-evolution.v1", record_kind: "negative-result",
     negative_id: payload.negative_id, attempt_id: attemptId, attempted_edit_id: editId,
