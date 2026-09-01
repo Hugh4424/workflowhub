@@ -25,6 +25,7 @@ describe("M16 governance registration", () => {
 
   it("keeps browser and final gates fail-closed and atomic", () => {
     const browser = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-browser-qa.sh"), "utf8");
+    const redWrapper = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-red-green-gate.sh"), "utf8");
     const aggregate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-aggregate.sh"), "utf8");
     const review = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-review-chain.mjs"), "utf8");
     expect(browser).toContain("validate-browser-manifest.mjs");
@@ -36,6 +37,11 @@ describe("M16 governance registration", () => {
     expect(redGate).toContain("EXPECTED_BASELINE_SHA256");
     expect(redGate).toContain('phase === "red" && exitCode === 0');
     expect(redGate).toContain("material_sha256");
+    const baseline = JSON.parse(readFileSync(resolve(root, "tests/fixtures/workflow-evolution/red-baseline.v1.json"), "utf8"));
+    expect(baseline.tests).toEqual(["tests/contract/public-behavior-baseline.test.mjs"]);
+    expect(baseline.tests.some((ref) => ref.includes("quality/"))).toBe(false);
+    expect(redWrapper).not.toContain("stage-reflection-e2e-constructed.test.mjs");
+    expect(redWrapper).toContain("red-baseline.v1.json");
   });
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");

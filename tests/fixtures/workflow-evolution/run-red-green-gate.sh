@@ -15,7 +15,8 @@ baseline="tests/fixtures/workflow-evolution/red-baseline.v1.json"
 baseline_output="quality/tests/m16-${suite}-baseline-output.txt"
 suite_output="quality/tests/m16-${suite}-suite-output.txt"
 mkdir -p "$(dirname "$baseline_output")"
-npx vitest run tests/contract/stage-reflection-e2e-constructed.test.mjs --poolOptions.forks.singleFork --no-fileParallelism >"$baseline_output" 2>&1
+baseline_test="$(node -e 'const v=require("./tests/fixtures/workflow-evolution/red-baseline.v1.json");if(v.schema_version!=="workflow-evolution-red-baseline.v1"||v.tests.length!==1||typeof v.tests[0]!=="string"||v.tests[0].includes("quality/"))process.exit(24);process.stdout.write(v.tests[0])')" || exit 24
+npx vitest run "$baseline_test" --poolOptions.forks.singleFork --no-fileParallelism >"$baseline_output" 2>&1
 baseline_status=$?
 npx vitest run "${tests[@]}" --poolOptions.forks.singleFork --no-fileParallelism >"$suite_output" 2>&1
 status=$?

@@ -1,1 +1,1 @@
-{"schema_version":"workflow-evolution-red-baseline.v1","suite":"pool-tax","tests":["tests/contract/stage-reflection-e2e-constructed.test.mjs"]}
+{"schema_version":"workflow-evolution-red-baseline.v1","suite":"all","tests":["tests/contract/public-behavior-baseline.test.mjs"]}

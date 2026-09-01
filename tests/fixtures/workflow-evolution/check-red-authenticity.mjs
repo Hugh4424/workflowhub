@@ -10,7 +10,7 @@ const suites = {
   monitor: ["tests/contract/build-reflection-page.test.mjs"],
   governance: ["tests/contract/workflow-evolution-governance.test.mjs", "tests/e2e/workflow-evolution-current.test.mjs", "tests/contract/public-behavior-baseline.test.mjs"],
 };
-const EXPECTED_BASELINE_SHA256 = "6849e00b39d1f9b6103e7680bfcbe0014da480e61a80baaab6fcb9abc73e8dc7";
+const EXPECTED_BASELINE_SHA256 = "9a7b17ce110d5c8e37f9f6d16d1b310e139bf747de96349ae6a9c7926f1059dd";
 const exitCode = Number(exitText); const baselineExit = Number(baselineExitText);
 if (!suites[suite] || !["red", "green", "verify"].includes(phase) || !Number.isInteger(exitCode) || baselineExit !== 0
     || baselineHash !== EXPECTED_BASELINE_SHA256 || !/^[a-f0-9]{64}$/.test(outputHash)) process.exit(24);
