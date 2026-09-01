@@ -185,6 +185,18 @@ describe("M16 candidate and tax contract", () => {
     expect(readFileSync(candidateLedger(storageRoot))).toEqual(beforeReplay);
   });
 
+  it("fails closed when a batch commit rewrites its begin attempt identity", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "attempt-a", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" }).status).toBe("ok");
+    const ledger = candidateLedger(storageRoot);
+    const records = readFileSync(ledger, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    records.at(-1).attempt_id = "forged-attempt";
+    writeFileSync(ledger, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+    expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" })).toMatchObject({ status: "failed" });
+    expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "attempt-a", inventory: { project: "Demo", observations: [] }, now: "2026-09-01T00:00:00Z" })).toMatchObject({ status: "failed" });
+  });
+
   it("authenticates a torn terminal batch before publishing the next generation", async () => {
     const mod = await loadModule();
     const storageRoot = root();

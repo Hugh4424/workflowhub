@@ -43,11 +43,14 @@ const reportedTests = report.testResults.map((result) => {
   return relative;
 }).sort();
 const failedAssertions = report.testResults.flatMap((result) => result?.assertionResults ?? []).filter((assertion) => assertion?.status === "failed");
+const allAssertions = report.testResults.flatMap((result) => result.assertionResults);
+const passedAssertions = allAssertions.filter((assertion) => assertion.status === "passed");
 const reportedFailure = report.success === false || report.numFailedTests > 0 || report.numFailedTestSuites > 0 || failedAssertions.length > 0
   || report.testResults.some((result) => result?.status === "failed");
 const sameTests = expectedTests.length === reportedTests.length && expectedTests.every((test, index) => test === reportedTests[index]);
 if (!sameTests
     || report.numTotalTests !== report.numPassedTests + report.numFailedTests + (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0)
+    || allAssertions.length !== report.numTotalTests || passedAssertions.length !== report.numPassedTests || failedAssertions.length !== report.numFailedTests
     || report.numTotalTests <= 0 || (report.numPendingTests ?? 0) !== 0 || (report.numTodoTests ?? 0) !== 0
     || (phase === "red" && (!reportedFailure || report.success !== false))
     || (phase !== "red" && (reportedFailure || report.success !== true))) process.exit(23);

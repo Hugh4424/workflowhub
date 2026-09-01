@@ -2251,8 +2251,8 @@
       "delete_condition": "remove when stage outcome consumption edges are no longer consumed",
       "content_change": "new read-only derivation of later consumer edges with unknown fallback",
       "sha256_before": null,
-      "bytes": 14045,
-      "sha256_after": "ca1a7d9f1173901c2db3494cea302625be51ea0921b6e7c6ab58f779bf679b31"
+      "bytes": 12357,
+      "sha256_after": "f3a1d64aa51cc69e3e881b6088baf15de7fba4b2eec3671fcdcbd07df46cb162"
     },
     {
       "source": "tools/cli/append-lesson-observation.mjs",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 60507,
-      "sha256_after": "01f85bcb0130e5ee5e44b89a90be56b7029b40cc3a3bdc7fefccad231738f291"
+      "bytes": 62378,
+      "sha256_after": "ac5d29758cf9d38d89b40616a689689bbd95afdaf70ea60851ef8f3ac83c038f"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",

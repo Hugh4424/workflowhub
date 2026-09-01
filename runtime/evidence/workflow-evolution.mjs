@@ -44,6 +44,22 @@ function canonical(value) {
 }
 
 function hashBytes(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+export function validateStageOutcomeStructure(value, { taskId, stage } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("invalid_input", "outcome must be an object");
+  if (value.schema_version !== "workflowhub-stage-outcomes.v1") throw fail("invalid_input", "outcome schema_version is invalid");
+  if (value.task_id !== taskId || value.stage !== stage) throw fail("invalid_input", "outcome task/stage identity does not match its path");
+  if (!Array.isArray(value.step_outcomes) || !Array.isArray(value.skill_outcomes)) throw fail("invalid_input", "outcome subject arrays are required");
+  for (const [kind, subjects] of [["step", value.step_outcomes], ["skill", value.skill_outcomes]]) {
+    for (const subject of subjects) {
+      const subjectId = kind === "step" ? (subject?.step_slug ?? subject?.step_id) : (subject?.skill_id ?? subject?.skill_slug);
+      if (typeof subjectId !== "string" || subjectId.trim() === "") throw fail("invalid_input", `${kind} outcome subject id is required`);
+      if (!Array.isArray(subject.input_refs) || subject.input_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) throw fail("invalid_input", `${kind} outcome input_refs must be a complete string array`);
+      if (!Array.isArray(subject.evidence_refs) || subject.evidence_refs.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.ref !== "string" || entry.ref.trim() === "")) throw fail("invalid_input", `${kind} outcome evidence_refs must be a complete reference array`);
+      if (subject.output_refs !== undefined && (!Array.isArray(subject.output_refs) || subject.output_refs.some((ref) => typeof ref !== "string" || ref.trim() === ""))) throw fail("invalid_input", `${kind} outcome output_refs must be a complete string array`);
+    }
+  }
+  return value;
+}
 export function validateWorkflowEvolutionDefinition(name, value) {
   if (!EVOLUTION_SCHEMA.$defs[name]) throw fail("invalid_input", `unknown workflow evolution schema definition: ${name}`);
   let validate = DEFINITION_VALIDATORS.get(name);
@@ -419,6 +435,7 @@ function scanCandidateLedger(path) {
     }
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.snapshot_id !== open.begin.snapshot_id
       || value.publication_generation !== open.begin.publication_generation || value.snapshot_content_id !== open.begin.snapshot_content_id
+      || value.attempt_id !== open.begin.attempt_id
       || value.count !== open.rows.length || value.content_hash !== hashBytes(canonical(open.rows))) {
       throw fail("failed", `committed batch integrity mismatch at byte ${entry.start}`);
     }
@@ -556,8 +573,7 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
           for (const file of files) {
             const raw = readFileSync(join(directory, file));
             if (hashBytes(raw) !== file.slice(0, -5)) return null;
-            const value = JSON.parse(raw.toString("utf8"));
-            if (value.task_id !== taskId || value.stage !== stage) return null;
+            const value = validateStageOutcomeStructure(JSON.parse(raw.toString("utf8")), { taskId, stage });
             sourceRefs.push(`quality/evidence/stage-outcomes/${stage}/${file}`);
             for (const [kind, subjects] of [["step", value.step_outcomes], ["skill", value.skill_outcomes]]) {
               if (!Array.isArray(subjects)) return null;

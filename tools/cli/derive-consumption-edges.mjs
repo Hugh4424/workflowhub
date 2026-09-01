@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { validateStageOutcomeStructure } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const STAGE_INDEX = new Map(STAGES.map((stage, index) => [stage, index]));
@@ -90,29 +91,7 @@ function readOutcomeFiles(taskRoot, project, taskId, stage, storageRoot) {
     try {
       const raw = readFileSync(path, "utf8");
       const value = JSON.parse(raw);
-      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("outcome must be an object");
-      if (value.schema_version !== "workflowhub-stage-outcomes.v1") throw new Error("outcome schema_version is invalid");
-      if (value.task_id !== taskId || value.stage !== stage) throw new Error("outcome task/stage identity does not match its path");
-      if (!Array.isArray(value.step_outcomes) || !Array.isArray(value.skill_outcomes)) throw new Error("outcome subject arrays are required");
-      for (const [kind, subjects] of [["step", value.step_outcomes], ["skill", value.skill_outcomes]]) {
-        for (const subject of subjects) {
-          const subjectId = kind === "step" ? (subject?.step_slug ?? subject?.step_id) : (subject?.skill_id ?? subject?.skill_slug);
-          if (typeof subjectId !== "string" || subjectId.trim() === "") throw new Error(`${kind} outcome subject id is required`);
-          if (!Array.isArray(subject.input_refs) || subject.input_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
-            throw new Error(`${kind} outcome input_refs must be a complete string array`);
-          }
-          if (!Array.isArray(subject.evidence_refs)
-              || subject.evidence_refs.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry)
-                || typeof entry.ref !== "string" || entry.ref.trim() === "")) {
-            throw new Error(`${kind} outcome evidence_refs must be a complete reference array`);
-          }
-          if (subject.output_refs !== undefined
-              && (!Array.isArray(subject.output_refs)
-                || subject.output_refs.some((ref) => typeof ref !== "string" || ref.trim() === ""))) {
-            throw new Error(`${kind} outcome output_refs must be a complete string array`);
-          }
-        }
-      }
+      validateStageOutcomeStructure(value, { taskId, stage });
       records.push({ path, value });
     } catch (error) {
       invalid.push({ ref: `quality/evidence/stage-outcomes/${stage}/${filename}`, reason: error.message });

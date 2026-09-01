@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
@@ -173,6 +173,21 @@ describe("derive-consumption-edges", () => {
     const second = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-two", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [disguisedReuse] } });
     expect(first.records[0]).toMatchObject({ tier: "action_suggested", machine_signals: { zero_consumption: true } });
     expect(second.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("rejects a proof after a hash-named stage outcome is replaced by a forged schema", () => {
+    const root = mkdtempSync(join(tmpdir(), "stage-reflection-proof-schema-")); roots.push(root);
+    const taskRoot = join(root, "Projects/Demo/tasks/task-schema"); mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true }); writeFileSync(join(taskRoot, "quality/evidence/zero.md"), "zero\n");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) writeOutcome(root, stage, "task-schema", { schema_version: "workflowhub-stage-outcomes.v1", task_id: "task-schema", stage, step_outcomes: stage === "build-spec" ? [{ step_slug: "spec-clarify", input_refs: [], output_refs: ["quality/evidence/zero.md"], evidence_refs: [] }] : [], skill_outcomes: [] });
+    const proof = run(root).tasks[0].consumer_scan_proof; expect(proof.zero_consumption).toBe(true);
+    const forgedDir = join(taskRoot, "quality/evidence/stage-outcomes/build-code");
+    for (const file of readdirSync(forgedDir)) rmSync(join(forgedDir, file));
+    writeOutcome(root, "build-code", "task-schema", { schema_version: "forged-stage-outcome.v0", task_id: "task-schema", stage: "build-code", step_outcomes: [], skill_outcomes: [] });
+    const sourceRefs = proof.source_refs.map((ref) => ref.includes("/build-code/") ? `quality/evidence/stage-outcomes/build-code/${readdirSync(forgedDir)[0]}` : ref).sort();
+    const forgedProof = { ...proof, source_refs: sourceRefs, scope_revision: hash(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).join("\n")) };
+    const item = { task_id: "task-schema", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } };
+    const result = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-schema", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [forgedProof] } });
+    expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
   });
 
   it("does not call an incomplete subject reference ledger a zero-consumption scan", () => {
