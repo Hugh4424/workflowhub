@@ -144,9 +144,12 @@ function normalTarget(input) {
     authority ??= entry?.authority ?? entry?.ref ?? authorities.move_map_ref;
     authoritySha256 ??= entry?.authority_sha256 ?? entry?.sha256;
   }
-  if (targetVersion === undefined || authority === undefined) throw fail("stale_source", `target authority is unavailable: ${targetId}`);
+  // A target reference is only useful when its authority can be re-read and
+  // checked. Do not derive a hash from the ref string: a missing authority
+  // identity must never become an apparently current target.
+  if (targetVersion === undefined || authority === undefined || authoritySha256 === undefined) throw fail("stale_source", `target authority is unavailable: ${targetId}`);
   const authorityRef = String(authority);
-  const authorityHash = authoritySha256 ?? hashBytes(authorityRef);
+  const authorityHash = authoritySha256;
   if (!/^[a-f0-9]{64}$/.test(authorityHash)) throw fail("stale_source", `target authority hash is invalid: ${targetId}`);
   return { project_id: projectId, target_kind: targetKind, target_id: targetId, target_version: String(targetVersion), authority_ref: authorityRef, authority_sha256: authorityHash };
 }
@@ -246,22 +249,78 @@ function attribution(stage, value) {
   return { status: "attributed", stage: match[1] };
 }
 
+function taxIdentity(item, project) {
+  const itemProject = item?.project ?? item?.project_id ?? project;
+  const taskId = item?.task_id ?? item?.taskId;
+  const confirmationRef = item?.confirmation_ref ?? item?.confirmationRef;
+  if (typeof itemProject !== "string" || itemProject.trim() === "" || typeof taskId !== "string" || taskId.trim() === "" || typeof confirmationRef !== "string" || confirmationRef.trim() === "") return null;
+  return { project: itemProject, taskId, confirmationRef, key: `${itemProject}\0${taskId}\0${confirmationRef}` };
+}
+
+function validateTaxSource(item, identity, inventory) {
+  // Legacy stage-reflection records do not carry a source envelope.  When an
+  // envelope is present, validate it instead of silently consuming a forged
+  // or mismatched confirmation.  This keeps old facts usable as unknown while
+  // making the authenticated path fail closed.
+  const source = item?.source ?? item?.source_fact ?? item?.sourceFact ?? item?.confirmation;
+  if (source === undefined && item?.source_ref === undefined && item?.source_sha256 === undefined && item?.source_schema_version === undefined) return null;
+  if (source !== undefined && (!source || typeof source !== "object" || Array.isArray(source))) return "source_identity_invalid";
+  const sourceValue = source ?? item;
+  const sourceTask = sourceValue.task_id ?? sourceValue.taskId;
+  const sourceProject = sourceValue.project ?? sourceValue.project_id;
+  const sourceStage = sourceValue.stage ?? sourceValue.intervention_stage ?? sourceValue.interventionStage;
+  const sourceStep = sourceValue.step_slug ?? sourceValue.stepSlug;
+  if (sourceProject !== undefined && sourceProject !== identity.project) return "source_project_mismatch";
+  if (sourceTask !== undefined && sourceTask !== identity.taskId) return "source_task_mismatch";
+  if (sourceStage !== undefined && sourceStage !== (item.intervention_stage ?? item.interventionStage)) return "source_stage_mismatch";
+  if (sourceStep !== undefined && typeof sourceStep !== "string") return "source_step_invalid";
+  const schemaVersion = item.source_schema_version ?? item.sourceSchemaVersion ?? sourceValue.schema_version ?? sourceValue.schemaVersion;
+  if (schemaVersion !== undefined && (typeof schemaVersion !== "string" || schemaVersion.trim() === "")) return "source_schema_invalid";
+  const sourceRef = item.source_ref ?? item.sourceRef ?? sourceValue.source_ref ?? sourceValue.ref;
+  if (sourceRef !== undefined && (typeof sourceRef !== "string" || sourceRef.trim() === "")) return "source_ref_invalid";
+  const sourceHash = item.source_sha256 ?? item.sourceSha256 ?? sourceValue.source_sha256 ?? sourceValue.sha256 ?? sourceValue.hash;
+  if (sourceHash !== undefined && !/^[a-f0-9]{64}$/.test(sourceHash)) return "source_hash_invalid";
+  const sourcePath = item.source_path ?? item.sourcePath ?? sourceValue.path;
+  if (sourcePath !== undefined) {
+    try {
+      const stat = lstatSync(sourcePath);
+      if (!stat.isFile() || stat.isSymbolicLink() || (sourceHash && hashBytes(readFileSync(sourcePath)) !== sourceHash)) return "source_bytes_invalid";
+    } catch { return "source_unavailable"; }
+  }
+  const attributionStatus = item.attribution_status ?? item.attributionStatus;
+  if (attributionStatus !== undefined && !["attributed", "unknown"].includes(attributionStatus)) return "attribution_status_invalid";
+  return null;
+}
+
 export function computeQualityTaxProjection(input = {}) {
   const asOf = input.asOf ?? input.as_of;
   requiredString(asOf, "asOf");
   const end = Date.parse(asOf); if (!Number.isFinite(end)) throw fail("invalid_input", "asOf must be an ISO timestamp");
   const interventions = Array.isArray(input.interventions) ? input.interventions : [];
-  const valid = []; let unknownCount = 0; let numerator = 0;
+  const project = input.inventory?.project ?? input.inventory?.project_id;
+  const valid = []; const byIdentity = new Map(); let unknownCount = 0; let numerator = 0; const sourceRefs = new Set();
   for (const item of interventions) {
     const occurred = Date.parse(item?.occurred_at ?? item?.occurredAt ?? "");
     if (!Number.isFinite(occurred) || occurred > end || occurred < end - WINDOW_MS) continue;
-    if (item?.project && input.inventory?.project && item.project !== input.inventory.project) continue;
+    const identity = taxIdentity(item, project);
+    if (!identity) continue;
+    if (project && identity.project !== project) continue;
     const stage = item.intervention_stage ?? item.interventionStage;
     if (!STAGE_INDEX.has(stage)) continue;
-    const key = `${item.project ?? input.inventory?.project ?? ""}\0${item.task_id ?? item.taskId ?? ""}\0${item.confirmation_ref ?? item.confirmationRef ?? ""}`;
-    if (valid.some((entry) => entry.key === key)) continue;
+    const sourceError = validateTaxSource(item, identity, input.inventory);
+    if (sourceError) return { status: "unavailable", error: { code: "identity_conflict", summary: sourceError }, sample_count: 0, unknown_count: 0, ratio: null, confidence: "unavailable", sample_status: "insufficient_samples", window_start: new Date(end - WINDOW_MS).toISOString(), window_end: asOf, generated_at: asOf, source_refs: [] };
+    const key = identity.key;
+    const itemBytes = canonical(item);
+    const previous = byIdentity.get(key);
+    if (previous !== undefined) {
+      if (previous !== itemBytes) return { status: "unavailable", error: { code: "identity_conflict", summary: `intervention identity has conflicting bytes: ${key}` }, sample_count: 0, unknown_count: 0, ratio: null, confidence: "unavailable", sample_status: "insufficient_samples", window_start: new Date(end - WINDOW_MS).toISOString(), window_end: asOf, generated_at: asOf, source_refs: [] };
+      continue;
+    }
+    byIdentity.set(key, itemBytes);
     const result = attribution(stage, item.primary_attribution_stage ?? item.primaryAttributionStage);
-    valid.push({ key, item, result });
+    valid.push({ key, identity, item, result, occurred });
+    const sourceRef = item.source_ref ?? item.sourceRef ?? item.source?.ref;
+    if (typeof sourceRef === "string" && sourceRef.trim() !== "") sourceRefs.add(sourceRef);
     if (result.status === "attributed") numerator += 1; else unknownCount += 1;
   }
   const denominator = valid.length;
@@ -276,9 +335,21 @@ export function computeQualityTaxProjection(input = {}) {
     ratio, unknown_count: unknownCount, unknown_ratio: unknownRatio, confidence, sample_status: sampleStatus,
     window_start: new Date(end - WINDOW_MS).toISOString(), window_end: asOf, generated_at: asOf,
     windowStart: new Date(end - WINDOW_MS).toISOString(), windowEnd: asOf, generatedAt: asOf,
-    validation_status: "unverified", label: "未验证，待真实任务数据", source_identities: input.sourceIdentities ?? input.source_identities ?? [],
+    validation_status: "unverified", label: "未验证，待真实任务数据", source_refs: [...sourceRefs].sort(),
+    source_identities: normalizedIdentities(input.sourceIdentities ?? input.source_identities, []),
+    interventions: valid.map(({ key, identity, item, result }) => ({
+      intervention_id: `tax-intervention.v1:${hashBytes(canonical({ project: identity.project, task_id: identity.taskId, confirmation_ref: identity.confirmationRef }))}`,
+      project: identity.project, task_id: identity.taskId, confirmation_ref: identity.confirmationRef,
+      intervention_stage: item.intervention_stage ?? item.interventionStage,
+      occurred_at: item.occurred_at ?? item.occurredAt,
+      step_slug: item.step_slug ?? item.stepSlug ?? null,
+      primary_attribution_stage: item.primary_attribution_stage ?? item.primaryAttributionStage ?? null,
+      attribution_status: result.status, unknown_reason: result.status === "unknown" ? result.reason : null,
+      source_ref: item.source_ref ?? item.sourceRef ?? item.source?.ref ?? null,
+      source_schema_version: item.source_schema_version ?? item.sourceSchemaVersion ?? item.source?.schema_version ?? null,
+    })),
   };
-  return output;
+  return Object.freeze(output);
 }
 
 function safeProjectPath(storageRoot, project) {
@@ -860,13 +931,67 @@ function currentSnapshot(path) {
 
 function normalizedIdentities(value, fallback = []) {
   const list = Array.isArray(value) ? value : fallback;
-  return list.map(plain).sort((left, right) => canonical(left).localeCompare(canonical(right)));
+  const unique = new Map();
+  for (const entry of list) {
+    const normalized = plain(entry);
+    unique.set(canonical(normalized), normalized);
+  }
+  return [...unique.values()].sort((left, right) => canonical(left).localeCompare(canonical(right)));
+}
+
+const SEVERITY_RANK = { low: 1, medium: 2, high: 3 };
+const CONFIDENCE_RANK = { unavailable: 0, unknown: 0, low: 1, medium: 2, high: 3 };
+const EVIDENCE_RANK = { unavailable: 0, unknown: 1, partial: 2, complete: 3 };
+
+function worstEnum(entries, field, rank, fallback, { preserveUnknown = false } = {}) {
+  const values = entries.map((entry) => entry?.observation?.[field]).filter((value) => value !== undefined && value !== null);
+  if (values.length === 0) return fallback;
+  const known = values.filter((value) => Object.hasOwn(rank, value));
+  if (preserveUnknown && values.some((value) => value === "unavailable")) return "unavailable";
+  if (preserveUnknown && values.some((value) => value === "unknown")) return "unknown";
+  if (known.length === 0) return preserveUnknown ? "unknown" : fallback;
+  return known.reduce((worst, value) => rank[value] < rank[worst] ? value : worst, known[0]);
+}
+
+function maxEnum(entries, field, rank, fallback) {
+  const values = entries.map((entry) => entry?.observation?.[field]).filter((value) => Object.hasOwn(rank, value));
+  return values.length === 0 ? fallback : values.reduce((best, value) => rank[value] > rank[best] ? value : best, values[0]);
+}
+
+function observationPriority(observation) {
+  const value = observation?.priority_score ?? observation?.priority;
+  if (value === undefined || value === null) return 1;
+  if (!Number.isInteger(value) || value < 0) throw fail("invalid_input", "observation priority must be a non-negative integer");
+  return value;
 }
 
 function withCandidateRecordIdentity(record) {
   const payload = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "record_id" && key !== "candidate_record_id"));
   const recordId = `candidate-record.v1:${hashBytes(canonical(payload))}`;
   return { ...payload, record_id: recordId, candidate_record_id: recordId };
+}
+
+function consumerProofIdentityPayload(proof) {
+  return {
+    schema_version: proof?.schema_version,
+    project: proof?.project,
+    task_id: proof?.task_id,
+    scope_revision: proof?.scope_revision,
+    source_subject: proof?.source_subject,
+    source_refs: [...(proof?.source_refs ?? [])].sort(),
+    registered_output_refs: [...(proof?.registered_output_refs ?? [])].sort((a, b) => canonical(a).localeCompare(canonical(b))),
+  };
+}
+
+function validateAblationRemovalState(record, requestedLifecycle) {
+  // M16 defines the ablation protocol but does not execute removal. A
+  // remove_candidate therefore remains pending until a later, explicit
+  // ablation decision owns the transition.
+  if (record?.classification !== "remove_candidate") return null;
+  if (record.removal_status !== "pending" || requestedLifecycle !== record.lifecycle_status) {
+    return fail("failed", "remove_candidate ablation is deferred; removal_status must remain pending");
+  }
+  return null;
 }
 
 function observationsToRecords(inventory, now, snapshotId, generation, storageRoot) {
@@ -889,12 +1014,18 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
   }
   return [...groups.entries()].map(([groupId, entries]) => {
     entries.sort((a, b) => a.observationId.localeCompare(b.observationId));
-    const first = entries.map((entry) => entry.observation.occurred_at).sort()[0] ?? now;
-    const recent = entries.map((entry) => entry.observation.occurred_at).sort().at(-1) ?? now;
+    const dated = entries.map((entry) => {
+      const occurredAt = entry.observation.occurred_at ?? entry.observation.occurredAt;
+      const timestamp = Date.parse(occurredAt ?? "");
+      if (!Number.isFinite(timestamp)) throw fail("invalid_input", `observation occurred_at is invalid: ${occurredAt}`);
+      return { ...entry, occurredAt, timestamp };
+    });
+    const first = dated.reduce((best, entry) => entry.timestamp < best.timestamp || (entry.timestamp === best.timestamp && entry.observationId < best.observationId) ? entry : best).occurredAt;
+    const recent = dated.reduce((best, entry) => entry.timestamp > best.timestamp || (entry.timestamp === best.timestamp && entry.observationId > best.observationId) ? entry : best).occurredAt;
     const tasks = new Set(entries.map((entry) => entry.observation.task_id));
     const proofs = (Array.isArray(inventory.consumer_proofs ?? inventory.consumerProofs) ? (inventory.consumer_proofs ?? inventory.consumerProofs) : []).filter(Boolean);
     const expectedStages = [...STAGES].sort();
-    const taskProofs = [...tasks].map((taskId) => proofs.find((candidate) => candidate.project === inventory.project && candidate.task_id === taskId));
+    const taskProofs = [...tasks].map((taskId) => proofs.filter((candidate) => candidate.project === inventory.project && candidate.task_id === taskId));
     const recomputeProof = (taskId) => {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(inventory.project)) return null;
       const taskRoot = join(storageRoot, "Projects", inventory.project, "tasks", taskId);
@@ -981,11 +1112,23 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
         && canonical([...proof.source_refs].sort()) === canonical([...actual.sourceRefs].sort())
         && canonical([...refs].sort((a, b) => canonical(a).localeCompare(canonical(b)))) === canonical([...actual.registered].sort((a, b) => canonical(a).localeCompare(canonical(b))));
     };
-    const zero = taskProofs.length === tasks.size && taskProofs.every(validProof);
-    const recentEntries = entries.filter((entry) => Date.parse(entry.observation.occurred_at) >= Date.parse(now) - WINDOW_MS);
+    const proofConflict = taskProofs.some((candidates) => {
+      const identities = new Set(candidates.map((proof) => hashBytes(canonical(consumerProofIdentityPayload(proof)))));
+      return identities.size > 1;
+    });
+    const zero = !proofConflict && taskProofs.length === tasks.size && taskProofs.every((candidates) => candidates.length === 1 && validProof(candidates[0]));
+    const recentEntries = dated.filter((entry) => entry.timestamp >= Date.parse(now) - WINDOW_MS && entry.timestamp <= Date.parse(now));
     const repeat = new Set(recentEntries.map((entry) => entry.observation.task_id)).size >= 2;
     const tier = zero || repeat ? "action_suggested" : "reference_only";
-    const sourceObservations = entries.map((entry) => ({ observation_id: entry.observationId, task_id: entry.observation.task_id, stage: entry.observation.stage ?? "unknown", confirmation_ref: entry.observation.confirmation_ref, occurred_at: entry.observation.occurred_at, evidence_refs: Array.isArray(entry.observation.evidence_refs) ? entry.observation.evidence_refs.map(plain) : [] }));
+    const sourceObservations = dated.map((entry) => ({
+      ...plain(entry.observation),
+      observation_id: entry.observationId,
+      target_ref: entry.target,
+      task_id: entry.observation.task_id ?? entry.observation.taskId,
+      occurred_at: entry.occurredAt,
+      confirmation_ref: entry.observation.confirmation_ref ?? entry.observation.confirmationRef,
+      evidence_refs: Array.isArray(entry.observation.evidence_refs) ? entry.observation.evidence_refs.map(plain) : [],
+    }));
     const sourceIdentities = normalizedIdentities(inventory.source_identities ?? inventory.sourceIdentities, sourceObservations.map((entry) => entry.observation_id));
     const observationMaterials = entries.flatMap((entry) => entry.observation.material_identities ?? entry.observation.materialIdentities ?? []);
     const materialIdentities = normalizedIdentities(inventory.material_identities ?? inventory.materialIdentities, observationMaterials);
@@ -993,15 +1136,22 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
     const confirmationRef = requiredString(confirmation.ref ?? confirmation.human_confirmation_ref ?? entries[0].observation.confirmation_ref, "human_confirmation_ref");
     const confirmationSha256 = requiredString(confirmation.sha256 ?? confirmation.human_confirmation_sha256 ?? entries[0].observation.confirmation_sha256, "human_confirmation_sha256");
     if (!/^[a-f0-9]{64}$/.test(confirmationSha256)) throw fail("invalid_input", "human_confirmation_sha256 must be a lowercase SHA-256 identity");
+    const classifications = entries.map((entry) => entry.observation.classification).filter((value) => typeof value === "string" && value !== "");
+    const classification = classifications[0] ?? "needs_evidence";
+    const relatedTargets = normalizedIdentities(entries.flatMap((entry) => entry.observation.related_targets ?? entry.observation.relatedTargets ?? []));
+    const evidenceStatus = worstEnum(entries, "evidence_status", EVIDENCE_RANK, zero ? "complete" : "unknown", { preserveUnknown: true });
+    const freshness = entries.some((entry) => ["stale", "unknown", "unavailable"].includes(entry.observation.freshness)) ? "stale" : "current";
+    const validationStatus = worstEnum(entries, "validation_status", { not_applicable: 0, unverified: 1, verified: 2 }, "unverified");
     return {
       schema_version: SCHEMA_VERSION, record_kind: "candidate", candidate_group_id: groupId, candidate_id: `${groupId}:candidate`, snapshot_id: snapshotId, publication_generation: generation, revision: 1,
-      target_ref: entries[0].target, classification: entries[0].observation.classification ?? "needs_evidence", tier, frequency: tasks.size, first_seen: first, recent_seen: recent,
-      severity: entries.some((entry) => entry.observation.severity === "high") ? "high" : entries.some((entry) => entry.observation.severity === "medium") ? "medium" : "low",
-      confidence: entries.some((entry) => entry.observation.confidence === "low") ? "low" : entries.some((entry) => entry.observation.confidence === "medium") ? "medium" : "high",
-      priority_score: entries.length, judgment_layer: "judgment", is_fact: false,
-      lifecycle_status: "open", row_status: "active", freshness: "current", evidence_status: zero ? "complete" : "unknown", sample_status: tasks.size >= 5 ? "sufficient" : "insufficient_samples", validation_status: "unverified", ...((entries[0].observation.classification ?? "needs_evidence") === "remove_candidate" ? { removal_status: "pending" } : {}), source_observations: sourceObservations,
+      target_ref: entries[0].target, classification, tier, frequency: tasks.size, first_seen: first, recent_seen: recent,
+      severity: maxEnum(entries, "severity", SEVERITY_RANK, "low"),
+      confidence: worstEnum(entries, "confidence", CONFIDENCE_RANK, "high", { preserveUnknown: true }),
+      priority_score: entries.reduce((sum, entry) => sum + observationPriority(entry.observation), 0), judgment_layer: "judgment", is_fact: false,
+      lifecycle_status: "open", row_status: "active", freshness, evidence_status: evidenceStatus, sample_status: tasks.size >= 5 ? "sufficient" : "insufficient_samples", validation_status: validationStatus, ...(classification === "remove_candidate" ? { removal_status: "pending" } : {}), source_observations: sourceObservations,
+      source_refs: [...new Set(sourceObservations.flatMap((entry) => (entry.evidence_refs ?? []).map((ref) => typeof ref === "string" ? ref : ref?.ref).filter(Boolean)))].sort(),
       source_identities: sourceIdentities, material_identities: materialIdentities, human_confirmation_ref: confirmationRef, human_confirmation_sha256: confirmationSha256,
-      machine_signals: { zero_consumption: zero ? true : "unknown", repeat_intervention: repeat }, related_targets: [], open_decision: null, supersedes: null,
+      machine_signals: { zero_consumption: zero ? true : "unknown", repeat_intervention: repeat, ...(proofConflict ? { proof_conflict: "unknown" } : {}) }, related_targets: relatedTargets, open_decision: inventory.open_decision ?? inventory.openDecision ?? null, supersedes: null,
     };
   });
 }
@@ -1022,17 +1172,16 @@ export function refreshEvolutionSnapshot(input = {}) {
     const generation = (prior?.commit.publication_generation ?? 0) + 1;
     const snapshotId = hashBytes(canonical(`${canonicalInventory.input_inventory_hash}\0${attemptId}\0${generation}`)); const batchId = randomUUID();
     const priorByGroup = new Map((prior?.rows ?? []).filter((entry) => entry.record_kind === "candidate" && entry.row_status === "active").map((entry) => [entry.candidate_group_id, entry]));
-    const proofPayload = (proof) => ({ schema_version: proof?.schema_version, project: proof?.project, task_id: proof?.task_id, scope_revision: proof?.scope_revision, source_subject: proof?.source_subject, source_refs: [...(proof?.source_refs ?? [])].sort(), registered_output_refs: [...(proof?.registered_output_refs ?? [])].sort((a, b) => canonical(a).localeCompare(canonical(b))) });
-    const usedProofs = new Set(initial.commits.flatMap((entry) => entry.rows.filter((row) => row.record_kind === "publication_proof").flatMap((row) => row.source_proofs ?? [])).map((proof) => proof.proof_identity ?? hashBytes(canonical(proofPayload(proof)))));
+    const usedProofs = new Set(initial.commits.flatMap((entry) => entry.rows.filter((row) => row.record_kind === "publication_proof").flatMap((row) => row.source_proofs ?? [])).map((proof) => proof.proof_identity ?? hashBytes(canonical(consumerProofIdentityPayload(proof)))));
     const inputProofs = inventory.consumer_proofs ?? inventory.consumerProofs ?? [];
     for (const proof of inputProofs) validateWorkflowEvolutionDefinition("consumer_scan_proof", proof);
-    const freshProofs = inputProofs.filter((proof) => !usedProofs.has(hashBytes(canonical(proofPayload(proof)))));
+    const freshProofs = inputProofs.filter((proof) => !usedProofs.has(hashBytes(canonical(consumerProofIdentityPayload(proof)))));
     const records = observationsToRecords({ project, ...inventory, consumer_proofs: freshProofs }, now, snapshotId, generation, storageRoot).map((record) => {
       const priorRecord = priorByGroup.get(record.candidate_group_id);
       return withCandidateRecordIdentity({ ...record, ...(priorRecord ? { revision: priorRecord.revision, lifecycle_status: priorRecord.lifecycle_status } : {}), batch_id: batchId, snapshot_content_id: canonicalInventory.input_inventory_hash });
     });
     const refreshResult = { schema_version: SCHEMA_VERSION, record_kind: "refresh_result", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, previous_snapshot_id: prior?.commit.snapshot_id ?? null, as_of: now, outcome: "committed", diagnostics: [] };
-    const publicationProof = { schema_version: SCHEMA_VERSION, record_kind: "publication_proof", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, source_proofs: plain(freshProofs).map((proof) => ({ ...proof, proof_identity: hashBytes(canonical(proofPayload(proof))), candidate_snapshot_id: snapshotId, candidate_snapshot_content_id: canonicalInventory.input_inventory_hash, publication_generation: generation })) };
+    const publicationProof = { schema_version: SCHEMA_VERSION, record_kind: "publication_proof", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, source_proofs: plain(freshProofs).map((proof) => ({ ...proof, proof_identity: hashBytes(canonical(consumerProofIdentityPayload(proof))), candidate_snapshot_id: snapshotId, candidate_snapshot_content_id: canonicalInventory.input_inventory_hash, publication_generation: generation })) };
     for (const record of records) validateWorkflowEvolutionDefinition("candidate_record", record);
     validateWorkflowEvolutionDefinition("refresh_result", refreshResult);
     const rows = [...records, refreshResult, publicationProof];
@@ -1048,6 +1197,7 @@ export function refreshEvolutionSnapshot(input = {}) {
 
 export function recordCandidateTransition(input = {}) {
   const attemptId = requiredString(input.attemptId ?? input.attempt_id, "attemptId");
+  if (input.attempt_id !== undefined && input.attempt_id !== attemptId) return { status: "stale_source", error: { code: "stale_source", summary: "attempt identity fields disagree" } };
   const authority = input.lockAuthority ?? input.lock_authority;
   if (!authority?.lockHandle && !authority?.lock_handle) return { status: "failed", error: { code: "failed", summary: "lock authority is required" } };
   const handle = authority.lockHandle ?? authority.lock_handle; const path = handle.path;
@@ -1082,6 +1232,8 @@ export function recordCandidateTransition(input = {}) {
   }
   if (!["open", "deferred"].includes(record.lifecycle_status)) return { status: "failed", error: { code: "failed", summary: "terminal candidate cannot transition" } };
   const lifecycleStatus = input.lifecycleStatus ?? input.lifecycle_status ?? "verified";
+  const ablationError = validateAblationRemovalState(record, lifecycleStatus);
+  if (ablationError) return { status: ablationError.code, error: { code: ablationError.code, summary: ablationError.message } };
   const allowedTransitions = { open: ["deferred", "verified", "rejected", "superseded"], deferred: ["open", "verified", "rejected", "superseded"] };
   if (!allowedTransitions[record.lifecycle_status].includes(lifecycleStatus)) return { status: "failed", error: { code: "failed", summary: "candidate lifecycle transition is invalid" } };
   if (initial.commits.some((entry) => entry.commit.attempt_id === attemptId)) return { status: "conflict", error: { code: "duplicate_attempt", summary: "attempt_id already committed" } };

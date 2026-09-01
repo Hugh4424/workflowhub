@@ -809,4 +809,84 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     expect(readFileSync(candidateLedger(storageRoot))).toEqual(before);
     staleLock.release();
   });
+
+  it("deterministically merges the full observation field set after identity de-duplication", async () => {
+    const mod = await loadModule();
+    const make = (taskId, confirmationRef, occurredAt, severity, confidence, priority) => ({
+      ...observation("same"), task_id: taskId, confirmation_ref: confirmationRef, occurred_at: occurredAt,
+      intervention_payload: { reason: "same-group" }, classification: "simplify", severity, confidence,
+      priority_score: priority, evidence_status: "partial", validation_status: "unverified",
+      related_targets: [{ project_id: "Demo", target_kind: "surface", target_id: "runtime", target_version: "1", authority_ref: "docs/architecture/move-map.json", authority_sha256: "a".repeat(64) }],
+      evidence_refs: [{ ref: `quality/evidence/${taskId}.json`, sha256: "b".repeat(64) }],
+    });
+    const observations = [
+      make("task-a", "confirmation-a", "2026-08-01T00:00:00Z", "low", "high", 2),
+      make("task-b", "confirmation-b", "2026-08-10T00:00:00Z", "high", "low", 7),
+      make("task-a", "confirmation-c", "2026-08-05T00:00:00Z", "medium", "medium", 4),
+    ];
+    const first = mod.refreshEvolutionSnapshot({ storageRoot: root(), project: "Demo", attemptId: "merge-a", inventory: { observations }, now: "2026-08-31T00:00:00Z" });
+    const second = mod.refreshEvolutionSnapshot({ storageRoot: root(), project: "Demo", attemptId: "merge-a", inventory: { observations: [...observations].reverse() }, now: "2026-08-31T00:00:00Z" });
+    expect(first.status).toBe("ok"); expect(second.status).toBe("ok");
+    const select = (record) => ({ ...record, snapshot_id: undefined, snapshot_content_id: undefined, batch_id: undefined, record_id: undefined, candidate_record_id: undefined });
+    expect(canonical(select(first.records[0]))).toBe(canonical(select(second.records[0])));
+    expect(first.records[0]).toMatchObject({ frequency: 2, first_seen: "2026-08-01T00:00:00Z", recent_seen: "2026-08-10T00:00:00Z", severity: "high", confidence: "low", priority_score: 13, evidence_status: "partial", validation_status: "unverified", freshness: "current" });
+    expect(first.records[0].source_observations).toHaveLength(3);
+    expect(first.records[0].source_observations.map((entry) => entry.observation_id)).toEqual([...first.records[0].source_observations.map((entry) => entry.observation_id)].sort());
+    expect(first.records[0].source_refs).toEqual(["quality/evidence/task-a.json", "quality/evidence/task-b.json", "quality/evidence/task-a.json"].filter((value, index, values) => values.indexOf(value) === index).sort());
+  });
+
+  it("keeps the strong-signal matrix independent and does not promote weak evidence", async () => {
+    const mod = await loadModule();
+    const repeated = [observation("repeat-a"), observation("repeat-b")].map((entry, index) => ({ ...entry, task_id: `task-${index + 1}`, confirmation_ref: `confirmation-${index + 1}`, intervention_payload: { reason: "same" } }));
+    const strong = mod.refreshEvolutionSnapshot({ storageRoot: root(), project: "Demo", attemptId: "repeat", inventory: { observations: repeated }, now: "2026-08-31T00:00:00Z" });
+    expect(strong.records[0]).toMatchObject({ tier: "action_suggested", machine_signals: { repeat_intervention: true } });
+    const weakRoot = root();
+    const oneTask = [{ ...observation("weak-a"), task_id: "task-one", confirmation_ref: "confirmation-one", intervention_payload: { reason: "same" } }, { ...observation("weak-b"), task_id: "task-one", confirmation_ref: "confirmation-two", intervention_payload: { reason: "same" } }];
+    const weak = mod.refreshEvolutionSnapshot({ storageRoot: weakRoot, project: "Demo", attemptId: "weak", inventory: { observations: oneTask }, now: "2026-08-31T00:00:00Z" });
+    expect(weak.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { repeat_intervention: false, zero_consumption: "unknown" } });
+  });
+
+  it("replays supersede and terminal lifecycle authority without mutating old rows", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "life-a", inventory: { observations: [observation("life")] }, now: "2026-08-31T00:00:00Z" });
+    const original = first.records[0];
+    const lock = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "life-supersede" });
+    const superseded = mod.recordCandidateTransition({ storageRoot, project: "Demo", attemptId: "life-supersede", currentSnapshotId: first.snapshot_id, candidateId: original.candidate_id, candidateRecordId: original.candidate_record_id, expectedRevision: 1, currentSourceIdentities: original.source_identities, currentMaterialIdentities: original.material_identities, humanConfirmation: { ref: original.human_confirmation_ref, sha256: original.human_confirmation_sha256 }, lifecycleStatus: "superseded", lockAuthority: lock });
+    expect(superseded).toMatchObject({ status: "ok", revision: 2 }); expect(lock.release()).toMatchObject({ status: "ok" });
+    const projection = mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" });
+    expect(projection.candidates.filter((entry) => entry.row_status === "active")).toHaveLength(1);
+    expect(projection.candidates.find((entry) => entry.row_status === "historical")).toMatchObject({ candidate_id: original.candidate_id, revision: 1, lifecycle_status: "superseded" });
+    const active = projection.candidates.find((entry) => entry.row_status === "active");
+    const terminalLock = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "life-terminal" });
+    expect(mod.recordCandidateTransition({ storageRoot, project: "Demo", attemptId: "life-terminal", currentSnapshotId: superseded.snapshot_id, candidateId: active.candidate_id, candidateRecordId: active.candidate_record_id, expectedRevision: active.revision, currentSourceIdentities: active.source_identities, currentMaterialIdentities: active.material_identities, humanConfirmation: { ref: active.human_confirmation_ref, sha256: active.human_confirmation_sha256 }, lifecycleStatus: "verified", lockAuthority: terminalLock })).toMatchObject({ status: "ok", revision: 3 });
+    terminalLock.release();
+    const afterTerminal = mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" });
+    const terminal = afterTerminal.candidates.find((entry) => entry.row_status === "active");
+    const staleLock = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "life-invalid" });
+    const rejected = mod.recordCandidateTransition({ storageRoot, project: "Demo", attemptId: "life-invalid", currentSnapshotId: afterTerminal.snapshot_id, candidateId: terminal.candidate_id, candidateRecordId: terminal.candidate_record_id, expectedRevision: terminal.revision, currentSourceIdentities: terminal.source_identities, currentMaterialIdentities: terminal.material_identities, humanConfirmation: { ref: terminal.human_confirmation_ref, sha256: terminal.human_confirmation_sha256 }, lifecycleStatus: "superseded", lockAuthority: staleLock });
+    expect(rejected).toMatchObject({ status: "failed", error: { code: "failed" } }); expect(staleLock.release()).toMatchObject({ status: "ok" });
+  });
+
+  it("computes tax window, identity de-duplication, and exact 4/5/9/10 confidence thresholds", async () => {
+    const mod = await loadModule();
+    const asOf = "2026-08-31T00:00:00Z";
+    const make = (index, unknown = false, occurredAt = "2026-08-30T00:00:00Z") => ({ project: "Demo", task_id: `tax-task-${index}`, confirmation_ref: `tax-confirmation-${index}`, intervention_stage: "build-code", occurred_at: occurredAt, primary_attribution_stage: unknown ? "free text" : "upstream_omission:build-plan", source_ref: `quality/confirmations/${index}.json` });
+    const run = (count, unknownCount = 0) => mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: Array.from({ length: count }, (_value, index) => make(index, index < unknownCount)) });
+    expect(run(4, 1)).toMatchObject({ sample_count: 4, unknown_count: 1, ratio: null, sample_status: "insufficient_samples", confidence: "unavailable" });
+    expect(run(5, 1)).toMatchObject({ sample_count: 5, numerator: 4, unknown_count: 1, ratio: 0.8, sample_status: "sufficient", confidence: "low" });
+    expect(run(9, 1).confidence).toBe("low");
+    expect(run(10, 0).confidence).toBe("high");
+    expect(run(10, 1).confidence).toBe("medium");
+    expect(run(10, 2).confidence).toBe("medium");
+    expect(run(10, 3).confidence).toBe("low");
+    const boundary = run(2, 0);
+    const exactStart = make(100, false, "2026-08-01T00:00:00Z");
+    const outside = make(101, false, "2026-07-31T23:59:59Z");
+    const withBoundary = mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [...boundary.interventions.map((entry) => ({ ...entry, source_ref: entry.source_ref })), exactStart, outside] });
+    expect(withBoundary.sample_count).toBe(3);
+    const duplicate = make(200); const same = mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [duplicate, structuredClone(duplicate)] });
+    expect(same.sample_count).toBe(1);
+    expect(mod.computeQualityTaxProjection({ inventory: { project: "Demo" }, asOf, interventions: [duplicate, { ...duplicate, primary_attribution_stage: "free text" }] })).toMatchObject({ status: "unavailable", error: { code: "identity_conflict" } });
+  });
 });
