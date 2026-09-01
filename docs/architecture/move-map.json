@@ -2343,8 +2343,8 @@
       "consumer": "maintainer terminal outcome recording",
       "delete_condition": "remove when M16 ledgers are retired",
       "content_change": "private candidate and ledger adapter",
-      "bytes": 25952,
-      "sha256_after": "8afa3375a84bdb56f93c02c68a57f714060f36e9497bad6d8e2e8fbf09f5f15e"
+      "bytes": 26120,
+      "sha256_after": "6fd1fcb42a769bd5f5486a5ea611062943914dd7ba5ca22e7a269c9f7b8fcd53"
     },
     {
       "source": "tools/cli/check-skill-updates.mjs",
