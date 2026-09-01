@@ -332,9 +332,6 @@ function hasRecoveryTombstone(path, lockHash) {
   try { return readdirSync(dirname(path)).some((name) => name.startsWith(prefix) && name.endsWith(`-${lockHash}`)); }
   catch (error) { if (error?.code === "ENOENT") return false; throw error; }
 }
-function waitForProjectLock() {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
-}
 function acquireProjectGuard(directory) {
   const path = join(directory, ".workflowhub-evolution.guard");
   const ownerToken = randomUUID();
@@ -365,14 +362,14 @@ function acquireProjectGuard(directory) {
       if (fd !== undefined) { try { closeSync(fd); } catch {} }
       if (error?.code !== "EEXIST") throw error;
       let current;
-      try { current = JSON.parse(readFileSync(path, "utf8")); } catch { waitForProjectLock(); continue; }
+      try { current = JSON.parse(readFileSync(path, "utf8")); } catch { return { status: "conflict", error: { code: "conflict", summary: "project lock guard is unreadable" } }; }
       if (current?.schema_version === "workflowhub-project-guard.v1"
         && Number.isInteger(current.lease_deadline_monotonic_ms)
         && monotonicMs() > current.lease_deadline_monotonic_ms
         && !processIsAlive(current.pid)) {
         return { status: "conflict", error: { code: "conflict", summary: "project lock guard is expired; manual cleanup is required" } };
       }
-      waitForProjectLock();
+      return { status: "conflict", error: { code: "conflict", summary: "project lock guard is held" } };
     }
   }
   return { status: "conflict", error: { code: "conflict", summary: "project lock guard is held" } };
@@ -401,6 +398,7 @@ export function acquireProjectLock(input = {}) {
     ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
   const guard = acquireProjectGuard(dirname(path));
   if (guard.status !== "ok") return guard;
+  let guardTransferred = false;
   try {
   if (recovery && !existsSync(path)) {
     if (recoveryTombstone && existsSync(recoveryTombstone)) {
@@ -470,9 +468,10 @@ export function acquireProjectLock(input = {}) {
     if (error.code === "EEXIST") return { status: "conflict", error: { code: "conflict", summary: "project lock is held" } };
     throw error;
   }
+  let guardHeld = true;
   const release = () => {
-    const releaseGuard = acquireProjectGuard(dirname(path));
-    if (releaseGuard.status !== "ok") return { status: "stale_source" };
+    if (!guardHeld) return { status: "stale_source" };
+    guardHeld = false;
     try {
       if (!existsSync(path)) return { status: "ok" };
       const authority = {
@@ -485,16 +484,18 @@ export function acquireProjectLock(input = {}) {
         assertProjectLockCurrent(authority, { allowExpired: true });
         unlinkSync(path); fsyncParent(path); return { status: "ok" };
       } catch (error) { if (error?.code === "ENOENT") return { status: "ok" }; if (error?.code === "stale_source") return { status: "stale_source" }; throw error; }
-    } finally { releaseGuard.release(); }
+    } finally { guard.release(); }
   };
-  return {
+  const result = {
     status: "ok",
     lockHandle: Object.freeze({ path, project, attemptId, ownerToken, fencingToken, bootId, sessionEpoch: String(sessionEpoch) }),
     lock_handle: Object.freeze({ path, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, boot_id: bootId, session_epoch: String(sessionEpoch) }),
     project, ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken,
     leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release,
   };
-  } finally { guard.release(); }
+  guardTransferred = true;
+  return result;
+  } finally { if (!guardTransferred) guard.release(); }
 }
 
 function assertLedgerFile(path) {

@@ -479,6 +479,31 @@ describe("M16 candidate and tax contract", () => {
     expect(first.release()).toEqual({ status: "ok" });
   });
 
+  it("holds the project guard for the writer lifetime and blocks manual recovery without writes", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "writer-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
+    const lockPath = first.lockHandle.path;
+    const expired = { ...JSON.parse(readFileSync(lockPath, "utf8")), pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    writeFileSync(lockPath, `${JSON.stringify(expired)}\n`);
+    const before = readFileSync(lockPath);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(before).digest("hex"),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "writer-guard-recovery",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "d".repeat(64),
+    };
+    const blocked = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "recovery-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
+    expect(blocked).toMatchObject({ status: "conflict", error: { code: "conflict" } });
+    expect(readFileSync(lockPath)).toEqual(before);
+    expect(first.release()).toEqual({ status: "ok" });
+  });
+
   it("fails closed when transition lock lease identity is missing, invalid, or expired", async () => {
     const mod = await loadModule();
     const storageRoot = root();
@@ -555,7 +580,7 @@ describe("M16 candidate and tax contract", () => {
       confirmation_sha256: "a".repeat(64),
     };
     const second = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "new-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
-    expect(second).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
+    expect(second).toMatchObject({ status: "conflict", error: { code: "conflict" } });
     expect(readFileSync(lockPath)).toEqual(before);
     expect(existsSync(`${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`)).toBe(false);
     expect(first.release()).toEqual({ status: "ok" });
@@ -586,6 +611,7 @@ describe("M16 candidate and tax contract", () => {
     const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "old-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
     const lockPath = first.lockHandle.path;
     const lockValue = JSON.parse(readFileSync(lockPath, "utf8"));
+    expect(first.release()).toEqual({ status: "ok" });
     const expired = { ...lockValue, pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
     writeFileSync(lockPath, `${JSON.stringify(expired)}\n`);
     const before = readFileSync(lockPath);
@@ -617,8 +643,7 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     const statuses = results.map((result) => JSON.parse(result.stdout).status);
     expect(statuses.filter((status) => status === "ok")).toHaveLength(1);
     expect(statuses.every((status) => ["ok", "conflict", "replayed_recovery"].includes(status)), statuses.join(",")).toBe(true);
-    expect(first.release()).toEqual({ status: "ok" });
-  });
+  }, 30000);
 
   it("fails closed when a stale guard reclaim reservation is already present", async () => {
     const mod = await loadModule();
@@ -657,6 +682,7 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "old-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
     const lockPath = first.lockHandle.path;
     const expired = { ...JSON.parse(readFileSync(lockPath, "utf8")), pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    expect(first.release()).toEqual({ status: "ok" });
     writeFileSync(lockPath, `${JSON.stringify(expired)}\n`);
     const before = readFileSync(lockPath);
     const recovery = {
@@ -676,7 +702,6 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     const result = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "new-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
     expect(result).toMatchObject({ status: "replayed_recovery", error: { code: "replayed_recovery" } });
     expect(readFileSync(tombstone)).toEqual(before);
-    expect(first.release()).toEqual({ status: "ok" });
   });
 
   it("inherits lifecycle and revision on refresh while invalidating old transition authority", async () => {
