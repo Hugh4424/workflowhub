@@ -81,8 +81,8 @@
     },
     "batch_abort": {
       "type": "object",
-      "required": ["record_kind", "batch_id", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"],
-      "properties": {"record_kind": {"const": "batch_abort"}, "batch_id": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}, "last_committed_prefix_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "abandoned_start_offset": {"type": "integer", "minimum": 0}, "observed_suffix_length": {"type": "integer", "minimum": 0}, "observed_suffix_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+      "required": ["record_kind", "batch_id", "publication_generation", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"],
+      "properties": {"record_kind": {"const": "batch_abort"}, "batch_id": {"type": "string", "minLength": 1}, "publication_generation": {"type": "integer", "minimum": 1}, "reason": {"type": "string", "minLength": 1}, "last_committed_prefix_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "abandoned_start_offset": {"type": "integer", "minimum": 0}, "observed_suffix_length": {"type": "integer", "minimum": 0}, "observed_suffix_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
       "additionalProperties": true
     },
     "project_lock": {"type":"object","required":["schema_version","project","owner_token","pid","host_id","boot_id","session_epoch","acquired_monotonic_ms","lease_deadline_monotonic_ms"]},

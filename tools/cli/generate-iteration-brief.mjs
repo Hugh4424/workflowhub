@@ -43,9 +43,10 @@ function ledgerEntries(raw) { const out = []; let start = 0; while (start < raw.
 function parseLedgerEntry(entry) { if (!entry.complete) return null; try { return JSON.parse(entry.bytes.toString("utf8")); } catch { return null; } }
 function validLedgerAbort(raw, start, entry, value) { const suffixEnd = start + value.observed_suffix_length; return value?.record_kind === "batch_abort" && value.abandoned_start_offset === start && Number.isInteger(value.observed_suffix_length) && suffixEnd <= entry.start && hash(raw.subarray(0, start)) === value.last_committed_prefix_hash && hash(raw.subarray(start, suffixEnd)) === value.observed_suffix_hash && /^[\r\n]*$/.test(raw.subarray(suffixEnd, entry.start).toString("utf8")); }
 function assertEnvelope(value, kind, ledgerKind, name) {
-  const keys = kind === "batch_begin" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id"]
-    : kind === "batch_commit" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "count", "content_hash", "status"]
-      : ["schema_version", "record_kind", "ledger_kind", "batch_id", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"];
+  try { validateWorkflowEvolutionDefinition(kind, value); } catch (error) { throw fail("failed", `${name} ${kind} envelope schema invalid: ${error.message}`); }
+  const keys = kind === "batch_begin" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "publication_generation"]
+    : kind === "batch_commit" ? ["schema_version", "record_kind", "ledger_kind", "batch_id", "attempt_id", "count", "content_hash", "publication_generation", "status"]
+      : ["schema_version", "record_kind", "ledger_kind", "batch_id", "publication_generation", "reason", "last_committed_prefix_hash", "abandoned_start_offset", "observed_suffix_length", "observed_suffix_hash"];
   if (!value || value.schema_version !== "workflow-evolution.v1" || value.record_kind !== kind || value.ledger_kind !== ledgerKind
       || Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `${name} ${kind} envelope schema invalid`);
 }

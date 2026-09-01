@@ -70,8 +70,8 @@ describe("M16 iteration brief", () => {
       const projectRoot = join(storage, "Projects/Demo");
       spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
       const batch = "legacy-batch"; const row = { record_kind: "attempted-edit", ledger_batch_id: batch, attempt_id: "legacy-row", legacy_before_facts: [], legacy_after_facts: [] };
-      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row" };
-      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row", status: "committed", count: 1, content_hash: sha256(canonical([row])) };
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row", publication_generation: 1 };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row", status: "committed", count: 1, content_hash: sha256(canonical([row])), publication_generation: 1 };
       writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(row)}\n${JSON.stringify(commit)}\n`);
       const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=legacy-row"], { encoding: "utf8" });
       expect(result.status).not.toBe(0);
@@ -93,11 +93,36 @@ describe("M16 iteration brief", () => {
     const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
     try {
       const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
-      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-a" };
-      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-b", count: 0, content_hash: sha256(canonical([])), status: "committed" };
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-a", publication_generation: 1 };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-b", count: 0, content_hash: sha256(canonical([])), publication_generation: 1, status: "committed" };
       writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(commit)}\n`);
       const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=commit-forge"], { encoding: "utf8" });
       expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("committed batch integrity mismatch");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it.each(["batch_begin", "batch_commit", "batch_abort"])("rejects a %s envelope without publication_generation", (kind) => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo");
+      spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      let ledger;
+      if (kind === "batch_begin") {
+        ledger = { schema_version: "workflow-evolution.v1", record_kind: kind, ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a" };
+        writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(ledger)}\n`);
+      } else if (kind === "batch_commit") {
+        const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a", publication_generation: 1 };
+        ledger = { schema_version: "workflow-evolution.v1", record_kind: kind, ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a", count: 0, content_hash: sha256(canonical([])), status: "committed" };
+        writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(ledger)}\n`);
+      } else {
+        const torn = Buffer.from('{"record_kind":"batch_begin"');
+        ledger = { schema_version: "workflow-evolution.v1", record_kind: kind, ledger_kind: "attempted-edit", batch_id: "b", publication_generation: undefined, reason: "torn", last_committed_prefix_hash: sha256(Buffer.alloc(0)), abandoned_start_offset: 0, observed_suffix_length: torn.length, observed_suffix_hash: sha256(torn) };
+        delete ledger.publication_generation;
+        writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${torn.toString()}\n${JSON.stringify(ledger)}\n`);
+      }
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), `--attempt-id=missing-${kind}`], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed", error: { summary: expect.stringContaining(`${kind} envelope schema invalid`) } });
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
