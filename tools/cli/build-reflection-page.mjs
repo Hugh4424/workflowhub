@@ -471,10 +471,12 @@ function project({ root, tasksRoot, now }) {
   try {
     if (authorityErrors.length > 0) throw new Error(`target authority resolution failed: ${JSON.stringify(authorityErrors)}`);
     const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter(Boolean);
-    const inventory = buildInputInventory({ project, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
-    const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory: inventory.inventory, now });
+    const producerIdentity = { ref: "runtime/evidence/workflow-evolution.mjs", sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, "runtime/evidence/workflow-evolution.mjs"))).digest("hex") };
+    const schemaIdentity = { ref: "runtime/schemas/workflow-evolution.v1.json", sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, "runtime/schemas/workflow-evolution.v1.json"))).digest("hex") };
+    const inventory = buildInputInventory({ project, producerIdentity, schemaIdentity, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
+    const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory, now });
     const tax = computeQualityTaxProjection({ inventory: inventory.inventory, interventions, asOf: now });
-    evolution = refresh.status === "ok" ? { ...readCurrentEvolutionProjection({ storageRoot: root, project, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result }), snapshot_content_id: inventory.input_inventory_hash } : { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }] };
+    evolution = refresh.status === "ok" ? { ...readCurrentEvolutionProjection({ storageRoot: root, project, expectedIdentity: { snapshot_id: refresh.snapshot_id, producer_identity: producerIdentity, schema_identity: schemaIdentity }, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result }), snapshot_content_id: inventory.input_inventory_hash } : { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }] };
   } catch (error) {
     evolution = { ...evolution, status: "unavailable", diagnostics: [{ summary: error.message }] };
   }

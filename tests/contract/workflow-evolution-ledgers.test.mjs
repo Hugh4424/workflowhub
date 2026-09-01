@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import Ajv2020 from "ajv/dist/2020.js";
 
 const root = join(import.meta.dirname, "../..");
 const cli = join(root, "tools/cli/record-evolution-result.mjs");
@@ -17,8 +18,9 @@ function setup() {
   const before = file("before.json", '{"value":1}\n');
   const after = file("after.json", '{"value":2}\n');
   const revert = file("revert.json", '{"value":1}\n');
-  const authority = file("stage-manifest.json", '{"stage":"build-plan","version":"1"}\n');
-  const targetRef = { project_id: "Demo", target_kind: "stage", target_id: "build-plan", target_version: "1", authority_ref: authority.path, authority_sha256: authority.sha256 };
+  const authorityPath = join(root, "workflows/build-plan/steps.json");
+  const authorityBytes = readFileSync(authorityPath);
+  const targetRef = { project_id: "Demo", target_kind: "stage", target_id: "build-plan", target_version: "2.0.0", authority_ref: authorityPath, authority_sha256: sha(authorityBytes) };
   const payload = { attempt_id: "attempt-1", edit_record_id: "edit-1", decision_id: "D-1", decision_ref: decision.path, decision_sha256: decision.sha256, approval: true, changed_surface: "workflow", before_facts_ref: before.path, before_facts_sha256: before.sha256, before_observed_at: "2026-08-30T00:00:00Z", after_facts_ref: after.path, after_facts_sha256: after.sha256, after_observed_at: "2026-08-30T01:00:00Z", observed_at: "2026-08-30T02:00:00Z", validation_method: "focused-test", outcome: "regressed", revert_ref: revert.path, revert_sha256: revert.sha256, evidence_refs: ["evidence:1"], supersedes: null, target_ref: targetRef };
   return { storage, facts, payload, cleanup: () => { rmSync(storage, { recursive: true, force: true }); rmSync(facts, { recursive: true, force: true }); } };
 }
@@ -100,8 +102,35 @@ describe("M16 ledgers", () => {
     try {
       const result = run(fixture.storage, "attempted-edit", { ...fixture.payload, target_ref: { ...fixture.payload.target_ref, authority_sha256: "0".repeat(64) } });
       expect(result.status).not.toBe(0);
-      expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid_input" });
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "stale_source" });
       expect(readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), { encoding: "utf8", flag: "a+" })).toBe("");
+    } finally { fixture.cleanup(); }
+  });
+
+  it("rejects a validly hashed target authority that is not the current repository manifest", () => {
+    const fixture = setup();
+    try {
+      const authority = join(fixture.facts, "foreign-stage-manifest.json");
+      const bytes = '{"stage":"build-plan","version":"2.0.0"}\n';
+      writeFileSync(authority, bytes);
+      const result = run(fixture.storage, "attempted-edit", { ...fixture.payload, target_ref: { ...fixture.payload.target_ref, authority_ref: authority, authority_sha256: sha(bytes) } });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "stale_source" });
+      expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
+    } finally { fixture.cleanup(); }
+  });
+
+  it("writes a superseding attempted-edit record that validates against the published schema", () => {
+    const fixture = setup();
+    try {
+      expect(run(fixture.storage, "attempted-edit", fixture.payload).status).toBe(0);
+      const corrected = run(fixture.storage, "attempted-edit", { ...fixture.payload, edit_record_id: "edit-2", supersedes: "edit-1" });
+      expect(corrected.status, corrected.stdout).toBe(0);
+      const row = JSON.parse(corrected.stdout).record;
+      const schema = JSON.parse(readFileSync(join(root, "runtime/schemas/workflow-evolution.v1.json"), "utf8"));
+      const validate = new Ajv2020({ strict: false }).compile(schema.$defs.attempted_edit);
+      expect(validate(row), validate.errors).toBe(true);
+      expect(row).toMatchObject({ schema_version: "workflow-evolution.v1", record_kind: "attempted-edit", edit_record_id: "edit-2", record_id: "edit-2", supersedes: "edit-1" });
     } finally { fixture.cleanup(); }
   });
 

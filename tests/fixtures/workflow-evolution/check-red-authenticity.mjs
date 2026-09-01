@@ -3,9 +3,21 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from "
 import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
-const [suite, phase = "red", exitText = "1"] = process.argv.slice(2);
-if (!suite) process.exit(24);
-const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, exit_code: Number(exitText), status: Number(exitText) === 0 ? "green" : "red" };
+const [suite, phase = "red", exitText = "1", baselineExitText = "1", baselineHash = "", outputHash = ""] = process.argv.slice(2);
+const suites = {
+  "pool-tax": ["tests/contract/workflow-evolution-candidates.test.mjs"],
+  "ledger-brief": ["tests/contract/workflow-evolution-ledgers.test.mjs", "tests/contract/generate-iteration-brief.test.mjs", "tests/contract/check-skill-updates.test.mjs"],
+  monitor: ["tests/contract/build-reflection-page.test.mjs"],
+  governance: ["tests/contract/workflow-evolution-governance.test.mjs", "tests/e2e/workflow-evolution-current.test.mjs", "tests/contract/public-behavior-baseline.test.mjs"],
+};
+const EXPECTED_BASELINE_SHA256 = "6849e00b39d1f9b6103e7680bfcbe0014da480e61a80baaab6fcb9abc73e8dc7";
+const exitCode = Number(exitText); const baselineExit = Number(baselineExitText);
+if (!suites[suite] || !["red", "green", "verify"].includes(phase) || !Number.isInteger(exitCode) || baselineExit !== 0
+    || baselineHash !== EXPECTED_BASELINE_SHA256 || !/^[a-f0-9]{64}$/.test(outputHash)) process.exit(24);
+if ((phase === "red" && exitCode === 0) || (phase !== "red" && exitCode !== 0)) process.exit(23);
+const materialRefs = ["specs/workflowhub-m16-evolution-20260831/decision-log.md", "specs/workflowhub-m16-evolution-20260831/spec.md", "specs/workflowhub-m16-evolution-20260831/plan.md", "specs/workflowhub-m16-evolution-20260831/tasks.md"];
+const materialSha256 = createHash("sha256").update(materialRefs.map((ref) => readFileSync(resolve(ref))).join("\0")).digest("hex");
+const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: suites[suite], exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
 const out = resolve(process.cwd(), {
   "pool-tax": "quality/tests/m16-p1-pool-tax/gate.json",
   "ledger-brief": "quality/tests/m16-p1-ledger-brief/gate.json",
@@ -18,4 +30,4 @@ const raw = `${JSON.stringify({ ...gate, content_sha256: createHash("sha256").up
 writeFileSync(tmp, raw, "utf8");
 renameSync(tmp, out);
 if (!existsSync(out) || !readFileSync(out, "utf8")) process.exit(25);
-process.exit(Number(exitText));
+process.exit(exitCode);

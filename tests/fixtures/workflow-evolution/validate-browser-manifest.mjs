@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 try {
   const value = JSON.parse(readFileSync(resolve(process.argv[2]), "utf8"));
@@ -11,8 +12,12 @@ try {
   if (value.status === "passed") {
     const hashes = value.material_identity;
     const requiredHashes = ["page_sha256", "data_sha256", "move_map_sha256", "fixture_sha256"];
+    const paths = Object.fromEntries(process.argv.slice(3).map((arg) => { const index = arg.indexOf("="); return [arg.slice(2, index), resolve(arg.slice(index + 1))]; }));
     if (!hashes || requiredHashes.some((key) => !/^[a-f0-9]{64}$/.test(hashes[key] ?? ""))
         || !value.checks || Object.values(value.checks).length < 5 || Object.values(value.checks).some((entry) => entry !== true)) process.exit(22);
+    for (const [name, key] of [["page", "page_sha256"], ["data", "data_sha256"], ["move-map", "move_map_sha256"], ["fixture", "fixture_sha256"]]) {
+      if (!paths[name] || createHash("sha256").update(readFileSync(paths[name])).digest("hex") !== hashes[key]) process.exit(22);
+    }
   }
   process.exit(value.status === "passed" ? 0 : value.status === "qa_failed" ? 20 : 21);
 } catch {

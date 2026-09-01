@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { refreshEvolutionSnapshot } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const repoRoot = resolve(join(fileURLToPath(new URL(".", import.meta.url)), "../.."));
 const scriptPath = join(repoRoot, "tools", "cli", "derive-consumption-edges.mjs");
@@ -143,6 +144,20 @@ describe("derive-consumption-edges", () => {
     expect(task.consumer_scan_proof.registered_output_refs.length).toBeGreaterThan(0);
     expect(task.consumer_scan_proof.registered_output_refs[0]).toEqual(expect.objectContaining({ consumer_count: expect.any(Number), freshness: "current" }));
     expect(task.consumer_scan_proof.zero_consumption).toBe(false);
+  });
+
+  it("recomputes the scan and rejects caller-forged zero consumption", () => {
+    const f = fixture();
+    mkdirSync(join(f.root, "Projects/Demo/tasks/task-edges/quality/evidence"), { recursive: true });
+    writeFileSync(join(f.root, "Projects/Demo/tasks/task-edges", f.produced), "plan\n");
+    writeFileSync(join(f.root, "Projects/Demo/tasks/task-edges", f.orphaned), "orphan\n");
+    for (const stage of ["make-decision", "build-spec", "verify-code"]) writeOutcome(f.root, stage, "task-edges", { schema_version: "workflowhub-stage-outcomes.v1", task_id: "task-edges", stage, step_outcomes: [], skill_outcomes: [] });
+    const proof = run(f.root).tasks.find((entry) => entry.task_id === "task-edges").consumer_scan_proof;
+    expect(proof.coverage_status).toBe("complete");
+    expect(proof.zero_consumption).toBe(false);
+    const forged = { ...proof, zero_consumption: true, registered_output_refs: proof.registered_output_refs.map((entry) => ({ ...entry, consumer_count: 0 })) };
+    const result = refreshEvolutionSnapshot({ storageRoot: f.root, project: "Demo", attemptId: "forged-zero", now: proof.scanned_at, inventory: { observations: [{ task_id: "task-edges", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "1", authority: "manifest" } }], consumer_proofs: [forged] } });
+    expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
   });
 
   it("does not call an incomplete subject reference ledger a zero-consumption scan", () => {

@@ -32,6 +32,10 @@ describe("M16 governance registration", () => {
     expect(aggregate).toContain("set -euo pipefail");
     expect(aggregate).toContain("atomic-write-final-aggregate.mjs");
     expect(review).not.toContain('status: "unavailable"');
+    const redGate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs"), "utf8");
+    expect(redGate).toContain("EXPECTED_BASELINE_SHA256");
+    expect(redGate).toContain('phase === "red" && exitCode === 0');
+    expect(redGate).toContain("material_sha256");
   });
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");

@@ -9,7 +9,30 @@ function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); 
 function required(value, name) { if (typeof value !== "string" || value.trim() === "") throw fail("invalid_input", `${name} is required`); return value; }
 function parse(argv) { const out = {}; for (const arg of argv) { const i = arg.indexOf("="); if (!arg.startsWith("--") || i < 3) throw fail("invalid_input", `invalid argument: ${arg}`); out[arg.slice(2, i)] = arg.slice(i + 1); } return out; }
 function canonical(value) { if (value === null || typeof value !== "object") return JSON.stringify(value); if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; }
-function target(options) { return resolveTargetRef({ projectId: options.project, targetKind: options["target-kind"], targetId: options["target-id"], targetVersion: options["target-version"], authority: options.authority, authoritySha256: options["authority-sha256"], authorities: options.authorities ? JSON.parse(options.authorities) : undefined }); }
+const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+function currentAuthorities(repositoryRoot) {
+  const stages = []; const steps = [];
+  for (const stage of STAGES) {
+    const authority = join(repositoryRoot, "workflows", stage, "steps.json"); const bytes = readFileSync(authority); const manifest = JSON.parse(bytes);
+    stages.push({ stage, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
+    for (const entry of manifest.steps ?? []) steps.push({ slug: entry.step_slug, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
+  }
+  const catalogAuthority = join(repositoryRoot, "skills/catalog.yaml"); const catalogBytes = readFileSync(catalogAuthority); const catalog = catalogBytes.toString("utf8");
+  const skills = [...catalog.matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].map((match) => ({ id: match[1], version: match[2].replaceAll('"', ""), authority: catalogAuthority, authority_sha256: hash(catalogBytes) }));
+  const moveMapAuthority = join(repositoryRoot, "docs/architecture/move-map.json"); const moveMapBytes = readFileSync(moveMapAuthority); const moveMap = JSON.parse(moveMapBytes);
+  const surfaces = (moveMap.entries ?? []).flatMap((entry) => [...new Set([entry.source, entry.destination].filter(Boolean))].map((id) => ({ id, version: String(moveMap.schema_version), authority: moveMapAuthority, authority_sha256: hash(moveMapBytes) })));
+  return { stages, steps, skills, surfaces };
+}
+function target(options, repositoryRoot) {
+  const targetKind = required(options["target-kind"], "--target-kind"); const targetId = required(options["target-id"], "--target-id"); const authorities = currentAuthorities(repositoryRoot);
+  const entries = targetKind === "stage" ? authorities.stages.filter((entry) => entry.stage === targetId) : targetKind === "step" ? authorities.steps.filter((entry) => entry.slug === targetId) : targetKind === "skill" ? authorities.skills.filter((entry) => entry.id === targetId) : targetKind === "surface" ? authorities.surfaces.filter((entry) => entry.id === targetId) : [];
+  if (entries.length !== 1) throw fail(entries.length === 0 ? "invalid_target" : "stale_source", `target must map to exactly one current authority: ${targetId}`);
+  const resolved = resolveTargetRef({ projectId: options.project, targetKind, targetId, authorities });
+  if (resolved.status !== "ok") return resolved;
+  const claims = { target_version: options["target-version"], authority_ref: options.authority, authority_sha256: options["authority-sha256"] };
+  for (const [field, claimed] of Object.entries(claims)) if (claimed !== undefined && claimed !== resolved.target_ref[field]) throw fail("stale_source", `caller-selected ${field} is not the current repository authority`);
+  return resolved;
+}
 function source(path, expectedHash, name) {
   if (!path || !expectedHash) return { status: "unavailable", reason: `${name}_identity_missing`, ref: path ?? null, bytes: null };
   const ref = resolve(path); let bytes; try { bytes = readFileSync(ref); } catch { return { status: "unavailable", reason: `${name}_unreadable`, ref, bytes: null }; }
@@ -33,6 +56,7 @@ function scan(path, name) {
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
     records.push(...open.rows); open = null;
   }
+  if (recoveryStart !== null || open !== null) throw fail("failed", `${name} has a malformed terminal tail`);
   return { status: records.length ? "ready" : "empty", reason: records.length ? null : "complete_scan_no_matches", refs: [path], records, rawHash: hash(raw) };
 }
 function sameTarget(left, right) { return left && canonical(left) === canonical(right); }
@@ -77,9 +101,11 @@ function briefBodyHash(raw) {
   const marker = `<!-- workflow-evolution-brief:${Buffer.from(canonical(normalized)).toString("base64")} -->`;
   return hash(raw.replace(match[0], marker));
 }
-function verifyCurrentBriefSources(projectRoot, header) {
+function verifyCurrentBriefSources(projectRoot, repositoryRoot, header) {
   const target = header.target_ref;
   if (!target?.authority_ref || !existsSync(resolve(target.authority_ref)) || hash(readFileSync(resolve(target.authority_ref))) !== target.authority_sha256) throw fail("stale_source", "current brief target authority identity is stale");
+  const current = targetRefForCurrentRepository(repositoryRoot, target);
+  if (canonical(current) !== canonical(target)) throw fail("stale_source", "current brief target no longer matches repository authority");
   const sources = header.source_hashes ?? {};
   const paths = {
     candidates: join(projectRoot, "evolution-candidates.jsonl"),
@@ -98,6 +124,11 @@ function verifyCurrentBriefSources(projectRoot, header) {
     if (projection.status !== "ok") throw fail(projection.error?.code ?? "stale_source", projection.error?.summary ?? "current candidate projection is stale");
   }
 }
+function targetRefForCurrentRepository(repositoryRoot, targetRef) {
+  const result = target({ project: targetRef.project_id, "target-kind": targetRef.target_kind, "target-id": targetRef.target_id }, repositoryRoot);
+  if (result.status !== "ok") throw fail(result.error?.code ?? result.status, result.error?.summary ?? "current target authority is unavailable");
+  return result.target_ref;
+}
 function render(envelope) {
   const lines = ["# Iteration brief", "", `<!-- workflow-evolution-brief:${Buffer.from(canonical(envelope.header)).toString("base64")} -->`, "", `- schema_version: ${envelope.header.schema_version}`, `- project: ${envelope.header.project}`, `- brief_attempt_id: ${envelope.header.brief_attempt_id}`, `- generated_at: ${envelope.header.generated_at}`, `- target: ${JSON.stringify(envelope.header.target_ref)}`, `- status: ${envelope.header.status}`, `- snapshot_id: ${envelope.header.snapshot_id ?? "unknown"}`, ""];
   const labels = { candidates: "Candidates", negative_results: "Negative results", attempted_edits: "Attempted edits", external_skill_updates: "External skill updates", retained_behavior: "Retained behavior", open_decisions: "Open decisions", market_comparison: "Market comparison" };
@@ -106,11 +137,11 @@ function render(envelope) {
 }
 
 function main() {
-  const options = parse(process.argv.slice(2)); const storageRoot = resolve(required(options.root, "--root")); const project = required(options.project, "--project"); const path = join(storageRoot, "Projects", project, "iteration-brief.md");
-  if (["true", "1"].includes(options["read-current"])) { if (!existsSync(path)) throw fail("unavailable", "current brief is unavailable"); const raw = readFileSync(path, "utf8"); const header = decodeHeader(raw); const sha256 = hash(raw); if (!/^[a-f0-9]{64}$/.test(header.body_sha256 ?? "") || header.body_sha256 !== briefBodyHash(raw)) throw fail("stale_source", "current brief body identity is stale"); if (options["brief-sha256"] && options["brief-sha256"] !== sha256) throw fail("stale_source", "current brief hash is stale"); verifyCurrentBriefSources(join(storageRoot, "Projects", project), header); console.log(JSON.stringify({ status: "ok", path, content_sha256: sha256, header })); return; }
+  const options = parse(process.argv.slice(2)); const storageRoot = resolve(required(options.root, "--root")); const project = required(options.project, "--project"); const repositoryRoot = resolve(options["repository-root"] ?? join(import.meta.dirname, "../..")); const path = join(storageRoot, "Projects", project, "iteration-brief.md");
+  if (["true", "1"].includes(options["read-current"])) { if (!existsSync(path)) throw fail("unavailable", "current brief is unavailable"); const raw = readFileSync(path, "utf8"); const header = decodeHeader(raw); const sha256 = hash(raw); if (header.project !== project) throw fail("stale_source", "current brief project identity is stale"); if (!/^[a-f0-9]{64}$/.test(header.body_sha256 ?? "") || header.body_sha256 !== briefBodyHash(raw)) throw fail("stale_source", "current brief body identity is stale"); if (options["brief-sha256"] && options["brief-sha256"] !== sha256) throw fail("stale_source", "current brief hash is stale"); verifyCurrentBriefSources(join(storageRoot, "Projects", project), repositoryRoot, header); console.log(JSON.stringify({ status: "ok", path, content_sha256: sha256, header })); return; }
   if (["true", "1"].includes(options.cancelled)) throw fail("cancelled", "brief generation was cancelled");
   const attemptId = options["attempt-id"] ?? options.attempt_id ?? `brief-${randomUUID()}`; const generatedAt = options["generated-at"] ?? options.generated_at ?? new Date().toISOString(); if (!Number.isFinite(Date.parse(generatedAt))) throw fail("invalid_input", "generated_at must be an ISO timestamp");
-  const resolvedTarget = target({ ...options, project }); if (resolvedTarget.status !== "ok") throw fail(resolvedTarget.error?.code ?? resolvedTarget.status, resolvedTarget.error?.summary ?? "target invalid"); const targetRef = resolvedTarget.target_ref;
+  const resolvedTarget = target({ ...options, project }, repositoryRoot); if (resolvedTarget.status !== "ok") throw fail(resolvedTarget.error?.code ?? resolvedTarget.status, resolvedTarget.error?.summary ?? "target invalid"); const targetRef = resolvedTarget.target_ref;
   const decision = source(options["decision-log"], options["decision-log-sha256"], "decision_log"); const spec = source(options.spec, options["spec-sha256"], "spec"); const projectRoot = join(storageRoot, "Projects", project);
   const projection = readCurrentEvolutionProjection({ storageRoot, project, expectedIdentity: options["snapshot-id"] ? { snapshot_id: options["snapshot-id"] } : undefined });
   if (projection.status === "stale_source" || projection.status === "failed") throw fail(projection.error?.code ?? projection.status, projection.error?.summary ?? "candidate projection invalid");

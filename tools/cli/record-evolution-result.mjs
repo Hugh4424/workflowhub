@@ -2,13 +2,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { acquireProjectLock, recordCandidateTransition, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, recordCandidateTransition, resolveTargetRef, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const EDIT_OUTCOMES = new Set(["improved", "unchanged", "regressed", "inconclusive", "reverted"]);
 const FAILURE_DOMAINS = new Set(["harness", "process", "skill_edit"]);
 const FAILURE_KINDS = new Set(["edit_validation_failed", "preserve_behavior_regression", "workflow_regression", "revert_failed"]);
 const D24_DOMAINS = new Set(["model", "strategy", "product", "eval_sample", "dataset", "provider_output_quality", "task_execution", "mixed"]);
+const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
@@ -17,6 +18,19 @@ function parseArgs(argv) { const out = {}; for (const arg of argv) { const index
 function inputValue(options) { if (options.input) return JSON.parse(readFileSync(resolve(options.input), "utf8")); if (options.json) return JSON.parse(options.json); return {}; }
 function plain(value) { if (value === null || typeof value !== "object") return value; if (Array.isArray(value)) return value.map(plain); return Object.fromEntries(Object.keys(value).sort().map((key) => [key, plain(value[key])])); }
 function canonical(value) { const walk = (node) => node && typeof node === "object" ? (Array.isArray(node) ? `[${node.map(walk).join(",")}]` : `{${Object.entries(node).map(([key, child]) => `${JSON.stringify(key)}:${walk(child)}`).join(",")}}`) : JSON.stringify(node); return walk(plain(value)); }
+function currentAuthorities(repositoryRoot) {
+  const stages = []; const steps = [];
+  for (const stage of STAGES) {
+    const authority = join(repositoryRoot, "workflows", stage, "steps.json"); const bytes = readFileSync(authority); const manifest = JSON.parse(bytes);
+    stages.push({ stage, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
+    for (const entry of manifest.steps ?? []) steps.push({ slug: entry.step_slug, version: String(manifest.schema_version), authority, authority_sha256: hash(bytes) });
+  }
+  const catalogAuthority = join(repositoryRoot, "skills/catalog.yaml"); const catalogBytes = readFileSync(catalogAuthority); const catalog = catalogBytes.toString("utf8");
+  const skills = [...catalog.matchAll(/^\s*- name:\s*([^\s#]+)[\s\S]*?^\s*local_version:\s*([^\s#]+)/gm)].map((match) => ({ id: match[1], version: match[2].replaceAll('"', ""), authority: catalogAuthority, authority_sha256: hash(catalogBytes) }));
+  const moveMapAuthority = join(repositoryRoot, "docs/architecture/move-map.json"); const moveMapBytes = readFileSync(moveMapAuthority); const moveMap = JSON.parse(moveMapBytes);
+  const surfaces = (moveMap.entries ?? []).flatMap((entry) => [...new Set([entry.source, entry.destination].filter(Boolean))].map((id) => ({ id, version: String(moveMap.schema_version), authority: moveMapAuthority, authority_sha256: hash(moveMapBytes) })));
+  return { stages, steps, skills, surfaces };
+}
 function encoded(value) { return Buffer.from(`${JSON.stringify(value)}\n`); }
 function entries(raw) { const out = []; let start = 0; while (start < raw.length) { const newline = raw.indexOf(0x0a, start); if (newline === -1) { out.push({ start, end: raw.length, complete: false, bytes: raw.subarray(start) }); break; } let end = newline; if (end > start && raw[end - 1] === 0x0d) end -= 1; out.push({ start, end: newline + 1, complete: true, bytes: raw.subarray(start, end) }); start = newline + 1; } return out; }
 function parsed(entry) { if (!entry.complete) return null; try { return JSON.parse(entry.bytes.toString("utf8")); } catch { return null; } }
@@ -73,17 +87,22 @@ function verifyDecision(payload) {
   return { decision_ref: ref, decision_sha256: sha256, decision_id: decisionId };
 }
 function heads(records, idField) { const superseded = new Set(records.map((entry) => entry.supersedes).filter(Boolean)); return records.filter((entry) => !superseded.has(entry[idField])); }
-function verifyTargetRef(value) {
+function verifyTargetRef(value, project, repositoryRoot) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("invalid_input", "target_ref is required");
   for (const field of ["project_id", "target_kind", "target_id", "target_version", "authority_ref", "authority_sha256"]) required(value[field], `target_ref.${field}`);
+  if (value.project_id !== project) throw fail("stale_source", "target_ref project does not match the current project");
+  const authorities = currentAuthorities(repositoryRoot);
+  const entries = value.target_kind === "stage" ? authorities.stages.filter((entry) => entry.stage === value.target_id) : value.target_kind === "step" ? authorities.steps.filter((entry) => entry.slug === value.target_id) : value.target_kind === "skill" ? authorities.skills.filter((entry) => entry.id === value.target_id) : value.target_kind === "surface" ? authorities.surfaces.filter((entry) => entry.id === value.target_id) : [];
+  if (entries.length !== 1) throw fail(entries.length === 0 ? "invalid_input" : "stale_source", `target_ref must map to exactly one current authority: ${value.target_id}`);
+  const resolved = resolveTargetRef({ projectId: project, targetKind: value.target_kind, targetId: value.target_id, authorities });
+  if (resolved.status !== "ok" || canonical(resolved.target_ref) !== canonical(value)) throw fail("stale_source", "target_ref does not match the current repository authority");
   let authorityBytes;
-  try { authorityBytes = readFileSync(resolve(value.authority_ref)); }
+  try { authorityBytes = readFileSync(value.authority_ref); }
   catch { throw fail("unavailable", "target_ref authority is unreadable"); }
   if (!["stage", "step", "skill", "surface"].includes(value.target_kind) || !SHA256.test(value.authority_sha256) || hash(authorityBytes) !== value.authority_sha256) throw fail("invalid_input", "target_ref identity is invalid");
-  for (const related of value.related_targets ?? []) verifyTargetRef(related);
   return value;
 }
-function attemptedEdit(payload, attemptId, records) {
+function attemptedEdit(payload, attemptId, records, project, repositoryRoot) {
   if (payload.d24_boundary !== undefined || payload.d24_eval_boundary !== undefined) throw fail("invalid_input", "attempted-edit must not consume D24 boundary");
   const decision = verifyDecision(payload);
   for (const field of ["changed_surface", "before_facts_ref", "before_facts_sha256", "before_observed_at", "after_facts_ref", "after_facts_sha256", "after_observed_at", "observed_at", "validation_method", "revert_ref", "revert_sha256", "outcome"]) required(payload[field], field);
@@ -93,7 +112,7 @@ function attemptedEdit(payload, attemptId, records) {
   const beforeAt = iso(payload.before_observed_at, "before_observed_at"); const afterAt = iso(payload.after_observed_at, "after_observed_at"); const observedAt = iso(payload.observed_at, "observed_at");
   if (!(beforeAt < afterAt && afterAt <= observedAt)) throw fail("invalid_input", "fact observation times are not ordered");
   if (!Array.isArray(payload.evidence_refs) || payload.evidence_refs.length === 0) throw fail("invalid_input", "evidence_refs are required");
-  verifyTargetRef(payload.target_ref);
+  verifyTargetRef(payload.target_ref, project, repositoryRoot);
   verifyFile(payload.revert_ref, payload.revert_sha256, "revert");
   const sameAttempt = records.filter((entry) => entry.attempt_id === attemptId); const current = heads(sameAttempt, "edit_record_id");
   if (sameAttempt.length === 0 && payload.supersedes != null) throw fail("stale_source", "first attempted edit cannot supersede a record");
@@ -106,7 +125,7 @@ function checkD24(payload) {
   const d24 = payload.d24_boundary ?? payload.d24_eval_boundary;
   if (!d24 || d24.schema_version !== D24_EVAL_BOUNDARY.schema_version || d24.schema_ref !== D24_EVAL_BOUNDARY.schema_ref || d24.sha256 !== D24_EVAL_BOUNDARY.sha256 || d24.canonical_bytes !== D24_EVAL_BOUNDARY.canonical_bytes) throw fail("wrong_domain", "D24 boundary identity mismatch");
 }
-function negativeResult(payload, attemptId, editState, negatives) {
+function negativeResult(payload, attemptId, editState, negatives, project, repositoryRoot) {
   const edits = editState.records;
   if (payload.classification_status === "unavailable" || payload.evidence_status !== "complete" || payload.independent_before_after_evidence !== true) throw fail("classification_unavailable", "independent before/after mechanism evidence is unavailable");
   if (D24_DOMAINS.has(payload.failure_domain) || payload.mixed_domain === true) { checkD24(payload); throw fail("wrong_domain", "failure belongs to D24 evaluation authority"); }
@@ -117,7 +136,7 @@ function negativeResult(payload, attemptId, editState, negatives) {
   iso(payload.observed_at, "observed_at"); if (!Array.isArray(payload.failure_evidence_refs) || payload.failure_evidence_refs.length === 0) throw fail("invalid_input", "failure_evidence_refs are required");
   const before = verifyFile(payload.before_facts_ref, payload.before_facts_sha256, "before_facts"); const after = verifyFile(payload.after_facts_ref, payload.after_facts_sha256, "after_facts");
   if (before.path === after.path || payload.before_facts_sha256 === payload.after_facts_sha256) throw fail("invalid_input", "negative before and after facts must be distinct");
-  verifyFile(payload.revert_ref, payload.revert_sha256, "revert"); verifyTargetRef(payload.target_ref);
+  verifyFile(payload.revert_ref, payload.revert_sha256, "revert"); verifyTargetRef(payload.target_ref, project, repositoryRoot);
   const editId = required(payload.attempted_edit_id ?? payload.edit_record_id, "attempted_edit_id");
   const edit = edits.find((entry) => entry.edit_record_id === editId && entry.attempt_id === attemptId && entry.decision_id === decision.decision_id);
   if (!edit) throw fail("stale_source", "negative result does not reference the same attempted edit");
@@ -132,14 +151,14 @@ function negativeResult(payload, attemptId, editState, negatives) {
 }
 
 function main() {
-  const options = parseArgs(process.argv.slice(2)); const root = resolve(required(options.root, "--root")); const project = required(options.project, "--project"); const kind = required(options["record-kind"] ?? options.record_kind, "--record-kind");
+  const options = parseArgs(process.argv.slice(2)); const root = resolve(required(options.root, "--root")); const project = required(options.project, "--project"); const repositoryRoot = resolve(options["repository-root"] ?? join(import.meta.dirname, "../..")); const kind = required(options["record-kind"] ?? options.record_kind, "--record-kind");
   const payload = inputValue(options); const attemptId = required(options["attempt-id"] ?? options.attempt_id ?? payload.attempt_id, "attempt_id"); const manualRecovery = options["manual-recovery"] ? JSON.parse(options["manual-recovery"]) : undefined;
   const lock = acquireProjectLock({ storageRoot: root, project, attemptId, manualRecovery }); if (lock.status !== "ok") throw fail(lock.error?.code ?? lock.status, lock.error?.summary ?? "lock unavailable");
   try {
     if (kind === "candidate-transition") { const result = recordCandidateTransition({ storageRoot: root, project, attemptId, ...payload, lockAuthority: lock }); if (result.status !== "ok") throw fail(result.error?.code ?? result.status, result.error?.summary ?? "candidate transition failed"); console.log(JSON.stringify(result)); return; }
     if (!["attempted-edit", "negative-result"].includes(kind)) throw fail("invalid_input", `unsupported record-kind: ${kind}`);
     const projectRoot = join(root, "Projects", project); const editsPath = join(projectRoot, "attempted-edits.jsonl"); const negativesPath = join(projectRoot, "negative-results.jsonl"); const editState = recoverTail(editsPath, "attempted-edit", lock, attemptId); const negativeState = kind === "negative-result" ? recoverTail(negativesPath, "negative-result", lock, attemptId) : { raw: Buffer.alloc(0), records: [] };
-    const record = kind === "attempted-edit" ? attemptedEdit(payload, attemptId, editState.records) : negativeResult(payload, attemptId, editState, negativeState.records); const targetPath = kind === "attempted-edit" ? editsPath : negativesPath; const targetState = kind === "attempted-edit" ? editState : negativeState; const persisted = appendBatch(targetPath, kind, record, lock, attemptId, hash(targetState.raw)); console.log(JSON.stringify({ status: "ok", record: persisted }));
+    const record = kind === "attempted-edit" ? attemptedEdit(payload, attemptId, editState.records, project, repositoryRoot) : negativeResult(payload, attemptId, editState, negativeState.records, project, repositoryRoot); const targetPath = kind === "attempted-edit" ? editsPath : negativesPath; const targetState = kind === "attempted-edit" ? editState : negativeState; const persisted = appendBatch(targetPath, kind, record, lock, attemptId, hash(targetState.raw)); console.log(JSON.stringify({ status: "ok", record: persisted }));
   } finally { lock.release(); }
 }
 

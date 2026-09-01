@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -471,7 +471,9 @@ function assertLockCurrent(lock) {
 }
 
 function currentSnapshot(path) {
-  const latest = scanCandidateLedger(path).latest;
+  const scan = scanCandidateLedger(path);
+  if (scan.terminalSuffix) throw fail("failed", "candidate ledger has an unauthenticated terminal suffix");
+  const latest = scan.latest;
   if (!latest) return null;
   return { commit: latest.commit, records: latest.rows.filter((entry) => entry.record_kind === "snapshot_record" || entry.record_kind === "candidate") };
 }
@@ -512,31 +514,64 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
     const proofs = (Array.isArray(inventory.consumer_proofs ?? inventory.consumerProofs) ? (inventory.consumer_proofs ?? inventory.consumerProofs) : []).filter(Boolean);
     const expectedStages = [...STAGES].sort();
     const taskProofs = [...tasks].map((taskId) => proofs.find((candidate) => candidate.project === inventory.project && candidate.task_id === taskId));
-    const sourceRefIsAuthentic = (taskId, ref) => {
-      if (typeof ref !== "string" || !/^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref)) return false;
-      const path = join(storageRoot, "Projects", inventory.project, "tasks", taskId, ...ref.split("/"));
+    const recomputeProof = (taskId) => {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(inventory.project)) return null;
+      const taskRoot = join(storageRoot, "Projects", inventory.project, "tasks", taskId);
+      const sourceRefs = []; const records = [];
       try {
-        const stat = lstatSync(path);
-        if (!stat.isFile() || stat.isSymbolicLink()) return false;
-        return hashBytes(readFileSync(path)) === ref.slice(ref.lastIndexOf("/") + 1, -5);
-      } catch { return false; }
+        for (const stage of STAGES) {
+          const directory = join(taskRoot, "quality/evidence/stage-outcomes", stage);
+          const files = readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.isSymbolicLink() && /^[a-f0-9]{64}\.json$/.test(entry.name)).map((entry) => entry.name).sort();
+          if (files.length === 0) return null;
+          let position = 0;
+          for (const file of files) {
+            const raw = readFileSync(join(directory, file));
+            if (hashBytes(raw) !== file.slice(0, -5)) return null;
+            const value = JSON.parse(raw.toString("utf8"));
+            if (value.task_id !== taskId || value.stage !== stage) return null;
+            sourceRefs.push(`quality/evidence/stage-outcomes/${stage}/${file}`);
+            for (const [kind, subjects] of [["step", value.step_outcomes], ["skill", value.skill_outcomes]]) {
+              if (!Array.isArray(subjects)) return null;
+              for (const subject of subjects) {
+                const subjectId = kind === "step" ? subject.step_slug ?? subject.step_id : subject.skill_id ?? subject.skill_slug;
+                if (typeof subjectId !== "string" || !Array.isArray(subject.input_refs) || !Array.isArray(subject.output_refs ?? subject.evidence_refs ?? [])) return null;
+                const outputRefs = [...new Set([...(subject.output_refs ?? []), ...(subject.evidence_refs ?? []).map((entry) => entry?.ref).filter(Boolean)])];
+                if (outputRefs.some((ref) => typeof ref !== "string" || !ref.startsWith("quality/") || ref.includes("..") || !existsSync(join(taskRoot, ...ref.split("/"))))) return null;
+                records.push({ stage, position: position++, subject_kind: kind, subject_id: subjectId, input_refs: subject.input_refs, output_refs: outputRefs });
+              }
+            }
+          }
+        }
+      } catch { return null; }
+      const registered = [];
+      for (const source of records) for (const ref of source.output_refs) {
+        const sourceStage = STAGE_INDEX.get(source.stage);
+        const count = records.filter((candidate) => (STAGE_INDEX.get(candidate.stage) > sourceStage || (candidate.stage === source.stage && candidate.position > source.position)) && candidate.input_refs.includes(ref)).length;
+        registered.push({ ref, source: { stage: source.stage, subject_kind: source.subject_kind, subject_id: source.subject_id }, consumer_count: count, freshness: "current" });
+      }
+      registered.sort((left, right) => `${left.ref}\0${left.source.stage}\0${left.source.subject_id}`.localeCompare(`${right.ref}\0${right.source.stage}\0${right.source.subject_id}`));
+      return { sourceRefs, registered, scopeRevision: hashBytes(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).sort().join("\n")), zero: registered.length > 0 && registered.every((entry) => entry.consumer_count === 0) };
     };
     const validProof = (proof) => {
       if (!proof || proof.schema_version !== "consumer-scan-proof.v1" || proof.coverage_status !== "complete" || proof.zero_consumption !== true || typeof proof.scope_revision !== "string" || proof.scope_revision === "") return false;
       if (proof.project !== inventory.project || !tasks.has(proof.task_id)
         || proof.source_subject !== "tools/cli/derive-consumption-edges.mjs"
         || !Array.isArray(proof.source_refs) || proof.source_refs.length === 0
-        || proof.source_refs.some((ref) => !sourceRefIsAuthentic(proof.task_id, ref))
+        || proof.source_refs.some((ref) => typeof ref !== "string" || ref.includes(".."))
         || !Array.isArray(proof.diagnostics) || proof.diagnostics.length !== 0) return false;
       const expected = [...new Set(proof.expected_stage_set ?? [])].sort(); const scanned = [...new Set(proof.scanned_stage_set ?? [])].sort();
       const scannedAt = Date.parse(proof.scanned_at ?? ""); const current = Number.isFinite(scannedAt) && scannedAt <= Date.parse(now) && scannedAt >= Date.parse(now) - WINDOW_MS;
       const refs = proof.registered_output_refs;
+      const actual = recomputeProof(proof.task_id);
       return canonical(expected) === canonical(expectedStages) && canonical(scanned) === canonical(expectedStages) && current && Array.isArray(refs) && refs.length > 0 && refs.every((ref) => ref
         && typeof ref.ref === "string" && ref.ref.startsWith("quality/") && !ref.ref.includes("..")
         && ref.consumer_count === 0 && ref.freshness === "current"
         && ref.source && STAGE_INDEX.has(ref.source.stage)
         && ["step", "skill"].includes(ref.source.subject_kind)
-        && typeof ref.source.subject_id === "string" && ref.source.subject_id !== "");
+        && typeof ref.source.subject_id === "string" && ref.source.subject_id !== "")
+        && actual?.zero === true && proof.scope_revision === actual.scopeRevision
+        && canonical([...proof.source_refs].sort()) === canonical([...actual.sourceRefs].sort())
+        && canonical([...refs].sort((a, b) => canonical(a).localeCompare(canonical(b)))) === canonical([...actual.registered].sort((a, b) => canonical(a).localeCompare(canonical(b))));
     };
     const zero = taskProofs.length === tasks.size && taskProofs.every(validProof);
     const recentEntries = entries.filter((entry) => Date.parse(entry.observation.occurred_at) >= Date.parse(now) - WINDOW_MS);
@@ -565,8 +600,8 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
 
 export function refreshEvolutionSnapshot(input = {}) {
   const storageRoot = resolve(requiredString(input.storageRoot, "storageRoot")); const project = requiredString(input.project, "project"); const attemptId = requiredString(input.attemptId ?? input.attempt_id, "attemptId"); const now = requiredString(input.now ?? input.asOf ?? input.as_of, "now");
-  const inventory = input.inventory?.inventory ?? input.inventory ?? {};
-  const canonicalInventory = buildInputInventory({ project, inventory });
+  const envelope = input.inventory ?? {}; const inventory = envelope.inventory ?? envelope;
+  const canonicalInventory = buildInputInventory({ project, inventory, producerIdentity: envelope.producer_identity ?? input.producerIdentity, schemaIdentity: envelope.schema_identity ?? input.schemaIdentity });
   const lock = acquireProjectLock({ storageRoot, project, attemptId });
   if (lock.status !== "ok") return lock;
   try {
@@ -589,9 +624,9 @@ export function refreshEvolutionSnapshot(input = {}) {
     validateWorkflowEvolutionDefinition("refresh_result", refreshResult);
     const rows = [...records, refreshResult, publicationProof];
     const begin = { schema_version: SCHEMA_VERSION, record_kind: "batch_begin", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation };
-    const commit = { schema_version: SCHEMA_VERSION, record_kind: "batch_commit", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, count: rows.length, content_hash: hashBytes(canonical(rows)), status: "committed" };
+    const commit = { schema_version: SCHEMA_VERSION, record_kind: "batch_commit", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, producer_identity: canonicalInventory.producer_identity, schema_identity: canonicalInventory.schema_identity, count: rows.length, content_hash: hashBytes(canonical(rows)), status: "committed" };
     publishBatch({ path, lock, expectedHead: prior?.commit ?? null, begin, rows, commit });
-    return { status: "ok", snapshotId, snapshot_id: snapshotId, publicationGeneration: generation, publication_generation: generation, snapshotContentId: canonicalInventory.input_inventory_hash, snapshot_content_id: canonicalInventory.input_inventory_hash, records, refreshResult, refresh_result: refreshResult };
+    return { status: "ok", snapshotId, snapshot_id: snapshotId, publicationGeneration: generation, publication_generation: generation, snapshotContentId: canonicalInventory.input_inventory_hash, snapshot_content_id: canonicalInventory.input_inventory_hash, producer_identity: canonicalInventory.producer_identity, schema_identity: canonicalInventory.schema_identity, records, refreshResult, refresh_result: refreshResult };
   } catch (error) {
     if (["failed", "conflict", "stale_source"].includes(error?.code)) return { status: error.code, error: { code: error.code, summary: error.message } };
     throw error;
@@ -657,11 +692,14 @@ export function recordCandidateTransition(input = {}) {
 }
 
 export function readCurrentEvolutionProjection(input = {}) {
-  const current = currentSnapshot(ledgerPath(input.storageRoot, input.project));
+  let current;
+  try { current = currentSnapshot(ledgerPath(input.storageRoot, input.project)); }
+  catch (error) { return { status: error.code ?? "failed", error: { code: error.code ?? "failed", summary: error.message } }; }
   if (!current) return { status: "unavailable", error: { code: "unavailable", summary: "no committed candidate snapshot" } };
   const tax = input.taxProjection ?? input.tax_projection ?? null;
   const projection = Object.freeze({ schema_version: SCHEMA_VERSION, status: "ok", project: input.project, snapshot_id: current.commit.snapshot_id, publication_generation: current.commit.publication_generation, candidates: current.records, quality_tax: tax, as_of: input.asOf ?? input.as_of ?? null, source_inventory_hash: input.sourceInventoryHash ?? input.source_inventory_hash ?? current.commit.snapshot_content_id ?? null, refresh_result: input.refreshResult ?? input.refresh_result ?? null });
   if (input.expectedIdentity && input.expectedIdentity.snapshot_id && input.expectedIdentity.snapshot_id !== projection.snapshot_id) return { status: "stale_source", error: { code: "stale_source", summary: "projection identity mismatch" } };
+  if (input.expectedIdentity && ((input.expectedIdentity.producer_identity !== undefined && canonical(input.expectedIdentity.producer_identity) !== canonical(current.commit.producer_identity)) || (input.expectedIdentity.schema_identity !== undefined && canonical(input.expectedIdentity.schema_identity) !== canonical(current.commit.schema_identity)))) return { status: "stale_source", error: { code: "stale_source", summary: "projection producer/schema identity mismatch" } };
   if (input.sourceInventoryHash !== undefined && input.sourceInventoryHash !== current.commit.snapshot_content_id) return { status: "stale_source", error: { code: "stale_source", summary: "source inventory identity mismatch" } };
   const refresh = input.refreshResult ?? input.refresh_result;
   if (refresh && (refresh.snapshot_id !== current.commit.snapshot_id || refresh.publication_generation !== current.commit.publication_generation || refresh.snapshot_content_id !== current.commit.snapshot_content_id)) return { status: "stale_source", error: { code: "stale_source", summary: "refresh result identity mismatch" } };
