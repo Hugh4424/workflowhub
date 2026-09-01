@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { acquireProjectLock, readCurrentEvolutionProjection, resolveTargetRef } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, readCurrentEvolutionProjection, resolveTargetRef, validateWorkflowEvolutionDefinition } from "../../runtime/evidence/workflow-evolution.mjs";
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
@@ -52,7 +52,7 @@ function scan(path, name) {
     if (!open) { if (value.record_kind !== "batch_begin" || value.ledger_kind !== ledgerKind) throw fail("failed", `${name} has an unexpected record`); open = { start: entry.start, begin: value, rows: [] }; continue; }
     if (value.record_kind === "batch_abort") { if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `${name} has a nested batch`);
-    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id) throw fail("failed", `${name} row identity mismatch`); open.rows.push(value); continue; }
+    if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id) throw fail("failed", `${name} row identity mismatch`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
     records.push(...open.rows); open = null;
   }

@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 56301,
-      "sha256_after": "66f56f199d840e470f08f168376b74f705b9ce27e7de7175e5eff9246a823076"
+      "bytes": 59374,
+      "sha256_after": "cbf8bc3bfe478af8e4c63615968a4a11b5008bcaf6bac18d9c9a1bd04a438ed6"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2321,8 +2321,8 @@
       "consumer": "workflow-evolution deep module and governance checks",
       "delete_condition": "remove with M16 data-plane",
       "content_change": "combined versioned M16 definitions",
-      "bytes": 14742,
-      "sha256_after": "740cf91c8e955d4c4b56ae853d904aa8a469c5d5ef2a69e70662ce4ab501965b"
+      "bytes": 14744,
+      "sha256_after": "8828f6375a4ad06eae17be48d6b7e4bd63afd80b43d825045f13fad6292d3e27"
     },
     {
       "source": "tools/cli/generate-iteration-brief.mjs",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 22985,
-      "sha256_after": "c103adf55364b90afbdde3557fb7ae10ada93a68465e77d2014a5daee44efeee"
+      "bytes": 23235,
+      "sha256_after": "0d56e20d1c58bc01715eebfdd21fa230f79740e91d607a420689bf1318705351"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",

@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync, statSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 const root = resolve(import.meta.dirname, "../..");
+const temporaryRoots = [];
+afterEach(() => { while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { recursive: true, force: true }); });
 describe("M16 governance registration", () => {
   it("registers each production module and private adapter with a real consumer", () => {
     const moveMap = JSON.parse(readFileSync(resolve(root, "docs/architecture/move-map.json"), "utf8"));
@@ -42,6 +46,28 @@ describe("M16 governance registration", () => {
     expect(baseline.tests.some((ref) => ref.includes("quality/"))).toBe(false);
     expect(redWrapper).not.toContain("stage-reflection-e2e-constructed.test.mjs");
     expect(redWrapper).toContain("red-baseline.v1.json");
+  });
+  it("rejects forged exit and hash arguments by reading the canonical suite output", () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "workflowhub-red-authenticity-")); temporaryRoots.push(temporaryRoot);
+    const checker = resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs");
+    const baseline = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/red-baseline.v1.json"));
+    const baselineHash = createHash("sha256").update(baseline).digest("hex");
+    const reportPath = join(temporaryRoot, "suite-output.json");
+    const report = {
+      numFailedTestSuites: 0,
+      numFailedTests: 0,
+      success: true,
+      testResults: [{ name: resolve(root, "tests/contract/build-reflection-page.test.mjs"), status: "passed", assertionResults: [] }],
+    };
+    writeFileSync(reportPath, JSON.stringify(report));
+    const reportHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
+    const forgedRed = spawnSync(process.execPath, [checker, "monitor", "red", "1", "0", baselineHash, reportHash, reportPath], { cwd: root });
+    expect(forgedRed.status).toBe(23);
+    report.success = false; report.numFailedTestSuites = 1; report.numFailedTests = 1; report.testResults[0].status = "failed";
+    writeFileSync(reportPath, JSON.stringify(report));
+    const failedHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
+    const forgedGreen = spawnSync(process.execPath, [checker, "monitor", "green", "0", "0", baselineHash, failedHash, reportPath], { cwd: root });
+    expect(forgedGreen.status).toBe(23);
   });
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from "
 import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
-const [suite, phase = "red", exitText = "1", baselineExitText = "1", baselineHash = "", outputHash = ""] = process.argv.slice(2);
+const [suite, phase = "red", exitText = "1", baselineExitText = "1", baselineHash = "", outputHash = "", outputRef = ""] = process.argv.slice(2);
 const suites = {
   "pool-tax": ["tests/contract/workflow-evolution-candidates.test.mjs"],
   "ledger-brief": ["tests/contract/workflow-evolution-ledgers.test.mjs", "tests/contract/generate-iteration-brief.test.mjs", "tests/contract/check-skill-updates.test.mjs"],
@@ -13,11 +13,36 @@ const suites = {
 const EXPECTED_BASELINE_SHA256 = "9a7b17ce110d5c8e37f9f6d16d1b310e139bf747de96349ae6a9c7926f1059dd";
 const exitCode = Number(exitText); const baselineExit = Number(baselineExitText);
 if (!suites[suite] || !["red", "green", "verify"].includes(phase) || !Number.isInteger(exitCode) || baselineExit !== 0
-    || baselineHash !== EXPECTED_BASELINE_SHA256 || !/^[a-f0-9]{64}$/.test(outputHash)) process.exit(24);
+    || baselineHash !== EXPECTED_BASELINE_SHA256 || !/^[a-f0-9]{64}$/.test(outputHash) || !outputRef) process.exit(24);
 if ((phase === "red" && exitCode === 0) || (phase !== "red" && exitCode !== 0)) process.exit(23);
+let report;
+let outputBytes;
+try {
+  outputBytes = readFileSync(resolve(outputRef));
+  report = JSON.parse(outputBytes);
+} catch {
+  process.exit(24);
+}
+if (createHash("sha256").update(outputBytes).digest("hex") !== outputHash
+    || typeof report !== "object" || report === null || !Array.isArray(report.testResults)) process.exit(23);
+const expectedTests = [...suites[suite], ...(suite === "pool-tax" && phase !== "red"
+  ? ["tests/contract/derive-consumption-edges.test.mjs", "tests/contract/stage-reflection-skill-contract.test.mjs"]
+  : [])].sort();
+const reportedTests = report.testResults.map((result) => {
+  const absolute = resolve(result?.name ?? "");
+  const relative = absolute.startsWith(`${process.cwd()}/`) ? absolute.slice(process.cwd().length + 1) : "";
+  return relative;
+}).sort();
+const failedAssertions = report.testResults.flatMap((result) => result?.assertionResults ?? []).filter((assertion) => assertion?.status === "failed");
+const reportedFailure = report.success === false || report.numFailedTests > 0 || report.numFailedTestSuites > 0 || failedAssertions.length > 0
+  || report.testResults.some((result) => result?.status === "failed");
+const sameTests = expectedTests.length === reportedTests.length && expectedTests.every((test, index) => test === reportedTests[index]);
+if (!sameTests
+    || (phase === "red" && (!reportedFailure || report.success !== false))
+    || (phase !== "red" && (reportedFailure || report.success !== true))) process.exit(23);
 const materialRefs = ["specs/workflowhub-m16-evolution-20260831/decision-log.md", "specs/workflowhub-m16-evolution-20260831/spec.md", "specs/workflowhub-m16-evolution-20260831/plan.md", "specs/workflowhub-m16-evolution-20260831/tasks.md"];
 const materialSha256 = createHash("sha256").update(materialRefs.map((ref) => readFileSync(resolve(ref))).join("\0")).digest("hex");
-const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: suites[suite], exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
+const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: expectedTests, exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
 const out = resolve(process.cwd(), {
   "pool-tax": "quality/tests/m16-p1-pool-tax/gate.json",
   "ledger-brief": "quality/tests/m16-p1-ledger-brief/gate.json",

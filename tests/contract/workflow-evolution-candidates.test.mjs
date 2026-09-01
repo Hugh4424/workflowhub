@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 
 const roots = [];
 const moduleUrl = new URL("../../runtime/evidence/workflow-evolution.mjs", import.meta.url);
+const manifestRef = "workflows/build-spec/steps.json";
+const manifestSha = createHash("sha256").update(readFileSync(new URL(`../../${manifestRef}`, import.meta.url))).digest("hex");
 
 async function loadModule() {
   try { return await import(moduleUrl.href); }
@@ -28,7 +31,7 @@ function observation(id, kind = "retry") {
     occurred_at: "2026-08-30T00:00:00Z",
     intervention_kind: kind,
     intervention_payload: { reason: id },
-    target_ref: { kind: "step", id: `step-${id}`, version: "1", authority: `manifest:${id}` },
+    target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: manifestRef, authority_sha256: manifestSha },
   };
 }
 
@@ -106,6 +109,13 @@ describe("M16 candidate and tax contract", () => {
     });
     expect(result.status).toBe("ok");
     expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("rejects a forged target authority before publishing", async () => {
+    const mod = await loadModule(); const storageRoot = root();
+    const item = observation("forged"); item.target_ref.authority_sha256 = "0".repeat(64);
+    expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "forged-authority", inventory: { observations: [item] }, now: "2026-08-31T00:00:00Z" })).toMatchObject({ status: "stale_source" });
+    expect(existsSync(candidateLedger(storageRoot))).toBe(false);
   });
 
   it("validates the task-level consumer proof shape and rejects the retired stage_set shape", async () => {

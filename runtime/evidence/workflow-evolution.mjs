@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -15,6 +16,7 @@ const D24_SCHEMA_VERSION = "d24-eval-boundary.v1";
 const EVOLUTION_SCHEMA = JSON.parse(readFileSync(new URL("../schemas/workflow-evolution.v1.json", import.meta.url), "utf8"));
 const AJV = new Ajv2020({ allErrors: true, strict: false });
 const DEFINITION_VALIDATORS = new Map();
+const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function fail(code, message) {
   const error = new Error(message);
@@ -133,6 +135,31 @@ function normalizeTargetRef(value) {
   requiredString(targetVersion, "target_ref.target_version"); requiredString(authority, "target_ref.authority");
   const authorityRef = String(authority);
   return { project_id: projectId ?? "project", target_kind: targetKind, target_id: targetId, target_version: String(targetVersion), authority_ref: authorityRef, authority_sha256: value.authority_sha256 ?? hashBytes(authorityRef) };
+}
+
+function assertCurrentTargetAuthority(target) {
+  const ref = target.authority_ref;
+  if (typeof ref !== "string" || ref.startsWith("/") || ref.includes("..") || ref.includes("\\")) throw fail("stale_source", "target authority ref is unsafe");
+  const path = join(REPOSITORY_ROOT, ...ref.split("/"));
+  let bytes;
+  try { const stat = lstatSync(path); if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("not a real file"); bytes = readFileSync(path); }
+  catch (error) { throw fail("stale_source", `target authority is unreadable: ${error.message}`); }
+  if (hashBytes(bytes) !== target.authority_sha256) throw fail("stale_source", "target authority hash is stale");
+  let matches = 0;
+  if (target.target_kind === "stage" || target.target_kind === "step") {
+    if (!/^workflows\/(make-decision|build-spec|build-plan|build-code|verify-code)\/steps\.json$/.test(ref)) throw fail("stale_source", "target manifest authority is not current");
+    const manifest = JSON.parse(bytes.toString("utf8"));
+    matches = target.target_kind === "stage" ? Number(manifest.stage_slug === target.target_id) : (manifest.steps ?? []).filter((entry) => entry.step_slug === target.target_id).length;
+  } else if (target.target_kind === "skill") {
+    if (ref !== "skills/catalog.yaml") throw fail("stale_source", "skill authority is not the current catalog");
+    matches = [...bytes.toString("utf8").matchAll(/^\s*- name:\s*([^\s#]+)/gm)].filter((entry) => entry[1] === target.target_id).length;
+  } else {
+    if (ref !== "docs/architecture/move-map.json") throw fail("stale_source", "surface authority is not the current move-map");
+    const map = JSON.parse(bytes.toString("utf8")); const found = new Set();
+    for (const [index, entry] of (map.entries ?? []).entries()) if (entry.source === target.target_id || entry.destination === target.target_id) found.add(index);
+    matches = found.size;
+  }
+  if (matches !== 1) throw fail(matches === 0 ? "invalid_target" : "stale_source", `target must map to exactly one current authority entry: ${target.target_id}`);
 }
 
 export function resolveTargetRef(input = {}) {
@@ -495,6 +522,7 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
   const seenObservations = new Map();
   for (const observation of observations) {
     const target = normalizeTargetRef({ ...(observation.target_ref ?? observation.targetRef), project_id: inventory.project });
+    assertCurrentTargetAuthority(target);
     const group = deriveCandidateGroupId({ projectId: inventory.project, targetRef: target, interventionKind: observation.intervention_kind ?? observation.interventionKind, interventionPayload: observation.intervention_payload ?? observation.interventionPayload ?? {} });
     const identity = deriveObservationId({ projectId: inventory.project, targetRef: target, taskId: observation.task_id ?? observation.taskId, confirmationRef: observation.confirmation_ref ?? observation.confirmationRef, occurredAt: observation.occurred_at ?? observation.occurredAt, interventionKind: observation.intervention_kind ?? observation.interventionKind, interventionPayload: observation.intervention_payload ?? observation.interventionPayload ?? {} });
     const observationBytes = canonical(observation);
@@ -614,12 +642,16 @@ export function refreshEvolutionSnapshot(input = {}) {
     const generation = (prior?.commit.publication_generation ?? 0) + 1;
     const snapshotId = hashBytes(canonical(`${canonicalInventory.input_inventory_hash}\0${attemptId}\0${generation}`)); const batchId = randomUUID();
     const priorByGroup = new Map((prior?.rows ?? []).filter((entry) => entry.record_kind === "candidate" && entry.row_status === "active").map((entry) => [entry.candidate_group_id, entry]));
-    const records = observationsToRecords({ project, ...inventory }, now, snapshotId, generation, storageRoot).map((record) => {
+    const proofPayload = (proof) => Object.fromEntries(Object.entries(proof ?? {}).filter(([key]) => !["candidate_snapshot_id", "candidate_snapshot_content_id", "publication_generation", "proof_identity"].includes(key)));
+    const usedProofs = new Set(initial.commits.flatMap((entry) => entry.rows.filter((row) => row.record_kind === "publication_proof").flatMap((row) => row.source_proofs ?? [])).map((proof) => proof.proof_identity ?? hashBytes(canonical(proofPayload(proof)))));
+    const inputProofs = inventory.consumer_proofs ?? inventory.consumerProofs ?? [];
+    const freshProofs = inputProofs.filter((proof) => !usedProofs.has(hashBytes(canonical(proofPayload(proof)))));
+    const records = observationsToRecords({ project, ...inventory, consumer_proofs: freshProofs }, now, snapshotId, generation, storageRoot).map((record) => {
       const priorRecord = priorByGroup.get(record.candidate_group_id);
       return withCandidateRecordIdentity({ ...record, ...(priorRecord ? { revision: priorRecord.revision, lifecycle_status: priorRecord.lifecycle_status } : {}), batch_id: batchId, snapshot_content_id: canonicalInventory.input_inventory_hash });
     });
     const refreshResult = { schema_version: SCHEMA_VERSION, record_kind: "refresh_result", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, previous_snapshot_id: prior?.commit.snapshot_id ?? null, as_of: now, outcome: "committed", diagnostics: [] };
-    const publicationProof = { schema_version: SCHEMA_VERSION, record_kind: "publication_proof", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, source_proofs: plain(inventory.consumer_proofs ?? inventory.consumerProofs ?? []).map((proof) => ({ ...proof, candidate_snapshot_id: snapshotId, candidate_snapshot_content_id: canonicalInventory.input_inventory_hash, publication_generation: generation })) };
+    const publicationProof = { schema_version: SCHEMA_VERSION, record_kind: "publication_proof", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, source_proofs: plain(freshProofs).map((proof) => ({ ...proof, proof_identity: hashBytes(canonical(proofPayload(proof))), candidate_snapshot_id: snapshotId, candidate_snapshot_content_id: canonicalInventory.input_inventory_hash, publication_generation: generation })) };
     for (const record of records) validateWorkflowEvolutionDefinition("candidate_record", record);
     validateWorkflowEvolutionDefinition("refresh_result", refreshResult);
     const rows = [...records, refreshResult, publicationProof];
@@ -684,7 +716,7 @@ export function recordCandidateTransition(input = {}) {
     return [withCandidateRecordIdentity({ ...entry, ...publicationFields, revision: record.revision + 1, lifecycle_status: lifecycleStatus, row_status: "active" })];
   });
   const begin = { schema_version: SCHEMA_VERSION, record_kind: "batch_begin", batch_id: batchId, project: input.project, attempt_id: attemptId, snapshot_content_id: current.commit.snapshot_content_id ?? null, snapshot_id: snapshotId, publication_generation: generation };
-  const commit = { schema_version: SCHEMA_VERSION, record_kind: "batch_commit", batch_id: batchId, project: input.project, attempt_id: attemptId, snapshot_content_id: current.commit.snapshot_content_id ?? null, snapshot_id: snapshotId, publication_generation: generation, count: nextRecords.length, content_hash: hashBytes(canonical(nextRecords)), status: "committed" };
+  const commit = { schema_version: SCHEMA_VERSION, record_kind: "batch_commit", batch_id: batchId, project: input.project, attempt_id: attemptId, snapshot_content_id: current.commit.snapshot_content_id ?? null, snapshot_id: snapshotId, publication_generation: generation, producer_identity: current.commit.producer_identity ?? null, schema_identity: current.commit.schema_identity ?? null, count: nextRecords.length, content_hash: hashBytes(canonical(nextRecords)), status: "committed" };
   try { publishBatch({ path: pathOut, lock: { lockHandle: handle, ownerToken: owner, fencingToken: fencing }, expectedHead: current.commit, begin, rows: nextRecords, commit }); }
   catch (error) { return { status: error.code ?? "failed", error: { code: error.code ?? "failed", summary: error.message } }; }
   const transitioned = nextRecords.find((entry) => entry.candidate_id === record.candidate_id && entry.row_status === "active");

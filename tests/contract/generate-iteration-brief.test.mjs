@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 const root = join(import.meta.dirname, "../..");
 const cli = join(root, "tools/cli/generate-iteration-brief.mjs");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const canonical = (value) => value === null || typeof value !== "object" ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
 
 function targetArgs() { return ["--target-kind=stage", "--target-id=build-plan"]; }
 describe("M16 iteration brief", () => {
@@ -60,6 +61,21 @@ describe("M16 iteration brief", () => {
       const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=malformed-tail"], { encoding: "utf8" });
       expect(result.status).not.toBe(0);
       expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed" });
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("rejects a committed ledger row that only has retired legacy fields", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo");
+      spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const batch = "legacy-batch"; const row = { record_kind: "attempted-edit", ledger_batch_id: batch, legacy_before_facts: [], legacy_after_facts: [] };
+      const begin = { record_kind: "batch_begin", batch_id: batch, ledger_kind: "attempted-edit" };
+      const commit = { record_kind: "batch_commit", batch_id: batch, ledger_kind: "attempted-edit", status: "committed", count: 1, content_hash: sha256(canonical([row])) };
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(row)}\n${JSON.stringify(commit)}\n`);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=legacy-row"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed", error: { summary: expect.stringContaining("row schema invalid") } });
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 

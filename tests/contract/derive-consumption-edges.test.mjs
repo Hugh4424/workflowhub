@@ -10,6 +10,8 @@ import { refreshEvolutionSnapshot } from "../../runtime/evidence/workflow-evolut
 
 const repoRoot = resolve(join(fileURLToPath(new URL(".", import.meta.url)), "../.."));
 const scriptPath = join(repoRoot, "tools", "cli", "derive-consumption-edges.mjs");
+const targetManifestRef = "workflows/build-spec/steps.json";
+const targetManifestSha = hash(readFileSync(join(repoRoot, targetManifestRef)));
 const roots = [];
 
 function hash(raw) {
@@ -156,8 +158,20 @@ describe("derive-consumption-edges", () => {
     expect(proof.coverage_status).toBe("complete");
     expect(proof.zero_consumption).toBe(false);
     const forged = { ...proof, zero_consumption: true, registered_output_refs: proof.registered_output_refs.map((entry) => ({ ...entry, consumer_count: 0 })) };
-    const result = refreshEvolutionSnapshot({ storageRoot: f.root, project: "Demo", attemptId: "forged-zero", now: proof.scanned_at, inventory: { observations: [{ task_id: "task-edges", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "1", authority: "manifest" } }], consumer_proofs: [forged] } });
+    const result = refreshEvolutionSnapshot({ storageRoot: f.root, project: "Demo", attemptId: "forged-zero", now: proof.scanned_at, inventory: { observations: [{ task_id: "task-edges", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } }], consumer_proofs: [forged] } });
     expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("binds a valid zero proof to one candidate snapshot and rejects reuse", () => {
+    const root = mkdtempSync(join(tmpdir(), "stage-reflection-proof-reuse-")); roots.push(root);
+    const taskRoot = join(root, "Projects/Demo/tasks/task-zero"); mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true }); writeFileSync(join(taskRoot, "quality/evidence/zero.md"), "zero\n");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) writeOutcome(root, stage, "task-zero", { schema_version: "workflowhub-stage-outcomes.v1", task_id: "task-zero", stage, step_outcomes: stage === "build-spec" ? [{ step_slug: "spec-clarify", input_refs: [], output_refs: ["quality/evidence/zero.md"], evidence_refs: [] }] : [], skill_outcomes: [] });
+    const proof = run(root).tasks[0].consumer_scan_proof; expect(proof.zero_consumption).toBe(true);
+    const item = { task_id: "task-zero", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } };
+    const first = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-one", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [proof] } });
+    const second = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-two", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [proof] } });
+    expect(first.records[0]).toMatchObject({ tier: "action_suggested", machine_signals: { zero_consumption: true } });
+    expect(second.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
   });
 
   it("does not call an incomplete subject reference ledger a zero-consumption scan", () => {
