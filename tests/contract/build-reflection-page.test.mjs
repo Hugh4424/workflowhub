@@ -88,6 +88,15 @@ function makeFixture() {
         attempt_ref: "legacy-attempt.json",
         decision: "accepted",
         confirmed_at: "2026-08-30T12:00:00.000Z",
+      } : taskId === "task-a" && stepSlug === "stage-reflection" ? {
+        schema_version: "human-confirmation.v2",
+        task_id: taskId,
+        stage,
+        decision: "accepted",
+        subject_ref: "quality/reviews/attempts/old-review.json",
+        material_revision: `revision-${"c".repeat(64)}`,
+        snapshot_tree: "d".repeat(40),
+        confirmed_at: "2026-08-30T12:00:00.000Z",
       } : {
         schema_version: "human-confirmation.v3",
         task_id: taskId,

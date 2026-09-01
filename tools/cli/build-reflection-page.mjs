@@ -123,10 +123,10 @@ function authenticatedConfirmation(taskRoot, storageRoot, project, taskId, stage
     const expectedHash = ref.slice("quality/confirmations/".length, -".json".length);
     if (createHash("sha256").update(raw).digest("hex") !== expectedHash) return null;
     const value = JSON.parse(raw);
-    const subject = value.schema_version === "human-confirmation.v1" ? value.attempt_ref : intervention.step_slug;
+    const subject = value.schema_version === "human-confirmation.v1" ? value.attempt_ref : value.schema_version === "human-confirmation.v3" ? intervention.step_slug : undefined;
     validateHumanConfirmation(value, { taskId, stage, subject });
     if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at) || !Number.isFinite(Date.parse(value.confirmed_at))) return null;
-    if (value.schema_version !== "human-confirmation.v1") {
+    if (value.schema_version === "human-confirmation.v3") {
       const step = value.step_slug ?? value.subject_ref;
       if (typeof step !== "string" || step.trim() === "" || (intervention.step_slug !== undefined && step !== intervention.step_slug)) return null;
     }

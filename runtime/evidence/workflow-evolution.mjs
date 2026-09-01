@@ -313,10 +313,10 @@ function authenticatedTaxConfirmation(item, identity, storageRoot) {
     const value = JSON.parse(raw);
     const stage = item.intervention_stage ?? item.interventionStage;
     const step = item.step_slug ?? item.stepSlug;
-    const subject = value.schema_version === "human-confirmation.v1" ? value.attempt_ref : step;
+    const subject = value.schema_version === "human-confirmation.v1" ? value.attempt_ref : value.schema_version === "human-confirmation.v3" ? step : undefined;
     validateHumanConfirmation(value, { taskId: identity.taskId, stage, subject });
     if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at) || !Number.isFinite(Date.parse(value.confirmed_at))) return { error: "confirmation_time_invalid" };
-    if (value.schema_version !== "human-confirmation.v1") {
+    if (value.schema_version === "human-confirmation.v3") {
       const confirmedStep = value.step_slug ?? value.subject_ref;
       if (typeof confirmedStep !== "string" || confirmedStep.trim() === "") return { error: "confirmation_step_missing" };
       if (step !== undefined && step !== confirmedStep) return { error: "confirmation_step_mismatch" };
