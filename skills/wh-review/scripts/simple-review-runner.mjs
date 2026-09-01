@@ -71,7 +71,11 @@ function buildBundle(attachmentRoot, input) {
   Object.entries(input.materials ?? {}).forEach(([key, value], index) => write(safeName(key, index, value), materialBytes(value)));
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   write("manifest.json", manifest);
-  const materialId = hash(Buffer.from(JSON.stringify(entries), "utf8"));
+  // Keep the bundle identity identical to the frozen packet identity. The
+  // packet hash covers the canonical manifest entry as well as its contents;
+  // using a pre-manifest hash here would make a frozen input impossible to
+  // rehydrate without changing its identity.
+  const materialId = materialIdForInput(input);
   return {
     bundleRoot,
     attachmentRoot,
@@ -92,6 +96,80 @@ function materialIdForInput(input) {
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
   return hash(Buffer.from(JSON.stringify(entries), "utf8"));
+}
+
+export function createSimpleReviewPacket(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review packet input must be an object");
+  if (typeof input.stage !== "string" || input.stage.trim() === "") throw new TypeError("stage is required");
+  if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
+  const materials = Object.entries(input.materials).map(([key, value]) => {
+    const bytes = materialBytes(value);
+    return { key, value_kind: Buffer.isBuffer(value) ? "bytes" : typeof value === "string" ? "text" : "json", content_base64: bytes.toString("base64"), sha256: hash(bytes) };
+  });
+  return Object.freeze({
+    schema_version: "wh-review-simple-packet.v1",
+    stage: input.stage,
+    review_track: input.review_track ?? input.reviewTrack ?? null,
+    review_kind: input.review_kind ?? input.reviewKind ?? null,
+    material_id: materialIdForInput(input),
+    materials: Object.freeze(materials.map(Object.freeze)),
+  });
+}
+
+export function serializeProviderInput(input) {
+  const packet = input?.packet;
+  if (packet?.schema_version !== "wh-review-simple-packet.v1" || !Array.isArray(packet.materials) || !/^[a-f0-9]{64}$/.test(packet.material_id ?? "")) throw new TypeError("provider packet is invalid");
+  const value = {
+    schema_version: "wh-review-provider-input.v1",
+    packet,
+    host_provider: input.hostProvider ?? input.host_provider,
+    providers: input.providers,
+    provider_identities: input.providerIdentities ?? input.provider_identities ?? null,
+    review_mode: input.reviewMode ?? input.review_mode,
+    prompt: input.prompt ?? RESULT_PROMPT,
+    subject_binding: input.subjectBinding ?? input.subject_binding ?? null,
+    review_policy: input.reviewPolicy ?? input.review_policy ?? null,
+  };
+  if (typeof value.host_provider !== "string" || !Array.isArray(value.providers) || value.providers.length === 0 || typeof value.review_mode !== "string" || typeof value.prompt !== "string") throw new TypeError("provider input is invalid");
+  return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
+}
+
+export function rehydrateProviderInput(bytes, attachmentRoot) {
+  let value;
+  try { value = JSON.parse(Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes)); }
+  catch { throw new TypeError("provider input is invalid"); }
+  if (value?.schema_version !== "wh-review-provider-input.v1" || value.packet?.schema_version !== "wh-review-simple-packet.v1" || !Array.isArray(value.packet.materials)) throw new TypeError("provider input is invalid");
+  const materials = {};
+  for (const entry of value.packet.materials) {
+    if (typeof entry?.key !== "string" || !new Set(["bytes", "text", "json"]).has(entry.value_kind) || typeof entry.content_base64 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || Object.hasOwn(materials, entry.key)) throw new TypeError("provider input material is invalid");
+    const content = Buffer.from(entry.content_base64, "base64");
+    if (hash(content) !== entry.sha256) throw new TypeError("provider input material hash is invalid");
+    if (entry.value_kind === "json") {
+      try { materials[entry.key] = JSON.parse(content.toString("utf8")); }
+      catch { throw new TypeError("provider input JSON material is invalid"); }
+    } else materials[entry.key] = entry.value_kind === "text" ? content.toString("utf8") : content;
+  }
+  const rebuilt = createSimpleReviewPacket({ stage: value.packet.stage, review_track: value.packet.review_track, review_kind: value.packet.review_kind, materials });
+  if (rebuilt.material_id !== value.packet.material_id) throw new TypeError("provider input material identity is invalid");
+  const bundle = buildBundle(attachmentRoot, { stage: value.packet.stage, review_track: value.packet.review_track, review_kind: value.packet.review_kind, materials });
+  if (bundle.materialId !== value.packet.material_id) { bundle.dispose(); throw new TypeError("provider input bundle identity is invalid"); }
+  return Object.freeze({ ...value, materials: bundle });
+}
+
+export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, client }) {
+  if (!client || typeof client.runGroup !== "function") throw new TypeError("review provider client is required");
+  const restored = rehydrateProviderInput(bytes, attachmentRoot);
+  try {
+    return await client.runGroup({
+      hostProvider: restored.host_provider,
+      providers: restored.providers,
+      providerIdentities: restored.provider_identities,
+      materials: restored.materials,
+      prompt: restored.prompt,
+      reviewMode: restored.review_mode,
+      strictProtocol: true,
+    });
+  } finally { restored.materials.dispose(); }
 }
 
 function unavailableResult(input, error) {

@@ -323,3 +323,80 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
 
   return { attempt_ref: attemptRef, result_ref: resultRef };
 }
+
+function taskBoundIdentity({ task, result, snapshot_tree: snapshotTree, material_revision: materialRevision }) {
+  const taskHandle = assertTaskHandle(task);
+  if (!result || typeof result !== "object" || Array.isArray(result) || !new Set(["available", "unavailable"]).has(result.status)) throw new TypeError("task-bound review result is invalid");
+  if (result.stage !== "verify-code" || !SHA256_HEX.test(result.material_id ?? "") || !Array.isArray(result.provider_results)) throw new TypeError("task-bound verify-code result identity is invalid");
+  if (!GIT_OID.test(snapshotTree ?? "") || !MATERIAL_REVISION.test(materialRevision ?? "")) throw new TypeError("task-bound review current identity is invalid");
+  return { taskHandle, taskId: taskHandle.identity.taskId, snapshotTree, materialRevision };
+}
+
+function taskBoundSource(tree) {
+  return { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree };
+}
+
+function taskBoundAttempt({ identity, result, attemptId, terminalStatus, error, providerAttempts, binding = undefined }) {
+  return {
+    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: identity.taskId, stage: "verify-code",
+    review_track: result.review_track ?? null, review_kind: result.review_kind ?? null,
+    subject_kind: "worktree", phase_id: null, review_scope: null,
+    source: taskBoundSource(identity.snapshotTree), snapshot_tree: identity.snapshotTree,
+    material_id: result.material_id, material_revision: identity.materialRevision,
+    ...(binding ? { e2e_binding: binding } : {}),
+    ...(result.review_policy ? { review_policy: result.review_policy, policy_snapshot_hash: policyHash(result.review_policy) } : {}),
+    provider_attempts: providerAttempts, terminal_status: terminalStatus, error,
+  };
+}
+
+export function recordTaskBoundE2eReviewUnavailable(input = {}) {
+  const identity = taskBoundIdentity(input);
+  const attemptId = randomUUID();
+  const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+  const attempt = taskBoundAttempt({ identity, result: input.result, attemptId, terminalStatus: "unavailable", error: input.result.error ?? { code: "E2E_REVIEWER_UNAVAILABLE", message: "task-bound review unavailable" }, providerAttempts: [] });
+  identity.taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
+  return Object.freeze({ attempt_ref: attemptRef, result_ref: null });
+}
+
+export function recordTaskBoundE2eReviewResult(input = {}) {
+  const { binding, result } = input;
+  const identity = taskBoundIdentity({ ...input, snapshot_tree: binding?.snapshot_tree, material_revision: binding?.material_revision });
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) throw new TypeError("task-bound review binding is required");
+  const frozen = binding.frozen_material;
+  const execution = binding.reviewed_execution;
+  const reviewer = binding.reviewer_actor;
+  if (!frozen || !execution || !reviewer || !SHA256_HEX.test(frozen.sha256 ?? "") || !SHA256_HEX.test(frozen.provider_input_sha256 ?? "")
+      || frozen.provider_input_sha256 !== result.material_id || !SHA256_HEX.test(execution.sha256 ?? "")
+      || !execution.actor || typeof reviewer.source_id !== "string" || typeof reviewer.run_id !== "string") throw new TypeError("task-bound review E2E binding is invalid");
+  const e2eBinding = {
+    frozen_material: { ref: frozen.ref, sha256: frozen.sha256, provider_input_sha256: frozen.provider_input_sha256 },
+    reviewed_execution: { ref: execution.ref, sha256: execution.sha256, actor: { ...execution.actor } },
+    reviewer_actor: { ...reviewer },
+  };
+  if (result.provider_results.length !== 1) throw new TypeError("task-bound review requires exactly one provider result");
+  const provider = result.provider_results[0];
+  if (provider.status !== "completed" || provider.error !== null || provider.identity?.source_id !== reviewer.source_id) throw new TypeError("task-bound provider result identity is invalid");
+  const providerFindings = (result.findings ?? []).filter((finding) => finding.provider === provider.provider);
+  const outputContent = JSON.stringify({ findings: providerFindings.map(({ provider: _provider, ...finding }) => finding) });
+  const attemptId = randomUUID();
+  const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+  const outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFileName(provider.provider, 0)}`;
+  const outputRecord = { schema_version: "wh-review-provider-output.v1", task_id: identity.taskId, stage: "verify-code", attempt_id: attemptId, provider: provider.provider, content: outputContent, content_hash: textHash(outputContent), evidence_anchor_valid: providerFindings.map(() => true) };
+  const aggregation = aggregateCanonicalProviderResults([{ provider: provider.provider, identity: normalizeIdentity(provider.identity, provider.provider), evidenceAnchors: outputRecord.evidence_anchor_valid, review: JSON.parse(outputContent) }], 1, { profilePriority: [provider.provider], requireIdentity: true, requireSourceId: true });
+  if (aggregation.status !== "available") throw new Error("task-bound provider output could not be aggregated");
+  const attempt = taskBoundAttempt({ identity, result, attemptId, terminalStatus: "semantic", error: null, binding: e2eBinding, providerAttempts: [providerAttemptRecord(provider, result.runtime_id, outputRef)] });
+  const resultRef = `quality/reviews/results/verify-code-e2e-${randomUUID()}.json`;
+  const resultRecord = {
+    version: "wh-review-result.v1", task_id: identity.taskId, stage: "verify-code", review_track: result.review_track ?? null, review_kind: result.review_kind ?? null,
+    subject_kind: "worktree", phase_id: null, review_scope: null,
+    source: taskBoundSource(identity.snapshotTree), snapshot_tree: identity.snapshotTree, material_id: result.material_id, material_revision: identity.materialRevision,
+    e2e_binding: e2eBinding, ...(result.review_policy ? { review_policy: result.review_policy } : {}), attempt_ref: attemptRef,
+    provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
+    findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+  };
+  identity.taskHandle.writeRecordAtomic(outputRef, JSON.stringify(outputRecord));
+  identity.taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
+  identity.taskHandle.writeRecordAtomic(resultRef, JSON.stringify(resultRecord));
+  return Object.freeze({ attempt_ref: attemptRef, result_ref: resultRef });
+}

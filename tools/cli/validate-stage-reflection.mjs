@@ -300,7 +300,7 @@ function main() {
   }), null, 2));
 }
 
-if (import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try { main(); }
   catch (error) {
     console.log(JSON.stringify({ status: "failed", error: { summary: error.message } }));
