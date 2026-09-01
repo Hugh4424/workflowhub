@@ -23,7 +23,7 @@
 - **Phase**：Phase P1 — Evolution data-plane 与私有入口
 - **goal**：用失败测试固定 snapshot identity、proof coverage、两档候选和质量税的保守状态机。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-001,R-002,R-008,R-011,R-012,R-014,D-003,D-006,D-007,D-010 → FR-POOL-001..008,FR-TAX-001..007 / AC-POOL-001..005,AC-TAX-001..003
 - **输入**：accepted spec/plan；canonical stage manifest、catalog、move-map 与现有 edge producer。
 - **依赖**：none
@@ -70,7 +70,7 @@
 - **Phase**：Phase P1 — Evolution data-plane 与私有入口
 - **goal**：实现单一深模块、组合 schema 与完整 proof，使 T001 通过且保留保守负例。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-001,R-002,R-008,R-011,R-012,R-014,D-003,D-006,D-007,D-010 → FR-POOL-001..008,FR-TAX-001..007 / AC-POOL-001..005,AC-TAX-001..003
 - **输入**：T001 RED 与已核实 producer/authority anchors。
 - **依赖**：T001
@@ -118,7 +118,7 @@
 - **Phase**：Phase P1 — Evolution data-plane 与私有入口
 - **goal**：用失败测试固定 framed append-only ledger、effective head、target-ref、七区块 brief、skill update receipt producer 与 CAS。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-003,R-004,R-005,R-006,R-007,R-009,D-001,D-004,D-005,D-008,D-009 → FR-EDIT-001..003,FR-NEG-001..003,FR-ABL-001..003,FR-BRIEF-001..009 / corresponding AC
 - **输入**：T002 schema、identity、lock API、current candidate snapshot，以及 T002-owned `runtime/schemas/workflow-evolution.v1.json#/$defs/d24_eval_boundary` ref/canonical subschema sha256/schema identity。
 - **依赖**：T002
@@ -164,7 +164,7 @@
 - **Phase**：Phase P1 — Evolution data-plane 与私有入口
 - **goal**：实现三个私有 CLI 与深模块发布/read-guard API，使 T003 通过且不新增 public behavior。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：与 T003 相同。
 - **输入**：T003 RED、T002 深模块/schema 与 T002-owned D24 anchor/canonical subschema hash/schema identity。
 - **依赖**：T003
@@ -250,7 +250,7 @@ P2 只消费 current candidate snapshot、tax projection 和结构化 refresh_re
 - **Phase**：Phase P2 — 现有 monitor 只读趋势区
 - **goal**：用失败测试固定同次 frozen ViewModel、三区块、稳定排序、展开和失败隔离。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-010,R-012,D-001,D-002,D-005,D-006 → FR-PAGE-001..005,FR-POOL-004..005,FR-TAX-004,FR-TAX-006 / AC-PAGE-001..003
 - **输入**：T002 current snapshot/tax/inventory/attempt/refresh/read-guard API 与现有 page producer/template。
 - **依赖**：T002
@@ -306,7 +306,7 @@ P2 只消费 current candidate snapshot、tax projection 和结构化 refresh_re
 - **Phase**：Phase P2 — 现有 monitor 只读趋势区
 - **goal**：实现 T005 的 frozen projection 与局部 DOM/CSS，保持旧区域和失败隔离。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-010,R-012,D-001,D-002,D-005,D-006 → FR-PAGE-001..005,FR-POOL-004..005,FR-TAX-004,FR-TAX-006 / AC-PAGE-001..003
 - **输入**：T005 RED 与 T002 current projection/inventory/attempt/read-guard API。
 - **依赖**：T005
@@ -402,7 +402,7 @@ P3 消费 P2 合同，并在 current move-map 登记后生成真实 browser fact
 - **Phase**：Phase P3 — 治理双向登记与当前快照总验收
 - **goal**：用失败测试固定 production-only filesystem/runtime-object↔move-map 集合、owner/consumer/delete 条件、七行为基线和 current snapshot seam；test-only 文件必须只由 fixture manifest/gate evidence 跟踪且不得进入 move-map。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-001,R-002,R-008,R-013,R-014,D-005,D-007,D-008,D-010 → FR-POOL-003,FR-POOL-005,FR-POOL-006,FR-GOV-001..003 / AC-POOL-004,AC-GOV-001..002
 - **输入**：T004 私有 CLI/ledger/brief、T006 page current implementation 与现有 move-map/public baseline。
 - **依赖**：T004、T006
@@ -447,7 +447,7 @@ P3 消费 P2 合同，并在 current move-map 登记后生成真实 browser fact
 - **Phase**：Phase P3 — 治理双向登记与当前快照总验收
 - **goal**：创建最终 browser/review/aggregate test-only checks但不登记 move-map；用真实 producer preflight 四对象并完成 production-only move-map 双向闭合，使 T008 通过。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：与 T008 相同。
 - **输入**：T008 RED 与 T004/T006 current implementation；T007 尚未执行。
 - **依赖**：T008
@@ -492,17 +492,17 @@ P3 消费 P2 合同，并在 current move-map 登记后生成真实 browser fact
 - **Phase**：Phase P3 — 治理双向登记与当前快照总验收
 - **goal**：对当前 fixture 生成的单页执行两 viewport、Evolution tab/预期文案、console/network 与 cleanup 验收。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-010,R-012,D-001,D-002,D-005,D-006 → FR-PAGE-001..005,FR-TAX-004,FR-TAX-006 / AC-PAGE-001..003
 - **输入**：T009 current move-map、T006 生成页与 `tests/fixtures/workflow-evolution/extreme.json`。
 - **依赖**：T009
 - **并行**：否 — T009 是 browser 文件唯一 owner，已完成 dry-run/preflight 与 current move-map closure 后，T007 才能只读执行
 - **FR**：FR-PAGE-001、FR-PAGE-002、FR-PAGE-003、FR-PAGE-004、FR-PAGE-005、FR-TAX-004、FR-TAX-006
 - **AC**：AC-PAGE-001、AC-PAGE-002、AC-PAGE-003
-- **动作**：T007 是 browser evidence 唯一 producer。只读执行 T009-owned canonical browser runner，用 T009 current move-map 调用真实 monitor generator，记录 snapshot_id、refresh_result、data.js/page/material/move-map hashes；单页 `workflowhub-monitor.html` 在 390×844、1280×800 两个 viewport 各采集一次，共 2 组截图，截图与 manifest 必须引用这些 current bytes，T009-owned validator 逐项 re-hash，禁止旧 fixture。随后 contract preflight→isolated-browser-qa QA；runner 按 canonical manifest checks 断言页面可打开、Evolution tab 可达、预期文案、无页面错误、无外部运行时网络请求及两张截图存在；passed/qa_failed/unavailable 都无条件运行 manifest validator，validator exit=22 优先，否则保留 QA 0/20/21；task-owned server/session/temp 全清理，不复用登录态。任何后续任务不得生成、刷新或改写该 evidence。
+- **动作**：T007 是 browser evidence 唯一 producer。只读执行 T009-owned canonical browser runner；runner 对单页 `workflowhub-monitor.html` 依次执行 open、Evolution tab、预期文案、page errors、runtime network、390×844/1280×800 两张截图与 cleanup，manifest 保留实际 assertions/checks/viewports/evidence/status/cleanup 字段。runner 不要求也不产出 `snapshot_id`、`refresh_result`、planned/observed 或独立 contract preflight；临时 fixture source 只在本次执行中可用，cleanup 后不作 source hash 后验重验。禁止旧 fixture；passed/qa_failed/unavailable/incomplete 都无条件运行 manifest validator，validator exit=22 优先，否则保留 QA 0/20/21；task-owned server/session/temp 全清理，不复用登录态。任何后续任务不得生成、刷新或改写该 evidence。
 - **精确文件**：`quality/evidence/browser-qa/m16-monitor/manifest.json` — 唯一 task evidence output；零 repository source/test file ownership/write，只读消费 T009-owned browser harness
 - **boundary**：repo files: zero writes; task evidence: one attempt-owned browser manifest/screenshots/logs; production correction returns to T006，script/fixture/checker correction returns to T009
-- **输出**：当前 snapshot 的 `browser-qa-evidence.v1` manifest、截图、检查清单、console/network 与 cleanup 事实；status=`passed|qa_failed|unavailable`。
+- **输出**：本次 runner 执行的 `browser-qa-evidence.v1` manifest、两张截图、实际检查清单、console/network 与 cleanup 事实；status=`passed|qa_failed|unavailable|incomplete`。
 - **Knowledge**：必须使用 isolated-browser-qa；不复用登录态；静态本地页无业务网络请求。
 - **verification_role**：N/A — non-behavior browser verification
 - **paired_task**：N/A — verification uses T005/T006 behavior pair
@@ -515,7 +515,7 @@ P3 消费 P2 合同，并在 current move-map 登记后生成真实 browser fact
 - **recovery**：保留失败截图/日志；产品缺陷回 T006，browser harness 缺陷回 T009；任何修复后旧 evidence 失效并用新 attempt 重跑。
 - **task risk**：把合同测试或旧截图误当真实浏览器证据。
 - **test tier / test method**：fullstack — isolated-browser-qa 实页验收。
-- **scenarios / commands / expected exit / oracle**：setup 固定单页 `workflowhub-monitor.html`；canonical runner 在 390×844 与 1280×800 各采集一次，共 2 组截图/断言。canonical script 先 contract preflight，再按 isolated-browser-qa 强制顺序执行 QA 并捕获 exit；passed/qa_failed/unavailable 三路都运行 manifest validator，validator failure 优先返回，否则保留 QA 状态。manifest 必含 snapshot/tool/skill identity、planned=2、observed、assertions/artifacts、server/session/temp cleanup；真实断言失败=`qa_failed` 且 QA exit non-zero，工具 unavailable=`unavailable/incomplete`、QA exit_code absent、orchestrator non-zero；passed 才 exit 0 / ORACLE-MONITOR-BROWSER。
+- **scenarios / commands / expected exit / oracle**：setup 固定单页 `workflowhub-monitor.html`；canonical runner 不执行独立 contract preflight，按 isolated-browser-qa 实际顺序打开页面、点击 Evolution tab、采集默认/窄屏/宽屏 snapshot、生成 390×844 与 1280×800 两张截图、读取 errors/network，并完成 browser/server/temp cleanup。manifest 只按 runner 实际字段记录 assertions、checks、两项 viewports/evidence、status 与 cleanup；不要求 `snapshot_id`、`refresh_result`、planned/observed 或 cleanup 后临时 source hash 重验。passed/qa_failed/unavailable/incomplete 四路都运行 manifest validator，validator failure 优先返回，否则保留 QA 状态；真实断言失败=`qa_failed` 且 QA exit non-zero，工具 unavailable 或 cleanup 不完整=`unavailable/incomplete`、QA exit_code absent、orchestrator non-zero；passed 才 exit 0 / ORACLE-MONITOR-BROWSER。
 - **fixtures_services**：T009-owned setup harness 在 `mktemp -d` root 生成单页；canonical QA runner 启动 task-owned localhost server 并持有精确 PID；技能 cleanup 只清 agent-browser session，确认 server 仍活后由 runner trap 停该 fixture server并清临时 root；不复用登录态，不触碰用户服务。
 - **coverage limits**：当前 runner 不独立断言 keyboard/focus order、对比度、横溢出或展开控件同步；另不覆盖 Safari/真机/生产部署、Design/Experience 审批或长期性能。
 
@@ -549,7 +549,7 @@ P3 消费 P2 合同，并在 current move-map 登记后生成真实 browser fact
 - **Phase**：Phase P3 — 治理双向登记与当前快照总验收
 - **goal**：对当前 spec/plan/tasks/implementation snapshot 一次聚合验证 22 项 AC、跨任务 seam 和完整质量事实。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"3f18404e3fa6691223978a335064ba8fe20062e2f25c8ad3fa4df2ff42eaf395","id":"M16-PLAN"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-m16-evolution-20260831/spec.md","hash":"b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb","id":"M16-SPEC"},{"artifact_kind":"plan","ref":"specs/workflowhub-m16-evolution-20260831/plan.md","hash":"afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269","id":"M16-PLAN"}]`
 - **source_refs / decision_refs**：R-001..014,D-001..010 → all M16 FR/AC
 - **输入**：T001-T009 completed facts、current material hashes、T009 创建但不登记 move-map 的 browser/review/aggregate harness manifests，以及 T007 exact current browser evidence。
 - **依赖**：T007、T009
