@@ -381,6 +381,25 @@ describe("M16 candidate and tax contract", () => {
   });
 
   it.each([
+    ["batch id", { batch_id: "forged-batch", publication_generation: 2 }],
+    ["publication generation", { batch_id: "recovery-batch", publication_generation: 99 }],
+  ])("binds an authenticated abort after a torn row to the open begin %s", async (_label, override) => {
+    const mod = await loadModule(); const storageRoot = root();
+    const first = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a1", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" });
+    const ledger = candidateLedger(storageRoot); const committedPrefix = readFileSync(ledger);
+    const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", batch_id: "recovery-batch", project: "Demo", attempt_id: "recovery-attempt", snapshot_content_id: first.snapshot_content_id, snapshot_id: "recovery-snapshot", publication_generation: 2 };
+    const torn = Buffer.from('{"record_kind":"candidate"');
+    const abandonedSuffix = Buffer.concat([Buffer.from(`${JSON.stringify(begin)}\n`), torn, Buffer.from("\n")]);
+    const abort = { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ...override, reason: "torn", last_committed_prefix_hash: createHash("sha256").update(committedPrefix).digest("hex"), abandoned_start_offset: committedPrefix.length, observed_suffix_length: abandonedSuffix.length, observed_suffix_hash: createHash("sha256").update(abandonedSuffix).digest("hex") };
+    appendFileSync(ledger, Buffer.concat([abandonedSuffix, Buffer.from(`${JSON.stringify(abort)}\n`)]));
+    const before = readFileSync(ledger);
+    const result = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a2", inventory: { project: "Demo", observations: [] }, now: "2026-09-01T00:00:00Z" });
+    expect(result).toMatchObject({ status: "failed", error: { code: "failed" } });
+    expect(readFileSync(ledger)).toEqual(before);
+    expect(first.status).toBe("ok");
+  });
+
+  it.each([
     ["wrong schema", { schema_version: "forged.v1", publication_generation: 2 }],
     ["wrong generation", { schema_version: "workflow-evolution.v1", publication_generation: 99 }],
   ])("rejects an authenticated candidate abort with %s", async (_label, override) => {

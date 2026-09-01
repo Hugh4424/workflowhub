@@ -50,15 +50,19 @@ function assertEnvelope(value, kind, ledgerKind, name) {
   if (!value || value.schema_version !== "workflow-evolution.v1" || value.record_kind !== kind || value.ledger_kind !== ledgerKind
       || Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) throw fail("failed", `${name} ${kind} envelope schema invalid`);
 }
+function assertAbortIdentity(value, expectedBatchId, expectedPublicationGeneration, name) {
+  if ((expectedBatchId !== null && value.batch_id !== expectedBatchId)
+      || (expectedPublicationGeneration !== null && value.publication_generation !== expectedPublicationGeneration)) throw fail("failed", `${name} batch_abort identity mismatch`);
+}
 function scan(path, name) {
   if (!existsSync(path)) return { status: "unavailable", reason: `${name}_missing`, refs: [], records: [] };
-  const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null;
+  const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null; let recoveryBatchId = null; let recoveryPublicationGeneration = null;
   for (const entry of ledgerEntries(raw)) {
     const value = parseLedgerEntry(entry);
-    if (recoveryStart !== null) { if (value?.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); if (!validLedgerAbort(raw, recoveryStart, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); recoveryStart = null; open = null; } else if (value?.record_kind === "batch_begin" || value?.record_kind === "batch_commit") throw fail("failed", `${name} has an unclosed abandoned region`); continue; }
-    if (!value) { recoveryStart = open?.start ?? entry.start; continue; }
+    if (recoveryStart !== null) { if (value?.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); assertAbortIdentity(value, recoveryBatchId, recoveryPublicationGeneration, name); if (!validLedgerAbort(raw, recoveryStart, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); recoveryStart = null; recoveryBatchId = null; recoveryPublicationGeneration = null; open = null; } else if (value?.record_kind === "batch_begin" || value?.record_kind === "batch_commit") throw fail("failed", `${name} has an unclosed abandoned region`); continue; }
+    if (!value) { if (open) { recoveryBatchId = open.begin.batch_id; recoveryPublicationGeneration = open.begin.publication_generation; } recoveryStart = open?.start ?? entry.start; continue; }
     if (!open) { assertEnvelope(value, "batch_begin", ledgerKind, name); open = { start: entry.start, begin: value, rows: [] }; continue; }
-    if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
+    if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); assertAbortIdentity(value, open.begin.batch_id, open.begin.publication_generation, name); if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `${name} has a nested batch`);
     if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `${name} row identity mismatch`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
     assertEnvelope(value, "batch_commit", ledgerKind, name); if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id || value.publication_generation !== open.begin.publication_generation || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);

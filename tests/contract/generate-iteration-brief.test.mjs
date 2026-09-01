@@ -113,6 +113,26 @@ describe("M16 iteration brief", () => {
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
+  it.each([
+    ["batch id", { batch_id: "forged-batch", publication_generation: 1 }],
+    ["publication generation", { batch_id: "recovery-batch", publication_generation: 2 }],
+  ])("binds a recovery abort to the open begin %s", (_label, override) => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "recovery-batch", attempt_id: "recovery-attempt", publication_generation: 1 };
+      const torn = Buffer.from('{"record_kind":"attempted-edit"');
+      const abandonedSuffix = Buffer.concat([Buffer.from(`${JSON.stringify(begin)}\n`), torn, Buffer.from("\n")]);
+      const abort = { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: "attempted-edit", ...override, reason: "torn", last_committed_prefix_hash: sha256(Buffer.alloc(0)), abandoned_start_offset: 0, observed_suffix_length: abandonedSuffix.length, observed_suffix_hash: sha256(abandonedSuffix) };
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), Buffer.concat([abandonedSuffix, Buffer.from(`${JSON.stringify(abort)}\n`)]));
+      const before = readFileSync(join(projectRoot, "attempted-edits.jsonl"));
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=recovery-abort"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "failed", error: { summary: expect.stringContaining("batch_abort identity mismatch") } });
+      expect(readFileSync(join(projectRoot, "attempted-edits.jsonl"))).toEqual(before);
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
   it.each(["batch_begin", "batch_commit", "batch_abort"])("rejects a %s envelope without publication_generation", (kind) => {
     const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
     try {

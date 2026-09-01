@@ -456,6 +456,10 @@ function scanCandidateLedger(path) {
       throw fail("failed", `corruption occurs before a later ledger record at byte ${entry.start}`);
     }
     if (!value) {
+      if (open) {
+        recoveryBatchId = open.begin.batch_id;
+        recoveryPublicationGeneration = open.begin.publication_generation;
+      }
       recoveryStart = open?.start ?? entry.start;
       continue;
     }

@@ -89,6 +89,11 @@ function parameterizedTitles(source) {
     const titleMatch = source.slice(close + 1).match(/^\s*\(\s*(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/);
     if (!titleMatch) continue;
     const template = decodeStringLiteral(titleMatch[2], titleMatch[1]);
+    const scalarTable = table.slice(1, -1).trim();
+    if (scalarTable && !scalarTable.startsWith("[")) {
+      for (const arg of quotedStrings(scalarTable)) titles.push(template.replace(/%[sdifjoO]/g, (token) => token === "%%" ? "%%" : arg ?? token));
+      continue;
+    }
     let depth = 0; let rowStart = -1; let quote = null; let escaped = false;
     for (let index = 0; index < table.length; index += 1) {
       const char = table[index];
