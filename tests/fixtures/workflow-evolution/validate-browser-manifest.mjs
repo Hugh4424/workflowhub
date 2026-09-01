@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const canonicalChecks = ["open", "evolution_tab", "content", "no_page_errors", "no_runtime_requests", "viewport_390x844", "viewport_1280x800"];
@@ -31,7 +31,11 @@ try {
         || new Set(viewports.map((viewport) => viewport.evidence_ref)).size !== 2
         || !Array.isArray(value.evidence) || value.evidence.length !== 2 || new Set(value.evidence.map((entry) => entry?.ref)).size !== 2) process.exit(22);
     for (const viewport of viewports) {
-      const bytes = readFileSync(join(manifestRoot, viewport.evidence_ref));
+      const evidencePath = join(manifestRoot, viewport.evidence_ref);
+      const stat = lstatSync(evidencePath);
+      const rel = relative(realpathSync(manifestRoot), realpathSync(evidencePath));
+      if (!stat.isFile() || stat.isSymbolicLink() || rel === ".." || rel.startsWith("../")) process.exit(22);
+      const bytes = readFileSync(evidencePath);
       if (createHash("sha256").update(bytes).digest("hex") !== viewport.snapshot_sha256
           || !value.evidence.some((entry) => entry?.ref === viewport.evidence_ref && entry.sha256 === viewport.snapshot_sha256)) process.exit(22);
     }

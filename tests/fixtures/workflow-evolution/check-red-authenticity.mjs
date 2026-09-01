@@ -42,6 +42,19 @@ const reportedTests = report.testResults.map((result) => {
   const relative = absolute.startsWith(`${process.cwd()}/`) ? absolute.slice(process.cwd().length + 1) : "";
   return relative;
 }).sort();
+const sourceAssertions = new Map(expectedTests.map((test) => {
+  const source = readFileSync(resolve(test), "utf8");
+  const titles = [...source.matchAll(/\bit(?:\.(?:runIf|skipIf)\s*\([^)]*\)|\.(?:skip|only|todo))?\s*\(\s*(["'`])([^"'`]+)\1/g)].map((match) => match[2]).sort();
+  if (titles.length === 0) process.exit(23);
+  return [test, titles];
+}));
+for (const result of report.testResults) {
+  const absolute = resolve(result.name ?? "");
+  const relative = absolute.startsWith(`${process.cwd()}/`) ? absolute.slice(process.cwd().length + 1) : "";
+  const actualTitles = result.assertionResults.map((assertion) => assertion.title).sort();
+  const expectedTitles = sourceAssertions.get(relative) ?? [];
+  if (actualTitles.length !== expectedTitles.length || actualTitles.some((title, index) => title !== expectedTitles[index])) process.exit(23);
+}
 const failedAssertions = report.testResults.flatMap((result) => result?.assertionResults ?? []).filter((assertion) => assertion?.status === "failed");
 const allAssertions = report.testResults.flatMap((result) => result.assertionResults);
 const passedAssertions = allAssertions.filter((assertion) => assertion.status === "passed");
@@ -56,7 +69,8 @@ if (!sameTests
     || (phase !== "red" && (reportedFailure || report.success !== true))) process.exit(23);
 const materialRefs = ["specs/workflowhub-m16-evolution-20260831/decision-log.md", "specs/workflowhub-m16-evolution-20260831/spec.md", "specs/workflowhub-m16-evolution-20260831/plan.md", "specs/workflowhub-m16-evolution-20260831/tasks.md"];
 const materialSha256 = createHash("sha256").update(materialRefs.map((ref) => readFileSync(resolve(ref))).join("\0")).digest("hex");
-const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: expectedTests, exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
+const suiteSourcesSha256 = createHash("sha256").update(expectedTests.map((ref) => `${ref}\0${createHash("sha256").update(readFileSync(resolve(ref))).digest("hex")}`).join("\n")).digest("hex");
+const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: expectedTests, exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, suite_sources_sha256: suiteSourcesSha256, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
 const out = resolve(process.cwd(), {
   "pool-tax": "quality/tests/m16-p1-pool-tax/gate.json",
   "ledger-brief": "quality/tests/m16-p1-ledger-brief/gate.json",

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -106,5 +106,15 @@ describe("M16 browser evidence manifest", () => {
     const malformed = join(root, "malformed.json"); writeFileSync(malformed, "{}\n");
     expect(spawnSync(process.execPath, [validator, malformed]).status).toBe(22);
     expect(spawnSync(process.execPath, [validator, join(root, "missing.json")]).status).toBe(22);
+  });
+
+  it("rejects viewport evidence symlinked outside the manifest directory", () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-browser-manifest-")); roots.push(root);
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-browser-outside-")); roots.push(outside);
+    writeFileSync(join(outside, "narrow.png"), "narrow-image"); symlinkSync(join(outside, "narrow.png"), join(root, "narrow.png")); writeFileSync(join(root, "wide.png"), "wide-image");
+    const paths = Object.fromEntries(["page", "data", "move-map", "fixture"].map((name) => { const path = join(root, name); writeFileSync(path, name); return [name, path]; }));
+    const identities = { page_sha256: sha("page"), data_sha256: sha("data"), move_map_sha256: sha("move-map"), fixture_sha256: sha("fixture") };
+    const manifest = join(root, "pass.json"); writeFileSync(manifest, `${JSON.stringify(passedManifest(identities))}\n`);
+    expect(spawnSync(process.execPath, [validator, manifest, ...Object.entries(paths).map(([name, path]) => `--${name}=${path}`)]).status).toBe(22);
   });
 });

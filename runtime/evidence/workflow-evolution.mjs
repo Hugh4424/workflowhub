@@ -283,8 +283,14 @@ export function computeQualityTaxProjection(input = {}) {
 
 function projectRoot(storageRoot, project) {
   const root = resolve(storageRoot); requiredString(project, "project");
+  let rootStat; try { rootStat = lstatSync(root); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  if (rootStat?.isSymbolicLink()) throw fail("invalid_input", "storage root must not be a symlink");
   if (project === "." || project === ".." || project.includes("/") || project.includes("\\") || project.includes("\0")) throw fail("invalid_input", "project must be a single safe path segment");
-  const projects = resolve(root, "Projects"); mkdirSync(projects, { recursive: true });
+  const projects = resolve(root, "Projects");
+  let projectsStat; try { projectsStat = lstatSync(projects); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  if (projectsStat?.isSymbolicLink()) throw fail("invalid_input", "Projects root must not be a symlink");
+  mkdirSync(projects, { recursive: true });
+  if (dirname(realpathSync(projects)) !== realpathSync(root)) throw fail("invalid_input", "Projects root escapes storage root");
   const path = resolve(projects, project);
   if (dirname(path) !== projects) throw fail("invalid_input", "project path escapes Projects root");
   if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw fail("invalid_input", "project path must not be a symlink");
@@ -373,8 +379,8 @@ function assertLedgerFile(path) {
   const parent = dirname(path);
   const parentStat = lstatSync(parent);
   if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) throw fail("failed", "candidate ledger parent must be a real directory");
-  if (!existsSync(path)) return path;
-  const stat = lstatSync(path);
+  let stat;
+  try { stat = lstatSync(path); } catch (error) { if (error?.code === "ENOENT") return path; throw error; }
   if (!stat.isFile() || stat.isSymbolicLink() || dirname(realpathSync(path)) !== realpathSync(parent)) throw fail("failed", "candidate ledger must be a contained real file");
   return path;
 }
@@ -424,11 +430,13 @@ function scanCandidateLedger(path) {
   const commits = [];
   let open = null;
   let recoveryStart = null;
+  let recoveryBatchId = null;
   for (const entry of ledgerEntries(raw)) {
     const value = parseEntry(entry);
     if (recoveryStart !== null) {
       if (value?.record_kind === "batch_abort" && validAbort(raw, recoveryStart, entry, value)) {
         recoveryStart = null;
+        recoveryBatchId = null;
         open = null;
         continue;
       }
@@ -454,12 +462,24 @@ function scanCandidateLedger(path) {
     }
     if (value.record_kind === "batch_begin") throw fail("failed", `new batch begins before prior batch terminates at byte ${entry.start}`);
     if (value.record_kind !== "batch_commit") {
-      if (value.batch_id !== open.begin.batch_id || value.snapshot_id !== open.begin.snapshot_id || value.publication_generation !== open.begin.publication_generation) throw fail("failed", `batch row identity mismatch at byte ${entry.start}`);
-      const definition = value.record_kind === "refresh_result" ? "refresh_result" : value.record_kind === "publication_proof" ? "publication_proof" : ["candidate", "snapshot_record"].includes(value.record_kind) ? "candidate_record" : null;
-      if (!definition) throw fail("failed", `unknown batch row kind at byte ${entry.start}`);
-      try { validateWorkflowEvolutionDefinition(definition, value); } catch (error) { throw fail("failed", `${definition} schema invalid at byte ${entry.start}: ${error.message}`); }
-      if (value.schema_version !== SCHEMA_VERSION || value.snapshot_content_id !== open.begin.snapshot_content_id
-        || (["refresh_result", "publication_proof"].includes(value.record_kind) && (value.project !== open.begin.project || value.attempt_id !== open.begin.attempt_id))) throw fail("failed", `batch row authority mismatch at byte ${entry.start}`);
+      try {
+        if (value.batch_id !== open.begin.batch_id || value.snapshot_id !== open.begin.snapshot_id || value.publication_generation !== open.begin.publication_generation) throw fail("failed", `batch row identity mismatch at byte ${entry.start}`);
+        const definition = value.record_kind === "refresh_result" ? "refresh_result" : value.record_kind === "publication_proof" ? "publication_proof" : ["candidate", "snapshot_record"].includes(value.record_kind) ? "candidate_record" : null;
+        if (!definition) throw fail("failed", `unknown batch row kind at byte ${entry.start}`);
+        try { validateWorkflowEvolutionDefinition(definition, value); } catch (error) { throw fail("failed", `${definition} schema invalid at byte ${entry.start}: ${error.message}`); }
+        if (value.schema_version !== SCHEMA_VERSION || value.snapshot_content_id !== open.begin.snapshot_content_id
+          || (["refresh_result", "publication_proof"].includes(value.record_kind) && (value.project !== open.begin.project || value.attempt_id !== open.begin.attempt_id))) throw fail("failed", `batch row authority mismatch at byte ${entry.start}`);
+        if (["candidate", "snapshot_record"].includes(value.record_kind)) {
+          const payload = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "record_id" && key !== "candidate_record_id"));
+          const expectedRecordId = `candidate-record.v1:${hashBytes(canonical(payload))}`;
+          if (value.record_id !== expectedRecordId || value.candidate_record_id !== expectedRecordId) throw fail("failed", `candidate record identity mismatch at byte ${entry.start}`);
+        }
+      } catch {
+        recoveryBatchId = open.begin.batch_id;
+        recoveryStart = open.start;
+        open = null;
+        continue;
+      }
       open.rows.push(value);
       continue;
     }
@@ -484,7 +504,7 @@ function scanCandidateLedger(path) {
     terminalSuffix: suffixStart === null ? null : {
       start: suffixStart,
       bytes: raw.subarray(suffixStart),
-      batch_id: open?.begin?.batch_id ?? null,
+      batch_id: recoveryBatchId ?? open?.begin?.batch_id ?? null,
     },
   };
 }
@@ -600,8 +620,13 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
       const taskRoot = join(storageRoot, "Projects", inventory.project, "tasks", taskId);
       const sourceRefs = []; const records = [];
       try {
+        const taskStat = lstatSync(taskRoot);
+        if (!taskStat.isDirectory() || taskStat.isSymbolicLink()) return null;
+        const trustedTaskRoot = realpathSync(taskRoot);
         for (const stage of STAGES) {
           const directory = join(taskRoot, "quality/evidence/stage-outcomes", stage);
+          const directoryStat = lstatSync(directory);
+          if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink() || !realpathSync(directory).startsWith(`${trustedTaskRoot}/`)) return null;
           const files = readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.isSymbolicLink() && /^[a-f0-9]{64}\.json$/.test(entry.name)).map((entry) => entry.name).sort();
           if (files.length === 0) return null;
           let position = 0;

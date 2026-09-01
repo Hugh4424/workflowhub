@@ -221,6 +221,16 @@ describe("M16 candidate and tax contract", () => {
     }
   });
 
+  it("rejects a candidate whose content changed without its derived record identity", async () => {
+    const mod = await loadModule(); const storageRoot = root();
+    expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "candidate-tamper", inventory: { project: "Demo", observations: [observation("tamper")] }, now: "2026-08-31T00:00:00Z" }).status).toBe("ok");
+    const ledger = candidateLedger(storageRoot); const records = readFileSync(ledger, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    records[1].tier = records[1].tier === "action_suggested" ? "reference_only" : "action_suggested";
+    records.at(-1).content_hash = createHash("sha256").update(canonical(records.slice(1, -1))).digest("hex");
+    writeFileSync(ledger, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+    expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" })).toMatchObject({ status: "failed" });
+  });
+
   it("refuses to follow an evolution candidate ledger symlink outside storage", async () => {
     const mod = await loadModule();
     const storageRoot = root(); const outside = root();
@@ -229,6 +239,17 @@ describe("M16 candidate and tax contract", () => {
     symlinkSync(externalLedger, candidateLedger(storageRoot));
     expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "symlink", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" })).toMatchObject({ status: "failed" });
     expect(readFileSync(externalLedger, "utf8")).toBe("outside\n");
+  });
+
+  it("refuses dangling ledger and Projects symlinks before any external write", async () => {
+    const mod = await loadModule();
+    const danglingRoot = root(); const outside = root(); const danglingProject = join(danglingRoot, "Projects/Demo"); mkdirSync(danglingProject, { recursive: true });
+    const missingTarget = join(outside, "missing-ledger.jsonl"); symlinkSync(missingTarget, candidateLedger(danglingRoot));
+    expect(mod.refreshEvolutionSnapshot({ storageRoot: danglingRoot, project: "Demo", attemptId: "dangling", inventory: { observations: [] }, now: "2026-08-31T00:00:00Z" })).toMatchObject({ status: "failed" });
+    expect(existsSync(missingTarget)).toBe(false);
+    const projectsRoot = root(); const externalProjects = join(outside, "external-projects"); mkdirSync(externalProjects, { recursive: true }); symlinkSync(externalProjects, join(projectsRoot, "Projects"));
+    expect(() => mod.refreshEvolutionSnapshot({ storageRoot: projectsRoot, project: "Demo", attemptId: "projects-link", inventory: { observations: [] }, now: "2026-08-31T00:00:00Z" })).toThrow(/Projects root must not be a symlink/);
+    expect(existsSync(join(externalProjects, "Demo/evolution-candidates.jsonl"))).toBe(false);
   });
 
   it("authenticates a torn terminal batch before publishing the next generation", async () => {

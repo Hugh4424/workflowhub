@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
@@ -187,6 +187,16 @@ describe("derive-consumption-edges", () => {
     const forgedProof = { ...proof, source_refs: sourceRefs, scope_revision: hash(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).join("\n")) };
     const item = { task_id: "task-schema", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } };
     const result = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-schema", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [forgedProof] } });
+    expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("rejects a consumer proof when its task directory is replaced by an external symlink", () => {
+    const root = mkdtempSync(join(tmpdir(), "stage-reflection-proof-task-link-")); const outside = mkdtempSync(join(tmpdir(), "stage-reflection-proof-task-outside-")); roots.push(root, outside);
+    const taskRoot = join(root, "Projects/Demo/tasks/task-link"); mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true }); writeFileSync(join(taskRoot, "quality/evidence/zero.md"), "zero\n");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) writeOutcome(root, stage, "task-link", { schema_version: "workflowhub-stage-outcomes.v1", task_id: "task-link", stage, step_outcomes: stage === "build-spec" ? [{ step_slug: "spec-clarify", input_refs: [], output_refs: ["quality/evidence/zero.md"], evidence_refs: [] }] : [], skill_outcomes: [] });
+    const proof = run(root).tasks[0].consumer_scan_proof; const externalTask = join(outside, "task-link"); renameSync(taskRoot, externalTask); symlinkSync(externalTask, taskRoot, "dir");
+    const item = { task_id: "task-link", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } };
+    const result = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "task-link", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [proof] } });
     expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
   });
 

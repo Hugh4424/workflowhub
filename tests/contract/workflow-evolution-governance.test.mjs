@@ -75,13 +75,13 @@ describe("M16 governance registration", () => {
     const forgedGreen = spawnSync(process.execPath, [checker, "monitor", "green", "0", "0", baselineHash, failedHash, reportPath], { cwd: root });
     expect(forgedGreen.status).toBe(23);
   });
-  it("rejects reports whose per-test assertions disagree with global totals", () => {
+  it("rejects minimal reports that invent one passed assertion per expected file", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "workflowhub-red-counts-")); temporaryRoots.push(temporaryRoot);
     const checker = resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs");
     const baseline = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/red-baseline.v1.json"));
     const baselineHash = createHash("sha256").update(baseline).digest("hex");
     const names = ["tests/contract/workflow-evolution-governance.test.mjs", "tests/e2e/workflow-evolution-current.test.mjs", "tests/contract/public-behavior-baseline.test.mjs"];
-    const report = { numTotalTests: 1, numPassedTests: 1, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, success: true, testResults: names.map((name) => ({ name: resolve(root, name), status: "passed", assertionResults: [{ fullName: name, status: "passed" }] })) };
+    const report = { numTotalTests: 3, numPassedTests: 3, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, success: true, testResults: names.map((name) => ({ name: resolve(root, name), status: "passed", assertionResults: [{ fullName: name, status: "passed" }] })) };
     const reportPath = join(temporaryRoot, "suite-output.json"); writeFileSync(reportPath, JSON.stringify(report));
     const reportHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
     expect(spawnSync(process.execPath, [checker, "governance", "green", "0", "0", baselineHash, reportHash, reportPath], { cwd: root }).status).toBe(23);
