@@ -330,13 +330,20 @@ export function acquireProjectLock(input = {}) {
   const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
   const fencingToken = `${ownerToken}:${now}`;
   const value = { schema_version: SCHEMA_VERSION, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, pid: process.pid, host_id: hostname(), boot_id: bootId, session_epoch: String(sessionEpoch), acquired_monotonic_ms: now, lease_deadline_monotonic_ms: now + LOCK_LEASE_MS };
+  const recovery = input.manualRecovery ?? input.manual_recovery;
+  const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
+    && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
+    && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
+    ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
+  if (!existsSync(path) && recoveryTombstone && existsSync(recoveryTombstone)) {
+    return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
+  }
   if (existsSync(path)) {
     let currentRaw;
     let current;
     try { currentRaw = readFileSync(path, "utf8"); current = JSON.parse(currentRaw); }
     catch (error) { return { status: "failed", error: { code: "failed", summary: `lock is unreadable: ${error.message}` } }; }
     if (!validProjectLock(current, project)) return { status: "failed", error: { code: "failed", summary: "project lock schema or identity is invalid" } };
-    const recovery = input.manualRecovery ?? input.manual_recovery;
     const sameEpoch = current.host_id === hostname() && current.boot_id === bootId && String(current.session_epoch) === String(sessionEpoch);
     const expired = Number.isFinite(current.lease_deadline_monotonic_ms) && now > current.lease_deadline_monotonic_ms;
     if (sameEpoch && (!expired || processIsAlive(current.pid))) return { status: "conflict", error: { code: "conflict", summary: "project lock is held by a live process" } };
@@ -371,6 +378,7 @@ export function acquireProjectLock(input = {}) {
       fsyncParent(path);
     } catch (error) {
       if (error?.code === "EEXIST") return { status: sameEpoch ? "failed" : "replayed_recovery", error: { code: sameEpoch ? "failed" : "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
+      if (error?.code === "ENOENT" && existsSync(tombstone)) return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
       return { status: "failed", error: { code: "failed", summary: `lock reclaim failed: ${error.message}` } };
     }
   }

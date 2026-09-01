@@ -581,7 +581,35 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
     expect(results.every((result) => result.status === 0), results.map((result) => result.stderr).join("\n")).toBe(true);
     const statuses = results.map((result) => JSON.parse(result.stdout).status);
     expect(statuses.filter((status) => status === "ok")).toHaveLength(1);
-    expect(statuses.every((status) => ["ok", "conflict", "replayed_recovery"].includes(status))).toBe(true);
+    expect(statuses.every((status) => ["ok", "conflict", "replayed_recovery"].includes(status)), statuses.join(",")).toBe(true);
+    expect(first.release()).toEqual({ status: "ok" });
+  });
+
+  it("rejects a replayed recovery while the lock path is between reclaim and recreation", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "old-attempt", bootId: "old-boot", sessionEpoch: "old-session" });
+    const lockPath = first.lockHandle.path;
+    const expired = { ...JSON.parse(readFileSync(lockPath, "utf8")), pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    writeFileSync(lockPath, `${JSON.stringify(expired)}\n`);
+    const before = readFileSync(lockPath);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(before).digest("hex"),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "gap-recovery",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "c".repeat(64),
+    };
+    const tombstone = `${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`;
+    writeFileSync(tombstone, before);
+    rmSync(lockPath);
+    const result = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "new-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
+    expect(result).toMatchObject({ status: "replayed_recovery", error: { code: "replayed_recovery" } });
+    expect(readFileSync(tombstone)).toEqual(before);
     expect(first.release()).toEqual({ status: "ok" });
   });
 
