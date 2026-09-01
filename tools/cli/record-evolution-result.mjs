@@ -36,7 +36,7 @@ function entries(raw) { const out = []; let start = 0; while (start < raw.length
 function parsed(entry) { if (!entry.complete) return null; try { return JSON.parse(entry.bytes.toString("utf8")); } catch { return null; } }
 function validAbort(raw, start, entry, value) { const suffixEnd = start + value.observed_suffix_length; return value?.record_kind === "batch_abort" && value.abandoned_start_offset === start && Number.isInteger(value.observed_suffix_length) && suffixEnd <= entry.start && hash(raw.subarray(0, start)) === value.last_committed_prefix_hash && hash(raw.subarray(start, suffixEnd)) === value.observed_suffix_hash && /^[\r\n]*$/.test(raw.subarray(suffixEnd, entry.start).toString("utf8")); }
 function scanLedger(path, ledgerKind) {
-  const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0); const records = []; let open = null; let recoveryStart = null; let committedEnd = 0;
+  const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0); const records = []; let open = null; let recoveryStart = null; let committedEnd = 0; let latestPublicationGeneration = 0;
   for (const entry of entries(raw)) {
     const value = parsed(entry);
     if (recoveryStart !== null) {
@@ -49,9 +49,9 @@ function scanLedger(path, ledgerKind) {
     if (value.record_kind === "batch_begin") throw fail("failed", `nested ledger batch at byte ${entry.start}`);
     if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id) throw fail("failed", `ledger row batch identity mismatch at byte ${entry.start}`); open.rows.push(value); continue; }
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `committed ledger integrity mismatch at byte ${entry.start}`);
-    records.push(...open.rows); committedEnd = entry.end; open = null;
+    records.push(...open.rows); committedEnd = entry.end; latestPublicationGeneration = Number.isInteger(value.publication_generation) ? value.publication_generation : latestPublicationGeneration; open = null;
   }
-  const suffixStart = recoveryStart ?? open?.start ?? null; return { raw, records, committedEnd, terminalSuffix: suffixStart === null ? null : { start: suffixStart, bytes: raw.subarray(suffixStart) } };
+  const suffixStart = recoveryStart ?? open?.start ?? null; return { raw, records, committedEnd, latestPublicationGeneration, terminalSuffix: suffixStart === null ? null : { start: suffixStart, bytes: raw.subarray(suffixStart), publication_generation: open?.begin?.publication_generation ?? null } };
 }
 function assertLock(lock, attemptId) {
   const value = JSON.parse(readFileSync(lock.lockHandle.path, "utf8"));
@@ -61,12 +61,12 @@ function appendLine(path, value, lock, attemptId) { mkdirSync(dirname(path), { r
 function recoverTail(path, ledgerKind, lock, attemptId) {
   const state = scanLedger(path, ledgerKind); if (!state.terminalSuffix) return state; const suffix = state.terminalSuffix;
   if (state.raw.length && state.raw.at(-1) !== 0x0a) { assertLock(lock, attemptId); const fd = openSync(path, "a"); try { writeFileSync(fd, "\n"); fsyncSync(fd); } finally { closeSync(fd); } assertLock(lock, attemptId); }
-  appendLine(path, { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: ledgerKind, batch_id: "unparseable-or-uncommitted", reason: "terminal_uncommitted_suffix", last_committed_prefix_hash: hash(state.raw.subarray(0, suffix.start)), abandoned_start_offset: suffix.start, observed_suffix_length: suffix.bytes.length, observed_suffix_hash: hash(suffix.bytes) }, lock, attemptId);
+  appendLine(path, { schema_version: "workflow-evolution.v1", record_kind: "batch_abort", ledger_kind: ledgerKind, batch_id: "unparseable-or-uncommitted", publication_generation: suffix.publication_generation ?? (state.latestPublicationGeneration + 1), reason: "terminal_uncommitted_suffix", last_committed_prefix_hash: hash(state.raw.subarray(0, suffix.start)), abandoned_start_offset: suffix.start, observed_suffix_length: suffix.bytes.length, observed_suffix_hash: hash(suffix.bytes) }, lock, attemptId);
   const recovered = scanLedger(path, ledgerKind); if (recovered.terminalSuffix) throw fail("failed", "ledger recovery did not close terminal suffix"); return recovered;
 }
 function appendBatch(path, ledgerKind, value, lock, attemptId, expectedPrefixHash) {
-  const state = scanLedger(path, ledgerKind); if (state.terminalSuffix || hash(state.raw) !== expectedPrefixHash) throw fail("conflict", "ledger head changed before append"); const batchId = randomUUID(); const row = { ...value, ledger_batch_id: batchId };
-  const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId }; const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId, count: 1, content_hash: hash(canonical([row])), status: "committed" };
+  const state = scanLedger(path, ledgerKind); if (state.terminalSuffix || hash(state.raw) !== expectedPrefixHash) throw fail("conflict", "ledger head changed before append"); const batchId = randomUUID(); const publicationGeneration = state.latestPublicationGeneration + 1; const row = { ...value, ledger_batch_id: batchId };
+  const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId, publication_generation: publicationGeneration }; const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: ledgerKind, batch_id: batchId, attempt_id: attemptId, count: 1, content_hash: hash(canonical([row])), publication_generation: publicationGeneration, status: "committed" };
   appendLine(path, begin, lock, attemptId); appendLine(path, row, lock, attemptId); const beforeCommit = scanLedger(path, ledgerKind); if (!beforeCommit.terminalSuffix || beforeCommit.terminalSuffix.start !== state.raw.length || !beforeCommit.terminalSuffix.bytes.equals(Buffer.concat([encoded(begin), encoded(row)]))) throw fail("stale_source", "uncommitted ledger bytes changed"); appendLine(path, commit, lock, attemptId); const complete = scanLedger(path, ledgerKind); if (complete.terminalSuffix || complete.records.at(-1)?.ledger_batch_id !== batchId) throw fail("failed", "ledger commit is not current"); return row;
 }
 function iso(value, name) { required(value, name); const parsed = Date.parse(value); if (!Number.isFinite(parsed) || !value.endsWith("Z")) throw fail("invalid_input", `${name} must be a UTC timestamp`); return parsed; }

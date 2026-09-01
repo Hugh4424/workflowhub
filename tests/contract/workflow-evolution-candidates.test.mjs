@@ -344,7 +344,7 @@ describe("M16 candidate and tax contract", () => {
       try { return [JSON.parse(line)]; } catch { return []; }
     });
     const abort = records.find((record) => record.record_kind === "batch_abort");
-    expect(abort).toMatchObject({ abandoned_start_offset: committedPrefix.length, observed_suffix_length: torn.length, reason: "terminal_uncommitted_suffix" });
+    expect(abort).toMatchObject({ abandoned_start_offset: committedPrefix.length, observed_suffix_length: torn.length, publication_generation: 2, reason: "terminal_uncommitted_suffix" });
     expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" }).publication_generation).toBe(2);
     expect(first.publication_generation).toBe(1);
   });

@@ -431,12 +431,14 @@ function scanCandidateLedger(path) {
   let open = null;
   let recoveryStart = null;
   let recoveryBatchId = null;
+  let recoveryPublicationGeneration = null;
   for (const entry of ledgerEntries(raw)) {
     const value = parseEntry(entry);
     if (recoveryStart !== null) {
       if (value?.record_kind === "batch_abort" && validAbort(raw, recoveryStart, entry, value)) {
         recoveryStart = null;
         recoveryBatchId = null;
+        recoveryPublicationGeneration = null;
         open = null;
         continue;
       }
@@ -476,6 +478,7 @@ function scanCandidateLedger(path) {
         }
       } catch {
         recoveryBatchId = open.begin.batch_id;
+        recoveryPublicationGeneration = open.begin.publication_generation;
         recoveryStart = open.start;
         open = null;
         continue;
@@ -505,6 +508,7 @@ function scanCandidateLedger(path) {
       start: suffixStart,
       bytes: raw.subarray(suffixStart),
       batch_id: recoveryBatchId ?? open?.begin?.batch_id ?? null,
+      publication_generation: recoveryPublicationGeneration ?? open?.begin?.publication_generation ?? null,
     },
   };
 }
@@ -524,6 +528,7 @@ function recoverTerminalSuffix(path, lock) {
   const state = scanCandidateLedger(path);
   if (!state.terminalSuffix) return state;
   const suffix = state.terminalSuffix;
+  const publicationGeneration = suffix.publication_generation ?? ((state.latest?.commit.publication_generation ?? 0) + 1);
   if (state.raw.length > 0 && state.raw[state.raw.length - 1] !== 0x0a) {
     assertLockCurrent(lock);
     const fd = openSync(path, "a");
@@ -534,6 +539,7 @@ function recoverTerminalSuffix(path, lock) {
     schema_version: SCHEMA_VERSION,
     record_kind: "batch_abort",
     batch_id: suffix.batch_id ?? "unparseable-or-uncommitted",
+    publication_generation: publicationGeneration,
     reason: "terminal_uncommitted_suffix",
     last_committed_prefix_hash: hashBytes(state.raw.subarray(0, suffix.start)),
     abandoned_start_offset: suffix.start,

@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 68496,
-      "sha256_after": "e0ad72dfd66b9a84b7853dca26f75d953c114b1908190ff224ca3f8e395a096b"
+      "bytes": 68943,
+      "sha256_after": "90a2e38d612fa431c80a7da634ad52235ded7ea2bba7e4ad0193d7c588b86d18"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2321,8 +2321,8 @@
       "consumer": "workflow-evolution deep module and governance checks",
       "delete_condition": "remove with M16 data-plane",
       "content_change": "combined versioned M16 definitions",
-      "bytes": 15876,
-      "sha256_after": "066d0433406609872a25c73c7e9daa2a43c9a9c86f82f880e7d63edba6f28f4f"
+      "bytes": 15963,
+      "sha256_after": "474b5caad6c033f6c50fcc7c9b032a18a8ddfe0b486a151085e58d9b12a30bf0"
     },
     {
       "source": "tools/cli/generate-iteration-brief.mjs",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 24299,
-      "sha256_after": "d74691fb7edb5de9ce7910a507177d645b3b2ebbaf0030ef7ba7846cf4a20a52"
+      "bytes": 24538,
+      "sha256_after": "25262305b8d0a99902976d29e7623a3b647b3aacf63caa3109e463e3e655e8a8"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",
@@ -2343,8 +2343,8 @@
       "consumer": "maintainer terminal outcome recording",
       "delete_condition": "remove when M16 ledgers are retired",
       "content_change": "private candidate and ledger adapter",
-      "bytes": 22589,
-      "sha256_after": "19adb162b050a4d9631531460ea8b1bc42bbcd1e38cae595e40f1de7674f892a"
+      "bytes": 23124,
+      "sha256_after": "4ac3c896c08a9d1b36ff4239f8ff0199539367c5a08d5d077f3498bf255f41e1"
     },
     {
       "source": "tools/cli/check-skill-updates.mjs",

@@ -37,7 +37,8 @@ describe("M16 ledgers", () => {
       expect(result.status, result.stdout).toBe(0);
       const records = readFileSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
       expect(records.map((entry) => entry.record_kind)).toEqual(["batch_begin", "attempted-edit", "batch_commit"]);
-      expect(records[2]).toMatchObject({ count: 1, status: "committed" });
+      expect(records[0]).toMatchObject({ publication_generation: 1 });
+      expect(records[2]).toMatchObject({ count: 1, publication_generation: 1, status: "committed" });
     } finally { fixture.cleanup(); }
   });
 
