@@ -2299,8 +2299,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 27523,
-      "sha256_after": "259837938ff7f9a3c205b787c03fb8bc327a84b0e12b58ba44f6083e1f09f0f1"
+      "bytes": 28127,
+      "sha256_after": "8b25b7c72afda5d98b52d92f7699d0bb559858bd36befd17229cf407a0c7e6c4"
     },
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
