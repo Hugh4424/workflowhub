@@ -1,6 +1,6 @@
 # 任务清单：M16 自进化候选池、迭代入口与负例库
 
-- **Input**：`decision-log.md@51d1ae108d28189df006d235bf2ae65e981812e283259dd06db29bc7a314bf7c`、`spec.md@b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb`、`plan.md@ef076a3a01a9182f8c910e7ebb792f76ded801c1c28f164c1b50846dfbbd7ee2`
+- **Input**：`decision-log.md@51d1ae108d28189df006d235bf2ae65e981812e283259dd06db29bc7a314bf7c`、`spec.md@b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb`、`plan.md@afd407b72231af9bb122ea2f4e01a69f457ad639232fd0ff4562435bc2481269`
 - **Template version**：`plan-task.v3`
 
 ## Phase P1 — Evolution data-plane 与私有入口
