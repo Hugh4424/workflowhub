@@ -42,9 +42,82 @@ const reportedTests = report.testResults.map((result) => {
   const relative = absolute.startsWith(`${process.cwd()}/`) ? absolute.slice(process.cwd().length + 1) : "";
   return relative;
 }).sort();
+function decodeStringLiteral(raw, quote) {
+  return raw.replace(/\\([\\'"`])/g, "$1").replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t");
+}
+function quotedStrings(raw) {
+  const values = [];
+  for (let index = 0; index < raw.length;) {
+    const quote = raw[index];
+    if (!["'", '"', "`"].includes(quote)) { index += 1; continue; }
+    let end = index + 1; let escaped = false;
+    for (; end < raw.length; end += 1) {
+      const char = raw[end];
+      if (escaped) { escaped = false; continue; }
+      if (char === "\\") { escaped = true; continue; }
+      if (char === quote) break;
+    }
+    if (end >= raw.length) break;
+    values.push(decodeStringLiteral(raw.slice(index + 1, end), quote)); index = end + 1;
+  }
+  return values;
+}
+function matchingParen(source, open) {
+  let depth = 0; let quote = null; let escaped = false;
+  for (let index = open; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (["'", '"', "`"].includes(char)) { quote = char; continue; }
+    if (char === "(") depth += 1;
+    else if (char === ")" && --depth === 0) return index;
+  }
+  return -1;
+}
+function parameterizedTitles(source) {
+  const titles = [];
+  for (const call of source.matchAll(/\bit\.each\s*\(/g)) {
+    const open = call.index + call[0].length - 1;
+    const close = matchingParen(source, open);
+    if (close < 0) continue;
+    const table = source.slice(open + 1, close).trim();
+    if (!table.startsWith("[")) continue;
+    const titleMatch = source.slice(close + 1).match(/^\s*\(\s*(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/);
+    if (!titleMatch) continue;
+    const template = decodeStringLiteral(titleMatch[2], titleMatch[1]);
+    let depth = 0; let rowStart = -1; let quote = null; let escaped = false;
+    for (let index = 0; index < table.length; index += 1) {
+      const char = table[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = null;
+        continue;
+      }
+      if (["'", '"', "`"].includes(char)) { quote = char; continue; }
+      if (char === "[") { depth += 1; if (depth === 2) rowStart = index + 1; }
+      else if (char === "]") {
+        if (depth === 2 && rowStart >= 0) {
+          const args = quotedStrings(table.slice(rowStart, index)); let argIndex = 0;
+          titles.push(template.replace(/%[sdifjoO]/g, (token) => token === "%%" ? "%%" : String(args[argIndex++] ?? token)));
+          rowStart = -1;
+        }
+        depth -= 1;
+      }
+    }
+  }
+  return titles;
+}
 const sourceAssertions = new Map(expectedTests.map((test) => {
   const source = readFileSync(resolve(test), "utf8");
-  const titles = [...source.matchAll(/\bit(?:\.(?:runIf|skipIf)\s*\([^)]*\)|\.(?:skip|only|todo))?\s*\(\s*(["'`])([^"'`]+)\1/g)].map((match) => match[2]).sort();
+  const titles = [
+    ...[...source.matchAll(/\bit(?:\.(?:runIf|skipIf)\s*\([^)]*\)|\.(?:skip|only|todo))?\s*\(\s*(["'`])([^"'`]+)\1/g)].map((match) => match[2]),
+    ...parameterizedTitles(source),
+  ].sort();
   if (titles.length === 0) process.exit(23);
   return [test, titles];
 }));

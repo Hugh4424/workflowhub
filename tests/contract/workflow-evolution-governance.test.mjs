@@ -86,6 +86,17 @@ describe("M16 governance registration", () => {
     const reportHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
     expect(spawnSync(process.execPath, [checker, "governance", "green", "0", "0", baselineHash, reportHash, reportPath], { cwd: root }).status).toBe(23);
   });
+  it("rejects empty assertion lists even when global totals claim a passing suite", () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "workflowhub-red-empty-")); temporaryRoots.push(temporaryRoot);
+    const checker = resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs");
+    const baseline = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/red-baseline.v1.json"));
+    const baselineHash = createHash("sha256").update(baseline).digest("hex");
+    const names = ["tests/contract/workflow-evolution-governance.test.mjs", "tests/e2e/workflow-evolution-current.test.mjs", "tests/contract/public-behavior-baseline.test.mjs"];
+    const report = { numTotalTests: 0, numPassedTests: 0, numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, success: true, testResults: names.map((name) => ({ name: resolve(root, name), status: "passed", assertionResults: [] })) };
+    const reportPath = join(temporaryRoot, "suite-output.json"); writeFileSync(reportPath, JSON.stringify(report));
+    const reportHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
+    expect(spawnSync(process.execPath, [checker, "governance", "green", "0", "0", baselineHash, reportHash, reportPath], { cwd: root }).status).toBe(23);
+  });
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");
     expect(facade).not.toMatch(/RUNTIME_BEHAVIORS[^\n]*evolution|generate-iteration-brief/);
