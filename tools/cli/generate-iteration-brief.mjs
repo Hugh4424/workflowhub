@@ -2,11 +2,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { acquireProjectLock, readCurrentEvolutionProjection, resolveTargetRef, validateWorkflowEvolutionDefinition } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, assertProjectLockCurrent, readCurrentEvolutionProjection, resolveTargetRef, validateWorkflowEvolutionDefinition } from "../../runtime/evidence/workflow-evolution.mjs";
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
-function monotonicMs() { return Number(process.hrtime.bigint() / 1_000_000n); }
 function required(value, name) { if (typeof value !== "string" || value.trim() === "") throw fail("invalid_input", `${name} is required`); return value; }
 function parse(argv) { const out = {}; for (const arg of argv) { const i = arg.indexOf("="); if (!arg.startsWith("--") || i < 3) throw fail("invalid_input", `invalid argument: ${arg}`); out[arg.slice(2, i)] = arg.slice(i + 1); } return out; }
 function canonical(value) { if (value === null || typeof value !== "object") return JSON.stringify(value); if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; }
@@ -98,7 +97,11 @@ function skillSection(path, targetRef) {
   if (receipt.schema_version !== "skill-update-check.v1" || receipt.receipt_id !== expected || receipt.installed_identity?.skill_id !== targetRef.target_id || receipt.installed_identity?.version !== targetRef.target_version) return { section_id: "external_skill_updates", status: "unavailable", reason_code: "receipt_identity_mismatch", source_refs: [resolve(path)], items: [] };
   return { section_id: "external_skill_updates", status: receipt.status === "current" || receipt.status === "update_available" ? "ready" : "unavailable", reason_code: receipt.reason, source_refs: [resolve(path)], items: [receipt] };
 }
-function assertLock(lock, attemptId) { const current = JSON.parse(readFileSync(lock.lockHandle.path, "utf8")); if (current.owner_token !== lock.ownerToken || current.fencing_token !== lock.fencingToken || current.attempt_id !== attemptId) throw fail("stale_source", "brief lock authority is stale"); if (!Number.isInteger(current.lease_deadline_monotonic_ms) || monotonicMs() > current.lease_deadline_monotonic_ms) throw fail("stale_source", "brief lock lease expired"); }
+function assertLock(lock, attemptId) {
+  const heldAttempt = lock?.attemptId ?? lock?.attempt_id ?? lock?.lockHandle?.attemptId ?? lock?.lockHandle?.attempt_id;
+  if (heldAttempt !== attemptId) throw fail("stale_source", "brief lock authority is stale");
+  return assertProjectLockCurrent(lock);
+}
 function currentHash(path) { return existsSync(path) ? hash(readFileSync(path)) : null; }
 function decodeHeader(raw) {
   const match = raw.match(/<!-- workflow-evolution-brief:([^ ]+) -->/);

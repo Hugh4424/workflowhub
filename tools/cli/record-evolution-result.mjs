@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { acquireProjectLock, recordCandidateTransition, resolveTargetRef, validateWorkflowEvolutionDefinition, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, assertProjectLockCurrent, recordCandidateTransition, resolveTargetRef, validateWorkflowEvolutionDefinition, D24_EVAL_BOUNDARY } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const EDIT_OUTCOMES = new Set(["improved", "unchanged", "regressed", "inconclusive", "reverted"]);
@@ -13,7 +13,6 @@ const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 
 function fail(code, summary) { const error = new Error(summary); error.code = code; return error; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
-function monotonicMs() { return Number(process.hrtime.bigint() / 1_000_000n); }
 function required(value, name) { if (typeof value !== "string" || value.trim() === "") throw fail("invalid_input", `${name} is required`); return value; }
 function parseArgs(argv) { const out = {}; for (const arg of argv) { const index = arg.indexOf("="); if (!arg.startsWith("--") || index < 3) throw fail("invalid_input", `invalid argument: ${arg}`); out[arg.slice(2, index)] = arg.slice(index + 1); } return out; }
 function inputValue(options) { if (options.input) return JSON.parse(readFileSync(resolve(options.input), "utf8")); if (options.json) return JSON.parse(options.json); return {}; }
@@ -74,9 +73,9 @@ function scanLedger(path, ledgerKind) {
   const suffixStart = recoveryStart ?? open?.start ?? null; return { raw, records, committedEnd, latestPublicationGeneration, terminalSuffix: suffixStart === null ? null : { start: suffixStart, bytes: raw.subarray(suffixStart), batch_id: open?.begin?.batch_id ?? null, publication_generation: open?.begin?.publication_generation ?? null } };
 }
 function assertLock(lock, attemptId) {
-  const value = JSON.parse(readFileSync(lock.lockHandle.path, "utf8"));
-  if (value.owner_token !== lock.ownerToken || value.fencing_token !== lock.fencingToken || value.attempt_id !== attemptId) throw fail("stale_source", "project lock authority is stale");
-  if (!Number.isInteger(value.lease_deadline_monotonic_ms) || monotonicMs() > value.lease_deadline_monotonic_ms) throw fail("stale_source", "project lock lease expired");
+  const heldAttempt = lock?.attemptId ?? lock?.attempt_id ?? lock?.lockHandle?.attemptId ?? lock?.lockHandle?.attempt_id;
+  if (heldAttempt !== attemptId) throw fail("stale_source", "project lock authority is stale");
+  return assertProjectLockCurrent(lock);
 }
 function appendLine(path, value, lock, attemptId) { mkdirSync(dirname(path), { recursive: true }); const existed = existsSync(path); assertLock(lock, attemptId); const fd = openSync(path, "a"); try { writeFileSync(fd, encoded(value)); fsyncSync(fd); } finally { closeSync(fd); } if (!existed) { const parent = openSync(dirname(path), "r"); try { fsyncSync(parent); } finally { closeSync(parent); } } assertLock(lock, attemptId); }
 function recoverTail(path, ledgerKind, lock, attemptId) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -515,7 +515,23 @@ describe("M16 candidate and tax contract", () => {
       expect(result).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
       expect(readFileSync(candidateLedger(storageRoot))).toEqual(before);
     }
-    expect(lock.release()).toEqual({ status: "ok" });
+    expect(lock.release()).toEqual({ status: "stale_source" });
+  });
+
+  it("uses a non-reusable fencing token and an old release cannot remove a replacement lock", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "fence-a", ownerToken: "reused-owner" });
+    expect(first.status).toBe("ok");
+    const firstFencing = first.fencingToken;
+    expect(first.release()).toEqual({ status: "ok" });
+    const second = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "fence-b", ownerToken: "reused-owner" });
+    expect(second.status).toBe("ok");
+    expect(second.fencingToken).not.toBe(firstFencing);
+    expect(() => mod.assertProjectLockCurrent({ ...second, leaseIdentity: { boot_id: "forged-boot", session_epoch: second.leaseIdentity.session_epoch } })).toThrow(/stale|unavailable|disagree/);
+    expect(first.release()).toEqual({ status: "stale_source" });
+    expect(existsSync(second.lockHandle.path)).toBe(true);
+    expect(second.release()).toEqual({ status: "ok" });
   });
 
   it("rejects cross-boot recovery while the lock lease is still valid without changing the lock", async () => {
@@ -543,6 +559,25 @@ describe("M16 candidate and tax contract", () => {
     expect(readFileSync(lockPath)).toEqual(before);
     expect(existsSync(`${lockPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}`)).toBe(false);
     expect(first.release()).toEqual({ status: "ok" });
+  });
+
+  it("fails closed without creating a project when manual recovery has no current lock", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: "a".repeat(64),
+      old_boot_id: "old-boot",
+      new_boot_id: "new-boot",
+      operator_identity: "operator@example.test",
+      issued_at: "2026-08-31T00:00:00Z",
+      nonce: "missing-current-lock",
+      confirmation_ref: "confirmation:recovery",
+      confirmation_sha256: "b".repeat(64),
+    };
+    const result = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "new-attempt", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery });
+    expect(result).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
+    expect(readdirSync(storageRoot)).toEqual([]);
   });
 
   it("allows at most one concurrent recovery to reclaim the same expired lock", async () => {

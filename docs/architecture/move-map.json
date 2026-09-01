@@ -2263,8 +2263,8 @@
       "delete_condition": "remove when automatic stage lessons are retired",
       "content_change": "raw_observation JSONL writer plus atomic idempotent merged_lesson lifecycle",
       "sha256_before": null,
-      "bytes": 13587,
-      "sha256_after": "6af23b804818e4d37b1b5c43e08de23a1ab9dc841479910ec621682648456dbc"
+      "bytes": 13793,
+      "sha256_after": "257b628734a541e9580a51f53c19efedd3d653dc929ddb37271f210075ca97bb"
     },
     {
       "source": "tools/cli/validate-stage-reflection.mjs",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 72177,
-      "sha256_after": "96b4d713fb6de88add9e1e6c5a12dff5f938e2f6e457f8bbd754aa6e2e2e38f9"
+      "bytes": 79957,
+      "sha256_after": "e91cf2022fff7b4803974106cdf557dede967f74d43ee37e0b12b4a031e75a2a"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 25869,
-      "sha256_after": "5581113ebaa49d99c1a8f4b3da4751eaf6be222d8c9af0b8cda125284fd561b6"
+      "bytes": 25640,
+      "sha256_after": "82e2d555353a32aedc6533e8812e592f63c6ab8d7cf89831b792836a67bc9032"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",
@@ -2343,8 +2343,8 @@
       "consumer": "maintainer terminal outcome recording",
       "delete_condition": "remove when M16 ledgers are retired",
       "content_change": "private candidate and ledger adapter",
-      "bytes": 26371,
-      "sha256_after": "cafc62d1b8990cf9929e143cdd4b757e6a43fd9f90f2a912ef78a45a34088a80"
+      "bytes": 26146,
+      "sha256_after": "34593b34257b0f8afb153539ae932dca964b18c04f83fa51a1f2d1e9311df2f6"
     },
     {
       "source": "tools/cli/check-skill-updates.mjs",

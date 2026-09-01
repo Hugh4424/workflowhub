@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync, fsyncSync } from "node:fs";
 import { hostname } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 
@@ -281,7 +281,7 @@ export function computeQualityTaxProjection(input = {}) {
   return output;
 }
 
-function projectRoot(storageRoot, project) {
+function safeProjectPath(storageRoot, project) {
   const root = resolve(storageRoot); requiredString(project, "project");
   let rootStat; try { rootStat = lstatSync(root); } catch (error) { if (error?.code !== "ENOENT") throw error; }
   if (rootStat?.isSymbolicLink()) throw fail("invalid_input", "storage root must not be a symlink");
@@ -289,17 +289,25 @@ function projectRoot(storageRoot, project) {
   const projects = resolve(root, "Projects");
   let projectsStat; try { projectsStat = lstatSync(projects); } catch (error) { if (error?.code !== "ENOENT") throw error; }
   if (projectsStat?.isSymbolicLink()) throw fail("invalid_input", "Projects root must not be a symlink");
-  mkdirSync(projects, { recursive: true });
-  if (dirname(realpathSync(projects)) !== realpathSync(root)) throw fail("invalid_input", "Projects root escapes storage root");
+  if (projectsStat && dirname(realpathSync(projects)) !== realpathSync(root)) throw fail("invalid_input", "Projects root escapes storage root");
   const path = resolve(projects, project);
   if (dirname(path) !== projects) throw fail("invalid_input", "project path escapes Projects root");
   if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw fail("invalid_input", "project path must not be a symlink");
   if (existsSync(path) && dirname(realpathSync(path)) !== realpathSync(projects)) throw fail("invalid_input", "project path escapes Projects root");
+  return path;
+}
+function projectRoot(storageRoot, project) {
+  const root = resolve(storageRoot);
+  const path = safeProjectPath(root, project);
+  const projects = dirname(path);
+  mkdirSync(projects, { recursive: true });
+  if (dirname(realpathSync(projects)) !== realpathSync(root)) throw fail("invalid_input", "Projects root escapes storage root");
   mkdirSync(path, { recursive: true });
   return path;
 }
 
 function lockPath(storageRoot, project) { return join(projectRoot(storageRoot, project), ".workflowhub-evolution.lock"); }
+function lockPathWithoutCreate(storageRoot, project) { return join(safeProjectPath(storageRoot, project), ".workflowhub-evolution.lock"); }
 function monotonicMs() { return Number(process.hrtime.bigint() / 1_000_000n); }
 function processIsAlive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error?.code === "EPERM"; } }
 function validProjectLock(value, project) {
@@ -312,25 +320,96 @@ function validProjectLock(value, project) {
     && typeof value.session_epoch === "string" && value.session_epoch.length > 0
     && Number.isInteger(value.acquired_monotonic_ms) && value.acquired_monotonic_ms >= 0
     && Number.isInteger(value.lease_deadline_monotonic_ms)
-    && value.lease_deadline_monotonic_ms >= value.acquired_monotonic_ms;
+    && value.lease_deadline_monotonic_ms > value.acquired_monotonic_ms;
 }
 function fsyncParent(path) {
   const fd = openSync(dirname(path), "r");
   try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+function sameInode(left, right) { return left?.dev === right?.dev && left?.ino === right?.ino; }
+function hasRecoveryTombstone(path, lockHash) {
+  const prefix = `${basename(path)}.tombstone-`;
+  try { return readdirSync(dirname(path)).some((name) => name.startsWith(prefix) && name.endsWith(`-${lockHash}`)); }
+  catch (error) { if (error?.code === "ENOENT") return false; throw error; }
+}
+function waitForProjectLock() {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+}
+function acquireProjectGuard(directory) {
+  const path = join(directory, ".workflowhub-evolution.guard");
+  const ownerToken = randomUUID();
+  const value = { schema_version: "workflowhub-project-guard.v1", owner_token: ownerToken, pid: process.pid, acquired_monotonic_ms: monotonicMs(), lease_deadline_monotonic_ms: monotonicMs() + LOCK_LEASE_MS };
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    let fd;
+    try {
+      fd = openSync(path, "wx");
+      try { writeFileSync(fd, `${JSON.stringify(value)}\n`); fsyncSync(fd); } finally { closeSync(fd); fd = undefined; }
+      fsyncParent(path);
+      return {
+        status: "ok",
+        path,
+        ownerToken,
+        release() {
+          try {
+            const current = JSON.parse(readFileSync(path, "utf8"));
+            if (current.owner_token !== ownerToken) return { status: "stale_source" };
+            unlinkSync(path); fsyncParent(path); return { status: "ok" };
+          } catch (error) {
+            if (error?.code === "ENOENT") return { status: "ok" };
+            throw error;
+          }
+        },
+      };
+    } catch (error) {
+      if (fd !== undefined) { try { closeSync(fd); } catch {} }
+      if (error?.code !== "EEXIST") throw error;
+      let current;
+      try { current = JSON.parse(readFileSync(path, "utf8")); } catch { waitForProjectLock(); continue; }
+      if (current?.schema_version === "workflowhub-project-guard.v1"
+        && Number.isInteger(current.lease_deadline_monotonic_ms)
+        && monotonicMs() > current.lease_deadline_monotonic_ms
+        && !processIsAlive(current.pid)) {
+        try { unlinkSync(path); fsyncParent(path); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
+        continue;
+      }
+      waitForProjectLock();
+    }
+  }
+  return { status: "conflict", error: { code: "conflict", summary: "project lock guard is held" } };
 }
 
 export function acquireProjectLock(input = {}) {
   const storageRoot = resolve(requiredString(input.storageRoot, "storageRoot"));
   const project = requiredString(input.project, "project");
   const attemptId = requiredString(input.attemptId ?? input.attempt_id, "attemptId");
-  const path = lockPath(storageRoot, project);
+  const recovery = input.manualRecovery ?? input.manual_recovery;
+  const existingPath = lockPathWithoutCreate(storageRoot, project);
+  if (recovery && !existsSync(existingPath)) {
+    const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
+      && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
+      && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
+      ? `${existingPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
+    if (recoveryTombstone && existsSync(recoveryTombstone)) {
+      return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
+    }
+    return { status: "stale_source", error: { code: "stale_source", summary: "manual recovery requires the current lock" } };
+  }
+  const path = existsSync(existingPath) ? existingPath : lockPath(storageRoot, project);
+  const guard = acquireProjectGuard(dirname(path));
+  if (guard.status !== "ok") return guard;
+  try {
+  if (recovery && !existsSync(path)) {
+    if (recoveryTombstone && existsSync(recoveryTombstone)) {
+      return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
+    }
+    return { status: "stale_source", error: { code: "stale_source", summary: "manual recovery requires the current lock" } };
+  }
   const now = monotonicMs();
   const ownerToken = input.ownerToken ?? input.owner_token ?? randomUUID();
   const bootId = input.bootId ?? input.boot_id ?? process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local";
   const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
-  const fencingToken = `${ownerToken}:${now}`;
+  const fencingToken = `${ownerToken}:${randomUUID()}:${now}`;
   const value = { schema_version: SCHEMA_VERSION, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, pid: process.pid, host_id: hostname(), boot_id: bootId, session_epoch: String(sessionEpoch), acquired_monotonic_ms: now, lease_deadline_monotonic_ms: now + LOCK_LEASE_MS };
-  const recovery = input.manualRecovery ?? input.manual_recovery;
   const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
     && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
     && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
@@ -362,24 +441,30 @@ export function acquireProjectLock(input = {}) {
     const lockAuthorityHash = hashBytes(currentRaw);
     const nonce = sameEpoch ? `auto-${lockAuthorityHash.slice(0, 24)}` : recovery.nonce;
     const tombstone = `${path}.tombstone-${nonce}-${lockAuthorityHash}`;
+    let lockFd;
+    let tombstoneLinked = false;
+    let lockPathUnlinked = false;
     try {
-      const observedRaw = readFileSync(path, "utf8");
-      if (hashBytes(observedRaw) !== lockAuthorityHash) return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed before recovery" } };
+      lockFd = openSync(path, "r");
+      const originalStat = fstatSync(lockFd);
+      if (hashBytes(readFileSync(lockFd, "utf8")) !== lockAuthorityHash) return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed before recovery" } };
       linkSync(path, tombstone);
-      if (hashBytes(readFileSync(tombstone, "utf8")) !== lockAuthorityHash) {
+      tombstoneLinked = true;
+      if (!sameInode(originalStat, lstatSync(tombstone)) || !sameInode(originalStat, lstatSync(path))) {
         unlinkSync(tombstone);
-        return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed during recovery" } };
-      }
-      if (hashBytes(readFileSync(path, "utf8")) !== lockAuthorityHash) {
-        unlinkSync(tombstone);
+        tombstoneLinked = false;
         return { status: "stale_source", error: { code: "stale_source", summary: "project lock changed during recovery" } };
       }
       unlinkSync(path);
+      lockPathUnlinked = true;
       fsyncParent(path);
     } catch (error) {
+      if (tombstoneLinked && !lockPathUnlinked) { try { unlinkSync(tombstone); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; } }
       if (error?.code === "EEXIST") return { status: sameEpoch ? "failed" : "replayed_recovery", error: { code: sameEpoch ? "failed" : "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
       if (error?.code === "ENOENT" && existsSync(tombstone)) return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
       return { status: "failed", error: { code: "failed", summary: `lock reclaim failed: ${error.message}` } };
+    } finally {
+      if (lockFd !== undefined) closeSync(lockFd);
     }
   }
   try {
@@ -389,13 +474,30 @@ export function acquireProjectLock(input = {}) {
     throw error;
   }
   const release = () => {
+    const releaseGuard = acquireProjectGuard(dirname(path));
+    if (releaseGuard.status !== "ok") return { status: "stale_source" };
     try {
-      const current = JSON.parse(readFileSync(path, "utf8"));
-      if (current.owner_token !== ownerToken || current.fencing_token !== fencingToken) return { status: "stale_source" };
-      unlinkSync(path); fsyncParent(path); return { status: "ok" };
-    } catch (error) { if (error.code === "ENOENT") return { status: "ok" }; throw error; }
+      if (!existsSync(path)) return { status: "ok" };
+      const authority = {
+        lockHandle: { path, project, attemptId, ownerToken, fencingToken, bootId, sessionEpoch: String(sessionEpoch) },
+        project, attemptId, ownerToken, fencingToken, leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) },
+      };
+      try {
+        const currentRaw = readFileSync(path, "utf8");
+        if (hasRecoveryTombstone(path, hashBytes(currentRaw))) return { status: "stale_source" };
+        assertProjectLockCurrent(authority, { allowExpired: true });
+        unlinkSync(path); fsyncParent(path); return { status: "ok" };
+      } catch (error) { if (error?.code === "ENOENT") return { status: "ok" }; if (error?.code === "stale_source") return { status: "stale_source" }; throw error; }
+    } finally { releaseGuard.release(); }
   };
-  return { status: "ok", lockHandle: Object.freeze({ path, project, attemptId, ownerToken, fencingToken }), lock_handle: Object.freeze({ path, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken }), project, ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken, leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release };
+  return {
+    status: "ok",
+    lockHandle: Object.freeze({ path, project, attemptId, ownerToken, fencingToken, bootId, sessionEpoch: String(sessionEpoch) }),
+    lock_handle: Object.freeze({ path, project, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken, boot_id: bootId, session_epoch: String(sessionEpoch) }),
+    project, ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken,
+    leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release,
+  };
+  } finally { guard.release(); }
 }
 
 function assertLedgerFile(path) {
@@ -604,20 +706,53 @@ function publishBatch({ path, lock, expectedHead, begin, rows, commit }) {
   if (!sameHead(afterCommit.latest?.commit ?? null, commit)) throw fail("failed", "candidate commit is not current after fsync");
 }
 
-function assertLockCurrent(lock) {
-  if (!lock?.lockHandle?.path) throw fail("stale_source", "lock handle is unavailable");
+export function assertProjectLockCurrent(lock, { allowExpired = false } = {}) {
+  const handle = lock?.lockHandle ?? lock?.lock_handle;
+  if (!handle?.path) throw fail("stale_source", "lock handle is unavailable");
+  const expectedProject = lock.project ?? lock.project_id ?? handle.project ?? handle.project_id;
+  const expectedAttempt = lock.attemptId ?? lock.attempt_id ?? handle.attemptId ?? handle.attempt_id;
+  const expectedOwner = lock.ownerToken ?? lock.owner_token ?? handle.ownerToken ?? handle.owner_token;
+  const expectedFencing = lock.fencingToken ?? lock.fencing_token ?? handle.fencingToken ?? handle.fencing_token;
+  const expectedBoot = lock.bootId ?? lock.boot_id ?? lock.leaseIdentity?.boot_id ?? handle.bootId ?? handle.boot_id;
+  const expectedSession = lock.sessionEpoch ?? lock.session_epoch ?? lock.leaseIdentity?.session_epoch ?? handle.sessionEpoch ?? handle.session_epoch;
+  if (typeof expectedProject !== "string" || expectedProject === "" || typeof expectedAttempt !== "string" || expectedAttempt === ""
+    || typeof expectedOwner !== "string" || expectedOwner === "" || typeof expectedFencing !== "string" || expectedFencing === ""
+    || typeof expectedBoot !== "string" || expectedBoot === "" || (typeof expectedSession !== "string" && typeof expectedSession !== "number") || String(expectedSession) === "") throw fail("stale_source", "lock authority is incomplete");
+  const handleProject = handle.project ?? handle.project_id;
+  const handleAttempt = handle.attemptId ?? handle.attempt_id;
+  const handleOwner = handle.ownerToken ?? handle.owner_token;
+  const handleFencing = handle.fencingToken ?? handle.fencing_token;
+  const handleBoot = handle.bootId ?? handle.boot_id;
+  const handleSession = handle.sessionEpoch ?? handle.session_epoch;
+  if ((handleProject !== undefined && handleProject !== expectedProject)
+    || (handleAttempt !== undefined && handleAttempt !== expectedAttempt)
+    || (handleOwner !== undefined && handleOwner !== expectedOwner)
+    || (handleFencing !== undefined && handleFencing !== expectedFencing)
+    || (handleBoot !== undefined && handleBoot !== expectedBoot)
+    || (handleSession !== undefined && String(handleSession) !== String(expectedSession))) throw fail("stale_source", "lock authority fields disagree");
+  try {
+    const projectDirectory = dirname(resolve(handle.path));
+    const projectsDirectory = dirname(projectDirectory);
+    const storageRoot = dirname(projectsDirectory);
+    if (resolve(handle.path) !== lockPathWithoutCreate(storageRoot, expectedProject)) throw fail("stale_source", "lock handle does not belong to project");
+  }
+  catch (error) { if (error?.code === "stale_source") throw error; throw fail("stale_source", "lock handle path is invalid"); }
   let value;
-  try { value = JSON.parse(readFileSync(lock.lockHandle.path, "utf8")); }
-  catch { throw fail("stale_source", "lock is unavailable"); }
-  const token = lock.fencingToken ?? lock.fencing_token ?? lock.lockHandle.fencingToken ?? lock.lockHandle.fencing_token;
-  if (value.owner_token !== (lock.ownerToken ?? lock.owner_token) || value.fencing_token !== token) throw fail("stale_source", "lock fencing is stale");
-  const expectedProject = lock.project ?? lock.project_id ?? lock.lockHandle.project ?? lock.lockHandle.project_id;
-  const expectedAttempt = lock.attemptId ?? lock.attempt_id ?? lock.lockHandle.attemptId ?? lock.lockHandle.attempt_id;
-  if (!expectedProject || !validProjectLock(value, expectedProject) || value.project !== expectedProject
+  try {
+    const stat = lstatSync(handle.path);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw fail("stale_source", "lock is not a regular file");
+    value = JSON.parse(readFileSync(handle.path, "utf8"));
+  }
+  catch (error) { if (error?.code === "stale_source") throw error; throw fail("stale_source", "lock is unavailable"); }
+  if (!validProjectLock(value, expectedProject) || value.project !== expectedProject || value.attempt_id !== expectedAttempt
+    || value.owner_token !== expectedOwner || value.fencing_token !== expectedFencing
+    || value.boot_id !== expectedBoot || value.session_epoch !== String(expectedSession)) throw fail("stale_source", "lock authority is stale");
+  if (!validProjectLock(value, expectedProject) || value.project !== expectedProject
     || value.attempt_id !== expectedAttempt
-    || !Number.isInteger(value.lease_deadline_monotonic_ms) || monotonicMs() > value.lease_deadline_monotonic_ms) throw fail("stale_source", "lock authority or lease is invalid");
+    || !Number.isInteger(value.lease_deadline_monotonic_ms) || (!allowExpired && monotonicMs() > value.lease_deadline_monotonic_ms)) throw fail("stale_source", "lock authority or lease is invalid");
   return value;
 }
+function assertLockCurrent(lock) { return assertProjectLockCurrent(lock); }
 
 function currentSnapshot(path) {
   const scan = scanCandidateLedger(path);
@@ -820,14 +955,13 @@ export function recordCandidateTransition(input = {}) {
   const authority = input.lockAuthority ?? input.lock_authority;
   if (!authority?.lockHandle && !authority?.lock_handle) return { status: "failed", error: { code: "failed", summary: "lock authority is required" } };
   const handle = authority.lockHandle ?? authority.lock_handle; const path = handle.path;
-  if (typeof path !== "string" || resolve(path) !== lockPath(input.storageRoot, input.project)) return { status: "stale_source", error: { code: "stale_source", summary: "lock handle does not belong to project" } };
   let lockValue;
-  try { lockValue = JSON.parse(readFileSync(path, "utf8")); } catch { return { status: "stale_source", error: { code: "stale_source", summary: "lock is unavailable" } }; }
+  try { lockValue = assertProjectLockCurrent(authority); } catch (error) { return { status: error.code ?? "stale_source", error: { code: error.code ?? "stale_source", summary: error.message } }; }
   const owner = authority.ownerToken ?? authority.owner_token;
   const fencing = authority.fencingToken ?? authority.fencing_token ?? handle.fencingToken ?? handle.fencing_token;
   const handleAttempt = handle.attemptId ?? handle.attempt_id;
-  if (lockValue.owner_token !== owner || lockValue.fencing_token !== fencing || lockValue.attempt_id !== attemptId || handleAttempt !== attemptId) return { status: "stale_source", error: { code: "stale_source", summary: "lock owner, fencing, or attempt mismatch" } };
-  if (Number.isFinite(lockValue.lease_deadline_monotonic_ms) && monotonicMs() > lockValue.lease_deadline_monotonic_ms) return { status: "stale_source", error: { code: "stale_source", summary: "lock lease expired" } };
+  const authorityProject = authority.project ?? authority.project_id ?? handle.project ?? handle.project_id;
+  if (authorityProject !== input.project || lockValue.owner_token !== owner || lockValue.fencing_token !== fencing || lockValue.attempt_id !== attemptId || handleAttempt !== attemptId) return { status: "stale_source", error: { code: "stale_source", summary: "lock owner, fencing, project, or attempt mismatch" } };
   const pathOut = ledgerPath(input.storageRoot, input.project);
   let initial;
   try { initial = recoverTerminalSuffix(pathOut, { lockHandle: handle, ownerToken: owner, fencingToken: fencing }); }

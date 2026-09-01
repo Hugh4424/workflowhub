@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameS
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { acquireProjectLock } from "../../runtime/evidence/workflow-evolution.mjs";
+import { acquireProjectLock, assertProjectLockCurrent } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -206,8 +206,10 @@ export function appendLessonObservation({ root, proj, stage, taskId, text, refle
   }
   const lock = acquireLessonMergeLock(storageRoot, proj);
   try {
+    assertProjectLockCurrent(lock);
     const prior = existsSync(path) ? readFileSync(path, "utf8") : "";
     appendFileSync(path, `${prior.length > 0 && !prior.endsWith("\n") ? "\n" : ""}${JSON.stringify(row)}\n`, "utf8");
+    assertProjectLockCurrent(lock);
   } finally {
     lock.release();
   }
@@ -243,6 +245,7 @@ export function mergeLessonObservation({
   const path = join(lessonsRoot, `${stage}.jsonl`);
   const lock = acquireLessonMergeLock(storageRoot, proj);
   try {
+    assertProjectLockCurrent(lock);
     const rows = readLessonRows(path);
     const rawIndex = rows.findIndex((row) => row.entry_kind === "raw_observation" && row.entry_id === rawEntryId);
     if (rawIndex < 0) fail(`raw lesson ${rawEntryId} is unavailable`);
@@ -300,7 +303,9 @@ export function mergeLessonObservation({
     const canonicalIndex = next.findIndex((row) => row.entry_kind === "merged_lesson" && row.entry_id === mergedEntryId);
     if (canonicalIndex >= 0) next[canonicalIndex] = merged;
     else next.push(merged);
+    assertProjectLockCurrent(lock);
     atomicWriteRows(path, next);
+    assertProjectLockCurrent(lock);
     return {
       status: "merged",
       path: `Projects/${proj}/lessons/${stage}.jsonl`,
