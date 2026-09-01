@@ -44,6 +44,18 @@ function canonical(value) {
 }
 
 function hashBytes(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+function currentEvolutionIdentities() {
+  return {
+    producer_identity: { ref: "runtime/evidence/workflow-evolution.mjs", sha256: hashBytes(readFileSync(join(REPOSITORY_ROOT, "runtime/evidence/workflow-evolution.mjs"))) },
+    schema_identity: { ref: "runtime/schemas/workflow-evolution.v1.json", sha256: hashBytes(readFileSync(join(REPOSITORY_ROOT, "runtime/schemas/workflow-evolution.v1.json"))) },
+  };
+}
+function trustedEvolutionIdentities(producerIdentity, schemaIdentity) {
+  const current = currentEvolutionIdentities();
+  if (producerIdentity !== undefined && producerIdentity !== null && canonical(producerIdentity) !== canonical(current.producer_identity)) throw fail("stale_source", "producer identity is not current");
+  if (schemaIdentity !== undefined && schemaIdentity !== null && schemaIdentity !== SCHEMA_VERSION && canonical(schemaIdentity) !== canonical(current.schema_identity)) throw fail("stale_source", "schema identity is not current");
+  return current;
+}
 export function validateStageOutcomeStructure(value, { taskId, stage } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("invalid_input", "outcome must be an object");
   if (value.schema_version !== "workflowhub-stage-outcomes.v1") throw fail("invalid_input", "outcome schema_version is invalid");
@@ -222,7 +234,8 @@ export function buildInputInventory(input = {}) {
   const inventory = plain({ project, ...rawInputs });
   const canonicalBytes = canonical(inventory);
   const inputInventoryHash = hashBytes(canonicalBytes);
-  return { status: "ok", inventory, input_inventory_hash: inputInventoryHash, inputInventoryHash, canonical_bytes: canonicalBytes, canonicalBytes, producer_identity: input.producerIdentity ?? input.producer_identity ?? null, schema_identity: input.schemaIdentity ?? input.schema_identity ?? SCHEMA_VERSION };
+  const identities = trustedEvolutionIdentities(input.producerIdentity ?? input.producer_identity, input.schemaIdentity ?? input.schema_identity);
+  return { status: "ok", inventory, input_inventory_hash: inputInventoryHash, inputInventoryHash, canonical_bytes: canonicalBytes, canonicalBytes, ...identities };
 }
 
 function attribution(stage, value) {
@@ -356,7 +369,16 @@ export function acquireProjectLock(input = {}) {
   return { status: "ok", lockHandle: Object.freeze({ path, attemptId, ownerToken, fencingToken }), lock_handle: Object.freeze({ path, attempt_id: attemptId, owner_token: ownerToken, fencing_token: fencingToken }), ownerToken, owner_token: ownerToken, fencingToken, fencing_token: fencingToken, leaseIdentity: { boot_id: bootId, session_epoch: String(sessionEpoch) }, release };
 }
 
-function ledgerPath(storageRoot, project, name = "evolution-candidates.jsonl") { return join(projectRoot(storageRoot, project), name); }
+function assertLedgerFile(path) {
+  const parent = dirname(path);
+  const parentStat = lstatSync(parent);
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) throw fail("failed", "candidate ledger parent must be a real directory");
+  if (!existsSync(path)) return path;
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink() || dirname(realpathSync(path)) !== realpathSync(parent)) throw fail("failed", "candidate ledger must be a contained real file");
+  return path;
+}
+function ledgerPath(storageRoot, project, name = "evolution-candidates.jsonl") { return assertLedgerFile(join(projectRoot(storageRoot, project), name)); }
 function encodedLine(value) { return Buffer.from(`${JSON.stringify(value)}\n`); }
 
 function ledgerEntries(raw) {
@@ -397,6 +419,7 @@ function validAbort(raw, recoveryStart, entry, abort) {
 }
 
 function scanCandidateLedger(path) {
+  assertLedgerFile(path);
   const raw = existsSync(path) ? readFileSync(path) : Buffer.alloc(0);
   const commits = [];
   let open = null;
@@ -417,6 +440,8 @@ function scanCandidateLedger(path) {
     }
     if (!open) {
       if (value.record_kind !== "batch_begin") throw fail("failed", `unexpected ledger record outside batch at byte ${entry.start}`);
+      try { validateWorkflowEvolutionDefinition("batch_begin", value); } catch (error) { throw fail("failed", `batch_begin schema invalid at byte ${entry.start}: ${error.message}`); }
+      if (value.schema_version !== SCHEMA_VERSION || typeof value.project !== "string" || typeof value.attempt_id !== "string" || typeof value.snapshot_id !== "string" || typeof value.snapshot_content_id !== "string") throw fail("failed", `batch_begin identity invalid at byte ${entry.start}`);
       const expectedGeneration = (commits.at(-1)?.commit.publication_generation ?? 0) + 1;
       if (!Number.isInteger(value.publication_generation) || value.publication_generation !== expectedGeneration) throw fail("failed", `candidate generation is not contiguous at byte ${entry.start}`);
       open = { start: entry.start, begin: value, rows: [] };
@@ -430,12 +455,21 @@ function scanCandidateLedger(path) {
     if (value.record_kind === "batch_begin") throw fail("failed", `new batch begins before prior batch terminates at byte ${entry.start}`);
     if (value.record_kind !== "batch_commit") {
       if (value.batch_id !== open.begin.batch_id || value.snapshot_id !== open.begin.snapshot_id || value.publication_generation !== open.begin.publication_generation) throw fail("failed", `batch row identity mismatch at byte ${entry.start}`);
+      const definition = value.record_kind === "refresh_result" ? "refresh_result" : value.record_kind === "publication_proof" ? "publication_proof" : ["candidate", "snapshot_record"].includes(value.record_kind) ? "candidate_record" : null;
+      if (!definition) throw fail("failed", `unknown batch row kind at byte ${entry.start}`);
+      try { validateWorkflowEvolutionDefinition(definition, value); } catch (error) { throw fail("failed", `${definition} schema invalid at byte ${entry.start}: ${error.message}`); }
+      if (value.schema_version !== SCHEMA_VERSION || value.snapshot_content_id !== open.begin.snapshot_content_id
+        || (["refresh_result", "publication_proof"].includes(value.record_kind) && (value.project !== open.begin.project || value.attempt_id !== open.begin.attempt_id))) throw fail("failed", `batch row authority mismatch at byte ${entry.start}`);
       open.rows.push(value);
       continue;
     }
+    try { validateWorkflowEvolutionDefinition("batch_commit", value); } catch (error) { throw fail("failed", `batch_commit schema invalid at byte ${entry.start}: ${error.message}`); }
+    const currentIdentities = currentEvolutionIdentities();
     if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.snapshot_id !== open.begin.snapshot_id
       || value.publication_generation !== open.begin.publication_generation || value.snapshot_content_id !== open.begin.snapshot_content_id
       || value.attempt_id !== open.begin.attempt_id
+      || value.project !== open.begin.project || value.schema_version !== SCHEMA_VERSION
+      || canonical(value.producer_identity) !== canonical(currentIdentities.producer_identity) || canonical(value.schema_identity) !== canonical(currentIdentities.schema_identity)
       || value.count !== open.rows.length || value.content_hash !== hashBytes(canonical(open.rows))) {
       throw fail("failed", `committed batch integrity mismatch at byte ${entry.start}`);
     }
@@ -457,6 +491,7 @@ function scanCandidateLedger(path) {
 
 function appendLine(path, value, lock) {
   mkdirSync(dirname(path), { recursive: true });
+  assertLedgerFile(path);
   assertLockCurrent(lock);
   const existed = existsSync(path);
   const fd = openSync(path, "a");

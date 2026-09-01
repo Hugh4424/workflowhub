@@ -93,6 +93,22 @@
       "properties": {"record_kind": {"const": "refresh_result"}, "project": {"type": "string", "minLength": 1}, "attempt_id": {"type": "string", "minLength": 1}, "snapshot_content_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "snapshot_id": {"type": "string", "minLength": 1}, "publication_generation": {"type": "integer", "minimum": 1}, "as_of": {"type": "string", "minLength": 1}, "outcome": {"enum": ["committed", "failed", "cancelled"]}},
       "additionalProperties": true
     },
+    "publication_proof": {
+      "type": "object",
+      "required": ["schema_version", "record_kind", "batch_id", "project", "attempt_id", "snapshot_content_id", "snapshot_id", "publication_generation", "source_proofs"],
+      "properties": {
+        "schema_version": {"const": "workflow-evolution.v1"},
+        "record_kind": {"const": "publication_proof"},
+        "batch_id": {"type": "string", "minLength": 1},
+        "project": {"type": "string", "minLength": 1},
+        "attempt_id": {"type": "string", "minLength": 1},
+        "snapshot_content_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "publication_generation": {"type": "integer", "minimum": 1},
+        "source_proofs": {"type": "array"}
+      },
+      "additionalProperties": false
+    },
     "consumer_scan_proof": {
       "type": "object",
       "required": ["schema_version", "project", "task_id", "coverage_status", "zero_consumption", "expected_stage_set", "scanned_stage_set", "scanned_at", "scope_revision", "registered_output_refs", "source_subject", "source_refs", "diagnostics"],

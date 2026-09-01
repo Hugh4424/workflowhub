@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -37,6 +37,12 @@ function observation(id, kind = "retry") {
 
 function candidateLedger(storageRoot) {
   return join(storageRoot, "Projects", "Demo", "evolution-candidates.jsonl");
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
 }
 
 afterEach(() => roots.splice(0).forEach((value) => rmSync(value, { recursive: true, force: true })));
@@ -195,6 +201,34 @@ describe("M16 candidate and tax contract", () => {
     writeFileSync(ledger, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
     expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" })).toMatchObject({ status: "failed" });
     expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "attempt-a", inventory: { project: "Demo", observations: [] }, now: "2026-09-01T00:00:00Z" })).toMatchObject({ status: "failed" });
+  });
+
+  it("rejects self-hashed ledger rows with forged schemas or producer authority", async () => {
+    const mod = await loadModule();
+    for (const attack of ["row-schema", "producer"]) {
+      const storageRoot = root();
+      expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: `attempt-${attack}`, inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" }).status).toBe("ok");
+      const ledger = candidateLedger(storageRoot);
+      const records = readFileSync(ledger, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      if (attack === "row-schema") {
+        records[1].schema_version = "forged-evolution.v0";
+        records.at(-1).content_hash = createHash("sha256").update(canonical(records.slice(1, -1))).digest("hex");
+      } else {
+        records.at(-1).producer_identity = { ref: "attacker", sha256: "0".repeat(64) };
+      }
+      writeFileSync(ledger, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+      expect(mod.readCurrentEvolutionProjection({ storageRoot, project: "Demo" })).toMatchObject({ status: "failed" });
+    }
+  });
+
+  it("refuses to follow an evolution candidate ledger symlink outside storage", async () => {
+    const mod = await loadModule();
+    const storageRoot = root(); const outside = root();
+    const projectRoot = join(storageRoot, "Projects/Demo"); mkdirSync(projectRoot, { recursive: true });
+    const externalLedger = join(outside, "outside-ledger.jsonl"); writeFileSync(externalLedger, "outside\n");
+    symlinkSync(externalLedger, candidateLedger(storageRoot));
+    expect(mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "symlink", inventory: { project: "Demo", observations: [] }, now: "2026-08-31T00:00:00Z" })).toMatchObject({ status: "failed" });
+    expect(readFileSync(externalLedger, "utf8")).toBe("outside\n");
   });
 
   it("authenticates a torn terminal batch before publishing the next generation", async () => {

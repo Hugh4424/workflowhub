@@ -23,8 +23,8 @@ describe("M16 current snapshot seam", () => {
   it("rejects a projection after producer or schema identity rollback", () => {
     const storageRoot = mkdtempSync(join(tmpdir(), "m16-current-"));
     try {
-      const producer_identity = { ref: "producer", sha256: "a".repeat(64) }; const schema_identity = { ref: "schema", sha256: "b".repeat(64) };
-      const first = refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a1", inventory: { inventory: { observations: [] }, producer_identity, schema_identity }, now: "2026-08-31T00:00:00.000Z" });
+      const first = refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "a1", inventory: { observations: [] }, now: "2026-08-31T00:00:00.000Z" });
+      const producer_identity = first.producer_identity; const schema_identity = first.schema_identity;
       expect(readCurrentEvolutionProjection({ storageRoot, project: "Demo", expectedIdentity: { snapshot_id: first.snapshot_id, producer_identity: { ...producer_identity, sha256: "c".repeat(64) }, schema_identity } })).toMatchObject({ status: "stale_source" });
     } finally { rmSync(storageRoot, { recursive: true, force: true }); }
   });
