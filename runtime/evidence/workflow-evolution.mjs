@@ -579,7 +579,7 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
         registered.push({ ref, source: { stage: source.stage, subject_kind: source.subject_kind, subject_id: source.subject_id }, consumer_count: count, freshness: "current" });
       }
       registered.sort((left, right) => `${left.ref}\0${left.source.stage}\0${left.source.subject_id}`.localeCompare(`${right.ref}\0${right.source.stage}\0${right.source.subject_id}`));
-      return { sourceRefs, registered, scopeRevision: hashBytes(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).sort().join("\n")), zero: registered.length > 0 && registered.every((entry) => entry.consumer_count === 0) };
+      return { sourceRefs, registered, subjectCount: records.length, scopeRevision: hashBytes(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).sort().join("\n")), zero: registered.length > 0 && registered.every((entry) => entry.consumer_count === 0) };
     };
     const validProof = (proof) => {
       if (!proof || proof.schema_version !== "consumer-scan-proof.v1" || proof.coverage_status !== "complete" || proof.zero_consumption !== true || typeof proof.scope_revision !== "string" || proof.scope_revision === "") return false;
@@ -599,6 +599,11 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
         && ["step", "skill"].includes(ref.source.subject_kind)
         && typeof ref.source.subject_id === "string" && ref.source.subject_id !== "")
         && actual?.zero === true && proof.scope_revision === actual.scopeRevision
+        && (proof.status === undefined || proof.status === "complete")
+        && (proof.scope === undefined || proof.scope === "all-current-stage-outcome-files")
+        && (proof.stage_count === undefined || proof.stage_count === STAGES.length)
+        && (proof.outcome_file_count === undefined || proof.outcome_file_count === actual.sourceRefs.length)
+        && (proof.subject_count === undefined || proof.subject_count === actual.subjectCount)
         && canonical([...proof.source_refs].sort()) === canonical([...actual.sourceRefs].sort())
         && canonical([...refs].sort((a, b) => canonical(a).localeCompare(canonical(b)))) === canonical([...actual.registered].sort((a, b) => canonical(a).localeCompare(canonical(b))));
     };
@@ -643,7 +648,7 @@ export function refreshEvolutionSnapshot(input = {}) {
     const generation = (prior?.commit.publication_generation ?? 0) + 1;
     const snapshotId = hashBytes(canonical(`${canonicalInventory.input_inventory_hash}\0${attemptId}\0${generation}`)); const batchId = randomUUID();
     const priorByGroup = new Map((prior?.rows ?? []).filter((entry) => entry.record_kind === "candidate" && entry.row_status === "active").map((entry) => [entry.candidate_group_id, entry]));
-    const proofPayload = (proof) => Object.fromEntries(Object.entries(proof ?? {}).filter(([key]) => !["candidate_snapshot_id", "candidate_snapshot_content_id", "publication_generation", "proof_identity"].includes(key)));
+    const proofPayload = (proof) => ({ schema_version: proof?.schema_version, project: proof?.project, task_id: proof?.task_id, scope_revision: proof?.scope_revision, source_subject: proof?.source_subject, source_refs: [...(proof?.source_refs ?? [])].sort(), registered_output_refs: [...(proof?.registered_output_refs ?? [])].sort((a, b) => canonical(a).localeCompare(canonical(b))) });
     const usedProofs = new Set(initial.commits.flatMap((entry) => entry.rows.filter((row) => row.record_kind === "publication_proof").flatMap((row) => row.source_proofs ?? [])).map((proof) => proof.proof_identity ?? hashBytes(canonical(proofPayload(proof)))));
     const inputProofs = inventory.consumer_proofs ?? inventory.consumerProofs ?? [];
     for (const proof of inputProofs) validateWorkflowEvolutionDefinition("consumer_scan_proof", proof);

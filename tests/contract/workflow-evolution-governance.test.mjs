@@ -33,6 +33,9 @@ describe("M16 governance registration", () => {
     const aggregate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-aggregate.sh"), "utf8");
     const review = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-review-chain.mjs"), "utf8");
     expect(browser).toContain("validate-browser-manifest.mjs");
+    expect(browser).toContain('screenshot body "$manifest_dir/m16-monitor-390x844.png"');
+    expect(browser).toContain('agent_browser_session_residual_processes=0');
+    expect(browser).not.toContain('v.cleanup="complete"');
     expect(browser).not.toMatch(/exit 0\s*$/);
     expect(aggregate).toContain("set -euo pipefail");
     expect(aggregate).toContain("atomic-write-final-aggregate.mjs");
@@ -63,6 +66,8 @@ describe("M16 governance registration", () => {
     const reportHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");
     const forgedRed = spawnSync(process.execPath, [checker, "monitor", "red", "1", "0", baselineHash, reportHash, reportPath], { cwd: root });
     expect(forgedRed.status).toBe(23);
+    const infrastructureAsRed = spawnSync(process.execPath, [checker, "monitor", "red", "2", "0", baselineHash, reportHash, reportPath], { cwd: root });
+    expect(infrastructureAsRed.status).toBe(23);
     report.success = false; report.numFailedTestSuites = 1; report.numFailedTests = 1; report.testResults[0].status = "failed";
     writeFileSync(reportPath, JSON.stringify(report));
     const failedHash = createHash("sha256").update(readFileSync(reportPath)).digest("hex");

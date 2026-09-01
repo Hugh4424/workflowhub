@@ -69,7 +69,7 @@ describe("M16 iteration brief", () => {
     try {
       const projectRoot = join(storage, "Projects/Demo");
       spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
-      const batch = "legacy-batch"; const row = { record_kind: "attempted-edit", ledger_batch_id: batch, legacy_before_facts: [], legacy_after_facts: [] };
+      const batch = "legacy-batch"; const row = { record_kind: "attempted-edit", ledger_batch_id: batch, attempt_id: "legacy-row", legacy_before_facts: [], legacy_after_facts: [] };
       const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row" };
       const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", batch_id: batch, ledger_kind: "attempted-edit", attempt_id: "legacy-row", status: "committed", count: 1, content_hash: sha256(canonical([row])) };
       writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(row)}\n${JSON.stringify(commit)}\n`);
@@ -86,6 +86,18 @@ describe("M16 iteration brief", () => {
       writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify({ schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a", legacy_phase: "old" })}\n`);
       const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=envelope"], { encoding: "utf8" });
       expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("envelope schema invalid");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("rejects a batch commit whose attempt differs from its begin", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-a" };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "attempt-b", count: 0, content_hash: sha256(canonical([])), status: "committed" };
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(commit)}\n`);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=commit-forge"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("committed batch integrity mismatch");
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 

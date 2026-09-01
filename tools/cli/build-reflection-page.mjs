@@ -470,7 +470,7 @@ function project({ root, tasksRoot, now }) {
   let evolution = { schema_version: "workflow-evolution.v1", status: "unavailable", candidates: [], quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" }, diagnostics: [{ summary: "evolution snapshot unavailable" }] };
   try {
     if (authorityErrors.length > 0) throw new Error(`target authority resolution failed: ${JSON.stringify(authorityErrors)}`);
-    const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter(Boolean);
+    const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter((proof) => proof?.coverage_status === "complete" && Array.isArray(proof.registered_output_refs) && proof.registered_output_refs.length > 0 && Array.isArray(proof.source_refs) && proof.source_refs.length > 0);
     const producerIdentity = { ref: "runtime/evidence/workflow-evolution.mjs", sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, "runtime/evidence/workflow-evolution.mjs"))).digest("hex") };
     const schemaIdentity = { ref: "runtime/schemas/workflow-evolution.v1.json", sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, "runtime/schemas/workflow-evolution.v1.json"))).digest("hex") };
     const inventory = buildInputInventory({ project, producerIdentity, schemaIdentity, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });

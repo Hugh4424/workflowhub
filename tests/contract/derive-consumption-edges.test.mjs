@@ -169,7 +169,8 @@ describe("derive-consumption-edges", () => {
     const proof = run(root).tasks[0].consumer_scan_proof; expect(proof.zero_consumption).toBe(true);
     const item = { task_id: "task-zero", confirmation_ref: "confirmation", confirmation_sha256: "a".repeat(64), occurred_at: proof.scanned_at, intervention_kind: "simplify", intervention_payload: {}, target_ref: { kind: "step", id: "spec-clarify", version: "2.0.0", authority: targetManifestRef, authority_sha256: targetManifestSha } };
     const first = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-one", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [proof] } });
-    const second = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-two", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [proof] } });
+    const disguisedReuse = { ...proof, status: "unknown", scope: "all-current-stage-outcome-files", stage_count: 999, outcome_file_count: 999, subject_count: 999 };
+    const second = refreshEvolutionSnapshot({ storageRoot: root, project: "Demo", attemptId: "proof-two", now: proof.scanned_at, inventory: { observations: [item], consumer_proofs: [disguisedReuse] } });
     expect(first.records[0]).toMatchObject({ tier: "action_suggested", machine_signals: { zero_consumption: true } });
     expect(second.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
   });

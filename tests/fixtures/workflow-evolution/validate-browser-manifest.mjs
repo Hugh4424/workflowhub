@@ -28,7 +28,8 @@ try {
         || viewports[0]?.width !== 390 || viewports[0]?.height !== 844
         || viewports[1]?.width !== 1280 || viewports[1]?.height !== 800
         || viewports.some((viewport) => !/^[a-f0-9]{64}$/.test(viewport?.snapshot_sha256 ?? "") || !/^[A-Za-z0-9._-]+\.png$/.test(viewport?.evidence_ref ?? ""))
-        || !Array.isArray(value.evidence) || value.evidence.length !== 2) process.exit(22);
+        || new Set(viewports.map((viewport) => viewport.evidence_ref)).size !== 2
+        || !Array.isArray(value.evidence) || value.evidence.length !== 2 || new Set(value.evidence.map((entry) => entry?.ref)).size !== 2) process.exit(22);
     for (const viewport of viewports) {
       const bytes = readFileSync(join(manifestRoot, viewport.evidence_ref));
       if (createHash("sha256").update(bytes).digest("hex") !== viewport.snapshot_sha256

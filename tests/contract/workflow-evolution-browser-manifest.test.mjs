@@ -90,6 +90,7 @@ describe("M16 browser evidence manifest", () => {
       (value) => { value.viewports.pop(); },
       (value) => { value.viewports[0].width = 391; },
       (value) => { value.evidence[0].sha256 = "0".repeat(64); },
+      (value) => { value.viewports[1].evidence_ref = value.viewports[0].evidence_ref; value.viewports[1].snapshot_sha256 = value.viewports[0].snapshot_sha256; value.evidence[1] = { ...value.evidence[0] }; },
       (value) => { delete value.session; },
       (value) => { value.cleanup = "pending"; },
     ];

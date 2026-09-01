@@ -2287,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 28715,
-      "sha256_after": "733d5d2e7beadc8e9c7f91c8600f4324b08237f36c8fb46cae4f347168892382"
+      "bytes": 28914,
+      "sha256_after": "1607118616de09683e292bb3809bc69ad8bba9b7753378278cba40f92d51b320"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 59862,
-      "sha256_after": "637170dc8e8cee93b711e7668e2351bc89613a9eb942e7248f3f53a62a55d328"
+      "bytes": 60507,
+      "sha256_after": "01f85bcb0130e5ee5e44b89a90be56b7029b40cc3a3bdc7fefccad231738f291"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2332,8 +2332,8 @@
       "consumer": "maintainer on-demand iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "private seven-section brief writer",
-      "bytes": 24207,
-      "sha256_after": "f7ecd3087e2fd49b6efc2ce6e5d03ce894fdcc4b8e39563a54da1866a7807184"
+      "bytes": 24299,
+      "sha256_after": "d74691fb7edb5de9ce7910a507177d645b3b2ebbaf0030ef7ba7846cf4a20a52"
     },
     {
       "source": "tools/cli/record-evolution-result.mjs",

@@ -36,8 +36,8 @@ const expectedTests = [...suites[suite], ...(suite === "pool-tax" && phase !== "
   ? ["tests/contract/derive-consumption-edges.test.mjs", "tests/contract/stage-reflection-skill-contract.test.mjs"]
   : [])].sort();
 const reportedTests = report.testResults.map((result) => {
-  if (!result || !["passed", "failed"].includes(result.status) || !Array.isArray(result.assertionResults)
-      || result.assertionResults.some((assertion) => !assertion || !["passed", "failed", "pending", "todo"].includes(assertion.status) || typeof assertion.fullName !== "string")) process.exit(23);
+  if (!result || !["passed", "failed"].includes(result.status) || !Array.isArray(result.assertionResults) || result.assertionResults.length === 0
+      || result.assertionResults.some((assertion) => !assertion || !["passed", "failed"].includes(assertion.status) || typeof assertion.fullName !== "string")) process.exit(23);
   const absolute = resolve(result?.name ?? "");
   const relative = absolute.startsWith(`${process.cwd()}/`) ? absolute.slice(process.cwd().length + 1) : "";
   return relative;
@@ -48,6 +48,7 @@ const reportedFailure = report.success === false || report.numFailedTests > 0 ||
 const sameTests = expectedTests.length === reportedTests.length && expectedTests.every((test, index) => test === reportedTests[index]);
 if (!sameTests
     || report.numTotalTests !== report.numPassedTests + report.numFailedTests + (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0)
+    || report.numTotalTests <= 0 || (report.numPendingTests ?? 0) !== 0 || (report.numTodoTests ?? 0) !== 0
     || (phase === "red" && (!reportedFailure || report.success !== false))
     || (phase !== "red" && (reportedFailure || report.success !== true))) process.exit(23);
 const materialRefs = ["specs/workflowhub-m16-evolution-20260831/decision-log.md", "specs/workflowhub-m16-evolution-20260831/spec.md", "specs/workflowhub-m16-evolution-20260831/plan.md", "specs/workflowhub-m16-evolution-20260831/tasks.md"];
