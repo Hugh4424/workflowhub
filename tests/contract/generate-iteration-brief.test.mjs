@@ -113,6 +113,29 @@ describe("M16 iteration brief", () => {
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
+  it("rejects a first batch whose publication generation skips one", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const begin = { schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a", publication_generation: 2 };
+      const commit = { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: "b", attempt_id: "a", count: 0, content_hash: sha256(canonical([])), publication_generation: 2, status: "committed" };
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${JSON.stringify(begin)}\n${JSON.stringify(commit)}\n`);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=first-generation-forge"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("publication generation is not contiguous");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("rejects a repeated publication generation across committed batches", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
+    try {
+      const projectRoot = join(storage, "Projects/Demo"); spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      const batch = (batchId) => [{ schema_version: "workflow-evolution.v1", record_kind: "batch_begin", ledger_kind: "attempted-edit", batch_id: batchId, attempt_id: batchId, publication_generation: 1 }, { schema_version: "workflow-evolution.v1", record_kind: "batch_commit", ledger_kind: "attempted-edit", batch_id: batchId, attempt_id: batchId, count: 0, content_hash: sha256(canonical([])), publication_generation: 1, status: "committed" }];
+      writeFileSync(join(projectRoot, "attempted-edits.jsonl"), `${batch("first").map(JSON.stringify).join("\n")}\n${batch("second").map(JSON.stringify).join("\n")}\n`);
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs(), "--attempt-id=repeated-generation-forge"], { encoding: "utf8" });
+      expect(result.status).not.toBe(0); expect(JSON.parse(result.stdout).error.summary).toContain("publication generation is not contiguous");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
   it.each([
     ["batch id", { batch_id: "forged-batch", publication_generation: 1 }],
     ["publication generation", { batch_id: "recovery-batch", publication_generation: 2 }],

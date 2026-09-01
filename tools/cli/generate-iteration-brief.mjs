@@ -56,17 +56,17 @@ function assertAbortIdentity(value, expectedBatchId, expectedPublicationGenerati
 }
 function scan(path, name) {
   if (!existsSync(path)) return { status: "unavailable", reason: `${name}_missing`, refs: [], records: [] };
-  const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null; let recoveryBatchId = null; let recoveryPublicationGeneration = null;
+  const raw = readFileSync(path); const ledgerKind = name === "negative_results" ? "negative-result" : "attempted-edit"; const records = []; let open = null; let recoveryStart = null; let recoveryBatchId = null; let recoveryPublicationGeneration = null; let latestPublicationGeneration = 0;
   for (const entry of ledgerEntries(raw)) {
     const value = parseLedgerEntry(entry);
     if (recoveryStart !== null) { if (value?.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); assertAbortIdentity(value, recoveryBatchId, recoveryPublicationGeneration, name); if (!validLedgerAbort(raw, recoveryStart, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); recoveryStart = null; recoveryBatchId = null; recoveryPublicationGeneration = null; open = null; } else if (value?.record_kind === "batch_begin" || value?.record_kind === "batch_commit") throw fail("failed", `${name} has an unclosed abandoned region`); continue; }
     if (!value) { if (open) { recoveryBatchId = open.begin.batch_id; recoveryPublicationGeneration = open.begin.publication_generation; } recoveryStart = open?.start ?? entry.start; continue; }
-    if (!open) { assertEnvelope(value, "batch_begin", ledgerKind, name); open = { start: entry.start, begin: value, rows: [] }; continue; }
+    if (!open) { assertEnvelope(value, "batch_begin", ledgerKind, name); if (value.publication_generation !== latestPublicationGeneration + 1) throw fail("failed", `${name} publication generation is not contiguous`); open = { start: entry.start, begin: value, rows: [] }; continue; }
     if (value.record_kind === "batch_abort") { assertEnvelope(value, "batch_abort", ledgerKind, name); assertAbortIdentity(value, open.begin.batch_id, open.begin.publication_generation, name); if (!validLedgerAbort(raw, open.start, entry, value)) throw fail("failed", `${name} has an unauthenticated abort`); open = null; continue; }
     if (value.record_kind === "batch_begin") throw fail("failed", `${name} has a nested batch`);
     if (value.record_kind !== "batch_commit") { if (value.ledger_batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id) throw fail("failed", `${name} row identity mismatch`); try { validateWorkflowEvolutionDefinition(ledgerKind === "negative-result" ? "negative_result" : "attempted_edit", value); } catch (error) { throw fail("failed", `${name} row schema invalid: ${error.message}`); } open.rows.push(value); continue; }
     assertEnvelope(value, "batch_commit", ledgerKind, name); if (value.status !== "committed" || value.batch_id !== open.begin.batch_id || value.attempt_id !== open.begin.attempt_id || value.publication_generation !== open.begin.publication_generation || value.ledger_kind !== ledgerKind || value.count !== open.rows.length || value.content_hash !== hash(canonical(open.rows))) throw fail("failed", `${name} committed batch integrity mismatch`);
-    records.push(...open.rows); open = null;
+    records.push(...open.rows); latestPublicationGeneration = value.publication_generation; open = null;
   }
   if (recoveryStart !== null || open !== null) throw fail("failed", `${name} has a malformed terminal tail`);
   return { status: records.length ? "ready" : "empty", reason: records.length ? null : "complete_scan_no_matches", refs: [path], records, rawHash: hash(raw) };
