@@ -97,7 +97,7 @@ describe("first three stage vNext cutover", () => {
     expect(() => state.task.readRecord("results/build-plan/accepted.json")).toThrow(/ENOENT/);
   });
 
-  it("rejects source drift before publishing vNext facts and converges on a retry", async () => {
+  it("rejects source drift before publishing vNext facts and records a fresh retry", async () => {
     const state = fixture();
     const context = {
       stage: "build-spec", task: state.task, kernel: state.kernel, identity: state.task.identity,
@@ -115,10 +115,13 @@ describe("first three stage vNext cutover", () => {
     const stableHandler = async () => ({ facts: { source: "stable" } });
     const first = await runStage("build-spec", context, stableHandler);
     const second = await runStage("build-spec", context, stableHandler);
-    expect(second.quality_fact_refs).toEqual(first.quality_fact_refs);
+    expect(second.quality_fact_refs).toHaveLength(first.quality_fact_refs.length);
+    expect(second.quality_fact_refs).not.toEqual(first.quality_fact_refs);
     expect(second).toMatchObject({ status: "in_progress", work_status: "ready" });
     expect(second).not.toHaveProperty("publication_ref");
-    expect(readdirSync(join(state.task.taskPath, "quality", "facts"))).toHaveLength(first.quality_fact_refs.length);
+    expect(readdirSync(join(state.task.taskPath, "quality", "facts"))).toHaveLength(
+      new Set([...first.quality_fact_refs, ...second.quality_fact_refs]).size,
+    );
   });
 
   it("keeps work ready but does not publish when the build-spec review fails", async () => {

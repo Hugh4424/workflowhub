@@ -2,7 +2,7 @@
   "schema_version": "workflow-evolution-extreme.v1",
   "project": "Demo",
   "fixed_vectors": [
-    {"kind":"target-ref","input":{"target_kind":"stage","target_id":"build-plan","target_version":"1","authority":"manifest:sha256:stage"}},
+    {"kind":"target-ref","input":{"target_kind":"stage","target_id":"build-plan","target_version":null,"authority":"manifest:sha256:stage"}},
     {"kind":"observation-id","input":{"project_id":"Demo","task_id":"task-a","confirmation_ref":"confirm-a","occurred_at":"2026-08-31T00:00:00Z","intervention_kind":"retry","intervention_payload":{"reason":"long reason"}}},
     {"kind":"candidate-group-id","input":{"project_id":"Demo","intervention_kind":"retry","intervention_payload":{"reason":"long reason"}}},
     {"kind":"proof","input":{"coverage_status":"complete","stage_set":["make-decision","build-spec","build-plan","build-code","verify-code"]}}

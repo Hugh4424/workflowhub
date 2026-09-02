@@ -310,11 +310,11 @@ describe("vNext formal delivery close", () => {
     });
   });
 
-  it("ignores execution sidecars when checking source worktree cleanliness", () => {
+  it("rejects execution sidecars before checking source worktree cleanliness", () => {
     const state = fixture();
     mkdirSync(join(state.candidate.worktreeRoot, "quality", "tests"), { recursive: true });
     writeFileSync(join(state.candidate.worktreeRoot, "quality", "tests", "stage-fact.json"), "{}\n");
-    const result = prepareDeliveryClosePlan({
+    expect(() => prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -322,8 +322,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    });
-    expect(result.plan.delivery.task_commit).toBe(state.snapshot.commit);
+    })).toThrow(/CLOSE_EXECUTION_SIDECAR_PATHS.*quality\/tests\/stage-fact\.json.*publish/i);
   });
 
   it("accepts the verify-code code-review fact without a second integration review", () => {
@@ -344,7 +343,7 @@ describe("vNext formal delivery close", () => {
 
   it("does not let an unavailable current code review reach the close consumer", () => {
     const state = fixture({ reviewStatus: "unavailable" });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -352,12 +351,15 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts are incomplete:.*code_review/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/current verify-code quality facts are incomplete:.*code_review/),
+    ]));
   });
 
   it("rejects a non-terminal code-review attempt used as a non-recorded quality fact", () => {
     const state = fixture({ reviewStatus: "failed", nonterminalAttempt: true });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -365,7 +367,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/unavailable terminal fact/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/unavailable terminal fact/),
+    ]));
   });
 
   it("accepts a clean task-head snapshot commit", () => {
@@ -385,7 +390,7 @@ describe("vNext formal delivery close", () => {
   it("does not reuse a quality fact after a material-only writeback", () => {
     const state = fixture({ materialOnlyWriteback: true });
     expect(state.snapshot.tree).not.toBe(state.receiptSnapshot.tree);
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -393,12 +398,15 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts are incomplete|material/i);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/current verify-code quality facts are incomplete|material/i),
+    ]));
   });
 
   it("rejects duplicate current quality facts instead of selecting by timestamp", () => {
     const state = fixture({ duplicateHumanConfirmation: true });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -406,7 +414,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts conflict: human_confirmation/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/current verify-code quality facts conflict: human_confirmation/),
+    ]));
   });
 
   it("ignores unrelated legacy quality references during code-review close", () => {
@@ -415,7 +426,7 @@ describe("vNext formal delivery close", () => {
       kind: "review", status: "recorded", subject: "legacy_independent_review",
       evidence: [{ ref: "quality/", sha256: "a".repeat(64), evidence_type: "review_result" }],
     });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -423,12 +434,13 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    });
+    expect(result.plan.delivery.task_commit).toBe(state.snapshot.commit);
   });
 
   it("does not treat a failed review fact as a formal close fact", () => {
     const state = fixture({ reviewStatus: "failed" });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -436,12 +448,15 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/code_review/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/code_review/),
+    ]));
   });
 
   it("does not let a recorded verify-code review with open findings satisfy close", () => {
     const state = fixture({ reviewVerdict: "findings" });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -449,12 +464,15 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/code_review/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/code_review/),
+    ]));
   });
 
-  it("keeps nonblocking minor review advice from blocking close", () => {
+  it("keeps nonblocking minor review advice visible in close quality gaps", () => {
     const state = fixture({ reviewVerdict: "findings", reviewFindingSeverity: "minor" });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -462,7 +480,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/verify-code freshness: .*code_review/),
+    ]));
   });
 
   it("reads an unavailable code-review disclosure and reports the missing close fact", () => {
@@ -482,7 +503,7 @@ describe("vNext formal delivery close", () => {
       kind: "review", status: "missing", subject: "code_review",
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       delivery: {
@@ -490,7 +511,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts are incomplete:.*code_review/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/current verify-code quality facts are incomplete:.*code_review/),
+    ]));
   });
 
   it("accepts the canonical recorded status used by review quality facts", () => {
@@ -549,7 +573,7 @@ describe("vNext formal delivery close", () => {
     "rejects close when the formal code-review fact is missing: %s",
     (subject) => {
       const state = fixture({ omitSubjects: [subject] });
-      expect(() => prepareDeliveryClosePlan({
+      const result = prepareDeliveryClosePlan({
         task: state.task,
         kernel: state.kernel,
         delivery: {
@@ -557,7 +581,10 @@ describe("vNext formal delivery close", () => {
           task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
           spec_archive_path: `specs/archive/${state.taskId}`,
         },
-      })).toThrow(new RegExp(subject));
+      });
+      expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+        expect.stringMatching(new RegExp(subject)),
+      ]));
     },
   );
 
@@ -621,7 +648,7 @@ describe("vNext formal delivery close", () => {
     };
     const raw = `${JSON.stringify(value, null, 2)}\n`;
     state.kernel.publishCanonicalRecord(`quality/evidence/mini-task-quality/${sha256(raw)}.json`, raw);
-    expect(() => prepareDeliveryClosePlan({
+    const result = prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
       allowMiniTaskFocused: true,
@@ -630,6 +657,9 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/MINI_TASK_QUALITY_INVALID/);
+    });
+    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/MINI_TASK_QUALITY_INVALID/),
+    ]));
   });
 });

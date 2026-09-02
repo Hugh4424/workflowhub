@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,6 +11,13 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const canonical = (value) => value === null || typeof value !== "object" ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
 
 function targetArgs() { return ["--target-kind=stage", "--target-id=build-plan"]; }
+function runBrief(args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cli, ...args], { encoding: "utf8" }); let stdout = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.on("close", (status) => resolve({ status, stdout }));
+  });
+}
 describe("M16 iteration brief", () => {
   it("renders all seven fixed sections and preserves missing-source states", () => {
     const storage = mkdtempSync(join(tmpdir(), "m16-brief-"));
@@ -23,6 +30,40 @@ describe("M16 iteration brief", () => {
       const read = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", "--read-current=true"], { encoding: "utf8" });
       expect(read.status, read.stdout).toBe(0);
       expect(JSON.parse(read.stdout)).toMatchObject({ status: "ok" });
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("resolves a unique current versioned step target and renders the same seven sections", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-step-"));
+    try {
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", "--target-kind=step", "--target-id=read-current-materials"], { encoding: "utf8" });
+      expect(result.status, result.stdout).toBe(0);
+      const raw = readFileSync(join(storage, "Projects/Demo/iteration-brief.md"), "utf8");
+      const header = Buffer.from(raw.match(/<!-- workflow-evolution-brief:([^ ]+) -->/)?.[1] ?? "", "base64").toString("utf8");
+      expect(JSON.parse(header).target_ref).toMatchObject({
+        target_kind: "step",
+        target_id: "read-current-materials",
+        target_version: "2.0.0",
+        authority_ref: "workflows/build-plan/steps.json",
+      });
+      for (const heading of ["Candidates", "Negative results", "Attempted edits", "External skill updates", "Retained behavior", "Open decisions", "Market comparison"]) expect(raw).toContain(heading);
+
+      const stale = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", "--target-kind=step", "--target-id=read-current-materials", "--target-version=1.0.0"], { encoding: "utf8" });
+      expect(stale.status).not.toBe(0);
+      expect(JSON.parse(stale.stdout)).toMatchObject({ status: "stale_source" });
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("keeps the brief as traceable facts and does not emit an automatic change proposal", () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-facts-"));
+    try {
+      const result = spawnSync(process.execPath, [cli, `--root=${storage}`, "--project=Demo", ...targetArgs()], { encoding: "utf8" });
+      expect(result.status, result.stdout).toBe(0);
+      const raw = readFileSync(join(storage, "Projects/Demo/iteration-brief.md"), "utf8");
+      expect(raw).toContain("本简报只包含事实、状态和证据引用。");
+      expect(raw).not.toMatch(/把[^\n]{0,160}(?:改成|改为|替换为)/u);
+      expect(raw).not.toMatch(/(?:自动|系统)(?:地)?(?:决定|修改|创建|生成|应用)/u);
+      expect(raw).toContain('"source_refs"');
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
@@ -77,6 +118,22 @@ describe("M16 iteration brief", () => {
       expect(JSON.parse(result.stdout)).toMatchObject({ status: "conflict" });
       expect(readFileSync(lockPath)).toEqual(before);
       expect(readFileSync(join(projectRoot, "iteration-brief.md"), { encoding: "utf8", flag: "a+" })).toBe("");
+    } finally { rmSync(storage, { recursive: true, force: true }); }
+  });
+
+  it("keeps exactly one current brief when two writers race", async () => {
+    const storage = mkdtempSync(join(tmpdir(), "m16-brief-race-"));
+    try {
+      const common = [`--root=${storage}`, "--project=Demo", ...targetArgs()];
+      const results = await Promise.all(["a", "b"].map((suffix) => runBrief([...common, `--attempt-id=brief-race-${suffix}`])));
+      const payloads = results.map((result) => JSON.parse(result.stdout));
+      expect(results.filter((result) => result.status === 0)).toHaveLength(1);
+      expect(payloads.filter((payload) => payload.status === "conflict")).toHaveLength(1);
+      const path = join(storage, "Projects/Demo/iteration-brief.md");
+      const raw = readFileSync(path, "utf8");
+      const header = JSON.parse(Buffer.from(raw.match(/<!-- workflow-evolution-brief:([^ ]+) -->/)?.[1] ?? "", "base64").toString("utf8"));
+      expect(["brief-race-a", "brief-race-b"]).toContain(header.brief_attempt_id);
+      expect(raw.match(/<!-- workflow-evolution-brief:/g)).toHaveLength(1);
     } finally { rmSync(storage, { recursive: true, force: true }); }
   });
 
@@ -238,7 +295,7 @@ describe("M16 iteration brief", () => {
         occurred_at: "2026-08-30T00:00:00Z",
         intervention_kind: "retry",
         intervention_payload: { reason: "same" },
-        target_ref: { kind: "stage", id: "build-plan", version: JSON.parse(manifestBytes).schema_version, authority: manifestRef, authority_sha256: sha256(manifestBytes) },
+        target_ref: { kind: "stage", id: "build-plan", version: null, authority: manifestRef, authority_sha256: sha256(manifestBytes) },
       };
       const first = evolution.refreshEvolutionSnapshot({ storageRoot: storage, project: "Demo", attemptId: "candidate-first", inventory: { observations: [observation] }, now: "2026-08-31T00:00:00Z" });
       expect(first.status).toBe("ok");

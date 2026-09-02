@@ -8,7 +8,17 @@ import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 
 const MAKE_DECISION_ONLY_SKILLS = new Set(["talk-with-zhipeng", "grill-with-docs"]);
 
-function readYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
+// Keep YAML date scalars as strings while retaining YAML merge-key support for
+// the catalog's project anchors. The default schema resolves merges but turns
+// timestamps into Date objects, so normalize only those scalar values before
+// applying the strict calendar contract below.
+function normalizeYamlDates(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (Array.isArray(value)) return value.map(normalizeYamlDates);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeYamlDates(item)]));
+  return value;
+}
+function readYaml(file) { return normalizeYamlDates(yaml.load(fs.readFileSync(file, "utf8"))); }
 function pushError(errors, message) { errors.push(message); }
 function schemaValidator(root, name) {
   // The authoritative schema tree moved under runtime/ during the layout
@@ -32,6 +42,22 @@ function isPortableRelativeLocator(value) {
     && !value.split("/").includes("")
     && !value.split("/").some((segment) => segment === "." || segment === "..")
     && !value.includes("\\");
+}
+
+export function parseStrictReviewDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || !Number.isSafeInteger(day)
+      || month < 1 || month > 12 || day < 1 || day > daysInMonth) return null;
+  // Date.UTC interprets years from 0 through 99 as 1900 through 1999.
+  // Set the full year on a Date instance instead so the four-digit calendar
+  // value remains the value being compared.
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getTime();
 }
 
 export function checkReleaseClosure({ skillRelease, runnerRelease } = {}) {
@@ -197,7 +223,20 @@ export function checkSkillClosure(packageRoot) {
         if (!manifestNames.has(match[1])) pushError(errors, `${stage}: prompt references undeclared skill ${match[1]}`);
       }
     }
-    if (/\/Users\/[^\n]*(?:SKILL|skill|debate|gstack|superpowers)|\.claude\/skills|\.codex\/skills/.test(prompt)) {
+    // Prompts are shipped as portable bundle bytes. Reject every host-local
+    // locator, independently of the platform that authored the prompt:
+    // POSIX absolute paths, drive-letter paths, UNC paths, tilde expansion,
+    // and the well-known user-local skill roots. Repository-relative
+    // `skills/<name>/SKILL.md` references are checked against the manifest
+    // above and remain valid.
+    const forbiddenAbsolutePath = [
+      /(?:^|[\s"'(=,:])\/(?!\/\/)\S+/,
+      /(?:^|[\s"'(=,:])[A-Za-z]:[\\/]\S+/,
+      /(?:^|[\s"'(=,:])\\\\\S+/,
+      /(?:^|[\s"'(=,:])~[\\/]\S+/,
+    ].some((pattern) => pattern.test(prompt));
+    const forbiddenSkillLocator = /(?:^|[\s"'(=,:])(?:~[\\/])?(?:\.claude|\.codex)[\\/]skills(?:[\\/]|$)/i;
+    if (forbiddenAbsolutePath || forbiddenSkillLocator.test(prompt)) {
       pushError(errors, `${stage}: forbidden external or user-local skill locator in prompt`);
     }
     if (/skills\s*\/\s*\$\{|skills\s*\+|(?:HOME|homedir|cwd)\s*[^\n]{0,40}skills/i.test(prompt)) {
@@ -212,13 +251,23 @@ export function checkSkillClosure(packageRoot) {
   const catalogNames = runtimeEntries.map(entry => entry.name).sort();
   for (const name of diskNames.filter(name => !catalogNames.includes(name))) pushError(errors, `disk skill missing from catalog: ${name}`);
   for (const name of catalogNames.filter(name => !diskNames.includes(name))) pushError(errors, `catalog runtime skill missing from disk: ${name}`);
+  const catalogReviewedAt = parseStrictReviewDate(catalog.last_reviewed_at);
+  if (catalogReviewedAt === null) {
+    pushError(errors, "catalog: last_reviewed_at must be a valid YYYY-MM-DD date baseline");
+  }
   for (const entry of runtimeEntries) {
     if (!declared.has(entry.name) && entry.standalone !== true) pushError(errors, `catalog orphan skill must set standalone: true: ${entry.name}`);
     try {
       const checked = validateSkillBundle(root, `skills/${entry.name}/skill-bundle.json`, entry.path);
       validateSchema(validateBundle, checked.bundle, `${entry.name}: bundle`, errors);
       if (entry.local_bundle_hash !== checked.bundleHash) pushError(errors, `${entry.name}: catalog local_bundle_hash does not match resolved bundle`);
-      if (entry.last_reviewed_at !== catalog.last_reviewed_at) pushError(errors, `${entry.name}: provenance review date must match catalog review date after bundle changes`);
+      // The catalog date is a review baseline, not a lockstep timestamp. A
+      // skill may be reviewed later than the baseline; forcing equality makes
+      // legitimate per-entry provenance look stale and encourages date rollback.
+      const entryReviewedAt = parseStrictReviewDate(entry.last_reviewed_at);
+      if (entryReviewedAt === null || (catalogReviewedAt !== null && entryReviewedAt < catalogReviewedAt)) {
+        pushError(errors, `${entry.name}: provenance review date must be on or after the catalog baseline`);
+      }
       const catalogSources = (entry.upstream || []).filter(source => source.github_url);
       const bundleSources = checked.bundle.sources || [];
       for (const source of catalogSources) {

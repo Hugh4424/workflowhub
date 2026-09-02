@@ -82,6 +82,7 @@ Unavailable:
 ```
 
 `available` only means at least one heterologous reviewer returned valid findings JSON. Empty findings are advice, not completion or approval. `unavailable` is not empty findings and must not be rewritten as pass.
+An unavailable response preserves the real public result and provenance: it is never a pass. The `error.code` must preserve the failure category: use `ROUTE_UNAVAILABLE` or `REVIEW_BROKER_START_FAILED` only for route/start failures; use `REVIEW_EXECUTION_TIMEOUT`, `REVIEW_CANCELLED`, `REVIEW_PROVIDER_OUTPUT_INVALID`, `MATERIAL_INCOMPLETE`, `RATE_LIMITED`, or the broker's original code for other failures. A timeout, signal, non-zero broker exit, malformed output, or one rate-limited sibling must never be relabeled `REVIEW_PROVIDER_UNAVAILABLE`; one valid semantic sibling keeps the aggregate `available`.
 
 ## Responsibility boundary
 

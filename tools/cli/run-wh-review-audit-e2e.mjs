@@ -11,13 +11,27 @@ const source = Object.freeze({ targetCommit: oid, baseCommit: oid, baseTree: oid
 const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
 const pass = JSON.stringify({ findings: [] });
 function providerResult(provider) {
-  return { provider, status: "completed", session_id: "fake-session", output: pass, error: null,
+  return { provider, status: "completed", identity: {
+    provider,
+    adapter: provider.split("/", 1)[0],
+    source_id: `fixture-${provider}-source`,
+    config_id: `fixture-${provider}-config`,
+    model: null,
+  }, session_id: "fake-session", output: pass, error: null,
     execution: { adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,
       timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
       retry: { count: 0, progress_events: 0 }, runtime_id: "runtime" } };
 }
 
 /** Test fixture only. This never constitutes provider or external-project E2E evidence. */
+export async function writeAuditEvidenceRecord(task, evidenceRef, data) {
+  // Keep the fixture's publication boundary observable. TaskHandle is
+  // currently synchronous, but awaiting here also preserves correct ordering
+  // if the storage implementation becomes asynchronous; failures must reject
+  // the audit instead of being lost as an unhandled fire-and-forget write.
+  await task.createRecordAtomic(evidenceRef, data);
+}
+
 export async function runAuditFixture({ outputRoot } = {}) {
   const requestedOutput = resolve(outputRoot ?? mkdtempSync(join(tmpdir(), "wh-review-audit-e2e-"))); mkdirSync(requestedOutput, { recursive: true });
   const output = realpathSync(requestedOutput);
@@ -47,7 +61,7 @@ export async function runAuditFixture({ outputRoot } = {}) {
     records.push({ stage, review_track: reviewTrack, status: result.status, snapshot_tree: source.snapshotTree, material_id: result.material_id ?? materialId, attempt_ref: null, result_ref: null });
   }
   const evidenceRef = "fixtures/fake-broker-audit.json";
-  task.createRecordAtomic(evidenceRef, `${JSON.stringify({ version: 1, kind: "fake-broker", fixture_only: true, is_real_e2e: false, records }, null, 2)}\n`);
+  await writeAuditEvidenceRecord(task, evidenceRef, `${JSON.stringify({ version: 1, kind: "fake-broker", fixture_only: true, is_real_e2e: false, records }, null, 2)}\n`);
   return { ok: records.every((item) => item.status === "available"), evidence_ref: evidenceRef, records };
 }
 

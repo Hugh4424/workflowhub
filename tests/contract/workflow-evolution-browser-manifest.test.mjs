@@ -13,6 +13,8 @@ const canonicalChecks = {
   content: true,
   no_page_errors: true,
   no_runtime_requests: true,
+  no_horizontal_overflow: true,
+  keyboard_accessible_and_expand_sync: true,
   viewport_390x844: true,
   viewport_1280x800: true,
 };
@@ -26,6 +28,8 @@ const canonicalAssertions = [
   "390x844 and 1280x800 snapshots",
   "no page errors",
   "no external runtime network requests",
+  "no horizontal overflow at both viewports",
+  "keyboard-accessible controls and synchronized evidence expansion",
 ];
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function passedManifest(identities) {

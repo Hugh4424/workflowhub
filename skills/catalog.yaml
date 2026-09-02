@@ -152,7 +152,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 987119353be9c841708ac952d2cddc9892f8fd2d2d51ffb9d41830aa19212b44
+    local_bundle_hash: a6bf7baaacc8be5605ebb5121cc6d14e4a3675d9beaa6a0b51e86b9ff6c2b167
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -168,7 +168,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 80ec931224b4b4c17aaa41a19d157eb4d4657b6f77dca3e50f334585cfe4f49d
+    local_bundle_hash: 072b8284056893b236816376ccdb98b238718f1ad02d65b8d2b273072e3a03ae
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -286,7 +286,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ffaa18b63a57dd4ed3311c83f560d342e8a864319daabeec1bbb91a2ee86740a
+    local_bundle_hash: fa5d28343da6d7169c632ce4a9bcdce836fc4d4fef01e5c59d7832e7040d957f
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -299,7 +299,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d506f82839cf57024fb5de785c366fa797f1782476d9d032f3f54c68e96e88cc
+    local_bundle_hash: ae7448ebc599bc460c38f1615d459cf14eda6801fbaf015d3da432280e5647d4
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
@@ -541,14 +541,14 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 25fc15c19529d9c79759f6067f95e065c53ec108ced6d5f9e4b78ff96ed5d39e
+    local_bundle_hash: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
     used_by_stages: []
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "25fc15c19529d9c79759f6067f95e065c53ec108ced6d5f9e4b78ff96ed5d39e", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
     local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
@@ -581,10 +581,24 @@ skills:
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
     dependency_closure: [skills/design-source-readiness]
     update_policy: 随 Design.md Read Map 字段和 plan-design-review consumer 人工审查
+  - name: frontend-prototype-render
+    path: skills/frontend-prototype-render/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 6e8c4ecb64d9ceb51099469c212b80539e1c4d65c9acd8b465b5a4e0727a934b
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 为 build-spec UI 分支生成真实组件预览和截图证据
+    design_idea: 真实组件输入、可运行本地渲染和用户授权降级
+    standalone: true
+    used_by_stages: [build-spec]
+    upstream: []
+    local_changes: WorkflowHub 原生渲染入口；owner 是 build-spec，唯一 consumer 是 build-spec UI path；test=tests/contract/frontend-prototype-render-skill.test.mjs；不改产品源码；delete-condition build-spec UI consumer 迁移后
+    dependency_closure: [skills/frontend-prototype-render]
+    update_policy: 随真实组件渲染命令、截图证据和 build-spec consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5242bb057ddb1171011698dd98fe6238e44bc104cd16f04dd65be79e08f42e79
+    local_bundle_hash: 2049ebfb27713db624d7bc87b6e654127191be8ee67ca5b4a61a83b8893bd479
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图

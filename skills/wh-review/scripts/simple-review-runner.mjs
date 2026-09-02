@@ -9,6 +9,34 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
+import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
+
+function redactHostPaths(value) {
+  if (typeof value !== "string") return value;
+  let redacted = "";
+  for (let index = 0; index < value.length;) {
+    const current = value[index];
+    const previous = value[index - 1] ?? "";
+    const unixStart = current === "/" && value[index + 1] !== "/"
+      && previous !== "/" && (index === 0 || !/[A-Za-z0-9_.-]/.test(previous));
+    const windowsStart = /[A-Za-z]/.test(current) && value[index + 1] === ":"
+      && (value[index + 2] === "\\" || value[index + 2] === "/");
+    const uncStart = current === "\\" && value[index + 1] === "\\";
+    if (!unixStart && !windowsStart && !uncStart) {
+      redacted += current;
+      index += 1;
+      continue;
+    }
+    const start = index;
+    if (windowsStart) index += 3;
+    else if (uncStart) index += 2;
+    else index += 1;
+    while (index < value.length && !/[\n"<>()[\]{};,]/.test(value[index])) index += 1;
+    redacted += "<host-path-redacted>";
+    if (start === index) index += 1;
+  }
+  return redacted;
+}
 
 const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "materials/02-approved_spec.md",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the bundle-relative path shown in the manifest.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
@@ -20,12 +48,78 @@ const FOCUS = Object.freeze({
   "build-spec": "Check requirement coverage, user journey, states, failure recovery, testable acceptance, and scope.",
   "build-plan": "Check dependencies, implementation order, real consumers, verification, recovery, and unnecessary work.",
   "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
-  "verify-code": "Check the submitted implementation and test material for correctness, lifecycle and security risks, failure boundaries, and test strength.",
+  "verify-code": "Check only the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. Do not report T010 status, AC coverage, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
   "mini_task.design": "Check that the mini-task remains small, complete, testable, and reversible.",
   "mini_task.implementation": "Check implementation correctness, user result, tests, and scope boundaries.",
 });
 
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+
+function providerSelectionShape(selection) {
+  const providers = Array.isArray(selection) ? [...selection] : selection?.providers;
+  if (!Array.isArray(providers) || providers.length === 0) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: trusted provider selection is empty");
+  }
+  if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "")) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: provider names are invalid");
+  }
+  if (new Set(providers).size !== providers.length) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: provider selection repeats a provider");
+  }
+  const identities = Array.isArray(selection) ? undefined : (selection?.provider_identities ?? selection?.providerIdentities);
+  if (identities === undefined || identities === null) return { providers };
+  if (!identities || typeof identities !== "object" || Array.isArray(identities)) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities are invalid");
+  }
+  return {
+    providers,
+    provider_identities: Object.fromEntries(Object.entries(identities).map(([provider, identity]) => [
+      provider,
+      identity && typeof identity === "object" ? { ...identity } : identity,
+    ])),
+  };
+}
+
+/**
+ * Validate the broker's provider facts against the trusted dispatch group.
+ * The runner keeps partial groups observable, while this strict helper is
+ * available to callers that require a complete provider set.
+ */
+export function validateProviderResultsAgainstSelection(providerResults, selection) {
+  const selected = providerSelectionShape(selection);
+  if (!Array.isArray(providerResults)) throw new TypeError("PROVIDER_RESULT_INVALID: provider_results must be an array");
+  const expected = new Set(selected.providers);
+  const seen = new Set();
+  for (const item of providerResults) {
+    const provider = item?.provider ?? item?.identity?.provider;
+    if (!item || typeof item !== "object" || typeof provider !== "string" || provider.trim() === ""
+        || !expected.has(provider) || seen.has(provider)) {
+      throw new TypeError("PROVIDER_RESULT_INVALID: provider result is not uniquely bound to the selected providers");
+    }
+    const identity = item.identity;
+    if (!identity || typeof identity !== "object" || Array.isArray(identity)
+        || identity.provider !== provider || identity.adapter !== providerAdapter(provider)) {
+      throw new TypeError(`PROVIDER_RESULT_INVALID: provider identity is missing or does not match ${provider}`);
+    }
+    const expectedIdentity = selected.provider_identities?.[provider];
+    if (selected.provider_identities !== undefined) {
+      if (!expectedIdentity || typeof expectedIdentity !== "object" || Array.isArray(expectedIdentity)
+          || typeof expectedIdentity.source_id !== "string" || expectedIdentity.source_id.trim() === ""
+          || typeof expectedIdentity.config_id !== "string" || expectedIdentity.config_id.trim() === "") {
+        throw new TypeError(`PROVIDER_RESULT_INVALID: trusted identity is missing for ${provider}`);
+      }
+      if (identity.source_id !== expectedIdentity.source_id || identity.config_id !== expectedIdentity.config_id) {
+        throw new TypeError(`PROVIDER_RESULT_INVALID: provider identity does not match trusted selection for ${provider}`);
+      }
+    }
+    seen.add(provider);
+  }
+  if (seen.size !== expected.size) {
+    const missing = selected.providers.filter((provider) => !seen.has(provider));
+    throw new TypeError(`PROVIDER_RESULT_INVALID: missing provider result ${missing.join(", ")}`);
+  }
+  return selected;
+}
 
 function surface(input) {
   const kind = input.review_kind ?? input.reviewKind ?? null;
@@ -208,11 +302,44 @@ function publicProviderResult(item, evidenceAnchors = undefined) {
     status: item.status,
     identity: item.identity,
     session_id: item.session_id ?? null,
-    error: item.error,
+    // Provider adapters are untrusted transport boundaries. Keep the
+    // provider's machine-readable code, but never expose raw adapter errors or
+    // host paths in the public review result.
+    error: item.error === null || item.error === undefined ? null : normalizeProviderError(item.error, { preserveCode: true }),
     timing: item.timing,
     usage: item.usage,
     ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
   };
+}
+
+const PUBLIC_FAILURE_CODES = new Map([
+  ["OUTPUT_INVALID", "REVIEW_PROVIDER_OUTPUT_INVALID"],
+  ["PROVIDER_OUTPUT_INVALID", "REVIEW_PROVIDER_OUTPUT_INVALID"],
+  ["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"],
+  ["TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"],
+  ["PROCESS_CANCELLED", "REVIEW_CANCELLED"],
+  ["CANCELLED", "REVIEW_CANCELLED"],
+  ["PROCESS_START_FAILED", "REVIEW_BROKER_START_FAILED"],
+  ["BROKER_SPAWN_FAILED", "REVIEW_BROKER_START_FAILED"],
+]);
+
+function normalizeProviderError(error, { preserveCode = false } = {}) {
+  const sourceCode = typeof error?.code === "string" && error.code.trim() !== "" ? error.code : null;
+  const code = preserveCode ? (sourceCode ?? "REVIEW_BROKER_EXIT_NONZERO") : sourceCode === "REVIEW_PROVIDER_UNAVAILABLE"
+    ? "REVIEW_NO_SEMANTIC_RESULT"
+    : (PUBLIC_FAILURE_CODES.get(sourceCode) ?? sourceCode ?? "REVIEW_BROKER_EXIT_NONZERO");
+  return {
+    code,
+    message: redactHostPaths(typeof error?.message === "string" && error.message.trim() !== ""
+      ? error.message : "review broker did not produce a semantic result"),
+    ...(!preserveCode && code !== sourceCode && sourceCode !== null ? { cause_code: sourceCode } : {}),
+  };
+}
+
+function unavailableReason(providers) {
+  const error = providers.find((item) => item?.error && typeof item.error === "object")?.error;
+  return error ? normalizeProviderError(error)
+    : { code: "REVIEW_NO_SEMANTIC_RESULT", message: "no provider produced a semantic review result" };
 }
 
 export async function runSimpleReview(input, dependencies = {}) {
@@ -236,24 +363,68 @@ export async function runSimpleReview(input, dependencies = {}) {
   }
   if (!route) return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" });
   const selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
+  let providerSelection;
+  try { providerSelection = providerSelectionShape(selection); }
+  catch (error) { return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: error.message }); }
+  const selectedProviders = providerSelection.providers;
+  const selectedIdentities = providerSelection.provider_identities ?? null;
+  const selectedSet = new Set(selectedProviders);
   const bundle = buildBundle(trusted.attachmentRoot, input);
   try {
     const client = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
-    const group = await client.runGroup({
-      hostProvider: input.host_provider ?? input.hostProvider,
-      providers: selection.providers,
-      materials: bundle,
-      prompt: RESULT_PROMPT,
-      reviewMode: route.mode,
-      strictProtocol: false,
-    });
+    let group;
+    try {
+      group = await client.runGroup({
+        hostProvider: input.host_provider ?? input.hostProvider,
+        providers: selectedProviders,
+        materials: bundle,
+        prompt: RESULT_PROMPT,
+        reviewMode: route.mode,
+        strictProtocol: false,
+      });
+    } catch (error) {
+      return unavailableResult(input, normalizeProviderError(error));
+    }
     const findings = [];
     const semanticProviders = new Set();
-    const providers = group.providers.map((item) => {
+    const receivedProviders = Array.isArray(group?.providers) ? group.providers : [];
+    const seenProviders = new Set();
+    const providers = receivedProviders.map((rawItem) => {
+      const item = rawItem && typeof rawItem === "object"
+        ? { ...rawItem, provider: rawItem.provider ?? rawItem.identity?.provider }
+        : rawItem;
+      const provider = item?.provider;
+      const expectedIdentity = selectedIdentities && typeof selectedIdentities === "object"
+        ? selectedIdentities[provider] : null;
+      const identity = item?.identity;
+      const identityValid = typeof provider === "string" && selectedSet.has(provider)
+        && !seenProviders.has(provider)
+        && identity && typeof identity === "object" && identity.provider === provider
+        && (identity.adapter === undefined || identity.adapter === providerAdapter(provider))
+        && (!selectedIdentities || (expectedIdentity && typeof expectedIdentity === "object"
+          && typeof expectedIdentity.source_id === "string" && expectedIdentity.source_id.trim() !== ""
+          && typeof expectedIdentity.config_id === "string" && expectedIdentity.config_id.trim() !== ""
+          && identity.config_id === expectedIdentity.config_id
+          && identity.source_id === expectedIdentity.source_id));
+      seenProviders.add(provider);
+      if (!identityValid) {
+        return {
+          ...publicProviderResult(item),
+          status: "failed",
+          error: { code: "PROVIDER_IDENTITY_INVALID", message: "provider result is not bound to the trusted review selection" },
+        };
+      }
       if (item.status === "completed" && typeof item.output === "string" && item.error === null) {
         try {
           const parsed = parseReviewerOutput(item.output, { requireEvidence: true });
           const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings);
+          if (!evidenceAnchors.every(Boolean)) {
+            return {
+              ...publicProviderResult(item, evidenceAnchors),
+              status: "failed",
+              error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
+            };
+          }
           semanticProviders.add(item.provider);
           for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
           return publicProviderResult(item, evidenceAnchors);
@@ -263,6 +434,20 @@ export async function runSimpleReview(input, dependencies = {}) {
       }
       return publicProviderResult(item);
     });
+    // A broker may finish a partial group without emitting a member for every
+    // selected provider. Make that omission an explicit failed provider fact;
+    // never let a clean-looking result hide an unobserved selected route.
+    for (const provider of selectedProviders) {
+      if (seenProviders.has(provider)) continue;
+      const expectedIdentity = selectedIdentities && typeof selectedIdentities === "object"
+        ? selectedIdentities[provider] : null;
+      providers.push(publicProviderResult({
+        provider,
+        status: "failed",
+        identity: { provider, ...(expectedIdentity && typeof expectedIdentity === "object" ? expectedIdentity : {}) },
+        error: { code: "PROVIDER_RESULT_MISSING", message: "trusted review route omitted a selected provider result" },
+      }));
+    }
     const minimum = Number.isSafeInteger(route.minimum_heterologous) && route.minimum_heterologous >= 1
       ? route.minimum_heterologous : 1;
     const available = semanticProviders.size >= minimum;
@@ -275,8 +460,13 @@ export async function runSimpleReview(input, dependencies = {}) {
       runtime_id: group.runtimeId,
       outcome: group.outcome,
       minimum_heterologous: minimum,
+      provider_selection: {
+        providers: [...selectedProviders],
+        provider_identities: selectedIdentities,
+      },
       provider_results: providers,
       findings,
+      ...(available ? {} : { error: unavailableReason(providers) }),
     };
   } finally {
     bundle.dispose();

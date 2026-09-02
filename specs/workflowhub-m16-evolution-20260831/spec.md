@@ -23,9 +23,9 @@
 
 | Source ID | Decision ID | FR / AC IDs | Status / affected scope | Unresolved / handoff |
 | --- | --- | --- | --- | --- |
-| R-001、R-002、R-014 | D-003、D-010 | FR-POOL-001～008；AC-POOL-001～005 | current / 候选身份、分层、诚实状态 | OPEN-12 在本 spec 关闭 |
-| R-003、R-007 | D-001、D-009 | FR-BRIEF-001～009；AC-BRIEF-001～003 | current / 按需迭代简报 | OPEN-14 在本 spec 关闭 |
-| R-004 | D-004、D-008 | FR-NEG-001～003；AC-NEG-001～002 | current / 负例库与 D24 分域 | OPEN-15 在本 spec 关闭 |
+| R-001、R-002、R-014 | D-003、D-010 | FR-POOL-001～008、FR-POOL-007-R1、FR-POOL-008-R1；AC-POOL-001～005 | current / 候选身份、分层、诚实状态 | OPEN-12 在本 spec 关闭 |
+| R-003、R-007 | D-001、D-009 | FR-BRIEF-001～009、FR-BRIEF-007-R1；AC-BRIEF-001～003 | current / 按需迭代简报 | OPEN-14 在本 spec 关闭 |
+| R-004 | D-004、D-008 | FR-NEG-001～003、FR-NEG-002-R1；AC-NEG-001～002 | current / 负例库与 D24 分域 | OPEN-15 在本 spec 关闭 |
 | R-005 | D-004、D-009 | FR-EDIT-001～003；AC-EDIT-001～002 | current / 改动台账 | 缺字段必须拒绝 |
 | R-006、R-009 | D-004、D-005 | FR-ABL-001～003；AC-ABL-001～002 | current / 协议和待裁决状态 | DE-001 延期执行与裁决 |
 | R-008 | D-001、D-007 | FR-POOL-001、FR-GOV-001；AC-GOV-001 | current / 消费上游复盘产物 | 不重建上游采集 |
@@ -220,11 +220,11 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **场景**：SCN-008
   - **验收**：AC-POOL-005
 
-- **FR-POOL-007 transition entrypoint**：deep module 唯一入口 `recordCandidateTransition`；CLI 必须传 current_snapshot_id、candidate_record_id、candidate_id、expected_revision、current source/material identities 与 human confirmation。refresh 继承 lifecycle/revision，transition 才 revision+1；旧授权 stale 正负例按上表校验。
+- **FR-POOL-007-R1 transition entrypoint**：deep module 唯一入口 `recordCandidateTransition`；CLI 必须传 current_snapshot_id、candidate_record_id、candidate_id、expected_revision、current source/material identities 与 human confirmation。refresh 继承 lifecycle/revision，transition 才 revision+1；旧授权 stale 正负例按上表校验。
+
+- **FR-POOL-008-R1 identity refinement**：稳定 `snapshot_content_id=hash(canonical input inventory)`；`publication_generation` 在 project lock 内由 latest complete committed snapshot generation+1 唯一分配（初始 1），并写入 batch/snapshot/refresh_result/proof canonical bytes；commit 前重验 head snapshot_id/generation 与 fencing，竞争 loser 零写。发布 `snapshot_id=hash(snapshot_content_id,attempt_id,publication_generation)`，相同 inventory 可同 content id，但每次 publication snapshot_id 唯一。proof 与 refresh_result 同时绑定两层 identity 与 generation；相同 inventory+as_of 计算可 byte-equivalent但新发布 id不同，as_of变化改变时间投影；旧 proof/refresh_result/snapshot_id 在新 generation 全部 stale且零写。torn tail 不占 generation；pre-commit crash 后新 attempt 可复用尚未消费的 next generation，完整 commit 后 generation 永久消费；同 attempt retry 拒绝。`refreshEvolutionSnapshot` 不接受 manualRecovery；跨 boot只由 explicit CLI 调用 frozen export `acquireProjectLock`。
 
 ### 5.2 前期质量税（TAX）
-
-- **FR-POOL-008 identity refinement**：稳定 `snapshot_content_id=hash(canonical input inventory)`；`publication_generation` 在 project lock 内由 latest complete committed snapshot generation+1 唯一分配（初始 1），并写入 batch/snapshot/refresh_result/proof canonical bytes；commit 前重验 head snapshot_id/generation 与 fencing，竞争 loser 零写。发布 `snapshot_id=hash(snapshot_content_id,attempt_id,publication_generation)`，相同 inventory 可同 content id，但每次 publication snapshot_id 唯一。proof 与 refresh_result 同时绑定两层 identity 与 generation；相同 inventory+as_of 计算可 byte-equivalent但新发布 id不同，as_of变化改变时间投影；旧 proof/refresh_result/snapshot_id 在新 generation 全部 stale且零写。torn tail 不占 generation；pre-commit crash 后新 attempt 可复用尚未消费的 next generation，完整 commit 后 generation 永久消费；同 attempt retry 拒绝。`refreshEvolutionSnapshot` 不接受 manualRecovery；跨 boot只由 explicit CLI 调用 frozen export `acquireProjectLock`。
 
 - **FR-TAX-001**：质量税定义为最近 30 天内“可确定归因于更早 stage 考虑不周的有效人工介入数 ÷ 全部有效人工介入数”；结果是观察占比，不是因果结论。
   - **范围边界**：不使用 token、耗时或 provider 数据
@@ -312,7 +312,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **场景**：SCN-004、SCN-005、SCN-008
   - **验收**：AC-BRIEF-001～002
 
-- **FR-BRIEF-008**：所有请求和可被简报消费的候选、attempted edit、negative result 必须使用同一六字段 target-ref，并允许 related_targets。target_kind 只允许 `stage|step|skill|surface`；skill target_version 必填，step target_version=versioned stage manifest version，stage/surface 固定 null。step 只由该 manifest 的唯一 step_slug→stage 映射解析；缺失/歧义 invalid。stage/step/skill/surface 分别由 manifest/manifest/catalog/move-map authority 解析；匹配只认 canonical JSON 全字段相等。
+- **FR-BRIEF-008**：所有请求和可被简报消费的候选、attempted edit、negative result 必须使用同一六字段 `target_ref`。候选记录可带 `related_targets[]`，每项都必须是同一六字段 canonical ref；当前 attempted-edit/negative-result schema 与 writer 只发布必填 `target_ref`，不声明 `related_targets`，简报对这两类记录只按其 `target_ref` 精确匹配，不得臆加字段或从自由文本补造关系。`target_kind` 只允许 `stage|step|skill|surface`；skill `target_version` 必填，step `target_version=versioned stage manifest version`，stage/surface 固定 null。step 只由该 manifest 的唯一 step_slug→stage 映射解析；缺失/歧义 invalid。stage/step/skill/surface 分别由 manifest/manifest/catalog/move-map authority 解析；匹配只认 canonical JSON 全字段相等。
   - **范围边界**：不从路径、标题或自由文本反推 target
   - **依据**：D-007、D-009、D-010
   - **场景**：SCN-004、SCN-008
@@ -324,11 +324,11 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **场景**：SCN-004、SCN-005、SCN-008
   - **验收**：AC-BRIEF-001、AC-BRIEF-002
 
+- **FR-BRIEF-007-R1 durability refinement**：brief rename前失败零写；rename后 directory fsync失败返回 `durability_unknown`，不得宣称旧bytes不变或发布成功。恢复需在owner fencing下重读current hash：等于intended hash则幂等完成，否则保留observed current并以新attempt、同semantic id重试，禁止覆盖未知owner/current。
+
 ### 5.4 改动台账（EDIT）
 
-- **FR-BRIEF-007 durability refinement**：brief rename前失败零写；rename后 directory fsync失败返回 `durability_unknown`，不得宣称旧bytes不变或发布成功。恢复需在owner fencing下重读current hash：等于intended hash则幂等完成，否则保留observed current并以新attempt、同semantic id重试，禁止覆盖未知owner/current。
-
-- **FR-EDIT-001**：每条 attempted edit 必须包含版本、唯一 edit_record_id、attempt_id、observed_at、decision_id、changed_surface、before_facts_ref、before_facts_sha256、before_observed_at、after_facts_ref、after_facts_sha256、after_observed_at、validation_method、outcome、revert_ref、evidence_refs 和 `supersedes`（首行必须为 null）；`record-evolution-result --record-kind=attempted-edit` 只接收并校验 current approved decision-log 的 ref+sha256+approval identity，不要求、不得消费 D24 boundary。任一必填字段缺失、decision_id 不属于该已批准 current decision、approval 缺失或 hash stale 时拒绝且零写；只有 `--record-kind=negative-result` 才必须额外绑定 current `d24-eval-boundary.v1` ref+frozen canonical bytes sha256+schema identity，错域/错 schema 时零写。
+- **FR-EDIT-001**：每条 attempted edit 必须包含版本、唯一 edit_record_id、attempt_id、canonical 六字段 `target_ref`、observed_at、decision_id、changed_surface、before_facts_ref、before_facts_sha256、before_observed_at、after_facts_ref、after_facts_sha256、after_observed_at、validation_method、outcome、revert_ref、evidence_refs 和 `supersedes`（首行必须为 null）；当前 schema/writer 不声明 `related_targets`，不得写入或从自由文本补造该字段；`record-evolution-result --record-kind=attempted-edit` 只接收并校验 current approved decision-log 的 ref+sha256+approval identity，不要求、不得消费 D24 boundary。任一必填字段缺失、target_ref 不是当前 authority 的完整 canonical bytes、decision_id 不属于该已批准 current decision、approval 缺失或 hash stale 时拒绝且零写；只有 `--record-kind=negative-result` 才必须额外绑定 current `d24-eval-boundary.v1` ref+frozen canonical bytes sha256+schema identity，错域/错 schema 时零写。
   - **范围边界**：decision_id 必须能回到当前项目已批准的 decision-log 条目
   - **依据**：R-005、D-004、D-009
   - **场景**：SCN-006、SCN-008
@@ -348,7 +348,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
 
 ### 5.5 负例库（NEG）
 
-- **FR-NEG-001**：每条 negative result 必须包含版本、negative_id、failure_identity、observed_at、decision_id、attempt_id、failure_domain、changed_surface、failure_kind、before_facts_ref、after_facts_ref、validation_method、failure_evidence_refs、revert_ref、status 和 supersedes。`failure_domain` 只允许 `harness|process|skill_edit`；`failure_kind` 只允许 `edit_validation_failed|preserve_behavior_regression|workflow_regression|revert_failed`。
+- **FR-NEG-001**：每条 negative result 必须包含版本、negative_id、failure_identity、observed_at、decision_id、attempt_id、canonical 六字段 `target_ref`、failure_domain、changed_surface、failure_kind、before_facts_ref、after_facts_ref、validation_method、failure_evidence_refs、revert_ref、status 和 supersedes。当前 schema/writer 不声明 `related_targets`，不得写入或从自由文本补造该字段；`failure_domain` 只允许 `harness|process|skill_edit`；`failure_kind` 只允许 `edit_validation_failed|preserve_behavior_regression|workflow_regression|revert_failed`。
   - **范围边界**：通用 execution failure、provider failure 和 eval result 不是允许的 failure_kind
   - **依据**：R-004、D-004
   - **场景**：SCN-006、SCN-008
@@ -366,9 +366,9 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **场景**：SCN-006、SCN-008
   - **验收**：AC-NEG-001、AC-NEG-002
 
-### 5.6 消融协议（ABL）
+- **FR-NEG-002-R1 writer refinement**：negative deep writer在同一project lock内读取current negative log/index，验证failure_identity全库唯一；supersedes仅可指同failure_identity的current effective head且链无环，悬空/跨identity/旧head/环全部零写。该读取是writer-side validation consumer；外部direct consumer仍只有iteration brief，move-map须登记此区别。
 
-- **FR-NEG-002 writer refinement**：negative deep writer在同一project lock内读取current negative log/index，验证failure_identity全库唯一；supersedes仅可指同failure_identity的current effective head且链无环，悬空/跨identity/旧head/环全部零写。该读取是writer-side validation consumer；外部direct consumer仍只有iteration brief，move-map须登记此区别。
+### 5.6 消融协议（ABL）
 
 - **FR-ABL-001**：本期必须定义可复用消融记录合同：protocol_id、candidate_id、decision_id、hypothesis、control_facts_ref、treatment_facts_ref、preserve_behaviors、validation_method、success_oracle、failure_oracle、revert_condition、status 和 evidence_refs。
   - **范围边界**：本期只交付协议，不创建实验运行结果
@@ -476,7 +476,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
 
 - **Evolution Candidate**：
   - **定义**：同一项目内，对一个 stage/step/skill 判断的跨任务聚合投影
-  - **字段和约束**：见 FR-POOL-002～007；无自由文本方案
+  - **字段和约束**：见 FR-POOL-002～007、FR-POOL-007-R1；无自由文本方案
   - **关系**：引用多个 stage-reflection 来源，可被简报和页面消费
 
 - **Quality Tax Projection**：
@@ -491,7 +491,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
 
 - **Negative Result**：
   - **定义**：harness、process 或 skill edit 的失败尝试或回归事实
-  - **字段和约束**：见 FR-NEG-001～003；禁止 D24 eval 域
+  - **字段和约束**：见 FR-NEG-001～003、FR-NEG-002-R1；禁止 D24 eval 域
   - **关系**：必须关联 Attempted Edit
 
 - **Iteration Brief**：
@@ -507,7 +507,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
 - **预览与正式**：趋势区是只读投影；JSONL 原始记录是持久来源；简报是一次性派生产物。
 - **当前与历史**：JSONL 只追加且物理旧行不改写；消费者只选择最新完整已发布 snapshot，批内每个 candidate_id 恰好一个 active 投影，旧批次、旧 revision 和残缺尾批只作 historical 或忽略；原始来源不覆盖。
 - **Crash recovery boundary**：ledger 只允许 append-only `batch_begin`→rows→`batch_commit(count+hash)`；`batch_abort` 不依赖可解析 batch_id，而认证 `last_committed_prefix_hash` 与从 `abandoned_start_offset` 开始的 `observed_suffix_length/hash`，因此覆盖 torn begin、torn row、torn commit。只有 terminal uncommitted suffix（无后续 batch）可直接忽略；一旦有后续 batch，前一 abandoned region 必须先由合法 abort 关闭；合法 abort region 可忽略，但已提交批次内 malformed row、count/hash/source identity 不一致必须 fail-loud，禁止 truncate/rewrite。
-- **Lock restart authority**：`runtime/schemas/workflow-evolution.v1.json#/$defs/project_lock` 是 project lock 唯一权威 schema，固定字段集为 `schema_version/project/owner_token/pid/host_id/boot_id/session_epoch/acquired_monotonic_ms/lease_deadline_monotonic_ms`；禁止 host-only、缺 boot_id 或缺 session_epoch 的变体。仅同一 boot_id 与 session_epoch 内允许按 monotonic clock 判断过期并 stale reclaim；boot_id/session_epoch mismatch 默认 fail-loud。跨 boot reclaim 只接受 caller-owned ephemeral `manual-recovery.v1`：组合 schema `$defs.manual_recovery` 固定字段 `schema_version,current_lock_sha256,old_boot_id,new_boot_id,operator_identity,issued_at,nonce,confirmation_ref,confirmation_sha256`。唯一 semantic consumer 是深模块 `acquireProjectLock({manualRecovery})`；T004 的 record/brief 私有 CLI 可通过可选 `--manual-recovery=<json>` 只 parse 并原样转交，不能解释、验证或执行 recovery；page/check 默认不接收且 boot mismatch 保持 failed。深模块必须重验 current lock hash/boot/confirmation，原子 tombstone 记录 authority hash+nonce 后才 reclaim；nonce 对同 lock one-shot，missing/stale/replayed/cross-lock/cross-boot authority 全部拒绝且零写。该输入不持久化为第五对象，caller 负责保留/删除原件。
+- **Lock restart authority**：`runtime/schemas/workflow-evolution.v1.json#/$defs/project_lock` 是 project lock 唯一权威 schema，固定字段集为 `schema_version/project/attempt_id/owner_token/fencing_token/pid/host_id/boot_id/session_epoch/acquired_monotonic_ms/lease_deadline_monotonic_ms`；禁止 host-only、缺 boot_id 或缺 session_epoch 的变体。仅同一 boot_id 与 session_epoch 内允许按 monotonic clock 判断过期并 stale reclaim；boot_id/session_epoch mismatch 默认 fail-loud。跨 boot reclaim 只接受 caller-owned ephemeral `manual-recovery.v1`：组合 schema `$defs.manual_recovery` 固定字段 `schema_version,current_lock_sha256,old_boot_id,new_boot_id,operator_identity,issued_at,nonce,confirmation_ref,confirmation_sha256`。唯一 semantic consumer 是深模块 `acquireProjectLock({manualRecovery})`；T004 的 record/brief 私有 CLI 可通过可选 `--manual-recovery=<json>` 只 parse 并原样转交，不能解释、验证或执行 recovery；page/check 默认不接收且 boot mismatch 保持 failed。深模块必须重验 current lock hash/boot/confirmation，原子 tombstone 记录 authority hash+nonce 后才 reclaim；nonce 对同 lock one-shot，missing/stale/replayed/cross-lock/cross-boot authority 全部拒绝且零写。该输入不持久化为第五对象，caller 负责保留/删除原件。
 - **Lock export contract**：T002 frozen export `acquireProjectLock({storageRoot,project,attemptId,ownerToken,manualRecovery?})`；成功返回 `{lockHandle,ownerToken,fencingToken,leaseIdentity,release}`，错误=`failed|conflict|stale_source|replayed_recovery`且零reclaim/零写。它是manualRecovery唯一semantic consumer。candidate-transition CLI先acquire，再把handle/owner/fencing传给`recordCandidateTransition`重验；CLI仅parse/转交。
 - **Lifecycle authority matrix**：initial `open`；open 可转 deferred/verified/rejected，deferred 可转 open/verified/rejected，且每次都必须绑定 current candidate_id/revision 的 human confirmation；verified/rejected terminal 且不可 supersede。仅 current open/deferred 可凭同样绑定的 human confirmation 转 superseded：旧 revision lifecycle=`superseded`、row=`historical`、immutable，新建同 candidate 的 revision+1 且 initial=`open`；无 authority、跨 candidate 或 stale revision 一律拒绝。
 - **归属与清理**：项目级三个 JSONL 与单一 current `iteration-brief.md` 共四个持久对象位于全局项目存储根；分别按 FR-GOV-001 的 owner/consumer 管理，并在 M16 退役时一起删除或只读归档。
@@ -600,7 +600,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **证据类型**：`test`
 
 - [ ] **AC-POOL-003**：30 天窗口、稳定 candidate_id、完整 snapshot 选批、current 批内每个 candidate_id 唯一 active row、revision、六维状态、人工 transition authority 和 supersedes 生命周期可回放。
-  - **需求**：FR-POOL-006～007
+  - **需求**：FR-POOL-006～007、FR-POOL-007-R1
   - **验证方法**：时间与生命周期契约测试
   判定：begin/row/commit 三个 tear point 均可由字节区间绑定的 batch_abort 关闭后开新批；旧物理行不改写且读取时 historical；open/deferred matrix 仅凭 current candidate/revision human confirmation 转换；仅 current open/deferred 可 supersede，旧 revision lifecycle=superseded/row=historical，新 revision+1 且 initial=open；verified/rejected terminal 且不可 supersede。
   - **失败条件**：abort 依赖可解析 batch_id、未认证字节区间后出现后续 batch、committed corruption 被忽略、重复 active/revision 回退、无 authority/跨 candidate/stale revision 转换或 supersede、verified/rejected 被 supersede、旧 revision 改写或来源覆盖
@@ -614,7 +614,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **证据类型**：`test`
 
 - [ ] **AC-POOL-005**：malformed JSON、未知 schema、hash mismatch、identity mismatch、同 ID 冲突和扫描中来源变化均使刷新失败；同 attempt 的 `refresh_result` 绑定 monitor 静态产物；已有 pool 字节不变，没有旧 pool 时显示 unavailable；修复输入后只发布一个完整新 snapshot。`publication_generation` 初始为 1，之后只取锁内 latest complete committed generation+1；batch/snapshot/refresh_result/proof canonical bytes 必须一致绑定该值，commit 前重验 head。fixed vectors 覆盖初始发布、连续发布、同 content 双发布、两个 writer 从同一 head 竞争、torn tail、pre-commit crash 后新 attempt 重试、完整 commit 后响应丢失再重试；竞争或旧 head 必须零写。
-  - **需求**：FR-POOL-008
+  - **需求**：FR-POOL-008、FR-POOL-008-R1
   - **验证方法**：刷新事务与恢复测试
   判定：失败不追加、不发布半批；旧 snapshot 结合绑定 refresh_result 显示 stale/failed；残缺尾批永不成为 current且不占 generation；恢复后 snapshot_size/index/generation 完整，连续 complete commits 为 1..N 无重复/跳号
   - **失败条件**：损坏输入覆盖旧 pool、从旧 pool 猜失败、页面显示空候选、消费者读到半批、并发 writer 复用 generation、torn tail 消耗 generation、或 crash/retry 重复发布
@@ -642,14 +642,14 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **证据类型**：`test`
 
 - [ ] **AC-BRIEF-001**：stage、step、skill、surface 四种目标各用合法 `target-ref.v1` 生成一份含七个固定区块及真实内容/状态的简报；step 正例必须由 versioned stage manifest 的唯一 step_slug→stage 映射解析；多选、零选、unknown/ambiguous step、stale authority、authority/hash/version 缺失或失配均 fail-loud 且零发布。
-  - **需求**：FR-BRIEF-001、FR-BRIEF-002、FR-BRIEF-007、FR-BRIEF-008、FR-BRIEF-009
+  - **需求**：FR-BRIEF-001、FR-BRIEF-002、FR-BRIEF-007、FR-BRIEF-007-R1、FR-BRIEF-008、FR-BRIEF-009
   - **验证方法**：输入组合与结构测试
   判定：恰好一个六字段 canonical target ref 成功；stage/step/skill/surface 正例与全字段精确 target/related_targets 关系生效；step authority 唯一且 current；七区块 envelope、来源身份和允许内容齐全
   - **失败条件**：unknown/ambiguous/stale step authority、目标歧义、部分字段匹配、自由文本/模糊匹配仍生成、空标题冒充区块内容或任一区块缺失
   - **证据类型**：`test`
 
 - [ ] **AC-BRIEF-002**：七区块分别覆盖 ready、empty、unavailable、stale、not_checked、not_applicable fixture；empty 仅在来源有效且完整扫描为零时成立；无效必需身份、stale source、取消和两个并发生成中的 loser 不覆盖既有简报。
-  - **需求**：FR-BRIEF-002、FR-BRIEF-003、FR-BRIEF-004、FR-BRIEF-006、FR-BRIEF-007、FR-BRIEF-008、FR-BRIEF-009
+  - **需求**：FR-BRIEF-002、FR-BRIEF-003、FR-BRIEF-004、FR-BRIEF-006、FR-BRIEF-007、FR-BRIEF-007-R1、FR-BRIEF-008、FR-BRIEF-009
   - **验证方法**：失败与恢复矩阵测试
   判定：每区块只消费白名单来源并保留 reason/source refs；可选缺失生成 degraded；必需输入失败保持旧文件字节不变；并发时仅一个 current brief
   - **失败条件**：读取失败标 empty、缺区块、越权来源、补造结果、CAS 失败仍覆盖旧文件或同时出现两个 current brief
@@ -684,7 +684,7 @@ WorkflowHub 已能在每个 stage 结束时记录带证据的判断，但这些�
   - **证据类型**：`test`
 
 - [ ] **AC-NEG-002**：D24 eval、产品、模型、策略、数据集、provider 输出和普通 task execution 失败返回 wrong_domain；证据不足返回 classification_unavailable；有独立 before/after 因果证据的 tooling regression 才进入 M16；M16 库内同一 failure_identity 唯一，D24/mixed 分类不写 M16。
-  - **需求**：FR-NEG-002～003
+  - **需求**：FR-NEG-002、FR-NEG-002-R1、FR-NEG-003
   - **验证方法**：mixed/provider-timeout/eval-harness/tooling-regression/证据不足/重复 claim 分类矩阵
   判定：分类顺序确定；仅三种允许域和四种 failure_kind 可落盘；M16-local identity 不重复
   - **失败条件**：模糊 mixed case 进入 M16、eval 失败进入 M16、证据不足仍落盘或 M16 库内 identity 重复
@@ -861,11 +861,11 @@ spec-clarify: trigger = true, executed = true, reason = "OPEN-12～OPEN-15 会�
 | 静态页越界为 runtime 刷新 | blocking | fixed | FR-PAGE-003～004、AC-PAGE-003 | 删除重试/timeout/后台刷新 |
 | 质量税输入不可重复计算 | major | fixed | FR-TAX-002～003、007、AC-TAX | 身份、语法、顺序、冲突 |
 | 零消费 proof 不完整 | major | fixed | FR-POOL-004、AC-POOL-002 | current complete proof 才可触发 |
-| 简报目标/身份/并发不明确 | major | fixed | FR-BRIEF-007、AC-BRIEF | canonical tuple 与 CAS |
-| 候选 lifecycle 不完整 | major | fixed | FR-POOL-007、AC-POOL-003 | 四维状态与 authority |
+| 简报目标/身份/并发不明确 | major | fixed | FR-BRIEF-007、FR-BRIEF-007-R1、AC-BRIEF | canonical tuple 与 CAS |
+| 候选 lifecycle 不完整 | major | fixed | FR-POOL-007、FR-POOL-007-R1、AC-POOL-003 | 四维状态与 authority |
 | edit 缺 supersedes/时间权威 | major | fixed | FR-EDIT-001～003、AC-EDIT | 无环链与 canonical 时间 |
-| D24 分域不可机器执行 | major | fixed | FR-NEG-001～002、AC-NEG-002 | classifier、precedence、claim |
-| pool 刷新未 fail closed | major | fixed | FR-POOL-008、AC-POOL-005 | 保留旧 snapshot，拒绝半批 |
+| D24 分域不可机器执行 | major | fixed | FR-NEG-001、FR-NEG-002、FR-NEG-002-R1、AC-NEG-002 | classifier、precedence、claim |
+| pool 刷新未 fail closed | major | fixed | FR-POOL-008、FR-POOL-008-R1、AC-POOL-005 | 保留旧 snapshot，拒绝半批 |
 
 - **剩余 finding**：0 个未处置；RISK-004 与 DE-001～003 仍按事实保留，不冒充已解决。
 
@@ -875,8 +875,8 @@ spec-clarify: trigger = true, executed = true, reason = "OPEN-12～OPEN-15 会�
 
 | finding_id | severity | disposition | 修复位置 | 说明 |
 | --- | --- | --- | --- | --- |
-| F-33298577a02d | blocking | fixed | FR-POOL-007～008、AC-POOL-003～005 | 完整 snapshot、读取投影、绑定刷新结果 |
-| F-15f5667808bf | major | fixed | FR-NEG-002、AC-NEG-002 | 收窄为 M16-local 唯一性 |
+| F-33298577a02d | blocking | fixed | FR-POOL-007、FR-POOL-007-R1、FR-POOL-008、FR-POOL-008-R1、AC-POOL-003～005 | 完整 snapshot、读取投影、绑定刷新结果 |
+| F-15f5667808bf | major | fixed | FR-NEG-002、FR-NEG-002-R1、AC-NEG-002 | 收窄为 M16-local 唯一性 |
 | F-4e486871b311 | major | fixed | FR-BRIEF-008、AC-BRIEF-001～002 | 统一六字段 TargetRef |
 | F-5dca31a51fd7 | major | fixed | FR-POOL-003、AC-POOL-001 | 确定性多来源归并 |
 | F-6c6f571bd7f6 | major | fixed | SCN-006、FR-EDIT-003、AC-EDIT-002 | 仅终态写 attempted edit |

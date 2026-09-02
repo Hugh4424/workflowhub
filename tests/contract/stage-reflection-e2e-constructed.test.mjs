@@ -420,6 +420,6 @@ describe("stage-reflection constructed end-to-end contract", () => {
     expect(readFileSync(join(repoRoot, "workflows/build-plan/SKILL.md"), "utf8")).toContain("specs/<task-id>");
     expect(readFileSync(join(repoRoot, "AGENTS.md"), "utf8")).toContain("specs/<task-id>");
     expect(readFileSync(join(repoRoot, "CONTEXT.md"), "utf8")).toContain("判断层（judgment）vs 事实层（fact）");
-    expect(readFileSync(join(repoRoot, "specs/workflowhub-stage-reflection-20260830/tasks.md"), "utf8")).toContain("m15-retirement");
+    expect(readFileSync(join(repoRoot, "specs/archive/workflowhub-stage-reflection-20260830/tasks.md"), "utf8")).toContain("m15-retirement");
   });
 });

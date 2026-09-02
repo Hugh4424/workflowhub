@@ -16,7 +16,7 @@ import {
   sessionHandoffPath,
 } from "../../tools/host/workflowhub-codex-session-state.mjs";
 
-const materialRoot = join(process.cwd(), "specs", "governance-runtime-execution-chain-20260827");
+const materialRoot = join(process.cwd(), "specs", "archive", "governance-runtime-execution-chain-20260827");
 const readMaterial = (name) => readFileSync(join(materialRoot, name), "utf8");
 
 describe("material producer and consumer round-trip", () => {

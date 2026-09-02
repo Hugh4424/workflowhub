@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "36db2f9230e1c8349c39124e26e17baf1710b87c5d45c4b1e52a7f8db9174ace"
+      "sha256": "f2455a29efdc9909f21dc78fecf0c38cd0553af7f56f76110ad0b6424a03fd47"
     },
     {
       "path": "contracts/build-code.md",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "2e61b419cd587c8590cd194e0bd2bb55169f66c2cb786e0cf9364a370b6e6029"
+      "sha256": "812ac9af130ff7403288e043f588f9ff19c2ca3b091ccbf45ccb709d3c1a02a4"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "c413019d20a20d9a8524e389afcb4e0be96373e0a227529d9c15c65d77d32d9d"
+      "sha256": "016cec025d2f1cfbf2d83b4dc24712b7946ab2b109d54701af9410a8446ce837"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -100,15 +100,15 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "d3b86ce4da33067569504901a96cd0427972b6d7ebdaa07cda2fee6dd17f7aaf"
+      "sha256": "3b02690db85ef6dff94797c8f048f98ba9049dcd00f275081a1b01bcac7009f3"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "cc25e486ec0517de16c83c0b9fdcc4e6a7495d7c8c6e288cb0de9d7196dae972"
+      "sha256": "6999ba7c441183a60339bcecc52fa9e6de53146716baa41c3d483771bf8f88d9"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "96141bc9f166da4be9b36e390f36b29402f6a5bef92ed4c5c233e814d09429e5"
+      "sha256": "b0b3140dc2b7ce1ddbfb4182bb87cb18c605054b3cc23c71886b40020ff51688"
     },
     {
       "path": "stage-skill-plan.json",

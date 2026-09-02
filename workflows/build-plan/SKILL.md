@@ -18,7 +18,7 @@ direction-changing gap is returned to `make-decision`; unaffected planning
 continues without guessing.
 四份当前材料统一落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不替代材料，也不新增 gate。
-`m15-retirement` 材料迁移与仓外 `~/Knowledge/Projects/workflowhub/tasks/Projects/`
+`m15-retirement` 材料迁移与仓外 `Knowledge/Projects/workflowhub/tasks/Projects/`
 清理不属于本技能范围。
 
 ## 同一会话自动记录

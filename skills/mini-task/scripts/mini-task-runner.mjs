@@ -6,7 +6,7 @@ import { captureExecutionSnapshot, materialRevisionFromValues } from "../../../r
 import { assertTaskHandle, assertTaskKernel } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateMiniTaskAcTrace } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
-import { validateReportableFindingDispositions } from "../../../runtime/review/stage-review-disposition.mjs";
+import { canonicalReviewFindings, isActionableSeriousFinding, validateReportableFindingDispositions } from "../../../runtime/review/stage-review-disposition.mjs";
 import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import {
   closePlanHash,
@@ -571,9 +571,9 @@ function assertMiniTaskQualityForDelivery(task) {
   }
 
   const implementationFact = facts.get("mini_task_implementation_review");
-  if (implementationFact === null) throw new Error("mini-task implementation review facts conflict for the current snapshot");
+  if (implementationFact === null) throw new Error("mini-task quality intents conflict: mini_task_implementation_review");
   const implementation = implementationFact?.value;
-  if (!implementation || !MINI_REVIEW_CLOSE_STATUSES.has(implementation.status)) throw new Error("mini-task implementation review is incomplete for the current snapshot");
+  if (!implementation || !MINI_REVIEW_CLOSE_STATUSES.has(implementation.status)) throw new Error("mini-task code_review quality facts are incomplete for the current snapshot");
   const packet = readBoundJson(task, implementation.evidence[0], "mini-task implementation evidence");
   const implementationSnapshotReusable = packet.snapshot_tree === snapshot.tree;
   if (packet.schema_version !== "workflowhub-mini-task-implementation-evidence.v1"
@@ -589,6 +589,9 @@ function assertMiniTaskQualityForDelivery(task) {
       || implementationResult.review_kind !== "mini_task.implementation"
       || !implementationReviewReusable) throw new Error("mini-task implementation review is not bound to the current snapshot");
   authenticateMiniReviewResult(task, implementationResult, "mini-task implementation review");
+  if (canonicalReviewFindings(implementationResult).some(isActionableSeriousFinding)) {
+    throw new Error("mini-task code_review has actionable serious findings; delivery remains incomplete");
+  }
   const dispositionFacts = miniFindingDispositions({
     reviewResult: implementationResult,
     supplied: packet.finding_dispositions?.items ?? [],
@@ -876,14 +879,18 @@ export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, 
   if (kernel.task !== task) throw new Error("mini-task TaskHandle/TaskKernel mismatch");
   const workspace = openCurrentTaskWorkspace(task);
   const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
+  // Validate every canonical quality fact before deriving the mini-task view.
+  // A malformed current fact must fail closed instead of being hidden by the
+  // mini-task-only evidence index.
+  for (const ref of task.listCanonicalQualityFactRefs()) readQualityFact(task, ref);
   const focusedFacts = latestMiniQualityFacts(task, {
     worktreeRoot: workspace.worktreeRoot,
     snapshotTree: snapshot.tree,
     materialRevision: currentMaterialRevision(task, workspace.worktreeRoot),
     subjects: ["full_tests_fresh"],
   });
-  if (focusedFacts.get("full_tests_fresh") === null) {
-    throw new Error("mini-task full_tests_fresh quality facts conflict for the current snapshot");
+  if (!focusedFacts.has("full_tests_fresh") || focusedFacts.get("full_tests_fresh") === null) {
+    throw new Error("fresh verify-code facts are incomplete: mini-task full_tests_fresh is missing or conflicting for the current snapshot (current verify-code quality facts are incomplete; material revision may be stale)");
   }
   const focusedTestFact = focusedFacts.get("full_tests_fresh");
   if (focusedTestFact?.value?.status === "failed") {
@@ -895,6 +902,11 @@ export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, 
       }
     }
   }
+  // The delivery plan is only meaningful after the mini-task's own design,
+  // implementation, focused-test, user-result, and AC evidence are current.
+  // Keep the ordinary close planner reusable, but do not let its incomplete
+  // quality reasons turn into a prepared mini-task plan.
+  assertMiniTaskQualityForDelivery(task);
   return prepareDeliveryClosePlan({ task, kernel, delivery, allowMiniTaskFocused: true });
 }
 

@@ -110,7 +110,11 @@ function verifyDecision(payload) {
   const start = lines.findIndex((line) => new RegExp(`^###\\s+${decisionId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}(?:\\s|$)`).test(line));
   const end = start < 0 ? -1 : lines.findIndex((line, index) => index > start && /^###\s+/.test(line));
   const section = start < 0 ? [] : lines.slice(start, end < 0 ? lines.length : end);
-  if (start < 0 || !section.some((line) => /approval_binding\s*:\s*accepted\b/i.test(line))) throw fail("stale_source", "decision_id is not present in an accepted decision binding");
+  // Approval must be a structured list field in the selected decision
+  // section. Free text, comments, quoted examples, and nested note fields do
+  // not authenticate a terminal edit.
+  const acceptedBinding = /^\s*-\s*approval_binding\s*:\s*accepted\s*$/i;
+  if (start < 0 || !section.some((line) => acceptedBinding.test(line))) throw fail("stale_source", "decision_id is not present in an accepted decision binding");
   return { decision_ref: ref, decision_sha256: sha256, decision_id: decisionId };
 }
 function heads(records, idField) {
@@ -136,7 +140,10 @@ function heads(records, idField) {
 }
 function verifyTargetRef(value, project, repositoryRoot) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw fail("invalid_input", "target_ref is required");
-  for (const field of ["project_id", "target_kind", "target_id", "target_version", "authority_ref", "authority_sha256"]) required(value[field], `target_ref.${field}`);
+  for (const field of ["project_id", "target_kind", "target_id", "authority_ref", "authority_sha256"]) required(value[field], `target_ref.${field}`);
+  if (["stage", "surface"].includes(value.target_kind)) {
+    if (value.target_version !== null) throw fail("invalid_input", "stage/surface target_ref.target_version must be null");
+  } else required(value.target_version, "target_ref.target_version");
   if (value.project_id !== project) throw fail("stale_source", "target_ref project does not match the current project");
   const authorities = currentAuthorities(repositoryRoot);
   const entries = value.target_kind === "stage" ? authorities.stages.filter((entry) => entry.stage === value.target_id) : value.target_kind === "step" ? authorities.steps.filter((entry) => entry.slug === value.target_id) : value.target_kind === "skill" ? authorities.skills.filter((entry) => entry.id === value.target_id) : value.target_kind === "surface" ? authorities.surfaces.filter((entry) => entry.id === value.target_id) : [];
@@ -202,6 +209,8 @@ function negativeResult(payload, attemptId, editState, negatives, project, repos
   if (!edit) throw fail("stale_source", "negative result does not reference the same attempted edit");
   const currentEditHeads = heads(edits.filter((entry) => entry.attempt_id === attemptId), "edit_record_id");
   if (currentEditHeads.length !== 1 || currentEditHeads[0].edit_record_id !== editId) throw fail("stale_source", "negative result does not reference the effective attempted edit head");
+  const currentEditHeadSha256 = hash(editState.raw.subarray(0, editState.committedEnd));
+  if (payload.attempted_edit_head_sha256 !== undefined && payload.attempted_edit_head_sha256 !== currentEditHeadSha256) throw fail("stale_source", "negative result attempted-edit head hash is stale");
   if (!["regressed", "reverted"].includes(edit.outcome)) throw fail("invalid_input", "attempted edit outcome is incompatible with a negative result");
   if (negatives.some((entry) => entry.negative_id === payload.negative_id)) throw fail("conflict", "duplicate negative result identity");
   const sameFailure = negatives.filter((entry) => entry.failure_identity === payload.failure_identity); const current = heads(sameFailure, "negative_id");
@@ -216,7 +225,7 @@ function negativeResult(payload, attemptId, editState, negatives, project, repos
   return {
     schema_version: "workflow-evolution.v1", record_kind: "negative-result",
     negative_id: payload.negative_id, attempt_id: attemptId, attempted_edit_id: editId,
-    attempted_edit_head_sha256: hash(editState.raw.subarray(0, editState.committedEnd)),
+    attempted_edit_head_sha256: currentEditHeadSha256,
     failure_identity: payload.failure_identity, ...decision, approval: true, target_ref: payload.target_ref,
     failure_domain: payload.failure_domain, failure_kind: payload.failure_kind, observed_at: payload.observed_at,
     changed_surface: payload.changed_surface, before_facts_ref: payload.before_facts_ref, before_facts_sha256: payload.before_facts_sha256,

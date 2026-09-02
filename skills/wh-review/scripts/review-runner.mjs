@@ -133,6 +133,45 @@ function minimumReviewersForPolicy(policy, stage, reviewTrack, reviewScope = nul
     ? policy.minimum_heterologous
     : minimumReviewersFor(stage, reviewTrack, reviewScope);
 }
+
+// Reuse is still a public helper for callers that already own canonical
+// review records. Keep its policy checks local to this module even though the
+// simple review CLI no longer drives the old runner lifecycle.
+function reuseSatisfiesCurrentPolicy({ result, attempt, reviewPolicy }) {
+  if (reviewPolicy?.source !== "wh_review.v2") return true;
+  const eligible = new Set(reviewPolicy.eligible_profiles ?? []);
+  const attempts = new Map((attempt.provider_attempts ?? []).map((item) => [item.provider, item]));
+  const adapters = new Set();
+  const sources = new Set();
+  for (const member of result.provider_results ?? []) {
+    if (!eligible.has(member.provider)) continue;
+    const providerAttempt = attempts.get(member.provider);
+    if (!providerAttempt || providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    const adapter = providerAttempt.identity?.adapter;
+    const sourceId = providerAttempt.identity?.source_id;
+    if (typeof adapter !== "string" || adapter.trim() === ""
+        || typeof sourceId !== "string" || sourceId.trim() === "") return false;
+    adapters.add(adapter);
+    sources.add(sourceId);
+  }
+  return adapters.size >= reviewPolicy.minimum_heterologous && sources.size >= reviewPolicy.minimum_heterologous;
+}
+
+function providerOutputCarriesAnchors(task, attempt) {
+  for (const providerAttempt of attempt.provider_attempts ?? []) {
+    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    try {
+      const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
+      if (!Array.isArray(output.evidence_anchor_valid) || output.evidence_anchor_valid.some((value) => typeof value !== "boolean")) return false;
+      const review = parseReviewerOutput(output.content, { requireEvidence: true });
+      if (output.evidence_anchor_valid.length !== review.findings.length) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;

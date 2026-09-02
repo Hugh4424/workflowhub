@@ -105,16 +105,17 @@ describe("simple wh-review contracts", () => {
 
   it("documents the complete public review input instead of forcing callers to guess", () => {
     const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
-    for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
+    for (const field of ["stage", "host_provider", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
-    expect(skill).toContain("runtime/review/stage-materials.json");
-    expect(skill).toMatch(/strict material allowlist/i);
-    expect(skill).toMatch(/`context_map` and `evidence_map` are optional/);
-    expect(skill).toMatch(/3rd-review config/i);
-    expect(skill).toMatch(/Callers cannot select provider, model/);
-    expect(skill).toMatch(/Send transient input through stdin/);
-    for (const name of ["target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(name);
+    for (const field of ["task_path", "project_name", "task_id"]) {
+      expect(skill, field).toContain(`\`${field}\``);
+    }
+    expect(skill).toMatch(/Do not send `task_path`, `project_name`, `task_id`/);
+    expect(skill).toMatch(/complete material bytes/i);
+    expect(skill).toMatch(/provider may read only the submitted bundle/i);
+    expect(skill).toMatch(/does not open or validate a Workspace, TaskHandle, Git repository/i);
+    expect(skill).toMatch(/Empty findings are advice, not completion or approval/i);
   });
 
   it("requires one explicit package root without checkout or path guessing", () => {

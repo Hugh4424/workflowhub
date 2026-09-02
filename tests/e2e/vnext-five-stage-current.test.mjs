@@ -21,6 +21,7 @@ const stages = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const completeConvergenceFacts = () => Object.fromEntries([
+  "ui_applicability",
   "requirement_coverage",
   "goal_achievement",
   "acceptance_clarity",
@@ -58,6 +59,26 @@ D-001：保持当前范围并完成当前夹具。
 
 ## 风险与延期交接
 当前夹具风险已记录。
+
+## 收敛检查
+| 维度 | 用户答案 | 事实 | 可执行验收 |
+| --- | --- | --- | --- |
+| goal | 用户确认当前夹具目标已达成 | R-FIXTURE-1 -> D-FIXTURE-1 | 场景：运行当前夹具；数据来源：当前阶段事实；通过：状态为 completed；失败：状态缺失 |
+| scope | 用户确认只覆盖当前夹具 | R-FIXTURE-5 -> D-FIXTURE-5 | 当前范围保持不变 |
+| solution | 用户确认取舍：最小夹具；被拒方案：扩大运行时；无未决项 | D-FIXTURE-1 | 当前方案可执行 |
+| acceptance | 用户确认结果可验证 | AC-001 -> D-FIXTURE-1 | 场景：运行当前夹具；数据来源：当前阶段事实；通过：状态为 completed；失败：状态不是 completed |
+
+## UI applicability
+\`\`\`json
+{
+  "result": "non_ui",
+  "sources": {
+    "raw_requirement": { "conclusion": "non_ui", "reason": "当前夹具只验证运行时事实" },
+    "project_inventory": { "conclusion": "non_ui", "reason": "当前夹具没有页面 consumer" },
+    "planned_or_changed_frontend_fact": { "conclusion": "non_ui", "reason": "当前夹具没有前端改动" }
+  }
+}
+\`\`\`
 `;
 const HISTORICAL_REGRESSION_CASES = Object.freeze([
   Object.freeze({
@@ -470,7 +491,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
     }));
   }
   const acceptanceSubjects = {
-    "make-decision": ["scope", "non_goals", "risks"],
+    "make-decision": ["scope", "non_goals", "risks", "ui_applicability"],
     "build-spec": ["zero_major_ambiguities", "clarify"],
     "build-plan": ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks"],
     "build-code": ["acceptance_criteria"],
@@ -1007,6 +1028,10 @@ describe("current vNext five-stage runtime", () => {
   it("runs build-spec through verify-code without inventing an audit gate", () => {
     const state = fixture("public-build-spec-through-verify-code");
     writeCanonicalStageMaterials(state.artifacts);
+    // The current UI boundary is explicit: this fixture has no page or
+    // frontend consumer, so record the non-UI decision before running the
+    // authoring stage.
+    state.artifacts.writeAtomic("decision-log.md", `${state.artifacts.read("decision-log.md")}\n${completeDecisionLog.slice(completeDecisionLog.indexOf("## UI applicability"))}`);
     const specContent = state.artifacts.read("spec.md");
     const specSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });

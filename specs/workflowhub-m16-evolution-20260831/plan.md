@@ -1,6 +1,6 @@
 # 实现计划：M16 自进化候选池、迭代入口与负例库
 
-- **Input**：`specs/workflowhub-m16-evolution-20260831/decision-log.md@51d1ae108d28189df006d235bf2ae65e981812e283259dd06db29bc7a314bf7c`、`specs/workflowhub-m16-evolution-20260831/spec.md@b863bf6cb656481a510c85386f8dcc38b6c3ad25d13c637c36dfaee2d7ddf1cb`
+- **Input**：`specs/workflowhub-m16-evolution-20260831/decision-log.md@8b869000b5327e36e40a9286c6c47116169a37f375181c348dedf1adc396b670`、`specs/workflowhub-m16-evolution-20260831/spec.md@647c4d906e31fc16d1fbdbc27e270bc433688a52a3ebc9169ddb68035dfbae5a`
 - **Template version**：`plan-task.v3`
 
 ## Quick Read
@@ -23,7 +23,7 @@
 - **Language / runtime**：Node.js >=24，ESM；Ajv 复用现有 schema 校验；HTML 为无框架静态模板。
 - **Primary dependencies**：复用 `tools/cli/derive-consumption-edges.mjs`、`runtime/stage/step-manifest.mjs` 的 canonical stage identity、`skills/catalog.yaml` 的 skill identity、`docs/architecture/move-map.json` 的 surface authority；不新增 npm 依赖。
 - **Storage / state**：四个项目级对象固定为 `Projects/<project>/evolution-candidates.jsonl`、`attempted-edits.jsonl`、`negative-results.jsonl`、`iteration-brief.md`；JSONL 用 framed append+fsync。negative writer 在同一锁内读取 current negative log/index，验证 failure_identity 全库唯一，且 supersedes 只指向同 identity 的 current effective head、链无环，才可 append。brief 使用 attempt+owner temp，fsync temp→重验→owner fencing→rename→directory fsync；rename 前失败零写。rename 后 directory fsync 失败返回 `durability_unknown`，不得宣称旧 bytes 不变或发布成功；恢复先以 owner fencing 重读 current bytes/hash，若已等于 intended hash则幂等完成，否则保留 observed current、产生新 attempt并按同 semantic id重试，禁止覆盖未知 owner/current。
-- **Lock contract**：唯一 owner=`runtime/evidence/workflow-evolution.mjs`，唯一 authority=`runtime/schemas/workflow-evolution.v1.json#/$defs/project_lock`；固定字段集为 `schema_version/project/owner_token/pid/host_id/boot_id/session_epoch/acquired_monotonic_ms/lease_deadline_monotonic_ms`，`owner_token` 每次 acquire 随机且不可复用。获取必须 `open(...,"wx")` 原子创建；仅同 boot_id/session_epoch 的 monotonic clock 可判定 lease，boot/session mismatch、未知 schema/host/owner 或无法证明过期一律 `failed` 且禁止删除。critical section 必须在配置的最大 lease 内有界完成；续租只允许当前 owner_token 在旧 deadline 前原子更新，且受最大累计持锁时长/最大续租次数约束。每次 append、每次 fsync、brief rename 前都必须重读 lock 并复核 owner_token 匹配且 lease 未过期。只有深模块可将已验证过期锁原子 rename 为绑定原 owner_token 的 tombstone 后争抢新锁；旧 writer 过期被 reclaim 后即使恢复，也必须 abort 且零写。释放/清 tombstone前必须重读并匹配 owner_token，禁止盲删未知锁。
+- **Lock contract**：唯一 owner=`runtime/evidence/workflow-evolution.mjs`，唯一 authority=`runtime/schemas/workflow-evolution.v1.json#/$defs/project_lock`；固定字段集为 `schema_version/project/attempt_id/owner_token/fencing_token/pid/host_id/boot_id/session_epoch/acquired_monotonic_ms/lease_deadline_monotonic_ms`，`owner_token` 与 `fencing_token` 每次 acquire 随机且不可复用。获取必须 `open(...,"wx")` 原子创建；仅同 boot_id/session_epoch 的 monotonic clock 可判定 lease，boot/session mismatch、未知 schema/host/owner 或无法证明过期一律 `failed` 且禁止删除。critical section 必须在配置的最大 lease 内有界完成；续租只允许当前 owner_token 在旧 deadline 前原子更新，且受最大累计持锁时长/最大续租次数约束。每次 append、每次 fsync、brief rename 前都必须重读 lock 并复核 owner_token 与 fencing_token 匹配且 lease 未过期。只有深模块可将已验证过期锁原子 rename 为绑定原 owner_token 的 tombstone 后争抢新锁；旧 writer 过期被 reclaim 后即使恢复，也必须 abort 且零写。释放/清 tombstone前必须重读并匹配 owner_token 与 fencing_token，禁止盲删未知锁。
 - **Testing**：Vitest 单 worker 保证文件竞争用例稳定；P2 另走 `isolated-browser-qa`，复用同一浏览器引擎和 fixture，记录 cleanup。
 - **Target environment**：本地 WorkflowHub CLI 与静态浏览器页面；单机文件系统。本期不证明 NFS/跨主机锁语义。
 - **Scale / scope**：最近 30 天、五阶段、候选默认 20 条分页展开；固定极端 fixture 含 120 字 subject/reason、5 refs 和多状态标签。
@@ -86,10 +86,13 @@
 | `refreshEvolutionSnapshot({storageRoot,project,attemptId,inventory,now})` | current inventory + locked committed head → `{status,snapshotId,publicationGeneration,refreshResult}` | `failed\|conflict\|stale_source\|cancelled` | acquire project lock；generation=latest complete committed+1/初始1；commit前重验head+fencing；不接受 manualRecovery；任一 error/loser 旧 bytes 不变 | T006 page adapter only |
 | `recordCandidateTransition({storageRoot,project,currentSnapshotId,candidateRecordId,candidateId,expectedRevision,currentSourceIdentities,currentMaterialIdentities,humanConfirmation,lockAuthority})` | exact current authority under already acquired fencing identity → `{status,candidateId,revision,snapshotId,publicationGeneration}` | `failed\|conflict\|stale_source` | 不接受 manualRecovery；private CLI先调用`acquireProjectLock({manualRecovery})`并传 lockAuthority；同样按 committed head+1 分配/commit前重验 generation；任一旧 identity 零写 | T004 `record-evolution-result --record-kind=candidate-transition` adapter only |
 | `readCurrentEvolutionProjection({storageRoot,project,expectedIdentity,taxProjection,sourceInventoryHash,asOf,refreshResult})` | caller-supplied current candidate identity + exact tax/refresh/time bundle → frozen page/brief projection | `unavailable\|failed\|stale_source` | read-only；逐字段重验同 attempt/source/time，禁止隐藏重读或系统时钟 | T006 page adapter；T004 brief adapter |
+| `validateWorkflowEvolutionDefinition(name,value)` | named workflow-evolution definition + candidate value → validated value | `schema_invalid` | no lock；error 零写 | internal ledger/snapshot validators；T004 record/brief adapters |
+| `assertProjectLockCurrent(lock,{allowExpired})` | lock authority → current fencing assertion | `stale_source\|conflict` | read-only；error 零写 | internal refresh/transition/brief/lesson writers；T004 record/brief adapters |
+| `D24_EVAL_BOUNDARY` | frozen D24 schema ref + canonical bytes + hash + schema identity → immutable boundary object | 不可变常量；消费方身份/hash mismatch fail-loud | no lock；不写入 | T004 `record-evolution-result --record-kind=negative-result`；negative-result contract/aggregate tests |
 
 `readCurrentCandidateSnapshot({storageRoot,project,expectedIdentity})` 是 module-private internal helper，不 export；唯一内部 callers=`refreshEvolutionSnapshot`、`recordCandidateTransition`、`readCurrentEvolutionProjection`。任何 private CLI、page/brief adapter、测试外的生产模块均禁止直接 import/调用它；T004 brief 与 T005/T006 page 只能经 frozen projection export 消费。
 
-全部九个 exports 只返回冻结结构化结果，不抛出可被 adapter 吞掉的业务错误；schema/programmer misuse 可 fail-loud。上述 consumer map 是 exact allowlist：每个 export 至少一个真实 import/call backref，allowlist 外生产 import 或缺失 backref 均失败。T001 固定签名、IO/error、consumer call graph、是否持锁、fencing/manualRecovery 与零写，T002 不得改 T001 focused tests。
+全部十二个 exports 只返回冻结结构化结果，不抛出可被 adapter 吞掉的业务错误；schema/programmer misuse 可 fail-loud。上述 consumer map 是 exact allowlist：每个 export 至少一个真实 import/call backref，allowlist 外生产 import 或缺失 backref 均失败。T001 固定十二个 export 的签名、IO/error、consumer call graph、是否持锁、fencing/manualRecovery 与零写；T008 governance oracle 同步断言十二个 export 与 D24 boundary，T002 不得改 T001 focused tests。
 
 #### Existing reflection producers
 
@@ -122,7 +125,7 @@
 - **Typed ViewModel**：vanilla JS，无 TypeScript；组合 schema 与 contract test 是类型边界。
 - **CSS/token owner**：`build-reflection-page-template.html` 的 `#evolution-trends` 局部 selector；禁止 global override 与 `!important`。
 - **Fixture / viewport**：`tests/fixtures/workflow-evolution/extreme.json` + setup 生成 manifest；当前 runner 服务单页 `workflowhub-monitor.html`，在 390×844、1280×800 两个 viewport 各采集一次，共 2 组。
-- **Browser / a11y / performance**：T007 是 browser evidence 唯一 producer，固定用 `isolated-browser-qa` 驱动 `agent-browser` 单引擎；单页 `workflowhub-monitor.html` 在 390×844 与 1280×800 各跑一次，共两张截图，runner 仅以现有 manifest checks 断言页面可打开、Evolution tab 可达、预期文案出现、无页面错误、无外部运行时网络请求及两张截图存在。manifest 实际保留 `status`、`engine`、`login_reused`、`session`、`assertions`、`checks`、`viewports`、`evidence`、`cleanup` 等字段；不要求 `snapshot_id`、`refresh_result`、planned/observed 或独立 contract preflight。keyboard/focus order、对比度、overflow 与展开控件同步不在当前 runner 的通过条件内。T010 不启动 browser、不生成/刷新/改写 evidence，只验证 T007 manifest 的 checks/viewports/evidence/cleanup 与 status/exit matrix。
+- **Browser / a11y / performance**：T007 是 browser evidence 唯一 producer，固定用 `isolated-browser-qa` 驱动 `agent-browser` 单引擎；单页 `workflowhub-monitor.html` 在 390×844 与 1280×800 各跑一次，共两张截图，runner 断言页面可打开、Evolution tab 可达、预期文案出现、无页面错误、无外部运行时网络请求、两 viewport 无横向溢出，以及控件可键盘访问且证据展开状态与按钮文本/`aria-expanded` 同步。manifest 实际保留 `status`、`engine`、`login_reused`、`session`、`assertions`、`checks`、`viewports`、`evidence`、`cleanup` 等字段；不要求 `snapshot_id`、`refresh_result`、planned/observed 或独立 contract preflight。对比度由静态 page contract 检查，focus order/performance 仍不由 runner 独立证明。T010 不启动 browser、不生成/刷新/改写 evidence，只验证 T007 manifest 的 checks/viewports/evidence/cleanup 与 status/exit matrix。
 - **Screenshot handoff**：`quality/evidence/browser-qa/m16-monitor/` 写 `browser-qa-evidence.v1` manifest，artifact refs 固定为 `m16-monitor-390x844.png` 与 `m16-monitor-1280x800.png`，并保留 runner 实际的 assertions/checks、两项 viewports/evidence 与 `cleanup` 字段；runner 另外负责 browser session、server、temp 的清理。临时 fixture source 只在 runner 执行期间可用，cleanup 后不要求也不能后验重验 source hash；`qa_failed` 只在 QA 命令真实执行且 exit 非 0 时使用，工具或清理不可用时保留 `incomplete`，禁止伪造 exit 0。
 - **Coverage limits**：不覆盖 Design/Experience 视觉权威、Safari/移动真机、生产部署或跨主机性能。
 - **N/A / unknown reason**：Design/Experience/preview/screenshot identity 当前 `not_bindable`；仅复用现有视觉基线。
@@ -166,6 +169,7 @@
 - `tests/contract/workflow-evolution-governance.test.mjs`
 - `tests/e2e/workflow-evolution-current.test.mjs`
 - `tests/contract/workflow-evolution-browser-manifest.test.mjs`
+- `tests/contract/workflow-evolution-final-aggregate.test.mjs`
 - `tests/fixtures/workflow-evolution/validate-final-review-chain.mjs`
 - `tests/fixtures/workflow-evolution/run-final-review-chain.mjs`
 - `tests/fixtures/workflow-evolution/run-final-aggregate.sh`
@@ -235,7 +239,7 @@
 | POOL+TAX | T001/T002 | RED→GREEN | `bash tests/fixtures/workflow-evolution/run-red-green-gate.sh pool-tax` / nonzero→0 | ORACLE-POOL-TAX；checker 唯一写/hash-bind `quality/tests/m16-p1-pool-tax/gate.json` |
 | EDIT+NEG+ABL+BRIEF | T003/T004 | RED→GREEN | `bash tests/fixtures/workflow-evolution/run-red-green-gate.sh ledger-brief` / nonzero→0 | ORACLE-LEDGER-BRIEF；checker 唯一写/hash-bind `quality/tests/m16-p1-ledger-brief/gate.json` |
 | PAGE | T005/T006 | RED→GREEN | `bash tests/fixtures/workflow-evolution/run-red-green-gate.sh monitor` / nonzero→0 | ORACLE-MONITOR；checker 唯一写/hash-bind `quality/tests/m16-p2-monitor/gate.json` |
-| Browser | T007 | N/A verification | `bash tests/fixtures/workflow-evolution/run-browser-qa.sh` / 0 | ORACLE-MONITOR-BROWSER；状态矩阵 `0|20|21|22`：passed=0、qa_failed=20、unavailable/incomplete=21、manifest invalid=22；脚本内 validator 结果优先；`quality/evidence/browser-qa/m16-monitor/` |
+| Browser | T007 | N/A verification | `bash tests/fixtures/workflow-evolution/run-browser-qa.sh` / 0 | ORACLE-MONITOR-BROWSER；状态矩阵 `0\|20\|21\|22`：passed=0、qa_failed=20、unavailable/incomplete=21、manifest invalid=22；脚本内 validator 结果优先；`quality/evidence/browser-qa/m16-monitor/` |
 | GOV+E2E | T008/T009 | RED→final GREEN | `bash tests/fixtures/workflow-evolution/run-red-green-gate.sh governance` / nonzero→0；T009 preflight 四对象并完成 production-only 双向闭合 | ORACLE-GOV-E2E；test-only 不进 move-map；checker 唯一写/hash-bind `quality/tests/m16-p3-governance/gate.json` |
 | aggregate | T010 | FINAL | `bash tests/fixtures/workflow-evolution/run-final-aggregate.sh` / 0 | ORACLE-FINAL；唯一 canonical gate 固定 browser manifest→review chain→all M16 focused→`npm test && npm run check`，first-failure wins；原子写唯一 `quality/tests/m16-final-aggregate.json` |
 
@@ -247,7 +251,7 @@
 
 ### Engineering Risk Handoff
 
-- **Affected IDs**：FR-POOL-001～008、FR-TAX-001～007、FR-EDIT-001～003、FR-NEG-001～003、FR-ABL-001～003、FR-BRIEF-001～009、FR-PAGE-001～005、FR-GOV-001～003；T001～T010。
+- **Affected IDs**：FR-POOL-001～008、FR-POOL-007-R1、FR-POOL-008-R1、FR-TAX-001～007、FR-EDIT-001～003、FR-NEG-001～003、FR-NEG-002-R1、FR-ABL-001～003、FR-BRIEF-001～009、FR-BRIEF-007-R1、FR-PAGE-001～005、FR-GOV-001～003；T001～T010。
 - **Trigger**：proof 不完整、来源/identity 漂移、项目锁/CAS 冲突、旧 monitor 回归、UI 来源或当前 browser evidence 缺失、public behavior 扩张。
 - **Consequence**：候选或质量税被误升级、旧字节被覆盖、页面误导用户、治理登记与真实消费者漂移，或把 incomplete 误报为完成。
 - **Mitigation or STOP**：绑定完整 inventory/proof，锁内重读并原子发布；失败保留旧字节和原始事实；触发 public surface/方向变化立即 STOP 回 owning material。
@@ -278,14 +282,14 @@ P1 单支为 T001→T002→T003→T004；P2 为 T005→T006（可在 T002 后开
 
 | Source / decision | FR | AC | Phase / Task | Depends on | Exact files | Command / oracle |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001/002/008/011/014；D-003/007/010 | FR-POOL-001～008 | AC-POOL-001～003、AC-POOL-005 | P1/T001-T002 | none→T001 | evolution module/schema、edge producer/tests | candidate command / ORACLE-POOL-TAX |
+| R-001/002/008/011/014；D-003/007/010 | FR-POOL-001～008、FR-POOL-007-R1、FR-POOL-008-R1 | AC-POOL-001～003、AC-POOL-005 | P1/T001-T002 | none→T001 | evolution module/schema、edge producer/tests | candidate command / ORACLE-POOL-TAX |
 | R-001/002/008/011/014；D-003/007/010 | FR-POOL-003/005/006 | AC-POOL-004 | P3/T008-T010 | T004+T006→T008→T009→T007→T010 | current E2E across candidate/page/brief | governance command / ORACLE-GOV-E2E |
 | R-012；D-006 | FR-TAX-001～007 | AC-TAX-001～003 | P1/T001-T002 | T001 | evolution module/schema/tests | candidate command / ORACLE-POOL-TAX |
 | stage-reflection `SKILL.md`/bundle/catalog；R-012/D-006 | FR-TAX-002 | AC-TAX-002 | P1/T002 | T001 | `skills/stage-reflection/SKILL.md`、`skill-bundle.json`、`skills/catalog.yaml`、skill contract test | candidate command / ORACLE-POOL-TAX-COMPUTE |
 | R-005；D-004/009 | FR-EDIT-001～003 | AC-EDIT-001～002 | P1/T003-T004 | T002 | evolution module、record CLI、ledger tests | ledger command / ORACLE-LEDGER-BRIEF |
-| R-004；D-004/008 | FR-NEG-001～003 | AC-NEG-001～002 | P1/T003-T004 | T002 | evolution module、record CLI、ledger tests | ledger command / ORACLE-LEDGER-BRIEF |
+| R-004；D-004/008 | FR-NEG-001～003、FR-NEG-002-R1 | AC-NEG-001～002 | P1/T003-T004 | T002 | evolution module、record CLI、ledger tests | ledger command / ORACLE-LEDGER-BRIEF |
 | R-006/009；D-004/005 | FR-ABL-001～003 | AC-ABL-001～002 | P1/T003-T004 | T002 | schema/module/ledger tests | ledger command / ORACLE-LEDGER-BRIEF |
-| R-003/007；D-001/009 | FR-BRIEF-001～009 | AC-BRIEF-001～003 | P1/T003-T004 | T002 | evolution module、brief CLI/tests | brief command / ORACLE-LEDGER-BRIEF |
+| R-003/007；D-001/009 | FR-BRIEF-001～009、FR-BRIEF-007-R1 | AC-BRIEF-001～003 | P1/T003-T004 | T002 | evolution module、brief CLI/tests | brief command / ORACLE-LEDGER-BRIEF |
 | R-010；D-001/002 | FR-PAGE-001～005 | AC-PAGE-001～003 | P2/T005-T006 + P3/T007 | T002；T007 depends T009 | page CLI/template/test/fixture matrix | monitor+browser / ORACLE-MONITOR(-BROWSER) |
 | P1 computation → P2 partial propagation | FR-POOL-004～006 | N/A — seam，不转移 AC ownership | P2/T005-T006 | T002 | page ViewModel/data.js/template | propagation annotations / ORACLE-MONITOR |
 | P1 tax computation → P2 partial propagation | FR-TAX-004/006 | N/A — TAX AC 留 T001/T002，GOV review 留 T010 | P2/T005-T006 + P3/T007 | T002 | page tax annotations/current generated page | percentage/unknown propagation / ORACLE-MONITOR(-BROWSER) |
@@ -392,7 +396,7 @@ P2 的 AC-PAGE-001～003 有合同事实；pool FR 仅作状态传播 seam，不
 
 ### Files
 
-- **NEW**：`tests/contract/workflow-evolution-governance.test.mjs`、`tests/e2e/workflow-evolution-current.test.mjs`、`tests/contract/workflow-evolution-browser-manifest.test.mjs`、`tests/fixtures/workflow-evolution/setup-browser-fixture.mjs`、`tests/fixtures/workflow-evolution/run-browser-qa.sh`、`tests/fixtures/workflow-evolution/run-final-review-chain.mjs`、`tests/fixtures/workflow-evolution/validate-final-review-chain.mjs`、`tests/fixtures/workflow-evolution/run-final-aggregate.sh`、`quality/evidence/browser-qa/m16-monitor/manifest.json`（T007 task evidence output，非 repository source）
+- **NEW**：`tests/contract/workflow-evolution-governance.test.mjs`、`tests/e2e/workflow-evolution-current.test.mjs`、`tests/contract/workflow-evolution-browser-manifest.test.mjs`、`tests/contract/workflow-evolution-final-aggregate.test.mjs`（test-only，登记在本边界，不进入 move-map）、`tests/fixtures/workflow-evolution/setup-browser-fixture.mjs`、`tests/fixtures/workflow-evolution/run-browser-qa.sh`、`tests/fixtures/workflow-evolution/run-final-review-chain.mjs`、`tests/fixtures/workflow-evolution/validate-final-review-chain.mjs`、`tests/fixtures/workflow-evolution/run-final-aggregate.sh`、`quality/evidence/browser-qa/m16-monitor/manifest.json`（T007 task evidence output，非 repository source）
 - **MODIFY**：`docs/architecture/move-map.json`、`tests/contract/public-behavior-baseline.test.mjs`
 - **DO NOT TOUCH**：runtime facade/stage runtime、四材料以外的历史记录
 
@@ -402,7 +406,7 @@ P2 的 AC-PAGE-001～003 有合同事实；pool FR 仅作状态传播 seam，不
 
 ### Verify
 
-T008 以 production-only exact set 与 test-only exclusion 稳定 RED。T009 创建六个 test-only browser/review/aggregate checks，但只由 fixture manifest/canonical gate evidence 跟踪、绝不登记 move-map；同时在 allowed temp storage root 调用真实 producer创建四对象，绑定 logical object id/path/schema、content hash、producer identity与consumer metadata后 owner-safe cleanup，temp path不得成为 repo条目。move-map 只登记生产文件/命令/schema、修改生产 producer与四 object metadata，冻结 closure hash。T007 零 repo写地产 current browser evidence；runner 直接执行 canonical browser checks 与 manifest validator，harness缺陷回T009并使旧evidence stale。T010对repo/product/material/move-map/browser evidence只读；task-quality exact 两类受控 writer：`review --action=record` 写 immutable receipt，owner=`run-final-review-chain:<attempt_id>`，idempotency key绑定current material manifest+exact review result+provider/runtime identity，同key同bytes复用、异bytes零覆盖失败；`run-final-aggregate.sh` 唯一顺序为 browser manifest→review chain/receipt→全部 M16 focused→`npm test && npm run check`→原子 aggregate，任一步失败立即返回该步 code且不运行后续步骤。最终以 temp write/fsync/rename/parent-fsync 原子写唯一 `quality/tests/m16-final-aggregate.json`，同一对象内记录 focused/repository 结果及 review receipt refs/hashes。record前失败零写；record后或测试失败保留 immutable receipt 与原始输出，aggregate 文件发布前失败不覆盖旧 bytes，cleanup只清同owner temp；browser/review unavailable保持真实incomplete，不产生独立 focused/repository 持久 JSON。
+T008 以 production-only exact set 与 test-only exclusion 稳定 RED。T009 创建六个 test-only browser/review/aggregate checks，但只由 fixture manifest/canonical gate evidence 跟踪、绝不登记 move-map；其中 `tests/contract/workflow-evolution-final-aggregate.test.mjs` 仅登记在本测试边界。与此同时在 allowed temp storage root 调用真实 producer创建四对象，绑定 logical object id/path/schema、content hash、producer identity与consumer metadata后 owner-safe cleanup，temp path不得成为 repo条目。move-map 只登记生产文件/命令/schema、修改生产 producer与四 object metadata，冻结 closure hash。T007 零 repo写地产 current browser evidence；runner 直接执行 canonical browser checks 与 manifest validator，harness缺陷回T009并使旧evidence stale。T010对repo/product/material/move-map/browser evidence只读；task-quality exact 两类受控 writer：`review --action=record` 写 immutable receipt，owner=`run-final-review-chain:<attempt_id>`，idempotency key绑定current material manifest+exact review result+provider/runtime identity，同key同bytes复用、异bytes零覆盖失败；`run-final-aggregate.sh` 唯一顺序为 browser manifest→review chain/receipt→全部 M16 focused→`npm test && npm run check`→原子 aggregate，任一步失败立即返回该步 code且不运行后续步骤。最终以 temp write/fsync/rename/parent-fsync 原子写唯一 `quality/tests/m16-final-aggregate.json`，同一对象内记录 focused/repository 结果及 review receipt refs/hashes。record前失败零写；record后或测试失败保留 immutable receipt 与原始输出，aggregate 文件发布前失败不覆盖旧 bytes，cleanup只清同owner temp；browser/review unavailable保持真实incomplete，不产生独立 focused/repository 持久 JSON。
 
 ### Knowledge
 
@@ -414,7 +418,7 @@ move-map 任一方向漏项、placeholder consumer、public behavior 增加、�
 
 ### Done
 
-T008 RED、T009 完成真实四对象preflight与production-only move-map closure并GREEN，test-only交集为空；T007 evidence绑定frozen hash；T010对产品面只读、受控幂等写immutable review receipt并原子写唯一 final aggregate；22项AC与current snapshot闭合。
+目标完成条件（不代表当前执行状态）：T008 RED、T009 完成真实四对象preflight与production-only move-map closure并GREEN，test-only交集为空；T007 evidence绑定frozen hash；T010对产品面只读、受控幂等写immutable review receipt并原子写唯一 final aggregate；22项AC与current snapshot闭合。
 
 ### Risks and rollback
 

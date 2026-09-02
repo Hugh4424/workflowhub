@@ -3,7 +3,7 @@
 import Ajv from "ajv";
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot, resolveTargetRef } from "../../runtime/evidence/workflow-evolution.mjs";
@@ -178,7 +178,7 @@ function dateMs(value) {
 
 function stateForReflection(reflection, nowMs) {
   const generatedMs = dateMs(reflection.generated_at);
-  if (generatedMs !== null && generatedMs < nowMs - WINDOW_MS) return "stale";
+  if (generatedMs !== null && (generatedMs < nowMs - WINDOW_MS || generatedMs > nowMs)) return "stale";
   return reflection.status;
 }
 
@@ -351,7 +351,13 @@ function readLessons(root, project, diagnostics) {
 
 function runDeriveConsumptionEdges(root, now) {
   const script = fileURLToPath(new URL("./derive-consumption-edges.mjs", import.meta.url));
-  const result = spawnSync(process.execPath, [script, `--root=${root}`, `--now=${now}`], { encoding: "utf8" });
+  // The derived edge report is a complete audit projection. On real task stores
+  // it can exceed Node's 1 MiB spawnSync default even though the child exits
+  // successfully; keep the report lossless instead of turning it into ENOBUFS.
+  const result = spawnSync(process.execPath, [script, `--root=${root}`, `--now=${now}`], {
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
   if (result.error) fail(`derive-consumption-edges failed to start: ${result.error.message}`);
   if (result.status !== 0) fail(`derive-consumption-edges failed: ${result.stdout || result.stderr}`.trim());
   try {
@@ -475,23 +481,37 @@ function project({ root, tasksRoot, now }) {
   const observations = [];
   const interventions = [];
   const authorityErrors = [];
+  const unverifiedJudgments = [];
   const materialIdentities = ["skills/catalog.yaml", "docs/architecture/move-map.json"].map((ref) => ({
     ref,
     sha256: createHash("sha256").update(readFileSync(join(repositoryRoot, ref))).digest("hex"),
   }));
   for (const task of tasks) {
     for (const stage of task.stages) {
+      const stageTime = dateMs(stage.generated_at);
+      // Only the current 30-day window is eligible for the live evolution
+      // snapshot. Old and future reflections remain visible as page facts but
+      // cannot affect candidate or quality-tax projections.
+      if (stageTime === null || stageTime < nowMs - WINDOW_MS || stageTime > nowMs) continue;
       if (stage.reflection_ref && stage.input_sha256) materialIdentities.push({ ref: `${task.task_id}/${stage.reflection_ref}`, sha256: stage.input_sha256 });
       const taskRoot = join(tasksRoot, task.task_id);
-      const authenticated = stage.interventions
-        .map((entry) => authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, entry))
-        .find(Boolean) ?? null;
-      const safeConfirmationRef = authenticated?.ref ?? null;
-      const confirmationSha256 = authenticated?.sha256 ?? null;
-      if (safeConfirmationRef && confirmationSha256) materialIdentities.push({ ref: `${task.task_id}/${safeConfirmationRef}`, sha256: confirmationSha256 });
+      const authenticatedInterventions = stage.interventions.map((entry) => ({
+        entry,
+        confirmation: authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, entry),
+      }));
+      for (const { confirmation } of authenticatedInterventions) {
+        if (confirmation?.ref && confirmation.sha256) materialIdentities.push({ ref: `${task.task_id}/${confirmation.ref}`, sha256: confirmation.sha256 });
+      }
       for (const judgment of stage.judgments) {
         const resolved = authorityForTarget(project, stage.stage, judgment);
         if (resolved.status !== "ok") { authorityErrors.push({ task_id: task.task_id, stage: stage.stage, subject_id: judgment.subject_id, status: resolved.status }); continue; }
+        const authenticated = authenticatedInterventions.find(({ entry, confirmation }) => entry.step_slug === judgment.subject_id && confirmation)?.confirmation ?? null;
+        if (!authenticated) {
+          unverifiedJudgments.push({ task_id: task.task_id, stage: stage.stage, subject_id: judgment.subject_id, subject_kind: judgment.subject_kind });
+          continue;
+        }
+        const safeConfirmationRef = authenticated.ref;
+        const confirmationSha256 = authenticated.sha256;
         observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: resolved.target_ref, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
       }
       for (const intervention of stage.interventions ?? []) {
@@ -500,7 +520,19 @@ function project({ root, tasksRoot, now }) {
       }
     }
   }
-  let evolution = { schema_version: "workflow-evolution.v1", status: "unavailable", candidates: [], quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" }, diagnostics: [{ summary: "evolution snapshot unavailable" }] };
+  let evolution = {
+    schema_version: "workflow-evolution.v1",
+    status: "unavailable",
+    candidates: [],
+    quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" },
+    regions: {
+      summary_status: "unavailable",
+      action_suggested: { status: "unavailable", reason: "候选快照不可用" },
+      reference_only: { status: "unavailable", reason: "候选快照不可用" },
+      quality_tax: { status: "unavailable", reason: "质量税投影不可用" },
+    },
+    diagnostics: [{ summary: "evolution snapshot unavailable" }],
+  };
   try {
     if (authorityErrors.length > 0) throw new Error(`target authority resolution failed: ${JSON.stringify(authorityErrors)}`);
     const consumerProofs = derived.tasks.filter((entry) => entry.project === project).map((entry) => entry.consumer_scan_proof).filter((proof) => proof?.coverage_status === "complete" && Array.isArray(proof.registered_output_refs) && proof.registered_output_refs.length > 0 && Array.isArray(proof.source_refs) && proof.source_refs.length > 0);
@@ -509,7 +541,27 @@ function project({ root, tasksRoot, now }) {
     const inventory = buildInputInventory({ project, producerIdentity, schemaIdentity, inventory: { observations, consumer_proofs: consumerProofs, material_identities: materialIdentities } });
     const refresh = refreshEvolutionSnapshot({ storageRoot: root, project, attemptId: `monitor-${randomUUID()}`, inventory, now });
     const tax = computeQualityTaxProjection({ storageRoot: root, inventory: inventory.inventory, interventions, asOf: now });
-    evolution = refresh.status === "ok" ? { ...readCurrentEvolutionProjection({ storageRoot: root, project, expectedIdentity: { snapshot_id: refresh.snapshot_id, producer_identity: producerIdentity, schema_identity: schemaIdentity }, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result }), snapshot_content_id: inventory.input_inventory_hash } : { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }] };
+    if (refresh.status === "ok") {
+      const projection = readCurrentEvolutionProjection({ storageRoot: root, project, expectedIdentity: { snapshot_id: refresh.snapshot_id, producer_identity: producerIdentity, schema_identity: schemaIdentity }, taxProjection: tax, sourceInventoryHash: inventory.input_inventory_hash, asOf: now, refreshResult: refresh.refresh_result });
+      if (projection.status !== "ok") throw new Error(projection.error?.summary ?? "evolution projection unavailable");
+      const unverifiedDiagnostics = unverifiedJudgments.length > 0
+        ? [{ state: "unverified", summary: `${unverifiedJudgments.length} 条判断缺少与 subject 对应的有效人工确认，未进入候选快照。`, judgments: unverifiedJudgments }]
+        : [];
+      const regions = unverifiedJudgments.length > 0
+        ? {
+          ...projection.regions,
+          summary_status: projection.regions.summary_status === "ok" ? "partial" : projection.regions.summary_status,
+          reference_only: {
+            ...projection.regions.reference_only,
+            status: projection.regions.reference_only.status === "ok" || projection.regions.reference_only.status === "empty" ? "unverified" : projection.regions.reference_only.status,
+            reason: `${projection.regions.reference_only.reason ?? ""}${projection.regions.reference_only.reason ? "；" : ""}存在未绑定人工确认的判断`,
+          },
+        }
+        : projection.regions;
+      evolution = { ...projection, regions, snapshot_content_id: inventory.input_inventory_hash, unverified_judgments: unverifiedJudgments, diagnostics: unverifiedDiagnostics };
+    } else {
+      evolution = { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }], unverified_judgments: unverifiedJudgments };
+    }
   } catch (error) {
     evolution = { ...evolution, status: "unavailable", diagnostics: [{ summary: error.message }] };
   }
@@ -525,7 +577,7 @@ function project({ root, tasksRoot, now }) {
       description: "LLM 复盘归因，不是机器事实，也不等于质量裁决。",
       is_fact: false,
     },
-    states: ["unknown", "unavailable", "degraded", "failed", "empty", "fatal", "stale"],
+    states: ["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
     coverage: {
       tasks: tasks.length,
       reflections: tasks.reduce((sum, task) => sum + task.coverage.present, 0),
@@ -564,7 +616,7 @@ function fatalData(error, now) {
     status: "fatal",
     state: "fatal",
     judgment_layer: { record_kind: "judgment", label: "判断层", description: "投影失败，未展示陈旧数据。", is_fact: false },
-    states: ["unknown", "unavailable", "degraded", "failed", "empty", "fatal", "stale"],
+    states: ["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
     coverage: { tasks: 0, reflections: 0, lessons: 0 },
     filters: { tasks: [], stages: STAGES, classifications: CLASSIFICATIONS },
     tasks: [],
@@ -578,8 +630,23 @@ function fatalData(error, now) {
 
 function writePage(paths, data) {
   mkdirSync(paths.directory, { recursive: true });
-  writeFileSync(paths.data, `globalThis.__WH_MONITOR_DATA__ = Object.freeze(${JSON.stringify(data, null, 2)});\n`, "utf8");
-  writeFileSync(paths.html, template, "utf8");
+  // data.js is embedded as a classic script by the static page. Escape the
+  // opening angle bracket so an LLM-derived value cannot terminate that script
+  // with a literal </script> sequence.
+  const serializedData = JSON.stringify(data, null, 2).replaceAll("<", "\\u003c");
+  const dataSource = `globalThis.__WH_MONITOR_DATA__ = Object.freeze(${serializedData});\n`;
+  const htmlSource = template.replace("<!-- __WH_MONITOR_DATA_SCRIPT__ -->", `<script>\n${dataSource}</script>`);
+  if (htmlSource === template) fail("reflection page template is missing the data script placeholder");
+  const writeAtomic = (path, source) => {
+    const temporary = `${path}.tmp-${randomUUID()}`;
+    try { writeFileSync(temporary, source, "utf8"); renameSync(temporary, path); }
+    finally { try { unlinkSync(temporary); } catch (error) { if (error?.code !== "ENOENT") throw error; } }
+  };
+  // Keep data.js for tooling compatibility, while the HTML embeds the exact
+  // same snapshot so a partial two-file update can never change what the page
+  // renders.
+  writeAtomic(paths.data, dataSource);
+  writeAtomic(paths.html, htmlSource);
   return paths;
 }
 

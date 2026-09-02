@@ -3,8 +3,8 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
-const canonicalChecks = ["open", "evolution_tab", "content", "no_page_errors", "no_runtime_requests", "viewport_390x844", "viewport_1280x800"];
-const canonicalAssertions = ["Evolution", "建议行动", "仅供参考", "前期质量税", "不是质量裁决或 stage gate", "evolution tab is reachable", "390x844 and 1280x800 snapshots", "no page errors", "no external runtime network requests"];
+const canonicalChecks = ["open", "evolution_tab", "content", "no_page_errors", "no_runtime_requests", "no_horizontal_overflow", "keyboard_accessible_and_expand_sync", "viewport_390x844", "viewport_1280x800"];
+const canonicalAssertions = ["Evolution", "建议行动", "仅供参考", "前期质量税", "不是质量裁决或 stage gate", "evolution tab is reachable", "390x844 and 1280x800 snapshots", "no page errors", "no external runtime network requests", "no horizontal overflow at both viewports", "keyboard-accessible controls and synchronized evidence expansion"];
 const sameArray = (left, right) => Array.isArray(left) && left.length === right.length && left.every((value, index) => value === right[index]);
 
 try {

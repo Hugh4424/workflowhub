@@ -3,7 +3,7 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -17,6 +17,7 @@ import {
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import {
   validateAcceptanceEvidence,
+  publishEvidence,
   writeCanonicalSpecClarifyReceipt,
 } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/capture.mjs";
@@ -555,10 +556,32 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "run", "confirm", "authorize-operation"]).has(command)) {
+  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "confirm", "authorize-operation"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
+}
+
+function privateEvidenceCaptureInput(input, worktreeRoot, now = () => new Date()) {
+  if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.source_path !== "string" || input.source_path.trim() === ""
+      || typeof input.evidence_type !== "string"
+      || Object.keys(input).some((key) => !new Set(["source_path", "evidence_type"]).has(key))) {
+    throw new TypeError("capture-evidence input requires source_path and evidence_type only");
+  }
+  const sourcePath = input.source_path.trim();
+  if (isAbsolute(sourcePath) || sourcePath.split(/[\\/]/).includes("..")) {
+    throw new TypeError("capture-evidence source_path must be worktree-relative");
+  }
+  const recordedAt = now();
+  if (!(recordedAt instanceof Date) || Number.isNaN(recordedAt.valueOf())) {
+    throw new TypeError("capture-evidence clock must return a valid Date");
+  }
+  return Object.freeze({
+    sourcePath: resolve(worktreeRoot, sourcePath),
+    evidenceType: input.evidence_type,
+    recordedAt: recordedAt.toISOString(),
+  });
 }
 
 /**
@@ -570,11 +593,15 @@ export function stageReflectionPublication(services = {}) {
   if (!services || typeof services !== "object" || Array.isArray(services)) {
     throw new TypeError("stage-runtime services must be an object");
   }
-  if (services.stageReflectionExecutor === undefined) return Object.freeze({});
+  if (services.stageReflectionExecutor === undefined && services.runControlledUiQa === undefined) return Object.freeze({});
   if (typeof services.stageReflectionExecutor !== "function") {
+    if (services.stageReflectionExecutor === undefined) return Object.freeze({ runControlledUiQa: services.runControlledUiQa });
     throw new TypeError("services.stageReflectionExecutor must be a function");
   }
-  return Object.freeze({ runStageReflection: services.stageReflectionExecutor });
+  return Object.freeze({
+    ...(services.stageReflectionExecutor ? { runStageReflection: services.stageReflectionExecutor } : {}),
+    ...(services.runControlledUiQa ? { runControlledUiQa: services.runControlledUiQa } : {}),
+  });
 }
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
@@ -592,6 +619,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) {
     throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   }
+  if (command === "capture-evidence" && (values.stage !== "build-code" || !values.input)) {
+    throw new TypeError("capture-evidence requires --stage=build-code --input=<evidence-capture.json>");
+  }
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "authorize-operation") {
     if (!new Set(["commit", "push", "merge", "archive", "cleanup"]).has(values.operation)) throw new TypeError("authorize-operation requires --operation=commit|push|merge|archive|cleanup");
@@ -607,7 +637,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     readOnly: command === "status",
   });
   if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
-  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "run"]).has(command)
+  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
@@ -723,6 +753,21 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       task: context.task,
       workspace: context.workspace,
       ...(input.output_ref === undefined ? {} : { outputRef: input.output_ref }),
+    });
+  }
+  if (command === "capture-evidence") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) {
+      throw new TypeError("capture-evidence accepts only --stage, --project, --task, and --input");
+    }
+    const capture = privateEvidenceCaptureInput(input, context.workspace.worktreeRoot, services.now);
+    return publishEvidence({
+      task: context.task,
+      sourcePath: capture.sourcePath,
+      sourceRoot: context.workspace.worktreeRoot,
+      evidenceType: capture.evidenceType,
+      publisher: "build-code",
+      recordedAt: capture.recordedAt,
     });
   }
   if (command === "review-risk-pause") {

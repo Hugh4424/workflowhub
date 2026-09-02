@@ -8,7 +8,7 @@ const root = resolve(import.meta.dirname, "../..");
 const temporaryRoots = [];
 afterEach(() => { while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { recursive: true, force: true }); });
 describe("M16 governance registration", () => {
-  it("registers each production module and private adapter with a real consumer", () => {
+  it("registers each production module and private adapter with a real consumer", async () => {
     const moveMap = JSON.parse(readFileSync(resolve(root, "docs/architecture/move-map.json"), "utf8"));
     const production = ["runtime/evidence/workflow-evolution.mjs", "runtime/schemas/workflow-evolution.v1.json", "tools/cli/generate-iteration-brief.mjs", "tools/cli/record-evolution-result.mjs", "tools/cli/check-skill-updates.mjs", "tools/cli/derive-consumption-edges.mjs", "tools/cli/build-reflection-page.mjs", "tools/cli/build-reflection-page-template.html"];
     for (const file of production) {
@@ -25,6 +25,20 @@ describe("M16 governance registration", () => {
       expect(entries[0].status).toBe("logical-object");
     }
     expect(moveMap.entries.some((entry) => /tests\/(?:contract|e2e|fixtures)\/.+workflow-evolution/.test(entry.destination ?? ""))).toBe(false);
+
+    const evolution = await import("../../runtime/evidence/workflow-evolution.mjs");
+    for (const name of [
+      "resolveTargetRef", "deriveObservationId", "deriveCandidateGroupId", "buildInputInventory",
+      "computeQualityTaxProjection", "acquireProjectLock", "refreshEvolutionSnapshot",
+      "recordCandidateTransition", "readCurrentEvolutionProjection", "validateWorkflowEvolutionDefinition",
+      "assertProjectLockCurrent",
+    ]) expect(typeof evolution[name], `missing frozen export ${name}`).toBe("function");
+    expect(evolution.D24_EVAL_BOUNDARY).toMatchObject({
+      schema_version: "d24-eval-boundary.v1",
+      schema_ref: "runtime/schemas/workflow-evolution.v1.json#/$defs/d24_eval_boundary",
+      canonical_bytes: expect.any(String),
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
   });
 
   it("keeps browser and final gates fail-closed and atomic", () => {
@@ -33,13 +47,15 @@ describe("M16 governance registration", () => {
     const aggregate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-aggregate.sh"), "utf8");
     const review = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/run-final-review-chain.mjs"), "utf8");
     expect(browser).toContain("validate-browser-manifest.mjs");
-    expect(browser).toContain('screenshot body "$manifest_dir/m16-monitor-390x844.png"');
+    expect(browser).toContain('screenshot --json "$manifest_dir/m16-monitor-390x844.png"');
     expect(browser).toContain('agent_browser_session_residual_processes=0');
     expect(browser).not.toContain('v.cleanup="complete"');
     expect(browser).not.toMatch(/exit 0\s*$/);
     expect(aggregate).toContain("set -euo pipefail");
     expect(aggregate).toContain("atomic-write-final-aggregate.mjs");
-    expect(review).not.toContain('status: "unavailable"');
+    expect(review).toContain('status: "unavailable"');
+    expect(review).toContain('process.exitCode = 31');
+    expect(review).toContain('process.exitCode = 32');
     const redGate = readFileSync(resolve(root, "tests/fixtures/workflow-evolution/check-red-authenticity.mjs"), "utf8");
     expect(redGate).toContain("EXPECTED_BASELINE_SHA256");
     expect(redGate).toContain('phase === "red" && exitCode !== 1');
@@ -100,5 +116,26 @@ describe("M16 governance registration", () => {
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");
     expect(facade).not.toMatch(/RUNTIME_BEHAVIORS[^\n]*evolution|generate-iteration-brief/);
+  });
+
+  it("keeps candidate, page, and brief projection local, deterministic, and honest about unverified benefit", () => {
+    const sources = [
+      "runtime/evidence/workflow-evolution.mjs",
+      "tools/cli/build-reflection-page.mjs",
+      "tools/cli/generate-iteration-brief.mjs",
+      "tools/cli/build-reflection-page-template.html",
+    ].map((path) => readFileSync(resolve(root, path), "utf8")).join("\n");
+    expect(sources).not.toMatch(/\b(?:fetch|XMLHttpRequest|setTimeout|setInterval)\s*\(/);
+    expect(sources).not.toMatch(/\b(?:openai|anthropic|wh-review)\b/i);
+    const spec = readFileSync(resolve(root, "specs/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
+    expect(spec).toContain("未验证，待真实任务数据");
+    expect(spec).toContain("本期不执行消融、不裁决 remove、不自动修改");
+  });
+
+  it("keeps every specification FR identifier unique", () => {
+    const spec = readFileSync(resolve(root, "specs/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
+    const ids = [...spec.matchAll(/^- \*\*(FR-[A-Z]+-[0-9]+(?:-R[0-9]+)?)(?:\s+[^*]+)?\*\*/gm)].map((match) => match[1]);
+    expect(ids).toHaveLength(45);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

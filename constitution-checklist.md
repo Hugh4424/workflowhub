@@ -50,11 +50,6 @@
 
 以下四项判据不新增宪法条款，也不作为阶段推进或完成 gate；仅用于本次任务落地时复核宪法既有条款是否被正确解释。每条回指 `CONSTITUTION.md` 治理边界节中的"close 三义"解释。
 
-- [ ] **F9 可证伪不假绿** — 判据：五个交付动作是否只在真实执行成功后才落账；失败/缺项时是否保持"未成功"状态，而不是把 risk/人为动作改写成正常完成。→ [CONSTITUTION.md#f9-可证伪不假绿](CONSTITUTION.md#f9-可证伪不假绿)
-- [ ] **Q1 质量事实不作准入证，完成质量不降级** — 判据：质量事实（测试、审查、AC）是否独立记录；completed.json 等物理交付记录是否不写 quality_status/product_release_status；质量缺口是否诚实地用缺失/风险接受事实承接，不漂白。→ [CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级](CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级)
-- [ ] **F7 三处正常确认与 UI 限定设计确认** — 判据：UI 原型确认是否不等于 cleanup 等不可逆动作授权；不可逆动作是否在任一阶段确认之外再经独立 authorize 授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
-- [ ] **F3 四材料决定推进，正式发布保持结构真实** — 判据：close 相关的 preflight（task/worktree/runtime 身份、hash、写集合）是否在正式写成功前 fail-loud，而不是到了清理阶段才报身份错误。→ [CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实)
-
 - **CLOSE-F9**：close 动作测试中不得伪造通过或把未完成状态漂白为完成；所有 GREEN 必须来自真实实现修复，completed.json 不写入 quality_status/product_release_status。
 - **CLOSE-Q1**：close 阶段收口只负责把物理交付事实落账，不把质量通过作为 close 前提；质量判定保留在 verify-code/quality facts 中。
 - **CLOSE-F7**：cleanup 等不可逆动作执行前必须有一次独立的人工确认绑定，确认范围覆盖本次 close 整批五个动作。

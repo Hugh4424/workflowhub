@@ -33,7 +33,7 @@ describe("repository architecture inventory", () => {
     expect(current).toContain("docs/architecture/repository-inventory.tsv\tkeep\t");
     expect(current).toContain("\tSELF\n");
     expect(current).toContain("tools/architecture/inventory.mjs\tkeep\t");
-    expect(current).toContain("specs/workflowhub-complexity-governance-v2/spec.md\tkeep\t");
+    expect(current).toContain("specs/archive/workflowhub-complexity-governance-v2/spec.md\tarchive\t");
     expect(validateDeletionProof()).toEqual([]);
     expect(validateTrackedTestDispositions(current)).toEqual([]);
   });

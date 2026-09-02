@@ -162,7 +162,7 @@ describe("authoring-stage spec-analyze profiles", () => {
         materials: {
           ...MATERIALS,
           decision_log: "R-001 用户要求完整覆盖；D1 采用五阶段检查",
-          spec: readFileSync(new URL("../../specs/ui-e2e-delivery-contract-20260830/spec.md", import.meta.url), "utf8"),
+          spec: readFileSync(new URL("../../specs/archive/ui-e2e-delivery-contract-20260830/spec.md", import.meta.url), "utf8"),
         },
       }),
       strict_material_contracts: true,

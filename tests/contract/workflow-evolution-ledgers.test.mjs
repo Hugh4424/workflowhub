@@ -21,7 +21,7 @@ function setup() {
   const revert = file("revert.json", '{"value":1}\n');
   const authorityPath = join(root, "workflows/build-plan/steps.json");
   const authorityBytes = readFileSync(authorityPath);
-  const targetRef = { project_id: "Demo", target_kind: "stage", target_id: "build-plan", target_version: "2.0.0", authority_ref: authorityPath, authority_sha256: sha(authorityBytes) };
+  const targetRef = { project_id: "Demo", target_kind: "stage", target_id: "build-plan", target_version: null, authority_ref: authorityPath, authority_sha256: sha(authorityBytes) };
   const payload = { attempt_id: "attempt-1", edit_record_id: "edit-1", decision_id: "D-1", decision_ref: decision.path, decision_sha256: decision.sha256, approval: true, changed_surface: "workflow", before_facts_ref: before.path, before_facts_sha256: before.sha256, before_observed_at: "2026-08-30T00:00:00Z", after_facts_ref: after.path, after_facts_sha256: after.sha256, after_observed_at: "2026-08-30T01:00:00Z", observed_at: "2026-08-30T02:00:00Z", validation_method: "focused-test", outcome: "regressed", revert_ref: revert.path, revert_sha256: revert.sha256, evidence_refs: ["evidence:1"], supersedes: null, target_ref: targetRef };
   return { storage, facts, payload, cleanup: () => { rmSync(storage, { recursive: true, force: true }); rmSync(facts, { recursive: true, force: true }); } };
 }
@@ -209,6 +209,24 @@ describe("M16 ledgers", () => {
       expect(result.status).not.toBe(0);
       expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
     } finally { fixture.cleanup(); }
+  });
+
+  it("does not treat notes, comments, or quoted text as a structured approval", () => {
+    for (const binding of [
+      "- note: approval_binding: accepted",
+      "<!-- - approval_binding: accepted -->",
+      "- approval_binding: \"accepted\"",
+    ]) {
+      const fixture = setup();
+      try {
+        writeFileSync(fixture.payload.decision_ref, `# Decision Log\n\n### D-1\n${binding}\n`);
+        const payload = { ...fixture.payload, decision_sha256: sha(readFileSync(fixture.payload.decision_ref)) };
+        const result = run(fixture.storage, "attempted-edit", payload);
+        expect(result.status).not.toBe(0);
+        expect(JSON.parse(result.stdout)).toMatchObject({ status: "stale_source" });
+        expect(existsSync(join(fixture.storage, "Projects/Demo/attempted-edits.jsonl"))).toBe(false);
+      } finally { fixture.cleanup(); }
+    }
   });
 
   it("rejects a negative result until a torn attempted-edit tail is recovered and rebound", async () => {

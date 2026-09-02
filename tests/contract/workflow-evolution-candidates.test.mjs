@@ -87,14 +87,21 @@ function canonical(value) {
 afterEach(() => roots.splice(0).forEach((value) => rmSync(value, { recursive: true, force: true })));
 
 describe("M16 candidate and tax contract", () => {
-  it("exports the nine frozen deep-module APIs", async () => {
+  it("exports the twelve frozen deep-module APIs and D24 boundary", async () => {
     const mod = await loadModule();
     expect(mod).not.toBeNull();
     for (const name of [
       "resolveTargetRef", "deriveObservationId", "deriveCandidateGroupId", "buildInputInventory",
       "computeQualityTaxProjection", "acquireProjectLock", "refreshEvolutionSnapshot",
-      "recordCandidateTransition", "readCurrentEvolutionProjection",
+      "recordCandidateTransition", "readCurrentEvolutionProjection", "validateWorkflowEvolutionDefinition",
+      "assertProjectLockCurrent",
     ]) expect(typeof mod?.[name]).toBe("function");
+    expect(mod?.D24_EVAL_BOUNDARY).toMatchObject({
+      schema_version: "d24-eval-boundary.v1",
+      schema_ref: "runtime/schemas/workflow-evolution.v1.json#/$defs/d24_eval_boundary",
+      canonical_bytes: expect.any(String),
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
     expect(Object.hasOwn(mod ?? {}, "readCurrentCandidateSnapshot")).toBe(false);
   });
 
@@ -165,6 +172,74 @@ describe("M16 candidate and tax contract", () => {
     });
     expect(result.status).toBe("ok");
     expect(result.records[0]).toMatchObject({ tier: "reference_only", machine_signals: { zero_consumption: "unknown" } });
+  });
+
+  it("promotes a current complete zero-consumption proof without requiring repeat intervention", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const taskId = "task-complete-proof";
+    const taskRoot = join(storageRoot, "Projects", "Demo", "tasks", taskId);
+    const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+    const sourceRefs = [];
+    const registered = [];
+    const sourceRecords = [];
+    for (const stage of stages) {
+      const stageDirectory = join(taskRoot, "quality/evidence/stage-outcomes", stage);
+      const outputRef = `quality/evidence/${stage}-output.md`;
+      mkdirSync(stageDirectory, { recursive: true });
+      mkdirSync(join(taskRoot, "quality/evidence"), { recursive: true });
+      writeFileSync(join(taskRoot, outputRef), `${stage} output\n`);
+      const outcome = {
+        schema_version: "workflowhub-stage-outcomes.v1",
+        task_id: taskId,
+        stage,
+        step_outcomes: [{ step_slug: `${stage}-step`, input_refs: [], output_refs: [outputRef], evidence_refs: [{ ref: outputRef }] }],
+        skill_outcomes: [],
+      };
+      const raw = `${JSON.stringify(outcome)}\n`;
+      const filename = `${createHash("sha256").update(raw).digest("hex")}.json`;
+      writeFileSync(join(stageDirectory, filename), raw);
+      const sourceRef = `quality/evidence/stage-outcomes/${stage}/${filename}`;
+      sourceRefs.push(sourceRef);
+      sourceRecords.push({ stage, subject_id: `${stage}-step`, outputRef });
+    }
+    for (const source of sourceRecords) registered.push({
+      ref: source.outputRef,
+      source: { stage: source.stage, subject_kind: "step", subject_id: source.subject_id },
+      consumer_count: 0,
+      freshness: "current",
+    });
+    const scopeRevision = createHash("sha256")
+      .update(sourceRefs.map((ref) => ref.slice("quality/evidence/stage-outcomes/".length)).sort().join("\n"))
+      .digest("hex");
+    const proof = {
+      schema_version: "consumer-scan-proof.v1",
+      project: "Demo",
+      task_id: taskId,
+      status: "complete",
+      coverage_status: "complete",
+      zero_consumption: true,
+      scope: "all-current-stage-outcome-files",
+      stage_count: stages.length,
+      outcome_file_count: sourceRefs.length,
+      subject_count: sourceRecords.length,
+      expected_stage_set: stages,
+      scanned_stage_set: stages,
+      scanned_at: "2026-08-30T00:00:00Z",
+      scope_revision: scopeRevision,
+      registered_output_refs: registered,
+      source_subject: "tools/cli/derive-consumption-edges.mjs",
+      source_refs: sourceRefs,
+      diagnostics: [],
+    };
+    const result = mod.refreshEvolutionSnapshot({
+      storageRoot,
+      project: "Demo",
+      attemptId: "complete-proof",
+      now: "2026-08-31T00:00:00Z",
+      inventory: { project: "Demo", observations: [observation("complete-proof")], consumer_proofs: [proof] },
+    });
+    expect(result).toMatchObject({ status: "ok", records: [{ tier: "action_suggested", machine_signals: { zero_consumption: true, repeat_intervention: false } }] });
   });
 
   it("rejects a forged target authority before publishing", async () => {
@@ -281,6 +356,30 @@ describe("M16 candidate and tax contract", () => {
   });
 
   it.each([
+    ["valid earlier stage", "upstream_omission:build-plan", "attributed"],
+    ["old version", "upstream_omission:build-plan@1", "unknown"],
+    ["free text", "manual guess", "unknown"],
+    ["unknown stage", "upstream_omission:unknown-stage", "unknown"],
+    ["same stage", "upstream_omission:build-code", "unknown"],
+    ["later stage", "upstream_omission:verify-code", "unknown"],
+  ])("applies the fixed five-stage attribution matrix for %s", async (_label, attributionStage, expectedStatus) => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const item = authenticateTaxItem(storageRoot, {
+      project: "Demo",
+      task_id: `tax-attribution-${expectedStatus}-${String(attributionStage).replaceAll(/[^a-z]+/g, "-")}`,
+      confirmation_ref: "tax-confirmation-attribution",
+      step_slug: "build-code-step",
+      intervention_stage: "build-code",
+      occurred_at: "2026-08-30T00:00:00Z",
+      primary_attribution_stage: attributionStage,
+    });
+    const result = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf: "2026-08-31T00:00:00Z", interventions: [item] });
+    expect(result).toMatchObject({ status: "ok", sample_count: 1, denominator: 1, numerator: expectedStatus === "attributed" ? 1 : 0, unknown_count: expectedStatus === "attributed" ? 0 : 1 });
+    expect(result.interventions[0]).toMatchObject({ attribution_status: expectedStatus });
+  });
+
+  it.each([
     ["missing", (item) => ({ ...item, confirmation_ref: `quality/confirmations/${"f".repeat(64)}.json` })],
     ["hash", (item) => ({ ...item, confirmation_ref: `quality/confirmations/${"0".repeat(64)}.json` })],
     ["schema", (item) => ({ ...item, _invalid_schema: true })],
@@ -302,6 +401,54 @@ describe("M16 candidate and tax contract", () => {
     expect(result).toMatchObject({ status: "unavailable", sample_count: 0, ratio: null, confidence: "unavailable" });
   });
 
+  it.each([
+    ["timestamp", (item) => ({ ...item, occurred_at: "not-an-iso-time" })],
+    ["identity", (item) => ({ ...item, task_id: "" })],
+    ["project", (item) => ({ ...item, project: "Other" })],
+    ["stage", (item) => ({ ...item, intervention_stage: "not-a-stage" })],
+  ])("fails closed for malformed in-window tax %s records", async (_kind, mutate) => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const base = { project: "Demo", task_id: `tax-malformed-${_kind}`, intervention_stage: "build-code", step_slug: "build-code-step", occurred_at: "2026-08-30T00:00:00Z", primary_attribution_stage: "upstream_omission:build-plan" };
+    const authenticated = authenticateTaxItem(storageRoot, base);
+    const result = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf: "2026-08-31T00:00:00Z", interventions: [mutate(authenticated)] });
+    expect(result).toMatchObject({ status: "unavailable", sample_count: 0, ratio: null, confidence: "unavailable" });
+  });
+
+  it("does not read a tax source path outside the authenticated task root", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const outsideRoot = root();
+    const outsidePath = join(outsideRoot, "outside-fact.json");
+    writeFileSync(outsidePath, "outside\n");
+    const item = authenticateTaxItem(storageRoot, { project: "Demo", task_id: "tax-source-path", intervention_stage: "build-code", step_slug: "build-code-step", occurred_at: "2026-08-30T00:00:00Z", primary_attribution_stage: "upstream_omission:build-plan", source_path: outsidePath });
+    const result = mod.computeQualityTaxProjection({ storageRoot, inventory: { project: "Demo" }, asOf: "2026-08-31T00:00:00Z", interventions: [item] });
+    expect(result).toMatchObject({ status: "unavailable", sample_count: 0, ratio: null });
+    expect(readFileSync(outsidePath, "utf8")).toBe("outside\n");
+  });
+
+  it("uses null target versions for stage authorities", async () => {
+    const mod = await loadModule();
+    const stageBytes = readFileSync(new URL("../../workflows/build-plan/steps.json", import.meta.url));
+    const stageSha = createHash("sha256").update(stageBytes).digest("hex");
+    const stage = mod.resolveTargetRef({ projectId: "Demo", targetKind: "stage", targetId: "build-plan", targetVersion: null, authorities: { stages: [{ slug: "build-plan", version: "2.0.0", authority: "workflows/build-plan/steps.json", authority_sha256: stageSha }] } });
+    expect(stage).toMatchObject({ status: "ok", target_ref: { target_version: null } });
+    expect(() => mod.validateWorkflowEvolutionDefinition("target_ref", stage.target_ref)).not.toThrow();
+    expect(mod.resolveTargetRef({ projectId: "Demo", targetKind: "stage", targetId: "build-plan", targetVersion: "2.0.0", authorities: { stages: [{ slug: "build-plan", version: "2.0.0", authority: "workflows/build-plan/steps.json", authority_sha256: stageSha }] } })).toMatchObject({ status: "invalid_target" });
+  });
+
+  it("rejects null or missing versions for step and skill authorities", async () => {
+    const mod = await loadModule();
+    const authorityBytes = readFileSync(new URL("../../workflows/build-plan/steps.json", import.meta.url));
+    const authoritySha = createHash("sha256").update(authorityBytes).digest("hex");
+    const authorities = {
+      steps: [{ slug: "build-code-step", version: "1.0.0", authority: "workflows/build-plan/steps.json", authority_sha256: authoritySha }],
+      skills: [{ id: "stage-reflection", version: "1.0.0", authority: "skills/catalog.yaml", authority_sha256: authoritySha }],
+    };
+    expect(mod.resolveTargetRef({ projectId: "Demo", targetKind: "step", targetId: "build-code-step", targetVersion: null, authorities })).toMatchObject({ status: "stale_source" });
+    expect(mod.resolveTargetRef({ projectId: "Demo", targetKind: "skill", targetId: "stage-reflection", targetVersion: null, authorities })).toMatchObject({ status: "stale_source" });
+  });
+
   it("rejects unknown target authorities instead of guessing from free text", async () => {
     const mod = await loadModule();
     const result = mod?.resolveTargetRef?.({ projectId: "Demo", targetKind: "step", targetId: "missing", authorities: { stages: [] } });
@@ -317,11 +464,58 @@ describe("M16 candidate and tax contract", () => {
     expect(result?.refreshResult ?? result?.refresh_result).toBeTruthy();
   });
 
+  it("rejects inventory drift detected immediately before publication without appending", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    let reads = 0;
+    const inventory = {};
+    Object.defineProperty(inventory, "observations", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        if (reads === 1) return [];
+        return [observation(reads === 2 ? "inventory-drift" : "inventory-drift-2")];
+      },
+    });
+    const result = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "inventory-drift", inventory, now: "2026-08-31T00:00:00Z" });
+    expect(result).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
+    expect(reads).toBe(3);
+    expect(existsSync(candidateLedger(storageRoot))).toBe(false);
+  });
+
   it("rejects project identifiers that escape the configured Projects root", async () => {
     const mod = await loadModule();
     const storageRoot = root();
     expect(() => mod.acquireProjectLock({ storageRoot, project: "../escape", attemptId: "a1" })).toThrow(/project/i);
     expect(existsSync(join(storageRoot, "escape"))).toBe(false);
+  });
+
+  it("rejects project locks and recovery authorities with extra or missing fields", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const first = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "lock-shape", bootId: "boot", sessionEpoch: "session" });
+    const lockPath = first.lockHandle.path;
+    const lockValue = JSON.parse(readFileSync(lockPath, "utf8"));
+    expect(first.release()).toMatchObject({ status: "ok" });
+    writeFileSync(lockPath, `${JSON.stringify({ ...lockValue, unexpected: true })}\n`);
+    expect(mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "lock-shape-next", bootId: "boot", sessionEpoch: "session" })).toMatchObject({ status: "failed" });
+
+    const recoveryRoot = root();
+    const seeded = mod.acquireProjectLock({ storageRoot: recoveryRoot, project: "Demo", attemptId: "old", bootId: "old-boot", sessionEpoch: "old-session" });
+    const recoveryPath = seeded.lockHandle.path;
+    const seededLockValue = JSON.parse(readFileSync(recoveryPath, "utf8"));
+    expect(seeded.release()).toMatchObject({ status: "ok" });
+    const expired = { ...seededLockValue, pid: 2147483647, acquired_monotonic_ms: 0, lease_deadline_monotonic_ms: 1 };
+    writeFileSync(recoveryPath, `${JSON.stringify(expired)}\n`);
+    const raw = readFileSync(recoveryPath);
+    const recovery = {
+      schema_version: "manual-recovery.v1",
+      current_lock_sha256: createHash("sha256").update(raw).digest("hex"), old_boot_id: "old-boot", new_boot_id: "new-boot",
+      operator_identity: "operator@example.test", issued_at: "2026-08-31T00:00:00Z", nonce: "shape-recovery",
+      confirmation_ref: "confirmation:recovery", confirmation_sha256: "a".repeat(64), unexpected: true,
+    };
+    expect(mod.acquireProjectLock({ storageRoot: recoveryRoot, project: "Demo", attemptId: "new", bootId: "new-boot", sessionEpoch: "new-session", manualRecovery: recovery })).toMatchObject({ status: "stale_source" });
+    expect(seeded.release()).toMatchObject({ status: "stale_source" });
   });
 
   it("allocates a new publication generation for identical content and rejects replay without writing", async () => {
@@ -613,6 +807,89 @@ describe("M16 candidate and tax contract", () => {
     expect(recovered.release()).toEqual({ status: "ok" });
   });
 
+  it("serializes two independent Node writers and leaves the losing attempt with zero ledger writes", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const seeded = mod.refreshEvolutionSnapshot({
+      storageRoot,
+      project: "Demo",
+      attemptId: "race-seed",
+      inventory: { project: "Demo", observations: [observation("race")] },
+      now: "2026-08-31T00:00:00Z",
+    });
+    expect(seeded).toMatchObject({ status: "ok" });
+    const ledgerPath = candidateLedger(storageRoot);
+    const before = readFileSync(ledgerPath);
+    const coordinationRoot = join(storageRoot, "race-coordination");
+    mkdirSync(coordinationRoot, { recursive: true });
+    const startPath = join(coordinationRoot, "start");
+    const attempts = ["race-writer-a", "race-writer-b"];
+    const readyPaths = attempts.map((attemptId) => join(coordinationRoot, `${attemptId}.ready`));
+    const childScript = `import { acquireProjectLock, readCurrentEvolutionProjection, recordCandidateTransition } from ${JSON.stringify(moduleUrl.href)};
+import { existsSync, writeFileSync } from "node:fs";
+const [storageRoot, attemptId, startPath, readyPath] = process.argv.slice(1);
+writeFileSync(readyPath, String(process.pid), { flag: "wx" });
+while (!existsSync(startPath)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+const lock = acquireProjectLock({ storageRoot, project: "Demo", attemptId });
+let transition = null;
+let release = null;
+if (lock.status === "ok") {
+  const projection = readCurrentEvolutionProjection({ storageRoot, project: "Demo" });
+  const target = projection.candidates.find((candidate) => candidate.row_status === "active");
+  transition = recordCandidateTransition({
+    storageRoot,
+    project: "Demo",
+    attemptId,
+    currentSnapshotId: projection.snapshot_id,
+    candidateId: target.candidate_id,
+    candidateRecordId: target.candidate_record_id,
+    expectedRevision: target.revision,
+    currentSourceIdentities: target.source_identities,
+    currentMaterialIdentities: target.material_identities,
+    humanConfirmation: { ref: target.human_confirmation_ref, sha256: target.human_confirmation_sha256 },
+    lifecycleStatus: "deferred",
+    lockAuthority: lock,
+  });
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+  release = lock.release();
+}
+console.log(JSON.stringify({ attempt_id: attemptId, status: lock.status, transition_status: transition?.status ?? null, release_status: release?.status ?? null }));`;
+    const run = (attemptId, readyPath) => new Promise((done) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", childScript, storageRoot, attemptId, startPath, readyPath], { cwd: resolve(import.meta.dirname, "../..") });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (status, signal) => done({ attemptId, status, signal, stdout, stderr }));
+    });
+    const children = attempts.map((attemptId, index) => run(attemptId, readyPaths[index]));
+    const deadline = Date.now() + 5000;
+    while (readyPaths.some((path) => !existsSync(path))) {
+      if (Date.now() > deadline) throw new Error("independent lock-race children did not become ready");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+    }
+    writeFileSync(startPath, "go\n");
+    const results = await Promise.all(children);
+    expect(results.every((result) => result.status === 0), results.map((result) => `${result.attemptId}: ${result.stderr}`).join("\n")).toBe(true);
+    const outcomes = results.map((result) => JSON.parse(result.stdout.trim()));
+    expect(outcomes.filter((outcome) => outcome.status === "ok")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === "conflict")).toHaveLength(1);
+    const winner = outcomes.find((outcome) => outcome.status === "ok");
+    const loser = outcomes.find((outcome) => outcome.status === "conflict");
+    expect(winner).toMatchObject({ transition_status: "ok", release_status: "ok" });
+    expect(loser).toMatchObject({ transition_status: null, release_status: null });
+    const after = readFileSync(ledgerPath);
+    expect(after).not.toEqual(before);
+    const rows = after.toString("utf8").trim().split("\n").map((line) => JSON.parse(line));
+    const commits = rows.filter((row) => row.record_kind === "batch_commit");
+    expect(commits.map((row) => row.attempt_id)).toEqual(["race-seed", winner.attempt_id]);
+    expect(rows.some((row) => row.attempt_id === loser.attempt_id)).toBe(false);
+    expect(existsSync(join(storageRoot, "Projects", "Demo", ".workflowhub-evolution.lock"))).toBe(false);
+    expect(existsSync(join(storageRoot, "Projects", "Demo", ".workflowhub-evolution.guard"))).toBe(false);
+  }, 30000);
+
   it("allows one recovery to claim crashed writer guard state under contention", async () => {
     const mod = await loadModule();
     const storageRoot = root();
@@ -693,6 +970,32 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
       expect(readFileSync(candidateLedger(storageRoot))).toEqual(before);
     }
     expect(lock.release()).toEqual({ status: "stale_source" });
+  });
+
+  it("never lets a caller root redirect an authenticated transition", async () => {
+    const mod = await loadModule();
+    const storageRoot = root();
+    const foreignRoot = root();
+    const refreshed = mod.refreshEvolutionSnapshot({ storageRoot, project: "Demo", attemptId: "root-binding-snapshot", inventory: { project: "Demo", observations: [observation("root-binding")] }, now: "2026-08-31T00:00:00Z" });
+    const target = refreshed.records[0];
+    const lock = mod.acquireProjectLock({ storageRoot, project: "Demo", attemptId: "root-binding-transition" });
+    const result = mod.recordCandidateTransition({
+      storageRoot: foreignRoot,
+      project: "Demo",
+      attemptId: "root-binding-transition",
+      currentSnapshotId: refreshed.snapshot_id,
+      candidateId: target.candidate_id,
+      candidateRecordId: target.candidate_record_id,
+      expectedRevision: target.revision,
+      currentSourceIdentities: target.source_identities,
+      currentMaterialIdentities: target.material_identities,
+      humanConfirmation: { ref: target.human_confirmation_ref, sha256: target.human_confirmation_sha256 },
+      lifecycleStatus: "deferred",
+      lockAuthority: lock,
+    });
+    expect(result).toMatchObject({ status: "stale_source", error: { code: "stale_source" } });
+    expect(existsSync(join(foreignRoot, "Projects/Demo/evolution-candidates.jsonl"))).toBe(false);
+    expect(lock.release()).toMatchObject({ status: "ok" });
   });
 
   it("uses a non-reusable fencing token and an old release cannot remove a replacement lock", async () => {
@@ -888,7 +1191,7 @@ console.log(JSON.stringify({ status: result.status, error: result.error ?? null 
       ...observation("same"), task_id: taskId, confirmation_ref: confirmationRef, occurred_at: occurredAt,
       intervention_payload: { reason: "same-group" }, classification: "simplify", severity, confidence,
       priority_score: priority, evidence_status: "partial", validation_status: "unverified",
-      related_targets: [{ project_id: "Demo", target_kind: "surface", target_id: "runtime", target_version: "1", authority_ref: "docs/architecture/move-map.json", authority_sha256: "a".repeat(64) }],
+      related_targets: [{ project_id: "Demo", target_kind: "surface", target_id: "runtime", target_version: null, authority_ref: "docs/architecture/move-map.json", authority_sha256: "a".repeat(64) }],
       evidence_refs: [{ ref: `quality/evidence/${taskId}.json`, sha256: "b".repeat(64) }],
     });
     const observations = [

@@ -10,6 +10,38 @@ const repoRoot = join(import.meta.dirname, "../..");
 const cli = join(repoRoot, "tools/cli/build-reflection-page.mjs");
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const now = "2026-08-31T00:00:00.000Z";
+const htmlVoidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+
+function assertBalancedHtmlTags(html) {
+  const source = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "");
+  const tags = /<\/?([A-Za-z][\w:-]*)(?:\s[^<>]*?)?\/?\s*>/g;
+  const stack = [];
+  for (const match of source.matchAll(tags)) {
+    const token = match[0];
+    const name = match[1].toLowerCase();
+    if (htmlVoidTags.has(name) || /\/\s*>$/.test(token)) continue;
+    if (/^<\//.test(token)) {
+      const open = stack.pop();
+      expect(open, `unexpected closing tag </${name}>`).toBe(name);
+    } else {
+      stack.push(name);
+    }
+  }
+  expect(stack, "unclosed HTML tags").toEqual([]);
+}
+
+function contrastRatio(foreground, background) {
+  const channel = (value) => {
+    const normalized = Number.parseInt(value, 16) / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex) => 0.2126 * channel(hex.slice(1, 3)) + 0.7152 * channel(hex.slice(3, 5)) + 0.0722 * channel(hex.slice(5, 7));
+  const [bright, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (bright + 0.05) / (dark + 0.05);
+}
 
 function writeJson(path, value) {
   mkdirSync(join(path, ".."), { recursive: true });
@@ -259,6 +291,36 @@ function readProjectedData(path) {
 }
 
 describe("build-reflection-page projection", () => {
+  it("keeps the static HTML structure balanced", () => {
+    const template = readFileSync(join(repoRoot, "tools/cli/build-reflection-page-template.html"), "utf8");
+    assertBalancedHtmlTags(template);
+    expect(template).toContain("本页是静态快照，浏览器脚本只做本地渲染、筛选和展开，不读取网络。");
+    expect(template).toContain("overflow-wrap: anywhere");
+    expect(template).toContain("请重新生成 monitor 数据并重新打开页面。");
+    expect(template).toContain("<!-- __WH_MONITOR_DATA_SCRIPT__ -->");
+    expect(template).not.toContain('<script src="data.js"></script>');
+  });
+
+  it("proves contrast tokens and DOM focus order independently", () => {
+    const template = readFileSync(join(repoRoot, "tools/cli/build-reflection-page-template.html"), "utf8");
+    const token = (name) => template.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
+    const colors = Object.fromEntries(["surface", "surface-subtle", "ink", "muted", "blue", "blue-soft", "warning", "warning-soft", "danger", "danger-soft", "quiet"].map((name) => [name, token(name)]));
+    expect(Object.values(colors)).not.toContain(undefined);
+    for (const [foreground, background] of [
+      ["ink", "surface"], ["muted", "surface"], ["quiet", "surface"], ["blue", "surface"],
+      ["warning", "surface"], ["danger", "surface"], ["ink", "surface-subtle"],
+      ["blue", "blue-soft"], ["warning", "warning-soft"], ["danger", "danger-soft"],
+    ]) expect(contrastRatio(colors[foreground], colors[background]), `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(colors.blue, colors.surface)).toBeGreaterThanOrEqual(3);
+
+    const staticInteractiveIds = [...template.matchAll(/<(?:button|select)\b[^>]*\bid="([^"]+)"/g)].map((match) => match[1]);
+    expect(staticInteractiveIds).toEqual([
+      "task-tab", "overall-tab", "evolution-tab", "task-filter", "stage-filter", "classification-filter", "evidence-toggle", "evolution-action-more", "evolution-reference-more",
+    ]);
+    expect([...template.matchAll(/\btabindex="([1-9]\d*)"/g)]).toHaveLength(0);
+    expect(template).toMatch(/button:focus-visible, select:focus-visible \{[^}]*outline:\s*2px solid var\(--blue\)/);
+  });
+
   it("projects task/overall views, all states, safe refs, and read-only consumption data", () => {
     const fixture = makeFixture();
     try {
@@ -268,6 +330,9 @@ describe("build-reflection-page projection", () => {
       const htmlPath = join(fixture.out, "workflowhub-monitor.html");
       const data = readProjectedData(dataPath);
       const html = readFileSync(htmlPath, "utf8");
+      assertBalancedHtmlTags(html);
+      expect(html).toContain("globalThis.__WH_MONITOR_DATA__ = Object.freeze(");
+      expect(html).not.toContain('<script src="data.js"></script>');
       const legacyBefore = readFileSync(fixture.legacy, "utf8");
       if (process.env.WORKFLOWHUB_KEEP_PAGE_FIXTURE === "1") console.log(JSON.stringify({ page: fixture.out, root: fixture.root }));
 
@@ -276,6 +341,16 @@ describe("build-reflection-page projection", () => {
       expect(data.evolution).toMatchObject({ schema_version: "workflow-evolution.v1" });
       expect(data.evolution.status).toBe("ok");
       expect(data.evolution.publication_generation).toBe(1);
+      expect(data.evolution.regions).toMatchObject({
+        summary_status: "partial",
+        action_suggested: { status: "empty" },
+        reference_only: { status: "unverified", validation_status: "unverified" },
+        quality_tax: { status: "insufficient_samples" },
+      });
+      expect(data.evolution.unverified_judgments).toEqual(expect.arrayContaining([
+        expect.objectContaining({ task_id: "task-a", stage: "build-spec", subject_id: "spec-specify" }),
+        expect.objectContaining({ task_id: "task-a", stage: "build-spec", subject_id: "read-decision-log" }),
+      ]));
       expect(Array.isArray(data.evolution.candidates)).toBe(true);
       expect(data.evolution.candidates.length).toBeGreaterThan(0);
       expect(data.evolution.candidates[0]).toEqual(expect.objectContaining({ confidence: expect.stringMatching(/^(high|medium|low)$/), priority_score: expect.any(Number), freshness: "current" }));
@@ -294,6 +369,7 @@ describe("build-reflection-page projection", () => {
       expect(pending[0].source_task_stages).toHaveLength(2);
       expect(pending.some((entry) => entry.subject_id === "spec-clarify" && entry.frequency > 2)).toBe(false);
       expect(pending.some((entry) => entry.subject_id === "read-decision-log")).toBe(false);
+      expect(data.evolution.candidates.flatMap((entry) => entry.source_observations ?? []).some((entry) => entry.task_id === "task-old")).toBe(false);
 
       const taskA = data.tasks.find((task) => task.task_id === "task-a");
       const taskB = data.tasks.find((task) => task.task_id === "task-b");
@@ -332,6 +408,10 @@ describe("build-reflection-page projection", () => {
       expect(html).toContain("展开全部证据");
       expect(html).toContain("收起证据");
       expect(html).toContain("aria-expanded");
+      expect(html).toContain('make("span", "evidence-entry")');
+      expect(html).toContain('evidenceWrap.querySelectorAll(".evidence-entry").forEach((node, index) => { node.hidden = !expanded && index >= 1; })');
+      expect(html).toContain("当前分区状态：");
+      expect(html).toContain('taxStatus === "ok" ? (tax.ratio === null || tax.ratio === undefined ? "unknown" : tax.ratio) : taxStatus');
       expect(html).toContain("subject=${subject}; task=${observation.task_id || \"unknown\"}; evidence=${kind}");
       expect(html).toContain("aria-selected=\"false\"");
       expect(html).toContain("const activateView =");
@@ -355,6 +435,20 @@ describe("build-reflection-page projection", () => {
     } finally {
       if (process.env.WORKFLOWHUB_KEEP_PAGE_FIXTURE !== "1") rmSync(fixture.root, { recursive: true, force: true });
     }
+  });
+
+  it("excludes future reflections from the live candidate and tax windows", () => {
+    const fixture = makeFixture();
+    try {
+      const path = join(fixture.tasksRoot, "task-old/quality/stage-reflection/build-spec.json");
+      const value = JSON.parse(readFileSync(path, "utf8"));
+      value.generated_at = "2026-09-01T00:00:00.000Z";
+      writeJson(path, value);
+      expect(() => runCli(fixture)).not.toThrow();
+      const data = readProjectedData(join(fixture.out, "data.js"));
+      expect(data.tasks.find((task) => task.task_id === "task-old").stages.find((stage) => stage.stage === "build-spec").state).toBe("stale");
+      expect(data.evolution.candidates.flatMap((entry) => entry.source_observations ?? []).some((entry) => entry.task_id === "task-old")).toBe(false);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 
   it("fails closed when tasks root traverses a symlinked project ancestor", () => {
@@ -393,6 +487,25 @@ describe("build-reflection-page projection", () => {
       const data = readProjectedData(join(fixture.out, "data.js"));
       expect(data.evolution.status).toBe("unavailable");
       expect(data.evolution.diagnostics[0].summary).toContain("target authority resolution failed");
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("escapes script-closing input before embedding frozen data.js", () => {
+    const fixture = makeFixture();
+    try {
+      const path = join(fixture.tasksRoot, "task-a/quality/stage-reflection/build-spec.json");
+      const value = JSON.parse(readFileSync(path, "utf8"));
+      value.judgments[0].reason = "</script><script>globalThis.__INJECTED__ = true;</script>";
+      writeJson(path, value);
+      expect(() => runCli(fixture)).not.toThrow();
+
+      const dataSource = readFileSync(join(fixture.out, "data.js"), "utf8");
+      expect(dataSource).not.toContain("</script>");
+      expect(dataSource).toContain("\\u003c/script>");
+      const context = {};
+      vm.runInNewContext(dataSource, context);
+      expect(context.__INJECTED__).toBeUndefined();
+      expect(context.__WH_MONITOR_DATA__.tasks.find((task) => task.task_id === "task-a").stages.find((stage) => stage.stage === "build-spec").judgments[0].reason).toContain("</script>");
     } finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 });

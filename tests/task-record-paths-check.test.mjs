@@ -51,6 +51,31 @@ describe("TaskContext static guard", () => {
     expect(result.status, result.stderr).toBe(0);
   });
 
+  it("allows the registered M16 evolution authority but rejects an unregistered sibling", () => {
+    const root = fixture();
+    const authority = join(root, "runtime", "evidence", "workflow-evolution.mjs");
+    mkdirSync(dirname(authority), { recursive: true });
+    const source = [
+      "import { join } from 'node:path';",
+      "import { writeFileSync } from 'node:fs';",
+      "export const projection = (storageRoot) => {",
+      "  const path = join(storageRoot, 'Projects', 'Demo', 'tasks', 'task-1');",
+      "  writeFileSync(path, 'projection');",
+      "};",
+    ].join("\n");
+    writeFileSync(authority, source);
+    expect(run(root).status).toBe(0);
+
+    const sibling = join(root, "runtime", "evidence", "unregistered-evolution.mjs");
+    writeFileSync(sibling, source);
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("runtime/evidence/unregistered-evolution.mjs");
+    expect(result.stderr).toContain("caller-supplied storage/task path capability");
+    expect(result.stderr).toContain("literal tasks path derivation");
+    expect(result.stderr).toContain("unclassified direct filesystem writer");
+  });
+
   it.each([
     ["core/task-dir-parser.mjs", "legacy task-dir parser"],
     ["resolveTaskRecordPaths(taskId)", "legacy task-record resolver"],

@@ -1,75 +1,48 @@
-import { afterEach } from "vitest";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { runReviewFixture } from "../review-runner.mjs";
-import { createTask } from "../../../../runtime/task/task-handle.mjs";
+import { afterEach, describe, expect, it } from "vitest";
 
-const oid = "1".repeat(40); const materialId = "a".repeat(64);
-const source = { targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead: oid, snapshotTree: oid };
-const pass = JSON.stringify({ findings: [] });
-const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
-function bundle(root) { return { bundleRoot: root, attachmentRoot: root, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }; }
-function providerResult(provider, { output = pass, status = "completed", error = null } = {}) {
-  return {
-    provider, status, session_id: status === "completed" ? "session" : null, output, error,
-    execution: { adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,
-      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime" },
-  };
+import { runSimpleReview } from "../simple-review-runner.mjs";
+import { writeAuditEvidenceRecord } from "../../../../tools/cli/run-wh-review-audit-e2e.mjs";
+
+const roots = [];
+afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
+function input() {
+  const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-simple-e2e-")));
+  roots.push(attachmentRoot);
+  return { stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" } };
 }
-function client(output = pass) { return { runGroup: async ({ providers }) => ({ runtimeId: "runtime", providers: providers.map((provider) => providerResult(provider, { output })) }) }; }
-const temporary=[];
-function fixture(prefix) { const root=realpathSync(mkdtempSync(join(tmpdir(),prefix))); temporary.push(root); const attachmentRoot=join(root,"attachments"); mkdirSync(attachmentRoot); const task=createTask({storageRoot:root,taskPath:join(root,"Projects","Demo","tasks","task"),manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"task",created_at:new Date().toISOString(),target_repo_root:join(root,"repo"),issue_ids:[],inputs:{}}}); return {root,attachmentRoot,task}; }
-afterEach(()=>{while(temporary.length)rmSync(temporary.pop(),{recursive:true,force:true});});
 
-describe("simple runner fake E2E and recovery", () => {
-  it("publishes one formal result for every stage/track", async () => {
-    for (const [stage, reviewTrack] of stages) {
-      const { attachmentRoot, task } = fixture("wh-review-e2e-");
-      const out = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage, reviewTrack,
-        hostProvider: "codex", providers: ["kimi"], providerClient: client(), captureSource: () => source,
-        ...(reviewTrack === "direction" ? { directionSelection: { current_selection: "fixture choice" } } : {}),
-        ...(reviewTrack === "direction" ? { materials: { raw_requirement: "fixture requirement", objective_facts: ["fixture fact"] } } : {}),
-        buildMaterials: () => bundle(attachmentRoot) });
-      expect(out.status).toBe("available");
-      const result = JSON.parse(task.readRecord(out.resultRef)); expect(result).toMatchObject({ stage, review_track: reviewTrack, snapshot_tree: oid, material_id: materialId });
-    }
+describe("simple review transport and recovery facts", () => {
+  it("awaits audit evidence publication and propagates write failures", async () => {
+    let completed = false;
+    const task = { createRecordAtomic: async () => { await Promise.resolve(); completed = true; } };
+    await writeAuditEvidenceRecord(task, "fixtures/audit.json", "{}\n");
+    expect(completed).toBe(true);
+    await expect(writeAuditEvidenceRecord({ createRecordAtomic: () => { throw new Error("write failed"); } }, "fixtures/audit.json", "{}\n"))
+      .rejects.toThrow("write failed");
   });
 
-  it("retains an immutable unavailable attempt and permits a later formal retry", async () => {
-    const { attachmentRoot, task } = fixture("wh-review-recover-");
-    const calls = [];
-    const failed = { runGroup: async () => { calls.push(true); const error = new Error("no auth"); error.code = "AUTH"; throw error; } };
-    const recovered = { runGroup: async ({ providers }) => { calls.push(true); return { runtimeId: "runtime-2", providers: providers.map((provider) => providerResult(provider)) }; } };
-    const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
-    const first = await runReviewFixture({ ...input, providerClient: failed });
-    const second = await runReviewFixture({ ...input, providerClient: recovered });
-    expect(first.status).toBe("unavailable");
-    expect(second).toMatchObject({ status: "available" });
-    expect(second.attemptRef).not.toBe(first.attemptRef);
-    expect(calls).toHaveLength(2);
-  });
-
-  it("keeps protocol mismatch and invalid format non-semantic", async () => {
-    const { attachmentRoot, task } = fixture("wh-review-fault-");
-    const protocol = { runGroup: async () => { const error = new Error("bad protocol"); error.code = "PROTOCOL_INCOMPATIBLE"; throw error; } };
-    const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
-    expect((await runReviewFixture({ ...input, providerClient: protocol })).resultRef).toBe(null);
-    expect((await runReviewFixture({ ...input, providerClient: client("not json") })).resultRef).toBe(null);
-  });
-
-  it("records one group failure, not one provider attempt per configured profile", async () => {
-    const { attachmentRoot, task } = fixture("wh-review-group-fault-");
-    const protocol = { runGroup: async () => { const error = new Error("broker public error"); error.code = "REQUEST_INVALID"; throw error; } };
-    const out = await runReviewFixture({
-      task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi", "opencode"],
-      captureSource: () => source, buildMaterials: () => bundle(attachmentRoot), providerClient: protocol,
+  it("records malformed provider output as a provider failure while retaining valid sibling findings", async () => {
+    const result = await runSimpleReview(input(), {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: roots.at(-1), command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime", outcome: "partial", providers: [
+          { provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null, output: "not-json", timing: null, usage: null },
+          { provider: "model-b", status: "completed", identity: { provider: "model-b" }, error: null, output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-implementation.md", line: 1, issue: "gap", recommendation: "fix" }] }), timing: null, usage: null },
+        ] };
+      } },
     });
-    expect(out.status).toBe("unavailable");
-    const attempt = JSON.parse(task.readRecord(out.attemptRef));
-    expect(attempt.provider_attempts).toEqual([]);
-    expect(attempt.error).toMatchObject({ code: "REQUEST_INVALID" });
+    expect(result).toMatchObject({ status: "available", provider_results: [{ status: "failed", error: { code: "OUTPUT_INVALID" } }, { status: "completed" }] });
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it("returns an honest unavailable result when the review route cannot load", async () => {
+    const result = await runSimpleReview(input(), { loadConfig: () => { throw new Error("route unavailable"); } });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: "ROUTE_UNAVAILABLE" }, provider_results: [], findings: [] });
   });
 });

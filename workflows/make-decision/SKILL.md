@@ -65,7 +65,7 @@ The current task has four working materials:
 四份材料都落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不是材料替代物，且不新增 gate。
 `m15-retirement` 会话负责的材料迁移不在本技能范围内；仓外
-`~/Knowledge/Projects/workflowhub/tasks/Projects/` 清理也不在本任务范围内。
+`Knowledge/Projects/workflowhub/tasks/Projects/` 清理也不在本任务范围内。
 
 `make-decision` owns `decision-log.md`. Read the original requirement and any
 current materials that already exist. Old accepted records, reviews, execution
@@ -128,9 +128,11 @@ decision and questions to the user.
      three inputs establish that classification, write the owning `### D<n>`
      section with exactly one Markdown source line in this form (the JSON is
      inline code, not bare text):
+
      ```md
      - **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"user_declaration"}`
      ```
+
      The only alternative `basis` is `three_inputs`.
      This is the sole decision-log fact a later acceptance card may reference;
      do not substitute policy IDs, task prose, or provider identity.

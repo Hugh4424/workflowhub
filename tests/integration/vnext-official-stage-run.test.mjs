@@ -212,6 +212,16 @@ function uiSourceBindingCase(taskId) {
   const workspace = openCurrentTaskWorkspace(state.task);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
   const kernel = createTaskKernel(state.task, { workspace, artifacts });
+  // UI applicability is authoritative in decision-log.md. Keep these
+  // source-binding cases explicitly UI-scoped before producing any receipts.
+  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n## UI applicability\n\`\`\`json\n${JSON.stringify({
+    result: "ui",
+    sources: {
+      raw_requirement: "new settings page",
+      project_inventory: "existing settings page",
+      planned_or_changed_frontend_fact: "new settings component",
+    },
+  }, null, 2)}\n\`\`\`\n`);
   const outcome = stageOutcome(state, "build-spec", { workspace, artifacts, attemptId: `attempt-${taskId}` });
   const review = publishReviewFixture({ ...state, kernel });
   const design = {
@@ -292,6 +302,17 @@ function uiSourceBindingCase(taskId) {
     },
   };
   return { state, workspace, artifacts, kernel, outcome, review, approved, design, experience };
+}
+
+function appendNonUiApplicability(artifacts) {
+  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n## UI applicability\n\`\`\`json\n${JSON.stringify({
+    result: "non_ui",
+    sources: {
+      raw_requirement: { conclusion: "non_ui", reason: "fixture has no page consumer" },
+      project_inventory: { conclusion: "non_ui", reason: "fixture has no frontend consumer" },
+      planned_or_changed_frontend_fact: { conclusion: "non_ui", reason: "fixture has no frontend change" },
+    },
+  }, null, 2)}\n\`\`\`\n`);
 }
 
 async function runUiSourceBindingCase(testCase, contractFacts) {
@@ -473,6 +494,8 @@ describe("vNext official stage completion", () => {
         session: {
           task_id: state.task.identity.taskId,
           host: "codex-test",
+          source_id: "codex/session-stage-boundary",
+          source_family: "codex",
           session_id: "session-stage-boundary",
           source_ref: "codex-session-stage-boundary",
           events: [{
@@ -1166,6 +1189,8 @@ describe("vNext official stage completion", () => {
       task_path: state.task.taskPath,
       session: {
         host: "codex-desktop",
+        source_id: "codex/session-bridge",
+        source_family: "codex",
         session_id: "session-bridge",
         task_id: state.task.identity.taskId,
         source_ref: "codex-rollout-bridge",
@@ -1292,6 +1317,8 @@ describe("vNext official stage completion", () => {
         session: {
           task_id: state.task.identity.taskId,
           host: "codex-desktop",
+          source_id: "codex/session-overlapping-lifecycle",
+          source_family: "codex",
           session_id: "session-overlapping-lifecycle",
           source_ref: "codex-overlapping-lifecycle",
           status: execution.status,
@@ -1840,6 +1867,7 @@ describe("vNext official stage completion", () => {
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
     const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    appendNonUiApplicability(artifacts);
     const snapshot = workspace.captureSnapshot?.() ?? state.candidate.captureSnapshot();
     const attemptId = "vnext-official-build-spec";
     const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;

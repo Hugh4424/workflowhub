@@ -31,6 +31,9 @@ import {
   validateUiContract,
   validateComponentQualityMap,
   analyzeDecisionConvergence,
+  buildShortUiDesignPrompt,
+  projectAcceptanceExecutionData,
+  readUiApplicabilityFromDecisionLog,
   validateSpecClarifyAndDirectionFidelity,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
@@ -239,7 +242,7 @@ function validReceiptRef(name, ref) {
   return Boolean(NAMESPACE[name] && ref.startsWith(NAMESPACE[name]));
 }
 
-function subjectFact(status, evidenceRefs = [], detail = null) {
+function subjectFact(status, evidenceRefs = [], detail = null, attributes = {}) {
   if (!new Set(["passed", "failed", "inconclusive", "deferred", "missing"]).has(status)) {
     throw new Error(`unsupported stage subject status: ${status}`);
   }
@@ -247,6 +250,9 @@ function subjectFact(status, evidenceRefs = [], detail = null) {
     status,
     evidence_refs: Object.freeze(evidenceRefs.map(({ ref, sha256 }) => Object.freeze({ ref, sha256 }))),
     ...(detail ? { detail } : {}),
+    ...(Array.isArray(attributes.execution_items) ? {
+      execution_items: Object.freeze(attributes.execution_items.map((item) => Object.freeze({ ...item }))),
+    } : {}),
   });
 }
 
@@ -582,6 +588,7 @@ function inferImpactFromAuthenticatedImplementation(worker, invocation) {
 async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null) {
   const suppliedRef = invocation.receipts?.ui_qa;
   const adapter = worker.runControlledUiQa;
+  const uiSource = readUiApplicabilityFromDecisionLog(worker.readArtifact("decision-log.md"));
   const usableDerivedImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(derivedImpact) && derivedImpact !== "unknown"
     ? derivedImpact
     : null;
@@ -594,14 +601,34 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
   const authenticated = inferImpactFromAuthenticatedImplementation(worker, invocation);
   const declaredImpactValue = typeof declaredImpact === "string" ? declaredImpact : declaredImpact?.impact;
   const hasDeclaredImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(declaredImpactValue);
-  let impact = authenticated.impact ?? declaredImpactValue;
+  const loggedImpact = uiSource.status === "recorded" ? uiSource.applicability : "unknown";
+  let impact = authenticated.impact ?? loggedImpact ?? declaredImpactValue;
   let impactReason = null;
-  if (authenticated.impact && hasDeclaredImpact && declaredImpactValue !== authenticated.impact) {
+  if (uiSource.status !== "recorded") {
+    impact = "unknown";
+    impactReason = uiSource.errors.join("; ") || "UI applicability is not recorded in decision-log.md";
+  } else if (hasDeclaredImpact && declaredImpactValue !== "unknown"
+      && ((loggedImpact === "ui" && !["ui", "fullstack"].includes(declaredImpactValue))
+        || (loggedImpact === "non_ui" && !["non_ui", "backend"].includes(declaredImpactValue)))) {
+    impact = "unknown";
+    impactReason = `decision-log applicability ${loggedImpact} conflicts with declared impact ${declaredImpactValue}`;
+  } else if (loggedImpact === "ui") {
+    if (authenticated.impact && !["ui", "fullstack"].includes(authenticated.impact)) {
+      impact = "unknown";
+      impactReason = `decision-log applicability ui conflicts with authenticated implementation impact ${authenticated.impact}`;
+    } else {
+      impact = authenticated.impact ?? "ui";
+    }
+  } else if (loggedImpact === "non_ui") {
+    if (authenticated.impact && ["ui", "fullstack"].includes(authenticated.impact)) {
+      impact = "unknown";
+      impactReason = `decision-log applicability non_ui conflicts with authenticated implementation impact ${authenticated.impact}`;
+    } else {
+      impact = authenticated.impact ?? "non_ui";
+    }
+  } else if (authenticated.impact && hasDeclaredImpact && declaredImpactValue !== authenticated.impact) {
     impact = "unknown";
     impactReason = `declared impact ${declaredImpactValue} does not match authenticated implementation impact ${authenticated.impact}`;
-  } else if (!authenticated.impact && declaredImpactValue === "non_ui") {
-    impact = "unknown";
-    impactReason = "non_ui impact cannot skip browser QA without an authenticated implementation consumer classification";
   }
   // UI applicability is an explicit branch of the contract.  A pure backend
   // or non-UI change must not start a browser, while a UI/fullstack change
@@ -615,18 +642,17 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     };
   }
   if (impact !== "ui" && impact !== "fullstack") {
-    if (suppliedRef === undefined && typeof adapter !== "function" && invocation.contract_facts === undefined) return null;
     if (suppliedRef === undefined && typeof adapter !== "function") {
       return {
       facts: { status: "unknown", applicability: "unknown", reason: impactReason ?? "UI applicability is unknown; no derived ui/fullstack impact was supplied" },
         evidence: null,
-        missing_items: ["browser QA applicability is unknown: derive ui/fullstack impact before execution"],
+        missing_items: [...uiSource.missing_items, "browser QA applicability is unknown: derive ui/fullstack impact before execution"],
       };
     }
     return {
       facts: { status: "unknown", applicability: "unknown", reason: impactReason ?? "UI applicability is unknown; refusing an unclassified browser QA invocation" },
       evidence: null,
-      missing_items: ["browser QA applicability is unknown: refusing an unclassified invocation"],
+      missing_items: [...uiSource.missing_items, "browser QA applicability is unknown: refusing an unclassified invocation"],
     };
   }
   const contractFacts = invocation.contract_facts ?? {};
@@ -662,7 +688,11 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     };
   }
 
-  const snapshot = captureWorkerSnapshot(worker);
+  const snapshot = typeof worker.snapshotWorkspace === "function"
+    ? worker.snapshotWorkspace()
+    : typeof worker.candidateWorkspace?.captureSnapshot === "function"
+      ? worker.candidateWorkspace.captureSnapshot()
+      : null;
   const qaBinding = contractFacts.qa_binding ?? invocation.qa_binding ?? {};
   const binding = {
     task_id: worker.identity.taskId,
@@ -1036,6 +1066,146 @@ function confirmationFacts(worker, invocation, { requireV2 = false } = {}) {
   // build-plan current-material path still requires provenance-bearing v2/v3.
   if (requireV2 && !isHumanConfirmationVersion(value, { current: true })) throw new Error("build-plan confirmation must use human-confirmation.v2 or human-confirmation.v3");
   return { facts: { decision: value.decision, confirmation_ref: ref, confirmation_hash: record.sha256, snapshot_tree: value.snapshot_tree }, evidence: { ref, sha256: record.sha256 } };
+}
+
+/**
+ * Execute only scenarios explicitly declared by the current acceptance
+ * contract. The runner owns the private executor capability; this handler
+ * validates its normalized result and never treats input as proof.
+ */
+export async function acceptanceExecutionFacts(worker, snapshotTree) {
+  if (worker?.stage !== "build-code") throw new Error("acceptance execution is private to build-code");
+  const projection = projectAcceptanceExecutionData(text(worker.readArtifact("tasks.md"), "tasks.md content"), {
+    decisionLog: text(worker.readArtifact("decision-log.md"), "decision-log.md content"),
+    spec: text(worker.readArtifact("spec.md"), "spec.md content"),
+  });
+  if (projection.status !== "ready") {
+    return Object.freeze({
+      status: projection.status,
+      requires_execution: projection.requires_execution,
+      requires_independent_verdict: projection.requires_independent_verdict,
+      items: Object.freeze([]),
+      evidence_refs: Object.freeze([]),
+      missing_items: Object.freeze(projection.errors),
+    });
+  }
+  const unavailable = (scenario, reason) => Object.freeze({
+    ...scenario,
+    status: "unavailable",
+    reason,
+    evidence_refs: Object.freeze([]),
+  });
+  const executor = worker.runAcceptanceScenario;
+  const items = [];
+  for (const scenario of projection.scenarios) {
+    if (typeof executor !== "function") {
+      items.push(unavailable(scenario, `${scenario.tier} acceptance executor is unavailable`));
+      continue;
+    }
+    const result = object(await executor(Object.freeze({
+      ...scenario,
+      stage: worker.stage,
+      task_id: text(worker.identity?.taskId, "build-code task id"),
+      snapshot_tree: snapshotTree,
+    })), `${scenario.tier} acceptance executor result`);
+    if (!new Set(["executed", "unavailable", "failed"]).has(result.status)) {
+      throw new Error(`${scenario.tier} acceptance executor status is invalid`);
+    }
+    if (result.tier !== scenario.tier) throw new Error(`${scenario.tier} acceptance executor returned a mismatched tier`);
+    if (!Array.isArray(result.evidence_refs)) throw new TypeError(`${scenario.tier} acceptance executor evidence_refs must be an array`);
+    const evidenceRefs = result.evidence_refs.map((entry, index) => {
+      const ref = object(entry, `${scenario.tier} acceptance executor evidence_refs[${index}]`);
+      if (typeof ref.ref !== "string" || !ref.ref.startsWith("quality/evidence/") || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) {
+        throw new Error(`${scenario.tier} acceptance executor evidence reference is invalid`);
+      }
+      return Object.freeze({ ref: ref.ref, sha256: ref.sha256 });
+    });
+    if (result.status === "executed" && evidenceRefs.length === 0) throw new Error(`${scenario.tier} executed acceptance requires canonical evidence`);
+    if (result.status !== "executed" && evidenceRefs.length !== 0) throw new Error(`${scenario.tier} non-executed acceptance must not claim evidence`);
+    if (result.status === "executed" && scenario.tier === "browser" && result.executor !== "controlled-browser-qa") throw new Error("browser acceptance execution must use controlled-browser-qa");
+    items.push(Object.freeze({
+      ...scenario,
+      status: result.status,
+      ...(typeof result.executor === "string" && result.executor.trim() !== "" ? { executor: result.executor } : {}),
+      ...(typeof result.reason === "string" && result.reason.trim() !== "" ? { reason: result.reason } : {}),
+      evidence_refs: Object.freeze(evidenceRefs),
+    }));
+  }
+  const evidenceRefs = items.flatMap((item) => item.evidence_refs);
+  const status = items.every((item) => item.status === "executed")
+    ? "executed"
+    : (items.some((item) => item.status === "unavailable") ? "unavailable" : "failed");
+  return Object.freeze({
+    status,
+    requires_execution: true,
+    requires_independent_verdict: projection.requires_independent_verdict,
+    items: Object.freeze(items),
+    evidence_refs: Object.freeze(evidenceRefs),
+    missing_items: Object.freeze(items.filter((item) => item.status !== "executed").map((item) => `${item.task_id}:${item.tier}: ${item.reason ?? item.status}`)),
+  });
+}
+
+/**
+ * Consume the runner-authenticated E2E chain. Execution, independent review,
+ * and user confirmation arrive through separate canonical records; no
+ * invocation field or caller-supplied aggregate can stand in for them.
+ */
+export function e2eAcceptanceFacts(worker) {
+  if (worker?.stage !== "verify-code") throw new Error("E2E acceptance verdict is private to verify-code");
+  if (typeof worker.readE2eAcceptanceEvidence !== "function") {
+    return Object.freeze({ required: false, status: "not_applicable", evidence_refs: Object.freeze([]), missing_items: Object.freeze([]) });
+  }
+  const source = object(worker.readE2eAcceptanceEvidence(), "authenticated E2E acceptance evidence");
+  if (source.required !== true) return Object.freeze({ required: false, status: "not_applicable", evidence_refs: Object.freeze([]), missing_items: Object.freeze([]) });
+  const execution = object(source.execution, "E2E execution evidence");
+  const review = object(source.independent_review, "E2E independent review evidence");
+  const confirmation = object(source.user_confirmation, "E2E user confirmation evidence");
+  const missing = [];
+  const ref = (value, label, pattern) => {
+    if (typeof value?.ref !== "string" || !pattern.test(value.ref) || !SHA256.test(value.sha256 ?? "")) {
+      missing.push(`${label} canonical ref/hash is missing or invalid`);
+      return null;
+    }
+    return Object.freeze({ ref: value.ref, sha256: value.sha256 });
+  };
+  const executionRef = ref(execution, "E2E execution", /^quality\/evidence\/acceptance\/build-code\//);
+  const reviewRef = ref(review, "independent review", /^quality\/reviews\/results\//);
+  const confirmationRef = ref(confirmation, "user confirmation", /^quality\/confirmations\//);
+  if (execution.status !== "passed") missing.push(`E2E execution is ${execution.status ?? "missing"}`);
+  if (review.status !== "recorded") missing.push(`independent review is ${review.status ?? "missing"}`);
+  if (confirmation.status !== "accepted") missing.push(`user confirmation is ${confirmation.status ?? "missing"}`);
+  if (!execution.executor_actor || typeof execution.executor_actor !== "object" || typeof execution.executor_actor.source_id !== "string" || execution.executor_actor.source_id.trim() === "") missing.push("E2E executor identity is unavailable");
+  if (!review.reviewer_actor || typeof review.reviewer_actor !== "object" || typeof review.reviewer_actor.source_id !== "string" || review.reviewer_actor.source_id.trim() === "") {
+    missing.push("independent reviewer identity is unavailable");
+  } else if (review.reviewer_actor.source_id.split("/")[0] === execution.executor_actor?.source_id?.split("/")[0]) {
+    missing.push("independent reviewer source family equals the executor source family");
+  }
+  if (!review.frozen_material || typeof review.frozen_material !== "object" || !/^quality\/evidence\/review-materials\/[a-f0-9]{64}\.json$/.test(review.frozen_material.ref ?? "") || !SHA256.test(review.frozen_material.sha256 ?? "")) missing.push("independent review frozen material ref is unavailable");
+  return Object.freeze({
+    required: true,
+    status: missing.length === 0 ? "passed" : "missing",
+    evidence_refs: Object.freeze([executionRef, reviewRef, confirmationRef].filter(Boolean)),
+    missing_items: Object.freeze(missing),
+    execution: Object.freeze({ ...execution }),
+    independent_review: Object.freeze({ ...review }),
+    user_confirmation: Object.freeze({ ...confirmation }),
+  });
+}
+
+// Scenario execution is deliberately kept separate from AC coverage. A
+// private executor can prove that a scenario ran, but cannot infer which AC
+// it covers without explicit criterion-specific evidence.
+function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execution) {
+  if (!execution.requires_execution) return acceptanceCoverageFacts(worker, invocation, snapshotTree);
+  const acceptedCriterionIds = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
+  return acceptanceCoverageFacts(worker, {
+    ...invocation,
+    acceptance_coverage: {
+      snapshot_tree: snapshotTree,
+      accepted_criterion_ids: acceptedCriterionIds,
+      items: acceptedCriterionIds.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })),
+    },
+  }, snapshotTree);
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   if (invocation.acceptance_coverage === undefined) {
@@ -1827,7 +1997,7 @@ function declaredUiSourceField(container, kind, field) {
   return Object.freeze({ value, valid: value !== "" && !UNKNOWN_UI_SOURCE_VALUE.test(value) });
 }
 
-function validateUiSourceIdentityBinding(supplied, initInput, readinessInput, reviewInput) {
+function validateUiSourceIdentityBinding(supplied = {}, initInput, readinessInput, reviewInput) {
   const containers = [initInput, readinessInput, supplied.project_standard_sources, supplied];
   const collected = Object.fromEntries(["design", "experience"].map((kind) => [kind, collectUiSourceIdentity(containers, kind)]));
   const current = Object.freeze(Object.fromEntries(["design", "experience"].map((kind) => [kind, collected[kind].current])));
@@ -1880,51 +2050,518 @@ function validateUiSourceIdentityBinding(supplied, initInput, readinessInput, re
  * content validators. The facts stay in the current stage result; no UI
  * page, approval store, or extra workflow state is created.
  */
-function buildSpecUiFacts(worker, invocation) {
-  const supplied = invocation.contract_facts;
+function authenticateCurrentUiSourceIdentities(worker, identities) {
+  const errors = [];
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    const identity = identities?.[kind];
+    if (!identity) continue;
+    if (typeof worker.readWorkspaceSource !== "function") {
+      errors.push(`ui-contract: ${label} cannot be read from the current Workspace`);
+      continue;
+    }
+    try {
+      const source = worker.readWorkspaceSource(identity.path);
+      if (source.sha256 !== identity.content_sha256) {
+        errors.push(`ui-contract: ${label} sha256 does not match the current Workspace source`);
+      }
+    } catch (error) {
+      errors.push(`ui-contract: ${label} is unavailable from the current Workspace: ${error.message}`);
+    }
+  }
+  return Object.freeze({ errors: Object.freeze(errors) });
+}
+
+function authenticatedTaskEvidence(worker, { ref, hash, label, pattern }) {
+  const errors = [];
+  if (typeof ref !== "string" || !pattern.test(ref)) {
+    errors.push(`${label} ref is outside its canonical task namespace`);
+  }
+  if (!SHA256.test(hash ?? "")) errors.push(`${label} sha256 is required`);
+  if (errors.length) return { errors, evidence: null, value: null };
+  try {
+    const evidence = worker.readEvidence(ref);
+    if (evidence.sha256 !== hash) errors.push(`${label} sha256 does not match canonical task evidence`);
+    return { errors, evidence: errors.length ? null : { ref, sha256: hash }, value: evidence.bytes };
+  } catch (error) {
+    errors.push(`${label} evidence is unavailable: ${error.message}`);
+    return { errors, evidence: null, value: null };
+  }
+}
+
+function rendererPublication(value, label, errors) {
+  let publication;
+  try { publication = JSON.parse(value); }
+  catch {
+    errors.push(`${label} must be a canonical evidence publication`);
+    return null;
+  }
+  const allowed = new Set([
+    "schema_version", "source_path", "content_sha256", "content_encoding", "content_base64", "publisher", "recorded_at",
+  ]);
+  if (!publication || typeof publication !== "object" || Array.isArray(publication)
+      || Object.keys(publication).some((key) => !allowed.has(key))
+      || publication.schema_version !== "workflowhub-evidence-publication.v1"
+      || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
+      || publication.source_path.startsWith("/") || publication.source_path.split(/[\\/]/).includes("..")
+      || !SHA256.test(publication.content_sha256 ?? "")
+      || publication.content_encoding !== "base64"
+      || typeof publication.content_base64 !== "string"
+      || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
+      || typeof publication.recorded_at !== "string" || publication.recorded_at.trim() === "") {
+    errors.push(`${label} publication metadata is invalid`);
+    return null;
+  }
+  const bytes = Buffer.from(publication.content_base64, "base64");
+  if (bytes.toString("base64") !== publication.content_base64
+      || hashText(bytes) !== publication.content_sha256) {
+    errors.push(`${label} publication content hash mismatch`);
+    return null;
+  }
+  return { publication, bytes };
+}
+
+function rendererImageKind(sourcePath, bytes) {
+  const path = sourcePath.toLowerCase();
+  if (/\.png$/.test(path)
+      && bytes.length >= 24
+      && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      && bytes.readUInt32BE(0) === 0x89504e47
+      && bytes.readUInt32BE(8) === 0x0d0a1a0a
+      && bytes.readUInt32BE(12) >= 13
+      && bytes.toString("ascii", 12, 16) === "IHDR"
+      && bytes.readUInt32BE(16) > 0 && bytes.readUInt32BE(20) > 0) return "image/png";
+  if (/\.jpe?g$/.test(path) && bytes.length >= 4
+      && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9) return "image/jpeg";
+  if (/\.webp$/.test(path) && bytes.length >= 12
+      && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return null;
+}
+
+function validateRendererArtifact(worker, artifact, { label, kind }) {
+  const errors = [...artifact.errors];
+  if (!artifact.value) return { errors, evidence: artifact.evidence };
+  const parsed = rendererPublication(artifact.value, label, errors);
+  if (!parsed) return { errors, evidence: artifact.evidence };
+  const { publication, bytes } = parsed;
+  const sourcePath = publication.source_path.toLowerCase();
+  const imageType = rendererImageKind(sourcePath, bytes);
+  if (kind === "screenshot" && !imageType) {
+    errors.push(`${label} must contain a real PNG, JPEG, or WebP image matching source_path`);
+  }
+  if (kind === "preview") {
+    const isHtml = /\.(?:html?|svg)$/.test(sourcePath);
+    const text = bytes.toString("utf8");
+    const isMarkup = Buffer.from(text, "utf8").equals(bytes) && /<\/?[a-z][^>]*>/i.test(text);
+    if (!imageType && (!isHtml || !isMarkup)) {
+      errors.push(`${label} must contain browser-displayable HTML/SVG or a real image matching source_path`);
+    }
+  }
+  return { errors, evidence: errors.length ? null : artifact.evidence };
+}
+
+function authenticatedPublishedEvidenceText(value, label, errors) {
+  if (typeof value !== "string") return null;
+  let publication;
+  try { publication = JSON.parse(value); } catch { return value; }
+  if (!publication || typeof publication !== "object" || Array.isArray(publication)
+      || publication.schema_version !== "workflowhub-evidence-publication.v1") return value;
+  const allowed = new Set([
+    "schema_version", "source_path", "content_sha256", "content_encoding", "content_base64", "publisher", "recorded_at",
+  ]);
+  if (Object.keys(publication).some((key) => !allowed.has(key))
+      || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
+      || !/^[a-f0-9]{64}$/.test(publication.content_sha256 ?? "")
+      || publication.content_encoding !== "base64"
+      || typeof publication.content_base64 !== "string"
+      || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
+      || typeof publication.recorded_at !== "string" || publication.recorded_at.trim() === "") {
+    errors.push(`${label} evidence publication is invalid`);
+    return null;
+  }
+  const bytes = Buffer.from(publication.content_base64, "base64");
+  if (bytes.toString("base64") !== publication.content_base64
+      || hashText(bytes) !== publication.content_sha256) {
+    errors.push(`${label} evidence publication content hash mismatch`);
+    return null;
+  }
+  return bytes.toString("utf8");
+}
+
+function currentBuildSpecSnapshotTree(worker) {
+  if (typeof worker.snapshotWorkspace !== "function") return { tree: null, errors: ["frontend-prototype-render requires the authenticated current Workspace snapshot"] };
+  try {
+    const snapshot = worker.snapshotWorkspace();
+    if (!/^[a-f0-9]{40,64}$/.test(snapshot?.tree ?? "")) {
+      return { tree: null, errors: ["frontend-prototype-render current Workspace snapshot is invalid"] };
+    }
+    return { tree: snapshot.tree, errors: [] };
+  } catch (error) {
+    return { tree: null, errors: [`frontend-prototype-render current Workspace snapshot is unavailable: ${error.message}`] };
+  }
+}
+
+function rendererSource(value, label, errors) {
+  if (typeof value !== "string" || value.trim() === "" || /(?:^|[\\/])\.\.(?:[\\/]|$)|^(?:unknown|unavailable|tbd|todo|n\/?a)$/i.test(value.trim())) {
+    errors.push(`frontend-prototype-render ${label} must name a real source`);
+  }
+}
+
+function authenticatedRendererWorkspaceSource(worker, ref, hash, label, errors) {
+  rendererSource(ref, label, errors);
+  if (!SHA256.test(hash ?? "")) {
+    errors.push(`frontend-prototype-render ${label} sha256 is required`);
+    return;
+  }
+  if (typeof ref !== "string" || ref.trim() === "" || typeof worker.readWorkspaceSource !== "function") {
+    if (typeof worker.readWorkspaceSource !== "function") errors.push(`frontend-prototype-render ${label} cannot read the authenticated current Workspace`);
+    return;
+  }
+  try {
+    const source = worker.readWorkspaceSource(ref);
+    if (source.sha256 !== hash) errors.push(`frontend-prototype-render ${label} sha256 does not match the current Workspace source`);
+  } catch (error) {
+    errors.push(`frontend-prototype-render ${label} is unavailable from the current Workspace: ${error.message}`);
+  }
+}
+
+function rendererSkillProof(worker, supplied, snapshotTree) {
+  const errors = [];
+  if (typeof worker.readSkillEvidence !== "function") return { errors: ["frontend-prototype-render authenticated skill proof is unavailable"], evidence: null };
+  let proofs;
+  try { proofs = worker.readSkillEvidence("frontend-prototype-render"); }
+  catch (error) { return { errors: [`frontend-prototype-render authenticated skill proof is unavailable: ${error.message}`], evidence: null }; }
+  const matching = [];
+  for (const proof of proofs) {
+    try {
+      const value = JSON.parse(proof.bytes);
+      if (value?.schema_version !== "workflowhub-stage-outcome-evidence.v1"
+          || value.task_id !== worker.identity.taskId || value.stage !== "build-spec"
+          || value.subject_kind !== "skill" || value.subject_id !== "frontend-prototype-render"
+          || value.outcome_status !== "completed"
+          || value.material_revision !== worker.currentMaterialRevision
+          || value.snapshot_tree !== snapshotTree) continue;
+      if (canonicalJson(value.host_evidence) === canonicalJson(supplied)) matching.push(proof);
+    } catch {
+      // An authenticated proof that is not the renderer's structured result
+      // is not usable as render evidence.
+    }
+  }
+  if (matching.length !== 1) errors.push("frontend-prototype-render authenticated skill proof does not bind the supplied render result");
+  return { errors, evidence: matching.length === 1 ? { ref: matching[0].ref, sha256: matching[0].sha256 } : null };
+}
+
+function frontendPrototypeRenderFacts(worker, supplied, snapshotTree) {
+  recordConsumerInvocation(worker, "stage-handlers#frontendPrototypeRenderFacts");
   if (supplied === undefined) {
-    return { facts: { status: "not_applicable", applicability: "non_ui", reason: "no UI contract facts supplied; current scope is non-UI" }, missing_items: [] };
+    return {
+      facts: { status: "incomplete", reason: "frontend-prototype-render fact is missing" },
+      evidence: [],
+      missing_items: ["frontend-prototype-render fact is missing for the logged UI scope"],
+    };
   }
   if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
-    return { facts: { status: "incomplete", applicability: "unknown", reason: "contract_facts must be an object" }, missing_items: ["build-spec UI contract_facts must be an object"] };
+    return {
+      facts: { status: "incomplete", reason: "frontend-prototype-render fact must be an object" },
+      evidence: [],
+      missing_items: ["frontend-prototype-render fact must be an object"],
+    };
   }
-  const applicabilityInput = supplied.ui_applicability ?? supplied.applicability;
-  if (applicabilityInput === undefined) {
+  const errors = [];
+  if (supplied.snapshot_tree !== snapshotTree) errors.push("frontend-prototype-render must bind the current Workspace snapshot");
+  const components = supplied.component_inputs;
+  if (!Array.isArray(components) || components.length === 0) {
+    errors.push("frontend-prototype-render requires non-empty structured component_inputs");
+  } else {
+    for (const entry of components) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        errors.push("frontend-prototype-render component_inputs entries must be structured");
+        continue;
+      }
+      authenticatedRendererWorkspaceSource(worker, entry.component_ref, entry.component_hash, "component_ref", errors);
+      rendererSource(entry.export_name, "export_name", errors);
+      authenticatedRendererWorkspaceSource(worker, entry.fixture_ref, entry.fixture_hash, "fixture_ref", errors);
+    }
+  }
+  if (typeof supplied.render_command !== "string" || supplied.render_command.trim() === "" || /^(?:true|:|echo)\b/.test(supplied.render_command.trim())) {
+    errors.push("frontend-prototype-render requires a non-trivial runnable local render_command");
+  }
+  if (supplied.exit_code !== 0) {
+    errors.push("frontend-prototype-render render execution must exit 0");
+  }
+  if (typeof supplied.viewport !== "string" || !/^\d{2,5}x\d{2,5}$/i.test(supplied.viewport.trim())) {
+    errors.push("frontend-prototype-render requires a concrete viewport");
+  }
+  if (supplied.material_revision !== worker.currentMaterialRevision) {
+    errors.push("frontend-prototype-render must bind the current material revision");
+  }
+  const output = authenticatedTaskEvidence(worker, {
+    ref: supplied.output_ref,
+    hash: supplied.output_hash,
+    label: "frontend-prototype-render command output",
+    pattern: /^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+  });
+  const preview = authenticatedTaskEvidence(worker, {
+    ref: supplied.preview_ref,
+    hash: supplied.preview_hash,
+    label: "frontend-prototype-render preview",
+    pattern: /^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+  });
+  const screenshot = authenticatedTaskEvidence(worker, {
+    ref: supplied.screenshot_ref,
+    hash: supplied.screenshot_hash,
+    label: "frontend-prototype-render screenshot",
+    pattern: /^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+  });
+  const previewArtifact = validateRendererArtifact(worker, preview, {
+    label: "frontend-prototype-render preview",
+    kind: "preview",
+  });
+  const screenshotArtifact = validateRendererArtifact(worker, screenshot, {
+    label: "frontend-prototype-render screenshot",
+    kind: "screenshot",
+  });
+  const proof = rendererSkillProof(worker, supplied, snapshotTree);
+  errors.push(...output.errors, ...previewArtifact.errors, ...screenshotArtifact.errors, ...proof.errors);
+  if (supplied.preview_ref === supplied.screenshot_ref) errors.push("frontend-prototype-render preview and screenshot must be separate evidence");
+  return {
+    facts: {
+      status: errors.length ? "incomplete" : "recorded",
+      component_inputs: components,
+      render_command: supplied.render_command ?? null,
+      exit_code: supplied.exit_code ?? null,
+      viewport: supplied.viewport ?? null,
+      output_ref: supplied.output_ref ?? null,
+      output_hash: supplied.output_hash ?? null,
+      preview_ref: supplied.preview_ref ?? null,
+      preview_hash: supplied.preview_hash ?? null,
+      screenshot_ref: supplied.screenshot_ref ?? null,
+      screenshot_hash: supplied.screenshot_hash ?? null,
+      material_revision: supplied.material_revision ?? null,
+      snapshot_tree: supplied.snapshot_tree ?? null,
+      errors,
+    },
+    evidence: [proof.evidence, output.evidence, previewArtifact.evidence, screenshotArtifact.evidence].filter(Boolean),
+    missing_items: errors.map((error) => `frontend-prototype-render: ${error}`),
+  };
+}
+
+function authenticatedBuildSpecConfirmation(worker, { ref, hash, subject, label, snapshotTree }) {
+  const confirmation = authenticatedTaskEvidence(worker, {
+    ref,
+    hash,
+    label,
+    pattern: /^quality\/confirmations\/[a-f0-9]{64}\.json$/,
+  });
+  const errors = [...confirmation.errors];
+  if (!confirmation.value) return { errors, evidence: confirmation.evidence };
+  try {
+    const value = JSON.parse(confirmation.value);
+    validateHumanConfirmation(value, {
+      taskId: worker.identity.taskId,
+      stage: "build-spec",
+      subject,
+      requireAccepted: true,
+      requireSubjectRef: true,
+    });
+    if (value.material_revision !== worker.currentMaterialRevision) {
+      errors.push(`${label} is not bound to the current material revision`);
+    }
+    if (value.snapshot_tree !== snapshotTree) errors.push(`${label} is not bound to the current Workspace snapshot`);
+  } catch (error) {
+    errors.push(`${label} is invalid: ${error.message}`);
+  }
+  return { errors, evidence: errors.length ? null : confirmation.evidence };
+}
+
+function authenticatedPlanDesignConfirmation(worker, reviewInput, designArtifactRef, snapshotTree) {
+  return authenticatedBuildSpecConfirmation(worker, {
+    ref: reviewInput?.confirmation_ref ?? reviewInput?.human_confirmation_ref,
+    hash: reviewInput?.confirmation_hash ?? reviewInput?.human_confirmation_hash,
+    subject: designArtifactRef,
+    label: "plan-design-review user confirmation",
+    snapshotTree,
+  });
+}
+
+function externalDesignReturnFacts(worker, reviewInput, snapshotTree, currentDesignRevision) {
+  const external = reviewInput?.external_design;
+  if (!external || typeof external !== "object" || Array.isArray(external)) {
+    return {
+      facts: { status: "incomplete", reason: "external_design_returned requires an external_design handoff" },
+      evidence: [],
+      missing_items: ["external_design_returned requires the authenticated prompt, downgrade confirmation, and returned design handoff"],
+    };
+  }
+  const errors = [];
+  const prompt = authenticatedTaskEvidence(worker, {
+    ref: external.prompt_ref,
+    hash: external.prompt_hash,
+    label: "external-design prompt package",
+    pattern: /^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+  });
+  const returned = authenticatedTaskEvidence(worker, {
+    ref: external.returned_design_ref,
+    hash: external.returned_design_hash,
+    label: "external-design returned design",
+    pattern: /^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+  });
+  errors.push(...prompt.errors, ...returned.errors);
+  const promptFact = validateUiDesignLoopFact({
+    state: "design_prompt_ready",
+    current_material_ref: reviewInput.current_material_ref,
+    prompt: external.prompt,
+    prompt_text: external.prompt_text,
+    actions: ["取消"],
+  });
+  const pendingFact = validateUiDesignLoopFact({
+    state: "external_design_pending",
+    current_material_ref: reviewInput.current_material_ref,
+    prompt_ref: external.prompt_ref,
+    actions: ["未返回", "取消"],
+  });
+  const returnedFact = validateUiDesignLoopFact({
+    state: "external_design_returned",
+    current_material_ref: reviewInput.current_material_ref,
+    design_ref: external.returned_design_ref,
+    expected_design_revision: external.expected_design_revision,
+    returned_design_revision: external.returned_design_revision,
+    actions: ["确认设计", "需要修改"],
+  });
+  errors.push(...validationErrors(promptFact).map((error) => `external-design prompt: ${error}`));
+  errors.push(...validationErrors(pendingFact).map((error) => `external-design pending: ${error}`));
+  errors.push(...validationErrors(returnedFact).map((error) => `external-design returned: ${error}`));
+  const promptText = buildShortUiDesignPrompt(external.prompt);
+  if (typeof external.prompt_text !== "string" || external.prompt_text.trim() === "") {
+    errors.push("external-design prompt_text is required");
+  } else if (promptText.ok && external.prompt_text !== promptText.prompt) {
+    errors.push("external-design prompt_text does not match the executable prompt builder");
+  }
+  const promptEvidenceText = authenticatedPublishedEvidenceText(prompt.value, "external-design prompt package", errors);
+  if (typeof external.prompt_text === "string" && promptEvidenceText !== external.prompt_text) {
+    errors.push("external-design prompt evidence does not exactly match prompt_text");
+  }
+  if (external.expected_design_revision !== currentDesignRevision) {
+    errors.push("external-design returned design must bind the current Design.md revision");
+  }
+  if (reviewInput.design_artifact_ref !== external.returned_design_ref) {
+    errors.push("plan-design-review external design artifact ref does not match the authenticated returned design");
+  }
+  if (reviewInput.design_artifact_hash !== external.returned_design_hash) {
+    errors.push("plan-design-review external design artifact sha256 does not match the authenticated returned design");
+  }
+  const downgrade = authenticatedBuildSpecConfirmation(worker, {
+    ref: external.downgrade_confirmation_ref,
+    hash: external.downgrade_confirmation_hash,
+    subject: external.prompt_ref,
+    label: "external-design user downgrade confirmation",
+    snapshotTree,
+  });
+  const final = authenticatedBuildSpecConfirmation(worker, {
+    ref: reviewInput.confirmation_ref ?? reviewInput.human_confirmation_ref,
+    hash: reviewInput.confirmation_hash ?? reviewInput.human_confirmation_hash,
+    subject: external.returned_design_ref,
+    label: "external-design returned design confirmation",
+    snapshotTree,
+  });
+  errors.push(...downgrade.errors, ...final.errors);
+  return {
+    facts: {
+      status: errors.length ? "incomplete" : "recorded",
+      prompt_ref: external.prompt_ref ?? null,
+      returned_design_ref: external.returned_design_ref ?? null,
+      expected_design_revision: external.expected_design_revision ?? null,
+      returned_design_revision: external.returned_design_revision ?? null,
+      errors,
+    },
+    evidence: [prompt.evidence, returned.evidence, downgrade.evidence, final.evidence].filter(Boolean),
+    missing_items: errors.map((error) => `external-design: ${error}`),
+  };
+}
+
+/**
+ * Consume the three conditional build-spec UI facts through the existing
+ * content validators. The facts stay in the current stage result; no UI
+ * page, approval store, or extra workflow state is created.
+ */
+
+function buildSpecUiFacts(worker, invocation) {
+  const source = readUiApplicabilityFromDecisionLog(worker.readArtifact("decision-log.md"));
+  const supplied = invocation.contract_facts;
+  const contractFacts = supplied && typeof supplied === "object" && !Array.isArray(supplied) ? supplied : {};
+  const sourceErrors = [...source.errors];
+  const sourceMissing = [...source.missing_items];
+  if (supplied !== undefined && contractFacts !== supplied) {
+    sourceErrors.push("contract_facts must be an object");
+    sourceMissing.push("build-spec UI contract_facts must be an object");
+  }
+  if (source.status !== "recorded") {
     return {
       facts: {
-        status: "unknown",
+        status: sourceErrors.length ? "incomplete" : "unknown",
         applicability: "unknown",
-        reason: "ui_applicability is required before accepting UI design facts",
+        ui_applicability: source.value,
+        errors: sourceErrors,
+        reason: "UI applicability must be read from decision-log.md before accepting UI design facts",
       },
-      missing_items: ["UI applicability is unknown: ui_applicability is missing"],
+      missing_items: sourceMissing,
     };
   }
-  const applicability = validateUiApplicability(applicabilityInput);
-  const applicabilityResult = applicabilityInput.result ?? applicabilityInput.conclusion;
-  if (!applicability.ok || applicabilityResult === "unknown") {
-    return {
-      facts: { status: applicability.ok ? "unknown" : "incomplete", applicability: applicabilityResult ?? "unknown", ui_applicability: applicabilityInput, errors: validationErrors(applicability) },
-      missing_items: validationErrors(applicability).map((error) => `UI applicability: ${error}`),
-    };
+  const applicabilityResult = source.applicability;
+  const applicabilityInput = contractFacts.ui_applicability ?? contractFacts.applicability;
+  if (applicabilityInput !== undefined) {
+    const applicability = validateUiApplicability(applicabilityInput);
+    const suppliedResult = applicabilityInput?.result ?? applicabilityInput?.conclusion;
+    sourceErrors.push(...validationErrors(applicability).map((error) => `caller UI applicability: ${error}`));
+    if (applicability.ok && suppliedResult !== applicabilityResult) {
+      sourceErrors.push(`caller UI applicability ${suppliedResult} conflicts with decision-log applicability ${applicabilityResult}`);
+      sourceMissing.push("UI applicability conflict: reconcile caller contract_facts with decision-log.md before continuing");
+    }
   }
   if (applicabilityResult === "non_ui") {
-    return { facts: { status: "not_applicable", applicability: "non_ui", ui_applicability: applicabilityInput, reason: "current spec has no UI scope" }, missing_items: [] };
+    return {
+      facts: {
+        status: sourceErrors.length ? "incomplete" : "not_applicable",
+        applicability: "non_ui",
+        ui_applicability: source.value,
+        errors: sourceErrors,
+        reason: "current decision-log records a non-UI scope",
+      },
+      missing_items: sourceMissing,
+    };
   }
-  const initInput = supplied.ui_project_init;
-  const readinessInput = supplied.design_source_readiness;
-  const reviewInput = supplied.plan_design_review;
+  const initInput = contractFacts.ui_project_init;
+  const readinessInput = contractFacts.design_source_readiness;
+  const reviewInput = contractFacts.plan_design_review;
+  const currentSnapshot = currentBuildSpecSnapshotTree(worker);
   const init = initInput === undefined
     ? { ok: false, errors: ["ui-project-init fact is missing"], value: null }
     : buildUiProjectInitFact(initInput);
   const readiness = readinessInput ? deriveDesignSourceReadiness(readinessInput) : { ok: false, errors: ["design-source-readiness fact is missing"], value: null };
   const designLoop = reviewInput ? validateUiDesignLoopFact(reviewInput) : { ok: false, errors: ["plan-design-review fact is missing"], value: null };
-  const contract = supplied.ui_contract;
-  const contractValidation = contract === undefined ? { ok: true, errors: [] } : validateUiContract(contract);
+  const contract = contractFacts.ui_contract;
+  const contractValidation = contract === undefined ? { ok: false, errors: ["ui contract is missing"] } : validateUiContract(contract);
+  const reviewState = reviewInput?.state ?? reviewInput?.status;
+  const sourceIdentityBinding = validateUiSourceIdentityBinding(contractFacts, initInput, readinessInput, reviewInput, contract);
+  const sourceIdentityAuthentication = authenticateCurrentUiSourceIdentities(worker, sourceIdentityBinding.current);
+  const externalDesign = reviewInput?.external_design && typeof reviewInput.external_design === "object" && !Array.isArray(reviewInput.external_design);
+  const prototype = externalDesign
+    ? { facts: { status: "not_applicable", reason: "authenticated external-design return replaces the local renderer" }, evidence: [], missing_items: [] }
+    : frontendPrototypeRenderFacts(worker, contractFacts.frontend_prototype_render, currentSnapshot.tree);
+  const external = externalDesign
+    ? externalDesignReturnFacts(worker, reviewInput, currentSnapshot.tree, sourceIdentityBinding.current.design?.revision ?? null)
+    : null;
+  const uiEvidence = [...prototype.evidence, ...(external?.evidence ?? [])];
   const errors = [
+    ...sourceErrors,
+    ...currentSnapshot.errors,
     ...validationErrors(init).map((error) => `ui-project-init: ${error}`),
     ...validationErrors(readiness).map((error) => `design-source-readiness: ${error}`),
     ...validationErrors(designLoop).map((error) => `plan-design-review: ${error}`),
     ...validationErrors(contractValidation).map((error) => `ui-contract: ${error}`),
+    ...sourceIdentityAuthentication.errors,
+    ...prototype.missing_items,
+    ...(external?.missing_items ?? []),
   ];
   const nonEmpty = (value) => typeof value === "string" && value.trim() !== "";
   const missingFacts = (value) => (Array.isArray(value?.missing_items) ? value.missing_items : [])
@@ -1938,8 +2575,6 @@ function buildSpecUiFacts(worker, invocation) {
     errors.push(`design-source-readiness: status is ${readiness.status ?? "unknown"}; missing inputs must be resolved`);
     errors.push(...missingFacts(readiness).map((item) => `design-source-readiness: ${item}`));
   }
-  const reviewState = reviewInput?.state ?? reviewInput?.status;
-  const sourceIdentityBinding = validateUiSourceIdentityBinding(supplied, initInput, readinessInput, reviewInput);
   if (reviewState !== "human_approved") {
     errors.push("plan-design-review: current design must be human_approved before build-spec can continue");
   }
@@ -1988,11 +2623,36 @@ function buildSpecUiFacts(worker, invocation) {
     const repliedAtMs = timestamp(replyAt);
     if (!nonEmpty(designArtifactRef)) errors.push("plan-design-review: human_approved requires the current design artifact ref");
     if (!SHA256.test(designArtifactHash ?? "")) errors.push("plan-design-review: human_approved requires the current design artifact sha256");
+    if (!externalDesign && designArtifactRef !== prototype.facts.preview_ref) {
+      errors.push("plan-design-review: design artifact ref does not match the authenticated renderer preview");
+    }
+    if (!externalDesign && designArtifactHash !== prototype.facts.preview_hash) {
+      errors.push("plan-design-review: design artifact sha256 does not match the authenticated renderer preview");
+    }
     if (!nonEmpty(replyRef)) errors.push("plan-design-review: human_approved requires the current user reply ref");
     if (!SHA256.test(replyHash ?? "")) errors.push("plan-design-review: human_approved requires the current user reply sha256");
     if (replySource !== "user") errors.push("plan-design-review: human_approved reply source must be user");
     if (displayedAtMs === null || repliedAtMs === null || repliedAtMs <= displayedAtMs) {
       errors.push("plan-design-review: the current design display event must precede the user reply");
+    }
+    if (!externalDesign) {
+      const authenticatedConfirmation = authenticatedPlanDesignConfirmation(worker, reviewInput, prototype.facts.preview_ref, currentSnapshot.tree);
+      errors.push(...authenticatedConfirmation.errors);
+      if (authenticatedConfirmation.evidence) uiEvidence.push(authenticatedConfirmation.evidence);
+    }
+    // `reply_source: user` is only a label. Bind the reply itself to a
+    // canonical accepted confirmation so a caller cannot pass arbitrary text
+    // and a self-declared hash as proof of the human decision.
+    if (nonEmpty(replyRef) && SHA256.test(replyHash ?? "")) {
+      const authenticatedReply = authenticatedBuildSpecConfirmation(worker, {
+        ref: replyRef,
+        hash: replyHash,
+        subject: designArtifactRef,
+        label: "plan-design-review user reply",
+        snapshotTree: currentSnapshot.tree,
+      });
+      errors.push(...authenticatedReply.errors);
+      if (authenticatedReply.evidence) uiEvidence.push(authenticatedReply.evidence);
     }
     errors.push(...sourceIdentityBinding.errors);
   }
@@ -2003,37 +2663,53 @@ function buildSpecUiFacts(worker, invocation) {
       ui_project_init: initInput ?? null,
       design_source_readiness: readinessInput ?? null,
       plan_design_review: reviewInput ?? null,
+      frontend_prototype_render: prototype.facts,
+      ...(external ? { external_design: external.facts } : {}),
       source_identity_binding: sourceIdentityBinding,
       ui_contract: contract ?? null,
       errors,
       current_material_revision: currentRevision,
+      evidence_refs: uiEvidence,
     },
     missing_items: errors.map((error) => `build-spec UI contract incomplete: ${error}`),
   };
 }
 
 function componentQualityConsumerFacts(worker, invocation) {
-  const contract = invocation.contract_facts;
-  const declaredImpact = contract?.change_impact?.impact ?? contract?.impact?.impact ?? contract?.impact;
-  if (contract === undefined || declaredImpact === "non_ui") {
-    return { facts: { status: "not_applicable", applicability: "non_ui", reason: "current scope has no UI component quality consumer" }, missing_items: [] };
+  const source = readUiApplicabilityFromDecisionLog(worker.readArtifact("decision-log.md"));
+  const contract = invocation.contract_facts && typeof invocation.contract_facts === "object" && !Array.isArray(invocation.contract_facts)
+    ? invocation.contract_facts
+    : {};
+  const declaredImpact = contract.change_impact?.impact ?? contract.impact?.impact ?? contract.impact;
+  if (source.status !== "recorded") {
+    return {
+      facts: { status: "unknown", applicability: "unknown", reason: "UI applicability is not recorded in decision-log.md" },
+      missing_items: [...source.missing_items, "component quality applicability is unknown"],
+    };
   }
-  if (declaredImpact === undefined) {
-    return { facts: { status: "unknown", applicability: "unknown", reason: "UI applicability is unknown" }, missing_items: ["component quality applicability is unknown"] };
+  const applicability = source.applicability;
+  const declaredConflict = declaredImpact !== undefined && declaredImpact !== "unknown"
+    && ((applicability === "ui" && !["ui", "fullstack"].includes(declaredImpact))
+      || (applicability === "non_ui" && !["non_ui", "backend"].includes(declaredImpact)));
+  if (declaredConflict) {
+    return {
+      facts: { status: "incomplete", applicability, reason: `decision-log applicability ${applicability} conflicts with caller impact ${declaredImpact}` },
+      missing_items: [`component quality applicability conflict: decision-log=${applicability}, caller=${declaredImpact}`],
+    };
   }
-  if (declaredImpact === "unknown") {
-    return { facts: { status: "unknown", applicability: "unknown", reason: "UI applicability is unknown" }, missing_items: ["component quality applicability is unknown"] };
+  if (applicability === "non_ui") {
+    return { facts: { status: "not_applicable", applicability: "non_ui", reason: "current decision-log records a non-UI scope" }, missing_items: [] };
   }
   const map = contract.component_quality_map;
   if (map === undefined) {
-    return { facts: { status: "incomplete", applicability: declaredImpact, reason: "component_quality_map is missing" }, missing_items: ["component_quality_map is missing for an applicable UI change"] };
+    return { facts: { status: "incomplete", applicability, reason: "component_quality_map is missing" }, missing_items: ["component_quality_map is missing for an applicable UI change"] };
   }
   recordConsumerInvocation(worker, "stage-content-contracts#validateComponentQualityMap");
   const validation = validateComponentQualityMap(map);
   return {
     facts: {
       status: validation.ok ? "recorded" : "incomplete",
-      applicability: declaredImpact,
+      applicability,
       component_quality_map: map,
       risks: validation.risks ?? [],
       errors: validation.errors ?? [],
@@ -2041,6 +2717,8 @@ function componentQualityConsumerFacts(worker, invocation) {
     missing_items: (validation.errors ?? []).map((error) => `component quality map: ${error}`),
   };
 }
+
+
 
 function declaredFinalTestScope(tasks) {
   const section = String(tasks ?? "").match(/## 4\. Final current-snapshot aggregate strategy([\s\S]*?)(?=\n##\s|$)/i)?.[1] ?? "";
@@ -2190,6 +2868,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
     requirementMessages: worker.authenticatedRequirementContext?.requirementMessages ?? [],
     requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
   });
+  const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
     facts: {
@@ -2202,8 +2881,16 @@ HANDLERS.set("make-decision", async (worker, input) => {
       decision_artifact_ref: decisionArtifactRef,
       decision_artifact_hash: decisionArtifactHash,
       audit_gaps: auditGaps,
+      ui_applicability: uiApplicability,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
       completion_subjects: {
+        ui_applicability: subjectFact(
+          uiApplicability.status === "recorded" ? "passed" : "missing",
+          [specEvidence],
+          uiApplicability.status === "recorded"
+            ? `decision-log UI applicability is ${uiApplicability.applicability}`
+            : uiApplicability.errors[0] ?? "decision-log UI applicability is missing",
+        ),
         scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [specEvidence], "decision-log scope section"),
         non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [specEvidence], "decision-log non-goals section"),
         risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [specEvidence], "decision-log risk handoff section"),
@@ -2229,7 +2916,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
     ],
     // Direction/detail review is advisory. Preserve its evidence and status,
     // but do not make transport failure a make-decision completion blocker.
-    missing_items: [...dispositions.missing_items],
+    missing_items: [...new Set([...dispositions.missing_items, ...uiApplicability.missing_items])],
   }, {
     worker,
     artifacts: [
@@ -2302,6 +2989,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
       ...(ui.facts.ui_project_init !== undefined ? { ui_project_init: ui.facts.ui_project_init } : {}),
       ...(ui.facts.design_source_readiness !== undefined ? { design_source_readiness: ui.facts.design_source_readiness } : {}),
       ...(ui.facts.plan_design_review !== undefined ? { plan_design_review: ui.facts.plan_design_review } : {}),
+      ...(ui.facts.frontend_prototype_render !== undefined ? { frontend_prototype_render: ui.facts.frontend_prototype_render } : {}),
       review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}),
     },
     evidence_refs: [
@@ -2470,6 +3158,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
     const current = currentMaterialContent(worker, "tasks.md");
     const snapshot = captureWorkerSnapshot(worker);
+    const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
     const acceptanceCoverage = input.acceptance_coverage === undefined
       ? (() => {
         const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
@@ -2484,16 +3173,27 @@ HANDLERS.set("build-code", async (worker, input) => {
       facts: {
         changed: [],
         contract_facts: contractFacts,
+        acceptance_execution: acceptanceExecution,
         acceptance_coverage: acceptanceCoverage,
         completion_subjects: {
           acceptance_criteria: subjectFact("missing", [], "implementation and test quality facts are not yet recorded"),
+          ...(acceptanceExecution.requires_execution ? {
+            acceptance_execution: subjectFact(
+              acceptanceExecution.status === "executed" ? "passed" : "missing",
+              acceptanceExecution.evidence_refs,
+              acceptanceExecution.status === "executed"
+                ? "all declared acceptance scenarios executed with canonical evidence"
+                : `declared acceptance execution is ${acceptanceExecution.status}`,
+              { execution_items: acceptanceExecution.items },
+            ),
+          } : {}),
         },
         ...(uiQa ? { ui_qa: uiQa.facts } : {}),
         finding_dispositions: { status: "not_applicable", items: [] },
         audit_gaps: ["current implementation/test facts are unavailable; current four materials remain the work authority"],
       },
-      evidence_refs: uiQa?.evidence ? [uiQa.evidence] : [],
-      missing_items: ["current implementation/test facts are unavailable; record them when available", ...(input.contract_facts === undefined ? [] : contractFacts.missing_items), ...(uiQa?.missing_items ?? [])],
+      evidence_refs: [...(uiQa?.evidence ? [uiQa.evidence] : []), ...acceptanceExecution.evidence_refs],
+      missing_items: ["current implementation/test facts are unavailable; record them when available", ...acceptanceExecution.missing_items, ...(input.contract_facts === undefined ? [] : contractFacts.missing_items), ...(uiQa?.missing_items ?? [])],
     }, {
       worker,
       artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
@@ -2532,8 +3232,12 @@ HANDLERS.set("build-code", async (worker, input) => {
   // ordinary completion gap. Verify-code reports its unavailable current
   // review as a concrete finding-disposition gap instead.
   if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
+  const acceptanceExecution = await acceptanceExecutionFacts(worker, tests.facts.snapshot_tree);
+  if (acceptanceExecution.status !== "executed" && acceptanceExecution.status !== "not_applicable") {
+    missingItems.push(...acceptanceExecution.missing_items);
+  }
   let coverage;
-  try { coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree); }
+  try { coverage = acceptanceCoverageForExecution(worker, input, tests.facts.snapshot_tree, acceptanceExecution); }
   catch (error) {
     if (error.message !== "build-code acceptance_coverage must be an object") throw error;
     missingItems.push(`acceptance coverage unavailable: ${error.message}`);
@@ -2566,6 +3270,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     facts: {
       changed: actualChangedFiles,
       contract_facts: contractFacts,
+      acceptance_execution: acceptanceExecution,
       tests: tests.facts,
       review: review.facts,
       finding_dispositions: dispositions.facts,
@@ -2628,6 +3333,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
     : actionableFindings.length > 0
       ? ["code review has " + actionableFindings.length + " actionable serious finding(s); repair them in verify-code"]
       : [];
+  const e2eAcceptance = e2eAcceptanceFacts(worker);
 
   const result = addCompletion("verify-code", {
     facts: {
@@ -2641,16 +3347,24 @@ HANDLERS.set("verify-code", async (worker, input) => {
       },
       review_diagnostics: reviewDiagnostics,
       component_quality: componentQuality.facts,
+      ...(e2eAcceptance.required ? { e2e_acceptance: e2eAcceptance } : {}),
       completion_subjects: {
         code_review: subjectFact(
           review.facts.status === "recorded" && actionableFindings.length === 0 ? "passed" : "missing",
           review.evidence ? [review.evidence] : [],
           "current implementation code review",
         ),
+        ...(e2eAcceptance.required ? {
+          e2e_acceptance: subjectFact(
+            e2eAcceptance.status,
+            e2eAcceptance.status === "passed" ? e2eAcceptance.evidence_refs : [],
+            e2eAcceptance.status === "passed" ? "execution, independent review, and user confirmation are all current" : "E2E acceptance evidence is incomplete",
+          ),
+        } : {}),
       },
     },
     evidence_refs: review.evidence ? [review.evidence] : [],
-    missing_items: [...reviewMissing, ...componentQuality.missing_items],
+    missing_items: [...reviewMissing, ...componentQuality.missing_items, ...e2eAcceptance.missing_items],
   }, {
     worker,
     artifacts: [],

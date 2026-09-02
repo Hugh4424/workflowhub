@@ -1,17 +1,29 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import yaml from "js-yaml";
+import { checkSkillClosure, parseStrictReviewDate } from "../runtime/evidence/check-skill-closure.mjs";
+import { validateSkillBundle } from "../runtime/adapters/local-skill-resolver.mjs";
 
-const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const catalog = yaml.load(fs.readFileSync(path.join(root, "skills/catalog.yaml"), "utf8"));
+const root = fileURLToPath(new URL("..", import.meta.url));
+const yamlOptions = { schema: yaml.CORE_SCHEMA };
+const catalog = yaml.load(fs.readFileSync(path.join(root, "skills/catalog.yaml"), "utf8"), yamlOptions);
 
 describe("strict skill provenance", () => {
   it("binds every runtime skill review to its current local bundle", () => {
     for (const entry of catalog.skills) {
       expect(entry.local_version, entry.name).toMatch(/^\d+\.\d+\.\d+$/);
       expect(entry.local_bundle_hash, entry.name).toMatch(/^[a-f0-9]{64}$/);
-      expect(entry.last_reviewed_at, entry.name).toBe(catalog.last_reviewed_at);
+      const entryReviewedAt = parseStrictReviewDate(entry.last_reviewed_at);
+      const catalogReviewedAt = parseStrictReviewDate(catalog.last_reviewed_at);
+      expect(entryReviewedAt, `${entry.name} last_reviewed_at`).not.toBeNull();
+      expect(catalogReviewedAt, "catalog last_reviewed_at").not.toBeNull();
+      expect(entryReviewedAt, `${entry.name} last_reviewed_at`).toBeGreaterThanOrEqual(catalogReviewedAt);
+      if (!["native", "adopted", "adapted"].includes(entry.status) || !entry.path) continue;
+      const checked = validateSkillBundle(root, `skills/${entry.name}/skill-bundle.json`, entry.path);
+      expect(checked.bundleHash, `${entry.name} local_bundle_hash`).toBe(entry.local_bundle_hash);
     }
     const browser = catalog.skills.find(entry => entry.name === "isolated-browser-qa");
     expect(browser.upstream[0]).toMatchObject({
@@ -21,6 +33,38 @@ describe("strict skill provenance", () => {
     });
     expect(browser.upstream[0].authorization_basis).toContain("user explicitly supplied");
   });
+  it("preserves four-digit years below 0100 when parsing review dates", () => {
+    expect(parseStrictReviewDate("0000-01-01")).toBe(-62167219200000);
+    expect(parseStrictReviewDate("0099-01-01")).toBe(-59042995200000);
+    expect(parseStrictReviewDate("0099-01-01")).toBeLessThan(parseStrictReviewDate("0100-01-01"));
+  });
+  it("fails closure for invalid baselines, stale entries, and invalid entries", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-skill-closure-"));
+    try {
+      for (const directory of ["config", "runtime", "workflows", "skills"]) {
+        fs.cpSync(path.join(root, directory), path.join(fixture, directory), { recursive: true });
+      }
+      fs.cpSync(path.join(root, "THIRD_PARTY_NOTICES.md"), path.join(fixture, "THIRD_PARTY_NOTICES.md"));
+      const catalogPath = path.join(fixture, "skills/catalog.yaml");
+      const rewriteCatalog = (mutate) => {
+        const next = yaml.load(fs.readFileSync(catalogPath, "utf8"), yamlOptions);
+        mutate(next);
+        fs.writeFileSync(catalogPath, yaml.dump(next), "utf8");
+        return checkSkillClosure(fixture).errors;
+      };
+      expect(rewriteCatalog((next) => { next.last_reviewed_at = "not-a-date"; }))
+        .toContain("catalog: last_reviewed_at must be a valid YYYY-MM-DD date baseline");
+      expect(rewriteCatalog((next) => {
+        next.last_reviewed_at = catalog.last_reviewed_at;
+        next.skills.find((entry) => entry.path && ["native", "adopted", "adapted"].includes(entry.status)).last_reviewed_at = "2026-07-13";
+      }).some((error) => error.includes("provenance review date must be on or after the catalog baseline"))).toBe(true);
+      expect(rewriteCatalog((next) => {
+        next.skills.find((entry) => entry.path && ["native", "adopted", "adapted"].includes(entry.status)).last_reviewed_at = "2026-02-30";
+      }).some((error) => error.includes("provenance review date must be on or after the catalog baseline"))).toBe(true);
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
   it("pins every public upstream source to a real commit URL and review", () => {
     for (const entry of [...catalog.skills, ...catalog.capability_decisions]) {
       for (const source of entry.upstream || []) {
@@ -29,9 +73,10 @@ describe("strict skill provenance", () => {
         expect(source.commit_url, `${entry.name} commit_url`).toContain(`/commit/${source.commit}`);
         expect(source.skill_url, `${entry.name} skill_url`).toContain(source.commit);
         expect(source.license, `${entry.name} license`).toBeTruthy();
-        const sourceReviewedAt = Date.parse(source.reviewed_at);
-        const catalogReviewedAt = Date.parse(catalog.last_reviewed_at);
-        expect(sourceReviewedAt, `${entry.name} reviewed_at`).not.toBeNaN();
+        const sourceReviewedAt = parseStrictReviewDate(source.reviewed_at);
+        const catalogReviewedAt = parseStrictReviewDate(catalog.last_reviewed_at);
+        expect(sourceReviewedAt, `${entry.name} reviewed_at`).not.toBeNull();
+        expect(catalogReviewedAt, "catalog last_reviewed_at").not.toBeNull();
         expect(sourceReviewedAt, `${entry.name} reviewed_at`).toBeGreaterThanOrEqual(catalogReviewedAt);
         expect(source.review_outcome, `${entry.name} review_outcome`).toMatch(/accepted|rejected|watch/);
       }

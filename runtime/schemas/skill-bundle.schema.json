@@ -6,6 +6,8 @@
   "properties": {
     "schema_version": { "const": 1 },
     "skill": { "type": "string", "minLength": 1 },
+    "contract": { "type": "string", "minLength": 1 },
+    "contract_owner": { "type": "string", "minLength": 1 },
     "runner_contract_major": { "type": "integer", "minimum": 1 },
     "runner_contract_min_minor": { "type": "integer", "minimum": 0 },
     "runtime_dependencies": {

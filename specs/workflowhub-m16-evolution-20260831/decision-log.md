@@ -67,12 +67,13 @@ stage: make-decision
 ## 决定
 
 ### D-001（使用方式：按需简报+聚合随页面）
+
 - question/final_option: M16 怎么用？→ 平时自动聚合+定期摘要，准备优化某 stage/skill 时按需生成完整迭代简报
 - recommendation/plain_language: 推荐；默认候选中已含，无需单独维护"很全的视图"
 - decision: 候选池聚合随 build-reflection-page 同一次运行产出（零 AI、单一消费者）；迭代简报由 CLI 按需生成
 - source_type/reference/exact_excerpt: Talk round1 q1-flow「两者都要」；T-001
 - approval_binding: accepted（2026-08-31 用户最终确认 approve1；host-visible 绑定=GUI ask_user_question，无正式 host attestation，如实保留）（待最终确认）
-- facts_and_constraints: F-101（页面投影器参数/overall_pending 聚合逻辑可复用）；页面不能执行逻辑（静态）
+- facts_and_constraints: F-101（页面投影器参数/overall_pending 聚合逻辑可复用）；页面不执行数据读取、重试或后台任务（静态快照，浏览器端脚本仅做本地渲染、筛选和展开）
 - Logic: 用户要"平时有印象+动手时才深挖" → 无 cron 不新增控制面 → 聚合挂页面重建点、简报 CLI 按需 → 成本最低且不造新控制面
 - choice_reason/impact: 覆盖两种使用场景；影响页面投影器与新增 CLI
 - consequences_and_risks: 聚合频率取决于用户何时刷页面；简报生成是手动动作
@@ -81,6 +82,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-002（页面范围：只读趋势区）
+
 - question/final_option: 动不加页面？→ 在现有 monitor 页面加只读趋势区（方案 A 扩展投影器）
 - recommendation/plain_language: 推荐；文件面 3 个，复用全套校验
 - decision: 扩展 tools/cli/build-reflection-page.mjs + 模板 + 契约测试；schema_version 保持 v1 向后兼容加键；不改任务视图
@@ -95,6 +97,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-003（判断入池+D31 白名单修订+两档分层）
+
 - question/final_option: 候选池是否允许带标签判断？→ 允许，显式修订 D31 白名单，两档分层
 - recommendation/plain_language: 推荐；这是"智能优化"的数据基础
 - decision: 候选条目允许引用判断层（record_kind=judgment/confidence/evidence_refs 原样保留）；每次来源事实用 `observation_id.v1(task_id,confirmation_ref,occurred_at)` 保持任务/时间身份，跨任务候选聚合改用 `candidate_group_id.v1(target-ref + normalized intervention kind/payload)` 且明确排除 task/time，frequency 只按 distinct task_id；target-ref 支持 stage/step/skill/surface，其中 step 只由 versioned stage manifest 的唯一 step_slug→stage 映射解析，缺失/歧义 fail-loud 或仅 reference_only；白名单新增生命周期字段 candidate_id/schema_version/observed_at/status/supersedes 及去重陈旧规则；两档＝机器信号强（零消费边/同 subject 跨至少两个任务介入/机器门槛）→建议行动档，仅判断→仅供参考档；自由文本方案字段仍禁止
@@ -109,6 +112,7 @@ stage: make-decision
 - Supersedes: 修订 roadmap M16 候选池 schema 白名单（D31 原语义）
 
 ### D-004（消融实验：协议+台账，裁决延期）
+
 - question/final_option: 消融做到什么程度？→ 本期协议+台账，执行与 remove 裁决延期
 - recommendation/plain_language: 推荐；当前无候选可实验，不做空转
 - decision: 交付消融协议 schema；attempted-edits.jsonl 带 R-005 全字段（缺任一字段即失败），只绑定 current approved decision，不消费 D24 authority；negative-results.jsonl 建库（只收 harness/process/skill-edit 失败尝试与回归，与 D24 eval 分域），只有 negative-result 写入才必须绑定 D24 authority。本期 D24 分域权威由 T002 在组合 schema 内产出，固定为 `runtime/schemas/workflow-evolution.v1.json#/$defs/d24_eval_boundary`：owner=`runtime/evidence/workflow-evolution.mjs` deep module，ref=该 anchor；T002 冻结 canonical subschema UTF-8 bytes、sha256 与 schema identity，T004/T010 必须用 fixed vector 逐字节复核，任何漂移零写/验收失败；它不是第五个持久对象。remove_candidate 标【待裁决】；本期不产生任何删除动作
@@ -123,6 +127,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-005（完成判据：测试+审查即结束；业务目标标未验证）
+
 - question/final_option: 完成判据与业务目标关系？→ 收窄为基础设施+标未验证
 - recommendation/plain_language: 推荐（用户 T-012 原判）
 - decision: 完成=确定性测试绿+独立审查完成；"step/skill 必要性""人工介入减少"标【未验证，待真实任务数据】；真实数据验证延期（后续有问题→用户重开任务）；独立审查 unavailable 时完成声明=incomplete 等用户确认，不伪造
@@ -137,6 +142,7 @@ stage: make-decision
 - Supersedes: 覆盖 T-005 中"2 个真实任务抽查作为完成条件"
 
 ### D-006（前期质量税：口径+诚实视图）
+
 - question/final_option: 质量税形态？→ 口径定义+聚合视图，样本不足诚实标注
 - recommendation/plain_language: 推荐；有数据出真值、无数据标 insufficient
 - decision: 质量税＝口径定义（interventions.attribution+step_slug 对上游 stage 归因规则）+页面趋势区聚合视图；数据不足显示 insufficient_samples；不作因果结论
@@ -151,6 +157,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-007（持久化位置与治理登记）
+
 - question/final_option: 新文件放哪？→ 全局存储根，独立候选池文件
 - recommendation/plain_language: 推荐；与 monitor 同层、跨任务聚合直
 - decision: evolution-candidates.jsonl / negative-results.jsonl / attempted-edits.jsonl 落 `<storageRoot>/Projects/<proj>/`；按对象真实 consumer 不变。owner=本任务机制；删除条件=M16 退役时一并删除或只读归档。move-map 只登记新增生产文件/命令/schema、四个 runtime object metadata 和修改过的生产 producer；任何 test-only wrapper/checker/browser/review/aggregate 文件都不进入 move-map，而由各自 fixture manifest 或 canonical gate evidence 跟踪。T001 创建并拥有 P1 RED baseline/checker/wrapper；T009 只拥有最终治理/browser/review/aggregate test-only checks，并在 allowed temp storage root 用真实 producer 创建四对象、绑定 hash/producer identity、验证 runtime metadata 后清理，再完成生产面 move-map 双向 closure。T007 零 repo 写，只消费 frozen T009 move-map hash与这些脚本并成为 browser evidence 唯一 producer；脚本缺陷返回 T009 修复并重做 closure，旧 evidence 自动 stale。T010 对 repo/product/material/move-map/browser evidence 只读；task-quality 只有两类受控 writer：现有 `review --action=record` 写 immutable review receipt，final aggregate runner 原子写唯一 `quality/tests/m16-final-aggregate.json`，其中同时绑定 focused/repository 结果与 review receipt refs/hashes，不另写 focused/repository 持久 JSON。正式 review record input 只能由 T010 orchestration 写入 task-owned 0700 temp root 的 canonical JSON 文件，绑定 attempt/owner/sha256，并在所有出口只清理同 owner/hash temp；全局存储根决策不变
@@ -165,6 +172,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-008（非目标与延期清单）
+
 - question/final_option: 非目标/延期确认？→ 六条全部接受；消融执行/市场对照调研/真实数据验证延期
 - recommendation/plain_language: 推荐；边界写死防隐性扩大
 - decision: 非目标＝不重建遥测/不自动改/不改五阶段 workflows 或其入口技能/不重复 eval 库/不回填/不破坏任务视图；D-008 已授权修改的 `stage-reflection` diagnostic skill、bundle 与 catalog 是当前生产 consumer contract，不是五阶段 workflow/入口技能目录变更，其 owner=stage-reflection producer，保持现有 invocation 兼容，并由 skill contract+stage-reflection E2E 验收；延期＝消融执行与 remove 裁决、市场对照实际调研（只留槽位）、真实任务数据验证；外部 skill 更新检查本期做
@@ -179,6 +187,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-009（迭代简报与负例/台账写入通道）
+
 - question/final_option: 简报与写入通道形态？→ CLI 按需生成；负例/台账按需写入（人/agent 拍板时）
 - recommendation/plain_language: 推荐；零 AI 装配、无历史可挖
 - decision: iteration-brief.md 由模板渲染，区块=候选池（两档）+负例库+改动台账+外部 skill 更新检查+【保留行为清单（preserve behaviors）】+【未决 decision-log 项（open decisions）】+市场对照槽位；CLI generate-iteration-brief 按需触发（输入/筛选/输出路径/失败态由 spec 定义）；negative-results/attempted-edits 不做历史自动挖掘，由 agent 在用户拍板改动时写入（含 decision_id，附校验器）
@@ -193,6 +202,7 @@ stage: make-decision
 - Supersedes: none
 
 ### D-010（候选池诚实状态与证据门槛）
+
 - question/final_option: 上游证据不足时如何呈现？→ 强制 unavailable/deferred/待验证状态
 - recommendation/plain_language: 推荐；防把待验证证据当可决策结论（审查 FND-010）
 - decision: 候选池/趋势区/简报强制保留状态标注（empty/stale/insufficient_samples/待验证）；上游 stage-reflection 真实验证未完成时，候选只出"待验证候选"；不输出完成性结论

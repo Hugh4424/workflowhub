@@ -416,7 +416,7 @@ describe("UI delivery contract dogfooding (T019 local S2-S4)", () => {
   });
 
   it("S3 rejects a non-UI acceptance task when either explicit acceptance field is removed", () => {
-    const materialRoot = resolve(process.cwd(), "specs/ui-e2e-delivery-contract-20260830");
+    const materialRoot = resolve(process.cwd(), "specs/archive/ui-e2e-delivery-contract-20260830");
     const decisionLog = readFileSync(join(materialRoot, "decision-log.md"), "utf8");
     const spec = readFileSync(join(materialRoot, "spec.md"), "utf8");
     const plan = readFileSync(join(materialRoot, "plan.md"), "utf8");

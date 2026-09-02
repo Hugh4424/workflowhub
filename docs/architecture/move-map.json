@@ -12,7 +12,7 @@
       "sha256_before": "090434b4c823cc685dc2c5038a02b50c6c627b33c75056a0405234df97cae210",
       "bytes": 4393,
       "sha256_after": "f2a5a520e0108091bcb9707380f94d24d83b34a6e70227d59780039472f5c4f2",
-      "content_change": "import/path-only"
+      "content_change": "import/path plus optional skill bundle contract metadata fields"
     },
     {
       "source": "core/boundary-confirm.mjs",
@@ -505,8 +505,8 @@
       "destination": "runtime/schemas/skill-bundle.schema.json",
       "status": "move",
       "sha256_before": "babe04fde41840c70477752eab33f38fbf566b88e4a3e47c5fb3e496776bdd37",
-      "bytes": 2853,
-      "sha256_after": "3b8df23fb9894dda64224b28a0a8196a40e8867b87dd40d0a34fdc27a8bdd381",
+      "bytes": 2975,
+      "sha256_after": "a87c78fec9aa937b5a924bff1ff1d77347dbe6971aea0af286d2feaca23cd2a4",
       "content_change": "import/path-only"
     },
     {
@@ -2287,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 30681,
-      "sha256_after": "1c722333c932c6652139e8b305ab15b4b450afd93f2eaebe6a9786905c723637"
+      "bytes": 34580,
+      "sha256_after": "c3c30e25f41ba681e8b9cd9ddac859c2c2089d304602319e73af5890b77cd856"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2299,8 +2299,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 28160,
-      "sha256_after": "69bc061e78ee31b46e78061d098df712d3c7d9838093b273967f8dd312f869f3"
+      "bytes": 40404,
+      "sha256_after": "7727b5ad2e8c40f031a213a18a456d12b7ea19c892b50170196124a1ac1905a0"
     },
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
@@ -2310,8 +2310,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 98418,
-      "sha256_after": "01dafbd7801a8c50122761914ecc8c43df3694a2b38ed6a26b736bb0e1851416"
+      "bytes": 108472,
+      "sha256_after": "5317601c92b8958032edbd341a033d82c392e0551fd8668f480c812e79df28c4"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2321,8 +2321,8 @@
       "consumer": "workflow-evolution deep module and governance checks",
       "delete_condition": "remove with M16 data-plane",
       "content_change": "combined versioned M16 definitions",
-      "bytes": 15963,
-      "sha256_after": "474b5caad6c033f6c50fcc7c9b032a18a8ddfe0b486a151085e58d9b12a30bf0"
+      "bytes": 17005,
+      "sha256_after": "7d1f20eb18d6ae9885aa2513a3fe4e054e8f68e42e05b0738f5582e9da1ec50d"
     },
     {
       "source": "tools/cli/generate-iteration-brief.mjs",
@@ -2343,8 +2343,8 @@
       "consumer": "maintainer terminal outcome recording",
       "delete_condition": "remove when M16 ledgers are retired",
       "content_change": "private candidate and ledger adapter",
-      "bytes": 28734,
-      "sha256_after": "103ba1c23bdb69acdb0c60b076b6717e5ad06ab7250706a15d857ba9c9e3c43e"
+      "bytes": 29465,
+      "sha256_after": "df635b5b3b92b64977d30d9b2dcb2a7260460e5c31cb1239700aae9424d61ad7"
     },
     {
       "source": "tools/cli/check-skill-updates.mjs",

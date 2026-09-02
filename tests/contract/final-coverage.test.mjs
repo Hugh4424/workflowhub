@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { extractAcceptanceCriteria, validateCoverage, validateFinalGates } from "../../tools/architecture/verify-final-coverage.mjs";
 import { governanceTreeHash } from "../../tools/architecture/inventory.mjs";
@@ -9,6 +9,7 @@ import { governanceTreeHash } from "../../tools/architecture/inventory.mjs";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const generatedExecutionRefs = [];
 let generatedExecutionId = 0;
+const PHASE9_ROOT = path.join(ROOT, "evidence", "phase-9");
 const DEFAULT_EXECUTION_ORACLES = [
   "tests/contract/review-layering.test.mjs",
   "tests/contract/repository-governance.test.mjs",
@@ -17,6 +18,9 @@ const DEFAULT_EXECUTION_ORACLES = [
 afterEach(() => {
   for (const ref of generatedExecutionRefs.splice(0)) fs.rmSync(path.join(ROOT, ref), { force: true });
 });
+
+beforeAll(() => { fs.mkdirSync(PHASE9_ROOT, { recursive: true }); });
+afterAll(() => { fs.rmSync(path.join(ROOT, "evidence"), { recursive: true, force: true }); });
 
 function writeCurrentExecution(oracles) {
   const ref = `evidence/phase-9/.final-coverage-test-${++generatedExecutionId}.json`;
@@ -32,6 +36,13 @@ function writeCurrentExecution(oracles) {
     })),
   };
   fs.writeFileSync(path.join(ROOT, ref), JSON.stringify(result));
+  generatedExecutionRefs.push(ref);
+  return ref;
+}
+
+function writePhase9File(name, contents) {
+  const ref = `evidence/phase-9/${name}`;
+  fs.writeFileSync(path.join(ROOT, ref), contents);
   generatedExecutionRefs.push(ref);
   return ref;
 }
@@ -109,7 +120,7 @@ describe("final direct coverage contract", () => {
   });
 
   test("accepts hash-checked archived final gate evidence", () => {
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
     const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
     const gates = {
       schema_version: "workflowhub-final-gates.v2",
@@ -124,7 +135,7 @@ describe("final direct coverage contract", () => {
   });
 
   test("keeps an honestly incomplete final gate record usable for progress reporting but not formal publication", () => {
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
     const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
     const gates = {
       schema_version: "workflowhub-final-gates.v2",
@@ -140,7 +151,7 @@ describe("final direct coverage contract", () => {
   });
 
   test("keeps direct AC coverage out of gate inputs so terminal validation can bind both independently", () => {
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
     const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
     const gates = {
       schema_version: "workflowhub-final-gates.v2",
@@ -158,7 +169,7 @@ describe("final direct coverage contract", () => {
   });
 
   test("rejects a final gate whose hash-valid evidence has the wrong command kind", () => {
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
     const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
     const gates = {
       schema_version: "workflowhub-final-gates.v2",
@@ -174,7 +185,7 @@ describe("final direct coverage contract", () => {
   });
 
   test("rejects a passed gate record whose archived command failed", () => {
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
     const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
     const gates = {
       schema_version: "workflowhub-final-gates.v2",
@@ -205,7 +216,7 @@ describe("final direct coverage contract", () => {
 
   test("rejects non-JSON execution evidence instead of skipping oracle verification", () => {
     const coverage = boundCoverage();
-    const ref = "evidence/phase-9/npm-test-final.out";
+    const ref = writePhase9File("npm-test-final.out", "not-json\n");
     coverage.items[0].execution = {
       ref,
       sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex"),
@@ -261,9 +272,12 @@ describe("final direct coverage contract", () => {
   });
 
   test("rejects stale final coverage instead of accepting an old snapshot", () => {
-    const specText = fs.readFileSync(path.join(ROOT, "specs/workflowhub-complexity-governance-v2/spec.md"), "utf8");
-    const coverage = JSON.parse(fs.readFileSync(path.join(ROOT, "evidence/phase-9/final-coverage.json"), "utf8"));
-    coverage.snapshot_tree = "0".repeat(64);
+    const specText = fs.readFileSync(path.join(ROOT, "specs/archive/workflowhub-complexity-governance-v2/spec.md"), "utf8");
+    const coverage = {
+      schema_version: "workflowhub-final-coverage.v2",
+      snapshot_tree: "0".repeat(64),
+      items: [],
+    };
     expect(validateCoverage({
       specText,
       coverage,

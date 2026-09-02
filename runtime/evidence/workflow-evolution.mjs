@@ -15,6 +15,8 @@ const LOCK_LEASE_MS = 15_000;
 const SCHEMA_VERSION = "workflow-evolution.v1";
 const D24_SCHEMA_VERSION = "d24-eval-boundary.v1";
 const CONFIRMATION_REF = /^quality\/confirmations\/([a-f0-9]{64})\.json$/;
+const PROJECT_LOCK_KEYS = ["schema_version", "project", "attempt_id", "owner_token", "fencing_token", "pid", "host_id", "boot_id", "session_epoch", "acquired_monotonic_ms", "lease_deadline_monotonic_ms"];
+const MANUAL_RECOVERY_KEYS = ["schema_version", "current_lock_sha256", "old_boot_id", "new_boot_id", "operator_identity", "issued_at", "nonce", "confirmation_ref", "confirmation_sha256"];
 const EVOLUTION_SCHEMA = JSON.parse(readFileSync(new URL("../schemas/workflow-evolution.v1.json", import.meta.url), "utf8"));
 const AJV = new Ajv2020({ allErrors: true, strict: false });
 const DEFINITION_VALIDATORS = new Map();
@@ -110,14 +112,15 @@ function normalTarget(input) {
   const authorities = input.authorities ?? {};
   const versions = authorities.versions ?? {};
   const manifests = authorities.stages ?? authorities.stage_manifests ?? [];
-  let targetVersion = input.targetVersion ?? input.target_version;
+  let targetVersion = input.targetVersion !== undefined ? input.targetVersion : input.target_version;
+  const suppliedTargetVersion = targetVersion;
   let authority = input.authority;
   let authoritySha256 = input.authoritySha256 ?? input.authority_sha256;
   if (targetKind === "stage") {
     const stage = Array.isArray(manifests) ? manifests.find((entry) => entry === targetId || entry?.slug === targetId || entry?.stage === targetId) : null;
     if (!stage && (!Array.isArray(manifests) || manifests.length === 0) && !STAGE_INDEX.has(targetId)) throw fail("invalid_target", `unknown stage target: ${targetId}`);
     if (!stage && Array.isArray(manifests) && manifests.length > 0) throw fail("invalid_target", `unknown stage target: ${targetId}`);
-    targetVersion ??= stage?.version ?? versions[targetId] ?? "1";
+    targetVersion = null;
     authority ??= stage?.authority ?? stage?.ref ?? authorities.stage_manifest_ref ?? authorities.stageManifestRef;
     authoritySha256 ??= stage?.authority_sha256 ?? stage?.sha256;
   } else if (targetKind === "step") {
@@ -126,7 +129,7 @@ function normalTarget(input) {
     const matches = entries.filter((entry) => (entry?.slug ?? entry?.step_slug ?? entry?.id) === targetId);
     if (matches.length !== 1) throw fail(matches.length === 0 ? "invalid_target" : "stale_source", `step target must map to exactly one manifest: ${targetId}`);
     const entry = matches[0];
-    targetVersion ??= entry.version ?? entry.target_version ?? versions[targetId];
+    if (targetVersion === undefined) targetVersion = entry.version ?? entry.target_version ?? versions[targetId];
     authority ??= entry.authority ?? entry.manifest_ref ?? authorities.step_manifest_ref;
     authoritySha256 ??= entry.authority_sha256 ?? entry.sha256;
   } else if (targetKind === "skill") {
@@ -134,7 +137,7 @@ function normalTarget(input) {
     const entries = Array.isArray(skills) ? skills : Object.entries(skills).map(([id, value]) => ({ id, ...value }));
     const entry = entries.find((item) => (item?.id ?? item?.skill_id ?? item?.name) === targetId);
     if (!entry) throw fail("invalid_target", `unknown skill target: ${targetId}`);
-    targetVersion ??= entry.version ?? versions[targetId];
+    if (targetVersion === undefined) targetVersion = entry.version ?? versions[targetId];
     authority ??= entry.authority ?? entry.ref ?? authorities.catalog_ref;
     authoritySha256 ??= entry.authority_sha256 ?? entry.sha256;
   } else {
@@ -142,32 +145,38 @@ function normalTarget(input) {
     const entries = Array.isArray(surfaces) ? surfaces : Object.entries(surfaces).map(([id, value]) => ({ id, ...value }));
     const entry = entries.find((item) => (item?.id ?? item?.surface_id ?? item?.path) === targetId);
     if (!entry) throw fail("invalid_target", `unknown surface target: ${targetId}`);
-    targetVersion ??= entry?.version ?? versions[targetId] ?? "1";
+    targetVersion = null;
     authority ??= entry?.authority ?? entry?.ref ?? authorities.move_map_ref;
     authoritySha256 ??= entry?.authority_sha256 ?? entry?.sha256;
   }
   // A target reference is only useful when its authority can be re-read and
   // checked. Do not derive a hash from the ref string: a missing authority
   // identity must never become an apparently current target.
-  if (targetVersion === undefined || authority === undefined || authoritySha256 === undefined) throw fail("stale_source", `target authority is unavailable: ${targetId}`);
+  if (["stage", "surface"].includes(targetKind) && suppliedTargetVersion !== undefined && suppliedTargetVersion !== null) throw fail("invalid_target", `${targetKind} target_version must be null: ${targetId}`);
+  if (["stage", "surface"].includes(targetKind)) targetVersion = null;
+  if (["step", "skill"].includes(targetKind) && (targetVersion === undefined || targetVersion === null)) throw fail("stale_source", `target version is unavailable: ${targetId}`);
+  if (authority === undefined || authoritySha256 === undefined) throw fail("stale_source", `target authority is unavailable: ${targetId}`);
   const authorityRef = String(authority);
   const authorityHash = authoritySha256;
   if (!/^[a-f0-9]{64}$/.test(authorityHash)) throw fail("stale_source", `target authority hash is invalid: ${targetId}`);
-  return { project_id: projectId, target_kind: targetKind, target_id: targetId, target_version: String(targetVersion), authority_ref: authorityRef, authority_sha256: authorityHash };
+  return { project_id: projectId, target_kind: targetKind, target_id: targetId, target_version: ["stage", "surface"].includes(targetKind) ? null : String(targetVersion), authority_ref: authorityRef, authority_sha256: authorityHash };
 }
 
 function normalizeTargetRef(value) {
   if (!value || typeof value !== "object") throw fail("invalid_input", "target_ref is required");
   const targetKind = value.target_kind ?? value.targetKind ?? value.kind;
   const targetId = value.target_id ?? value.targetId ?? value.id;
-  const targetVersion = value.target_version ?? value.targetVersion ?? value.version;
+  const targetVersion = value.target_version !== undefined ? value.target_version : value.targetVersion !== undefined ? value.targetVersion : value.version;
   const authority = value.authority_ref ?? value.authority ?? value.ref;
   const projectId = value.project_id ?? value.projectId;
   requiredString(projectId ?? "project", "target_ref.project_id");
   requiredString(targetKind, "target_ref.target_kind"); requiredString(targetId, "target_ref.target_id");
-  requiredString(targetVersion, "target_ref.target_version"); requiredString(authority, "target_ref.authority");
+  if (["stage", "surface"].includes(targetKind)) {
+    if (targetVersion !== null) throw fail("invalid_input", "stage/surface target_ref.target_version must be null");
+  } else requiredString(targetVersion, "target_ref.target_version");
+  requiredString(authority, "target_ref.authority");
   const authorityRef = String(authority);
-  return { project_id: projectId ?? "project", target_kind: targetKind, target_id: targetId, target_version: String(targetVersion), authority_ref: authorityRef, authority_sha256: value.authority_sha256 ?? hashBytes(authorityRef) };
+  return { project_id: projectId ?? "project", target_kind: targetKind, target_id: targetId, target_version: ["stage", "surface"].includes(targetKind) ? null : String(targetVersion), authority_ref: authorityRef, authority_sha256: value.authority_sha256 ?? hashBytes(authorityRef) };
 }
 
 function assertCurrentTargetAuthority(target) {
@@ -193,7 +202,9 @@ function assertCurrentTargetAuthority(target) {
     matches = found.size; expectedVersion = String(map.schema_version ?? "1");
   }
   if (matches !== 1) throw fail(matches === 0 ? "invalid_target" : "stale_source", `target must map to exactly one current authority entry: ${target.target_id}`);
-  if (target.target_version !== expectedVersion) throw fail("stale_source", `target version is stale: ${target.target_id}`);
+  if (["stage", "surface"].includes(target.target_kind)) {
+    if (target.target_version !== null) throw fail("stale_source", `target version is not null: ${target.target_id}`);
+  } else if (target.target_version !== expectedVersion) throw fail("stale_source", `target version is stale: ${target.target_id}`);
 }
 
 export function resolveTargetRef(input = {}) {
@@ -259,13 +270,13 @@ function taxIdentity(item, project) {
   return { project: itemProject, taskId, confirmationRef, key: `${itemProject}\0${taskId}\0${confirmationRef}` };
 }
 
-function validateTaxSource(item, identity, inventory) {
+function validateTaxSource(item, identity, inventory, storageRoot) {
   // Legacy stage-reflection records do not carry a source envelope.  When an
   // envelope is present, validate it instead of silently consuming a forged
   // or mismatched confirmation.  This keeps old facts usable as unknown while
   // making the authenticated path fail closed.
   const source = item?.source ?? item?.source_fact ?? item?.sourceFact ?? item?.confirmation;
-  if (source === undefined && item?.source_ref === undefined && item?.source_sha256 === undefined && item?.source_schema_version === undefined) return null;
+  if (source === undefined && item?.source_ref === undefined && item?.source_sha256 === undefined && item?.source_schema_version === undefined && item?.source_path === undefined && item?.sourcePath === undefined) return null;
   if (source !== undefined && (!source || typeof source !== "object" || Array.isArray(source))) return "source_identity_invalid";
   const sourceValue = source ?? item;
   const sourceTask = sourceValue.task_id ?? sourceValue.taskId;
@@ -284,9 +295,25 @@ function validateTaxSource(item, identity, inventory) {
   if (sourceHash !== undefined && !/^[a-f0-9]{64}$/.test(sourceHash)) return "source_hash_invalid";
   const sourcePath = item.source_path ?? item.sourcePath ?? sourceValue.path;
   if (sourcePath !== undefined) {
+    if (typeof sourcePath !== "string" || sourcePath.trim() === "") return "source_path_invalid";
+    if (typeof storageRoot !== "string" || storageRoot.trim() === "") return "source_path_unavailable";
+    if (!/^[A-Za-z0-9._-]+$/.test(identity.project) || !/^[A-Za-z0-9._-]+$/.test(identity.taskId)) return "source_path_untrusted";
     try {
-      const stat = lstatSync(sourcePath);
-      if (!stat.isFile() || stat.isSymbolicLink() || (sourceHash && hashBytes(readFileSync(sourcePath)) !== sourceHash)) return "source_bytes_invalid";
+      const root = resolve(storageRoot);
+      const taskRoot = resolve(root, "Projects", identity.project, "tasks", identity.taskId);
+      const resolvedSource = isAbsolute(sourcePath) ? resolve(sourcePath) : resolve(taskRoot, sourcePath);
+      const relativeSource = relative(taskRoot, resolvedSource);
+      if (!relativeSource || relativeSource === ".." || relativeSource.startsWith(`..${sep}`) || isAbsolute(relativeSource)) return "source_path_untrusted";
+      const segments = [root, "Projects", identity.project, "tasks", identity.taskId, ...relativeSource.split(sep)];
+      let current = segments[0];
+      const rootStat = lstatSync(current);
+      if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return "source_path_untrusted";
+      for (let index = 1; index < segments.length; index += 1) {
+        current = join(current, segments[index]);
+        const stat = lstatSync(current);
+        if (stat.isSymbolicLink() || (index < segments.length - 1 && !stat.isDirectory()) || (index === segments.length - 1 && !stat.isFile())) return "source_path_untrusted";
+      }
+      if (sourceHash && hashBytes(readFileSync(current)) !== sourceHash) return "source_bytes_invalid";
     } catch { return "source_unavailable"; }
   }
   const attributionStatus = item.attribution_status ?? item.attributionStatus;
@@ -336,6 +363,33 @@ function unavailableTax(asOf, summary) {
   };
 }
 
+function candidateRegion(candidates, tier, projectionStatus) {
+  if (projectionStatus !== "ok") return { status: projectionStatus, reason: "候选快照不可用" };
+  const entries = candidates.filter((entry) => entry.record_kind === "candidate" && entry.row_status === "active" && entry.tier === tier);
+  if (entries.length === 0) return { status: "empty", reason: "当前分区没有候选" };
+  if (entries.some((entry) => entry.freshness === "stale")) return { status: "stale", reason: "候选来源已过期" };
+  if (entries.some((entry) => entry.evidence_status === "unavailable")) return { status: "unavailable", reason: "候选证据不可用" };
+  return { status: "ok", validation_status: entries.some((entry) => entry.validation_status === "unverified") ? "unverified" : "verified" };
+}
+
+function taxRegion(tax) {
+  if (!tax || typeof tax !== "object") return { status: "unavailable", reason: "质量税投影不可用" };
+  if (tax.status !== "ok") return { status: tax.status ?? "unavailable", reason: tax.error?.summary ?? "质量税投影不可用" };
+  if (tax.sample_status === "insufficient_samples") return { status: "insufficient_samples", reason: "有效样本少于 5 个" };
+  return { status: "ok", validation_status: tax.validation_status ?? "unverified" };
+}
+
+function projectionRegions(candidates, tax, projectionStatus) {
+  const regions = {
+    action_suggested: candidateRegion(candidates, "action_suggested", projectionStatus),
+    reference_only: candidateRegion(candidates, "reference_only", projectionStatus),
+    quality_tax: taxRegion(tax),
+  };
+  const statuses = Object.values(regions).map((entry) => entry.status);
+  const summaryStatus = statuses.every((status) => status === "ok") ? "ok" : statuses.some((status) => status === "ok") ? "partial" : (statuses.includes("error") ? "error" : statuses.includes("unavailable") ? "unavailable" : statuses.includes("stale") ? "stale" : statuses.includes("insufficient_samples") ? "insufficient_samples" : "empty");
+  return { summary_status: summaryStatus, ...regions };
+}
+
 export function computeQualityTaxProjection(input = {}) {
   const asOf = input.asOf ?? input.as_of;
   requiredString(asOf, "asOf");
@@ -345,13 +399,14 @@ export function computeQualityTaxProjection(input = {}) {
   const valid = []; const byIdentity = new Map(); let unknownCount = 0; let numerator = 0; const sourceRefs = new Set();
   for (const item of interventions) {
     const occurred = Date.parse(item?.occurred_at ?? item?.occurredAt ?? "");
-    if (!Number.isFinite(occurred) || occurred > end || occurred < end - WINDOW_MS) continue;
+    if (!Number.isFinite(occurred)) return unavailableTax(asOf, "occurred_at_invalid");
+    if (occurred > end || occurred < end - WINDOW_MS) continue;
     const identity = taxIdentity(item, project);
-    if (!identity) continue;
-    if (project && identity.project !== project) continue;
+    if (!identity) return unavailableTax(asOf, "intervention_identity_invalid");
+    if (project && identity.project !== project) return unavailableTax(asOf, "intervention_project_mismatch");
     const stage = item.intervention_stage ?? item.interventionStage;
-    if (!STAGE_INDEX.has(stage)) continue;
-    const sourceError = validateTaxSource(item, identity, input.inventory);
+    if (!STAGE_INDEX.has(stage)) return unavailableTax(asOf, "intervention_stage_invalid");
+    const sourceError = validateTaxSource(item, identity, input.inventory, input.storageRoot ?? input.storage_root ?? input.inventory?.storageRoot ?? input.inventory?.storage_root);
     if (sourceError) return unavailableTax(asOf, sourceError);
     const confirmation = authenticatedTaxConfirmation(item, identity, input.storageRoot ?? input.storage_root ?? input.inventory?.storageRoot ?? input.inventory?.storage_root);
     if (confirmation.error) return unavailableTax(asOf, confirmation.error);
@@ -428,7 +483,10 @@ function lockPathWithoutCreate(storageRoot, project) { return join(safeProjectPa
 function monotonicMs() { return Number(process.hrtime.bigint() / 1_000_000n); }
 function processIsAlive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error?.code === "EPERM"; } }
 function validProjectLock(value, project) {
-  return value?.schema_version === SCHEMA_VERSION && value.project === project
+  return value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).sort().join("\0") === [...PROJECT_LOCK_KEYS].sort().join("\0")
+    && value.schema_version === SCHEMA_VERSION && value.project === project
+    && typeof value.attempt_id === "string" && value.attempt_id.length > 0
     && typeof value.owner_token === "string" && value.owner_token.length > 0
     && typeof value.fencing_token === "string" && value.fencing_token.length > 0
     && Number.isInteger(value.pid) && value.pid > 0
@@ -441,7 +499,8 @@ function validProjectLock(value, project) {
 }
 function validManualRecoveryAuthority(recovery, current, currentRaw, project, bootId) {
   return Boolean(recovery && typeof recovery === "object" && !Array.isArray(recovery)
-    && (recovery.schema_version === undefined || recovery.schema_version === "manual-recovery.v1")
+    && Object.keys(recovery).sort().join("\0") === [...MANUAL_RECOVERY_KEYS].sort().join("\0")
+    && recovery.schema_version === "manual-recovery.v1"
     && validProjectLock(current, project)
     && monotonicMs() > current.lease_deadline_monotonic_ms
     && recovery.current_lock_sha256 === hashBytes(currentRaw)
@@ -1222,7 +1281,10 @@ export function refreshEvolutionSnapshot(input = {}) {
     const inputProofs = inventory.consumer_proofs ?? inventory.consumerProofs ?? [];
     for (const proof of inputProofs) validateWorkflowEvolutionDefinition("consumer_scan_proof", proof);
     const freshProofs = inputProofs.filter((proof) => !usedProofs.has(hashBytes(canonical(consumerProofIdentityPayload(proof)))));
-    const records = observationsToRecords({ project, ...inventory, consumer_proofs: freshProofs }, now, snapshotId, generation, storageRoot).map((record) => {
+    // Previously published proofs remain valid evidence for recomputing the
+    // current candidate tier. Only the publication-proof row is incremental;
+    // dropping consumed proofs here silently downgraded unchanged candidates.
+    const records = observationsToRecords({ project, ...inventory, consumer_proofs: inputProofs }, now, snapshotId, generation, storageRoot).map((record) => {
       const priorRecord = priorByGroup.get(record.candidate_group_id);
       return withCandidateRecordIdentity({ ...record, ...(priorRecord ? { revision: priorRecord.revision, lifecycle_status: priorRecord.lifecycle_status } : {}), batch_id: batchId, snapshot_content_id: canonicalInventory.input_inventory_hash });
     });
@@ -1233,6 +1295,27 @@ export function refreshEvolutionSnapshot(input = {}) {
     const rows = [...records, refreshResult, publicationProof];
     const begin = { schema_version: SCHEMA_VERSION, record_kind: "batch_begin", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation };
     const commit = { schema_version: SCHEMA_VERSION, record_kind: "batch_commit", batch_id: batchId, project, attempt_id: attemptId, snapshot_content_id: canonicalInventory.input_inventory_hash, snapshot_id: snapshotId, publication_generation: generation, producer_identity: canonicalInventory.producer_identity, schema_identity: canonicalInventory.schema_identity, count: rows.length, content_hash: hashBytes(canonical(rows)), status: "committed" };
+    // The inventory is caller-owned input.  Re-read it immediately before the
+    // first append so a mutable source (or a source-backed getter) cannot be
+    // changed after validation while the derived snapshot still carries the
+    // old content identity.  A mismatch is zero-write and leaves the prior
+    // committed head untouched.
+    let finalInventory;
+    try {
+      finalInventory = buildInputInventory({
+        project,
+        inventory: envelope.inventory ?? envelope,
+        producerIdentity: envelope.producer_identity ?? input.producerIdentity,
+        schemaIdentity: envelope.schema_identity ?? input.schemaIdentity,
+      });
+    } catch (error) {
+      throw fail("stale_source", `input inventory changed during refresh: ${error.message}`);
+    }
+    if (finalInventory.input_inventory_hash !== canonicalInventory.input_inventory_hash
+      || canonical(finalInventory.producer_identity) !== canonical(canonicalInventory.producer_identity)
+      || canonical(finalInventory.schema_identity) !== canonical(canonicalInventory.schema_identity)) {
+      throw fail("stale_source", "input inventory changed during refresh");
+    }
     publishBatch({ path, lock, expectedHead: prior?.commit ?? null, begin, rows, commit });
     return { status: "ok", snapshotId, snapshot_id: snapshotId, publicationGeneration: generation, publication_generation: generation, snapshotContentId: canonicalInventory.input_inventory_hash, snapshot_content_id: canonicalInventory.input_inventory_hash, producer_identity: canonicalInventory.producer_identity, schema_identity: canonicalInventory.schema_identity, records, refreshResult, refresh_result: refreshResult };
   } catch (error) {
@@ -1249,12 +1332,18 @@ export function recordCandidateTransition(input = {}) {
   const handle = authority.lockHandle ?? authority.lock_handle; const path = handle.path;
   let lockValue;
   try { lockValue = assertProjectLockCurrent(authority); } catch (error) { return { status: error.code ?? "stale_source", error: { code: error.code ?? "stale_source", summary: error.message } }; }
+  // The authenticated lock path is the sole authority for the storage root.
+  // Never let a caller-provided root redirect a transition to another ledger.
+  const authenticatedStorageRoot = dirname(dirname(dirname(resolve(path))));
+  if (input.storageRoot !== undefined && resolve(input.storageRoot) !== authenticatedStorageRoot) {
+    return { status: "stale_source", error: { code: "stale_source", summary: "storage root does not match the authenticated project lock" } };
+  }
   const owner = authority.ownerToken ?? authority.owner_token;
   const fencing = authority.fencingToken ?? authority.fencing_token ?? handle.fencingToken ?? handle.fencing_token;
   const handleAttempt = handle.attemptId ?? handle.attempt_id;
   const authorityProject = authority.project ?? authority.project_id ?? handle.project ?? handle.project_id;
   if (authorityProject !== input.project || lockValue.owner_token !== owner || lockValue.fencing_token !== fencing || lockValue.attempt_id !== attemptId || handleAttempt !== attemptId) return { status: "stale_source", error: { code: "stale_source", summary: "lock owner, fencing, project, or attempt mismatch" } };
-  const pathOut = ledgerPath(input.storageRoot, input.project);
+  const pathOut = ledgerPath(authenticatedStorageRoot, input.project);
   let initial;
   try { initial = recoverTerminalSuffix(pathOut, { lockHandle: handle, ownerToken: owner, fencingToken: fencing }); }
   catch (error) { return { status: error.code ?? "failed", error: { code: error.code ?? "failed", summary: error.message } }; }
@@ -1307,13 +1396,51 @@ export function readCurrentEvolutionProjection(input = {}) {
   catch (error) { return { status: error.code ?? "failed", error: { code: error.code ?? "failed", summary: error.message } }; }
   if (!current) return { status: "unavailable", error: { code: "unavailable", summary: "no committed candidate snapshot" } };
   const tax = input.taxProjection ?? input.tax_projection ?? null;
-  const projection = Object.freeze({ schema_version: SCHEMA_VERSION, status: "ok", project: input.project, snapshot_id: current.commit.snapshot_id, publication_generation: current.commit.publication_generation, candidates: current.records, quality_tax: tax, as_of: input.asOf ?? input.as_of ?? null, source_inventory_hash: input.sourceInventoryHash ?? input.source_inventory_hash ?? current.commit.snapshot_content_id ?? null, refresh_result: input.refreshResult ?? input.refresh_result ?? null });
-  if (input.expectedIdentity && input.expectedIdentity.snapshot_id && input.expectedIdentity.snapshot_id !== projection.snapshot_id) return { status: "stale_source", error: { code: "stale_source", summary: "projection identity mismatch" } };
-  if (input.expectedIdentity && ((input.expectedIdentity.producer_identity !== undefined && canonical(input.expectedIdentity.producer_identity) !== canonical(current.commit.producer_identity)) || (input.expectedIdentity.schema_identity !== undefined && canonical(input.expectedIdentity.schema_identity) !== canonical(current.commit.schema_identity)))) return { status: "stale_source", error: { code: "stale_source", summary: "projection producer/schema identity mismatch" } };
-  if (input.sourceInventoryHash !== undefined && input.sourceInventoryHash !== current.commit.snapshot_content_id) return { status: "stale_source", error: { code: "stale_source", summary: "source inventory identity mismatch" } };
+  const asOf = input.asOf ?? input.as_of;
+  const sourceInventoryHash = input.sourceInventoryHash ?? input.source_inventory_hash;
   const refresh = input.refreshResult ?? input.refresh_result;
-  if (refresh && (refresh.snapshot_id !== current.commit.snapshot_id || refresh.publication_generation !== current.commit.publication_generation || refresh.snapshot_content_id !== current.commit.snapshot_content_id)) return { status: "stale_source", error: { code: "stale_source", summary: "refresh result identity mismatch" } };
-  if ((input.asOf ?? input.as_of) !== undefined && tax && (tax.generated_at ?? tax.generatedAt) !== (input.asOf ?? input.as_of)) return { status: "stale_source", error: { code: "stale_source", summary: "tax projection time identity mismatch" } };
+  const expected = input.expectedIdentity;
+  const stale = (summary) => ({ status: "stale_source", error: { code: "stale_source", summary } });
+  const expectedSnapshotId = expected?.snapshot_id ?? expected?.snapshotId;
+  const expectedGeneration = expected?.publication_generation ?? expected?.publicationGeneration;
+  const expectedContentId = expected?.snapshot_content_id ?? expected?.snapshotContentId;
+  const expectedAttemptId = expected?.attempt_id ?? expected?.attemptId;
+  const suppliedProjectionInputs = [tax, sourceInventoryHash, asOf, refresh].some((value) => value !== null && value !== undefined);
+  if (suppliedProjectionInputs && (!tax || sourceInventoryHash === undefined || asOf === undefined || !refresh)) return stale("projection identity inputs are incomplete");
+  if (asOf !== undefined && (typeof asOf !== "string" || !Number.isFinite(Date.parse(asOf)))) return stale("projection time identity is invalid");
+  if (expectedSnapshotId !== undefined && expectedSnapshotId !== current.commit.snapshot_id) return stale("projection snapshot identity mismatch");
+  if (expectedGeneration !== undefined && expectedGeneration !== current.commit.publication_generation) return stale("projection publication generation mismatch");
+  if (expectedContentId !== undefined && expectedContentId !== current.commit.snapshot_content_id) return stale("projection content identity mismatch");
+  if (expectedAttemptId !== undefined && expectedAttemptId !== current.commit.attempt_id) return stale("projection attempt identity mismatch");
+  if (expected && ((expected.producer_identity !== undefined && canonical(expected.producer_identity) !== canonical(current.commit.producer_identity)) || (expected.schema_identity !== undefined && canonical(expected.schema_identity) !== canonical(current.commit.schema_identity)))) return stale("projection producer/schema identity mismatch");
+  if (sourceInventoryHash !== undefined && sourceInventoryHash !== current.commit.snapshot_content_id) return stale("source inventory identity mismatch");
+  if (refresh !== undefined) {
+    if (!refresh || typeof refresh !== "object" || Array.isArray(refresh)
+      || refresh.schema_version !== SCHEMA_VERSION || refresh.record_kind !== "refresh_result" || refresh.outcome !== "committed"
+      || refresh.project !== input.project || refresh.batch_id !== current.commit.batch_id || refresh.attempt_id !== current.commit.attempt_id
+      || refresh.snapshot_id !== current.commit.snapshot_id || refresh.publication_generation !== current.commit.publication_generation
+      || refresh.snapshot_content_id !== current.commit.snapshot_content_id
+      || (asOf !== undefined && refresh.as_of !== asOf)) return stale("refresh result identity mismatch");
+  }
+  if (tax !== null) {
+    if (!tax || typeof tax !== "object" || Array.isArray(tax)) return stale("tax projection is invalid");
+    const taxSnapshotId = tax.snapshot_id ?? tax.snapshotId;
+    const taxContentId = tax.snapshot_content_id ?? tax.snapshotContentId ?? tax.source_inventory_hash ?? tax.sourceInventoryHash;
+    const taxAttemptId = tax.attempt_id ?? tax.attemptId;
+    const taxGeneration = tax.publication_generation ?? tax.publicationGeneration;
+    if ((taxSnapshotId !== undefined && taxSnapshotId !== current.commit.snapshot_id)
+      || (taxContentId !== undefined && taxContentId !== current.commit.snapshot_content_id)
+      || (taxAttemptId !== undefined && taxAttemptId !== current.commit.attempt_id)
+      || (taxGeneration !== undefined && taxGeneration !== current.commit.publication_generation)) return stale("tax projection identity mismatch");
+    if (asOf !== undefined) {
+      const taxGeneratedAt = tax.generated_at ?? tax.generatedAt;
+      const taxWindowEnd = tax.window_end ?? tax.windowEnd;
+      const taxWindowStart = tax.window_start ?? tax.windowStart;
+      const expectedWindowStart = Date.parse(asOf) - WINDOW_MS;
+      if (taxGeneratedAt !== asOf || taxWindowEnd !== asOf || typeof taxWindowStart !== "string" || Date.parse(taxWindowStart) !== expectedWindowStart) return stale("tax projection time identity mismatch");
+    }
+  }
+  const projection = Object.freeze({ schema_version: SCHEMA_VERSION, status: "ok", project: input.project, snapshot_id: current.commit.snapshot_id, publication_generation: current.commit.publication_generation, candidates: current.records, quality_tax: tax, regions: projectionRegions(current.records, tax, "ok"), as_of: asOf ?? null, source_inventory_hash: sourceInventoryHash ?? current.commit.snapshot_content_id ?? null, refresh_result: refresh ?? null });
   return projection;
 }
 

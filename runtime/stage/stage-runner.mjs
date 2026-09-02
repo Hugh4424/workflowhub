@@ -1,9 +1,10 @@
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
@@ -13,7 +14,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
-import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
+import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
 import { isHumanConfirmationVersion, validateCanonicalTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
@@ -22,6 +23,7 @@ import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/s
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
 import { lessonEntryRef, mergeLessonObservation } from "../../tools/cli/append-lesson-observation.mjs";
 import { validateReflectionValue } from "../../tools/cli/validate-stage-reflection.mjs";
+import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -1049,6 +1051,39 @@ function currentMaterialTexts(ctx) {
   }));
 }
 
+function readCurrentE2eAcceptanceEvidence(ctx) {
+  const materials = currentMaterialTexts(ctx);
+  const projection = projectAcceptanceExecutionData(materials?.["tasks.md"], {
+    decisionLog: materials?.["decision-log.md"],
+    spec: materials?.["spec.md"],
+  });
+  if (!projection.requires_independent_verdict) return Object.freeze({ required: false });
+  const snapshot = ctx.kernel.currentVNextSnapshot();
+  const materialRevision = ctx.kernel.currentVNextMaterialRevision();
+  const facts = (ctx.task.listCanonicalQualityFactRefs?.() ?? []).flatMap((ref) => {
+    try {
+      const raw = ctx.task.readRecord(ref);
+      const value = JSON.parse(raw);
+      if (value?.schema_version !== "quality-fact.v1" || value.task_id !== ctx.identity.taskId
+          || value.stage !== "build-code" || value.kind !== "acceptance_criterion"
+          || value.subject !== "acceptance_execution" || value.snapshot_tree !== snapshot.tree
+          || value.material_revision !== materialRevision) return [];
+      return [{ ref, sha256: createHash("sha256").update(raw).digest("hex"), value }];
+    } catch { return []; }
+  });
+  const executionFact = facts.at(-1);
+  const executionEvidence = executionFact?.value?.evidence?.[0];
+  const execution = executionFact?.value?.status === "passed" && executionEvidence
+    ? { status: "passed", ref: executionEvidence.ref, sha256: executionEvidence.sha256, executor_actor: null }
+    : { status: "missing", ref: null, sha256: null, executor_actor: null };
+  return Object.freeze({
+    required: true,
+    execution: Object.freeze(execution),
+    independent_review: Object.freeze({ status: "missing", ref: null, sha256: null, reviewer_actor: null, frozen_material: null }),
+    user_confirmation: Object.freeze({ status: "missing", ref: null, sha256: null }),
+  });
+}
+
 function specAnalyzeDisclosure(value) {
   if (!value || typeof value !== "object") return null;
   return Object.freeze({
@@ -1302,6 +1337,8 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   dispositionItems,
   sourceReviewRefs,
   riskAcceptanceRefs,
+  executionItems,
+  executionBinding,
 }) {
   const subjectEvidence = evidenceRefs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
   const evidenceValue = {
@@ -1319,6 +1356,10 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
         disposition_items: dispositionItems ?? [],
         source_review_refs: sourceReviewRefs ?? [],
         risk_acceptance_refs: riskAcceptanceRefs ?? [],
+      } : {}),
+      ...(executionItems ? {
+        execution_items: executionItems,
+        execution_binding: executionBinding ?? null,
       } : {}),
     },
   };
@@ -1378,6 +1419,183 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot) {
   });
 }
 
+function unavailableAcceptanceScenario(scenario, reason) {
+  return Object.freeze({ status: "unavailable", tier: scenario.tier, reason, evidence_refs: Object.freeze([]) });
+}
+
+function sameAcceptanceScenario(candidate, expected) {
+  return candidate && typeof candidate === "object" && !Array.isArray(candidate)
+    && ["source", "sample", "scenario", "tier"].every((field) => candidate[field] === expected[field]);
+}
+
+function sameExactIdentity(left, right, fields) {
+  return left && typeof left === "object" && !Array.isArray(left)
+    && right && typeof right === "object" && !Array.isArray(right)
+    && fields.every((field) => left[field] === right[field]);
+}
+
+function sameBrowserAcceptanceExecutionIdentity(payload, stored) {
+  return sameExactIdentity(payload.environment_identity, stored.environment_identity,
+    ["kind", "name", "revision", "endpoint", "runtime_id"])
+    && sameExactIdentity(payload.data_identity, stored.data_identity,
+      ["kind", "name", "revision", "source", "dataset_id", "fixture_only"]);
+}
+
+function canonicalBrowserQaComparable(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const comparable = { ...value };
+  delete comparable.evidence_ref;
+  delete comparable.evidence_hash;
+  return comparable;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function dataIdentityMatchesAcceptanceScenario(dataIdentity, acceptanceScenario) {
+  return dataIdentity?.source === acceptanceScenario?.source
+    && dataIdentity?.dataset_id === acceptanceScenario?.sample;
+}
+
+function browserQaAttachment(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || typeof value.ref !== "string"
+      || !/^quality\/evidence\/browser-qa\/[a-f0-9]{64}\.json$/.test(value.ref)
+      || !SHA256.test(value.hash ?? "")) {
+    throw new Error(`${label} must bind one task-owned browser-qa publication record`);
+  }
+  return value;
+}
+
+function verifyBrowserQaAttachment(task, reference, label) {
+  const attachment = browserQaAttachment(reference, label);
+  const raw = task.readRecord(attachment.ref);
+  if (createHash("sha256").update(raw).digest("hex") !== attachment.hash) throw new Error(`${label} canonical record hash mismatch`);
+  let publication;
+  try { publication = JSON.parse(raw); } catch { throw new Error(`${label} canonical record is not JSON`); }
+  const allowed = new Set(["schema_version", "source_path", "content_sha256", "content_encoding", "content_base64", "publisher", "recorded_at"]);
+  if (!publication || typeof publication !== "object" || Array.isArray(publication)
+      || Object.keys(publication).some((key) => !allowed.has(key))
+      || publication.schema_version !== "workflowhub-evidence-publication.v1"
+      || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
+      || !SHA256.test(publication.content_sha256 ?? "")
+      || publication.content_encoding !== "base64"
+      || typeof publication.content_base64 !== "string"
+      || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
+      || typeof publication.recorded_at !== "string" || publication.recorded_at.trim() === "") {
+    throw new Error(`${label} is not a complete browser evidence publication`);
+  }
+  const bytes = Buffer.from(publication.content_base64, "base64");
+  if (bytes.toString("base64") !== publication.content_base64
+      || createHash("sha256").update(bytes).digest("hex") !== publication.content_sha256
+      || attachment.ref !== `quality/evidence/browser-qa/${publication.content_sha256}.json`) {
+    throw new Error(`${label} published content hash mismatch`);
+  }
+}
+
+function verifyBrowserAcceptanceAttachments(ctx, candidate) {
+  const screenshots = Array.isArray(candidate?.screenshots) ? candidate.screenshots : [];
+  const screenshotRefs = Array.isArray(candidate?.visual?.screenshot_refs) ? candidate.visual.screenshot_refs : [];
+  if (screenshots.length === 0 || screenshotRefs.length === 0
+      || new Set(screenshots.map((entry) => entry?.ref)).size !== screenshots.length
+      || new Set(screenshotRefs).size !== screenshotRefs.length
+      || screenshots.length !== screenshotRefs.length
+      || screenshots.some((entry) => !screenshotRefs.includes(entry.ref))) {
+    throw new Error("browser acceptance screenshot references are incomplete or inconsistent");
+  }
+  screenshots.forEach((reference, index) => verifyBrowserQaAttachment(ctx.task, reference, `browser acceptance screenshot ${index + 1}`));
+  const outputRef = candidate?.test?.output_ref;
+  const outputHash = candidate?.test?.output_hash;
+  if (typeof outputRef !== "string" || !/^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(outputRef) || !SHA256.test(outputHash ?? "")) {
+    throw new Error("browser acceptance test output reference is invalid");
+  }
+  const output = ctx.task.readRecord(outputRef);
+  if (createHash("sha256").update(output).digest("hex") !== outputHash) throw new Error("browser acceptance test output hash mismatch");
+}
+
+function currentBrowserAcceptanceBinding(candidate, { binding, attemptId, invocationId, acceptanceScenario }) {
+  return candidate && typeof candidate === "object" && !Array.isArray(candidate)
+    && candidate.applicability === "ui" && candidate.result === "pass"
+    && candidate.task_id === binding.task_id && candidate.stage === binding.stage
+    && candidate.attempt_id === attemptId && candidate.material_revision === binding.material_revision
+    && candidate.snapshot_tree === binding.snapshot_tree && candidate.invocation_id === invocationId
+    && Array.isArray(binding.acceptance_criterion_ids)
+    && binding.acceptance_criterion_ids.includes(candidate.acceptance_criterion_id)
+    && sameAcceptanceScenario(candidate.acceptance_scenario, acceptanceScenario)
+    && candidate.cancellation?.status === "not_cancelled" && candidate.cleanup?.status === "completed"
+    && candidate.fixture?.fixture_only === false
+    && candidate.environment_identity?.kind && candidate.environment_identity?.name
+    && candidate.environment_identity?.revision && candidate.environment_identity?.endpoint
+    && candidate.environment_identity?.runtime_id
+    && candidate.data_identity?.kind && candidate.data_identity?.name
+    && candidate.data_identity?.revision && candidate.data_identity?.source
+    && candidate.data_identity?.dataset_id && candidate.data_identity?.fixture_only === false
+    && dataIdentityMatchesAcceptanceScenario(candidate.data_identity, acceptanceScenario)
+    && String(candidate.service_identity?.instance ?? "").toLowerCase() !== "fixture";
+}
+
+async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null) {
+  if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)) throw new TypeError("acceptance scenario must be an object");
+  const snapshot = ctx.kernel.currentVNextSnapshot();
+  const materialRevision = ctx.kernel.currentVNextMaterialRevision();
+  if (scenario.task_id !== ctx.identity.taskId || scenario.stage !== "build-code" || scenario.snapshot_tree !== snapshot.tree) {
+    throw new Error("acceptance scenario is not bound to the current build-code task and snapshot");
+  }
+  for (const field of ["source", "sample", "scenario"]) {
+    if (typeof scenario[field] !== "string" || scenario[field].trim() === "") throw new TypeError(`acceptance scenario ${field} is required`);
+  }
+  if (!new Set(["browser", "service", "command"]).has(scenario.tier)) throw new Error("acceptance scenario tier is unsupported");
+  const binding = Object.freeze({
+    task_id: ctx.identity.taskId, stage: "build-code", material_revision: materialRevision, snapshot_tree: snapshot.tree,
+    source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: scenario.tier,
+    acceptance_criterion_ids: Object.freeze([...(scenario.acceptance_criterion_ids ?? [])]),
+  });
+  if (scenario.tier !== "browser") return unavailableAcceptanceScenario(scenario, `${scenario.tier} acceptance execution has no canonical scenario-bound evidence contract`);
+  if (typeof publication.runControlledUiQa !== "function") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no controlled QA adapter");
+  if (typeof attemptId !== "string" || attemptId.trim() === "") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no current attempt binding");
+  const acceptanceScenario = Object.freeze({ source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: "browser" });
+  const invocationId = `acceptance-browser-${randomUUID()}`;
+  try {
+    const result = await publication.runControlledUiQa(Object.freeze({
+      ...binding,
+      project_name: ctx.identity.projectName,
+      task_path: ctx.task.taskPath,
+      worktree_root: ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot,
+      attempt_id: attemptId,
+      invocation_id: invocationId,
+      acceptance_scenario: acceptanceScenario,
+    }));
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("controlled QA adapter must return an object");
+    if (result.invocation_id !== undefined && result.invocation_id !== invocationId) throw new Error("controlled QA adapter invocation_id mismatch");
+    const payload = result.payload ?? result.browser_qa ?? result.evidence;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("controlled QA adapter payload is missing");
+    const ref = result.evidence_ref;
+    const sha256 = result.evidence_hash;
+    if (typeof ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref) || !SHA256.test(sha256 ?? "")) throw new Error("controlled QA canonical evidence ref/hash is invalid");
+    if (payload.evidence_ref !== ref || payload.evidence_hash !== sha256) throw new Error("controlled QA payload does not bind its canonical evidence ref/hash");
+    const raw = ctx.task.readRecord(ref);
+    if (createHash("sha256").update(raw).digest("hex") !== sha256) throw new Error("controlled QA canonical evidence hash mismatch");
+    let stored;
+    try { stored = JSON.parse(raw); } catch { throw new Error("controlled QA canonical evidence is not JSON"); }
+    validateBrowserQaEvidence(payload);
+    validateBrowserQaEvidence(stored);
+    const expected = { binding, attemptId, invocationId, acceptanceScenario };
+    if (!currentBrowserAcceptanceBinding(payload, expected) || !currentBrowserAcceptanceBinding(stored, expected)) throw new Error("controlled QA payload or canonical bytes do not match the current browser acceptance binding");
+    if (!sameBrowserAcceptanceExecutionIdentity(payload, stored)) throw new Error("controlled QA payload execution identities do not match canonical bytes");
+    if (canonicalJson(canonicalBrowserQaComparable(payload)) !== canonicalJson(canonicalBrowserQaComparable(stored))) throw new Error("controlled QA payload content does not match canonical bytes");
+    verifyBrowserAcceptanceAttachments(ctx, payload);
+    verifyBrowserAcceptanceAttachments(ctx, stored);
+    return Object.freeze({ status: "executed", tier: "browser", executor: "controlled-browser-qa", evidence_refs: Object.freeze([{ ref, sha256 }]) });
+  } catch (error) {
+    return unavailableAcceptanceScenario(scenario, `browser acceptance execution is unavailable: ${error.message}`);
+  }
+}
+
 function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
@@ -1411,6 +1629,12 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
       .map(([subject, kind]) => ({ subject, kind, gating: true })),
     ...(ctx.stage === "build-spec" && result.facts?.completion_subjects?.ui_design
       ? [{ subject: "ui_design", kind: "acceptance_criterion", gating: true }]
+      : []),
+    ...(ctx.stage === "build-code" && result.facts?.completion_subjects?.acceptance_execution
+      ? [{ subject: "acceptance_execution", kind: "acceptance_criterion", gating: false }]
+      : []),
+    ...(ctx.stage === "verify-code" && result.facts?.completion_subjects?.e2e_acceptance
+      ? [{ subject: "e2e_acceptance", kind: "acceptance_criterion", gating: true }]
       : []),
     ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}).map(([subject, kind]) => ({ subject, kind, gating: false })),
   ];
@@ -1488,6 +1712,12 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
           dispositionItems: acceptanceSubject?.disposition_items ?? [],
           sourceReviewRefs: acceptanceSubject?.source_review_refs ?? [],
           riskAcceptanceRefs: acceptanceSubject?.risk_acceptance_refs ?? [],
+        } : {}),
+        ...(subject === "acceptance_execution" ? {
+          executionItems: acceptanceSubject?.execution_items ?? [],
+          executionBinding: typeof result.stage_outcome_ref === "string" && typeof result.stage_outcome_hash === "string"
+            ? { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash }
+            : null,
         } : {}),
       });
       factEvidenceRef = acceptanceFact.evidence.ref;
@@ -1716,7 +1946,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
   return Object.freeze({ ...published, stage_reflection: stageReflection });
 }
 
-function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, reflectionScheduler = null) {
+function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, authenticatedStageOutcome = null, reflectionScheduler = null) {
   const artifactDir = ctx.artifacts
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
@@ -1765,6 +1995,21 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ bytes: raw, sha256: createHash("sha256").update(raw).digest("hex") });
     },
+    // Skill proof is private, authenticated input to the current official
+    // handler. It is not a new receipt, public command, or state projection.
+    ...(authenticatedStageOutcome?.value?.skill_outcomes ? {
+      readSkillEvidence: (skillId) => {
+        const outcome = authenticatedStageOutcome.value.skill_outcomes.find((entry) => entry.skill_id === skillId);
+        if (!outcome) throw new Error(`authenticated stage outcome has no ${skillId} skill outcome`);
+        return Object.freeze((outcome.evidence_refs ?? []).map(({ ref, sha256 }) => {
+          const raw = ctx.task.readRecord(ref);
+          if (createHash("sha256").update(raw).digest("hex") !== sha256) {
+            throw new Error(`authenticated ${skillId} skill evidence hash mismatch`);
+          }
+          return Object.freeze({ ref, sha256, bytes: raw });
+        }));
+      },
+    } : {}),
     readBrowserQaEvidence: (ref) => {
       if (typeof ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref)) {
         throw new Error("controlled QA evidence ref is outside the browser-qa namespace");
@@ -1784,6 +2029,19 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
     } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace, ctx.identity.taskId) } : {}),
+    // Renderer inputs are task-owned source bytes. Keep this filesystem access
+    // private to the authenticated handler rather than exposing a new runtime
+    // input or public read API.
+    ...(ctx.workspace ? { readWorkspaceSource: (sourcePath) => {
+      if (typeof sourcePath !== "string" || sourcePath.trim() === "" || isAbsolute(sourcePath)) {
+        throw new Error("workspace source path must be a non-empty relative path");
+      }
+      const root = realpathSync(ctx.workspace.worktreeRoot);
+      const candidate = realpathSync(join(root, sourcePath));
+      if (!candidate.startsWith(`${root}${sep}`)) throw new Error("workspace source path escapes the current worktree");
+      const bytes = readFileSync(candidate);
+      return Object.freeze({ sha256: createHash("sha256").update(bytes).digest("hex") });
+    } } : {}),
     ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({
       worktreeRoot: ctx.candidateWorkspace.worktreeRoot,
       baselineCommit: ctx.candidateWorkspace.baselineCommit,
@@ -1795,6 +2053,12 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
     ...(ctx.stage === "build-code" && typeof publication?.runControlledUiQa === "function"
       ? { runControlledUiQa: publication.runControlledUiQa }
       : {}),
+    ...(ctx.stage === "build-code" ? {
+      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id),
+    } : {}),
+    ...(ctx.stage === "verify-code" ? {
+      readE2eAcceptanceEvidence: () => readCurrentE2eAcceptanceEvidence(ctx),
+    } : {}),
     ...(artifactDir ? {
       readArtifact: (name) => artifactDir.read(name),
       writeArtifact: (name, value) => artifactDir.writeAtomic(name, value),
@@ -2062,7 +2326,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
             })),
         }
         : null;
-      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, worker.runStageEndReflection);
+      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
       // The concrete reflection is published only after the stage result has

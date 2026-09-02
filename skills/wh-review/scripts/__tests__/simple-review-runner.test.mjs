@@ -86,6 +86,31 @@ describe("simple material-only review", () => {
     expect(calls[0].prompt).not.toContain("sample below.\\n\\n");
   });
 
+  it("gives verify-code a code-only scope", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-verify-scope-")));
+    roots.push(attachmentRoot);
+    let instructions;
+    const result = await runSimpleReview({
+      stage: "verify-code",
+      host_provider: "codex",
+      materials: { implementation: "current implementation", tests: "current tests" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: {
+        async runGroup(request) {
+          instructions = readFileSync(join(request.materials.bundleRoot, "review-instructions.md"), "utf8");
+          return { runtimeId: "runtime-verify-scope", outcome: "completed", providers: [] };
+        },
+      },
+    });
+    expect(result.status).toBe("unavailable");
+    expect(instructions).toContain("Check only the submitted implementation and test code");
+    for (const excluded of ["T010 status", "AC coverage", "repository-wide gate status", "review packet/material completeness", "release/close status"])
+      expect(instructions).toContain(excluded);
+  });
+
   it("requires only stage, host provider, and materials", async () => {
     await expect(runSimpleReview({ stage: "make-decision", host_provider: "codex", materials: {} }))
       .rejects.toThrow("materials are required");
@@ -113,7 +138,7 @@ describe("simple material-only review", () => {
               },
               {
                 provider: "model-b", status: "completed", identity: { provider: "model-b" }, error: null,
-                output: JSON.stringify({ findings: [{ severity: "major", path: "materials/02-spec.md", line: 3, issue: "gap", recommendation: "fix", root_cause: "missing test", evidence_kind: "direct", evidence: "none" }] }),
+                output: JSON.stringify({ findings: [{ severity: "major", path: "materials/02-spec.md", line: 1, issue: "gap", recommendation: "fix", root_cause: "missing test", evidence_kind: "direct", evidence: "none" }] }),
                 timing: null, usage: null,
               },
             ],
@@ -127,9 +152,159 @@ describe("simple material-only review", () => {
     expect(result.provider_results[1]).toMatchObject({ provider: "model-b", status: "completed" });
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ severity: "major", path: "materials/02-spec.md", provider: "model-b" });
-    expect(result.provider_results[1].evidence_anchor_valid).toEqual([false]);
+    expect(result.provider_results[1].evidence_anchor_valid).toEqual([true]);
     expect(result).not.toHaveProperty("error_code");
     expect(result).not.toHaveProperty("attempt_ref");
+  });
+
+  it("does not treat findings with invalid evidence anchors as semantic", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-anchor-invalid-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: {
+        async runGroup() {
+          return {
+            runtimeId: "runtime-anchor-invalid", outcome: "completed",
+            providers: [{
+              provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+              output: JSON.stringify({ findings: [{
+                severity: "major", path: "materials/missing.md", line: 1,
+                issue: "gap", recommendation: "fix", root_cause: "fixture",
+                evidence_kind: "direct", evidence: "missing file",
+              }] }), timing: null, usage: null,
+            }],
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "unavailable",
+      error: { code: "EVIDENCE_ANCHOR_INVALID" },
+      findings: [],
+      provider_results: [{ status: "failed", error: { code: "EVIDENCE_ANCHOR_INVALID" }, evidence_anchor_valid: [false] }],
+    });
+  });
+
+  it("redacts host paths from provider transport errors", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-error-redaction-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup() { throw new Error("broker failed at /tmp/private-review/config.json"); } },
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: "REVIEW_BROKER_EXIT_NONZERO" } });
+    expect(result.error.message).not.toContain("/tmp/private-review");
+  });
+
+  it.each([
+    ["unix", "/private/provider logs/review.json"],
+    ["windows", "C:\\Users\\reviewer\\provider logs\\review.json"],
+    ["unc", "\\\\review-host\\share\\provider logs\\review.json"],
+  ])("redacts %s provider-level error paths while preserving its code", async (_label, path) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-provider-error-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-error", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed", identity: { provider: "model-a" },
+          error: { code: "AUTH_FAILED", message: `provider failed at ${path}` },
+          timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(result.provider_results[0].error).toMatchObject({ code: "AUTH_FAILED" });
+    expect(result.provider_results[0].error.message).not.toContain(path);
+    expect(result.provider_results[0].error.message).toContain("<host-path-redacted>");
+  });
+
+  it("records selected providers omitted by a partial broker response as explicit failures", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-provider-missing-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-partial", outcome: "partial", providers: [{
+          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(result.status).toBe("available");
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "model-b", status: "failed", error: expect.objectContaining({ code: "PROVIDER_RESULT_MISSING" }) }),
+    ]));
+  });
+
+  it.each([
+    ["malformed output", "OUTPUT_INVALID", "REVIEW_PROVIDER_OUTPUT_INVALID"],
+    ["provider timeout", "PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"],
+    ["provider rate limit", "RATE_LIMITED", "RATE_LIMITED"],
+  ])("returns a concrete error when every provider has %s", async (label, sourceCode, publicCode) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-all-failed-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: {
+        async runGroup() {
+          const provider = sourceCode === "OUTPUT_INVALID"
+            ? {
+              provider: "model-a", status: "completed", identity: { provider: "model-a" },
+              error: null, output: "not-json", timing: null, usage: null,
+            }
+            : {
+              provider: "model-a", status: "failed", identity: { provider: "model-a" },
+              error: { code: sourceCode, message: `${label} fixture` }, timing: null, usage: null,
+            };
+          return {
+            runtimeId: "runtime-all-failed", outcome: "unavailable",
+            providers: [provider],
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: publicCode } });
+    if (publicCode !== sourceCode) expect(result.error.cause_code).toBe(sourceCode);
+  });
+
+  it.each([
+    ["timeout", "PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"],
+    ["cancel", "PROCESS_CANCELLED", "REVIEW_CANCELLED"],
+    ["legacy unavailable", "REVIEW_PROVIDER_UNAVAILABLE", "REVIEW_NO_SEMANTIC_RESULT"],
+  ])("classifies a broker rejection without calling it provider unavailable (%s)", async (_label, sourceCode, publicCode) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-rejection-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup() { throw Object.assign(new Error("broker fixture"), { code: sourceCode }); } },
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: publicCode } });
+    expect(result).not.toMatchObject({ error: { code: "REVIEW_PROVIDER_UNAVAILABLE" } });
   });
 
   it("RESULT_PROMPT contains a parseable sample finding", async () => {

@@ -36,7 +36,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("keeps build-spec direct order and wh-review as the only provider reviewer", () => {
     expect(names("build-spec")).toEqual([
       "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
-      "ui-project-init", "design-source-readiness",
+      "ui-project-init", "design-source-readiness", "frontend-prototype-render",
       "plan-design-review", "wh-review", "spec-analyze", "stage-reflection",
     ]);
     expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([

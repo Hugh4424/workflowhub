@@ -86,6 +86,9 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["tools/cli/derive-consumption-edges.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", new Set(["cwd identity discovery"])],
+  // M16 evolution snapshots validate and persist the candidate projection
+  // behind the registered storage/task authority boundary.
+  ["runtime/evidence/workflow-evolution.mjs", new Set(["caller-supplied storage/task path capability"])],
 ]);
 
 // Every production module using direct filesystem mutation must be classified.
@@ -99,6 +102,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["runtime/evidence/quality-store.mjs", "quality fact storage authority"],
   ["core/artifact-dir.mjs", "ArtifactDir product authority"],
   ["runtime/evidence/canonical-receipt-writer.mjs", "canonical evidence authority"],
+  ["runtime/evidence/workflow-evolution.mjs", "M16 workflow-evolution projection authority"],
   ["runtime/task/git-worktree-snapshot.mjs", "private Git snapshot temp index"],
   ["workflows/build-code/diff-scanner.mjs", "private Git diff scan temp file"],
   ["core/task-close.mjs", "confirmed plan-bound delivery close authority"],
@@ -228,7 +232,7 @@ function checkRuntimeContracts() {
 function checkUniqueTaskPathDerivation() {
   const failures = [];
   const roots = ["core", "runtime", "scripts", "workflows", "skills"];
-  const allowed = new Set(["runtime/task/task-identity.mjs"]);
+  const allowed = new Set(["runtime/task/task-identity.mjs", "runtime/evidence/workflow-evolution.mjs"]);
   const literalTasksJoin = /\b(?:join|resolve)\s*\([^;\n]*(?:"tasks"|'tasks'|`tasks`)/g;
   for (const root of roots) {
     for (const file of walk(resolve(repoRoot, root))) {
