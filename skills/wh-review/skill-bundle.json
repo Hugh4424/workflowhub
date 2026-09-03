@@ -108,7 +108,7 @@
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "b0b3140dc2b7ce1ddbfb4182bb87cb18c605054b3cc23c71886b40020ff51688"
+      "sha256": "af14c18c10c5234855ca0b0247eea7d8cd8bb4922d9949a7ff1d4b50a5b39ac9"
     },
     {
       "path": "stage-skill-plan.json",

@@ -17,7 +17,7 @@ const RELATIVE_PATH = /^(?!\/|[A-Za-z]:[\\/])(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-
 // Keep host-path redaction whole for spaces and shell punctuation inside a
 // path; stop only at string/markup boundaries so no suffix can leak.
 const REVIEW_REPO_ROOT = realpathSync(resolve(process.env.WORKFLOWHUB_REVIEW_REPO_ROOT ?? process.cwd()));
-const TRUSTED_TASK_ROOT = resolve(REVIEW_REPO_ROOT, "specs/workflowhub-m16-evolution-20260831");
+const TRUSTED_TASK_ROOT = resolve(REVIEW_REPO_ROOT, "specs/archive/workflowhub-m16-evolution-20260831");
 const TRUSTED_SPEC_PATH = resolve(TRUSTED_TASK_ROOT, "spec.md");
 const reviewAttemptId = process.env.WORKFLOWHUB_REVIEW_ATTEMPT_ID ?? randomUUID();
 const reviewOwner = `run-final-review-chain:${reviewAttemptId}`;

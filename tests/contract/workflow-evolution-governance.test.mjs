@@ -127,13 +127,13 @@ describe("M16 governance registration", () => {
     ].map((path) => readFileSync(resolve(root, path), "utf8")).join("\n");
     expect(sources).not.toMatch(/\b(?:fetch|XMLHttpRequest|setTimeout|setInterval)\s*\(/);
     expect(sources).not.toMatch(/\b(?:openai|anthropic|wh-review)\b/i);
-    const spec = readFileSync(resolve(root, "specs/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
+    const spec = readFileSync(resolve(root, "specs/archive/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
     expect(spec).toContain("未验证，待真实任务数据");
     expect(spec).toContain("本期不执行消融、不裁决 remove、不自动修改");
   });
 
   it("keeps every specification FR identifier unique", () => {
-    const spec = readFileSync(resolve(root, "specs/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
+    const spec = readFileSync(resolve(root, "specs/archive/workflowhub-m16-evolution-20260831/spec.md"), "utf8");
     const ids = [...spec.matchAll(/^- \*\*(FR-[A-Z]+-[0-9]+(?:-R[0-9]+)?)(?:\s+[^*]+)?\*\*/gm)].map((match) => match[1]);
     expect(ids).toHaveLength(45);
     expect(new Set(ids).size).toBe(ids.length);

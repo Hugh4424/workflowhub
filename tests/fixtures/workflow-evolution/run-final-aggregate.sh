@@ -19,7 +19,7 @@ case "$review_staging_path" in
 esac
 review_chain_script="${WORKFLOWHUB_REVIEW_CHAIN_SCRIPT:-tests/fixtures/workflow-evolution/run-final-review-chain.mjs}"
 review_status=0
-if node "$review_chain_script" "specs/workflowhub-m16-evolution-20260831/spec.md" "$review_staging_path" >/dev/null; then review_status=0; else review_status=$?; fi
+if node "$review_chain_script" "specs/archive/workflowhub-m16-evolution-20260831/spec.md" "$review_staging_path" >/dev/null; then review_status=0; else review_status=$?; fi
 if [[ "$review_status" -eq 31 || "$review_status" -eq 32 ]]; then exit "$review_status"; fi
 if [[ "$review_status" -ne 0 ]]; then exit 32; fi
 review_sha256="$(node -e 'const { createHash } = require("node:crypto"); const { readFileSync } = require("node:fs"); process.stdout.write(createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$review_staging_path")"

@@ -90,6 +90,57 @@ function writeOutcome(taskRoot, stage, value) {
   writeFileSync(path, raw);
 }
 
+function loadPageFixture(name) {
+  return JSON.parse(readFileSync(join(repoRoot, "tests/fixtures/reflection-page", name), "utf8"));
+}
+
+function writeAvailabilityFact(taskRoot, value) {
+  const raw = `${JSON.stringify(value)}\n`;
+  const digest = createHash("sha256").update(raw).digest("hex");
+  const path = join(taskRoot, "quality/evidence/stage-reflection-availability", `${digest}.json`);
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, raw);
+}
+
+function makeAvailabilityFixture() {
+  const root = mkdtempSync(join(tmpdir(), "workflowhub-reflection-page-availability-"));
+  const project = "FixtureProject";
+  const tasksRoot = join(root, "Projects", project, "tasks");
+  const out = join(root, "page");
+  mkdirSync(tasksRoot, { recursive: true });
+  const facts = loadPageFixture("availability-facts.json");
+  const states = loadPageFixture("five-states.json");
+  const taskIds = [
+    ...facts.facts.map((fact) => fact.task_identity.task_id),
+    facts.priority.task_id,
+    facts.never_started.task_id,
+    facts.unknown.task_id,
+    ...states.fixed_states.map((fixed) => fixed.task_id),
+  ];
+  for (const taskId of taskIds) mkdirSync(join(tasksRoot, taskId), { recursive: true });
+  for (const fact of facts.facts) writeAvailabilityFact(join(tasksRoot, fact.task_identity.task_id), fact);
+  for (const fixed of states.fixed_states) {
+    writeJson(join(tasksRoot, fixed.task_id, "quality/stage-reflection", `${fixed.stage}.json`), reflection(fixed.task_id, fixed.stage, {
+      status: fixed.status,
+      ...(fixed.status === "failed" ? { error: { summary: "fixture failure" } } : {}),
+    }));
+  }
+  const priorityTaskRoot = join(tasksRoot, facts.priority.task_id);
+  writeJson(join(priorityTaskRoot, "quality/stage-reflection/build-code.json"), reflection(facts.priority.task_id, "build-code", { status: "failed", error: { summary: "fixed reflection wins" } }));
+  writeAvailabilityFact(priorityTaskRoot, {
+    schema_version: "stage-reflection-availability.v1",
+    record_kind: "availability",
+    task_id: facts.priority.task_id,
+    stage: facts.priority.stage,
+    state: facts.priority.availability_state,
+    reason_code: "executor_absent",
+    observed_at: "2026-08-30T12:00:00.000Z",
+    task_identity: { task_id: facts.priority.task_id, worktree: "/tmp/workflowhub", branch: "task/availability" },
+  });
+  writeOutcome(join(tasksRoot, facts.never_started.task_id), facts.never_started.later_stage, outcome(facts.never_started.later_stage, facts.never_started.task_id));
+  return { root, tasksRoot, out, project };
+}
+
 function makeFixture() {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-reflection-page-"));
   const project = "FixtureProject";
@@ -298,6 +349,8 @@ describe("build-reflection-page projection", () => {
     expect(template).toContain("overflow-wrap: anywhere");
     expect(template).toContain("请重新生成 monitor 数据并重新打开页面。");
     expect(template).toContain("<!-- __WH_MONITOR_DATA_SCRIPT__ -->");
+    expect(template).toContain("judgmentLayerLabel");
+    expect(template).toContain("stage.availability_fact?.reason_code");
     expect(template).not.toContain('<script src="data.js"></script>');
   });
 
@@ -375,6 +428,7 @@ describe("build-reflection-page projection", () => {
       const taskB = data.tasks.find((task) => task.task_id === "task-b");
       const empty = data.tasks.find((task) => task.task_id === "task-empty");
       expect(taskA.stages.find((stage) => stage.stage === "build-code").state).toBe("failed");
+      expect(taskA.state).toBe("failed");
       expect(taskA.stages.find((stage) => stage.stage === "make-decision").state).toBe("unknown");
       expect(taskB.stages.find((stage) => stage.stage === "build-plan").state).toBe("degraded");
       expect(taskB.stages.find((stage) => stage.stage === "verify-code").state).toBe("unavailable");
@@ -410,6 +464,9 @@ describe("build-reflection-page projection", () => {
       expect(html).toContain("aria-expanded");
       expect(html).toContain('make("span", "evidence-entry")');
       expect(html).toContain('evidenceWrap.querySelectorAll(".evidence-entry").forEach((node, index) => { node.hidden = !expanded && index >= 1; })');
+      expect(html).toContain('const showReference = (ref) =>');
+      expect(html).toContain('link.addEventListener("click", () => showReference(safe));');
+      expect(html).toContain('const referencePanel = el("reference-panel"); referencePanel.hidden = true;');
       expect(html).toContain("当前分区状态：");
       expect(html).toContain('taxStatus === "ok" ? (tax.ratio === null || tax.ratio === undefined ? "unknown" : tax.ratio) : taxStatus');
       expect(html).toContain("subject=${subject}; task=${observation.task_id || \"unknown\"}; evidence=${kind}");
@@ -437,6 +494,90 @@ describe("build-reflection-page projection", () => {
     }
   });
 
+  it("derives not_scheduled and unavailable from availability facts without overriding fixed records", () => {
+    const fixture = makeAvailabilityFixture();
+    try {
+      expect(() => runCli(fixture)).not.toThrow();
+      const data = readProjectedData(join(fixture.out, "data.js"));
+      const statesFixture = loadPageFixture("five-states.json");
+      const unavailable = data.tasks.find((task) => task.task_id === "task-availability-unavailable");
+      expect(unavailable.stages.find((stage) => stage.stage === "build-code")).toMatchObject({
+        state: "unavailable",
+        reflection_status: "unavailable",
+        is_fact: true,
+        availability_fact: { state: "unavailable", reason_code: "executor_absent" },
+      });
+
+      const notScheduled = data.tasks.find((task) => task.task_id === "task-availability-not-scheduled");
+      expect(notScheduled.stages.find((stage) => stage.stage === "build-plan")).toMatchObject({
+        state: "not_scheduled",
+        reflection_status: "not_scheduled",
+        judgment_layer: "fact",
+        is_fact: true,
+      });
+
+      const priority = data.tasks.find((task) => task.task_id === "task-availability-priority");
+      expect(priority.stages.find((stage) => stage.stage === "build-code")).toMatchObject({ state: "failed", reflection_status: "failed", is_fact: false });
+
+      for (const fixed of statesFixture.fixed_states) {
+        const task = data.tasks.find((entry) => entry.task_id === fixed.task_id);
+        expect(task.stages.find((stage) => stage.stage === fixed.stage)).toMatchObject({ state: fixed.status, reflection_status: fixed.status, is_fact: false });
+      }
+
+      const neverStarted = data.tasks.find((task) => task.task_id === "task-never-started");
+      expect(neverStarted.stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "not_scheduled", reflection_status: "not_scheduled", judgment_layer: "judgment", is_fact: false });
+
+      const unknown = data.tasks.find((task) => task.task_id === "task-unknown");
+      expect(unknown.stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "unknown", reflection_status: "unknown" });
+      expect(data.states).toEqual(expect.arrayContaining(["unknown", "unavailable", "degraded", "failed", ...statesFixture.availability_states]));
+      const v1Schema = JSON.parse(readFileSync(join(repoRoot, "runtime/schemas/stage-reflection.v1.json"), "utf8"));
+      expect(v1Schema.properties.status.enum).toContain("not_scheduled");
+      const generatedHtml = readFileSync(join(fixture.out, "workflowhub-monitor.html"), "utf8");
+      expect(generatedHtml).toContain('not_scheduled: "not_scheduled"');
+      expect(generatedHtml).toContain(`.state-${statesFixture.style_reuse.not_scheduled}`);
+
+      const futureTaskRoot = join(fixture.tasksRoot, "task-future-availability");
+      mkdirSync(futureTaskRoot, { recursive: true });
+      writeAvailabilityFact(futureTaskRoot, {
+        schema_version: "stage-reflection-availability.v1",
+        record_kind: "availability",
+        task_id: "task-future-availability",
+        stage: "build-plan",
+        state: "not_scheduled",
+        reason_code: "preflight_failed",
+        observed_at: "2026-09-02T12:00:00.000Z",
+        task_identity: { task_id: "task-future-availability", worktree: "/tmp/workflowhub", branch: "task/availability" },
+      });
+      expect(() => runCli(fixture)).not.toThrow();
+      const futureData = readProjectedData(join(fixture.out, "data.js"));
+      expect(futureData.tasks.find((task) => task.task_id === "task-future-availability").stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "unknown", availability_fact: null });
+
+      const futureOutcomeTaskRoot = join(fixture.tasksRoot, "task-future-outcome");
+      mkdirSync(futureOutcomeTaskRoot, { recursive: true });
+      writeOutcome(futureOutcomeTaskRoot, "build-code", outcome("build-code", "task-future-outcome", { generated_at: "2026-09-02T12:00:00.000Z" }));
+      expect(() => runCli(fixture)).not.toThrow();
+      const futureOutcomeData = readProjectedData(join(fixture.out, "data.js"));
+      expect(futureOutcomeData.tasks.find((task) => task.task_id === "task-future-outcome").stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "unknown", availability_fact: null });
+
+      const malformedOutcomeTaskRoot = join(fixture.tasksRoot, "task-malformed-outcome");
+      mkdirSync(malformedOutcomeTaskRoot, { recursive: true });
+      writeOutcome(malformedOutcomeTaskRoot, "build-code", outcome("build-code", "task-malformed-outcome", { generated_at: "not-a-timestamp" }));
+      expect(() => runCli(fixture)).not.toThrow();
+      const malformedOutcomeData = readProjectedData(join(fixture.out, "data.js"));
+      expect(malformedOutcomeData.tasks.find((task) => task.task_id === "task-malformed-outcome").stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "unknown", availability_fact: null });
+
+      const malformedReflectionTaskRoot = join(fixture.tasksRoot, "task-malformed-reflection");
+      mkdirSync(join(malformedReflectionTaskRoot, "quality/stage-reflection"), { recursive: true });
+      writeJson(join(malformedReflectionTaskRoot, "quality/stage-reflection/build-code.json"), reflection("task-malformed-reflection", "build-code", { generated_at: "not-a-timestamp" }));
+      expect(() => runCli(fixture)).not.toThrow();
+      const malformedReflectionData = readProjectedData(join(fixture.out, "data.js"));
+      expect(malformedReflectionData.tasks.find((task) => task.task_id === "task-malformed-reflection").stages.find((stage) => stage.stage === "build-code")).toMatchObject({
+        state: "unavailable",
+        reflection_status: null,
+      });
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
   it("excludes future reflections from the live candidate and tax windows", () => {
     const fixture = makeFixture();
     try {
@@ -444,10 +585,23 @@ describe("build-reflection-page projection", () => {
       const value = JSON.parse(readFileSync(path, "utf8"));
       value.generated_at = "2026-09-01T00:00:00.000Z";
       writeJson(path, value);
+
+      const taskAReflectionPath = join(fixture.tasksRoot, "task-a/quality/stage-reflection/build-spec.json");
+      const taskAReflection = JSON.parse(readFileSync(taskAReflectionPath, "utf8"));
+      const currentConfirmationRef = taskAReflection.interventions[0].confirmation_ref;
+      const futureConfirmation = JSON.parse(readFileSync(join(fixture.tasksRoot, "task-a", currentConfirmationRef), "utf8"));
+      futureConfirmation.confirmed_at = "2026-09-01T00:00:00.000Z";
+      const futureConfirmationRaw = `${JSON.stringify(futureConfirmation, null, 2)}\n`;
+      const futureConfirmationRef = `quality/confirmations/${createHash("sha256").update(futureConfirmationRaw).digest("hex")}.json`;
+      writeFileSync(join(fixture.tasksRoot, "task-a", futureConfirmationRef), futureConfirmationRaw);
+      taskAReflection.interventions[0].confirmation_ref = futureConfirmationRef;
+      writeJson(taskAReflectionPath, taskAReflection);
+
       expect(() => runCli(fixture)).not.toThrow();
       const data = readProjectedData(join(fixture.out, "data.js"));
       expect(data.tasks.find((task) => task.task_id === "task-old").stages.find((stage) => stage.stage === "build-spec").state).toBe("stale");
       expect(data.evolution.candidates.flatMap((entry) => entry.source_observations ?? []).some((entry) => entry.task_id === "task-old")).toBe(false);
+      expect(data.evolution.candidates.flatMap((entry) => entry.source_observations ?? []).some((entry) => entry.task_id === "task-a")).toBe(false);
     } finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 
@@ -506,6 +660,111 @@ describe("build-reflection-page projection", () => {
       vm.runInNewContext(dataSource, context);
       expect(context.__INJECTED__).toBeUndefined();
       expect(context.__WH_MONITOR_DATA__.tasks.find((task) => task.task_id === "task-a").stages.find((stage) => stage.stage === "build-spec").judgments[0].reason).toContain("</script>");
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("covers the mixed v1/v2/availability/historical/malformed input contract", () => {
+    const fixture = makeFixture();
+    try {
+      const v2TaskRoot = join(fixture.tasksRoot, "task-v2");
+      const v2Confirmation = {
+        schema_version: "human-confirmation.v3",
+        task_id: "task-v2",
+        stage: "build-plan",
+        decision: "accepted",
+        subject_ref: "stage-reflection",
+        material_revision: `revision-${"c".repeat(64)}`,
+        snapshot_tree: "d".repeat(40),
+        confirmed_at: "2026-08-30T12:00:00.000Z",
+        reply_text: "继续记录这次人工介入。",
+        step_slug: "stage-reflection",
+      };
+      const v2ConfirmationRaw = `${JSON.stringify(v2Confirmation, null, 2)}\n`;
+      const v2ConfirmationRef = `quality/confirmations/${createHash("sha256").update(v2ConfirmationRaw).digest("hex")}.json`;
+      mkdirSync(join(v2TaskRoot, "quality/confirmations"), { recursive: true });
+      writeFileSync(join(v2TaskRoot, v2ConfirmationRef), v2ConfirmationRaw);
+      writeJson(join(v2TaskRoot, "quality/stage-reflection/build-plan.json"), {
+        schema_version: "stage-reflection.v2",
+        record_kind: "judgment",
+        task_id: "task-v2",
+        stage: "build-plan",
+        stage_status: "completed",
+        generated_at: "2026-08-30T12:00:00.000Z",
+        status: "ok",
+        error: null,
+        judgments: [{
+          subject_id: "stage-reflection",
+          subject_kind: "step",
+          classification: "simplify",
+          severity: "medium",
+          reason: "v2 判断应进入既有候选消费链。",
+          evidence_refs: [],
+          confidence: "medium",
+          next_review_trigger: "下一次 build-plan 复核时",
+        }],
+        interventions: [{
+          confirmation_ref: v2ConfirmationRef,
+          step_slug: "stage-reflection",
+          reply_text: "继续记录这次人工介入。",
+          attribution: "human",
+          confidence: "medium",
+        }],
+        lessons_added: [],
+        status_matrix: {
+          code: { state: "completed", evidence_refs: [] },
+          verify: { state: "unknown", evidence_refs: [] },
+          physical_close: { state: "unknown", evidence_refs: [] },
+          acceptance: { state: "unknown", evidence_refs: [] },
+          release: { state: "unknown", evidence_refs: [] },
+        },
+        identity: { task_id: "task-v2", worktree: "/tmp/workflowhub", branch: "task/v2" },
+        source_completeness: { compaction: false, truncation: false, visible_scope: "fixture", unknown_reasons: [] },
+        what_helped: { state: "none_observed", items: [] },
+        what_to_improve: { state: "none_observed", items: [] },
+        blockers: { state: "none_observed", items: [] },
+        intervention_reasons: { state: "none_observed", items: [] },
+        what_to_simplify: { state: "observed", items: [{ summary: "v2 fixture", evidence_refs: [], confidence: "medium" }] },
+        simplifiable_now: { state: "none_observed", items: [] },
+      });
+
+      const availabilityTaskRoot = join(fixture.tasksRoot, "task-availability-only");
+      writeAvailabilityFact(availabilityTaskRoot, {
+        schema_version: "stage-reflection-availability.v1",
+        record_kind: "availability",
+        task_id: "task-availability-only",
+        stage: "build-plan",
+        state: "not_scheduled",
+        reason_code: "preflight_failed",
+        observed_at: "2026-08-30T12:00:00.000Z",
+        task_identity: { task_id: "task-availability-only", worktree: "/tmp/workflowhub", branch: "task/availability" },
+      });
+
+      const lessonsRoot = join(fixture.root, "Projects", fixture.project, "lessons");
+      writeFileSync(join(lessonsRoot, "verify-code.jsonl"), `${JSON.stringify({
+        entry_kind: "merged_lesson",
+        entry_id: "historical-1",
+        task_id: "unknown-historical-thread",
+        stage: "verify-code",
+        historical_replay: true,
+        lesson: "历史回放只能进入参考区。",
+        severity: "medium",
+        occurrence_count: 1,
+        source_refs: [{ task_id: "unknown-historical-thread", raw_entry_id: "historical-1" }],
+        evidence_refs: ["quality/evidence/historical-replay-20260901/transcript-index.jsonl"],
+        supersedes: [],
+      })}\n`);
+
+      expect(() => runCli(fixture)).not.toThrow();
+      const data = readProjectedData(join(fixture.out, "data.js"));
+      const v2Stage = data.tasks.find((task) => task.task_id === "task-v2").stages.find((stage) => stage.stage === "build-plan");
+      expect(v2Stage.state).not.toBe("unavailable");
+      expect(data.evolution.candidates.some((entry) => entry.source_observations?.some((observation) => observation.task_id === "task-v2"))).toBe(true);
+      expect(data.evolution.candidates.some((entry) => entry.historical_replay === true)).toBe(true);
+      expect(data.evolution.candidates.filter((entry) => entry.historical_replay === true).every((entry) => entry.tier === "reference_only")).toBe(true);
+      expect(data.evolution.candidates.find((entry) => entry.historical_replay === true)).toMatchObject({ judgment_layer: "fact", is_fact: true });
+      expect(data.evolution.quality_tax.sample_count).toBe(4);
+      expect(data.evolution.candidates.some((entry) => entry.source_observations?.some((observation) => observation.task_id === "task-availability-only"))).toBe(false);
+      expect(data.diagnostics.some((entry) => entry.summary.includes("lesson build-plan.jsonl:1 unavailable"))).toBe(true);
     } finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 });

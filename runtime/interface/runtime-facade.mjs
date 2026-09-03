@@ -20,6 +20,7 @@ const BEHAVIOR_BY_INTERNAL_OPERATION = Object.freeze({
   confirm: "confirm",
   "authorize-operation": "authorize",
   run: "run",
+  reflect: "run",
 });
 
 function behaviorForInternalOperation(operation) {

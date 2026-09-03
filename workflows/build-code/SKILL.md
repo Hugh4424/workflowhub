@@ -24,6 +24,12 @@ node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> -
 
 skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 `node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>`，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
 
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须包含六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，分别说明帮助、改进、阻塞、人工介入原因、应简化和现在可简化之处。每个区块条目写真实 `evidence_refs` 与 `confidence`；已检查无发现明确写 `none_observed`，不知道写 `unknown` 并说明 `unknown_reason`，不适用写 `not_applicable` 及理由，不能静默缺失。
+
+实际验证由 `validate-stage-reflection.mjs` 负责，它在内部调用 `deriveConsumptionEdges`。不要让技能或实现另行声称消费边：较早 subject 的 `output_refs` 仅在较晚 subject 的 `input_refs` 含同一引用时形成 edge；stage outcome/output 缺失会使 `coverage_status=partial`、消费保持 unknown，不能推出零消费。只有完整扫描、近 30 天 output 的 `zero_consumption_proof`，并且人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才能保留，否则 validator 改为 `needs_evidence`。当前 route 若尚未实现，保留真实 unavailable/dependency，不用未支持命令替代。
+
 When the host automatically binds the current WorkflowHub session to an
 explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery comes before extended
 reporting: read the host stage input once, perform the smallest real

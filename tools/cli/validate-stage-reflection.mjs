@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import Ajv from "ajv";
-import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { deriveConsumptionEdges } from "./derive-consumption-edges.mjs";
@@ -12,8 +12,110 @@ const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-const schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v1.json", import.meta.url), "utf8"));
-const validateSchema = new Ajv({ allErrors: true, strict: false }).compile(schema);
+
+export function isDateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const monthNumber = Number(month);
+  if (monthNumber < 1 || monthNumber > 12 || Number(day) < 1 || Number(day) > new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate()
+    || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  if (zone !== "Z" && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4, 6)) > 59)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
+const ajv = new Ajv({ allErrors: true, strict: false, formats: { "date-time": isDateTime } });
+const v1Schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v1.json", import.meta.url), "utf8"));
+const v2Schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v2.json", import.meta.url), "utf8"));
+ajv.addSchema(v1Schema);
+ajv.addSchema(v2Schema);
+const v1Validator = ajv.compile(v1Schema);
+const v2Validator = ajv.compile(v2Schema);
+
+const SIX_BLOCKS = ["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"];
+
+function selectValidator(input) {
+  if (!input || typeof input !== "object") return { validator: null, version: "unknown" };
+  if (input.schema_version === "stage-reflection.v2") return { validator: v2Validator, version: "v2" };
+  if (input.schema_version === "stage-reflection.v1") return { validator: v1Validator, version: "v1" };
+  return { validator: null, version: "unknown" };
+}
+
+function validateSchemaVersion(input) {
+  const { validator, version } = selectValidator(input);
+  if (!validator) fail(`unsupported schema_version: ${input?.schema_version}`);
+  if (!validator(input)) {
+    const errors = validator.errors?.map((entry) => `${entry.instancePath || "/"} ${entry.message}`).join("; ");
+    fail(`reflection schema is invalid: ${errors ?? "/"}`);
+  }
+  return version;
+}
+
+function completenessAnnotations(input) {
+  const annotations = [];
+  if (!input || typeof input !== "object") return annotations;
+  if (input.schema_version === "stage-reflection.v2") {
+    // unavailable/not_scheduled records intentionally carry no judgment
+    // blocks and use null projections; the schema requires their availability
+    // fact and identity instead.
+    if (["unavailable", "not_scheduled"].includes(input.status)) return annotations;
+    for (const block of SIX_BLOCKS) {
+      const value = input[block];
+      if (!value || typeof value !== "object") {
+        annotations.push({ code: "missing_quality_block", reason: `v2 record must include ${block}`, ref: block });
+        continue;
+      }
+      if (value.state === "unknown") {
+        if (!value.unknown_reason || typeof value.unknown_reason !== "string" || value.unknown_reason.trim() === "") {
+          annotations.push({ code: "unknown_quality_block", reason: `${block}.state=unknown requires unknown_reason`, ref: block });
+        } else {
+          annotations.push({ code: "unknown_quality_block", reason: `${block}.state=unknown`, ref: block });
+        }
+      }
+    }
+    if (!input.status_matrix) annotations.push({ code: "missing_fact_projection", reason: "v2 record must include status_matrix", ref: "status_matrix" });
+    if (!input.identity) annotations.push({ code: "missing_fact_projection", reason: "v2 record must include identity", ref: "identity" });
+    if (!input.source_completeness) annotations.push({ code: "missing_fact_projection", reason: "v2 record must include source_completeness", ref: "source_completeness" });
+    if (input.status_matrix && Object.values(input.status_matrix).some((column) => column?.state === "unknown")) {
+      annotations.push({ code: "unknown_fact_projection", reason: "v2 status_matrix contains unknown state", ref: "status_matrix" });
+    }
+    if (input.source_completeness
+      && [input.source_completeness.compaction, input.source_completeness.truncation, input.source_completeness.visible_scope].includes("unknown")) {
+      annotations.push({ code: "unknown_fact_projection", reason: "v2 source_completeness contains unknown state", ref: "source_completeness" });
+    }
+  }
+  return annotations;
+}
+
+function v2EvidenceRefs(input) {
+  if (input?.schema_version !== "stage-reflection.v2") return [];
+  const blockRefs = SIX_BLOCKS.flatMap((block) => input[block]?.items?.flatMap((item) => item.evidence_refs ?? []) ?? []);
+  const statusRefs = ["code", "verify", "physical_close", "acceptance", "release"]
+    .flatMap((column) => input.status_matrix?.[column]?.evidence_refs ?? []);
+  const judgmentRefs = input.judgments.flatMap((judgment) => judgment.evidence_refs ?? []);
+  return [...blockRefs, ...statusRefs, ...judgmentRefs];
+}
+
+function assertV2Identity(input, taskId, stage) {
+  if (input.schema_version !== "stage-reflection.v2") return;
+  if (input.identity && input.identity.task_id !== taskId) {
+    fail("reflection identity snapshot does not match the requested task");
+  }
+  if (input.availability_fact) {
+    if (input.availability_fact.stage !== stage || input.availability_fact.task_identity?.task_id !== taskId) {
+      fail("reflection availability identity does not match the requested task and stage");
+    }
+    const sharedFields = ["worktree", "branch", "attempt", "snapshot_tree", "material_revision"];
+    for (const field of sharedFields) {
+      const identityValue = input.identity?.[field];
+      const factValue = input.availability_fact.task_identity?.[field];
+      if (identityValue !== undefined && identityValue !== null && factValue !== undefined && factValue !== null && identityValue !== factValue) {
+        fail(`reflection identity field ${field} does not match availability fact`);
+      }
+    }
+  }
+}
 
 function fail(message) {
   const error = new Error(message);
@@ -145,7 +247,9 @@ function zeroConsumption(edges, stage, subjectId, nowMs) {
   const outputs = edges.outputs.filter((entry) => entry.source.stage === stage && entry.source.subject_id === subjectId);
   const recent = outputs.filter((entry) => inWindow(entry.produced_at, nowMs));
   if (recent.length === 0) return { allowed: false, reason: "no registered output is inside the 30-day window" };
-  if (edges.consumer_scan?.status !== "complete" || edges.consumer_scan.zero_consumption_proof !== true) {
+  if (edges.consumer_scan?.status !== "complete"
+    || edges.consumer_scan.zero_consumption_proof !== true
+    || edges.consumer_scan_proof?.zero_consumption !== true) {
     return { allowed: false, reason: "complete consumer scan is unavailable; consumption remains unknown" };
   }
   if (recent.some((entry) => entry.consumer_count !== 0 || entry.consumption_status === "consumed")) {
@@ -156,8 +260,10 @@ function zeroConsumption(edges, stage, subjectId, nowMs) {
 
 export function validateReflectionValue({ storageRoot, taskRoot, project, taskId, stage, reflectionRef, now, input, raw }) {
   assertTrustedPath(storageRoot, taskRoot, "task path");
-  if (!validateSchema(input)) fail(`reflection schema is invalid: ${validateSchema.errors?.[0]?.instancePath ?? "/"}`);
+  validateSchemaVersion(input);
   if (input.task_id !== taskId || input.stage !== stage) fail("reflection identity does not match the requested task and stage");
+  assertV2Identity(input, taskId, stage);
+  const annotations = completenessAnnotations(input);
   const nowMs = Date.parse(now);
   const derived = findTaskEdges(deriveConsumptionEdges(storageRoot), project, taskId);
   const confirmations = confirmationFacts(taskRoot, taskId, stage, nowMs, storageRoot);
@@ -165,6 +271,39 @@ export function validateReflectionValue({ storageRoot, taskRoot, project, taskId
   const missingEvidenceRefs = new Set();
   const missingConfirmationRefs = new Set();
   const downgrades = [];
+  if (["unavailable", "not_scheduled"].includes(input.status)) {
+    const reflection = { ...input };
+    return {
+      schema_version: "stage-reflection-validation.v1",
+      project,
+      task_id: taskId,
+      stage,
+      status: input.status,
+      reflection_ref: reflectionRef,
+      reflection,
+      downgrades,
+      annotations,
+      missing_evidence_refs: [],
+      missing_confirmation_refs: [],
+      consumption: derived,
+      confirmations: confirmations.map(({ ref, decision, step_slug, version, task_id: confirmationTaskId, stage: confirmationStage, reply_text, subject_ref, attempt_ref }) => ({
+        ref,
+        task_id: confirmationTaskId,
+        stage: confirmationStage,
+        decision,
+        step_slug,
+        reply_text,
+        subject_ref,
+        attempt_ref,
+        version,
+      })),
+      input_sha256: createHash("sha256").update(raw).digest("hex"),
+      validated_at: now,
+    };
+  }
+  for (const ref of v2EvidenceRefs(input)) {
+    if (!qualityRefExists(taskRoot, ref, storageRoot)) missingEvidenceRefs.add(ref);
+  }
   const judgments = input.judgments.map((judgment) => {
     const missing = judgment.evidence_refs.filter((ref) => !qualityRefExists(taskRoot, ref, storageRoot));
     for (const ref of missing) missingEvidenceRefs.add(ref);
@@ -210,16 +349,22 @@ export function validateReflectionValue({ storageRoot, taskRoot, project, taskId
   });
   const missing = [...missingEvidenceRefs].sort();
   const missingConfirmations = [...missingConfirmationRefs].sort();
+  const incomplete = annotations.some(({ code }) => [
+    "missing_quality_block",
+    "missing_fact_projection",
+    "unknown_quality_block",
+    "unknown_fact_projection",
+  ].includes(code));
   const status = input.status === "failed"
     ? "failed"
-    : missing.length > 0 || missingConfirmations.length > 0 ? "degraded" : input.status;
+    : incomplete || missing.length > 0 || missingConfirmations.length > 0 ? "degraded" : input.status;
   const reflection = {
     ...input,
     ...(status === "degraded" ? { status: "degraded", error: null } : {}),
     judgments,
     interventions,
   };
-  if (!validateSchema(reflection)) fail(`validated reflection is invalid: ${validateSchema.errors?.[0]?.instancePath ?? "/"}`);
+  validateSchemaVersion(reflection);
   return {
     schema_version: "stage-reflection-validation.v1",
     project,
@@ -229,6 +374,7 @@ export function validateReflectionValue({ storageRoot, taskRoot, project, taskId
     reflection_ref: reflectionRef,
     reflection,
     downgrades,
+    annotations,
     missing_evidence_refs: missing,
     missing_confirmation_refs: missingConfirmations,
     consumption: derived,
@@ -256,30 +402,10 @@ function reflectionPath(storageRoot, taskRoot, reflectionRef) {
   return path;
 }
 
-function writeValidatedReflection({ storageRoot, taskRoot, reflectionRef, sourceRaw, reflection }) {
-  const path = reflectionPath(storageRoot, taskRoot, reflectionRef);
-  const currentRaw = readFileSync(path, "utf8");
-  if (currentRaw !== sourceRaw) fail(`reflection ${reflectionRef} changed during validation`);
-  const validatedRaw = `${JSON.stringify(reflection, null, 2)}\n`;
-  if (validatedRaw === currentRaw) return { status: "unchanged", ref: reflectionRef };
-  const temporary = `${path}.tmp-${randomUUID()}`;
-  try {
-    writeFileSync(temporary, validatedRaw, { encoding: "utf8", flag: "wx", mode: 0o600 });
-    renameSync(temporary, path);
-  } catch (error) {
-    try { unlinkSync(temporary); } catch (cleanupError) { if (cleanupError?.code !== "ENOENT") throw cleanupError; }
-    fail(`reflection ${reflectionRef} write-back failed: ${error.message}`);
-  }
-  return { status: "written", ref: reflectionRef };
-}
-
-export function validateReflection({ storageRoot, taskRoot, project, taskId, stage, reflectionRef, now, writeBack = false }) {
+export function validateReflection({ storageRoot, taskRoot, project, taskId, stage, reflectionRef, now }) {
   const path = reflectionPath(storageRoot, taskRoot, reflectionRef);
   const { raw, value: input } = readJson(path, `reflection ${reflectionRef}`);
-  const result = validateReflectionValue({ storageRoot, taskRoot, project, taskId, stage, reflectionRef, now, input, raw });
-  return writeBack
-    ? { ...result, reflection_write: writeValidatedReflection({ storageRoot, taskRoot, reflectionRef, sourceRaw: raw, reflection: result.reflection }) }
-    : result;
+  return validateReflectionValue({ storageRoot, taskRoot, project, taskId, stage, reflectionRef, now, input, raw });
 }
 
 function main() {
@@ -296,7 +422,6 @@ function main() {
     stage: values.stage,
     reflectionRef: values["reflection-ref"],
     now,
-    writeBack: true,
   }), null, 2));
 }
 
