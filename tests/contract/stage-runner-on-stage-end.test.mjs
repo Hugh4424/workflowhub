@@ -110,7 +110,7 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
     expect(result.stage_reflection.error).toMatch(/reflection executor failed/);
   });
 
-  it("runs the reflection for a completed stage and appends raw lessons before execution", async () => {
+  it("runs the reflection for a completed stage and commits lessons after execution", async () => {
     const state = fixture("stage-ended-completed");
     let lessonSeenBeforeExecutor = false;
     const result = await runReflection(state, "completed", async ({ taskId, stageStatus }) => {
@@ -119,30 +119,29 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
     });
 
     expect(result.stage_reflection).toMatchObject({ status: "completed", step_status: "completed" });
-    expect(lessonSeenBeforeExecutor).toBe(true);
+    expect(lessonSeenBeforeExecutor).toBe(false);
     expect(readFileSync(lessonPath(state), "utf8").trim()).toMatch(/"entry_kind":"raw_observation"/);
   });
 
-  it("records a raw-lesson prelude failure as a failed reflection", async () => {
+  it("records a lesson commit failure as a degraded reflection", async () => {
     const state = fixture("reflection-prelude-failed");
     mkdirSync(join(state.root, "Projects", "StageReflection"), { recursive: true });
     writeFileSync(join(state.root, "Projects", "StageReflection", "lessons"), "not a directory\n");
     const result = await runReflection(state, "completed", async ({ taskId, stageStatus }) => reflection({ taskId, stageStatus }));
     expect(result.stage_reflection).toMatchObject({
-      status: "failed",
-      step_status: "failed",
-      reflection_status: "failed",
+      status: "completed",
+      step_status: "completed",
+      reflection_status: "degraded",
       persisted: true,
     });
     expect(JSON.parse(state.task.readRecord("quality/stage-reflection/build-spec.json"))).toMatchObject({
-      status: "failed",
-      error: { summary: expect.stringMatching(/lessons must be a directory/i) },
+      status: "degraded",
+      error: null,
       lessons_added: [],
     });
   });
 
   it.each([
-    ["not-started", undefined],
     ["timeout", async () => { throw new Error("reflection timeout"); }],
     ["failed", async () => { throw new Error("reflection failed"); }],
   ])("keeps the machine raw observation when reflection is %s", async (_scenario, execute) => {
@@ -190,7 +189,7 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(lessons).toHaveLength(2);
+    expect(lessons).toHaveLength(1);
     expect(lessons.every((entry) => entry.entry_kind === "raw_observation" && entry.merged === false)).toBe(true);
   });
 

@@ -159,6 +159,26 @@ describe("review record route", () => {
     });
   });
 
+  it("persists only the schema-supported error pair when public diagnostics include a cause", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      status: "unavailable",
+      stage: "verify-code",
+      review_track: null,
+      review_kind: null,
+      material_id: "8192849eab3a861772ed1e409e72ff43eae462b16bc6437193483fc905d8260d",
+      runtime_id: null,
+      outcome: "unavailable",
+      provider_results: [],
+      findings: [],
+      error: { code: "REVIEW_EXECUTION_TIMEOUT", message: "broker timed out", cause_code: "PROCESS_TIMEOUT" },
+    };
+    const refs = recordSimpleReviewResult({ task, result, kernel });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.error).toEqual({ code: "REVIEW_EXECUTION_TIMEOUT", message: "broker timed out" });
+  });
+
   it("persists the actual producer shape when route loading is unavailable", async () => {
     const { task, kernel } = makeTask();
     const result = await runSimpleReview({

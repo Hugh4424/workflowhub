@@ -1,0 +1,40 @@
+[
+  {
+    "id": "judgment-executed",
+    "condition": "real judgment + validation succeeds",
+    "fixed_path_status": "ok",
+    "availability_state": null,
+    "counts_in_m16": true
+  },
+  {
+    "id": "judgment-invalid",
+    "condition": "real judgment + validation fails",
+    "fixed_path_status": "failed",
+    "availability_state": null,
+    "counts_in_m16": false
+  },
+  {
+    "id": "executor-absent",
+    "condition": "stage ended without reflection executor",
+    "fixed_path_status": null,
+    "availability_state": "unavailable",
+    "reason_code": "executor_absent",
+    "counts_in_m16": false
+  },
+  {
+    "id": "not-scheduled",
+    "condition": "preflight, identity, startup, or interruption prevented scheduling",
+    "fixed_path_status": null,
+    "availability_state": "not_scheduled",
+    "reason_code": "preflight_failed",
+    "counts_in_m16": false
+  },
+  {
+    "id": "supplemented",
+    "condition": "later judgment supplements an empty fixed path",
+    "fixed_path_status": "ok",
+    "availability_state": "unavailable",
+    "counts_in_m16": true
+  }
+]
+

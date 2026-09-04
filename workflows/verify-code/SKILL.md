@@ -8,9 +8,7 @@ version: 5.1.0
 
 ## 同一会话自动记录
 
-本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个
-manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有
-记录命令；命令失败就保留真实 `incomplete`/`unavailable`，不能补填成功。
+本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验。旧 task context 只读保留，不会和新 task 的事件混在一起；未登记的 task id 仍直接失败。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；命令失败就保留真实 `incomplete`/`unavailable`，不能补填成功。
 
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=verify-code --subject-kind=step --subject-id=<step_slug>
@@ -20,6 +18,12 @@ node tools/host/workflowhub-codex-session-event.mjs finish --stage=verify-code -
 skill 使用同一命令记录实际版本、触发和执行结果。verify-code 不执行前四
 阶段的 `record-spec-analyze`/`spec-analyze`；阶段末发布当前代码审查 outcome，并单独保留真实
 确认事实。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须包含六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，分别回答帮助、改进、阻塞、人工介入原因、应简化和现在可简化之处。每个区块条目带真实 `evidence_refs` 与 `confidence`；没有观察到写 `none_observed`，无法判断写 `unknown` + `unknown_reason`，不适用写 `not_applicable` + 原因，不能静默空缺。
+
+`validate-stage-reflection.mjs` 在验证时内部调用 `deriveConsumptionEdges`，不由技能单独调用消费边工具。只有较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 含同一引用才形成边；stage outcome/output 不完整时 `coverage_status=partial`、消费保持 unknown、`zero_consumption_proof` 不可用。完整扫描和近 30 天零 consumer 证明还必须配合人工 rejected 或同一步骤两次介入，才能保留 `remove_candidate`；否则降为 `needs_evidence`。route 尚未实现时如实记录 unavailable/dependency，不发明替代命令。
 
 ## 职责
 
@@ -105,6 +109,10 @@ build-code 已有的测试事实可以作为代码审查输入，但 verify-code
 - `failed`：代码本身有明确失败，回同一 task 修复。
 
 `incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
+
+## Preflight self-check
+
+Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=verify-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
 
 ## 阶段末交接
 

@@ -1,0 +1,11 @@
+{
+  "schema_version": "resolved-review-authorization.v1",
+  "task_id": "legacy-task",
+  "stage": "verify-code",
+  "subject": "code_review",
+  "stage_outcome_ref": "quality/evidence/stage-outcomes/verify-code/22222222222222222222222222222222222222222222222222222222222222222222.json",
+  "stage_outcome_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "review_result_ref": "quality/reviews/results/legacy-result.json",
+  "review_result_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+  "finding_dispositions": []
+}

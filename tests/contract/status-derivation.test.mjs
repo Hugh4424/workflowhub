@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { STAGE_PREDICATES, deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
+import { STAGE_FACT_MATERIALS, STAGE_PREDICATES, deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
 
@@ -117,6 +117,107 @@ function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
 }
 
 describe("status is derived from current quality facts", () => {
+  it("does not turn upstream quality gaps into actions that block the current stage", () => {
+    const groups = deriveStatusGroups({
+      stage: "verify-code",
+      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
+      productRelease: {
+        reasons: [
+          "stage_completion_missing:make-decision",
+          "stage_predicate_missing:build-code:stage_outcome",
+          "stage_predicate_missing:verify-code:code_review",
+        ],
+      },
+    });
+    expect(groups.actionable_now).toEqual(["code_review"]);
+    expect(groups.next_action).toBe("code_review");
+    expect(groups).not.toHaveProperty("upstream_actions");
+  });
+
+  it("requires exactly one current completed stage outcome for product stage completion", () => {
+    const taskId = "task";
+    const tree = "a".repeat(40);
+    const materialRevision = `revision-${"b".repeat(64)}`;
+    const scopeRevision = `revision-${"c".repeat(64)}`;
+    const value = {
+      schema_version: "workflowhub-stage-outcomes.v1",
+      task_id: taskId,
+      stage: "make-decision",
+      run_id: `vnext-${sha256(`${taskId}\0make-decision`).slice(0, 32)}`,
+      status: "completed",
+      attempt_id: "attempt-make-decision",
+      producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: "attempt-make-decision" },
+      snapshot_tree: tree,
+      material_revision: materialRevision,
+      material_hashes: {},
+      material_scope: STAGE_FACT_MATERIALS["make-decision"],
+      material_scope_revision: scopeRevision,
+      steps_manifest_ref: "workflows/make-decision/steps.json",
+      steps_manifest_hash: "d".repeat(64),
+      skills_manifest_ref: "workflows/make-decision/skill-deps.yaml",
+      skills_manifest_hash: "e".repeat(64),
+      step_outcomes: [],
+      skill_outcomes: [],
+    };
+    const raw = `${JSON.stringify(value)}\n`;
+    const ref = `quality/evidence/stage-outcomes/make-decision/${sha256(raw)}.json`;
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: taskId,
+      read: (candidate) => candidate === ref ? raw : (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
+      stage_outcome_refs: { "make-decision": [ref] },
+      snapshot_tree: tree,
+      material_revision: materialRevision,
+      material_scope_revisions: { "make-decision": scopeRevision },
+      authenticate: ({ value: candidate }) => candidate,
+    });
+    expect(statuses["make-decision"]).toBe("completed");
+    expect(deriveStageCompletion("make-decision", [], { requireStageOutcome: true, stageOutcomeStatus: statuses["make-decision"] }).status).toBe("in_progress");
+  });
+
+  it("ignores an older retry envelope that reuses the deterministic stage run id", () => {
+    const taskId = "task";
+    const currentTree = "a".repeat(40);
+    const oldTree = "b".repeat(40);
+    const materialRevision = `revision-${"c".repeat(64)}`;
+    const runId = `vnext-${sha256(`${taskId}\0make-decision`).slice(0, 32)}`;
+    const outcome = (snapshot_tree) => ({
+      schema_version: "workflowhub-stage-outcomes.v1",
+      task_id: taskId,
+      stage: "make-decision",
+      run_id: runId,
+      status: "completed",
+      attempt_id: `attempt-${snapshot_tree.slice(0, 4)}`,
+      producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: runId },
+      snapshot_tree,
+      material_revision: materialRevision,
+      material_hashes: {},
+      material_scope: STAGE_FACT_MATERIALS["make-decision"],
+      material_scope_revision: "revision-scope",
+      material_scope_hashes: {},
+      steps_manifest_ref: "workflows/make-decision/steps.json",
+      steps_manifest_hash: "d".repeat(64),
+      skills_manifest_ref: "workflows/make-decision/skill-deps.yaml",
+      skills_manifest_hash: "e".repeat(64),
+      step_outcomes: [],
+      skill_outcomes: [],
+    });
+    const currentRaw = `${JSON.stringify(outcome(currentTree))}\n`;
+    const oldRaw = `${JSON.stringify(outcome(oldTree))}\n`;
+    const currentRef = `quality/evidence/stage-outcomes/make-decision/${sha256(currentRaw)}.json`;
+    const oldRef = `quality/evidence/stage-outcomes/make-decision/${sha256(oldRaw)}.json`;
+    const records = new Map([[currentRef, currentRaw], [oldRef, oldRaw]]);
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: taskId,
+      read: (ref) => records.get(ref),
+      stage_outcome_refs: { "make-decision": [oldRef, currentRef] },
+      snapshot_tree: currentTree,
+      material_revision: materialRevision,
+      material_scope_revisions: { "make-decision": "revision-scope" },
+      authenticate: ({ value: candidate }) => candidate,
+    });
+    expect(statuses["make-decision"]).toBe("completed");
+  });
+
   it("does not consume an accepted/current pointer or caller status", () => {
     const result = deriveStageCompletion("build-spec", facts("build-spec"));
     expect(result).toMatchObject({ stage: "build-spec", status: "completed", missing: [] });

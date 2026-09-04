@@ -766,7 +766,7 @@ describe("WorkflowHub current Codex session handoff", () => {
       bind(state, "task-alpha");
       startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "alpha-step", cwd: state.cwd, startedAtMs: 1000 });
       finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "alpha-step", cwd: state.cwd, endedAtMs: 2000, status: "completed", resultSummary: "alpha" });
-      expect(() => startCodexSessionEvent({ taskId: "task-beta", stage: "build-code", subjectKind: "step", subjectId: "beta-step", cwd: state.cwd, startedAtMs: 3000 })).toThrow(/does not match|switch/i);
+      expect(() => startCodexSessionEvent({ taskId: "task-beta", stage: "build-code", subjectKind: "step", subjectId: "beta-step", cwd: state.cwd, startedAtMs: 3000 })).toThrow(/task context|binding/i);
       const alpha = buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" });
       expect(alpha.events).toEqual([expect.objectContaining({ subject_id: "alpha-step" })]);
       expect(alpha.events).not.toEqual(expect.arrayContaining([expect.objectContaining({ subject_id: "beta-step" })]));

@@ -25,7 +25,7 @@ continues without guessing.
 
 本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。
 
-阶段入口收到明确的 project/task context 时，会自动把当前已登记会话绑定到这个 task；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一绑定。绑定后下面的命令自动使用这个 task，不再手填 task id。一个会话只允许绑定一个 task，换 task 必须开新会话。
+阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一登记。同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验；旧 task context 只读保留，不会和新 task 的事件混在一起。完成选择后，下面的事件命令可以省略 task id；未登记的 task id 仍直接失败。
 
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>
@@ -33,6 +33,12 @@ node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> -
 ```
 
 skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
+
+`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`，技能不另行派生消费边。实际边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 同引用形成；stage outcome 或 output 不全时 `coverage_status=partial`、消费为 unknown，不能当零消费。只有完整扫描、近 30 天登记 output 的 `zero_consumption_proof`，以及人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才保留，否则变为 `needs_evidence`。如果 route 尚未实现，记录真实 unavailable/dependency，不发明私有命令。
 
 ## Portable dependencies
 

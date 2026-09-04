@@ -9,7 +9,7 @@ const outputPath = process.argv[2] ?? "quality/reviews/m16-final-review-chain.js
 const requestPath = process.argv[3] ?? process.env.WORKFLOWHUB_WH_REVIEW_REQUEST ?? null;
 const specPath = process.env.WORKFLOWHUB_REVIEW_SPEC_PATH
   ? resolve(process.env.WORKFLOWHUB_REVIEW_SPEC_PATH)
-  : resolve(process.cwd(), "specs/workflowhub-m16-evolution-20260831/spec.md");
+  : resolve(process.cwd(), "specs/archive/workflowhub-m16-evolution-20260831/spec.md");
 const CURRENT_MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const SHA256 = /^[a-f0-9]{64}$/;
 

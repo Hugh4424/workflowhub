@@ -5,6 +5,7 @@ import yaml from "js-yaml";
 
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
+import { STAGE_FACT_MATERIALS, stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
 import { createRegisteredCodexSource, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 
@@ -63,6 +64,40 @@ export function canonicalStageMaterials() {
   });
 }
 
+export function completeCanonicalStageMaterials() {
+  const values = canonicalStageMaterials();
+  return Object.freeze({
+    ...values,
+    "decision-log.md": `${values["decision-log.md"]}
+
+## 收敛检查
+| 维度 | 用户答案 | 事实 | 可执行验收 |
+| --- | --- | --- | --- |
+| goal | 用户确认当前夹具目标已达成 | R-FIXTURE-1 -> D-FIXTURE-1 | 场景：运行当前夹具；数据来源：当前阶段事实；通过：状态为 completed；失败：状态缺失 |
+| scope | 用户确认只覆盖当前夹具 | R-FIXTURE-5 -> D-FIXTURE-5 | 当前范围保持不变 |
+| solution | 用户确认取舍：最小夹具；被拒方案：扩大运行时；无未决项 | D-FIXTURE-1 | 当前方案可执行 |
+| acceptance | 用户确认结果可验证 | AC-001 -> D-FIXTURE-1 | 场景：运行当前夹具；数据来源：当前阶段事实；通过：状态为 completed；失败：状态不是 completed |
+
+## UI applicability
+\`\`\`json
+{
+  "result": "non_ui",
+  "sources": {
+    "raw_requirement": { "conclusion": "non_ui", "reason": "当前夹具只验证运行时事实" },
+    "project_inventory": { "conclusion": "non_ui", "reason": "当前夹具没有页面 consumer" },
+    "planned_or_changed_frontend_fact": { "conclusion": "non_ui", "reason": "当前夹具没有前端改动" }
+  }
+}
+\`\`\`
+`,
+    "plan.md": `${values["plan.md"]}
+
+## Deletion proofs
+- 不涉及删除。
+`,
+  });
+}
+
 export function writeCanonicalStageMaterials(artifacts) {
   const values = canonicalStageMaterials();
   for (const [name, value] of Object.entries(values)) artifacts.writeAtomic(name, value);
@@ -102,10 +137,13 @@ function lifecycleEvents(prefix = "fixture-confirmation") {
 }
 
 /** Test-only Stage Agent producer fixture; runtime authenticates every byte. */
-export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null, skipAnalyzerValidation = false } = {}) {
+export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null, skipAnalyzerValidation = false, workflowRunId = undefined, producer = null } = {}) {
   if (!task?.identity?.taskId || !kernel?.publishCanonicalRecord || !artifacts?.read) throw new TypeError("stage outcome fixture requires task, kernel, and ArtifactDir");
   const active = workspace ?? candidateWorkspace;
   if (!active?.worktreeRoot) throw new TypeError("stage outcome fixture requires an authenticated workspace");
+  const resolvedWorkflowRunId = workflowRunId === undefined
+    ? kernel.deriveStageWorkflowRunId(stage)
+    : workflowRunId;
   const stepsManifestRef = `workflows/${stage}/steps.json`;
   const skillsManifestRef = `workflows/${stage}/skill-deps.yaml`;
   const stepsManifestRaw = readFileSync(join(process.cwd(), stepsManifestRef), "utf8");
@@ -116,6 +154,8 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
   });
   const revision = materialRevisionFromValues(values);
+  const materialScope = STAGE_FACT_MATERIALS[stage] ?? MATERIALS;
+  const scopeValues = materialScope.map((file) => values.find(([name]) => name === file) ?? [file, null]);
   const manifest = JSON.parse(stepsManifestRaw);
   const skillManifest = yaml.load(skillsManifestRaw);
   const analyzerStep = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
@@ -299,6 +339,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     const resultSummary = `resolved ${name}`;
     return {
       skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "dsh-code-review" || status === "completed", version: "fixture-1.0.0",
+      input_refs: [],
       result_summary: resultSummary,
       evidence_refs: makeEvidence({ subjectKind: "skill", subjectId: name, outcomeStatus: status, resultSummary }),
       ...(status === "completed" ? {} : { reason: "fixture stage outcome is incomplete for the unavailable review" }),
@@ -307,9 +348,13 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   });
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1", task_id: task.identity.taskId, stage, attempt_id: attemptId, status,
-    producer: { kind: "stage-agent", host: "fixture-host", source_id: "fixture/executor", source_family: "fixture", agent_run_id: attemptId },
+    ...(resolvedWorkflowRunId === null ? {} : { run_id: resolvedWorkflowRunId }),
+    producer: producer ?? { kind: "stage-agent", host: "fixture-host", source_id: "fixture/executor", source_family: "fixture", agent_run_id: attemptId },
     snapshot_tree: snapshot.tree, material_revision: revision,
     material_hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : sha256(content)])),
+    material_scope: [...materialScope],
+    material_scope_revision: stageMaterialScopeRevision(stage, Object.fromEntries(values)),
+    material_scope_hashes: Object.fromEntries(scopeValues.map(([file, content]) => [file, content === null ? null : sha256(content)])),
     steps_manifest_ref: stepsManifestRef, steps_manifest_hash: sha256(stepsManifestRaw),
     skills_manifest_ref: skillsManifestRef, skills_manifest_hash: sha256(skillsManifestRaw),
     step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes,

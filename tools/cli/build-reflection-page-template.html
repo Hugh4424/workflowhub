@@ -81,7 +81,7 @@
     .state-high, .state-critical { color: var(--warning); }
     .state-failed, .state-fatal, .state-error { color: var(--danger); }
     .state-degraded, .state-stale, .state-insufficient_samples, .state-unverified, .state-partial { color: var(--warning); }
-    .state-unknown, .state-unavailable, .state-empty, .state-not-checked, .state-not-applicable { color: var(--quiet); }
+    .state-unknown, .state-unavailable, .state-not_scheduled, .state-empty, .state-not-checked, .state-not-applicable { color: var(--quiet); }
     .stage-grid { border-top: 2px solid var(--ink); }
     .stage-row { border-top: 1px solid var(--line); }
     .stage-toggle { display: flex; width: 100%; min-height: 58px; align-items: flex-start; gap: 12px; padding: 10px 2px; border: 0; background: transparent; text-align: left; }
@@ -236,19 +236,21 @@
   <script>
     (() => {
       const data = globalThis.__WH_MONITOR_DATA__;
-      const stateNames = new Set(["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "stale", "insufficient_samples", "not_checked", "not_applicable", "unverified", "ok", "ready", "partial"]);
+      const stateNames = new Set(["unknown", "unavailable", "not_scheduled", "degraded", "failed", "error", "empty", "fatal", "stale", "insufficient_samples", "not_checked", "not_applicable", "unverified", "ok", "ready", "partial"]);
       let selectedTaskId = data?.tasks?.[0]?.task_id || "all";
       const el = (id) => document.getElementById(id);
       const text = (node, value) => { node.textContent = value === null || value === undefined || value === "" ? "unknown" : String(value); return node; };
       const option = (label, value) => { const node = document.createElement("option"); node.value = value; node.textContent = label; return node; };
-      const stateLabel = (value) => ({ ok: "ok", ready: "ready", unknown: "unknown", unavailable: "unavailable", degraded: "degraded", failed: "failed", error: "error", empty: "empty", fatal: "fatal", stale: "stale", insufficient_samples: "insufficient_samples", not_checked: "not_checked", not_applicable: "not_applicable", unverified: "unverified", partial: "partial", completed: "已记录", complete: "已复盘" }[value] || "unknown");
+      const stateLabel = (value) => ({ ok: "ok", ready: "ready", unknown: "unknown", unavailable: "unavailable", not_scheduled: "not_scheduled", degraded: "degraded", failed: "failed", error: "error", empty: "empty", fatal: "fatal", stale: "stale", insufficient_samples: "insufficient_samples", not_checked: "not_checked", not_applicable: "not_applicable", unverified: "unverified", partial: "partial", completed: "已记录", complete: "已复盘" }[value] || "unknown");
       const stageStatusLabel = (value) => value === "completed" ? "已记录" : value === "ok" ? "已复盘" : stateLabel(value);
       const classificationLabel = (value) => ({ keep: "保留", optimize: "优化", simplify: "简化", merge: "合并", remove_candidate: "移除候选", add: "新增", needs_evidence: "需要证据", evidence_gap: "证据缺口", handoff: "交接遗漏", source_conflict: "来源冲突", artifact_missing: "产物缺失", out_of_order: "顺序异常", review_missing: "缺少审查", quality_tax: "质量税" }[value] || value);
       const stageLabel = (value) => ({ "make-decision": "做决定", "build-spec": "规格设计", "build-plan": "执行计划", "build-code": "开发实现", "verify-code": "验收检查" }[value] || value);
+      const judgmentLayerLabel = (entry) => entry?.is_fact === true || entry?.judgment_layer === "fact" ? "fact · 事实" : "judgment · 非事实";
       const make = (tag, className, value) => { const node = document.createElement(tag); if (className) node.className = className; if (value !== undefined) text(node, value); return node; };
       const addField = (parent, name, value) => { const row = make("div", "field"); row.appendChild(make("span", "field-name", `${name}: `)); if (value instanceof Node) row.appendChild(value); else row.appendChild(document.createTextNode(value === null || value === undefined || value === "" ? "unknown" : String(value))); parent.appendChild(row); };
       const stateClassNames = new Set([...stateNames, "completed", "complete", "low", "medium", "high", "critical"]);
       const stateNode = (state, label = stateLabel(state)) => make("span", `state state-${stateClassNames.has(state) ? state : "unknown"}`, label);
+      const showReference = (ref) => { const panel = el("reference-panel"); text(el("reference-value"), ref); panel.hidden = false; panel.scrollIntoView({ block: "nearest" }); };
       const refList = (refs) => {
         const wrap = make("span", "ref-list");
         if (!Array.isArray(refs) || refs.length === 0) { wrap.textContent = "unavailable"; return wrap; }
@@ -259,12 +261,7 @@
           button.type = "button";
           button.disabled = !available;
           button.setAttribute("aria-label", available ? `来源 ${index + 1} · ${entry.safe_ref}` : `来源 ${index + 1} · unavailable`);
-          if (available) button.addEventListener("click", () => {
-            const panel = el("reference-panel");
-            text(el("reference-value"), entry.safe_ref);
-            panel.hidden = false;
-            panel.scrollIntoView({ block: "nearest" });
-          });
+          if (available) button.addEventListener("click", () => showReference(entry.safe_ref));
           wrap.appendChild(button);
         });
         return wrap;
@@ -301,7 +298,7 @@
         toggle.setAttribute("aria-expanded", String(hasFindings)); toggle.setAttribute("aria-controls", panelId);
         toggle.appendChild(make("span", "stage-toggle-icon", hasFindings ? "−" : "+"));
         const main = make("span", "stage-main"); main.appendChild(make("span", "stage-name", stageLabel(stage.stage)));
-        const meta = make("span", "stage-meta"); meta.appendChild(make("span", "field-name", "阶段状态")); meta.appendChild(stateNode(stage.stage_status || "unknown", stageStatusLabel(stage.stage_status || "unknown"))); meta.appendChild(make("span", "field-name", "复盘状态")); meta.appendChild(stateNode(stage.reflection_status || "unknown", stageStatusLabel(stage.reflection_status || "unknown")));
+        const meta = make("span", "stage-meta"); meta.appendChild(make("span", "field-name", "阶段状态")); meta.appendChild(stateNode(stage.stage_status || "unknown", stageStatusLabel(stage.stage_status || "unknown"))); meta.appendChild(make("span", "field-name", "复盘状态")); meta.appendChild(stateNode(stage.reflection_status || "unknown", stageStatusLabel(stage.reflection_status || "unknown"))); if (stage.availability_fact?.reason_code) { meta.appendChild(make("span", "field-name", "原因")); meta.appendChild(make("span", "stage-reason", stage.availability_fact.reason_code)); }
         if (stage.judgments.length > 0) meta.appendChild(make("span", "field-name", `· ${stage.judgments.length} 条判断`));
         main.appendChild(meta); toggle.appendChild(main); row.appendChild(toggle);
         if (judgments.length > 0) judgments.forEach((judgment) => panel.appendChild(renderJudgment(judgment)));
@@ -319,6 +316,7 @@
         const lessons = el("lesson-list"); lessons.replaceChildren();
         const nextReview = el("task-next-review"); nextReview.replaceChildren();
         const evidencePanel = el("evidence-panel"); evidencePanel.replaceChildren(); evidencePanel.hidden = true;
+        const referencePanel = el("reference-panel"); referencePanel.hidden = true; text(el("reference-value"), "");
         const evidenceToggle = el("evidence-toggle"); evidenceToggle.setAttribute("aria-expanded", "false"); el("evidence-toggle-icon").textContent = "+";
         if (!task) { header.appendChild(make("p", "empty-copy", "empty: 暂无任务数据。")); return; }
         const title = make("div"); title.appendChild(make("h2", "task-id", task.task_id)); title.appendChild(make("p", "coverage", `覆盖阶段 ${task.coverage.present}/${task.coverage.total} · 人工介入 ${task.stages.reduce((sum, stage) => sum + (stage.interventions || []).length, 0)} · 快照时间 ${task.generated_at || "unknown"}`));
@@ -355,6 +353,7 @@
         card.appendChild(make("div", "pending-score", entry.tier || "reference_only"));
         card.appendChild(make("h4", "pending-title", `${entry.target_ref?.target_kind || "target"}:${subject}`));
         addField(card, "stage", stages); addField(card, "subject", subject); addField(card, "classification", classificationLabel(entry.classification));
+        if (entry.lesson) addField(card, "lesson", entry.lesson);
         addField(card, "frequency", entry.frequency); addField(card, "priority_score", entry.priority_score); addField(card, "confidence", entry.confidence);
         addField(card, "freshness", entry.freshness); addField(card, "validation_status", entry.validation_status);
         if (entry.classification === "remove_candidate") addField(card, "removal_status", entry.removal_status === "pending" ? "待裁决" : "unknown");
@@ -365,8 +364,9 @@
           if (index > 0) entryNode.appendChild(document.createTextNode(", "));
           const safe = item?.safe_ref; const kind = item?.ref?.split("/")?.[1] || "evidence";
           if (!safe) { entryNode.appendChild(make("span", "ref-unavailable", "unavailable")); entryNode.hidden = index >= 1; evidenceWrap.appendChild(entryNode); return; }
-          const link = make("a", "ref", safe); link.href = `#ref=${encodeURIComponent(safe)}`; link.dataset.ref = safe;
+          const link = make("button", "ref-button", safe); link.type = "button"; link.dataset.ref = safe;
           link.setAttribute("aria-label", `subject=${subject}; task=${observation.task_id || "unknown"}; evidence=${kind}`);
+          link.addEventListener("click", () => showReference(safe));
           entryNode.appendChild(link); entryNode.hidden = index >= 1; evidenceWrap.appendChild(entryNode);
         });
         card.appendChild(evidenceWrap);
@@ -375,7 +375,7 @@
           toggle.addEventListener("click", () => { const expanded = toggle.getAttribute("aria-expanded") !== "true"; toggle.setAttribute("aria-expanded", String(expanded)); toggle.textContent = expanded ? "收起证据" : "展开全部证据"; evidenceWrap.querySelectorAll(".evidence-entry").forEach((node, index) => { node.hidden = !expanded && index >= 1; }); });
           card.appendChild(toggle);
         }
-        card.appendChild(make("div", "pending-source", "judgment · 非事实 · 不等于删除许可"));
+        card.appendChild(make("div", "pending-source", `${judgmentLayerLabel(entry)}${entry.historical_replay ? " · 历史回放" : ""} · 不等于删除许可`));
         return card;
       };
       const regionStatus = (evolution, tier, entries) => {
@@ -388,8 +388,9 @@
         const list = el(listId); list.replaceChildren(); const state = el(stateId); const more = el(moreId);
         const entries = (Array.isArray(evolution.candidates) ? evolution.candidates : []).filter((entry) => entry.row_status === "active" && entry.tier === tier).sort(sortEvolutionCandidates);
         const status = regionStatus(evolution, tier, entries);
-        if (status !== "ok") { text(state, `当前分区状态：${stateLabel(status)}。${evolution.regions?.[tier]?.reason ? ` ${evolution.regions[tier].reason}` : ""}`); more.hidden = true; return; }
-        text(state, entries.length === 0 ? "empty: 暂无候选数据。" : `ok: 共 ${entries.length} 条。`);
+        const canRenderEntries = status === "ok" || (tier === "reference_only" && status === "stale" && entries.length > 0);
+        if (!canRenderEntries) { text(state, `当前分区状态：${stateLabel(status)}。${evolution.regions?.[tier]?.reason ? ` ${evolution.regions[tier].reason}` : ""}`); more.hidden = true; return; }
+        text(state, `${stateLabel(status)}: 共 ${entries.length} 条。${evolution.regions?.[tier]?.reason ? ` ${evolution.regions[tier].reason}` : ""}`);
         entries.slice(0, evolutionLimits[tier]).forEach((entry) => list.appendChild(renderCandidate(entry)));
         more.hidden = entries.length <= evolutionLimits[tier];
         more.onclick = () => { evolutionLimits[tier] += 20; renderEvolutionTier(evolution, tier, listId, stateId, moreId); };

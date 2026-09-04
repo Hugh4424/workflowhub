@@ -2229,8 +2229,20 @@
       "delete_condition": "remove when the stage-reflection skill and projection are retired",
       "content_change": "judgment-only stage reflection schema with quality-safe and merged lesson references, without quality scoring fields",
       "sha256_before": null,
-      "bytes": 4216,
-      "sha256_after": "842ad285678f5e3c6eff4cc0fa58bc8dd6b4cb96becc4c671b32f43103a70476"
+      "bytes": 5824,
+      "sha256_after": "a44e40ab55d45f8e056da1e7331a627ff3c93f7bcd3513b30f399f04c1103ba7"
+    },
+    {
+      "source": "runtime/schemas/stage-reflection.v2.json",
+      "destination": "runtime/schemas/stage-reflection.v2.json",
+      "status": "add",
+      "owner": "stage-reflection v2 fact and quality contract",
+      "consumer": "stage-reflection validator and M16 mixed-input consumer",
+      "delete_condition": "remove when v2 stage-reflection records and their consumers are retired",
+      "content_change": "independent v2 schema for six structured blocks, status matrix, identity, and source completeness",
+      "sha256_before": null,
+      "bytes": 10003,
+      "sha256_after": "ccf472b02b9d29c344bd19d209c3ecb765d65663227da76ff7dcb856b8369639"
     },
     {
       "source": "skills/stage-reflection",
@@ -2275,8 +2287,8 @@
       "delete_condition": "remove when the stage-reflection workflow and remove gate are retired",
       "content_change": "new read-only validator for evidence existence and remove_candidate hard signals",
       "sha256_before": null,
-      "bytes": 12812,
-      "sha256_after": "79b540a1492c1d3266eb119d8c95b74d8e48c59e07a2c933127f04f321afcfc1"
+      "bytes": 19413,
+      "sha256_after": "0c017c74ddd4cc622315ded755aaff5fa87c61a00871ef47c44f66db4b4d3b04"
     },
     {
       "source": "tools/cli/build-reflection-page.mjs",
@@ -2287,8 +2299,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 34580,
-      "sha256_after": "c3c30e25f41ba681e8b9cd9ddac859c2c2089d304602319e73af5890b77cd856"
+      "bytes": 43038,
+      "sha256_after": "3b1defb291855ffebe3e47c13ce77d31c06f802dcc71107ad0a727e1b5a5f89c"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2299,8 +2311,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 40404,
-      "sha256_after": "7727b5ad2e8c40f031a213a18a456d12b7ea19c892b50170196124a1ac1905a0"
+      "bytes": 40646,
+      "sha256_after": "7255c62f1e58b259d5224edae7a8de27b607a37154b8a2f44819cbf99c894425"
     },
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
@@ -2358,6 +2370,50 @@
       "sha256_after": "a41f660ee96c172da4f737edef9c37a7bc2c5882855cdfe48fd9aa52c7218bcd"
     },
     {
+      "source": "runtime/stage/stage-reflect.mjs",
+      "destination": "runtime/stage/stage-reflect.mjs",
+      "status": "add",
+      "owner": "stage-reflection usability P2",
+      "consumer": "private reflect command, stage-reflection page and M16 projection; failure facts remain the durable merge/publication recovery signal",
+      "delete_condition": "remove when the stage reflection mechanism is retired",
+      "content_change": "authenticated validate-lessons-publish reflection deep module with retryable lesson recovery and immutable failure facts",
+      "bytes": 26218,
+      "sha256_after": "f47b9f80aa33c0041c25dd8abdf503bf5985570dd325a5722696fdb047618e99"
+    },
+    {
+      "source": "runtime/stage/stage-runner.mjs",
+      "destination": "runtime/stage/stage-runner.mjs",
+      "status": "modify",
+      "owner": "stage-reflection usability P2",
+      "consumer": "on-stage-end reflection scheduling and shared reflect transaction",
+      "delete_condition": "remove when the stage reflection mechanism is retired",
+      "content_change": "route scheduled reflections through runStageReflection and preserve truthful not_scheduled availability facts",
+      "bytes": 124437,
+      "sha256_after": "ea0f0fa83816978347b570547489523e83eedb5de5b91b35f3f5404d7d494bcd"
+    },
+    {
+      "source": "tools/cli/stage-runtime.mjs",
+      "destination": "tools/cli/stage-runtime.mjs",
+      "status": "modify",
+      "owner": "stage-reflection usability P2",
+      "consumer": "run:reflect private action route",
+      "delete_condition": "remove when the stage reflection mechanism is retired",
+      "content_change": "add private reflect command and route it through existing public run behavior",
+      "bytes": 43641,
+      "sha256_after": "fb55de913d3ad3f2a88433c0eb7a64ac27544b4ec0e28c7781880b667d1ab6d6"
+    },
+    {
+      "source": "tools/cli/import-historical-reflection.mjs",
+      "destination": "tools/cli/import-historical-reflection.mjs",
+      "status": "add",
+      "owner": "stage-reflection usability P5",
+      "consumer": "one-time historical replay import for this task only",
+      "delete_condition": "archive after T504 import verification and acceptance; do not promote to a recurring backfill mechanism",
+      "content_change": "package validation, formal lesson mapping, dry-run, idempotent project writes, evidence copy, and rollback",
+      "bytes": 20022,
+      "sha256_after": "2f07e7490fb2844c6d8ddfb4cd37bc2f2a35e9a80749b2dc02bef6259aa1a48a"
+    },
+    {
       "source": "Projects/<project>/evolution-candidates.jsonl",
       "destination": "Projects/<project>/evolution-candidates.jsonl",
       "status": "logical-object",
@@ -2392,6 +2448,15 @@
       "consumer": "maintainer reading current iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "atomic current brief projection"
+    },
+    {
+      "source": "runtime/stage/protocol-error-whitelist.mjs",
+      "destination": "runtime/stage/protocol-error-whitelist.mjs",
+      "status": "add",
+      "owner": "workflowhub-verify-close-protocol-robustness-20260902 build-code",
+      "consumer": "stage-runner publication diagnostics and private preflight validation",
+      "delete_condition": "remove when protocol-error classification is retired and its consumers are removed",
+      "content_change": "immutable conservative protocol-error classifier with one explicit retryable publication-fault class"
     }
   ]
 }

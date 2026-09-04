@@ -98,6 +98,8 @@ describe("verify-code accepted-input and append-only attempt facts", () => {
     const published = publishVerifySummary(task.taskPath, { status: "incomplete", source_digest: sourceDigest, material_digest: "a".repeat(64), criteria });
     expect(published.ref).toBe("quality/verify.json");
     expect(published.value.criteria).toMatchObject([{ acceptance_criterion_id: "AC-15", status: "passed" }]);
+    expect(() => publishVerifySummary(task.taskPath, { status: "passed", task_id: "another-task" }))
+      .toThrow(/cannot override authenticated identity fields.*task_id/i);
   });
 
   it("downgrades a pass claim without implementation and test anchors", () => {

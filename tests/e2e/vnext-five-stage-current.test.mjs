@@ -14,7 +14,7 @@ import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../ru
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
-import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { completeCanonicalStageMaterials, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -275,7 +275,7 @@ function publicRunRaw(state, stage, input) {
   });
 }
 
-function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", status = "completed" } = {}) {
+function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", status = "completed", qualityReview = null, skipAnalyzerValidation = false } = {}) {
   return writeStageOutcomeFixture({
     task: state.task,
     kernel: state.kernel,
@@ -284,6 +284,38 @@ function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", stat
     stage,
     attemptId,
     status,
+    qualityReview,
+    skipAnalyzerValidation,
+  });
+}
+
+async function seedCompletedMakeDecision(state) {
+  state.artifacts.writeAtomic("decision-log.md", completeCanonicalStageMaterials()["decision-log.md"]);
+  state.kernel.publishHumanConfirmation("make-decision", {
+    decision: "accepted",
+    subject_ref: "fixture/make-decision",
+    reply_text: "fixture confirmation for make-decision",
+    step_slug: "approve-decision",
+  });
+  const result = await runStage("make-decision", context("make-decision", state), async () => ({
+    facts: {
+      worktree_root: state.candidate.worktreeRoot,
+      baseline_commit: state.candidate.baselineCommit,
+      completion_subjects: {
+        scope: { status: "passed", evidence_refs: [], detail: "fixture scope" },
+        non_goals: { status: "passed", evidence_refs: [], detail: "fixture non-goals" },
+        risks: { status: "passed", evidence_refs: [], detail: "fixture risks" },
+        ui_applicability: { status: "passed", evidence_refs: [], detail: "fixture non-UI applicability" },
+        ...completeConvergenceFacts(),
+      },
+    },
+    spec_analyze: { result: { status: "consistent" } },
+    evidence_refs: [],
+    verification: "fixture completed make-decision prerequisite",
+  }));
+  expect(result.status).toBe("completed");
+  return stageOutcomeReceipt(state, "make-decision", {
+    attemptId: "attempt-make-decision-prerequisite",
   });
 }
 
@@ -525,49 +557,39 @@ describe("current vNext five-stage runtime", () => {
 
   it("keeps current stage work running when a supplied stage-outcome receipt is invalid", () => {
     const state = fixture("stage-outcome-receipt-required");
+    return seedCompletedMakeDecision(state).then(() => {
     const result = publicRunRaw(state, "build-spec", {
       receipts: { stage_outcomes: "quality/evidence/stage-outcomes/build-spec/missing.json" },
     });
     expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
     expect(JSON.parse(result.stdout)).toMatchObject({
       stage: "build-spec",
-      work_status: "ready",
       quality_status: "incomplete",
-      stage_outcome_ref: null,
-      stage_outcome_hash: null,
       stage_outcome_status: "unavailable",
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
     });
-    const invalidOutput = JSON.parse(result.stdout);
-    const qualityFacts = invalidOutput.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(qualityFacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "acceptance_criterion", subject: "stage_end_spec_analyze", status: "missing" }),
-      expect.objectContaining({ kind: "review", subject: "independent_review", status: "missing" }),
-    ]));
-  });
-
-  it("allows public stage work without a host outcome and exposes the gap as unavailable", () => {
-    const state = fixture("stage-outcome-optional-for-work");
-    const result = publicRunRaw(state, "build-spec", { receipts: {} });
-    expect(result.status).toBe(0);
-    const output = JSON.parse(result.stdout);
-    expect(output).toMatchObject({
-      stage: "build-spec",
-      work_status: "ready",
-      quality_status: "incomplete",
-      stage_outcome_ref: null,
-      stage_outcome_hash: null,
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
-    const qualityFacts = output.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(qualityFacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "acceptance_criterion", subject: "stage_end_spec_analyze", status: "missing" }),
-    ]));
   });
 
-  it("rejects evidence that is hashed correctly but belongs to another declared step", () => {
+  it("keeps the public route runnable when the current Stage Agent outcome is absent", () => {
+    const state = fixture("stage-outcome-optional-for-work");
+    return seedCompletedMakeDecision(state).then(() => {
+      const result = publicRunRaw(state, "build-spec", { receipts: {} });
+      expect(result.status).toBe(0);
+      expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        stage: "build-spec",
+        quality_status: "incomplete",
+        stage_outcome_status: "unavailable",
+        stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+      });
+    });
+  });
+
+  it("keeps a public run going when Stage Agent evidence belongs to another declared step", async () => {
     const state = fixture("stage-outcome-semantic-binding");
+    await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
     const tampered = structuredClone(original.value);
     tampered.step_outcomes[0].evidence_refs = tampered.step_outcomes[1].evidence_refs;
@@ -577,16 +599,18 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
     expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
     expect(JSON.parse(result.stdout)).toMatchObject({
-      work_status: "ready",
+      stage: "build-spec",
       quality_status: "incomplete",
       stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { reason: "stage_outcome_invalid" },
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
     });
   });
 
-  it("requires the executed stage-end spec-analyze result and validates its actual semantics", () => {
+  it("reports invalid stage-end spec-analyze results without blocking public build-spec", async () => {
     const state = fixture("stage-outcome-spec-analyze-required");
+    await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
     const tampered = structuredClone(original.value);
     delete tampered.spec_analyze;
@@ -596,12 +620,8 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
     expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      work_status: "ready",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { reason: "stage_outcome_invalid" },
-    });
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
+    expect(JSON.parse(result.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
 
     const semanticTamper = structuredClone(original.value);
     semanticTamper.spec_analyze.packet.coverage[0].actual_behavior = "文档文件存在";
@@ -611,12 +631,8 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(semanticRef, semanticRaw);
     const semanticResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: semanticRef } });
     expect(semanticResult.status).toBe(0);
-    expect(JSON.parse(semanticResult.stdout)).toMatchObject({
-      work_status: "ready",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { reason: "stage_outcome_invalid" },
-    });
+    expect(semanticResult.stderr).not.toContain("MATERIAL_INCOMPLETE");
+    expect(JSON.parse(semanticResult.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
 
     const materialTamper = structuredClone(original.value);
     materialTamper.spec_analyze.packet.materials.decision_log = "伪造的 decision-log 内容";
@@ -630,16 +646,13 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(materialRef, materialRaw);
     const materialResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: materialRef } });
     expect(materialResult.status).toBe(0);
-    expect(JSON.parse(materialResult.stdout)).toMatchObject({
-      work_status: "ready",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { reason: "stage_outcome_invalid" },
-    });
+    expect(materialResult.stderr).not.toContain("MATERIAL_INCOMPLETE");
+    expect(JSON.parse(materialResult.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
   });
 
-  it("publishes semantic spec-analyze facts without turning them into a run gate", () => {
+  it("publishes semantic spec-analyze facts without turning them into a run gate", async () => {
     const state = fixture("stage-outcome-spec-analyze-report-only");
+    await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
     const tampered = structuredClone(original.value);
     tampered.spec_analyze.packet.coverage[0].status = "missing";
@@ -659,8 +672,9 @@ describe("current vNext five-stage runtime", () => {
     expect(output.quality_warnings).toContain("stage-end-spec-analyze:inconsistent");
   });
 
-  it("rejects unavailable outcome cost that contains guessed numbers", () => {
+  it("reports unavailable Stage Agent outcome cost that contains guessed numbers without blocking work", async () => {
     const state = fixture("stage-outcome-cost-unavailable");
+    await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
     const tampered = structuredClone(original.value);
     tampered.step_outcomes[0].cost = {
@@ -675,12 +689,8 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
     expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      work_status: "ready",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { reason: "stage_outcome_invalid" },
-    });
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
+    expect(JSON.parse(result.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
   });
 
   it("publishes immutable stage outcomes with every declared step and skill", () => {
@@ -897,7 +907,7 @@ describe("current vNext five-stage runtime", () => {
     expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
-  it("keeps the public run route usable when the Stage Agent omits its outcome receipt", () => {
+  it("keeps the public run route runnable when its Stage Agent outcome receipt is unavailable", () => {
     const state = fixture("public-run-missing-receipt");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const result = spawnSync(process.execPath, [
@@ -909,12 +919,30 @@ describe("current vNext five-stage runtime", () => {
       encoding: "utf8",
     });
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
     expect(JSON.parse(result.stdout)).toMatchObject({
       stage: "build-spec",
       work_status: "ready",
       quality_status: "incomplete",
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("keeps public verify-code runnable from the four current materials alone", () => {
+    const state = fixture("public-verify-code-current-materials-only");
+    const result = publicRunRaw(state, "verify-code", { receipts: {} });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      stage: "verify-code",
+      work_status: "ready",
+      continuation_allowed: true,
+      quality_status: "incomplete",
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+    });
   });
 
   it("binds verify-code only to the current code-review fact, not build-code review", async () => {
@@ -1019,19 +1047,26 @@ describe("current vNext five-stage runtime", () => {
       .find((fact) => fact.kind === "review" && fact.subject === "code_review");
     expect(firstFact).toMatchObject({ status: "recorded", review_status: "resolved", snapshot_tree: state.candidate.captureSnapshot().tree });
     expect(first.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
+    expect(first.missing_items ?? []).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/),
+    ]));
+    expect(first.quality_warnings ?? []).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/),
+    ]));
     publicConfirm(state, "verify-code");
     const reopened = await run(createTaskKernel(state.task, { candidateWorkspace: state.candidate }));
     expect(reopened.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
     expect(reopened.status).toBe("completed");
   });
 
-  it("runs build-spec through verify-code without inventing an audit gate", () => {
+  it("runs build-spec through verify-code without inventing an audit gate", async () => {
     const state = fixture("public-build-spec-through-verify-code");
     writeCanonicalStageMaterials(state.artifacts);
     // The current UI boundary is explicit: this fixture has no page or
     // frontend consumer, so record the non-UI decision before running the
     // authoring stage.
     state.artifacts.writeAtomic("decision-log.md", `${state.artifacts.read("decision-log.md")}\n${completeDecisionLog.slice(completeDecisionLog.indexOf("## UI applicability"))}`);
+    await seedCompletedMakeDecision(state);
     const specContent = state.artifacts.read("spec.md");
     const specSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
@@ -1113,13 +1148,10 @@ describe("current vNext five-stage runtime", () => {
 
   it("completes all five stages from the current four materials", async () => {
     const state = fixture("current-five-stage-normal");
+    for (const [file, value] of Object.entries(completeCanonicalStageMaterials())) state.artifacts.writeAtomic(file, value);
     const statuses = {};
+    let verifyQualityReview = null;
     for (const stage of stages) {
-      if (stage === "build-spec") state.artifacts.writeAtomic("spec.md", "# current spec\n");
-      if (stage === "build-plan") {
-        state.artifacts.writeAtomic("plan.md", "# current plan\n");
-        state.artifacts.writeAtomic("tasks.md", "# current tasks\n");
-      }
       if (stage === "build-code") writeFileSync(join(state.candidate.worktreeRoot, "src/app.txt"), "implemented\n");
       const result = await runStage(stage, context(stage, state), async () => {
         const currentEvidence = evidence(state, stage);
@@ -1140,7 +1172,9 @@ describe("current vNext five-stage runtime", () => {
         }
         if (stage === "verify-code") {
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-          const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree });
+          const materialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
+          const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree, materialRevision });
+          verifyQualityReview = qualityReview;
           const reviewFact = (ref, reviewScope) => ({
             status: "recorded", result_ref: ref, result_hash: sha256(state.task.readRecord(ref)),
             snapshot_tree: snapshot.tree, subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
@@ -1157,6 +1191,10 @@ describe("current vNext five-stage runtime", () => {
         };
       });
       statuses[stage] = result.status;
+      const currentOutcome = stageOutcomeReceipt(state, stage, {
+        attemptId: `attempt-${stage}-current-five-stage`,
+        ...(stage === "verify-code" ? { qualityReview: { ref: verifyQualityReview.resultRef } } : {}),
+      });
       const projection = publicStatus(state, stage);
       expect(projection, JSON.stringify({ stage, projection })).toMatchObject({ work_status: "ready", quality_status: "completed" });
       expect(projection).not.toHaveProperty("status");

@@ -1,0 +1,80 @@
+{
+  "schema_version": "stage-reflection.v2",
+  "record_kind": "judgment",
+  "task_id": "task-gate",
+  "stage": "build-code",
+  "stage_status": "completed",
+  "generated_at": "2026-08-30T00:00:00.000Z",
+  "status": "ok",
+  "error": null,
+  "judgments": [
+    {
+      "subject_id": "unused-step",
+      "subject_kind": "step",
+      "classification": "optimize",
+      "severity": "medium",
+      "reason": "该步骤应继续观察其消费情况。",
+      "evidence_refs": ["quality/evidence/produced.json"],
+      "confidence": "medium",
+      "next_review_trigger": "下一次同类阶段再次出现消费缺失时复核。",
+      "title": "消费边需要观察",
+      "detail": "当前证据只支持继续观察，不支持移除。",
+      "source_refs": [{ "task_id": "task-gate", "raw_entry_id": "raw-001" }]
+    }
+  ],
+  "interventions": [],
+  "lessons_added": [],
+  "what_helped": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "阶段 outcome 提供了可复核的证据引用。",
+        "evidence_refs": ["quality/evidence/produced.json"],
+        "confidence": "medium"
+      }
+    ]
+  },
+  "what_to_improve": {
+    "state": "none_observed",
+    "items": []
+  },
+  "blockers": {
+    "state": "unknown",
+    "unknown_reason": "当前阶段没有可用的阻塞记录投影。",
+    "items": []
+  },
+  "intervention_reasons": {
+    "state": "none_observed",
+    "items": []
+  },
+  "what_to_simplify": {
+    "state": "none_observed",
+    "items": []
+  },
+  "simplifiable_now": {
+    "state": "unknown",
+    "unknown_reason": "需要后续阶段事实才能判断。",
+    "items": []
+  },
+  "status_matrix": {
+    "code": { "state": "completed", "evidence_refs": ["quality/evidence/produced.json"] },
+    "verify": { "state": "unknown", "evidence_refs": [] },
+    "physical_close": { "state": "not_applicable", "evidence_refs": ["quality/evidence/produced.json"] },
+    "acceptance": { "state": "unknown", "evidence_refs": [] },
+    "release": { "state": "not_applicable", "evidence_refs": ["quality/evidence/produced.json"] }
+  },
+  "identity": {
+    "task_id": "task-gate",
+    "worktree": "/tmp/workflowhub-task-gate",
+    "branch": "task/workflowhub/task-gate",
+    "attempt": "attempt-001",
+    "snapshot_tree": "b000000000000000000000000000000000000000",
+    "material_revision": "revision-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "source_completeness": {
+    "compaction": false,
+    "truncation": false,
+    "visible_scope": "current stage memory and outcome projection",
+    "unknown_reasons": []
+  }
+}

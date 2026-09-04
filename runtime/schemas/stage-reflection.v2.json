@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://workflowhub.local/runtime/schemas/stage-reflection.v2.json",
+  "title": "WorkflowHub stage reflection judgment v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_kind",
+    "task_id",
+    "stage",
+    "stage_status",
+    "generated_at",
+    "status",
+    "error",
+    "judgments",
+    "interventions",
+    "lessons_added"
+  ],
+  "properties": {
+    "schema_version": { "const": "stage-reflection.v2" },
+    "record_kind": { "const": "judgment" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "stage_status": { "enum": ["completed", "failed"] },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["ok", "degraded", "failed", "unavailable", "not_scheduled"] },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary"],
+          "properties": { "summary": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "judgments": { "type": "array", "items": { "$ref": "#/$defs/judgment" } },
+    "interventions": { "type": "array", "items": { "$ref": "#/$defs/intervention" } },
+    "lessons_added": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/safe_ref" }, { "$ref": "#/$defs/lesson_ref" }] } },
+    "availability_fact": { "$ref": "#/$defs/availability_fact" },
+    "status_matrix": { "anyOf": [{ "$ref": "#/$defs/status_matrix" }, { "type": "null" }] },
+    "identity": { "$ref": "#/$defs/identity" },
+    "source_completeness": { "anyOf": [{ "$ref": "#/$defs/source_completeness" }, { "type": "null" }] },
+    "what_helped": { "$ref": "#/$defs/structured_block" },
+    "what_to_improve": { "$ref": "#/$defs/structured_block" },
+    "blockers": { "$ref": "#/$defs/structured_block" },
+    "intervention_reasons": { "$ref": "#/$defs/structured_block" },
+    "what_to_simplify": { "$ref": "#/$defs/structured_block" },
+    "simplifiable_now": { "$ref": "#/$defs/structured_block" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["ok", "degraded"] } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["unavailable", "not_scheduled"] } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "error": { "type": "null" },
+          "judgments": { "maxItems": 0 },
+          "interventions": { "maxItems": 0 },
+          "lessons_added": { "maxItems": 0 },
+          "status_matrix": { "type": "null" },
+          "source_completeness": { "type": "null" }
+        },
+        "required": ["availability_fact", "identity"]
+      }
+    }
+  ],
+  "$defs": {
+    "safe_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*\\.\\.)quality/(?:evidence|tests|reviews|confirmations|stage-reflection)/[^\\s]+$"
+    },
+    "lesson_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^lessons/(?:make-decision|build-spec|build-plan|build-code|verify-code)\\.jsonl#[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "raw_entry_id"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "raw_entry_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "availability_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "state", "reason_code", "observed_at", "task_identity"],
+      "properties": {
+        "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+        "state": { "enum": ["unavailable", "not_scheduled"] },
+        "reason_code": { "enum": ["executor_absent", "preflight_failed", "identity_failed", "startup_failed", "interrupted", "not_started"] },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "task_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "worktree", "branch"],
+          "properties": {
+            "task_id": { "type": "string", "minLength": 1 },
+            "worktree": { "type": "string", "minLength": 1 },
+            "branch": { "type": "string", "minLength": 1 },
+            "attempt": { "type": ["string", "null"] },
+            "snapshot_tree": { "type": ["string", "null"] },
+            "material_revision": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "status_matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "verify", "physical_close", "acceptance", "release"],
+      "properties": {
+        "code": { "$ref": "#/$defs/status_matrix_column" },
+        "verify": { "$ref": "#/$defs/status_matrix_column" },
+        "physical_close": { "$ref": "#/$defs/status_matrix_column" },
+        "acceptance": { "$ref": "#/$defs/status_matrix_column" },
+        "release": { "$ref": "#/$defs/status_matrix_column" }
+      }
+    },
+    "status_matrix_column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "evidence_refs"],
+      "properties": {
+        "state": { "enum": ["completed", "failed", "not_applicable", "unknown"] },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/safe_ref" }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "worktree", "branch"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "worktree": { "type": "string", "minLength": 1 },
+        "branch": { "type": "string", "minLength": 1 },
+        "attempt": { "type": ["string", "null"] },
+        "snapshot_tree": { "type": ["string", "null"] },
+        "material_revision": { "type": ["string", "null"] }
+      }
+    },
+    "source_completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compaction", "truncation", "visible_scope", "unknown_reasons"],
+      "properties": {
+        "compaction": { "enum": [true, false, "unknown"] },
+        "truncation": { "enum": [true, false, "unknown"] },
+        "visible_scope": { "anyOf": [{ "type": "string", "minLength": 1 }, { "const": "unknown" }] },
+        "unknown_reasons": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "structured_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "items"],
+      "properties": {
+        "state": { "enum": ["observed", "none_observed", "unknown"] },
+        "unknown_reason": { "type": "string", "minLength": 1 },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/structured_item" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "unknown" } }, "required": ["state"] },
+          "then": { "required": ["unknown_reason"] }
+        }
+      ]
+    },
+    "structured_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "evidence_refs", "confidence"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/safe_ref" } },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      }
+    },
+    "judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "subject_kind",
+        "classification",
+        "severity",
+        "reason",
+        "evidence_refs",
+        "confidence",
+        "next_review_trigger"
+      ],
+      "properties": {
+        "subject_id": { "type": "string", "minLength": 1 },
+        "subject_kind": { "enum": ["step", "skill"] },
+        "classification": { "enum": ["keep", "optimize", "simplify", "merge", "remove_candidate", "add", "needs_evidence"] },
+        "severity": { "enum": ["high", "medium", "low"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/safe_ref" } },
+        "source_refs": { "type": "array", "items": { "$ref": "#/$defs/source_ref" } },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "next_review_trigger": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "confidence": { "const": "high" } }, "required": ["confidence"] },
+          "then": { "properties": { "evidence_refs": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmation_ref", "step_slug", "reply_text", "attribution", "confidence"],
+      "properties": {
+        "confirmation_ref": {
+          "type": "string",
+          "pattern": "^(?!.*\\.\\.)quality/confirmations/[a-f0-9]{64}\\.json$"
+        },
+        "step_slug": { "type": "string", "minLength": 1 },
+        "reply_text": { "type": ["string", "null"], "minLength": 1 },
+        "attribution": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "reply_text": { "type": "null" } }, "required": ["reply_text"] },
+          "then": { "properties": { "confidence": { "enum": ["medium", "low"] } } }
+        }
+      ]
+    }
+  }
+}

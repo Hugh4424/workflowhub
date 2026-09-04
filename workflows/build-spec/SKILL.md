@@ -35,7 +35,7 @@ The current `spec.md` remains the single revision target; never create a
 
 本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。
 
-阶段入口收到明确的 project/task context 时，会自动把当前已登记会话绑定到这个 task；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一绑定。绑定后下面的命令自动使用这个 task，不再手填 task id。一个会话只允许绑定一个 task，换 task 必须开新会话。
+阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一登记。同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验；旧 task context 只读保留，不会和新 task 的事件混在一起。完成选择后，下面的事件命令可以省略 task id；未登记的 task id 仍直接失败。
 
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>
@@ -43,6 +43,12 @@ node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> -
 ```
 
 skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每个区块及其条目带真实 `evidence_refs` 与 `confidence`；没有观察到写 `none_observed`，无法判断写 `unknown` + `unknown_reason`，不适用写 `not_applicable` + 原因，禁止静默空缺。
+
+验证由 `validate-stage-reflection.mjs` 完成；它内部调用 `deriveConsumptionEdges`，不是技能单独运行消费边工具。较早 subject 的 `output_refs` 只有与较晚 subject 的 `input_refs` 同值时才形成边；任一 stage outcome 或声明 output 缺失时扫描不完整，`coverage_status` 为 `partial`，消费保持 unknown，不能推出 `zero_consumption_proof`。完整扫描、近 30 天 output 且 consumer 全为零，再加人工 rejected 或同一步骤两次介入，才保留 `remove_candidate`；否则是 `needs_evidence`。若当前运行时尚未提供该 route，保留真实 unavailable/dependency，不发明替代命令。
 
 当 `spec-clarify trigger=true` 时，spec-analyze 输入同时携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。Codex host 只从已登记 transcript 认证被当前 `spec-clarify` skill 事件包围的 assistant ask 与 user reply；认证结果与这两个材料身份一起冻结。public run 仅在没有显式 `stage_outcomes` 且身份仍精确匹配时，生成同次 content-addressed `quality/evidence/interactions/` receipt。身份漂移、缺 transcript 或触发改为 false 都保持 Clarify incomplete/missing，不重绑旧回复。
 

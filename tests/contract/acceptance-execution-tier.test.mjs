@@ -8,10 +8,12 @@ import { join } from "node:path";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
+import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 import { projectAcceptanceExecutionData } from "../../runtime/stage/stage-content-contracts.mjs";
 import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const SNAPSHOT = "b".repeat(40);
 const roots = [];
@@ -178,6 +180,48 @@ function publishBrowserAttachments({ task, kernel, payload }) {
       output_hash: createHash("sha256").update(output).digest("hex"),
     },
   };
+}
+
+async function seedCompletedUpstreamStages(state) {
+  for (const stage of ["make-decision", "build-spec", "build-plan"]) {
+    const snapshot = state.context.kernel.currentVNextSnapshot();
+    const facts = Object.fromEntries(Object.entries(STAGE_PREDICATES[stage])
+      .filter(([subject]) => subject !== "stage_end_spec_analyze" && subject !== "human_confirmation")
+      .map(([subject]) => [subject, { status: "passed", evidence_refs: [], detail: `fixture ${subject}` }]));
+    if (stage === "make-decision" || stage === "build-plan") {
+      state.context.kernel.publishHumanConfirmation(stage, {
+        decision: "accepted",
+        subject_ref: `fixture/${stage}`,
+        reply_text: `fixture confirmation for ${stage}`,
+        step_slug: stage === "make-decision" ? "approve-decision" : "publish-plan-result",
+      });
+    }
+    const result = await runStage(stage, {
+      ...state.context,
+      stage,
+      workflowRunId: state.context.kernel.deriveStageWorkflowRunId(stage),
+    }, async () => ({
+      facts: stage === "make-decision"
+        ? { worktree_root: state.candidate.worktreeRoot, baseline_commit: state.candidate.baselineCommit, completion_subjects: facts }
+        : stage === "build-spec"
+          ? { spec_ref: state.context.artifacts.reference("spec.md"), snapshot_tree: snapshot.tree, source_digest: snapshot.source_digest, completion_subjects: facts }
+          : { plan_ref: state.context.artifacts.reference("plan.md"), tasks_ref: state.context.artifacts.reference("tasks.md"), snapshot_tree: snapshot.tree, source_digest: snapshot.source_digest, completion_subjects: facts },
+      spec_analyze: { result: { status: "consistent" } },
+      evidence_refs: [],
+      verification: `fixture ${stage} completed upstream seed`,
+    }));
+    expect(result.status).toBe("completed");
+    writeStageOutcomeFixture({
+      task: state.task,
+      kernel: state.context.kernel,
+      artifacts: state.context.artifacts,
+      candidateWorkspace: state.candidate,
+      stage,
+      attemptId: `upstream-${stage}-attempt`,
+      skipAnalyzerValidation: true,
+      workflowRunId: state.context.kernel.deriveStageWorkflowRunId(stage),
+    });
+  }
 }
 
 function acceptanceExecutionSubjectFact(state, result) {
@@ -374,9 +418,10 @@ describe("acceptance execution tiers", () => {
     });
   });
 
-  it("uses the trusted browser capability during the normal public run:execute route without a browser input field", async () => {
+  it("keeps the current stage runnable when an upstream Stage Agent outcome is not current", async () => {
     const state = officialBrowserFixture();
-    const inputPath = join(state.candidate.worktreeRoot, "run-input.json");
+    await seedCompletedUpstreamStages(state);
+    const inputPath = join(state.root, "run-input.json");
     writeFileSync(inputPath, JSON.stringify({ attempt_id: "runtime-browser-attempt", receipts: {} }));
     const calls = [];
 
@@ -393,35 +438,18 @@ describe("acceptance execution tiers", () => {
         monitoring: false,
         runControlledUiQa: async (input) => {
           calls.push(input);
-          const stored = publishBrowserAttachments({
-            task: state.task,
-            kernel: state.context.kernel,
-            payload: browserPayload(input),
-          });
-          const raw = `${JSON.stringify(stored)}\n`;
-          const evidenceHash = createHash("sha256").update(raw).digest("hex");
-          const evidenceRef = `quality/evidence/browser-qa/${evidenceHash}.json`;
-          state.context.kernel.publishCanonicalRecord(evidenceRef, raw);
-          return {
-            invocation_id: input.invocation_id,
-            payload: { ...stored, evidence_ref: evidenceRef, evidence_hash: evidenceHash },
-            evidence_ref: evidenceRef,
-            evidence_hash: evidenceHash,
-          };
+          throw new Error("browser capability must not run without a Stage Agent outcome");
         },
       },
     }));
-
-    expect(result.quality_fact_refs).toEqual(expect.any(Array));
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      task_id: "browser-acceptance",
+    expect(result).toMatchObject({
       stage: "build-code",
-      attempt_id: "runtime-browser-attempt",
-      project_name: "WorkflowHub",
-      task_path: state.task.taskPath,
-      worktree_root: state.candidate.worktreeRoot,
+      work_status: "ready",
+      quality_status: "incomplete",
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
+    expect(calls).toHaveLength(1);
   });
 
   it("keeps verify-code browser execution unavailable when current canonical data identity does not bind the declared scenario", async () => {
@@ -433,6 +461,10 @@ describe("acceptance execution tiers", () => {
       workflowRunId: state.context.kernel.deriveStageWorkflowRunId("verify-code"),
     }, { attempt_id: "verify-data-binding", receipts: {} });
 
+    expect(verify).toMatchObject({
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+    });
     expect(e2eAcceptanceSubjectFact(state, verify)).toMatchObject({
       status: "missing",
       evidence_refs: [],

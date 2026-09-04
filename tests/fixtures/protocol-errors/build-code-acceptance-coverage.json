@@ -1,0 +1,35 @@
+{
+  "schema_version": "protocol-error-fixture.v1",
+  "entries": [
+    {
+      "entry_id": "00501eae-fda5-4771-bf18-7c158b0ce5d8",
+      "source": "workflowhub/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "acceptance_coverage_spec_mismatch",
+      "error": "build-code acceptance_coverage must match the current spec acceptance criteria"
+    },
+    {
+      "entry_id": "519fff47-1ff3-458f-9ba8-933ed23cad2e",
+      "source": "workflowhub/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "acceptance_coverage_invalid_evidence",
+      "error": "acceptance_coverage AC-TAX-003 evidence reference is invalid"
+    },
+    {
+      "entry_id": "83e619f7-02b0-40b6-bc36-ff8165dd7b95",
+      "source": "PaperBuilder/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "acceptance_coverage_invalid_status",
+      "error": "acceptance_coverage AC-T07-04 status must be covered, missing, or unknown"
+    }
+  ]
+}

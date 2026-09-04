@@ -13,6 +13,7 @@ import {
   validateInteractionLifecycleSequence,
   validateStageSpecAnalyzeProfile,
 } from "./stage-content-contracts.mjs";
+import { STAGE_FACT_MATERIALS, stageMaterialScopeRevision } from "./completion-predicates.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding } from "./stage-skill-runtime.mjs";
 import { isAuthenticatedRequirementResult } from "../evidence/codex-transcript-adapter.mjs";
 
@@ -24,7 +25,7 @@ const REPOSITORY_ROOT = new URL("../../", import.meta.url);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const SHA256 = /^[a-f0-9]{64}$/;
-const QUALITY_REVIEW_REF = /^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/;
+const QUALITY_REVIEW_REF = /^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/;
 
 /**
  * Validate the ordered rounds supplied by the host for one declared skill.
@@ -97,7 +98,7 @@ function activeWorkspace({ workspace, candidateWorkspace }) {
   return active;
 }
 
-function readMaterials(artifacts) {
+function readMaterials(artifacts, stage = null) {
   if (!(artifacts instanceof ArtifactDir)) throw new TypeError("Stage Agent outcome adapter requires an authenticated ArtifactDir");
   const values = CURRENT_MATERIAL_FILES.map((file) => {
     try { return [file, artifacts.read(file)]; }
@@ -107,10 +108,17 @@ function readMaterials(artifacts) {
     }
   });
   const revision = materialRevisionFromValues(values);
+  const materialScope = stage && STAGE_FACT_MATERIALS[stage] ? STAGE_FACT_MATERIALS[stage] : CURRENT_MATERIAL_FILES;
+  const scopeValues = materialScope.map((file) => values.find(([name]) => name === file) ?? [file, null]);
   return Object.freeze({
     values: Object.freeze(values),
     revision,
     hashes: Object.freeze(Object.fromEntries(values.map(([file, content]) => [
+      file, content === null ? null : sha256(content),
+    ]))),
+    material_scope: Object.freeze([...materialScope]),
+    material_scope_revision: stage ? stageMaterialScopeRevision(stage, Object.fromEntries(values)) : materialRevisionFromValues(scopeValues),
+    material_scope_hashes: Object.freeze(Object.fromEntries(scopeValues.map(([file, content]) => [
       file, content === null ? null : sha256(content),
     ]))),
   });
@@ -158,17 +166,27 @@ function materialTextMap(materials) {
 }
 
 function bindAnalyzerPacketIdentity(packet, identity) {
+  const bind = (value, label) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    for (const key of ["task_id", "stage", "material_revision", "snapshot_tree"]) {
+      if (value[key] !== undefined && value[key] !== identity[key]) {
+        throw new Error(`${label}.${key} does not match the authenticated Stage Agent identity`);
+      }
+    }
+    return { ...value, ...identity };
+  };
   const bound = structuredClone(packet);
   for (const key of ["clarify", "clarify_outcome", "grill", "grill_summary", "confirmation", "final_confirmation"]) {
     if (bound[key] && typeof bound[key] === "object" && !Array.isArray(bound[key])) {
-      // Host identity is authoritative for the current snapshot/materials;
-      // a session packet may carry the prior run's advisory identity.
-      bound[key] = { ...bound[key], ...identity };
+      bound[key] = bind(bound[key], `spec_analyze.packet.${key}`);
     }
   }
   for (const key of ["acceptance_coverage"]) {
     if (Array.isArray(bound[key])) {
-      bound[key] = bound[key].map((row) => ({ ...identity, producer_stage: identity.stage, ...row }));
+      bound[key] = bound[key].map((row, index) => ({
+        ...bind(row, `spec_analyze.packet.${key}[${index}]`),
+        producer_stage: identity.stage,
+      }));
     }
   }
   return bound;
@@ -564,7 +582,7 @@ export function publishStageAgentOutcome({
   if (!Array.isArray(input.steps) || !Array.isArray(input.skills)) throw new TypeError("Stage Agent execution must include steps and skills arrays");
 
   const snapshot = active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot);
-  const materials = readMaterials(safeArtifacts);
+  const materials = readMaterials(safeArtifacts, stage);
   const stepsManifestRef = `workflows/${stage}/steps.json`;
   const skillsManifestRef = `workflows/${stage}/skill-deps.yaml`;
   const stepsManifestRaw = readFileSync(new URL(stepsManifestRef, REPOSITORY_ROOT), "utf8");
@@ -649,6 +667,9 @@ export function publishStageAgentOutcome({
     snapshot_tree: snapshot.tree,
     material_revision: materials.revision,
     material_hashes: materials.hashes,
+    material_scope: materials.material_scope,
+    material_scope_revision: materials.material_scope_revision,
+    material_scope_hashes: materials.material_scope_hashes,
     steps_manifest_ref: stepsManifestRef,
     steps_manifest_hash: sha256(stepsManifestRaw),
     skills_manifest_ref: skillsManifestRef,

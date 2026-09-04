@@ -106,7 +106,7 @@ function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null 
     // Session handoff is supporting provenance, not task/workspace authority.
     // A different task already bound in the host session must be reported as
     // unavailable instead of blocking an otherwise authenticated bootstrap.
-    if (/cannot switch the current WorkflowHub task|current WorkflowHub task binding path does not match/i.test(String(error?.message ?? error))) {
+    if (/cannot switch the current WorkflowHub task|current WorkflowHub task context identity does not match|current WorkflowHub task binding path does not match/i.test(String(error?.message ?? error))) {
       return Object.freeze({ status: "unavailable", reason: "session_task_binding_mismatch" });
     }
     throw error;

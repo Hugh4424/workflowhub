@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "3dbc87d880338ba2b585f6559ccec0c66982f3b384a5c3b1cab0be7c28a8133e"
+      "sha256": "4cf177c55982b57e3fbc241371e8fedc1ae4aee2972c89d52ba1251fb3ec2584"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -104,11 +104,11 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "6999ba7c441183a60339bcecc52fa9e6de53146716baa41c3d483771bf8f88d9"
+      "sha256": "0b4021a8a4db253a6147ab4a1d39a8bf1b722e4c9094148f7e3a09441c78254c"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "b0b3140dc2b7ce1ddbfb4182bb87cb18c605054b3cc23c71886b40020ff51688"
+      "sha256": "af14c18c10c5234855ca0b0247eea7d8cd8bb4922d9949a7ff1d4b50a5b39ac9"
     },
     {
       "path": "stage-skill-plan.json",

@@ -104,7 +104,7 @@ function currentBuildCodeExecution(trusted) {
     const current = authenticateCurrentBuildCodeStageOutcome({
       ...trusted,
       identity: trusted.identity ?? trusted.task?.identity ?? { taskId: trusted.taskId },
-      workflowRunId: trusted.workflowRunId ?? null,
+      workflowRunId: trusted.kernel.deriveStageWorkflowRunId("build-code"),
     });
     return Object.freeze({
       ref: current.ref,
@@ -659,8 +659,8 @@ export async function runTaskBoundE2eReview(input, dependencies = {}) {
 const RETIRED_RECOVERY_FIELDS = ["previous_result_ref", "previousResultRef", "review_round", "reviewRound", "review_delta", "reviewDelta", "request_id", "requestId", "prior_attempt_refs", "priorAttemptRefs", "dispatch_sequence", "dispatchSequence"];
 /** One WorkflowHub call. Provider recovery and lifecycle belong to 3rd-review. */
 
-const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
-const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/;
+const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
 
 function publishReviewFactOrThrow(args) {
   try {

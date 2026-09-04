@@ -78,6 +78,10 @@ function matchingParen(source, open) {
   }
   return -1;
 }
+function declaredStringArray(source, identifier) {
+  const match = source.match(new RegExp(`(?:const|let|var)\\s+${identifier}\\s*=\\s*\\[([\\s\\S]*?)\\]`));
+  return match ? quotedStrings(match[1]) : [];
+}
 function parameterizedTitles(source) {
   const titles = [];
   for (const call of source.matchAll(/\bit\.each\s*\(/g)) {
@@ -85,13 +89,23 @@ function parameterizedTitles(source) {
     const close = matchingParen(source, open);
     if (close < 0) continue;
     const table = source.slice(open + 1, close).trim();
-    if (!table.startsWith("[")) continue;
+    const tableIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(table) ? table : null;
+    if (!table.startsWith("[") && !tableIdentifier) continue;
     const titleMatch = source.slice(close + 1).match(/^\s*\(\s*(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/);
     if (!titleMatch) continue;
     const template = decodeStringLiteral(titleMatch[2], titleMatch[1]);
+    if (tableIdentifier) {
+      for (const arg of declaredStringArray(source, tableIdentifier)) {
+        titles.push(template.replace(/%[sdifjoO]/g, (token) => token === "%%" ? "%%" : arg ?? token));
+      }
+      continue;
+    }
     const scalarTable = table.slice(1, -1).trim();
     if (scalarTable && !scalarTable.startsWith("[")) {
-      for (const arg of quotedStrings(scalarTable)) titles.push(template.replace(/%[sdifjoO]/g, (token) => token === "%%" ? "%%" : arg ?? token));
+      const args = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(scalarTable)
+        ? declaredStringArray(source, scalarTable)
+        : quotedStrings(scalarTable);
+      for (const arg of args) titles.push(template.replace(/%[sdifjoO]/g, (token) => token === "%%" ? "%%" : arg ?? token));
       continue;
     }
     let depth = 0; let rowStart = -1; let quote = null; let escaped = false;
@@ -145,7 +159,7 @@ if (!sameTests
     || report.numTotalTests <= 0 || (report.numPendingTests ?? 0) !== 0 || (report.numTodoTests ?? 0) !== 0
     || (phase === "red" && (!reportedFailure || report.success !== false))
     || (phase !== "red" && (reportedFailure || report.success !== true))) process.exit(23);
-const materialRefs = ["specs/workflowhub-m16-evolution-20260831/decision-log.md", "specs/workflowhub-m16-evolution-20260831/spec.md", "specs/workflowhub-m16-evolution-20260831/plan.md", "specs/workflowhub-m16-evolution-20260831/tasks.md"];
+const materialRefs = ["specs/archive/workflowhub-m16-evolution-20260831/decision-log.md", "specs/archive/workflowhub-m16-evolution-20260831/spec.md", "specs/archive/workflowhub-m16-evolution-20260831/plan.md", "specs/archive/workflowhub-m16-evolution-20260831/tasks.md"];
 const materialSha256 = createHash("sha256").update(materialRefs.map((ref) => readFileSync(resolve(ref))).join("\0")).digest("hex");
 const suiteSourcesSha256 = createHash("sha256").update(expectedTests.map((ref) => `${ref}\0${createHash("sha256").update(readFileSync(resolve(ref))).digest("hex")}`).join("\n")).digest("hex");
 const gate = { schema_version: "workflow-evolution-gate.v1", suite, phase, command_tests: expectedTests, exit_code: exitCode, baseline_exit_code: baselineExit, baseline_sha256: baselineHash, output_sha256: outputHash, suite_sources_sha256: suiteSourcesSha256, material_sha256: materialSha256, status: exitCode === 0 ? "green" : "red" };
