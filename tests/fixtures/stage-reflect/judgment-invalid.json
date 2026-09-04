@@ -1,0 +1,15 @@
+{
+  "schema_version": "stage-reflection.v1",
+  "record_kind": "judgment",
+  "task_id": "task-reflect",
+  "stage": "build-spec",
+  "stage_status": "completed",
+  "generated_at": "2026-08-31T00:00:00.000Z",
+  "status": "ok",
+  "error": null,
+  "judgments": [],
+  "interventions": [],
+  "lessons_added": [],
+  "unexpected": true
+}
+

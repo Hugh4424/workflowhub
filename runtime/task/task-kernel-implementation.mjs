@@ -45,6 +45,12 @@ function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
   return value;
 }
+function objectOrDiagnostic(value, label, checkId, expected) {
+  try { return object(value, label); }
+  catch (error) {
+    throwResolvedReviewError(error.message, checkId, expected, diagnosticValue(value), TypeError);
+  }
+}
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -136,72 +142,241 @@ function validateEvidenceRefs(value, label) {
   return value;
 }
 
+function diagnosticValue(value, depth = 0) {
+  if (value === undefined) return "missing";
+  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.length > 128 ? `${value.slice(0, 125)}...` : value;
+  if (depth >= 1) return "[object]";
+  if (Array.isArray(value)) return value.slice(0, 8).map((entry) => diagnosticValue(entry, depth + 1));
+  return Object.fromEntries(Object.keys(value).slice(0, 8).map((key) => [key, diagnosticValue(value[key], depth + 1)]));
+}
+
+function annotateResolvedReviewError(error, checkId, expected, actual) {
+  Object.defineProperty(error, "diagnostic", {
+    value: deepFreeze({
+      check_id: checkId,
+      expected: diagnosticValue(expected),
+      actual: diagnosticValue(actual),
+    }),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return error;
+}
+
+function throwResolvedReviewError(message, checkId, expected, actual, ErrorClass = Error) {
+  throw annotateResolvedReviewError(new ErrorClass(message), checkId, expected, actual);
+}
+
 function validateResolvedReviewAuthorization({ task, stage, input, authorization, currentContext }) {
   if (input.review_status !== RESOLVED_REVIEW_STATUS) {
     if (authorization !== undefined && authorization !== null) {
-      throw new Error("resolved review authorization is only valid for a resolved verify-code review");
+      throwResolvedReviewError(
+        "resolved review authorization is only valid for a resolved verify-code review",
+        "bind_outcome",
+        "authorization is absent unless review_status is resolved",
+        "authorization supplied for a non-resolved review",
+      );
     }
     return;
   }
   if (stage !== "verify-code" || input.kind !== "review" || input.subject !== "code_review") {
-    throw new Error("resolved review status is only valid for verify-code code_review");
+    throwResolvedReviewError(
+      "resolved review status is only valid for verify-code code_review",
+      "bind_outcome",
+      { stage: "verify-code", kind: "review", subject: "code_review" },
+      { stage, kind: input.kind ?? null, subject: input.subject ?? null },
+    );
   }
-  const proof = object(authorization, "resolved review authorization");
+  if (!authorization || typeof authorization !== "object" || Array.isArray(authorization)) {
+    throwResolvedReviewError(
+      "resolved review authorization must be an object",
+      "bind_outcome",
+      "resolved-review authorization object",
+      authorization === undefined || authorization === null ? "missing" : Array.isArray(authorization) ? "array" : typeof authorization,
+      TypeError,
+    );
+  }
+  const proof = authorization;
   if (Object.keys(proof).some((key) => !new Set(["stage_outcome_ref", "stage_outcome_hash"]).has(key))) {
-    throw new Error("resolved review authorization contains unsupported fields");
+    throwResolvedReviewError(
+      "resolved review authorization contains unsupported fields",
+      "bind_outcome",
+      ["stage_outcome_ref", "stage_outcome_hash"],
+      Object.keys(proof),
+    );
   }
   const outcomeRef = proof.stage_outcome_ref;
   const outcomeHash = proof.stage_outcome_hash;
   if (!RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef ?? "") || !HASH.test(outcomeHash ?? "")) {
-    throw new Error("resolved review authorization must bind a verify-code stage outcome");
+    throwResolvedReviewError(
+      "resolved review authorization must bind a verify-code stage outcome",
+      "outcome_ref",
+      "quality/evidence/stage-outcomes/verify-code/<sha256>.json with matching sha256",
+      { ref: outcomeRef, hash: outcomeHash },
+    );
   }
   if (outcomeRef.slice("quality/evidence/stage-outcomes/verify-code/".length, -".json".length) !== outcomeHash) {
-    throw new Error("resolved review authorization stage outcome ref/hash do not match");
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome ref/hash do not match",
+      "outcome_ref",
+      "stage outcome ref basename equals its sha256",
+      { ref: outcomeRef, hash: outcomeHash },
+    );
   }
   const { revision, snapshot } = currentContext();
   let outcomeRaw;
   try { outcomeRaw = task.readRecord(outcomeRef); }
-  catch (error) { throw new Error(`resolved review authorization stage outcome is unavailable: ${error.message}`); }
-  if (hash(outcomeRaw) !== outcomeHash) throw new Error("resolved review authorization stage outcome hash mismatch");
+  catch (error) {
+    throwResolvedReviewError(
+      `resolved review authorization stage outcome is unavailable: ${error.message}`,
+      "outcome_ref",
+      { ref: outcomeRef, hash: outcomeHash },
+      { ref: outcomeRef, status: "unavailable" },
+    );
+  }
+  if (hash(outcomeRaw) !== outcomeHash) {
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome hash mismatch",
+      "outcome_ref",
+      { ref: outcomeRef, hash: hash(outcomeRaw) },
+      { ref: outcomeRef, hash: outcomeHash },
+    );
+  }
   let outcome;
   try { outcome = JSON.parse(outcomeRaw); }
-  catch { throw new Error("resolved review authorization stage outcome must be valid JSON"); }
+  catch {
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome must be valid JSON",
+      "outcome_ref",
+      "valid JSON stage outcome",
+      { ref: outcomeRef, status: "invalid_json" },
+    );
+  }
   if (outcome?.schema_version !== "workflowhub-stage-outcomes.v1"
       || outcome.task_id !== task.identity.taskId
       || outcome.stage !== "verify-code"
       || outcome.status !== "completed"
       || outcome.snapshot_tree !== snapshot.tree
       || outcome.material_revision !== revision.revision_id) {
-    throw new Error("resolved review authorization stage outcome is not current and completed");
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome is not current and completed",
+      "outcome_current",
+      { task_id: task.identity.taskId, stage: "verify-code", status: "completed", snapshot_tree: snapshot.tree, material_revision: revision.revision_id },
+      { task_id: outcome?.task_id ?? null, stage: outcome?.stage ?? null, status: outcome?.status ?? null, snapshot_tree: outcome?.snapshot_tree ?? null, material_revision: outcome?.material_revision ?? null },
+    );
   }
-  const stageReview = object(outcome.code_review, "resolved review authorization code_review");
+  const expectedRunId = `vnext-${hash(`${task.identity.taskId}\0verify-code`).slice(0, 32)}`;
+  if (outcome.run_id !== expectedRunId) {
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome workflow run identity mismatch",
+      "outcome_current",
+      { run_id: expectedRunId },
+      { run_id: outcome.run_id ?? null },
+    );
+  }
+  const producer = outcome.producer;
+  if (!producer || typeof producer !== "object" || Array.isArray(producer)
+      || !["stage-agent", "workflowhub-session"].includes(producer.kind)
+      || typeof producer.host !== "string" || producer.host.trim() === ""
+      || typeof producer.agent_run_id !== "string" || producer.agent_run_id.trim() === ""
+      || ((producer.source_id !== undefined || producer.source_family !== undefined)
+        && (typeof producer.source_id !== "string" || producer.source_id.trim() === ""
+          || typeof producer.source_family !== "string" || producer.source_family.trim() === ""
+          || producer.source_family !== producer.source_id.split("/")[0]))) {
+    throwResolvedReviewError(
+      "resolved review authorization stage outcome producer identity is invalid",
+      "outcome_producer",
+      "authenticated stage-agent/workflowhub-session producer identity",
+      { kind: producer?.kind ?? null, host: producer?.host ?? null, source_id: producer?.source_id ?? null, source_family: producer?.source_family ?? null, agent_run_id: producer?.agent_run_id ?? null },
+    );
+  }
+  const stageReview = objectOrDiagnostic(
+    outcome.code_review,
+    "resolved review authorization code_review",
+    "review_binding",
+    "current dsh-code-review stage outcome binding",
+  );
   const reviewEvidence = Array.isArray(input.evidence)
     ? input.evidence.find((entry) => entry?.ref === stageReview.quality_review_ref && entry?.sha256 === stageReview.quality_review_hash)
     : null;
   if (!reviewEvidence || !RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef)) {
-    throw new Error("resolved review authorization does not bind the current review evidence");
+    throwResolvedReviewError(
+      "resolved review authorization does not bind the current review evidence",
+      "review_binding",
+      { ref: stageReview.quality_review_ref ?? null, hash: stageReview.quality_review_hash ?? null },
+      reviewEvidence ? { ref: reviewEvidence.ref, hash: reviewEvidence.sha256 } : "missing",
+    );
   }
   if (stageReview.stage !== "verify-code"
       || stageReview.step_slug !== "approve-verification"
       || stageReview.skill_id !== "dsh-code-review"
       || typeof stageReview.quality_review_ref !== "string"
       || !HASH.test(stageReview.quality_review_hash ?? "")) {
-    throw new Error("resolved review authorization code_review binding is invalid");
+    throwResolvedReviewError(
+      "resolved review authorization code_review binding is invalid",
+      "review_identity",
+      { stage: "verify-code", step_slug: "approve-verification", skill_id: "dsh-code-review", ref: "canonical review result", hash: "sha256" },
+      { stage: stageReview.stage ?? null, step_slug: stageReview.step_slug ?? null, skill_id: stageReview.skill_id ?? null, ref: stageReview.quality_review_ref ?? null, hash: stageReview.quality_review_hash ?? null },
+    );
   }
   let reviewRaw;
   try { reviewRaw = task.readRecord(stageReview.quality_review_ref); }
-  catch (error) { throw new Error(`resolved review authorization review result is unavailable: ${error.message}`); }
-  if (hash(reviewRaw) !== stageReview.quality_review_hash) throw new Error("resolved review authorization review result hash mismatch");
+  catch (error) {
+    throwResolvedReviewError(
+      `resolved review authorization review result is unavailable: ${error.message}`,
+      "review_identity",
+      { ref: stageReview.quality_review_ref, hash: stageReview.quality_review_hash },
+      { ref: stageReview.quality_review_ref, status: "unavailable" },
+    );
+  }
+  if (hash(reviewRaw) !== stageReview.quality_review_hash) {
+    throwResolvedReviewError(
+      "resolved review authorization review result hash mismatch",
+      "review_identity",
+      { ref: stageReview.quality_review_ref, hash: hash(reviewRaw) },
+      { ref: stageReview.quality_review_ref, hash: stageReview.quality_review_hash },
+    );
+  }
   let review;
   try { review = JSON.parse(reviewRaw); }
-  catch { throw new Error("resolved review authorization review result must be valid JSON"); }
-  if (review?.task_id !== task.identity.taskId || review.stage !== "verify-code") {
-    throw new Error("resolved review authorization review result identity mismatch");
+  catch {
+    throwResolvedReviewError(
+      "resolved review authorization review result must be valid JSON",
+      "review_identity",
+      "valid JSON review result",
+      { ref: stageReview.quality_review_ref, status: "invalid_json" },
+    );
+  }
+  if (review?.version !== "wh-review-result.v1"
+      || review?.task_id !== task.identity.taskId
+      || review.stage !== "verify-code"
+      || review.subject_kind !== "worktree"
+      || review.phase_id !== null
+      || review.review_scope !== null
+      || review.material_revision !== revision.revision_id) {
+    throwResolvedReviewError(
+      "resolved review authorization review result identity mismatch",
+      "review_identity",
+      { task_id: task.identity.taskId, stage: "verify-code" },
+      { task_id: review?.task_id ?? null, stage: review?.stage ?? null },
+    );
   }
   const sourceFindings = canonicalReviewFindings(review).filter(isActionableSeriousFinding);
-  const result = object(stageReview.result, "resolved review authorization result");
+  const result = objectOrDiagnostic(
+    stageReview.result,
+    "resolved review authorization result",
+    "finding_coverage",
+    "resolved dsh-code-review result with findings and repairs",
+  );
   if (result.status !== "findings" || sourceFindings.length === 0 || !Array.isArray(result.repairs)) {
-    throw new Error("resolved review authorization must prove repaired actionable findings");
+    throwResolvedReviewError(
+      "resolved review authorization must prove repaired actionable findings",
+      "finding_coverage",
+      { result_status: "findings", actionable_finding_count: ">0", repairs: "array" },
+      { result_status: result.status ?? null, actionable_finding_count: sourceFindings.length, repairs: Array.isArray(result.repairs) ? "array" : "missing" },
+    );
   }
   const findingKey = (finding) => JSON.stringify({
     severity: finding.severity,
@@ -211,7 +386,12 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
   });
   const outcomeKeys = new Set(canonicalReviewFindings(result).filter(isActionableSeriousFinding).map(findingKey));
   if (sourceFindings.some((finding) => !outcomeKeys.has(findingKey(finding)))) {
-    throw new Error("resolved review authorization omitted an actionable finding");
+    throwResolvedReviewError(
+      "resolved review authorization omitted an actionable finding",
+      "finding_coverage",
+      "every actionable finding appears in the resolved outcome",
+      { actionable_finding_count: sourceFindings.length, outcome_finding_count: outcomeKeys.size },
+    );
   }
   const sourceIds = new Set(sourceFindings.map((finding) => finding.id));
   const repairedIds = new Set();
@@ -221,11 +401,23 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
         || !sourceIds.has(repair.finding_id ?? repair.id)
         || repairedIds.has(repair.finding_id ?? repair.id)
         || !RESOLVED_REVIEW_REPAIR_STATUSES.has(repair.status)) {
-      throw new Error("resolved review authorization contains an invalid repair disposition");
+      throwResolvedReviewError(
+        "resolved review authorization contains an invalid repair disposition",
+        "finding_coverage",
+        { finding_id: "known actionable finding", status: "fixed or rejected_invalid" },
+        { finding_id: repair?.finding_id ?? repair?.id ?? null, status: repair?.status ?? null },
+      );
     }
     repairedIds.add(repair.finding_id ?? repair.id);
   }
-  if (repairedIds.size !== sourceIds.size) throw new Error("resolved review authorization does not cover every actionable finding");
+  if (repairedIds.size !== sourceIds.size) {
+    throwResolvedReviewError(
+      "resolved review authorization does not cover every actionable finding",
+      "finding_coverage",
+      { actionable_finding_count: sourceIds.size, repaired_finding_count: sourceIds.size },
+      { actionable_finding_count: sourceIds.size, repaired_finding_count: repairedIds.size },
+    );
+  }
 }
 
 function interactionAggregateIdentity(value) {
@@ -495,7 +687,9 @@ export function buildTaskKernel(taskHandle, {
       const name = stageName(stage);
       object(input, "vNext quality fact input");
       object(options, "vNext quality fact options");
-      rejectUnknown(options, new Set(["resolved_review"]), "vNext quality fact options");
+      // `recorded_at` is a private same-invocation retry input. It freezes the
+      // first publication's bytes without adding a public control surface.
+      rejectUnknown(options, new Set(["resolved_review", "recorded_at"]), "vNext quality fact options");
       rejectUnknown(input, new Set(["kind", "status", "review_status", "subject", "evidence"]), "vNext quality fact input");
       if (input.evidence.some((entry) => typeof entry?.ref !== "string" || !entry.ref.startsWith("quality/"))) {
         throw new Error("vNext quality facts must reference the quality namespace");
@@ -533,7 +727,7 @@ export function buildTaskKernel(taskHandle, {
         snapshotTree: snapshot.tree,
         ...factInput,
         reviewStatus,
-        recordedAt: now(),
+        recordedAt: options.recorded_at ?? now(),
       });
       return publishQualityFact({ fact, read: task.readRecord, create: (recordRef, raw) => createRecord(recordRef, raw) });
     },

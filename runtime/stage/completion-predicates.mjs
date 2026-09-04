@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { isMaterialOnlySnapshotDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { isHumanConfirmationVersion } from "../evidence/canonical-evidence-validators.mjs";
@@ -49,6 +50,22 @@ export function stageMaterialScopeRevisions(materials = {}) {
     stage,
     stageMaterialScopeRevision(stage, materials),
   ])));
+}
+
+/**
+ * A prior stage owns only the material it could have seen.  Later material
+ * files may therefore be added without invalidating that stage, while any
+ * source change or edit to an owned material still makes its facts stale.
+ */
+export function isStageSnapshotCurrent(stage, expectedTree, actualTree, { snapshotRoot = null, taskId = null } = {}) {
+  if (expectedTree === actualTree) return true;
+  if (!snapshotRoot || typeof taskId !== "string" || taskId.trim() === "") return false;
+  const downstreamMaterials = CURRENT_MATERIAL_FILES.filter((file) => !STAGE_FACT_MATERIALS[stage]?.includes(file));
+  return isStageMaterialOnlySnapshotDelta(snapshotRoot, expectedTree, actualTree, {
+    taskId,
+    downstreamMaterials,
+    allowNonMaterialChanges: !new Set(["build-code", "verify-code"]).has(stage),
+  });
 }
 
 export const STAGE_PREDICATES = Object.freeze({
@@ -173,7 +190,7 @@ function selectLatestAcceptanceCandidates(candidates) {
     : { status: "conflict", candidates };
 }
 
-export function deriveStageCompletion(stage, observations = []) {
+export function deriveStageCompletion(stage, observations = [], { requireStageOutcome = false, stageOutcomeStatus = null } = {}) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
   const requirements = {
@@ -238,16 +255,26 @@ export function deriveStageCompletion(stage, observations = []) {
     }
   }
   const missing = Object.keys(requirements).filter((subject) => !satisfied.has(subject));
+  const stageOutcomeMissing = requireStageOutcome && stageOutcomeStatus !== "completed";
+  if (stageOutcomeMissing) missing.push("stage_outcome");
+  const predicates = Object.fromEntries(Object.keys(requirements).map((subject) => [
+    subject, Object.freeze({
+      kind: requirements[subject],
+      status: conflicts.has(subject) ? "conflict" : satisfied.has(subject) ? "satisfied" : "missing",
+      fact_ref: satisfied.get(subject)?.fact?.ref ?? null,
+    }),
+  ]));
+  if (requireStageOutcome) {
+    predicates.stage_outcome = Object.freeze({
+      kind: "stage_outcome",
+      status: stageOutcomeMissing ? "missing" : "satisfied",
+      fact_ref: null,
+    });
+  }
   const result = Object.freeze({
     stage,
     status: missing.length === 0 ? "completed" : "in_progress",
-    predicates: Object.freeze(Object.fromEntries(Object.keys(requirements).map((subject) => [
-      subject, Object.freeze({
-        kind: requirements[subject],
-        status: conflicts.has(subject) ? "conflict" : satisfied.has(subject) ? "satisfied" : "missing",
-        fact_ref: satisfied.get(subject)?.fact?.ref ?? null,
-      }),
-    ]))),
+    predicates: Object.freeze(predicates),
     fact_refs: Object.freeze([...satisfied.values()].map((entry) => entry.fact.ref).sort()),
     missing: Object.freeze(missing),
   });
@@ -383,6 +410,86 @@ function productIdentity(value, label, expected, reasons) {
   if (expected === null) return identity;
   for (const field of fields) if (expected[field] !== identity[field]) productReason(reasons, `${label}_identity_conflict:${field}`);
   return expected;
+}
+
+/**
+ * Project the current authenticated stage-outcome envelope without creating
+ * another persisted ledger.  A stage outcome is current when its content
+ * hash, task/stage identity, stage-owned material scope, and stage snapshot
+ * all match the current task.  Multiple current completed envelopes are a
+ * conflict; an unavailable/incomplete envelope never satisfies completion.
+ */
+export function deriveStageOutcomeStatuses({
+  task_id: taskId,
+  read,
+  stage_outcome_refs: stageOutcomeRefs = {},
+  snapshot_tree: snapshotTree,
+  material_revision: materialRevision,
+  material_scope_revisions: materialScopeRevisions = {},
+  snapshot_root: snapshotRoot = null,
+  authenticate,
+} = {}) {
+  if (typeof read !== "function") throw new TypeError("stage-outcome reader is required");
+  if (typeof authenticate !== "function") throw new TypeError("stage-outcome authenticator is required");
+  return Object.freeze(Object.fromEntries(STAGES.map((stage) => {
+    const refs = Array.isArray(stageOutcomeRefs[stage]) ? stageOutcomeRefs[stage] : [];
+    const candidates = [];
+    let invalidCurrent = false;
+    const currentRunId = `vnext-${sha256(`${taskId}\0${stage}`).slice(0, 32)}`;
+    for (const ref of refs) {
+      if (typeof ref !== "string" || !new RegExp(`^quality/evidence/stage-outcomes/${stage}/[a-f0-9]{64}\\.json$`).test(ref)) continue;
+      let raw;
+      let value;
+      try {
+        raw = read(ref);
+        value = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const refHash = ref.slice(ref.lastIndexOf("/") + 1, -5);
+      const sameTaskStage = value?.task_id === taskId && value?.stage === stage;
+      const currentRun = sameTaskStage && value?.run_id === currentRunId;
+      const currentSnapshot = sameTaskStage && isStageSnapshotCurrent(stage, value?.snapshot_tree, snapshotTree, {
+        snapshotRoot,
+        taskId,
+      });
+      if (sha256(raw) !== refHash) {
+        // A content-addressed ref that declares the current run but whose
+        // bytes no longer match is a current integrity failure only when the
+        // envelope also claims the current snapshot. A deterministic
+        // workflow run id is reused across retries, so an older valid
+        // snapshot from that run is historical, not a second current
+        // candidate. Foreign or historical siblings remain non-authoritative
+        // and are ignored.
+        if (currentRun && currentSnapshot) invalidCurrent = true;
+        continue;
+      }
+      // The stage run id is deterministic for the task/stage, while each
+      // retry gets a new immutable envelope. Select only the envelope bound
+      // to both the derived run and a stage-current worktree snapshot; otherwise
+      // a previous retry would make status report stage_outcome missing even
+      // though the latest authenticated outcome exists.
+      if (!sameTaskStage || !currentRun || !currentSnapshot) continue;
+      try {
+        // The callback is the single full authentication boundary.  This
+        // projector must never turn a shallow JSON shape check into close or
+        // release authority. A null result means the authenticator classified
+        // the ref as foreign/stale; an exception means the current candidate
+        // was malformed and must remain incomplete.
+        const authenticated = authenticate({ stage, ref, raw, value });
+        if (authenticated === null || authenticated === undefined) continue;
+        const normalized = authenticated.value ?? authenticated;
+        if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) throw new Error("authenticated stage outcome is not an object");
+        candidates.push(normalized.status === "completed" ? "completed" : normalized.status ?? "incomplete");
+      } catch {
+        invalidCurrent = true;
+      }
+    }
+    if (invalidCurrent) return [stage, "incomplete"];
+    if (candidates.filter((status) => status === "completed").length > 1) return [stage, "conflict"];
+    if (candidates.includes("completed")) return [stage, "completed"];
+    return [stage, candidates[0] ?? "unavailable"];
+  })));
 }
 
 /**
@@ -597,11 +704,12 @@ export function deriveCurrentProductRelease({
   snapshot_root: snapshotRoot = null,
   expected_acceptance_ids: expectedAcceptanceIds = [],
   evaluate_freshness: evaluateFreshness = null,
+  stage_outcome_statuses: stageOutcomeStatuses = null,
 } = {}) {
   if (typeof read !== "function") throw new TypeError("product-release quality fact reader is required");
   const stageObservations = new Map(STAGES.map((stage) => [stage, []]));
   const acceptanceCandidates = new Map();
-  let confirmation = null;
+  const confirmationCandidates = new Map();
   for (const ref of refs) {
     if (typeof ref !== "string" || ref.trim() === "") continue;
     let raw;
@@ -612,8 +720,7 @@ export function deriveCurrentProductRelease({
     } catch {
       continue;
     }
-    const snapshotCurrent = value?.snapshot_tree === snapshotTree
-      || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, value?.snapshot_tree, snapshotTree, taskId));
+    const snapshotCurrent = isStageSnapshotCurrent(value?.stage, value?.snapshot_tree, snapshotTree, { snapshotRoot, taskId });
     const scopeMatchesStage = value?.material_scope === undefined
       || JSON.stringify(value.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[value.stage]);
     const factMaterialCurrent = !scopeMatchesStage
@@ -670,9 +777,13 @@ export function deriveCurrentProductRelease({
       try {
         const human = JSON.parse(read(binding.ref));
         if (isHumanConfirmationVersion(human, { current: true })
+            && human.task_id === taskId
+            && human.stage === "verify-code"
+            && human.decision === "accepted"
+            && human.material_revision === materialRevision
             && (human.snapshot_tree === snapshotTree
               || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, human.snapshot_tree, snapshotTree, taskId)))) {
-          confirmation = {
+          const candidate = {
             ...human,
             material_revision: materialRevision,
             snapshot_tree: snapshotTree,
@@ -680,15 +791,27 @@ export function deriveCurrentProductRelease({
             ref: binding.ref,
             hash: binding.sha256,
           };
+          confirmationCandidates.set(`${binding.ref}:${binding.sha256}`, candidate);
         }
       } catch {
-        confirmation = null;
+        // Malformed confirmation evidence cannot participate in the current
+        // selection. A distinct valid confirmation still keeps its own
+        // provenance and is handled by the ambiguity check below.
       }
     }
   }
+  // A product projection must not choose an arbitrary accepted confirmation
+  // when two distinct current proofs exist. Keep the release input absent so
+  // the existing `verify_confirmation_missing` reason remains fail-closed.
+  const confirmation = confirmationCandidates.size === 1
+    ? [...confirmationCandidates.values()][0]
+    : null;
   const stageCompletions = STAGES.map((stage) => {
     const observations = stageObservations.get(stage) ?? [];
-    const completion = deriveStageCompletion(stage, observations);
+    const completion = deriveStageCompletion(stage, observations, {
+      requireStageOutcome: stageOutcomeStatuses !== null,
+      stageOutcomeStatus: stageOutcomeStatuses?.[stage] ?? "unavailable",
+    });
     const first = observations.find(({ fact }) => completion.fact_refs.includes(fact.ref));
     return {
       stage,

@@ -1,0 +1,12 @@
+{
+  "fixed_states": [
+    { "task_id": "task-fixed-ok", "stage": "make-decision", "status": "ok" },
+    { "task_id": "task-fixed-degraded", "stage": "build-spec", "status": "degraded" },
+    { "task_id": "task-fixed-failed", "stage": "build-plan", "status": "failed" }
+  ],
+  "availability_states": ["unavailable", "not_scheduled"],
+  "style_reuse": {
+    "not_scheduled": "unavailable"
+  }
+}
+

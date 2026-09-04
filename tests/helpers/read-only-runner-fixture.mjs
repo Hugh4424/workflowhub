@@ -16,6 +16,14 @@ const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
+function isolatedRunnerEnv(home, storage) {
+  const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
+  // Released-runner fixtures own a temporary host/storage boundary.  An
+  // inherited Codex session must not be rebound to the fixture task.
+  for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
+  return env;
+}
+
 /** Hash tracked fixture bytes, excluding generated VCS metadata. */
 export function sourceContentListHash(root = SOURCE_ROOT) {
   const names = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root }).toString("utf8").split("\0").filter(Boolean);
@@ -63,7 +71,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
     run: (command, args, options) => spawnSync(command, command === "npm" ? [...args, "--offline"] : args, options),
   });
 
-  const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
+  const env = isolatedRunnerEnv(home, storage);
   const runtimePath = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
   const taskPath = path.join(storage, "Projects", "E2E", "tasks", taskId);
   createTask({ storageRoot: storage, taskPath, manifest: {
@@ -153,7 +161,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
 
 /** Reattach CLI/module capabilities inside a child Node process. */
 export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRoot, targetRepo, home, storage, taskPath, taskId, sourceHashBefore }) {
-  const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
+  const env = isolatedRunnerEnv(home, storage);
   const runtimePath = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
   const cli = (argv) => parseCli(spawnSync(process.execPath, [runtimePath, ...argv], { cwd: targetRepo, env, encoding: "utf8" }), argv.join(" "));
   const modules = {};

@@ -107,7 +107,7 @@ describe("wh-review production CLI", () => {
     const kernel = createTaskKernel(task, { candidateWorkspace: workspace });
     const snapshot = kernel.currentVNextSnapshot();
     const materialRevision = kernel.currentVNextMaterialRevision();
-    const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace, stage: "build-code", attemptId: "build-1" });
+    const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace, stage: "build-code", attemptId: "build-1", workflowRunId: kernel.deriveStageWorkflowRunId("build-code") });
     const outcomeRaw = `${JSON.stringify(outcome.value, null, 2)}\n`;
     const outcomeHash = outcome.sha256;
     const testOutput = "focused test passed\n";
@@ -739,9 +739,13 @@ describe("wh-review production CLI", () => {
       providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
       attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
     }));
+    const brokerConfigId = createHash("sha256").update(JSON.stringify({
+      id: "kimi", source_id: "fixture-kimi-source", model: null, effort: null, thinking: null, deadline_ms: null,
+    }), "utf8").digest("hex");
     const counter = join(root, "broker-count"); writeFileSync(counter, "0");
     const broker = join(root, "fake-broker.mjs");
-    writeFileSync(broker, `import { readFileSync, writeFileSync } from "node:fs";
+    writeFileSync(broker, `import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 const requestPath = process.argv.find((value) => value.startsWith("--request="))?.slice("--request=".length);
 const attachmentsPath = process.argv.find((value) => value.startsWith("--attachments="))?.slice("--attachments=".length);
 if (!requestPath) process.exit(2);
@@ -750,6 +754,17 @@ const count = Number(readFileSync(countPath, "utf8")) + 1;
 writeFileSync(countPath, String(count));
 const request = JSON.parse(readFileSync(requestPath, "utf8"));
 const attachments = JSON.parse(readFileSync(attachmentsPath, "utf8"));
+const trustedIdentity = {
+  source_id: "fixture-kimi-source",
+  config_id: createHash("sha256").update(JSON.stringify({
+    id: "kimi",
+    source_id: "fixture-kimi-source",
+    model: null,
+    effort: null,
+    thinking: null,
+    deadline_ms: null,
+  }), "utf8").digest("hex"),
+};
 const runtimeId = "fixture-runtime-" + count;
 const error = { code: "AUTH", message: "fixture auth unavailable" };
 process.stdout.write(JSON.stringify({
@@ -758,7 +773,7 @@ process.stdout.write(JSON.stringify({
   providers: [{
     attempts: [{ attempt_id: "fixture-attempt-" + count, completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "failed" }],
     continuable: false, deadline_ms: null, error,
-    identity: { adapter: "kimi", config_id: "fixture-config", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
+    identity: { adapter: "kimi", config_id: "${brokerConfigId}", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
     material: {
       contract_hash: request.contract_hash ?? "fixture-contract-hash",
       contract_id: request.contract_id ?? "fixture-contract",

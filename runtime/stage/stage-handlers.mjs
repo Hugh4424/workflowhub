@@ -82,8 +82,8 @@ const NAMESPACE = Object.freeze({
   stage_outcomes: "quality/evidence/stage-outcomes/",
 });
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", clarify: "spec-clarify", ui_qa: "browser-qa" });
-const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
-const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json$/;
+const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
 const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
@@ -240,6 +240,181 @@ function validReceiptRef(name, ref) {
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);
   return Boolean(NAMESPACE[name] && ref.startsWith(NAMESPACE[name]));
+}
+
+function shapeDiagnosticError(message, path, expected, actual, ErrorClass = Error) {
+  const error = new ErrorClass(message);
+  Object.defineProperty(error, "diagnostic", {
+    value: Object.freeze({ path, expected, actual: actual === undefined ? "<missing>" : actual }),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  Object.defineProperty(error, "preflight_protocol", {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return error;
+}
+
+function stageInputKeys(stage) {
+  if (stage === "build-code") return ["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"];
+  if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
+    return ["receipts", "finding_dispositions", "contract_facts"];
+  }
+  return ["receipts", "finding_dispositions"];
+}
+
+export function validateStageInvocation(stage, input, { currentOnly = true, expectedCriterionIds = null } = {}) {
+  if (!new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]).has(stage)) {
+    throw new TypeError(`unsupported stage for invocation validation: ${stage}`);
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw shapeDiagnosticError("official stage input must be an object", "$", "object", input, TypeError);
+  }
+  const allowed = stageInputKeys(stage);
+  const unknown = Object.keys(input).filter((key) => !allowed.includes(key));
+  if (unknown.length) {
+    throw shapeDiagnosticError(
+      `${stage} official run input must contain only ${allowed.join(" and ")}; unknown fields: ${unknown.join(", ")}`,
+      unknown[0],
+      allowed,
+      input[unknown[0]],
+    );
+  }
+  const normalized = { ...input, receipts: input.receipts === undefined ? {} : input.receipts };
+  if (!normalized.receipts || typeof normalized.receipts !== "object" || Array.isArray(normalized.receipts)) {
+    throw shapeDiagnosticError(`${stage} receipts must be an object`, "receipts", "object", normalized.receipts, TypeError);
+  }
+  const unexpectedReceiptKeys = Object.keys(normalized.receipts).filter((key) => !RECEIPT_KEYS[stage].has(key));
+  if (unexpectedReceiptKeys.length) {
+    throw shapeDiagnosticError(
+      `${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`,
+      `receipts.${unexpectedReceiptKeys[0]}`,
+      [...RECEIPT_KEYS[stage]],
+      normalized.receipts[unexpectedReceiptKeys[0]],
+    );
+  }
+  if (stage !== "build-plan") {
+    for (const [name, ref] of Object.entries(normalized.receipts)) {
+      const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref];
+      const invalidIndex = candidateRefs.findIndex((candidateRef) => !validReceiptRef(name, candidateRef));
+      if (candidateRefs.length === 0 || invalidIndex >= 0) {
+        const path = candidateRefs.length === 0
+          ? `receipts.${name}`
+          : `receipts.${name}${Array.isArray(ref) ? `[${invalidIndex}]` : ""}`;
+        const actual = candidateRefs.length === 0 ? ref : candidateRefs[invalidIndex];
+        throw shapeDiagnosticError(`${name} receipt ref is outside its canonical namespace`, path, "canonical receipt reference", actual);
+      }
+    }
+  }
+  if (stage === "build-code" && normalized.acceptance_coverage !== undefined) {
+    const reviewRef = normalized.receipts?.review;
+    const allowEmptyItems = typeof reviewRef === "string" && REVIEW_ATTEMPT_REF.test(reviewRef);
+    validateAcceptanceCoverageShape(normalized.acceptance_coverage, { currentOnly, expectedCriterionIds, allowEmptyItems });
+  }
+  return normalized;
+}
+
+export function validateAcceptanceCoverageShape(value, {
+  stage = "build-code",
+  expectedCriterionIds = null,
+  snapshotTree = undefined,
+  currentOnly = true,
+  allowEmptyItems = false,
+} = {}) {
+  const label = `${stage} acceptance_coverage`;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw shapeDiagnosticError(`${label} must be an object`, "acceptance_coverage", "object", value, TypeError);
+  }
+  if (snapshotTree !== undefined && value.snapshot_tree !== snapshotTree) {
+    throw shapeDiagnosticError(`${label} must bind the tests snapshot tree`, "acceptance_coverage.snapshot_tree", snapshotTree, value.snapshot_tree);
+  }
+  const acceptedIds = value.accepted_criterion_ids;
+  if (!Array.isArray(acceptedIds) || acceptedIds.length === 0) {
+    throw shapeDiagnosticError(`${label}.accepted_criterion_ids is required`, "acceptance_coverage.accepted_criterion_ids", "non-empty array", acceptedIds);
+  }
+  const declared = new Set();
+  for (const [index, id] of acceptedIds.entries()) {
+    if (typeof id !== "string" || id.trim() === "") {
+      throw shapeDiagnosticError(
+        `${label}.accepted_criterion_ids[${index}] must be non-empty`,
+        `acceptance_coverage.accepted_criterion_ids[${index}]`,
+        "non-empty string",
+        id,
+        TypeError,
+      );
+    }
+    if (declared.has(id)) {
+      throw shapeDiagnosticError(`duplicate accepted criterion id: ${id}`, `acceptance_coverage.accepted_criterion_ids[${index}]`, "unique criterion id", id);
+    }
+    declared.add(id);
+  }
+  if (expectedCriterionIds !== null) {
+    if (!Array.isArray(expectedCriterionIds)) throw new TypeError("expectedCriterionIds must be an array or null");
+    const expected = new Set(expectedCriterionIds);
+    if (expected.size !== declared.size || [...declared].some((id) => !expected.has(id))) {
+      throw shapeDiagnosticError(`${label} must match the current spec acceptance criteria`, "acceptance_coverage.accepted_criterion_ids", expectedCriterionIds, acceptedIds);
+    }
+  }
+  const suppliedItems = value.items;
+  if (!Array.isArray(suppliedItems) || suppliedItems.length !== declared.size) {
+    if (suppliedItems?.length === 0 && declared.size === 1 && allowEmptyItems === true) return { ...value, accepted_criterion_ids: [...acceptedIds], items: [] };
+    throw shapeDiagnosticError(`${label} must contain exactly one row per accepted criterion`, "acceptance_coverage.items", `array with ${declared.size} item(s)`, suppliedItems);
+  }
+  const items = suppliedItems.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw shapeDiagnosticError(`${label}.items[${index}] must be an object`, `acceptance_coverage.items[${index}]`, "object", item, TypeError);
+    }
+    const id = item.acceptance_criterion_id;
+    if (typeof id !== "string" || id.trim() === "") {
+      throw shapeDiagnosticError(
+        `acceptance_coverage.items[${index}].acceptance_criterion_id must be non-empty`,
+        `acceptance_coverage.items[${index}].acceptance_criterion_id`,
+        "non-empty string",
+        id,
+        TypeError,
+      );
+    }
+    if (!declared.has(id)) {
+      throw shapeDiagnosticError(`acceptance_coverage item is not an accepted criterion: ${id}`, `acceptance_coverage.items[${index}].acceptance_criterion_id`, [...declared], id);
+    }
+    declared.delete(id);
+    if (!["covered", "missing", "unknown"].includes(item.status)) {
+      throw shapeDiagnosticError(`acceptance_coverage ${id} status must be covered, missing, or unknown`, `acceptance_coverage.items[${index}].status`, "covered|missing|unknown", item.status);
+    }
+    if (!Array.isArray(item.evidence_refs)) {
+      throw shapeDiagnosticError(`acceptance_coverage ${id} evidence_refs must be an array`, `acceptance_coverage.items[${index}].evidence_refs`, "array", item.evidence_refs, TypeError);
+    }
+    if (item.status === "covered" && item.evidence_refs.length === 0) {
+      throw shapeDiagnosticError(`covered acceptance criterion requires evidence: ${id}`, `acceptance_coverage.items[${index}].evidence_refs`, "non-empty array", item.evidence_refs);
+    }
+    if (item.status !== "covered" && item.evidence_refs.length !== 0) {
+      throw shapeDiagnosticError(`non-covered acceptance criterion must not claim evidence: ${id}`, `acceptance_coverage.items[${index}].evidence_refs`, "empty array", item.evidence_refs);
+    }
+    const refs = item.evidence_refs.map((entry, refIndex) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw shapeDiagnosticError(`acceptance_coverage ${id} evidence_refs[${refIndex}] must be an object`, `acceptance_coverage.items[${index}].evidence_refs[${refIndex}]`, "object", entry, TypeError);
+      }
+      if (typeof entry.ref !== "string" || entry.ref.trim() === "") {
+        throw shapeDiagnosticError(`acceptance_coverage ${id} evidence_refs[${refIndex}].ref must be non-empty`, `acceptance_coverage.items[${index}].evidence_refs[${refIndex}].ref`, "non-empty string", entry.ref, TypeError);
+      }
+      const validNamespace = currentOnly
+        ? entry.ref.startsWith("quality/evidence/")
+        : entry.ref.startsWith("evidence/") || entry.ref.startsWith("quality/evidence/");
+      if (!validNamespace || entry.ref.includes("..") || !SHA256.test(entry.sha256 ?? "")) {
+        throw shapeDiagnosticError(`acceptance_coverage ${id} evidence reference is invalid`, `acceptance_coverage.items[${index}].evidence_refs[${refIndex}]`, "canonical evidence ref with sha256", entry);
+      }
+      return { ref: entry.ref, sha256: entry.sha256 };
+    });
+    return { ...item, acceptance_criterion_id: id, evidence_refs: refs };
+  });
+  if (declared.size) {
+    throw shapeDiagnosticError(`${label} is missing an accepted criterion`, "acceptance_coverage.items", "one row for every accepted criterion", [...declared]);
+  }
+  return { ...value, accepted_criterion_ids: [...acceptedIds], items };
 }
 
 function subjectFact(status, evidenceRefs = [], detail = null, attributes = {}) {
@@ -1208,6 +1383,18 @@ function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execut
   }, snapshotTree);
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
+  const reviewRef = invocation.receipts?.review;
+  const attemptRef = typeof reviewRef === "string" && REVIEW_ATTEMPT_REF.test(reviewRef) ? reviewRef : null;
+  if (invocation.acceptance_coverage?.items?.length === 0) {
+    if (attemptRef) {
+      const attempt = worker.readReceipt(attemptRef)?.value;
+      if (attempt?.terminal_status === "unavailable" && attempt?.error?.code === "PROVIDER_UNAVAILABLE") {
+        throw new Error("review unavailable attempt must contain provider attempts");
+      }
+      const fallback = { ...invocation.acceptance_coverage, items: invocation.acceptance_coverage.accepted_criterion_ids.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })) };
+      invocation = { ...invocation, acceptance_coverage: fallback };
+    }
+  }
   if (invocation.acceptance_coverage === undefined) {
     const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
     if (ids.length === 0) throw new Error("build-code acceptance_coverage has no current spec acceptance criteria");
@@ -1221,36 +1408,18 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       items: ids.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })),
     };
   }
-  const coverage = object(invocation.acceptance_coverage, "build-code acceptance_coverage");
-  if (coverage.snapshot_tree !== snapshotTree) throw new Error("build-code acceptance_coverage must bind the tests snapshot tree");
-  if (!Array.isArray(coverage.accepted_criterion_ids) || coverage.accepted_criterion_ids.length === 0) throw new Error("build-code acceptance_coverage.accepted_criterion_ids is required");
+  const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const currentIds = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
-  const currentSet = new Set(currentIds);
-  const suppliedSet = new Set(coverage.accepted_criterion_ids);
-  if (suppliedSet.size !== currentSet.size || [...suppliedSet].some((id) => !currentSet.has(id))) {
-    throw new Error("build-code acceptance_coverage must match the current spec acceptance criteria");
-  }
-  const declared = new Set();
-  for (const [index, id] of coverage.accepted_criterion_ids.entries()) {
-    text(id, `build-code acceptance_coverage.accepted_criterion_ids[${index}]`);
-    if (declared.has(id)) throw new Error(`duplicate accepted criterion id: ${id}`);
-    declared.add(id);
-  }
-  if (!Array.isArray(coverage.items) || coverage.items.length !== declared.size) throw new Error("build-code acceptance_coverage must contain exactly one row per accepted criterion");
-  const items = coverage.items.map((item, index) => {
-    const value = object(item, `build-code acceptance_coverage.items[${index}]`);
-    const id = text(value.acceptance_criterion_id, `build-code acceptance_coverage.items[${index}].acceptance_criterion_id`);
-    if (!declared.has(id)) throw new Error(`acceptance_coverage item is not an accepted criterion: ${id}`);
-    declared.delete(id);
-    if (!new Set(["covered", "missing", "unknown"]).has(value.status)) throw new Error(`acceptance_coverage ${id} status must be covered, missing, or unknown`);
-    if (!Array.isArray(value.evidence_refs)) throw new TypeError(`acceptance_coverage ${id} evidence_refs must be an array`);
-    if (value.status === "covered" && value.evidence_refs.length === 0) throw new Error(`covered acceptance criterion requires evidence: ${id}`);
-    if (value.status !== "covered" && value.evidence_refs.length !== 0) throw new Error(`non-covered acceptance criterion must not claim evidence: ${id}`);
-    const refs = value.evidence_refs.map((entry, refIndex) => {
-      const ref = object(entry, `acceptance_coverage ${id} evidence_refs[${refIndex}]`);
-      text(ref.ref, `acceptance_coverage ${id} evidence_refs[${refIndex}].ref`);
-      const currentOnly = worker.manifest?.record_model === "vnext-single-write";
-      if ((currentOnly ? !ref.ref.startsWith("quality/evidence/") : !ref.ref.startsWith("evidence/") && !ref.ref.startsWith("quality/evidence/")) || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) throw new Error(`acceptance_coverage ${id} evidence reference is invalid`);
+  const coverage = validateAcceptanceCoverageShape(invocation.acceptance_coverage, {
+    stage: "build-code",
+    expectedCriterionIds: currentIds,
+    snapshotTree,
+    currentOnly,
+    allowEmptyItems: Boolean(attemptRef),
+  });
+  const items = coverage.items.map((value) => {
+    const id = value.acceptance_criterion_id;
+    const refs = value.evidence_refs.map((ref) => {
       const record = worker.readReceipt(ref.ref);
       if (record.sha256 !== ref.sha256) throw new Error(`acceptance_coverage ${id} evidence hash mismatch`);
       return { ref: ref.ref, sha256: ref.sha256 };
@@ -1283,7 +1452,6 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       } : {}),
     };
   });
-  if (declared.size) throw new Error("acceptance_coverage is missing an accepted criterion");
   const proofOwners = [];
   const coveredItems = items.filter((item) => item.status === "covered");
   const normalizedItems = items.map((item) => {
@@ -1571,8 +1739,21 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   // A broker group can terminate before dispatching any provider. Preserve
   // that terminal transport fact as unavailable; do not accept an empty
   // provider list for provider-specific failures or malformed results.
-  if (attempt.provider_attempts.length === 0
-      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "GROUP_OUTCOME_UNAVAILABLE", "PROCESS_TIMEOUT"].includes(attempt.error.code)) {
+  const groupTerminalWithoutProvider = new Set([
+    "MATERIAL_INCOMPLETE",
+    "MATERIAL_FORBIDDEN",
+    "GROUP_OUTCOME_UNAVAILABLE",
+    "PROCESS_TIMEOUT",
+    "ROUTE_UNAVAILABLE",
+    "REVIEW_BROKER_START_FAILED",
+    "REVIEW_BROKER_EXIT_NONZERO",
+    "REVIEW_EXECUTION_TIMEOUT",
+    "REVIEW_CANCELLED",
+    "REVIEW_NO_SEMANTIC_RESULT",
+    "REVIEW_PROVIDER_OUTPUT_INVALID",
+    "PROTOCOL_INCOMPATIBLE",
+  ]);
+  if (attempt.provider_attempts.length === 0 && !groupTerminalWithoutProvider.has(attempt.error.code)) {
     throw new Error("review unavailable attempt must contain provider attempts");
   }
   const latestByProvider = new Map();
@@ -3314,6 +3495,16 @@ HANDLERS.set("verify-code", async (worker, input) => {
   // result and exposes its findings; it does not audit materials, AC coverage,
   // test receipts, verification receipts, or requirement replay.
   const review = codeReviewFacts(worker, input, "quality_review");
+  // wh-review is the optional independent/advisory review. Consume its
+  // receipt through the real handler seam so the declared skill binding is
+  // observable; stage-runner later replaces this projection with the
+  // authenticated broker intent before publishing the quality fact.
+  const independentReview = input.receipts?.review !== undefined
+    ? safeReviewFacts(worker, input, "review", undefined, "verify-code", {
+      requireRiskAcceptance: false,
+      requireDispositions: false,
+    })
+    : null;
   const componentQuality = componentQualityConsumerFacts(worker, input);
   const findings = Array.isArray(review.value?.findings) ? review.value.findings : [];
   const actionableFindings = findings.filter(isActionableSeriousFinding);
@@ -3346,6 +3537,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
         status: review.facts.status,
       },
       review_diagnostics: reviewDiagnostics,
+      ...(independentReview ? { review: independentReview.facts } : {}),
       component_quality: componentQuality.facts,
       ...(e2eAcceptance.required ? { e2e_acceptance: e2eAcceptance } : {}),
       completion_subjects: {
@@ -3363,7 +3555,10 @@ HANDLERS.set("verify-code", async (worker, input) => {
         } : {}),
       },
     },
-    evidence_refs: review.evidence ? [review.evidence] : [],
+    evidence_refs: [
+      ...(review.evidence ? [review.evidence] : []),
+      ...(independentReview?.evidence ? [independentReview.evidence] : []),
+    ],
     missing_items: [...reviewMissing, ...componentQuality.missing_items, ...e2eAcceptance.missing_items],
   }, {
     worker,
@@ -3382,4 +3577,17 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { recordConsumerInvocation(worker, `stage-handlers#officialStageHandler("${stage}")`); const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"]) : stage === "build-spec" || stage === "build-plan" || stage === "verify-code" ? new Set(["receipts", "finding_dispositions", "contract_facts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }
+export function officialStageHandler(stage) {
+  const handler = HANDLERS.get(stage);
+  if (!handler) throw new TypeError(`no official handler for stage: ${stage}`);
+  return async (worker, invocation) => {
+    recordConsumerInvocation(worker, `stage-handlers#officialStageHandler("${stage}")`);
+    const normalized = validateStageInvocation(stage, invocation, {
+      currentOnly: worker?.manifest?.record_model === "vnext-single-write",
+      expectedCriterionIds: stage === "build-code" && typeof worker?.readArtifact === "function"
+        ? activeAcceptanceCriterionIds(worker.readArtifact("spec.md"))
+        : null,
+    });
+    return handler(worker, normalized);
+  };
+}

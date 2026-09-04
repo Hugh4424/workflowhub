@@ -6,7 +6,7 @@ import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateC
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
-import { STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { isStageSnapshotCurrent, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 
@@ -417,11 +417,12 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
 
 export function evaluateFactFreshness(fact, current, { read, workspaceRoot = null, taskId = null } = {}) {
   const adviceReview = isAdviceReviewFact(fact);
-  const recordOnly = !adviceReview
-    && isRegisteredStagePredicate(fact)
+  const stageScopedSnapshot = !adviceReview
     && workspaceRoot
     && typeof taskId === "string"
-    && isMaterialOnlySnapshotDelta(workspaceRoot, fact.snapshot_tree, current.snapshot_tree, taskId);
+    && isRegisteredStagePredicate(fact)
+    && isStageSnapshotCurrent(fact.stage, fact.snapshot_tree, current.snapshot_tree, { snapshotRoot: workspaceRoot, taskId });
+  const recordOnly = stageScopedSnapshot && isRegisteredStagePredicate(fact);
   const scopeMatchesStage = fact.material_scope === undefined
     || JSON.stringify(fact.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[fact.stage]);
   const scopedMaterialCurrent = scopeMatchesStage
@@ -434,7 +435,7 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
       && fact.material_revision === current.material_revision);
   const dependencies = {
     material: adviceReview || recordOnly || materialCurrent ? "current" : "stale",
-    tree: adviceReview || recordOnly || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
+    tree: adviceReview || stageScopedSnapshot || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
     fact: "current",
   };
   const factRaw = readBound(fact, read, dependencies, "fact");

@@ -97,8 +97,15 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 发现的 finding 必须先在当前 stage 修复，再重跑受影响的 `spec-analyze` profile；不能静默
 交给下游。六项摘要和 `unavailable`/`incomplete` 事实随现有 stage outcome 交接，不新建
 store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实。
+
+每个 stage 结束时，当前主会话必须按 `stage-reflection` 技能先产出 judgment JSON，再调用实际公共入口 `run --action=reflect`。判断 JSON 使用六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；每个区块条目带真实 `evidence_refs` 与 `confidence`。已检查但无观察写 `none_observed`，无法判断写 `unknown` 并给 `unknown_reason`，确实不适用写 `not_applicable` 并说明原因，不能静默省略。v2 还保留 `status_matrix`、`identity`、`source_completeness` 三件套；它们是事实投影，不是质量结论。
+
+`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`。实际消费边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 含同一引用形成；所有五个 stage 的 outcome 文件有效且声明 output 存在时，扫描才是 `coverage_status=complete`，否则为 partial/unknown。单个 output 没有后续边也不能直接称为零消费；只有完整扫描、近 30 天登记 output 且 consumer 全为零的 `zero_consumption_proof`，再加人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才能保留，否则降为 `needs_evidence`。当前 route 若未实现，保留真实 unavailable/dependency，不用未支持命令替代。
+
 用户明确执行 `close` 时，WorkflowHub 才按冻结计划执行 Git commit、spec archive、merge、push、
 worktree cleanup 和 branch cleanup，并对每一步做物理读回。
+
+阶段末指令是每个正式 stage 的共同收尾动作；上述六块 judgment JSON 与 `run --action=reflect` 适用于 `make-decision`、`build-spec`、`build-plan`、`build-code` 和 `verify-code`，不改变任何 `steps.json` 拓扑或 `skill-deps.yaml` 依赖声明。
 
 ## `make-decision`：把需求和前置条件一次弄清楚
 

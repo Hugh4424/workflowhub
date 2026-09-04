@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot, resolveTargetRef } from "../../runtime/evidence/workflow-evolution.mjs";
+import { buildInputInventory, computeQualityTaxProjection, readCurrentEvolutionProjection, refreshEvolutionSnapshot, resolveTargetRef, validateStageOutcomeStructure } from "../../runtime/evidence/workflow-evolution.mjs";
 import { validateHumanConfirmation } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -19,8 +19,32 @@ const SAFE_REF = /^quality\/(?:evidence|tests|reviews|confirmations|stage-reflec
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
 const SAFE_LESSON_REF = /^lessons\/(make-decision|build-spec|build-plan|build-code|verify-code)\.jsonl#([A-Za-z0-9][A-Za-z0-9._-]*)$/;
 const REFLECTION_FILE = /^(make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
+const HASHED_JSON = /^[a-f0-9]{64}\.json$/;
+const AVAILABILITY_STATES = new Set(["unavailable", "not_scheduled"]);
+const AVAILABILITY_REASONS_BY_STATE = {
+  unavailable: new Set(["executor_absent"]),
+  not_scheduled: new Set(["preflight_failed", "identity_failed", "startup_failed", "interrupted", "not_started"]),
+};
 const schema = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v1.json", import.meta.url), "utf8"));
-const validateSchema = new Ajv({ allErrors: true, strict: false }).compile(schema);
+const dateTimeFormats = { "date-time": isDateTime };
+const validateSchema = new Ajv({ allErrors: true, strict: false, formats: dateTimeFormats }).compile(schema);
+const schemaV2 = JSON.parse(readFileSync(new URL("../../runtime/schemas/stage-reflection.v2.json", import.meta.url), "utf8"));
+const validateSchemaV2 = new Ajv({ allErrors: true, strict: false, formats: dateTimeFormats }).compile(schemaV2);
+const validateAvailabilityFact = new Ajv({ allErrors: true, strict: false, formats: dateTimeFormats }).compile({
+  type: "object",
+  additionalProperties: false,
+  required: ["schema_version", "record_kind", "task_id", "stage", "state", "reason_code", "observed_at", "task_identity"],
+  properties: {
+    schema_version: { const: "stage-reflection-availability.v1" },
+    record_kind: { const: "availability" },
+    task_id: { type: "string", minLength: 1 },
+    stage: { enum: STAGES },
+    state: { enum: ["unavailable", "not_scheduled"] },
+    reason_code: { enum: ["executor_absent", "preflight_failed", "identity_failed", "startup_failed", "interrupted", "not_started"] },
+    observed_at: { type: "string", format: "date-time" },
+    task_identity: schema.$defs.availability_fact.properties.task_identity,
+  },
+});
 const template = readFileSync(new URL("./build-reflection-page-template.html", import.meta.url), "utf8");
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -111,7 +135,7 @@ function availableRef(taskRoot, ref, storageRoot) {
   return stat && stat.isFile() && !stat.isSymbolicLink() ? lexicalRef : null;
 }
 
-function authenticatedConfirmation(taskRoot, storageRoot, project, taskId, stage, intervention) {
+function authenticatedConfirmation(taskRoot, storageRoot, project, taskId, stage, intervention, nowMs) {
   const ref = intervention?.confirmation_ref;
   if (typeof ref !== "string" || !CONFIRMATION_REF.test(ref)) return null;
   const path = join(taskRoot, ...ref.split("/"));
@@ -125,7 +149,9 @@ function authenticatedConfirmation(taskRoot, storageRoot, project, taskId, stage
     const value = JSON.parse(raw);
     const subject = value.schema_version === "human-confirmation.v1" ? value.attempt_ref : value.schema_version === "human-confirmation.v3" ? intervention.step_slug : undefined;
     validateHumanConfirmation(value, { taskId, stage, subject });
-    if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at) || !Number.isFinite(Date.parse(value.confirmed_at))) return null;
+    const confirmedMs = Date.parse(value.confirmed_at ?? "");
+    if (typeof value.confirmed_at !== "string" || !/T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value.confirmed_at)
+        || !Number.isFinite(confirmedMs) || confirmedMs < nowMs - WINDOW_MS || confirmedMs > nowMs) return null;
     if (value.schema_version === "human-confirmation.v3") {
       const step = value.step_slug ?? value.subject_ref;
       if (typeof step !== "string" || step.trim() === "" || (intervention.step_slug !== undefined && step !== intervention.step_slug)) return null;
@@ -169,6 +195,18 @@ function parseJson(path, label) {
   catch (error) { return { ok: false, error: `${label} unavailable: ${error.message}` }; }
   try { return { ok: true, raw, value: JSON.parse(raw) }; }
   catch (error) { return { ok: false, error: `${label} invalid JSON: ${error.message}` }; }
+}
+
+function isDateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const monthNumber = Number(month);
+  if (monthNumber < 1 || monthNumber > 12 || Number(day) < 1 || Number(day) > new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate()
+    || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  if (zone !== "Z" && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4, 6)) > 59)) return false;
+  return Number.isFinite(Date.parse(value));
 }
 
 function dateMs(value) {
@@ -232,12 +270,13 @@ function readReflection(root, project, taskRoot, taskId, stage, filename, nowMs)
   const parsed = parseJson(path, `reflection ${ref}`);
   if (!parsed.ok) return { stage, state: "unavailable", reflection_status: null, error: { summary: parsed.error }, judgments: [], interventions: [], lessons_added: [] };
   const value = parsed.value;
-  if (!validateSchema(value)) {
+  const validator = value?.schema_version === "stage-reflection.v2" ? validateSchemaV2 : validateSchema;
+  if (!validator(value)) {
     return {
       stage,
       state: "unavailable",
       reflection_status: null,
-      error: { summary: `reflection ${ref} does not satisfy stage-reflection.v1` },
+      error: { summary: `reflection ${ref} does not satisfy ${value?.schema_version === "stage-reflection.v2" ? "stage-reflection.v2" : "stage-reflection.v1"}` },
       judgments: [],
       interventions: [],
       lessons_added: [],
@@ -276,6 +315,96 @@ function readReflection(root, project, taskRoot, taskId, stage, filename, nowMs)
   };
 }
 
+function readAvailabilityFact(root, taskRoot, taskId, stage, nowMs) {
+  const directory = join(taskRoot, "quality", "evidence", "stage-reflection-availability");
+  if (!optionalRealDirectory(directory, "stage reflection availability directory", root)) return null;
+  const facts = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.isSymbolicLink() || !HASHED_JSON.test(entry.name)) continue;
+    const path = join(directory, entry.name);
+    try {
+      const raw = readFileSync(path, "utf8");
+      if (createHash("sha256").update(raw).digest("hex") !== entry.name.slice(0, -5)) continue;
+      const value = JSON.parse(raw);
+      if (value?.schema_version !== "stage-reflection-availability.v1"
+        || value.record_kind !== "availability"
+        || value.task_id !== taskId
+        || value.stage !== stage
+        || !AVAILABILITY_STATES.has(value.state)
+        || !AVAILABILITY_REASONS_BY_STATE[value.state]?.has(value.reason_code)
+        || value.task_identity?.task_id !== taskId
+        || !Number.isFinite(Date.parse(value.observed_at))
+        || Date.parse(value.observed_at) > nowMs
+        || !validateAvailabilityFact(value)) continue;
+      facts.push({ ...value, ref: `quality/evidence/stage-reflection-availability/${entry.name}` });
+    } catch {
+      // Malformed availability facts are unavailable evidence, not a reason
+      // to infer a state for the stage.
+    }
+  }
+  return facts.sort((left, right) => Date.parse(right.observed_at) - Date.parse(left.observed_at) || right.ref.localeCompare(left.ref))[0] ?? null;
+}
+
+function hasValidStageOutcome(root, taskRoot, taskId, stage, nowMs) {
+  const directory = join(taskRoot, "quality", "evidence", "stage-outcomes", stage);
+  if (!optionalRealDirectory(directory, `stage outcomes for ${stage}`, root)) return false;
+  return readdirSync(directory, { withFileTypes: true }).some((entry) => {
+    if (!entry.isFile() || entry.isSymbolicLink() || !HASHED_JSON.test(entry.name)) return false;
+    try {
+      const raw = readFileSync(join(directory, entry.name), "utf8");
+      if (createHash("sha256").update(raw).digest("hex") !== entry.name.slice(0, -5)) return false;
+      const value = JSON.parse(raw);
+      validateStageOutcomeStructure(value, { taskId, stage });
+      const generatedMs = Date.parse(value.generated_at ?? "");
+      return value.generated_at === undefined || (Number.isFinite(generatedMs) && generatedMs <= nowMs);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function missingStage(root, taskRoot, taskId, stage, stageIndex, outcomeByStage, nowMs) {
+  const availability = readAvailabilityFact(root, taskRoot, taskId, stage, nowMs);
+  if (availability) {
+    return {
+      stage,
+      state: availability.state,
+      stage_status: null,
+      reflection_status: availability.state,
+      generated_at: availability.observed_at,
+      error: null,
+      judgments: [],
+      interventions: [],
+      lessons_added: [],
+      judgment_counts: judgmentCounts([]),
+      judgment_layer: "fact",
+      is_fact: true,
+      reflection_ref: null,
+      availability_fact: availability,
+    };
+  }
+  const laterOutcome = STAGES.slice(stageIndex + 1).some((laterStage) => outcomeByStage.get(laterStage));
+  const currentOutcome = outcomeByStage.get(stage);
+  const state = !currentOutcome && laterOutcome ? "not_scheduled" : "unknown";
+  const inferred = state === "not_scheduled";
+  return {
+    stage,
+    state,
+    stage_status: null,
+    reflection_status: state,
+    generated_at: null,
+    error: null,
+    judgments: [],
+    interventions: [],
+    lessons_added: [],
+    judgment_counts: judgmentCounts([]),
+    judgment_layer: "judgment",
+    is_fact: false,
+    reflection_ref: null,
+    availability_fact: null,
+  };
+}
+
 function readTask(root, project, taskRoot, taskId, nowMs) {
   assertTrustedPath(root, taskRoot, "task path");
   const reflectionRoot = join(taskRoot, "quality", "stage-reflection");
@@ -287,25 +416,20 @@ function readTask(root, project, taskRoot, taskId, nowMs) {
       .sort();
   }
   const byStage = new Map(files.map((filename) => [filename.slice(0, -5), readReflection(root, project, taskRoot, taskId, filename.slice(0, -5), filename, nowMs)]));
-  const stages = STAGES.map((stage) => byStage.get(stage) ?? {
-    stage,
-    state: files.length === 0 ? "empty" : "unknown",
-    stage_status: null,
-    reflection_status: null,
-    generated_at: null,
-    error: null,
-    judgments: [],
-    interventions: [],
-    lessons_added: [],
-    judgment_counts: judgmentCounts([]),
-    judgment_layer: "judgment",
-    is_fact: false,
-    reflection_ref: null,
-  });
+  const outcomeByStage = new Map(STAGES.map((stage) => [stage, hasValidStageOutcome(root, taskRoot, taskId, stage, nowMs)]));
+  const stages = STAGES.map((stage, index) => byStage.get(stage) ?? missingStage(root, taskRoot, taskId, stage, index, outcomeByStage, nowMs));
   const generated = stages.map((stage) => stage.generated_at).filter(Boolean).sort().at(-1) ?? null;
   return {
     task_id: taskId,
-    state: files.length === 0 ? "empty" : stages.some((stage) => stage.state === "unavailable") ? "unavailable" : "ready",
+    state: stages.some((stage) => stage.state === "unavailable")
+      ? "unavailable"
+      : stages.some((stage) => stage.state === "failed")
+        ? "failed"
+        : stages.some((stage) => stage.state === "degraded")
+          ? "degraded"
+          : files.length === 0
+            ? stages.some((stage) => stage.state === "not_scheduled") ? "not_scheduled" : "empty"
+            : "ready",
     generated_at: generated,
     coverage: { present: files.length, total: STAGES.length },
     stages,
@@ -347,6 +471,52 @@ function readLessons(root, project, diagnostics) {
     }
   }
   return { by_stage: byStage, count: Object.values(byStage).reduce((sum, entries) => sum + entries.length, 0) };
+}
+
+function historicalReferenceCandidates(lessons) {
+  return Object.values(lessons.by_stage).flat()
+    .filter((entry) => entry.entry_kind === "merged_lesson" && entry.historical_replay === true)
+    .map((entry) => {
+      const sourceRefs = Array.isArray(entry.evidence_refs) ? entry.evidence_refs.filter((ref) => typeof ref === "string" && !ref.includes("#")) : [];
+      const sourceId = `${entry.stage}\0${entry.entry_id}\0${entry.task_id ?? "unknown"}`;
+      const candidateHash = createHash("sha256").update(sourceId).digest("hex");
+      const observedAt = entry.merged_at ?? entry.source_generated_at ?? entry.imported_at ?? null;
+      const sourceObservation = {
+        task_id: entry.task_id ?? "unknown",
+        stage: entry.stage,
+        entry_id: entry.entry_id,
+        occurred_at: observedAt,
+        historical_replay: true,
+        evidence_refs: sourceRefs,
+        lesson_ref: entry.lesson_ref ?? null,
+      };
+      return {
+        schema_version: "workflow-evolution.v1",
+        record_kind: "candidate",
+        candidate_id: `historical-replay.v1:${candidateHash}`,
+        candidate_group_id: `historical-replay.v1:${candidateHash}`,
+        tier: "reference_only",
+        lifecycle_status: "open",
+        row_status: "active",
+        freshness: "stale",
+        evidence_status: sourceRefs.length > 0 ? "complete" : "unavailable",
+        sample_status: "insufficient_samples",
+        validation_status: "unverified",
+        classification: "needs_evidence",
+        severity: ["high", "medium", "low"].includes(entry.severity) ? entry.severity : "medium",
+        confidence: "low",
+        frequency: 1,
+        first_seen: observedAt,
+        recent_seen: observedAt,
+        judgment_layer: "fact",
+        is_fact: true,
+        historical_replay: true,
+        reference_only_reason: "历史回放仅供参考，不进入 action_suggested、质量税分母或当前趋势。",
+        source_refs: sourceRefs,
+        source_observations: [sourceObservation],
+        lesson: entry.lesson ?? null,
+      };
+    });
 }
 
 function runDeriveConsumptionEdges(root, now) {
@@ -456,6 +626,7 @@ function project({ root, tasksRoot, now }) {
     .sort((a, b) => a.localeCompare(b))
       .map((taskId) => readTask(root, project, join(tasksRoot, taskId), taskId, nowMs));
   const lessons = readLessons(root, project, diagnostics);
+  const historicalCandidates = historicalReferenceCandidates(lessons);
   for (const task of tasks) {
     const referencedReflectionRefs = new Map(task.stages.map((stage) => [
       stage.stage,
@@ -497,7 +668,7 @@ function project({ root, tasksRoot, now }) {
       const taskRoot = join(tasksRoot, task.task_id);
       const authenticatedInterventions = stage.interventions.map((entry) => ({
         entry,
-        confirmation: authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, entry),
+        confirmation: authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, entry, nowMs),
       }));
       for (const { confirmation } of authenticatedInterventions) {
         if (confirmation?.ref && confirmation.sha256) materialIdentities.push({ ref: `${task.task_id}/${confirmation.ref}`, sha256: confirmation.sha256 });
@@ -515,7 +686,7 @@ function project({ root, tasksRoot, now }) {
         observations.push({ task_id: task.task_id, stage: stage.stage, confirmation_ref: safeConfirmationRef, confirmation_sha256: confirmationSha256, human_confirmation: safeConfirmationRef && confirmationSha256 ? { ref: safeConfirmationRef, sha256: confirmationSha256 } : null, occurred_at: stage.generated_at ?? now, target_ref: resolved.target_ref, intervention_kind: judgment.classification, intervention_payload: { reason: judgment.reason ?? "" }, classification: judgment.classification, severity: judgment.severity, confidence: judgment.confidence, evidence_refs: judgment.evidence_refs, material_identities: materialIdentities.filter((entry) => entry.ref.startsWith(`${task.task_id}/`)) });
       }
       for (const intervention of stage.interventions ?? []) {
-        const confirmation = authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, intervention);
+        const confirmation = authenticatedConfirmation(taskRoot, root, project, task.task_id, stage.stage, intervention, nowMs);
         interventions.push({ project, task_id: task.task_id, confirmation_ref: confirmation?.ref ?? intervention.confirmation_ref ?? null, confirmation_sha256: confirmation?.sha256 ?? null, intervention_stage: stage.stage, step_slug: intervention.step_slug, occurred_at: stage.generated_at ?? now, primary_attribution_stage: intervention.attribution });
       }
     }
@@ -523,7 +694,7 @@ function project({ root, tasksRoot, now }) {
   let evolution = {
     schema_version: "workflow-evolution.v1",
     status: "unavailable",
-    candidates: [],
+    candidates: historicalCandidates,
     quality_tax: { status: "unavailable", label: "未验证，待真实任务数据" },
     regions: {
       summary_status: "unavailable",
@@ -558,7 +729,14 @@ function project({ root, tasksRoot, now }) {
           },
         }
         : projection.regions;
-      evolution = { ...projection, regions, snapshot_content_id: inventory.input_inventory_hash, unverified_judgments: unverifiedJudgments, diagnostics: unverifiedDiagnostics };
+      const candidates = [...projection.candidates, ...historicalCandidates];
+      const referenceRegion = historicalCandidates.length > 0
+        ? { ...regions.reference_only, status: "stale", historical_count: historicalCandidates.length, reason: "含历史回放，仅供参考，不进入质量税或当前趋势。" }
+        : regions.reference_only;
+      const mixedRegions = historicalCandidates.length > 0
+        ? { ...regions, reference_only: referenceRegion, summary_status: regions.summary_status === "ok" ? "partial" : regions.summary_status }
+        : regions;
+      evolution = { ...projection, candidates, regions: mixedRegions, snapshot_content_id: inventory.input_inventory_hash, unverified_judgments: unverifiedJudgments, diagnostics: unverifiedDiagnostics, historical_replay_count: historicalCandidates.length };
     } else {
       evolution = { ...evolution, status: refresh.status, diagnostics: [refresh.error ?? { summary: "refresh failed" }], unverified_judgments: unverifiedJudgments };
     }
@@ -577,7 +755,7 @@ function project({ root, tasksRoot, now }) {
       description: "LLM 复盘归因，不是机器事实，也不等于质量裁决。",
       is_fact: false,
     },
-    states: ["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
+    states: ["unknown", "unavailable", "not_scheduled", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
     coverage: {
       tasks: tasks.length,
       reflections: tasks.reduce((sum, task) => sum + task.coverage.present, 0),
@@ -616,7 +794,7 @@ function fatalData(error, now) {
     status: "fatal",
     state: "fatal",
     judgment_layer: { record_kind: "judgment", label: "判断层", description: "投影失败，未展示陈旧数据。", is_fact: false },
-    states: ["unknown", "unavailable", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
+    states: ["unknown", "unavailable", "not_scheduled", "degraded", "failed", "error", "empty", "fatal", "partial", "stale", "insufficient_samples", "unverified"],
     coverage: { tasks: 0, reflections: 0, lessons: 0 },
     filters: { tasks: [], stages: STAGES, classifications: CLASSIFICATIONS },
     tasks: [],

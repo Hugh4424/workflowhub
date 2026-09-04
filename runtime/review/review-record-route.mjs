@@ -33,6 +33,18 @@ function policyHash(policy) {
   return createHash("sha256").update(canonicalJson(policy)).digest("hex");
 }
 
+function recordError(error, fallback) {
+  const value = error ?? fallback;
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || typeof value.code !== "string" || value.code.trim() === ""
+      || typeof value.message !== "string" || value.message.trim() === "") {
+    throw new TypeError("review error must contain a non-empty code and message");
+  }
+  // Public diagnostics may retain cause_code; attempt/provider records use
+  // the existing two-field schema. Transport detail remains on provider facts.
+  return { code: value.code, message: value.message };
+}
+
 function buildPolicy(result) {
   const providers = result.provider_results?.map((item) => item.provider) ?? [];
   const minimum = Number.isSafeInteger(result.minimum_heterologous) && result.minimum_heterologous >= 1
@@ -88,7 +100,7 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
     runtime_id: runtimeId ?? null,
     output_ref: outputRef,
     raw_output_ref: null,
-    error: status === "completed" ? null : item.error ?? { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" },
+    error: status === "completed" ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
     execution: {
       adapter: providerAdapter(item.provider),
       model: item.identity?.model ?? "unknown",
@@ -190,7 +202,7 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
   };
 
   if (result.status === "unavailable") {
-    const error = result.error ?? { code: "ROUTE_UNAVAILABLE", message: "review unavailable" };
+    const error = recordError(result.error, { code: "ROUTE_UNAVAILABLE", message: "review unavailable" });
     const policyResult = buildPolicy(result);
     const attempt = {
       version: "wh-review-attempt.v1",

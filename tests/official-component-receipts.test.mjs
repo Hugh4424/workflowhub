@@ -557,7 +557,9 @@ describe("official component receipt authority", () => {
     `;
     task.withRecordLock("locks/test-capture.execution.lock", () => {
       try {
-        execFileSync(process.execPath, ["--input-type=module", "-e", child], { cwd: process.cwd(), encoding: "utf8", timeout: 500, stdio: ["ignore", "pipe", "pipe"] });
+        // The child enforces the 25ms lock lease wait. Keep a separate, wider
+        // parent bound for Node module startup under Vitest/CI.
+        execFileSync(process.execPath, ["--input-type=module", "-e", child], { cwd: process.cwd(), encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
         observed = { timedOut: false, stderr: "" };
       } catch (error) {
         observed = { timedOut: error.code === "ETIMEDOUT", stderr: String(error.stderr ?? "") };

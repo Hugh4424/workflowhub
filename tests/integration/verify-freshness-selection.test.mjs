@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { assertFresh, evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { deriveStageOutcomeStatuses, isStageSnapshotCurrent } from "../../runtime/stage/completion-predicates.mjs";
 
 const roots = [];
 
@@ -87,6 +89,74 @@ describe("verify selects facts by freshness", () => {
       material_scope_revisions: { "make-decision": "revision-decision-log-changed" },
       snapshot_tree: "tree",
     }, { read: io.read }).status).toBe("stale");
+  });
+
+  it("keeps authoring-stage facts current when later materials or source bytes change, but keeps implementation stages source-bound", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-scope-")));
+    roots.push(root);
+    mkdirSync(join(root, "specs", "task"), { recursive: true });
+    writeFileSync(join(root, "src.mjs"), "export const value = 1;\n");
+    writeFileSync(join(root, "specs", "task", "decision-log.md"), "# decision\n");
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "add", "."], { cwd: root });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "baseline"], { cwd: root });
+    const before = captureGitWorktreeSnapshot(root, "task");
+    writeFileSync(join(root, "specs", "task", "spec.md"), "# spec\n");
+    writeFileSync(join(root, "specs", "task", "plan.md"), "# plan\n");
+    writeFileSync(join(root, "specs", "task", "tasks.md"), "# tasks\n");
+    const afterMaterials = captureGitWorktreeSnapshot(root, "task");
+    expect(isStageSnapshotCurrent("make-decision", before.tree, afterMaterials.tree, { snapshotRoot: root, taskId: "task" })).toBe(true);
+    writeFileSync(join(root, "src.mjs"), "export const value = 2;\n");
+    const afterSource = captureGitWorktreeSnapshot(root, "task");
+    expect(isStageSnapshotCurrent("make-decision", before.tree, afterSource.tree, { snapshotRoot: root, taskId: "task" })).toBe(true);
+    expect(isStageSnapshotCurrent("build-code", before.tree, afterSource.tree, { snapshotRoot: root, taskId: "task" })).toBe(false);
+  });
+
+  it("projects an authoring-stage outcome as current when only downstream materials were added", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-outcome-scope-")));
+    roots.push(root);
+    mkdirSync(join(root, "specs", "task"), { recursive: true });
+    writeFileSync(join(root, "specs", "task", "decision-log.md"), "# decision\n");
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "add", "."], { cwd: root });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "baseline"], { cwd: root });
+    const before = captureGitWorktreeSnapshot(root, "task");
+    writeFileSync(join(root, "specs", "task", "spec.md"), "# spec\n");
+    writeFileSync(join(root, "specs", "task", "plan.md"), "# plan\n");
+    writeFileSync(join(root, "specs", "task", "tasks.md"), "# tasks\n");
+    const afterMaterials = captureGitWorktreeSnapshot(root, "task");
+    const runId = `vnext-${sha256(["task", "make-decision"].join(String.fromCharCode(0))).slice(0, 32)}`;
+    const outcome = {
+      schema_version: "workflowhub-stage-outcomes.v1",
+      task_id: "task",
+      stage: "make-decision",
+      run_id: runId,
+      status: "completed",
+      attempt_id: "attempt-before-materials",
+      producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: "attempt-before-materials" },
+      snapshot_tree: before.tree,
+      material_revision: "revision-before-materials",
+      material_hashes: {},
+      material_scope: ["decision-log.md"],
+      material_scope_revision: "revision-decision-log",
+      steps_manifest_ref: "workflows/make-decision/steps.json",
+      steps_manifest_hash: "d".repeat(64),
+      skills_manifest_ref: "workflows/make-decision/skill-deps.yaml",
+      skills_manifest_hash: "e".repeat(64),
+      step_outcomes: [],
+      skill_outcomes: [],
+    };
+    const raw = `${JSON.stringify(outcome)}\n`;
+    const ref = `quality/evidence/stage-outcomes/make-decision/${sha256(raw)}.json`;
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: "task",
+      read: (candidate) => candidate === ref ? raw : (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
+      stage_outcome_refs: { "make-decision": [ref] },
+      snapshot_tree: afterMaterials.tree,
+      snapshot_root: root,
+      authenticate: ({ value: candidate }) => candidate,
+    });
+    expect(statuses["make-decision"]).toBe("completed");
   });
 
   it("rejects a forged or narrowed material scope", () => {

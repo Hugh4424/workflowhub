@@ -1,0 +1,46 @@
+{
+  "facts": [
+    {
+      "schema_version": "stage-reflection-availability.v1",
+      "record_kind": "availability",
+      "task_id": "task-availability-unavailable",
+      "stage": "build-code",
+      "state": "unavailable",
+      "reason_code": "executor_absent",
+      "observed_at": "2026-08-30T12:00:00.000Z",
+      "task_identity": {
+        "task_id": "task-availability-unavailable",
+        "worktree": "/tmp/workflowhub",
+        "branch": "task/availability"
+      }
+    },
+    {
+      "schema_version": "stage-reflection-availability.v1",
+      "record_kind": "availability",
+      "task_id": "task-availability-not-scheduled",
+      "stage": "build-plan",
+      "state": "not_scheduled",
+      "reason_code": "preflight_failed",
+      "observed_at": "2026-08-30T12:00:00.000Z",
+      "task_identity": {
+        "task_id": "task-availability-not-scheduled",
+        "worktree": "/tmp/workflowhub",
+        "branch": "task/availability"
+      }
+    }
+  ],
+  "priority": {
+    "task_id": "task-availability-priority",
+    "stage": "build-code",
+    "availability_state": "unavailable"
+  },
+  "never_started": {
+    "task_id": "task-never-started",
+    "stage": "build-plan",
+    "later_stage": "build-code"
+  },
+  "unknown": {
+    "task_id": "task-unknown",
+    "stage": "build-plan"
+  }
+}

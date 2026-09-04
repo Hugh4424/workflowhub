@@ -714,7 +714,7 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
   return Object.freeze({
     writeProviderOutput(ref, output, metadata = undefined) {
       const reviewRoot = "quality/reviews";
-      const match = ref.match(new RegExp(`^${reviewRoot.replaceAll("/", "\\/")}\\/attempts\\/([a-zA-Z0-9._-]+)\\/providers\\/([a-zA-Z0-9._-]+)\\.output\\.json$`));
+      const match = ref.match(new RegExp(`^${reviewRoot.replaceAll("/", "\\/")}\\/attempts\\/([A-Za-z0-9][A-Za-z0-9._-]*)\\/providers\\/([A-Za-z0-9][A-Za-z0-9._-]*)\\.output\\.json$`));
       if (!match) throw new Error("canonical provider output ref required");
       if (typeof output !== "string") throw new TypeError("provider output must be text");
       const providerName = metadata && typeof metadata === "object" && !Array.isArray(metadata)
@@ -734,7 +734,7 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
     },
     writeAttempt(ref, value) {
       const reviewRoot = "quality/reviews";
-      if (!new RegExp(`^${reviewRoot.replaceAll("/", "\\/")}\\/attempts\\/[a-zA-Z0-9._-]+\\/attempt\\.json$`).test(ref)) throw new Error("canonical review attempt ref required");
+      if (!new RegExp(`^${reviewRoot.replaceAll("/", "\\/")}\\/attempts\\/[A-Za-z0-9][A-Za-z0-9._-]*\\/attempt\\.json$`).test(ref)) throw new Error("canonical review attempt ref required");
       validateProvenance(value, "attempt"); validateSchema("attempt", value); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
     },
     writeResult(ref, value) {

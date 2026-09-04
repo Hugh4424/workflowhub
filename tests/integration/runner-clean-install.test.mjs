@@ -115,6 +115,7 @@ describe("runner release", () => {
       WORKFLOWHUB_TASK_DIR: storage,
       NODE_PATH: "",
     };
+    for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
     const bootstrap = runCli(path.join(outputDir, "tools/cli/task-bootstrap.mjs"), [
       "--project=Demo", "--task=clean-release", `--target-repo=${target}`,
     ], { cwd: outputDir, env });

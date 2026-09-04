@@ -1,0 +1,49 @@
+{
+  "schema_version": "protocol-error-fixture.v1",
+  "entries": [
+    {
+      "entry_id": "a7eed10a-f1ae-40af-a788-f45943b08d86",
+      "source": "PaperBuilder/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "resolved-review-authorization",
+      "class_id": "close_outcome_current",
+      "check_id": "outcome_current",
+      "error": "resolved review authorization stage outcome is not current and completed"
+    },
+    {
+      "entry_id": "54dfd9b1-9965-4f40-a3c9-8dc0386d1b49",
+      "source": "workflowhub/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "stage",
+      "class_id": "verify_receipt_fields",
+      "check_id": null,
+      "error": "verify-code official run has unexpected receipt fields: tests"
+    },
+    {
+      "entry_id": "b82d2b1e-56c7-46a1-8f26-0ca114467e52",
+      "source": "PaperBuilder/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "resolved-review-authorization",
+      "class_id": "close_review_binding",
+      "check_id": "review_binding",
+      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    },
+    {
+      "entry_id": "4020ded8-fae5-4805-917b-03bd15670668",
+      "source": "PaperBuilder/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "resolved-review-authorization",
+      "class_id": "close_review_binding",
+      "check_id": "review_binding",
+      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    }
+  ]
+}

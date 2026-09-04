@@ -15,7 +15,7 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b2137d9932027de06f30428c286aba43ed2769567a731cda88c5e49ae684e043
+    local_bundle_hash: 50737f6a2d9defe8110b040e71fdeffe372c3e50a932fe23b2838cdecd8f8a0e
     m16_contract: consumer-scan-proof.v1
     last_reviewed_at: "2026-07-14"
     status: native
@@ -286,7 +286,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: fa5d28343da6d7169c632ce4a9bcdce836fc4d4fef01e5c59d7832e7040d957f
+    local_bundle_hash: 8a6c180b27bfb3dfdb993bc06c2ad4ac1e7b1cc830b90758ad1f45d5b69c03ab
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

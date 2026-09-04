@@ -35,7 +35,16 @@
 一个 UI 任务对引用设计源、页面区域、状态、交互、组件、fixture、视口和视觉证据的当前 spec 约定。
 
 **stage-reflection**：
-每个正式 stage 结束时由主会话自动运行的复盘判断层机制，记录当前 stage 的保留、优化、简化、合并、移除候选、补充或待证据判断；它对应 ADR 0021，不是新的 stage、事实源或质量 gate。
+每个正式 stage 结束时由主会话运行的复盘判断层机制，记录当前 stage 的保留、优化、简化、合并、移除候选、补充或待证据判断；新版执行闭环=主会话产出判断 JSON→私有 reflect 命令完成机器校验/合并/发布；状态含 ok/degraded/failed/unavailable（无人执行）/not_scheduled（未触发）。它对应 ADR 0021/0023，不是新的 stage、事实源或质量 gate。
+
+**复盘执行闭环（reflect）**：
+stage 末由主会话触发、机器完成 raw 前奏校验、validate、lessons 合并与固定路径 immutable 发布的私有 CLI 命令；会话只产出判断内容，机器不生成判断。对应 ADR 0023。
+
+**事实投影（status_matrix / identity / source_completeness）**：
+复盘记录中由机器可验事实承载的投影区块：status_matrix 记录 code/verify/physical_close/acceptance/release 五栏并逐栏绑定证据引用；identity 记录 task/worktree/branch/attempt/snapshot/material revision 快照；source_completeness 记录会话压缩/截断/可见范围。它是 judgment 层的事实底座，不推导质量结论。对应 ADR 0021/0023。
+
+**历史回放导入（historical replay import）**：
+经用户批准的一次性动作，把离线历史任务（Codex 会话）分析出的判断/教训按正式契约转换后导入对应项目 lessons，带"历史回放"身份注释，不作常规回填机制。对应 ADR 0023。
 
 **判断层（judgment）vs 事实层（fact）**：
 判断层是 LLM 基于窄输入写出的 `record_kind=judgment` 归因记录，不是机器事实，也不单独作质量裁决；事实层是机器采集的物理事实，必须由可核验来源支撑。两者分开保存、分别标明 provenance。

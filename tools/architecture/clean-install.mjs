@@ -163,6 +163,10 @@ export async function cleanInstall({ packageRoot = ROOT, verifyRunner = true, ve
     let layout = null;
     if (verifyMulticaLayout) {
       const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
+      // A clean-install child is an isolated fixture, not the current host
+      // session.  Do not let its temporary task overwrite the developer's
+      // WorkflowHub session binding through inherited Codex variables.
+      for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
       const bootstrap = run(process.execPath, [path.join(runnerRoot, "tools/cli/task-bootstrap.mjs"),
         "--project=CleanInstall", "--task=release-smoke", `--target-repo=${targetRoot}`], { cwd: runnerRoot, env });
       const runtime = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");

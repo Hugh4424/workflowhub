@@ -1,0 +1,19 @@
+{
+  "schema_version": "stage-reflection.v2",
+  "record_kind": "judgment",
+  "task_id": "task-gate",
+  "stage": "build-code",
+  "stage_status": "completed",
+  "generated_at": "2026-08-30T00:00:00.000Z",
+  "status": "ok",
+  "error": null,
+  "judgments": [],
+  "interventions": [],
+  "lessons_added": [],
+  "what_helped": { "state": "unknown", "unknown_reason": "not captured", "items": [] },
+  "what_to_improve": { "state": "none_observed", "items": [] },
+  "blockers": { "state": "none_observed", "items": [] },
+  "intervention_reasons": { "state": "none_observed", "items": [] },
+  "what_to_simplify": { "state": "none_observed", "items": [] },
+  "simplifiable_now": { "state": "none_observed", "items": [] }
+}

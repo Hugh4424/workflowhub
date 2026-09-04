@@ -1146,7 +1146,11 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const worker = workerFor(stage, values);
     await expect(officialStageHandler(stage)(worker, {
       receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: attemptRef, audit: worker.auditRef },
-      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [] },
+      acceptance_coverage: {
+        snapshot_tree: tree,
+        accepted_criterion_ids: ["AC1"],
+        items: [{ acceptance_criterion_id: "AC1", status: "unknown", evidence_refs: [] }],
+      },
     })).rejects.toThrow(/must contain provider attempts/i);
   });
 
@@ -1186,7 +1190,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it("keeps a group-level PROCESS_TIMEOUT with no dispatched providers as an incomplete verify fact", async () => {
+  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-group-timeout/attempt.json";
     const values = {
       [attemptRef]: {
@@ -1194,7 +1198,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, review_scope: null, base_tree: tree, candidate_tree: tree,
         material_id: sha, provider_attempts: [], terminal_status: "unavailable",
-        error: { code: "PROCESS_TIMEOUT", message: "review group timed out before provider dispatch" },
+        error: { code: errorCode, message: "review group timed out before provider dispatch" },
       },
     };
     const worker = workerFor(stage, values);
