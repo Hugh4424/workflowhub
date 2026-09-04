@@ -1,6 +1,6 @@
 # 实现计划：workflowhub 执行效率修复（B 面+C 面+会话绑定移除+遗漏披露）
 
-- **Input**：`specs/workflowhub-execution-efficiency-20260902/decision-log.md`（D-001~D-008、C-001~C-003）、`specs/workflowhub-execution-efficiency-20260902/spec.md`（FR-001~012、AC-1~7，SHA-256 `ba99cb84…`）
+- **Input**：`specs/workflowhub-execution-efficiency-20260902/decision-log.md`（D-001~D-008、C-001~C-003）、`specs/workflowhub-execution-efficiency-20260902/spec.md`（FR-001~012、AC-1~7，SHA-256 `e5eb3cd6fc01d62b`）
 - **Template version**：`plan-task.v3`
 - **Current-material audit**：四材料为本计划唯一工作真相；历史 receipt/review 只读。
 
@@ -12,7 +12,8 @@
 - **Before**：doctor 只回四字段；writer 不记解析来源；旧树无说明；untracked 哈希捕获过早致整轮重跑；会话绑定族在非 Codex 宿主整体失能；wh-review 0 字节无专属语义。
 - **After**：doctor 机器可读一致性段+exit 0；task.json 记 write_resolution_source；旧树根 ARCHIVED.md；捕获点入发布事务；身份=显式>派生、冲突/缺失 fail-closed；0字节→contract_failure、partial 永不当 pass、公共边界脱敏；stage 末总结必列遗漏。
 - **Main risk**：与任务 A 在 stage-runtime.mjs 同文件不同区（RISK-P-01）；B5b gate 依赖 usability（RISK-P-02，兜底 C-001）。
-- **Next step**：用户确认后进入 build-code，按 P1（并行 RED）→GREEN→P2→P3→（gate 释放后）P4→P5 执行；任何越出 File Boundary 的实现立即 STOP。
+- **Post-merge baseline**：任务分支已合并 `main` 的 stage-reflection/`preflight`/`reflect`、verify-close、bridge stale-review 校验、snapshot materialization 与 wh-review 本地 bounded timeout；这些行为属于现有基线，当前任务只能兼容并回归，不能覆盖或重复实现。
+- **Next step**：先完成本次材料重基线并重新确认 build-plan，再进入 build-code，按 P1（并行 RED）→GREEN→P2→P3→（内容级 gate 释放后）P4→P5 执行；任何越出 File Boundary 的实现立即 STOP。
 
 ## Technical Context
 
@@ -22,24 +23,24 @@
 - **fail-closed 不削弱**：verify 的 untracked 重算比对、质量事实缺失保持 missing/unavailable（D-003/D-005）。
 - **旧记录只读**：旧任务记录/receipt/review 只读保留；旧树除 ARCHIVED.md 首次创建（豁免）外零写入（C-003）。
 - **原子性**：B5b 删除与改写必须同一 git 提交（AC-6 不变量）。
-- **铁律文件边界**：不碰 stage-runner.mjs、task-kernel-implementation.mjs；stage-handlers.mjs 仅 diff 证据捕获点区域；stage-runtime.mjs 仅 doctor 区+会话派生区（D-002）。
+- **铁律文件边界**：不碰 main 已更新的 stage-runner.mjs、task-kernel-implementation.mjs；stage-handlers.mjs 仅 diff 证据捕获点区域；stage-runtime.mjs 仅 doctor 区+会话派生区（D-002），并保留 main 已合入的 `preflight`/`reflect`/stale-session 逻辑。
 - **Testing**：Vitest；契约测试 tests/contract/ 与 skills/wh-review/scripts/__tests__/；RED/GREEN 每行为变化成对共用 gate_cmd。
 - **Target environment**：本地 CLI+单机文件系统；多宿主（DSH/Codex），不依赖任何宿主会话链。
 
 ## Code Anchors
 
-- doctor：tools/cli/stage-runtime.mjs:726-737（JSON 四字段，exit 0/异常非零）。
+- doctor：tools/cli/stage-runtime.mjs:833-843（JSON 四字段，exit 0/异常非零；main 已增加 `preflight`/`reflect`，不可覆盖）。
 - 存储根：runtime/evidence/storage-root.mjs:30-52（env>config>home，launcher-only）；调用方=stage-context.mjs、task-bootstrap.mjs、check-task-record-paths.mjs。
-- diff 证据：runtime/evidence/canonical-receipt-writer.mjs:323（untracked blob_oid 捕获）；runtime/stage/stage-handlers.mjs:1403-1427（verify 重算比对 fail-closed）。
-- 绑定族：`tools/host/workflowhub-codex-session-{state,hook,event}.mjs`；消费者 stage-runtime.mjs:35（4 导入）、task-bootstrap.mjs:27（3 导入）、stage-agent-bridge.mjs:117（session.session_id 输入面）。
-- SKILL.md 引用点：make-decision:50-54、build-spec:41-45、build-plan:32-35、build-code×3、verify-code:16-17 等（F-202）。
-- wh-review broker：review-provider-client.mjs:45-52（spawn 无超时）、:261（0字节 JSON.parse 裸抛）、隐私守卫 :38/:71/:89/:112/:191/:220（PUBLIC_RESULT_INVALID）；比较键既有 material_fingerprint（review-runner.mjs:354）。
+- diff 证据：runtime/evidence/canonical-receipt-writer.mjs:316-325（untracked blob_oid 捕获）；runtime/stage/stage-handlers.mjs:1563-1597（verify 重算比对 fail-closed）。
+- 绑定族：`tools/host/workflowhub-codex-session-{state,hook,event}.mjs`；合并后仍由 stage-runtime、task-bootstrap、stage-agent-bridge 的 `session.session_id` 输入面及五份 SKILL.md 消费，T9/T14 需按当前源码重新定位并清零。
+- SKILL.md 引用点：main 当前五份文件仍含 `workflowhub-codex-session-event.mjs` 和同一会话段；T14 用内容级 grep/契约测试，不使用旧行号作为唯一证据。
+- wh-review broker：review-provider-client.mjs:9、:44-75、:287-288、:316-363（已有 120000ms timeout 与 `PROCESS_TIMEOUT`）；0 字节/非法 JSON 仍是本任务的 `contract_failure` 语义；simple-review-runner.mjs:318-319 对外归一 `REVIEW_EXECUTION_TIMEOUT`；比较键复用既有 `material_fingerprint`。
 
 ### Reuse → Extend → New
 
 - 复用：resolveStorageRoot（扩展暴露解析链）、material_fingerprint（重试比较键）、既有隐私守卫（不动）。
 - 扩展：doctor JSON 加 storage 段；task.json 加 write_resolution_source；canonical-receipt-writer 发布路径内定点唯一捕获。
-- 新增（最小）：tests/ 契约测试与 fixture、docs/operations/old-tree-archive.md（consumer=审计/doctor 对照，删除条件=旧树不存在）、docs/adr/00xx-remove-host-session-binding.md（随 B5b 批）。不新增 npm 依赖、不新增机制对象。
+- 新增（最小）：tests/ 契约测试与 fixture、docs/operations/old-tree-archive.md（consumer=审计/doctor 对照，删除条件=旧树不存在）、docs/adr/0024-remove-host-session-binding.md（随 B5b 批；0023 已被 main 占用）。不新增 npm 依赖、不新增机制对象。
 
 ## Solution Design
 
@@ -65,16 +66,16 @@ stage-runtime 删 4 个绑定族导入及派生路径；task-bootstrap 删绑定
 
 ### wh-review 契约守护（FR-008~011）
 
-broker 读取 provider 输出处：0字节/非法 JSON→contract_failure 内部标签，原文入任务私有证据区；四公共边界（CLI stdout JSON/canonical result/报告投影/跨任务 quality facts）只含错误码+脱敏消息；partial=available-with-failures 永不当 pass；相同 material_fingerprint 不重试；spawn 不加超时机制（约定归文档）。wh-review SKILL.md 增后台执行+轮询约定段。
+broker 读取 provider 输出处：0字节/非法 JSON→contract_failure 内部标签，原文入任务私有证据区；四公共边界（CLI stdout JSON/canonical result/报告投影/跨任务 quality facts）只含错误码+脱敏消息；partial=available-with-failures 永不当 pass；相同 material_fingerprint 不重试；保留 main 已有 120000ms bounded timeout、`PROCESS_TIMEOUT` 和对外 `REVIEW_EXECUTION_TIMEOUT` 映射，不新增第二套 timeout/进程生命周期机制。wh-review SKILL.md 增后台执行+轮询约定段。
 
 ### B5b 原子批（FR-006/FR-012）
 
-同一 git 提交内：删三件套、bridge 的 session.session_id 改显式参数（无输入如实 unavailable）、五份 SKILL.md 移除"同一会话自动记录"段并新增遗漏披露段（stage 末总结必列非 completed step/skill 及原因）、ADR 新建。gate 释放信号=usability 合并/取消/14 天无进展（C-001 兜底本任务接管）；若 usability 已改写 SKILL.md 则本批只做删除。
+同一 git 提交内：删三件套、bridge 的 session.session_id 改显式参数（无输入如实 unavailable）、保留 main 已加入的 stage-reflection 内容并在五份 SKILL.md 移除"同一会话自动记录"段、session-event 指令且新增遗漏披露段（stage 末总结必列非 completed step/skill 及原因）、ADR 新建为 0024。gate 释放信号=usability 合并且五份文档内容级满足零 session 引用+遗漏披露，或任务取消/14 天无进展（C-001 兜底本任务接管）；仅有文件改动或新增 stage-reflection 不算释放，当前 main 不满足 gate，因此保留完整改写范围。
 
 ## File Boundary
 
 ### NEW
-`tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`、`tests/fixtures/diff-evidence/historical-untracked-mismatch.json`、`docs/operations/old-tree-archive.md`、`docs/adr/0023-remove-host-session-binding.md`（T14 批内）。
+`tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`、`tests/fixtures/diff-evidence/historical-untracked-mismatch.json`、`docs/operations/old-tree-archive.md`、`docs/adr/0024-remove-host-session-binding.md`（T14 批内）。
 
 ### MODIFY
 `tools/cli/stage-runtime.mjs`（doctor 区+会话派生区）、`runtime/evidence/storage-root.mjs`、`tools/cli/task-bootstrap.mjs`、`runtime/stage/stage-context.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`runtime/stage/stage-handlers.mjs`（仅 diff 证据捕获点区域）、`skills/wh-review/scripts/review-provider-client.mjs`、`skills/wh-review/SKILL.md`、`tools/host/workflowhub-stage-agent-bridge.mjs`（T14 批内）、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`（T14 批内）。
@@ -82,7 +83,7 @@ broker 读取 provider 输出处：0字节/非法 JSON→contract_failure 内部
 ### DELETE
 `tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-hook.mjs`、`tools/host/workflowhub-codex-session-event.mjs`（T14 批内）。
 
-删除证明：a) 消费方清单完整——F-201/F-202 反向引用扫描确认消费者仅 stage-runtime.mjs:35、task-bootstrap.mjs:27、stage-agent-bridge.mjs:117 及五份 SKILL.md 文本，全部在本计划 MODIFY 面内（T9 先移除代码消费，T14 同批移除文本消费）；b) 删除条件=身份替代 FR-007 落地且 T8/T9 绿；c) 零残留证明=T13 测试断言全仓引用为零；d) 原子性证明=同一 git 提交内容断言；e) 决策留痕=ADR 0023 随批创建。
+删除证明：a) 消费方清单完整——F-201/F-202 反向引用扫描确认消费者为 stage-runtime、task-bootstrap、stage-agent-bridge 及五份 SKILL.md 文本，全部在本计划 MODIFY 面内（T9 先移除代码消费，T14 同批移除文本消费）；b) 删除条件=身份替代 FR-007 落地且 T8/T9 绿；c) 零残留证明=T13 测试断言全仓引用为零；d) 原子性证明=同一 git 提交内容断言；e) 决策留痕=ADR 0024 随批创建，避免覆盖 main 的 ADR 0023。
 
 ### DO NOT TOUCH
 runtime/stage/stage-runner.mjs、runtime/task/task-kernel-implementation.mjs、stage-handlers.mjs 捕获点区域外、任务 A 与 usability 任务文件、旧树（豁免除外）。
@@ -255,11 +256,11 @@ broker 契约守护+调用约定文本。
 ### Tasks
 T10（RED）、T11（GREEN）、T12（docs）
 ### Verify
-provider-output-contract.test RED→GREEN；T12 grep 断言。
+provider-output-contract.test RED→GREEN；main 已有 `review-provider-client-timeout.test.mjs` 保持绿色；T12 grep 断言。
 ### Knowledge
 PFACT-06；终态矩阵。
 ### STOP
-需改公共 schema/加超时机制 → 停止回本 Phase。
+需改公共 schema、重复实现 timeout 或新增进程生命周期机制 → 停止回本 Phase；main timeout 必须保留并有回归证据。
 ### Done
 AC-4/AC-7 证据齐。
 ### Risks and rollback
@@ -270,7 +271,7 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 ### Goal
 删三件套+bridge 显式输入+五份 SKILL.md 改写，单提交原子交付。
 ### Files
-**MODIFY** `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`；**NEW** `tests/contract/session-binding-removed.test.mjs`、`docs/adr/0023-remove-host-session-binding.md`。
+**MODIFY** `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`；**NEW** `tests/contract/session-binding-removed.test.mjs`、`docs/adr/0024-remove-host-session-binding.md`。
 **DELETE** `tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-hook.mjs`、`tools/host/workflowhub-codex-session-event.mjs`。
 
 ### Tasks
@@ -280,7 +281,7 @@ session-binding-removed.test RED→GREEN+提交内容断言。
 ### Knowledge
 F-201/F-202 引用清单。
 ### STOP
-gate 未释放 → 本 Phase 不启动；SKILL.md 已被 usability 改写 → 只做删除。
+gate 未释放 → 本 Phase 不启动；只有五份 SKILL.md 内容级无 session 引用且已有遗漏披露段时，才可跳过文档改写；当前 main 不满足，不能只做删除。
 ### Done
 AC-6 证据齐（同提交+零残留）。
 ### Risks and rollback
@@ -291,12 +292,12 @@ AC-6 证据齐（同提交+零残留）。
 ### Goal
 全量回归+全 AC 证据聚合。
 ### Files
-**MODIFY** `tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`（聚合卡回填证据引用）。
+**MODIFY** `tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`（聚合卡回填证据引用；另回归 main 已有 timeout 测试）。
 
 ### Tasks
 T15（聚合卡）
 ### Verify
-npm run test:safe && npm run check。
+npm run test:safe && npm run check；另跑 `git diff --check`，若仅命中 main 已带入的 fixture EOF 空行则如实记录，不将其伪装为任务代码通过。
 ### Knowledge
 质量缺失如实。
 ### STOP

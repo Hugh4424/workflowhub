@@ -33,11 +33,11 @@
 ## 4. 产品事实（PFACT）
 
 - PFACT-01：存储根解析优先级 = env `WORKFLOWHUB_TASK_DIR` > `~/.config/workflowhub/config.json` `task_dir` > home 默认；launcher-only，不看 cwd/git（F-206）。
-- PFACT-02：会话绑定族 = `tools/host/workflowhub-codex-session-{state,hook,event}.mjs`；生产消费者 = `tools/cli/stage-runtime.mjs`（4 个导入函数）与 `tools/cli/task-bootstrap.mjs`（3 个）；`workflowhub-stage-agent-bridge.mjs` 读取 `session.session_id` 作为输入面（F-201）。
-- PFACT-03：五份 SKILL.md 的"同一会话自动记录"段落位置已清点（make-decision:50-54、build-spec:41-45、build-plan:32-35、build-code×3 处、verify-code:16-17 等）（F-202）。
+- PFACT-02：会话绑定族 = `tools/host/workflowhub-codex-session-{state,hook,event}.mjs`；合并当前 `main` 后，生产消费者仍包括 `tools/cli/stage-runtime.mjs`、`tools/cli/task-bootstrap.mjs`、`workflowhub-stage-agent-bridge.mjs` 的 `session.session_id` 输入面，以及五份 SKILL.md 文本；本任务仍负责按 FR-005/FR-006 移除这些消费面（F-201）。
+- PFACT-03：合并当前 `main` 后，五份 SKILL.md 已加入 stage-reflection 说明，但仍保留"同一会话自动记录"段与 `workflowhub-codex-session-event.mjs` 指令；B5b gate 必须按内容级零残留和遗漏披露段判断，不能按文件是否被修改判断（F-202，2026-09-04 rebaseline）。
 - PFACT-04：diff 证据的 untracked blob 哈希在捕获时冻结（canonical receipt 写入路径），verify 时重算比对，不一致即抛错（F-203）。
 - PFACT-05：doctor 当前输出 JSON（stage/task_id/worktree_root/baseline_commit/materials），正常 exit 0，异常抛错非零（F-204）。
-- PFACT-06：wh-review broker spawn 无超时；0 字节 stdout 导致 JSON.parse 抛错且无专属语义；隐私守卫在多处抛 `PUBLIC_RESULT_INVALID`；配置 `wh_review.v2`（profiles/minimum_heterologous）（F-205）。
+- PFACT-06：合并当前 `main` 后，wh-review broker 已有本地 120000ms bounded timeout，并将超时标记为 `PROCESS_TIMEOUT`，simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；0 字节/非法 JSON 仍需本任务补充专属 `contract_failure` 语义；隐私守卫在多处抛 `PUBLIC_RESULT_INVALID`；配置 `wh_review.v2`（profiles/minimum_heterologous）（F-205，2026-09-04 rebaseline）。
 - PFACT-07：M15 监控链已退休（commit 95bfa2247）；CONTEXT.md:274 明文拒绝宿主身份系统扩展（F-017/F-018）。
 - PFACT-08：DSH 宿主下会话事件链整体不可用（本会话全部实测 unavailable）（make-decision F-013 等）。
 
@@ -50,12 +50,12 @@
 - **FR-003 旧树归档标记**：在旧 Knowledge tree 根放置 `ARCHIVED.md` 只读说明（权威根、休眠起始日期、禁止写入声明）；**该文件的首次创建是唯一被豁免的一次性写入**，除此之外不迁移、不修改旧树任何数据（D-004、C-003；SCEN-05；AC-2）。
 - **FR-004 untracked diff 证据唯一捕获点**：untracked 文件哈希的唯一捕获点移到发布事务内（与实现发布同一时机同事务）；捕获后的任何修改在 verify 重算时仍然 fail-closed 报错；历史错误样例转为 fixture 重放验证（D-003；SCEN-06；AC-3）。
 - **FR-005 移除会话身份派生**：删除 stage-runtime 的会话身份派生路径与 task-bootstrap 的绑定调用；任务身份改为显式 `--project/--task` 优先、认证 worktree 派生其次；缺失或冲突时 fail-closed。**同族消费面含 stage-agent bridge 的 `session.session_id` 输入**：移除后该输入改为显式参数携带；无显式输入时该桥接能力如实不可用（unavailable），不得从环境猜测会话身份（D-007、PFACT-02；SCEN-01/02/03；AC-5/AC-6）。
-- **FR-006 移除 session 三件套 + SKILL.md 原子批**：删除 session-state/session-event/session-hook 三件套，同批改写五份 SKILL.md（移除"同一会话自动记录"段、新增遗漏披露段）；**必须先于或同于 CLI 删除交付，绝不允许先删 CLI 留旧指令**；gated on usability merge，**gate 释放信号（可观察、有 owner）**：usability 任务合并且五份 SKILL.md 已由该任务改写 → 本批只做三件套删除；或 usability 任务被取消 → 本任务接管全批（C-001）；或 usability 任务 14 天无合并进展 → 本任务接管全批；owner=本任务执行者，接管动作=在 build-plan 对应任务卡中记录触发信号（D-006/D-007、C-001、PFACT-03；SCEN-09/10；AC-6）。
+- **FR-006 移除 session 三件套 + SKILL.md 原子批**：删除 session-state/session-event/session-hook 三件套，同批改写五份 SKILL.md（移除"同一会话自动记录"段、新增遗漏披露段）；**必须先于或同于 CLI 删除交付，绝不允许先删 CLI 留旧指令**；gated on usability merge，**gate 释放信号（可观察、有 owner，且按内容验证）**：usability 任务合并且五份 SKILL.md 均已移除 session-event/session-binding 指令并包含遗漏披露段 → 本批只做三件套删除与 bridge 改造；仅有文件改动或 stage-reflection 新增不算 gate 释放；或 usability 任务被取消 → 本任务接管全批（C-001）；或 usability 任务 14 天无合并进展 → 本任务接管全批；owner=本任务执行者，接管动作=在 build-plan 对应任务卡中记录触发信号（D-006/D-007、C-001、PFACT-03；SCEN-09/10；AC-6）。
 - **FR-007 身份解析算法**：优先级=显式 `--project/--task` > 认证 worktree 派生。认证 worktree 的定义=该目录是经任务清单（manifest）登记的任务 worktree，能从中读出已登记的 project/task 身份；派生即读取该登记身份；比较前对 project/task 做统一规范化（去空白、精确匹配）；显式与派生冲突=fail-closed 报冲突；两者皆缺=fail-closed 报缺身份；登记损坏/不可读=fail-closed；旧任务记录中的 session 字段只读保留、不再消费（D-007；SCEN-02/03；AC-5）。
 - **FR-008 broker 输出契约守护**：broker 读取 provider 输出处加契约守护：0 字节或非法 JSON → 标记内部标签 `contract_failure`（非公共行为，公共行为保持七类），原始全文入任务私有证据区，公共输出只含错误码+脱敏消息（D-005、PFACT-06；SCEN-07；AC-4）。
 - **FR-009 partial 处置规则**：`available-with-failures` 语义写死：逐 provider 保留错误与状态；相同输入不重试；partial 永不当 pass；处置矩阵明细（timeout/partial/invalid/0字节/unavailable 各自终态+重试条件+完成影响）在本规格数据契约节给出（D-005；SCEN-08；AC-4）。
 - **FR-010 隐私边界**：原始 provider 错误全文只入任务私有证据区；**公共/跨任务边界枚举**=wh-review CLI stdout JSON、canonical review result 记录、审查报告投影、跨任务 quality facts——四处只保留错误码+脱敏消息；既有 `PUBLIC_RESULT_INVALID` 守卫行为不变（D-005、PFACT-06；SCEN-07；AC-4）。
-- **FR-011 调用约定文本化**：wh-review 技能文档声明：长审查由宿主后台执行+轮询收集；不引入任何真异步机制/状态对象/进程管理（D-005；SCEN-08；AC-7）。
+- **FR-011 调用约定文本化**：wh-review 技能文档声明：长审查由宿主后台执行+轮询收集；不引入任何真异步机制/新的状态对象或新的进程管理。本任务保留合并自 `main` 的既有本地 bounded timeout，不重复实现另一套超时/进程生命周期控制（D-005；SCEN-08；AC-7）。
 - **FR-012 遗漏披露规则**：五份 SKILL.md 的阶段末交接段新增规则：stage 结束大白话总结必须列出所有非 completed 的 step/skill 及真实原因；与 FR-006 同批交付（D-006；SCEN-09；AC-6）。
 
 ## 6. 验收标准（AC）
@@ -96,7 +96,7 @@
   比较键=既有 material_fingerprint（材料指纹）：指纹不变=同一输入，一律不重试；指纹变化=新输入，允许一轮新审查。"修复后重试"均指修复后材料/配置变化导致指纹变化。
   | 终态 | 内部标签 | 重试条件 | 对完成声明的影响 |
   | --- | --- | --- | --- |
-  | timeout（宿主侧） | unavailable（reason 含超时事实） | 指纹变化后可重试 | 只限完成声明，不阻塞同 task 修复 |
+  | timeout（broker/宿主侧） | `PROCESS_TIMEOUT`（公共归一化为 `REVIEW_EXECUTION_TIMEOUT`，完成语义仍为 unavailable） | 指纹变化后可重试 | 只限完成声明，不阻塞同 task 修复 |
   | partial | available-with-failures | 指纹不变不重试 | 永不当 pass |
   | PUBLIC_RESULT_INVALID | unavailable（隐私守卫） | 脱敏修复致指纹变化后重试 | 同上 |
   | 0 字节/非法 JSON | contract_failure | provider 修复致指纹变化后重试 | 同上 |
@@ -109,7 +109,7 @@
 ## 8. 风险、假设与未决
 
 - RISK-S-01：与任务 A 在 stage-runtime.mjs 同文件不同区；merge 冲突不可调和时本任务让路（owner=双任务 owner；关闭条件=双方契约测试绿）。
-- RISK-S-02：B5b gated on usability merge；兜底=C-001 本任务接管（关闭条件=原子批交付或 usability 合并后交付）。
+- RISK-S-02：B5b gated on usability merge 且需内容级检查；当前 `main` 已合并 usability 但五份 SKILL.md 仍有 session-event 引用，因此 gate 尚未释放；兜底=C-001 本任务接管（关闭条件=原子批交付或 usability 内容满足条件后交付）。
 - RISK-S-03：宿主子代理不稳定（本任务已三次失败）；降级=主会话亲自执行（关闭条件=不影响交付）。
 - RISK-S-04：grok/grok 与 opencode/pax3.8 provider 身份连续失效（decision-log OPEN-007，owner=用户择机核查配置）。
 - 假设 A-01：usability 任务会合并（若不成立→C-001 兜底）；A-02：旧树保持休眠只读；A-03：任务 A 不反向触碰本任务分区。

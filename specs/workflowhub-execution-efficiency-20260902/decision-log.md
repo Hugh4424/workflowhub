@@ -4,6 +4,10 @@
 > 阶段：make-decision（进行中）
 > 目标仓库：/Users/Hugh/Hugh/Project/workflowhub（worktree：workflowhub-workflowhub-execution-efficiency-20260902，分支 task/workflowhub/workflowhub-execution-efficiency-20260902，baseline fff255c78）
 
+## 合并后重基线（2026-09-04）
+
+任务分支已合并 `main`（`f4f2ae20b`）的 stage-reflection/`preflight`/`reflect`、verify-close、bridge stale-review 校验、snapshot materialization 与 wh-review 本地 bounded timeout。已提交的合并基线无文件冲突；当前任务四份材料先以 `a8310efd2` 固化，再通过 merge 保留。main 的五份 workflow SKILL.md 仍含 `workflowhub-codex-session-event.mjs` 和“同一会话自动记录”段，因此 B5b gate 未按“文件有改动”释放。main 已占用 `docs/adr/0023-stage-reflection-execution-and-status.md`，本任务 ADR 改用 0024。该记录只更新事实，不改变用户已确认的 B/C 方向。
+
 ## 阶段执行记录
 
 | step/skill | 实际结果 | session-event 记录 |
@@ -108,7 +112,7 @@
 - decision: 本任务修复 diff 证据冻结时机；约束=唯一捕获点在阶段发布时（所有 writer 完成后同事务）；捕获后修改仍 fail-closed；历史样例做 fixture（FND-D06）
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R2 选②；T-004
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
-- facts_and_constraints: 机制真相=diff 证据冻结后未跟踪文件再改导致复核哈希不符（F-007，stage-handlers.mjs:1416-1423）
+- facts_and_constraints: 机制真相=diff 证据冻结后未跟踪文件再改导致复核哈希不符（F-007，合并后 stage-handlers.mjs:1583-1590）；main 新增 snapshot materialization 不改变该 fail-closed 约束
 - Logic: 问题在本任务主题（执行事实链）内 -> 就地修复 -> 冻结时机对齐发布点 -> 同类整轮重跑消失
 - choice_reason/impact: 用户判断该问题与 B 面同源；接受与 A 相邻改动的协调成本
 - consequences_and_risks: RISK-001 加深（stage-handlers 与 A 失败通道相邻）；fail-closed 不得削弱是硬约束
@@ -136,7 +140,7 @@
 - decision: broker 边界加输出契约守护（0字节/非法输出→contract_failure 内部标签并保留原文；partial=available-with-failures 逐 provider 保留错误、输入无变化不重试、不得当 pass；contract_failure 非公共行为，公共行为保持七类——FND-D03/D04）；**隐私边界（FND-DD10）：原始错误全文只入任务内部证据区（私有），wh-review 输出 JSON 与任何公共/跨任务边界只保留错误码+脱敏消息，私有路径一律脱敏——现有隐私守卫行为不变**；调用约定文本化（长审查由宿主后台执行+轮询）；处置矩阵原则=如实记录/不重试无变化输入/只限完成声明不阻塞修复，矩阵明细归 build-spec（FND-D05，OPEN-004）
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R2 选①；T-006
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
-- facts_and_constraints: broker spawn 无超时、300s 是宿主上限（F-010）；PUBLIC_RESULT_INVALID=隐私守卫（F-011）
+- facts_and_constraints: 合并前记录为 broker spawn 无超时；合并后 main 已提供 120000ms 本地 bounded timeout，超时内部标记 `PROCESS_TIMEOUT`、simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；PUBLIC_RESULT_INVALID 仍是隐私守卫（F-011）
 - Logic: 失败语义已分清但守护与约定缺失 -> 补守护+文本约定 -> provider 故障如实可见且不卡死 -> 关闭率回升
 - choice_reason/impact: 最小改动命中痛点；真异步机制违反"不新增维护成本对象"被拒
 - consequences_and_risks: 长审查依赖宿主后台能力（DSH/Codex 均具备）
@@ -211,10 +215,10 @@
 | F-004 | 新 worktree 依赖 | worktree 无 node_modules，已符号链接主仓（与历史 lesson 一致） | verified | — |
 | F-005 | 权威存储根 | bootstrap 输出 storage_root=/Users/Hugh/Hugh/Knowledge；T08 报告证实 /Users/Hugh/Knowledge 另有精简旧目录（双 tree 事实） | verified | 待登记 |
 | F-006 | wh-review 失败前科 | T08：kimi PUBLIC_RESULT_INVALID、总 outcome partial、t08-build-plan-output.json 0 字节（仅 AJV warning）；f17 verify-code lessons：wh-review unavailable 致关闭受阻 | verified | 待登记 |
-| F-007 | 快照排除与 untracked hash 真相 | EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES 已含 evidence/ quality/ .multica/（git-worktree-snapshot.mjs:23）；untracked evidence hash mismatch 实为 diff 证据冻结后未跟踪源文件又被改动，handler 用 git hash-object 复核当前文件（stage-handlers.mjs:1416-1423）——是证据冻结时机问题，不是 evidence 目录污染快照 | verified | 待登记 |
-| F-008 | doctor 现状 | 仅返回 worktree_root/baseline_commit/materials（stage-runtime.mjs:726-737）；无存储根一致性、无双 tree 检测 | verified | 待登记 |
+| F-007 | 快照排除与 untracked hash 真相 | EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES 已含 evidence/ quality/ .multica/（git-worktree-snapshot.mjs:23）；untracked evidence hash mismatch 实为 diff 证据冻结后未跟踪源文件又被改动，handler 用 git hash-object 复核当前文件（stage-handlers.mjs:1583-1590）——是证据冻结时机问题，不是 evidence 目录污染快照；main 新增 snapshot materialization 仍需保留 | verified | 待登记 |
+| F-008 | doctor 现状 | 合并后仍仅返回 worktree_root/baseline_commit/materials（stage-runtime.mjs:833-843）；无存储根一致性、无双 tree 检测；main 新增的 preflight/reflect 不属于 doctor 改造区 | verified | 待登记 |
 | F-009 | 双 tree 真相 | 旧 /Users/Hugh/Knowledge 顶层 mtime 停留在 2026-08-15（ModelTest/PaperBuilder 旧任务/workflowhub 旧任务各一）；权威根 /Users/Hugh/Hugh/Knowledge 由 env WORKFLOWHUB_TASK_DIR 或 ~/.config/workflowhub/config.json task_dir 解析（storage-root.mjs:34-52） | verified | 待登记 |
-| F-010 | wh-review 超时真相 | broker spawn 无超时（review-provider-client.mjs:44-53 只等 close）；300s 是宿主工具调用上限；"超时后后台重试"是宿主层约定，不是 workflowhub 机制 | verified | 待登记 |
+| F-010 | wh-review 超时真相 | 合并前 broker spawn 无超时；main 已加入 `DEFAULT_REVIEW_BROKER_TIMEOUT_MS=120000`、超时进程组终止与 `PROCESS_TIMEOUT`（review-provider-client.mjs:9、44-75、287-288）；simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；本任务不得再新增第二套 timeout/进程生命周期机制 | verified | T10/T11 |
 | F-011 | PUBLIC_RESULT_INVALID 语义 | 隐私守卫：broker/provider 输出含本机私有路径即判 invalid（review-provider-client.mjs:38-112）；不是通用传输失败 | verified | 待登记 |
 | F-012 | 阶段末总结数据源 | stage outcome 的 step_outcomes/skill_outcomes 已按 manifest 顺序/身份强制校验（stage-runner.mjs:140-158，状态含 completed/failed/skipped/not_applicable）；六部分大白话总结是各 SKILL.md 文本规则（build-code:181、verify-code:109-113） | verified | 待登记 |
 | F-013 | 调研方式降级事实 | 两个调研子代理两次启动均中途失败无收尾（宿主子代理机制不可用）；降级为主会话亲自做定点调研，范围未缩小 | verified（过程事实） | — |
@@ -223,6 +227,7 @@
 | F-016 | wh-review 路由配置 | ~/.config/workflowhub/config.json 的 wh_review.profiles/stages 定义各阶段 provider 列表与 minimum_heterologous=1；broker=3rd-review 脚本（config.third_review.command） | verified | — |
 | F-017 | 会话绑定考古 | 绑定=M15 记录系统防串台机制（一同会话一任务，transcript token/耗时采集的身份锚）；不阻断执行，只令非 Codex 宿主的记录命令失败（归档决策三次记录"unavailable 不阻塞"：stage-reflection-20260830 决策 F-008 等） | verified | T-008/T-009 |
 | F-018 | M15 退休核实 | commit 95bfa2247（2026-08-30 "chore: retire M15 monitoring"）已删除 monitoring-facts/projector/page/diagnostics/transcript-adapter 全链；剩余 session-state 消费者仅：stage-runtime.mjs（--project/--task 省略时的身份派生+bindCurrentSessionOutcome 把会话事件转为 stage receipts，显式 receipt 本就是 authoritative 通道）与 task-bootstrap.mjs（provenance 绑定，失败不阻塞）；5 份 SKILL.md 引用 session-event 命令。用户声明"M15 监控链已彻底退休"属实 | verified | T-009 |
+| F-019 | main 合并后当前基线 | `main`=`f4f2ae20b` 已合并 usability 与 verify-close；stage-runtime 保留 preflight/reflect，bridge 保留 stale-review 校验，wh-review 已有 120000ms bounded timeout；五份 workflow SKILL.md 仍保留 session-event 指令；ADR 0023 已占用 | verified | T-001~T-014 重基线 |
 
 ## grill
 
@@ -359,4 +364,3 @@
 ## Supersedes
 
 无（本任务首次决策）。
-

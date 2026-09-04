@@ -35,7 +35,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：先把 AC-1 表驱动五例写成失败测试（解析链三来源/漂移/可疑第二根/writer 字段一致与不一致/历史缺字段 unknown）
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-004、C-002、spec FR-001/AC-1
 - **输入**：spec.md AC-1；F-204/F-206 锚点
 - **依赖**：无
@@ -68,7 +68,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：实现 doctor 的 storage 段（解析链/选中来源/写入根/可疑第二根/warnings），exit 恒 0
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-004、C-002、spec FR-001/AC-1
 - **输入**：T1 RED 测试
 - **依赖**：T1
@@ -101,7 +101,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：失败测试——任务创建/写入后 task.json 含 write_resolution_source 且与实际来源一致
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-004、spec FR-002/AC-1
 - **输入**：spec AC-1 例 d/e
 - **依赖**：无
@@ -134,7 +134,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：writer 在 task.json 落 write_resolution_source ∈ `{env, config, home}`
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-004、spec FR-002/AC-1
 - **输入**：T3 RED 测试
 - **依赖**：T3
@@ -167,7 +167,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：旧 Knowledge tree 根落 ARCHIVED.md（一次性豁免写入），仓内留 ops 记录
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-004、C-003、spec FR-003/AC-2
 - **输入**：旧树路径事实（休眠自 ~2026-08 中旬）
 - **依赖**：无
@@ -200,7 +200,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：失败测试——历史 untracked mismatch 样例转 fixture 重放；正常流程端到端；捕获唯一性/次序/中断断言
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-003、spec FR-004/AC-3
 - **输入**：PaperBuilder build-code lessons 真实失败 payload；F-203 锚点
 - **依赖**：无
@@ -211,7 +211,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **精确文件**：`tests/contract/diff-evidence-capture-point.test.mjs`
 - **boundary**：files: `tests/contract/diff-evidence-capture-point.test.mjs`、`tests/fixtures/diff-evidence/historical-untracked-mismatch.json`
 - **输出**：RED 测试
-- **Knowledge**：捕获现状=canonical-receipt-writer.mjs:323 捕获时冻结（F-203）
+- **Knowledge**：合并后捕获现状=canonical-receipt-writer.mjs:316-325；main 的 stage-handlers 校验位于 1563-1597，verify hash mismatch 仍必须 fail-closed（F-203）。
 - **verification_role**：RED
 - **paired_task**：T7
 - **gate_cmd**：`npx vitest run tests/contract/diff-evidence-capture-point.test.mjs`
@@ -233,7 +233,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **Phase**：Phase P1 — 存储一致性
 - **goal**：untracked 哈希唯一捕获点移到发布事务内；verify 重算保持 fail-closed
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-003、spec FR-004/AC-3；OPEN-P-01 在本卡定点
 - **输入**：T6 RED 测试
 - **依赖**：T6
@@ -244,7 +244,7 @@ stage-runtime 与 A 冲突→让路；全部改动可 git revert。
 - **精确文件**：`runtime/evidence/canonical-receipt-writer.mjs`
 - **boundary**：files: `runtime/evidence/canonical-receipt-writer.mjs`、`runtime/stage/stage-handlers.mjs`
 - **输出**：T6 测试转绿
-- **Knowledge**：stage-handlers:1416-1423 重算逻辑是 fail-closed 本体，不削弱
+- **Knowledge**：stage-handlers:1563-1597 的重算逻辑是 fail-closed 本体，不削弱；main 的 snapshot/materialization 变化也必须保留。
 - **verification_role**：GREEN
 - **paired_task**：T6
 - **gate_cmd**：`npx vitest run tests/contract/diff-evidence-capture-point.test.mjs`
@@ -292,7 +292,7 @@ AC-5 证据齐。
 - **Phase**：Phase P2 — B5a 身份移除
 - **goal**：失败测试——显式/派生/冲突/皆缺/登记损坏/旧记录六例 + 正式 run 的 step/skill outcomes 完整有序断言
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-007、spec FR-005/FR-007/AC-5
 - **输入**：spec AC-5
 - **依赖**：无
@@ -325,7 +325,7 @@ AC-5 证据齐。
 - **Phase**：Phase P2 — B5a 身份移除
 - **goal**：删除 stage-runtime 会话派生与 task-bootstrap 绑定调用；实现显式>派生、冲突/缺失 fail-closed
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-007、spec FR-005/FR-007/AC-5
 - **输入**：T8 RED 测试
 - **依赖**：T8, T2
@@ -370,7 +370,7 @@ provider-output-contract.test RED→GREEN；T12 grep 断言。
 PFACT-06；终态矩阵（spec 第 7 节）。
 
 ### STOP
-需要改 broker 公共 schema/新增公共字段/加超时机制 → 停止回本 Phase。
+需要改 broker 公共 schema/新增公共字段、重复实现 timeout 或新增进程生命周期 → 停止回本 Phase；main timeout 只做回归保护。
 
 ### Done
 AC-4/AC-7 证据齐。
@@ -382,9 +382,9 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 
 - **ID**：T10
 - **Phase**：Phase P3 — C 面契约守护
-- **goal**：失败测试——五终态用例+0字节 contract_failure+相同指纹不重试+四公共边界脱敏断言
+- **goal**：失败测试——五终态用例+0字节 contract_failure+相同指纹不重试+四公共边界脱敏断言，并回归 main 已有 broker timeout 映射
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-005、spec FR-008/FR-009/FR-010/AC-4
 - **输入**：spec 终态矩阵；lessons 真实失败 payload（0 字节、PUBLIC_RESULT_INVALID）
 - **依赖**：无
@@ -395,10 +395,10 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 - **精确文件**：`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`
 - **boundary**：files: `skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`
 - **输出**：RED 测试
-- **Knowledge**：0 字节现状=JSON.parse 裸抛（PFACT-06）
+- **Knowledge**：0 字节/非法 JSON 仍需补 `contract_failure`；main 已有 120000ms timeout、`PROCESS_TIMEOUT` 和 `REVIEW_EXECUTION_TIMEOUT` 映射（PFACT-06）。
 - **verification_role**：RED
 - **paired_task**：T11
-- **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`
+- **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs && npx vitest run skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs`
 - **expected_exit**：1
 - **oracle**：AC-4 provider-output-contract.test.mjs 五终态+脱敏+不重试断言全过
 - **evidence_path**：quality/tests/t10-broker-red.json
@@ -417,7 +417,7 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 - **Phase**：Phase P3 — C 面契约守护
 - **goal**：0字节/非法JSON→contract_failure 内部标签；原文入私有证据区；公共边界脱敏；partial 永不当 pass
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-005、spec FR-008/FR-009/FR-010/AC-4
 - **输入**：T10 RED 测试
 - **依赖**：T10
@@ -428,14 +428,14 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 - **精确文件**：`skills/wh-review/scripts/review-provider-client.mjs`
 - **boundary**：files: `skills/wh-review/scripts/review-provider-client.mjs`
 - **输出**：T10 测试转绿
-- **Knowledge**：spawn 无超时保持现状（调用约定归 T12 文本，不加机制）
+- **Knowledge**：main 已有 bounded timeout；本卡不得新增第二套 timeout/进程生命周期，只补输出契约语义并保护既有 timeout 行为。
 - **verification_role**：GREEN
 - **paired_task**：T10
-- **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`
+- **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs && npx vitest run skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs`
 - **expected_exit**：0
 - **oracle**：AC-4 provider-output-contract.test.mjs 五终态+脱敏+不重试断言全过
 - **evidence_path**：quality/tests/t11-broker-green.json
-- **STOP**：需要给 spawn 加超时机制（超出本任务范围，归调用约定） → 停止
+- **STOP**：需要重复实现 timeout、改公共 schema 或新增进程生命周期 → 停止；已有 main timeout 只做回归保护
 - **recovery**：回退
 - **task risk**：中
 
@@ -450,7 +450,7 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 - **Phase**：Phase P3 — C 面契约守护
 - **goal**：wh-review SKILL.md 写明宿主后台执行+轮询约定与终态处置矩阵引用
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-005、spec FR-011/AC-7
 - **输入**：spec 第 7 节终态矩阵
 - **依赖**：无
@@ -483,7 +483,7 @@ fake 输出用 lessons 真实 payload 校准；可 revert。
 删除 session 三件套+bridge 显式输入+五份 SKILL.md 改写，同一 git 提交原子交付。
 
 ### Files
-**MODIFY** `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`；**NEW** `tests/contract/session-binding-removed.test.mjs`、`docs/adr/0023-remove-host-session-binding.md`。
+**MODIFY** `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`；**NEW** `tests/contract/session-binding-removed.test.mjs`、`docs/adr/0024-remove-host-session-binding.md`。
 **DELETE** `tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-hook.mjs`、`tools/host/workflowhub-codex-session-event.mjs`。
 
 ### Tasks
@@ -496,7 +496,7 @@ session-binding-removed.test RED→GREEN+提交内容原子性断言。
 PFACT-02/03；F-201/F-202 引用清单。
 
 ### STOP
-gate 未释放（usability 未合并且未取消且 14 天内）→ 本 Phase 不启动；发现 SKILL.md 已被 usability 改写 → 只删三件套+bridge，跳过改写。
+gate 未释放（usability 未合并且未取消且 14 天内）→ 本 Phase 不启动；只有五份 SKILL.md 内容级无 session-event/session-binding 引用且已有遗漏披露段时，才可跳过文档改写；当前 main 不满足，不能只删三件套+bridge。
 
 ### Done
 AC-6 证据齐（同提交断言+零残留 grep）。
@@ -508,9 +508,9 @@ AC-6 证据齐（同提交断言+零残留 grep）。
 
 - **ID**：T13
 - **Phase**：Phase P4 — B5b 原子批（gated）
-- **goal**：失败测试——三件套不存在、SKILL.md 含遗漏披露段且无绑定段、bridge 无 session_id 依赖、全仓引用零残留、同提交原子性断言
+- **goal**：失败测试——三件套不存在、SKILL.md 含遗漏披露段且无绑定段、bridge 无 session_id 依赖、全仓引用零残留、同提交原子性断言；保留 main 已加入的 stage-reflection 文本
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-006、D-007、C-001、spec FR-006/FR-012/AC-6
 - **输入**：spec AC-6；F-201/F-202 引用清单
 - **依赖**：T9
@@ -521,7 +521,7 @@ AC-6 证据齐（同提交断言+零残留 grep）。
 - **精确文件**：`tests/contract/session-binding-removed.test.mjs`
 - **boundary**：files: `tests/contract/session-binding-removed.test.mjs`
 - **输出**：RED 测试
-- **Knowledge**：gate 信号见 spec FR-006（合并/取消/14 天）
+- **Knowledge**：gate 信号见 spec FR-006（合并且内容满足/取消/14 天）；main 当前仍有五份 session-event 引用
 - **verification_role**：RED
 - **paired_task**：T14
 - **gate_cmd**：`npx vitest run tests/contract/session-binding-removed.test.mjs`
@@ -541,18 +541,18 @@ AC-6 证据齐（同提交断言+零残留 grep）。
 
 - **ID**：T14
 - **Phase**：Phase P4 — B5b 原子批（gated）
-- **goal**：同一 git 提交内：删三件套、改 bridge 显式输入、五份 SKILL.md 移除绑定段+新增遗漏披露段
+- **goal**：同一 git 提交内：删三件套、改 bridge 显式输入、保留 main 的 stage-reflection 内容，并让五份 SKILL.md 移除绑定段+新增遗漏披露段
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-006、D-007、C-001、spec FR-006/FR-012/AC-6
 - **输入**：T13 RED 测试；gate 释放信号
 - **依赖**：T13
 - **并行**：无（原子批独占）
 - **FR**：FR-006, FR-012
 - **AC**：AC-6
-- **动作**：按 F-201/F-202 清单删除三件套（tools/host/workflowhub-codex-session-state/hook/event.mjs，Phase DELETE 行）并改写 bridge+五份 SKILL.md；ADR 随批创建；单提交交付
+- **动作**：按 F-201/F-202 清单删除三件套（tools/host/workflowhub-codex-session-state/hook/event.mjs，Phase DELETE 行）并改写 bridge+五份 SKILL.md；保留 main 已合入的 stage-reflection/`preflight`/`reflect` 文本；创建 ADR 0024；单提交交付
 - **精确文件**：`tools/host/workflowhub-stage-agent-bridge.mjs`
-- **boundary**：files: `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`docs/adr/0023-remove-host-session-binding.md`
+- **boundary**：files: `tools/host/workflowhub-stage-agent-bridge.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`docs/adr/0024-remove-host-session-binding.md`
 - **输出**：T13 测试转绿；零残留
 - **Knowledge**：遗漏披露段文案=R-006 用户原文语义
 - **verification_role**：GREEN
@@ -576,13 +576,13 @@ AC-6 证据齐（同提交断言+零残留 grep）。
 全量回归+全 AC 证据聚合。
 
 ### Files
-**MODIFY** `tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`（聚合卡回填证据引用）。
+**MODIFY** `tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`（聚合卡回填证据引用；另回归 main 已有 timeout 测试）。
 
 ### Tasks
 T15
 
 ### Verify
-npm run test:safe && npm run check。
+npm run test:safe && npm run check；另跑 `git diff --check`，若仅命中 main 已带入的 fixture EOF 空行则如实记录，不将其伪装为任务代码通过。
 
 ### Knowledge
 质量缺失保持如实。
@@ -602,21 +602,21 @@ B5b 未释放时 AC-6 记 gated 事实而非伪造通过。
 - **Phase**：Phase P5 — 聚合验收
 - **goal**：全量回归+AC-1~AC-7 证据聚合+零残留终检
 - **design_state**：designed
-- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@ba99cb84`
+- **versioned_refs**：`specs/workflowhub-execution-efficiency-20260902/spec.md@e5eb3cd6fc01d62b`
 - **source_refs / decision_refs**：D-001~D-008、spec 全部 FR/AC
 - **输入**：全部 GREEN 卡证据
 - **依赖**：T2, T4, T5, T7, T9, T11, T12, T14
 - **并行**：无（收尾独占）
 - **FR**：FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012
 - **AC**：AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7
-- **动作**：跑全量回归；聚合各 AC 证据；B5b 未交付时如实记录 gated 事实
+- **动作**：跑全量回归与 `git diff --check`；回归 main timeout；聚合各 AC 证据；B5b 未交付时如实记录 gated 事实；main 已带入的 fixture EOF 空行若仍存在，单独记录为基线质量问题，不宣称整体绿色
 - **精确文件**：`tests/contract/doctor-storage-consistency.test.mjs`
 - **boundary**：files: `tests/contract/doctor-storage-consistency.test.mjs`、`tests/contract/writer-resolution-source.test.mjs`、`tests/contract/diff-evidence-capture-point.test.mjs`、`tests/contract/identity-resolution.test.mjs`、`tests/contract/session-binding-removed.test.mjs`、`skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs`
 - **输出**：聚合验收证据
 - **Knowledge**：质量缺失保持如实
 - **verification_role**：N/A — 非行为变更：聚合验证，非新公共阶段
 - **paired_task**：N/A — 非行为变更无配对
-- **gate_cmd**：`npm run test:safe && npm run check`
+- **gate_cmd**：`npm run test:safe && npm run check && git diff --check`
 - **expected_exit**：0
 - **oracle**：AC-1 全量回归绿+check 结构校验过
 - **evidence_path**：quality/tests/t15-aggregate.json
