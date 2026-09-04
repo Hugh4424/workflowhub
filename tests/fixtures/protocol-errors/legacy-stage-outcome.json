@@ -1,0 +1,22 @@
+{
+  "schema_version": "workflowhub-stage-outcomes.v1",
+  "task_id": "legacy-task",
+  "stage": "build-code",
+  "attempt_id": "legacy-build-attempt",
+  "status": "completed",
+  "snapshot_tree": "1111111111111111111111111111111111111111",
+  "material_revision": "revision-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "steps_manifest_ref": "workflows/build-code/steps.json",
+  "skills_manifest_ref": "workflows/build-code/skill-deps.yaml",
+  "step_outcomes": [],
+  "skill_outcomes": [],
+  "code_review": {
+    "schema_version": "workflowhub-code-review-stage-outcome.v1",
+    "stage": "build-code",
+    "snapshot_tree": "1111111111111111111111111111111111111111",
+    "material_revision": "revision-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "step_slug": "approve-verification",
+    "skill_id": "dsh-code-review",
+    "result": { "status": "clean", "findings": [] }
+  }
+}

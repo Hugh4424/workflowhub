@@ -19,6 +19,14 @@ const SHA256 = /^[a-f0-9]{64}$/;
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
+function isolatedChildEnv(overrides = {}) {
+  const env = { ...process.env, ...overrides };
+  // Baseline probes create temporary WorkflowHub tasks.  They must not
+  // mutate the real Codex session that launched the probe.
+  for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
+  return env;
+}
+
 function assertBehavior(value) {
   if (!BEHAVIORS.includes(value)) throw new TypeError(`unknown public behavior: ${value}`);
   return value;
@@ -47,11 +55,7 @@ function runCli(root, args, { env = {}, cwd = root } = {}) {
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd,
     encoding: "utf8",
-    env: {
-      ...process.env,
-      ...env,
-      TERM: "dumb",
-    },
+    env: { ...isolatedChildEnv(env), TERM: "dumb" },
   });
   const rawStdout = result.stdout ?? "";
   const rawStderr = result.stderr ?? "";
@@ -127,7 +131,7 @@ function prepareIsolatedCase(root, behavior, variant = "default") {
     "--project=Baseline",
     `--task=${task}`,
     `--target-repo=${repo}`,
-  ], { cwd: root, env: { ...process.env, ...env }, encoding: "utf8" });
+  ], { cwd: root, env: isolatedChildEnv(env), encoding: "utf8" });
   const taskPath = JSON.parse(bootstrap).task_path;
   return { caseRoot, repo, env, project: "Baseline", task, taskPath };
 }

@@ -10,6 +10,7 @@
  * skill, scans sessions, or guesses a source.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -20,6 +21,8 @@ import {
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function readInput() {
   const raw = readFileSync(0, "utf8");
@@ -96,11 +99,60 @@ function normalizeBridgeError(error) {
   return normalized;
 }
 
+function rejectStaleVerifyCodeReview({ context, stage, session }) {
+  if (stage !== "verify-code" || !session.code_review || typeof session.code_review !== "object") return;
+  const review = session.code_review;
+  const currentSnapshotTree = context.kernel.currentVNextSnapshot().tree;
+  const currentMaterialRevision = context.kernel.currentVNextMaterialRevision();
+  const reject = (reason) => {
+    const error = new Error(`BRIDGE_STALE_STAGE_OUTCOME: ${reason}`);
+    error.code = "BRIDGE_STALE_STAGE_OUTCOME";
+    throw error;
+  };
+  if (review.stage !== undefined && review.stage !== stage) {
+    reject("session code_review stage does not match verify-code");
+  }
+  if (review.task_id !== undefined && review.task_id !== context.task.identity.taskId) {
+    reject("session code_review task does not match the current task");
+  }
+  if (review.snapshot_tree !== currentSnapshotTree) {
+    reject("session code_review snapshot_tree does not match the current stage snapshot");
+  }
+  if (review.material_revision !== currentMaterialRevision) {
+    reject("session code_review material_revision does not match current stage materials");
+  }
+  if (review.quality_review_ref === undefined) return;
+  let raw;
+  try { raw = context.task.readRecord(review.quality_review_ref); }
+  catch { reject("session code_review quality review record is unavailable"); }
+  if (sha256(raw) !== review.quality_review_hash) {
+    reject("session code_review quality review hash does not match its record");
+  }
+  let result;
+  try { result = JSON.parse(raw); }
+  catch { reject("session code_review quality review record is not JSON"); }
+  if (result?.version !== "wh-review-result.v1"
+      || result?.task_id !== context.task.identity.taskId
+      || result?.stage !== stage
+      || result?.subject_kind !== "worktree"
+      || result?.phase_id !== null
+      || result?.review_scope !== null) {
+    reject("session code_review quality review identity does not match the current task and stage");
+  }
+  if (result?.snapshot_tree !== review.snapshot_tree) {
+    reject("session code_review quality review snapshot_tree does not match the session review");
+  }
+  if (result?.material_revision !== currentMaterialRevision) {
+    reject("session code_review quality review material_revision does not match current stage materials");
+  }
+}
+
 function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId, requirementAuthentication = null }) {
   const session = input.session;
   if (!session || typeof session !== "object" || Array.isArray(session)) throw new TypeError("session must be an object");
   if (!Array.isArray(session.events)) throw new TypeError("session.events must be an array");
   if (requiredText(session.task_id, "session.task_id") !== context.task.identity.taskId) throw new Error("session.task_id does not match the current WorkflowHub task");
+  rejectStaleVerifyCodeReview({ context, stage, session });
   let clock = 0;
   const recorder = createWorkflowHubSessionRecorder({
     task: context.task,

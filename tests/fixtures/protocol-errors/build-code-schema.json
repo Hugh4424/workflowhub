@@ -1,0 +1,45 @@
+{
+  "schema_version": "protocol-error-fixture.v1",
+  "entries": [
+    {
+      "entry_id": "38729c0d-a82c-479a-8051-45e7add41b4e",
+      "source": "workflowhub/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "build_review_kind",
+      "error": "SCHEMA_VALIDATION_FAILED result /review_kind enum"
+    },
+    {
+      "entry_id": "0095c4ae-6967-43ee-bcc6-25190250b39e",
+      "source": "workflowhub/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "build_review_track",
+      "error": "SCHEMA_VALIDATION_FAILED result /review_track type"
+    },
+    {
+      "entry_id": "1e59804c-cd63-4520-aee6-dc784b27a6e7",
+      "source": "workflowhub/lessons/build-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-code",
+      "surface": "stage",
+      "class_id": "build_review_kind",
+      "error": "SCHEMA_VALIDATION_FAILED result /review_kind enum"
+    },
+    {
+      "entry_id": "a692c5d5-e1d7-4cdd-8225-ba4cefddb24a",
+      "source": "workflowhub/lessons/build-plan.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "build-plan",
+      "surface": "stage",
+      "class_id": "build_review_track",
+      "error": "SCHEMA_VALIDATION_FAILED result /review_track type"
+    }
+  ]
+}

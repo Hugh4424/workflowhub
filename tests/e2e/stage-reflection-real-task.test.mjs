@@ -1,5 +1,6 @@
 import Ajv from "ajv";
 import { afterEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,13 +12,16 @@ import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
 import { stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
-import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
+import { completeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const repoRoot = resolve(join(import.meta.dirname, "../.."));
 const stageSchema = JSON.parse(readFileSync(join(repoRoot, "runtime/schemas/stage-reflection.v1.json"), "utf8"));
 const validateReflectionSchema = new Ajv({ allErrors: true, strict: false }).compile(stageSchema);
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const roots = [];
 const envKeys = [
   "HOME",
@@ -125,7 +129,7 @@ describe("stage-reflection real official task path", () => {
         home: join(root, "home"),
         cwd: repo,
       });
-      const materials = canonicalStageMaterials();
+      const materials = completeCanonicalStageMaterials();
       const materialInputs = Object.fromEntries(Object.entries(materials).map(([name, content]) => [name, writeInput(root, name, content)]));
       const invoke = (argv) => stageRuntimeMain(argv, { cwd: repo });
       await invoke(["artifact", "--stage=make-decision", "--project=ReviewProducer", "--task=current-identity", "--name=decision-log.md", `--input=${materialInputs["decision-log.md"]}`]);
@@ -203,7 +207,7 @@ describe("stage-reflection real official task path", () => {
       expect(bootstrapped.workspace.branch).toBe("task/ReflectionReal/official-real-task");
       expect(bootstrapped.task_path).toBe(join(root, "storage", "Projects", "ReflectionReal", "tasks", "official-real-task"));
 
-      const materials = canonicalStageMaterials();
+      const materials = completeCanonicalStageMaterials();
       const materialInputs = Object.fromEntries(Object.entries(materials).map(([name, content]) => [name, writeInput(root, name, content)]));
       const invoke = (argv, services = {}) => stageRuntimeMain(argv, { cwd: repo, services });
       await invoke(["artifact", "--stage=make-decision", "--project=ReflectionReal", "--task=official-real-task", "--name=decision-log.md", `--input=${materialInputs["decision-log.md"]}`]);
@@ -211,6 +215,24 @@ describe("stage-reflection real official task path", () => {
       await invoke(["artifact", "--stage=build-plan", "--project=ReflectionReal", "--task=official-real-task", "--name=plan.md", `--input=${materialInputs["plan.md"]}`]);
       await invoke(["artifact", "--stage=build-plan", "--project=ReflectionReal", "--task=official-real-task", "--name=tasks.md", `--input=${materialInputs["tasks.md"]}`]);
 
+      const makeDecisionConfirmation = await invoke([
+        "confirm",
+        "--stage=make-decision",
+        "--project=ReflectionReal",
+        "--task=official-real-task",
+        "--decision=accepted",
+        "--reply-text=确认真实 task 的决策继续",
+        "--step-slug=approve-decision",
+      ]);
+      const buildPlanConfirmation = await invoke([
+        "confirm",
+        "--stage=build-plan",
+        "--project=ReflectionReal",
+        "--task=official-real-task",
+        "--decision=accepted",
+        "--reply-text=确认真实 task 的计划继续",
+        "--step-slug=publish-plan-result",
+      ]);
       const confirmed = await invoke([
         "confirm",
         "--stage=build-code",
@@ -230,26 +252,123 @@ describe("stage-reflection real official task path", () => {
       const workspace = openCurrentTaskWorkspace(task);
       const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
       const kernel = createTaskKernel(task, { workspace, artifacts });
-      const buildSpecOutcome = writeStageOutcomeFixture({
+      mkdirSync(join(workspace.worktreeRoot, "src"), { recursive: true });
+      writeFileSync(join(workspace.worktreeRoot, "src", "app.txt"), "implemented for stage reflection\n", "utf8");
+      const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: {} });
+      const buildSnapshot = kernel.currentVNextSnapshot();
+      const testOutput = "stage reflection build-code test passed\n";
+      const testOutputRef = "quality/tests/output/stage-reflection-build-code.txt";
+      kernel.publishCanonicalRecord(testOutputRef, testOutput);
+      const testReceipt = {
+        schema_version: "workflowhub-receipt.v1",
+        task_id: task.identity.taskId,
+        stage: "build-code",
+        producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+        command: "true",
+        command_hash: sha256("true"),
+        exit_code: 0,
+        source_digest: buildSnapshot.source_digest,
+        snapshot_head: buildSnapshot.head,
+        snapshot_tree: buildSnapshot.tree,
+        snapshot_commit: buildSnapshot.commit,
+        started_at: "2026-08-30T00:00:00.000Z",
+        completed_at: "2026-08-30T00:00:01.000Z",
+        output_ref: testOutputRef,
+        output_hash: sha256(testOutput),
+      };
+      const testReceiptRaw = `${JSON.stringify(testReceipt)}\n`;
+      const testReceiptRef = "quality/tests/stage-reflection-build-code.json";
+      kernel.publishCanonicalRecord(testReceiptRef, testReceiptRaw);
+      const buildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: buildSnapshot.tree });
+      const buildProofRaw = `${JSON.stringify({ verified: true, snapshot_tree: buildSnapshot.tree })}\n`;
+      const buildProofRef = "quality/evidence/stage-reflection-build-code-proof.json";
+      kernel.publishCanonicalRecord(buildProofRef, buildProofRaw);
+      const buildProof = { ref: buildProofRef, sha256: sha256(buildProofRaw) };
+      const stageOutcomes = {
+        "make-decision": writeStageOutcomeFixture({
+          task,
+          kernel,
+          artifacts,
+          workspace,
+          stage: "make-decision",
+          attemptId: "attempt-real-make-decision",
+          workflowRunId: kernel.deriveStageWorkflowRunId("make-decision"),
+        }),
+      };
+      stageOutcomes["build-spec"] = writeStageOutcomeFixture({
         task,
         kernel,
         artifacts,
         workspace,
         stage: "build-spec",
         attemptId: "attempt-real-build-spec",
+        workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"),
       });
-      const buildSpecInputPath = writeInput(root, "build-spec-run.json", JSON.stringify({ receipts: { stage_outcomes: buildSpecOutcome.ref } }));
+      stageOutcomes["build-plan"] = writeStageOutcomeFixture({
+        task,
+        kernel,
+        artifacts,
+        workspace,
+        stage: "build-plan",
+        attemptId: "attempt-real-build-plan",
+        workflowRunId: kernel.deriveStageWorkflowRunId("build-plan"),
+      });
+      stageOutcomes["build-code"] = writeStageOutcomeFixture({
+        task,
+        kernel,
+        artifacts,
+        workspace,
+        stage: "build-code",
+        attemptId: "attempt-real-build-code",
+        workflowRunId: kernel.deriveStageWorkflowRunId("build-code"),
+      });
+      stageOutcomes["verify-code"] = writeStageOutcomeFixture({
+        task,
+        kernel,
+        artifacts,
+        workspace,
+        stage: "verify-code",
+        attemptId: "attempt-real-verify-code",
+        status: "unavailable",
+        workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"),
+      });
+      const stageInputPaths = Object.fromEntries(Object.entries(stageOutcomes).map(([stage, outcome]) => [
+        stage,
+        writeInput(root, `${stage}-run.json`, JSON.stringify({
+          receipts: {
+            stage_outcomes: outcome.ref,
+            ...(stage === "make-decision" ? { confirmation: makeDecisionConfirmation.ref } : {}),
+            ...(stage === "build-plan" ? { confirmation: buildPlanConfirmation.ref } : {}),
+            ...(stage === "build-code" ? { implementation: implementation.ref, tests: testReceiptRef, review: buildReview.resultRef } : {}),
+          },
+          ...(stage === "build-code" ? {
+            acceptance_coverage: {
+              snapshot_tree: buildSnapshot.tree,
+              accepted_criterion_ids: ["AC-001"],
+              items: [{
+                acceptance_criterion_id: "AC-001",
+                status: "covered",
+                evidence_refs: [buildProof],
+                scenario: "stage reflection build-code execution",
+                oracle: "implementation, tests, and review are current",
+                actual_outcome: "stage reflection build-code passed",
+                coverage_limits: "fixture only",
+                implementation_anchor: { id: "reflection-implementation", path: "src/app.txt", start_line: 1, end_line: 1, role: "implementation" },
+                verification_anchor: { id: "reflection-verification", path: "tasks.md", start_line: 1, end_line: 1, role: "verification" },
+              }],
+            },
+          } : {}),
+        })),
+      ]));
       const services = { stageReflectionExecutor: reflectionExecutorFactory({ confirmationRef: confirmed.ref }) };
       const results = [];
-      results.push(await invoke(["run", "--stage=make-decision", "--project=ReflectionReal", "--task=official-real-task"], services));
-      results.push(await invoke(["run", "--stage=build-spec", "--project=ReflectionReal", "--task=official-real-task", `--input=${buildSpecInputPath}`], services));
-      results.push(await invoke(["run", "--stage=build-plan", "--project=ReflectionReal", "--task=official-real-task"], services));
-      results.push(await invoke(["run", "--stage=build-code", "--project=ReflectionReal", "--task=official-real-task"], services));
-      results.push(await invoke(["run", "--stage=verify-code", "--project=ReflectionReal", "--task=official-real-task"], services));
+      for (const stage of stages) {
+        results.push(await invoke(["run", `--stage=${stage}`, "--project=ReflectionReal", "--task=official-real-task", `--input=${stageInputPaths[stage]}`], services));
+      }
 
       expect(results).toHaveLength(5);
       expect(results[1]).toMatchObject({ stage: "build-spec", stage_outcome_status: "completed" });
-      expect(results[0]).toMatchObject({ stage: "make-decision", stage_outcome_status: "unavailable" });
+      expect(results[0]).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed" });
       expect(results[4]).toMatchObject({ stage: "verify-code", stage_outcome_status: "unavailable" });
       expect(results[4].stage_reflection).toMatchObject({ status: "failed", reflection_status: "failed", persisted: true });
 

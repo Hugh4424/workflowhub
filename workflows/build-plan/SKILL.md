@@ -25,7 +25,7 @@ continues without guessing.
 
 本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。
 
-阶段入口收到明确的 project/task context 时，会自动把当前已登记会话绑定到这个 task；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一绑定。绑定后下面的命令自动使用这个 task，不再手填 task id。一个会话只允许绑定一个 task，换 task 必须开新会话。
+阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一登记。同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验；旧 task context 只读保留，不会和新 task 的事件混在一起。完成选择后，下面的事件命令可以省略 task id；未登记的 task id 仍直接失败。
 
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>

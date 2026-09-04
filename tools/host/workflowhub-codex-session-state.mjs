@@ -269,7 +269,7 @@ function codexConversationMessage(outer, lineIndex) {
   });
 }
 
-function authenticateSpecClarifyTranscript(session, clarify) {
+function authenticateSpecClarifyTranscript(session, taskId, clarify) {
   const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: clarify?.lifecycle_rounds });
   if (!lifecycle.ok) throw new Error(`spec-clarify lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
   if (!session.transcript_path || looksLikeDshTranscriptPath(session.transcript_path)) {
@@ -278,7 +278,7 @@ function authenticateSpecClarifyTranscript(session, clarify) {
   let raw;
   try { raw = readFileSync(session.transcript_path, "utf8"); }
   catch (error) { throw new Error(`spec-clarify registered transcript is unreadable: ${error.message}`); }
-  const boundAt = session.task_binding?.bound_at_ms;
+  const boundAt = selectedSessionTaskBinding(session, taskId)?.bound_at_ms;
   if (!Number.isSafeInteger(boundAt)) throw new Error("spec-clarify requires the current bound task session");
   const messages = raw.split(/\r?\n/).map((line, index) => {
     if (!line.trim()) return null;
@@ -308,7 +308,8 @@ function authenticateSpecClarifyTranscript(session, clarify) {
       reply_occurred_at_ms: replyMessage.occurred_at_ms,
     });
   });
-  const matchingSkills = session.events.filter((event) => event.stage === "build-spec"
+  const matchingSkills = session.events.filter((event) => event.task_id === taskId
+    && event.stage === "build-spec"
     && event.subject_kind === "skill" && event.subject_id === "spec-clarify"
     && event.status === "completed" && event.trigger === true && event.executed === true
     && event.started_at_ms <= rounds[0].ask_occurred_at_ms
@@ -402,6 +403,10 @@ export function registerCodexSession({ sessionId, transcriptPath, cwd = process.
     code_review_by_task_stage: existing?.code_review_by_task_stage && typeof existing.code_review_by_task_stage === "object" ? existing.code_review_by_task_stage : {},
     spec_clarify_by_task_stage: existing?.spec_clarify_by_task_stage && typeof existing.spec_clarify_by_task_stage === "object" ? existing.spec_clarify_by_task_stage : {},
     task_binding: existing?.task_binding ?? null,
+    task_bindings: existing?.task_bindings && typeof existing.task_bindings === "object" && !Array.isArray(existing.task_bindings)
+      ? existing.task_bindings
+      : {},
+    active_task_id: existing?.active_task_id ?? existing?.task_binding?.task_id ?? null,
   };
   const sessions = state.sessions.filter((entry) => entry.session_id !== id);
   sessions.push(record);
@@ -414,17 +419,21 @@ export function bindCodexSessionTask({ projectName, taskId, taskPath, cwd = proc
   const task = safeId(taskId, "task_id");
   const path = boundTaskPath(taskPath);
   const current = sessionForMutation(cwd, sessionId);
-  const previous = current.session.task_binding;
+  const bindings = sessionTaskBindings(current.session);
+  const previous = bindings.get(task) ?? null;
   if (previous) {
     if (previous.task_id !== task || previous.project_name !== project) {
-      throw new Error("cannot switch the current WorkflowHub task inside one Codex session; start a fresh session for another task");
+      throw new Error("current WorkflowHub task context identity does not match the requested task");
     }
     if (previous.task_path !== path) throw new Error("current WorkflowHub task binding path does not match the requested task");
     const frozen = frozenRequirementMessages(previous.requirement_messages);
     if (!Array.isArray(previous.requirement_messages)) {
       previous.requirement_messages = snapshotOriginalRequirementMessages(current.session.transcript_path, previous.bound_at_ms);
+      current.session.task_bindings = Object.fromEntries(bindings);
+      current.session.active_task_id = task;
+      current.session.task_binding = previous;
       const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
-      return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: statePath });
+      return Object.freeze({ session_id: current.session.session_id, status: "already_bound", active_task_id: task, task_binding: { ...previous }, state_path: statePath });
     }
     if (frozen.length !== previous.requirement_messages.length) throw new Error("current WorkflowHub task requirement snapshot is invalid");
     // Repair an empty snapshot that predates transcript availability: the
@@ -437,23 +446,40 @@ export function bindCodexSessionTask({ projectName, taskId, taskPath, cwd = proc
       const repaired = snapshotOriginalRequirementMessages(current.session.transcript_path, previous.bound_at_ms);
       if (repaired.length > 0) {
         previous.requirement_messages = repaired;
+        current.session.task_bindings = Object.fromEntries(bindings);
+        current.session.active_task_id = task;
+        current.session.task_binding = previous;
         const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
-        return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: statePath });
+        return Object.freeze({ session_id: current.session.session_id, status: "already_bound", active_task_id: task, task_binding: { ...previous }, state_path: statePath });
       }
     }
-    return Object.freeze({ session_id: current.session.session_id, status: "already_bound", task_binding: { ...previous }, state_path: current.state_path });
+    current.session.task_bindings = Object.fromEntries(bindings);
+    current.session.active_task_id = task;
+    current.session.task_binding = previous;
+    const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
+    return Object.freeze({ session_id: current.session.session_id, status: "already_bound", active_task_id: task, task_binding: { ...previous }, state_path: statePath });
   }
   const bound = nowMs(boundAtMs);
-  current.session.task_binding = {
+  const binding = {
     project_name: project,
     task_id: task,
     task_path: path,
     bound_at_ms: bound,
     requirement_messages: snapshotOriginalRequirementMessages(current.session.transcript_path, bound),
   };
-  current.session.last_seen_at_ms = current.session.task_binding.bound_at_ms;
+  bindings.set(task, binding);
+  // Keep the legacy single-binding field as a mirror of the active binding.
+  // Older WorkflowHub hooks do not understand task_bindings/active_task_id
+  // and rewrite the session from this field only.  Mirroring the selection
+  // keeps a task selected when a session was opened from an older checkout,
+  // while task_bindings still retains the explicit multi-task history for
+  // current hosts.
+  current.session.task_binding = binding;
+  current.session.task_bindings = Object.fromEntries(bindings);
+  current.session.active_task_id = task;
+  current.session.last_seen_at_ms = binding.bound_at_ms;
   const statePath = writeState(cwd, current.state, { sessionId: current.session.session_id });
-  return Object.freeze({ session_id: current.session.session_id, status: "bound", task_binding: { ...current.session.task_binding }, state_path: statePath });
+  return Object.freeze({ session_id: current.session.session_id, status: "bound", active_task_id: task, task_binding: { ...binding }, state_path: statePath });
 }
 
 export function endCodexSession({ sessionId, cwd = process.cwd(), endedAtMs = Date.now() } = {}) {
@@ -488,6 +514,7 @@ export function readCurrentCodexSession({ cwd = process.cwd(), stage = null, ses
   if (stage !== null && !STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (result.status !== "present") return Object.freeze({ status: result.status, state_path: result.state_path });
   const session = result.session;
+  const activeTaskBinding = selectedSessionTaskBinding(session);
   const events = stage === null ? session.events : session.events.filter((entry) => entry.stage === stage);
   return Object.freeze({
     status: "present",
@@ -496,25 +523,28 @@ export function readCurrentCodexSession({ cwd = process.cwd(), stage = null, ses
     session_id: session.session_id,
     transcript_path: session.transcript_path,
     model: session.model ?? null,
-    task_binding: session.task_binding ?? null,
+    task_binding: activeTaskBinding ?? session.task_binding ?? null,
+    task_bindings: Object.fromEntries(sessionTaskBindings(session)),
+    active_task_id: activeTaskBinding?.task_id ?? session.active_task_id ?? session.task_binding?.task_id ?? null,
     events: events.map((entry) => Object.freeze({ ...entry })),
     spec_analyze: session.spec_analyze,
     spec_analyze_by_task: session.spec_analyze_by_task ?? {},
     spec_analyze_by_task_stage: session.spec_analyze_by_task_stage ?? {},
     code_review_by_task_stage: session.code_review_by_task_stage ?? {},
-    spec_clarify: stage === null ? null : session.spec_clarify_by_task_stage?.[session.task_binding?.task_id]?.[stage] ?? null,
+    spec_clarify_by_task_stage: session.spec_clarify_by_task_stage ?? {},
+    spec_clarify: stage === null ? null : session.spec_clarify_by_task_stage?.[activeTaskBinding?.task_id ?? session.task_binding?.task_id]?.[stage] ?? null,
   });
 }
 
 function resolveSessionTaskId(session, taskId, { allowUnbound = false } = {}) {
   const requested = taskId === null || taskId === undefined ? null : safeId(taskId, "task_id");
-  const bound = session?.task_binding?.task_id ? safeId(session.task_binding.task_id, "task_binding.task_id") : null;
-  if (!bound) {
+  const binding = selectedSessionTaskBinding(session, requested);
+  if (!binding) {
     if (allowUnbound) return null;
+    if (requested) throw new Error(`requested task_id ${requested} has no active WorkflowHub task context; select the task through the authenticated stage entry first`);
     throw new Error("current WorkflowHub session has no active task binding; bootstrap the task in this session first");
   }
-  if (requested && requested !== bound) throw new Error(`requested task_id ${requested} does not match the current WorkflowHub task binding ${bound} for ${session?.cwd ?? "unknown cwd"}`);
-  return bound;
+  return binding.task_id;
 }
 
 function eventId(sessionId, taskId, stage, subjectKind, subjectId, startedAtMs, sequence) {
@@ -526,6 +556,27 @@ function sessionForMutation(cwd, sessionId = null) {
   const result = currentSession(cwd, id);
   if (result.status !== "present") throw new Error(`current WorkflowHub session is ${result.status}`);
   return { state: result.state, session: result.session, state_path: result.state_path };
+}
+
+function sessionTaskBindings(session) {
+  const bindings = new Map();
+  const add = (binding) => {
+    if (!binding || typeof binding !== "object" || Array.isArray(binding)) return;
+    if (typeof binding.task_id !== "string" || !SAFE_ID.test(binding.task_id)) return;
+    bindings.set(binding.task_id, binding);
+  };
+  add(session?.task_binding);
+  if (session?.task_bindings && typeof session.task_bindings === "object" && !Array.isArray(session.task_bindings)) {
+    for (const binding of Object.values(session.task_bindings)) add(binding);
+  }
+  return bindings;
+}
+
+function selectedSessionTaskBinding(session, taskId = null) {
+  const requested = taskId === null || taskId === undefined ? null : safeId(taskId, "task_id");
+  const selected = requested ?? session?.active_task_id ?? session?.task_binding?.task_id ?? null;
+  if (!selected) return null;
+  return sessionTaskBindings(session).get(selected) ?? null;
 }
 
 function loadStageSequenceManifest(cwd, stage) {
@@ -613,7 +664,7 @@ function currentStageEvents(events, stage, manifest) {
   });
 }
 
-function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parentSubjectId = null) {
+function preflightStartEvent(current, taskId, cwd, stage, subjectKind, subjectId, parentSubjectId = null) {
   const manifest = loadStageSequenceManifest(cwd, stage);
   const skillManifest = loadStageSkillDependencyManifest(cwd, stage);
   if (subjectKind === "skill" && skillManifest
@@ -621,7 +672,10 @@ function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parent
     throw new Error(`${stage} skill ${subjectId} is not declared`);
   }
   if (!manifest) return { parentSubjectId: null, restartsStage: false };
-  const events = current.session.events;
+  // A Codex session may process several tasks sequentially.  Sequence and
+  // restart checks must see only the selected task; an old task's open step
+  // or completed dependency is not evidence for this task.
+  const events = current.session.events.filter((entry) => entry.task_id === taskId);
   const restartFrontier = stageRestartFrontier(events, stage, manifest);
   const projectedEvents = currentStageEvents(events, stage, manifest);
   const completedSteps = events
@@ -678,7 +732,7 @@ export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subj
   const current = sessionForMutation(cwd, sessionId);
   const task = resolveSessionTaskId(current.session, taskId);
   const started = nowMs(startedAtMs);
-  const sequenceBinding = preflightStartEvent(current, cwd, stage, subjectKind, id, parentSubjectId);
+  const sequenceBinding = preflightStartEvent(current, task, cwd, stage, subjectKind, id, parentSubjectId);
   if (sequenceBinding.restartsStage && current.session.spec_analyze_by_task_stage?.[task]?.[stage] !== undefined) {
     current.session.spec_analyze_by_task_stage[task][stage] = null;
   }
@@ -768,7 +822,7 @@ export function recordCodexSessionSpecAnalyze({ taskId = null, stage, value, cwd
         || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")) {
       throw new TypeError("spec-clarify authentication requires snapshot_tree and material_revision");
     }
-    const transcript = authenticateSpecClarifyTranscript(current.session, clarify);
+    const transcript = authenticateSpecClarifyTranscript(current.session, task, clarify);
     authenticatedClarify = Object.freeze({
       trigger: true,
       reason: text(clarify.reason, "spec-clarify reason"),
@@ -820,7 +874,7 @@ export function recordCodexSessionCodeReview({ taskId = null, stage = "verify-co
   }
   if (value.quality_review_ref !== undefined
       && (typeof value.quality_review_ref !== "string"
-        || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(value.quality_review_ref)
+        || !/^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/.test(value.quality_review_ref)
         || typeof value.quality_review_hash !== "string"
         || !/^[a-f0-9]{64}$/.test(value.quality_review_hash))) {
     throw new TypeError("code_review quality review binding is invalid");
@@ -845,15 +899,16 @@ export function recordCodexSessionCodeReview({ taskId = null, stage = "verify-co
 export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stage, sessionId = null } = {}) {
   const current = readCurrentCodexSession({ cwd, stage, sessionId });
   if (current.status !== "present") return current;
-  if (taskId && current.task_binding?.task_id && current.task_binding.task_id !== taskId) {
+  const binding = selectedSessionTaskBinding(current, taskId);
+  if (taskId && !binding) {
     return Object.freeze({
       status: "unavailable",
       state_path: current.state_path,
       session_id: current.session_id,
-      reason: "session_task_binding_mismatch",
+      reason: "session_task_context_missing",
     });
   }
-  const task = resolveSessionTaskId(current, taskId, { allowUnbound: true });
+  const task = binding?.task_id ?? resolveSessionTaskId(current, null, { allowUnbound: true });
   if (!task) return Object.freeze({ status: "unbound", state_path: current.state_path, session_id: current.session_id });
   const taskEvents = current.events.filter((entry) => entry.task_id === task);
   const manifest = stage ? loadStageSequenceManifest(cwd, stage) : null;
@@ -951,9 +1006,9 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     status_value: complete ? "completed" : "incomplete",
     events,
     spec_analyze: specAnalyze,
-    spec_clarify: stage ? current.spec_clarify ?? null : null,
+    spec_clarify: stage ? current.spec_clarify_by_task_stage?.[task]?.[stage] ?? null : null,
     ...(stage === "verify-code" ? { code_review: codeReview } : {}),
-    requirement_messages: frozenRequirementMessages(current.task_binding?.requirement_messages),
+    requirement_messages: frozenRequirementMessages(binding?.requirement_messages ?? current.task_binding?.requirement_messages),
     ...(rejectedEvents.length > 0 ? {
       rejected_events: rejectedEvents.map((entry) => ({
         event_id: entry.event_id,

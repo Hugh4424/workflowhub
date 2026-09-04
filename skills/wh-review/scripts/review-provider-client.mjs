@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
+const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = 120_000;
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
@@ -40,16 +41,43 @@ function safeBrokerError(value) {
   return failure(error.code, error.message);
 }
 
-function execute(command, args) {
+function execute(command, args, { timeoutMs = DEFAULT_REVIEW_BROKER_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); let stdout = "", stderr = ""; let settled = false;
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      // A timed-out broker must not leave its provider descendants behind.
+      // Put the broker in its own process group so the bounded termination
+      // path can reap the whole invocation on POSIX hosts.
+      detached: process.platform !== "win32",
+    });
+    let stdout = "", stderr = "", settled = false, timedOut = false, timeoutTimer = null, killTimer = null;
+    const terminate = (signal) => {
+      if (process.platform !== "win32" && Number.isInteger(child.pid)) {
+        try { process.kill(-child.pid, signal); return; } catch { /* fall through to the direct child */ }
+      }
+      try { child.kill(signal); } catch { /* the child may already be gone */ }
+    };
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+      if (killTimer !== null) clearTimeout(killTimer);
+      resolve(value);
+    };
     child.stdout.on("data", (bytes) => { stdout += bytes; }); child.stderr.on("data", (bytes) => { stderr += bytes; });
     child.once("error", (error) => {
       if (settled) return;
-      settled = true;
-      resolve({ exitCode: null, stdout, stderr, spawnError: { code: error?.code ?? "SPAWN_ERROR" } });
+      finish({ exitCode: null, stdout, stderr, spawnError: { code: error?.code ?? "SPAWN_ERROR" }, timedOut });
     });
-    child.once("close", (exitCode) => { if (settled) return; settled = true; resolve({ exitCode, stdout, stderr }); });
+    child.once("close", (exitCode) => finish({ exitCode, stdout, stderr, timedOut }));
+    timeoutTimer = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      terminate("SIGTERM");
+      killTimer = setTimeout(() => {
+        if (!settled) terminate("SIGKILL");
+      }, 250);
+    }, timeoutMs);
   });
 }
 
@@ -257,6 +285,7 @@ function validateDirectionFlow(value) {
 }
 
 function parsePublicRun(wire) {
+  if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
   let result = null;
   try { result = JSON.parse(wire?.stdout ?? ""); }
   catch {
@@ -284,9 +313,11 @@ function parsePublicRun(wire) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null } = {}) {
+  constructor({ command = null, config = null, invoke = null, timeoutMs = DEFAULT_REVIEW_BROKER_TIMEOUT_MS } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new TypeError("timeoutMs must be a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
+    this.timeoutMs = timeoutMs;
   }
 
   async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true } = {}) {
@@ -377,12 +408,12 @@ export class ReviewProviderClient {
         writeFileSync(requestPath, `${JSON.stringify(request)}\n`, { mode: 0o600 }); writeFileSync(attachmentsPath, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
         args = [...this.command.slice(1), "run", `--config=${this.config}`, `--request=${requestPath}`, `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
       } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported public broker command: ${command}`);
-      return await execute(this.command[0], args);
+      return await execute(this.command[0], args, { timeoutMs: this.timeoutMs });
     } catch (error) {
       // Local filesystem, spawn, and configuration failures can include host
       // paths. Preserve only a safe typed diagnostic; do not flatten every
       // invocation problem into a protocol mismatch.
-      if (error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
+      if (error?.code === "PROCESS_TIMEOUT" || error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
       throw failure("BROKER_INVOCATION_FAILED", `3rd-review public ${command} could not be invoked`);
     } finally {
       if (temporary !== null) {

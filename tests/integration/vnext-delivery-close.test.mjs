@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -111,7 +111,6 @@ function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) 
   kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-leaf.json", acceptanceLeafRaw);
   kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-proof.json", "ac-001-proof\n");
   publishVerifySummary(task.taskPath, {
-    schema_version: "quality-verify.v1",
     status: "passed",
     source_digest: sourceDigest,
     material_digest: materialRevision.slice("revision-".length),
@@ -310,6 +309,26 @@ describe("vNext formal delivery close", () => {
     });
   });
 
+  it("materializes a dirty delivery snapshot for a fresh close process", () => {
+    const state = fixture();
+    const result = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    });
+    const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "GIT_ALTERNATE_OBJECT_DIRECTORIES"));
+    const check = spawnSync("git", ["cat-file", "-e", `${result.plan.delivery.task_commit}^{commit}`], {
+      cwd: state.repo,
+      env: cleanEnv,
+      encoding: "utf8",
+    });
+    expect(check.status).toBe(0);
+  });
+
   it("rejects execution sidecars before checking source worktree cleanliness", () => {
     const state = fixture();
     mkdirSync(join(state.candidate.worktreeRoot, "quality", "tests"), { recursive: true });
@@ -404,7 +423,7 @@ describe("vNext formal delivery close", () => {
     ]));
   });
 
-  it("rejects duplicate current quality facts instead of selecting by timestamp", () => {
+  it("selects the uniquely latest current quality fact after a retry", () => {
     const state = fixture({ duplicateHumanConfirmation: true });
     const result = prepareDeliveryClosePlan({
       task: state.task,
@@ -415,7 +434,7 @@ describe("vNext formal delivery close", () => {
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     });
-    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+    expect(result.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/current verify-code quality facts conflict: human_confirmation/),
     ]));
   });
@@ -570,7 +589,7 @@ describe("vNext formal delivery close", () => {
   });
 
   it.each(["code_review"])(
-    "rejects close when the formal code-review fact is missing: %s",
+    "keeps close preparation usable when the formal code-review fact is missing: %s",
     (subject) => {
       const state = fixture({ omitSubjects: [subject] });
       const result = prepareDeliveryClosePlan({
@@ -585,6 +604,8 @@ describe("vNext formal delivery close", () => {
       expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
         expect.stringMatching(new RegExp(subject)),
       ]));
+      expect(result.plan.delivery.quality_status).toBe("incomplete");
+      expect(result.plan.delivery.close_mode).toBe("ordinary");
     },
   );
 

@@ -1,0 +1,45 @@
+{
+  "schema_version": "protocol-error-fixture.v1",
+  "entries": [
+    {
+      "entry_id": "b8dbb5a0-7289-465d-a98b-4d252927addc",
+      "source": "workflowhub/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "stage",
+      "class_id": "verify_outcome_unbound_review",
+      "error": "verify-code quality_review is not bound to the dsh-code-review stage outcome"
+    },
+    {
+      "entry_id": "29aea205-9fe0-4456-a3e9-f6475153a9ee",
+      "source": "workflowhub/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "stage",
+      "class_id": "verify_review_without_outcome",
+      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    },
+    {
+      "entry_id": "a4a06292-c12f-4bdc-9bfd-646e6169bbab",
+      "source": "workflowhub/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "stage",
+      "class_id": "verify_review_without_outcome",
+      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    },
+    {
+      "entry_id": "50d4f9d1-1cf1-401d-b893-d08533b90641",
+      "source": "PaperBuilder/lessons/verify-code.jsonl",
+      "source_line": null,
+      "provenance": "historical lesson entry; source line and source hash unavailable in portable checkout",
+      "stage": "verify-code",
+      "surface": "stage",
+      "class_id": "verify_review_without_outcome",
+      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    }
+  ]
+}

@@ -8,13 +8,15 @@ import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 
 import {
   authenticateStageWriteBoundary,
   bootstrapStage,
   prepareMakeDecisionWorkspace,
 } from "../../runtime/stage/stage-context.mjs";
-import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { authenticateStageOutcomeForProjection, runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { validateStageInvocation } from "../../runtime/stage/stage-handlers.mjs";
 import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
 import {
   validateAcceptanceEvidence,
@@ -25,7 +27,7 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
@@ -35,6 +37,7 @@ import { isDshTranscriptPath, normalizeDshTranscript, readDshTranscriptText } fr
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { bindCodexSessionTask, buildWorkflowHubSessionInput, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 import { publishCurrentWorkflowHubSession } from "../host/workflowhub-stage-agent-bridge.mjs";
+import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -45,12 +48,22 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
 const CODEX_SESSION_ID = /^[A-Za-z0-9._:-]{8,160}$/;
+const WORKFLOW_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 
-function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
+export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = process.env) {
   const hasProject = typeof values.project === "string" && values.project.trim() !== "";
   const hasTask = typeof values.task === "string" && values.task.trim() !== "";
   if (hasProject !== hasTask) throw new TypeError("--project and --task must be supplied together, or omitted inside a bound WorkflowHub session");
-  const current = readCurrentCodexSession({ cwd, sessionId: currentCodexSessionId(process.env) });
+  const sessionId = currentCodexSessionId(env);
+  // Explicit identity is already authenticated by the TaskHandle/workspace
+  // boundary.  Without a session id there is no session to select, so do not
+  // scan every host session and turn unrelated parallel sessions into a
+  // blocker.  A supplied exact session id is still inspected to prevent an
+  // explicit temporary CLI task from replacing that session's selected task.
+  if (hasProject && !sessionId) {
+    return Object.freeze({ project: values.project, task: values.task, taskPath: undefined, source: "explicit" });
+  }
+  const current = readCurrentCodexSession({ cwd, sessionId });
   if (current.status === "conflict") throw new Error("current WorkflowHub session has multiple active Codex sessions");
   const binding = current.status === "present" ? current.task_binding : null;
   if (binding) {
@@ -79,7 +92,7 @@ function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
 function bindExplicitWorkflowHubIdentity(context, cwd) {
   const sessionId = currentCodexSessionId(process.env);
   const current = readCurrentCodexSession({ cwd, sessionId });
-  if (current.status !== "present" || current.task_binding) return null;
+  if (current.status !== "present") return null;
   return bindCodexSessionTask({
     projectName: context.identity.projectName,
     taskId: context.identity.taskId,
@@ -283,7 +296,7 @@ export function resolveRequirementSource({ context, task_id, run_id, attempt_id,
       session_id: sessionRef,
       source_format: "jsonl",
       source_version: "v1",
-      cli_version: env.DSH_CLI_VERSION ?? "dsh-host",
+      cli_version: env.DSH_CLI_VERSION?.trim() || "dsh-host",
       adapter_version: "dsh-transcript-adapter.v1",
       capabilities: ["requirement_message"],
       reader: createTranscriptSourceReader(() => normalizeDshTranscript(readDshTranscriptText(dsh.target), {
@@ -307,7 +320,7 @@ export function resolveRequirementSource({ context, task_id, run_id, attempt_id,
     session_id: safeRolloutId(located.threadId),
     source_format: "jsonl",
     source_version: "v1",
-    cli_version: env.CODEX_CLI_VERSION ?? "codex-host",
+    cli_version: env.CODEX_CLI_VERSION?.trim() || "codex-host",
     adapter_version: "codex-rollout-adapter.v1",
       capabilities: ["requirement_message"],
     reader: createTranscriptSourceReader(() => normalizeCodexRequirementTranscript(readUtf8Lines(located.target), {
@@ -351,12 +364,23 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   }
   const stageOutcome = stage === "verify-code" ? session.code_review : session.spec_analyze;
   if (!stageOutcome || typeof stageOutcome !== "object" || Array.isArray(stageOutcome)) return boundInput;
+  // The host handoff can outlive a source edit.  Include the runtime's
+  // current source/material identity in the automatic attempt key so a
+  // rerun after code changes gets a fresh immutable attempt instead of
+  // replaying the old attempt id with different authenticated bytes.
+  const currentSnapshot = context.kernel.currentVNextSnapshot();
+  const currentMaterialRevision = context.kernel.currentVNextMaterialRevision();
   const attemptId = typeof boundInput?.attempt_id === "string" && boundInput.attempt_id.trim()
     ? boundInput.attempt_id
     : `attempt-${sha256(JSON.stringify({
       task_id: taskId,
       stage,
       workflow_run_id: context?.workflowRunId ?? null,
+      snapshot_tree: currentSnapshot.tree,
+      material_revision: currentMaterialRevision,
+      host: session.host,
+      source_id: session.source_id,
+      source_family: session.source_family,
       session_id: session.session_id,
       source_ref: session.source_ref,
       events: session.events,
@@ -372,25 +396,34 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
       cwd,
     }), { stage })
     : null;
-  const published = publishCurrentWorkflowHubSession({
-    context,
-    stage,
-    attemptId,
-    requirementAuthentication,
-    input: {
-      session: {
-        host: session.host,
-        source_id: session.source_id,
-        source_family: session.source_family,
-        session_id: session.session_id,
-        task_id: session.task_id,
-        source_ref: session.source_ref,
-        status: session.status_value,
-        events: session.events,
-        ...(stage === "verify-code" ? { code_review: session.code_review } : { spec_analyze: session.spec_analyze }),
+  let published;
+  try {
+    published = publishCurrentWorkflowHubSession({
+      context,
+      stage,
+      attemptId,
+      requirementAuthentication,
+      input: {
+        session: {
+          host: session.host,
+          source_id: session.source_id,
+          source_family: session.source_family,
+          session_id: session.session_id,
+          task_id: session.task_id,
+          source_ref: session.source_ref,
+          status: session.status_value,
+          events: session.events,
+          ...(stage === "verify-code" ? { code_review: session.code_review } : { spec_analyze: session.spec_analyze }),
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    // A host session can outlive the material revision it reviewed.  Do not
+    // turn that stale sidecar into a new current outcome; the official route
+    // will keep the existing missing/unavailable quality fact visible.
+    if (error?.code === "BRIDGE_STALE_STAGE_OUTCOME") return boundInput;
+    throw error;
+  }
   return {
     ...boundInput,
     attempt_id: attemptId,
@@ -460,6 +493,20 @@ function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot
   );
 }
 function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials }) {
+  const stageOutcomeRefs = Object.fromEntries(WORKFLOW_STAGES.map((stage) => [
+    stage,
+    context.task.listCanonicalStageOutcomeRefs(stage),
+  ]));
+  const stageOutcomeStatuses = deriveStageOutcomeStatuses({
+    task_id: context.identity.taskId,
+    read: context.task.readRecord,
+    stage_outcome_refs: stageOutcomeRefs,
+    snapshot_tree: currentSnapshot.tree,
+    material_revision: materialRevision,
+    material_scope_revisions: stageMaterialScopeRevisions(materials),
+    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+    authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
+  });
   return deriveCurrentProductRelease({
     task_id: context.identity.taskId,
     read: context.task.readRecord,
@@ -467,9 +514,10 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     snapshot_tree: currentSnapshot?.tree,
     material_revision: materialRevision,
     material_scope_revisions: stageMaterialScopeRevisions(materials),
-    snapshot_root: context.workspace?.worktreeRoot ?? null,
+    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
     expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
     evaluate_freshness: evaluateFactFreshness,
+    stage_outcome_statuses: stageOutcomeStatuses,
   });
 }
 
@@ -557,10 +605,24 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect", "confirm", "authorize-operation"]).has(command)) {
+  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "capture-evidence", "preflight", "run", "reflect", "confirm", "authorize-operation"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
+}
+
+function preflightDiagnostic(error) {
+  if (error?.diagnostic && typeof error.diagnostic.path === "string") return error.diagnostic;
+  return {
+    path: "$",
+    expected: "valid stage payload",
+    actual: error?.message ?? String(error),
+  };
+}
+
+function runPreflight(stage, input) {
+  validateStageInvocation(stage, input);
+  return { status: "valid", diagnostics: [] };
 }
 
 function privateEvidenceCaptureInput(input, worktreeRoot, now = () => new Date()) {
@@ -607,6 +669,20 @@ export function stageReflectionPublication(services = {}) {
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
+  if (command === "preflight" || (command === "run" && values.action === "preflight")) {
+    const prefix = command === "run" ? "run:" : "";
+    const allowed = new Set(command === "run" ? ["action", "stage", "input"] : ["stage", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError(`${prefix}preflight accepts only --stage and --input`);
+    if (!new Set(["build-code", "verify-code"]).has(values.stage)) throw new TypeError(`${prefix}preflight requires --stage=build-code|verify-code`);
+    if (typeof values.input !== "string" || values.input.trim() === "") throw new TypeError(`${prefix}preflight requires --input=<payload.json>`);
+    const payload = JSON.parse(readFileSync(values.input, "utf8"));
+    try {
+      return runPreflight(values.stage, payload);
+    } catch (error) {
+      if (error?.preflight_protocol === true) return { status: "protocol_invalid", diagnostics: [preflightDiagnostic(error)] };
+      throw error;
+    }
+  }
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
@@ -629,6 +705,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (!new Set(["commit", "push", "merge", "archive", "cleanup"]).has(values.operation)) throw new TypeError("authorize-operation requires --operation=commit|push|merge|archive|cleanup");
     if (typeof values["subject-ref"] !== "string" || values["subject-ref"].trim() === "") throw new TypeError("authorize-operation requires --subject-ref=<quality/confirmations/<sha256>.json>");
   }
+  // Runtime quiescing is a hard launch boundary.  Check it before resolving
+  // session identity so an unrelated/stale host session cannot mask the
+  // authoritative refusal with a misleading multi-session binding error.
+  const launchHome = homedir();
+  const launchEnv = process.env;
+  const launchStorageRoot = resolveStorageRoot({ env: launchEnv, home: launchHome });
+  assertRuntimeAuthority(launchStorageRoot, {
+    home: launchHome,
+    expectedEpoch: launchEnv.WORKFLOWHUB_CUTOVER_EPOCH,
+  });
   const identity = resolveWorkflowHubIdentity(values, cwd);
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
@@ -638,6 +724,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     runnerRoot: RUNNER_ROOT,
     readOnly: command === "status",
   });
+  // An explicit CLI identity authenticates the requested TaskHandle, but it
+  // is not a session-selector.  Only task-bootstrap may select/rebind the
+  // current host session; otherwise an isolated runner/test child inheriting
+  // CODEX_SESSION_ID could silently replace the active task binding.
   if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
   const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect"]).has(command)
       && values.input !== undefined
@@ -698,7 +788,22 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         : { status: "unknown", authenticated: false };
       observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
     }
-    const quality = deriveStageCompletion(values.stage, observations);
+    const stageOutcomeStatuses = current
+      ? deriveStageOutcomeStatuses({
+          task_id: context.identity.taskId,
+          read: context.task.readRecord,
+          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
+          snapshot_tree: current.tree,
+          material_revision: materialRevision,
+          material_scope_revisions: stageMaterialScopeRevisions(materials),
+          snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
+        })
+      : null;
+    const quality = deriveStageCompletion(values.stage, observations, {
+      requireStageOutcome: stageOutcomeStatuses !== null,
+      stageOutcomeStatus: stageOutcomeStatuses?.[values.stage] ?? "unavailable",
+    });
     const progression = deriveStageProgress(values.stage, observations, materials);
     const productRelease = current
       ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials })
@@ -819,6 +924,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(suppliedInput.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
+    // Missing, stale, or unavailable upstream quality facts remain visible in
+    // quality/product-release projections, but never become a work permit.
+    // The current stage is allowed to publish its own truthful incomplete
+    // result so the same task can repair or add evidence without replaying
+    // unrelated stages.
     const controlledInput = bindCurrentSessionOutcome({
       context,
       stage: values.stage,
@@ -863,7 +973,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
       actions: {
         doctor: ["workspace"],
         status: ["begin", "repair"],
-        run: ["execute", "draft", "reflect"],
+        run: ["execute", "preflight", "draft", "reflect"],
         review: ["risk"],
         verify: ["execute"],
         confirm: ["decision"],
@@ -875,12 +985,23 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   const actionArgument = raw.find((item) => item.startsWith("--action="));
   if (!actionArgument) throw new TypeError("public runtime behavior requires --action=<high-level-action>");
   const action = actionArgument.slice("--action=".length);
+  if (behavior === "run" && action === "preflight") {
+    const delegatedArgv = ["preflight", ...raw.filter((item) => item !== actionArgument)];
+    return invokeRuntimeCommand(
+      behavior,
+      Object.freeze({ action, argv: delegatedArgv }),
+      ({ argv: internalArgv }) => delegate(internalArgv, { services, cwd }),
+      { skillBundleContract, runnerContract },
+      "run",
+    );
+  }
   const publicRoute = `${behavior}:${action}`;
   const internalOperation = ({
     "doctor:workspace": "doctor",
     "status:begin": "status",
     "status:repair": "status",
     "run:execute": "run",
+    "run:preflight": "run",
     "run:reflect": "reflect",
     "run:draft": "artifact",
     "review:risk": "review-risk-pause",
@@ -910,8 +1031,21 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   stageRuntimeCliMain().then((result) => {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (result?.status === "valid" && Array.isArray(result.diagnostics) && result.diagnostics.length === 0) {
+      process.exitCode = 0;
+      return;
+    }
+    const output = result?.status === "protocol_invalid" && Array.isArray(result.diagnostics)
+      ? result.diagnostics
+      : result;
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    process.exitCode = result?.status === "protocol_invalid" ? 2 : 0;
   }).catch((error) => {
+    if (error?.preflight_protocol === true && error?.diagnostic) {
+      process.stdout.write(`${JSON.stringify([error.diagnostic], null, 2)}\n`);
+      process.exitCode = 2;
+      return;
+    }
     process.stderr.write(`${error?.stack ?? error}\n`);
     process.exitCode = 1;
   });

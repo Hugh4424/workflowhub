@@ -17,14 +17,14 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { completeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const projectName = "WorkflowHub";
 const taskId = "interrupted-same-task";
 const materialFiles = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const runtimeCli = fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url));
-const materials = canonicalStageMaterials();
+const materials = completeCanonicalStageMaterials();
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
@@ -121,6 +121,32 @@ describe("interrupted same-task recovery", () => {
 
     const runInput = join(firstCall.storageRoot, "build-plan-run.json");
     const reopenedKernel = createTaskKernel(reopened, { workspace: reopenedWorkspace, artifacts: reopenedArtifacts });
+    reopenedKernel.publishHumanConfirmation("make-decision", {
+      decision: "accepted",
+      subject_ref: "fixture/interrupted-make-decision",
+      reply_text: "fixture confirmation for make-decision",
+      step_slug: "approve-decision",
+    });
+    const upstreamOutcomes = {};
+    for (const stage of ["make-decision", "build-spec"]) {
+      const outcome = writeStageOutcomeFixture({
+        task: reopened,
+        kernel: reopenedKernel,
+        artifacts: reopenedArtifacts,
+        workspace: reopenedWorkspace,
+        stage,
+        attemptId: `attempt-interrupted-reopen-${stage}`,
+        workflowRunId: reopenedKernel.deriveStageWorkflowRunId(stage),
+      });
+      upstreamOutcomes[stage] = outcome.ref;
+      const input = join(firstCall.storageRoot, `${stage}-run.json`);
+      writeFileSync(input, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+      const upstreamCall = publicCall(firstCall, [
+        "run", "--action=execute", `--stage=${stage}`, `--project=${projectName}`, `--task=${taskId}`,
+        `--input=${input}`,
+      ]);
+      expect(upstreamCall.status, `${stage}: ${upstreamCall.stdout}\n${upstreamCall.stderr}`).toBe(0);
+    }
     const outcome = writeStageOutcomeFixture({
       task: reopened,
       kernel: reopenedKernel,
@@ -128,6 +154,7 @@ describe("interrupted same-task recovery", () => {
       workspace: reopenedWorkspace,
       stage: "build-plan",
       attemptId: "attempt-interrupted-reopen",
+      workflowRunId: reopenedKernel.deriveStageWorkflowRunId("build-plan"),
     });
     writeFileSync(runInput, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
     const runCall = publicCall(firstCall, [

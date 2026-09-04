@@ -162,6 +162,58 @@ function writeLooseObject(objectDir, format, type, body) {
   return oid;
 }
 
+function repositoryObjectDir(root) {
+  const path = gitText(root, ["rev-parse", "--git-path", "objects"]);
+  mkdirSync(resolve(root, path), { recursive: true });
+  return resolve(root, path);
+}
+
+function readBatchObjects(root, objectIds) {
+  const input = Buffer.from(`${objectIds.join("\n")}\n`);
+  const output = Buffer.from(git(root, ["cat-file", "--batch"], { encoding: "buffer", input }));
+  const objects = [];
+  let offset = 0;
+  for (const objectId of objectIds) {
+    const headerEnd = output.indexOf(0x0a, offset);
+    if (headerEnd < 0) throw new Error(`snapshot object batch is truncated: ${objectId}`);
+    const [returnedId, type, sizeText] = output.subarray(offset, headerEnd).toString("utf8").split(" ");
+    const size = Number(sizeText);
+    if (returnedId !== objectId || !["blob", "tree", "commit", "tag"].includes(type) || !Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`snapshot object batch contains an invalid header: ${objectId}`);
+    }
+    const bodyStart = headerEnd + 1;
+    const bodyEnd = bodyStart + size;
+    if (bodyEnd >= output.length || output[bodyEnd] !== 0x0a) throw new Error(`snapshot object batch is truncated: ${objectId}`);
+    objects.push({ objectId, type, body: output.subarray(bodyStart, bodyEnd) });
+    offset = bodyEnd + 1;
+  }
+  return objects;
+}
+
+/**
+ * Promote one ephemeral snapshot into the repository object database before
+ * any close operation can publish its commit as a branch ref.  Snapshot
+ * capture remains side-effect free for normal evidence callers; close is the
+ * explicit boundary that makes the delivery commit durable across processes.
+ */
+export function materializeGitSnapshot(root, snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || typeof snapshot.commit !== "string") {
+    throw new TypeError("snapshot commit is required for materialization");
+  }
+  const format = objectFormat(root);
+  const commitPattern = format === "sha256" ? /^[a-f0-9]{64}$/ : /^[a-f0-9]{40}$/;
+  if (!commitPattern.test(snapshot.commit)) throw new TypeError("snapshot commit has an invalid object id");
+  ensureGitSnapshotObjectStore(root);
+  const objectIds = [...new Set(gitText(root, ["rev-list", "--objects", "--no-object-names", "--no-walk", snapshot.commit]).split(/\s+/).filter(Boolean))];
+  if (!objectIds.includes(snapshot.commit)) objectIds.unshift(snapshot.commit);
+  const repositoryObjects = repositoryObjectDir(root);
+  for (const { objectId, type, body } of readBatchObjects(root, objectIds)) {
+    const written = writeLooseObject(repositoryObjects, format, type, body);
+    if (written !== objectId) throw new Error(`snapshot object hash mismatch: ${objectId}`);
+  }
+  return snapshot.commit;
+}
+
 function workspacePath(root, path) {
   const absolute = resolve(root, path);
   if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) throw new Error(`Git path escapes workspace: ${path}`);
@@ -439,6 +491,38 @@ export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, task
     && isCurrentMaterialPath(changed[0], taskId)
     && changed[0] === artifactReference(taskId, "tasks.md")
     && isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId);
+}
+
+/**
+ * A stage fact remains current when later workflow material or unrelated
+ * source bytes changed after an authoring stage. The caller supplies the
+ * stage-owned material boundary; implementation stages can keep the stricter
+ * source-bound behavior. This is deliberately a predicate, not a writer or
+ * progression permit.
+ */
+export function isStageMaterialOnlySnapshotDelta(root, expectedTree, actualTree, {
+  taskId = null,
+  downstreamMaterials = [],
+  allowNonMaterialChanges = false,
+} = {}) {
+  if (expectedTree === actualTree) return true;
+  if (typeof root !== "string" || typeof taskId !== "string" || taskId.trim() === ""
+      || !Array.isArray(downstreamMaterials)
+      || downstreamMaterials.some((file) => typeof file !== "string" || file.trim() === "")) return false;
+  ensureGitSnapshotObjectStore(root);
+  let changed;
+  try {
+    changed = gitText(root, ["diff", "--name-only", expectedTree, actualTree, "--"]).split("\n").filter(Boolean);
+  } catch {
+    return false;
+  }
+  const allowed = new Set(downstreamMaterials.map((file) => artifactReference(taskId, file)));
+  return changed.length > 0 && changed.every((path) => {
+    if (allowNonMaterialChanges && !isCurrentMaterialPath(path, taskId)) return true;
+    if (allowed.has(path)) return true;
+    const tasksRef = artifactReference(taskId, "tasks.md");
+    return path === tasksRef && isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId);
+  });
 }
 
 export function taskExecutionRecordOnly(text) {

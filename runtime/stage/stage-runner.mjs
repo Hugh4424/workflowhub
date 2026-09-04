@@ -7,7 +7,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
-import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, deriveStageProgress, isStageSnapshotCurrent, stageMaterialScopeRevision, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
@@ -22,6 +22,8 @@ import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/s
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
 import { isDateTime, normalizeStageReflectionAvailability, publishStageReflectionAvailability, runStageReflection } from "./stage-reflect.mjs";
 import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
+import { classifyProtocolError } from "./protocol-error-whitelist.mjs";
+import { appendTaskFact } from "../task/task-store.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -44,7 +46,10 @@ const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
 const SHA256 = /^[a-f0-9]{64}$/;
+const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
 const REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
+const RESOLVED_CODE_REVIEW_MISSING = /^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/;
 const DEFAULT_REFLECTION_TIMEOUT_MS = 30_000;
 
 export function isStageReflectionRef(value) {
@@ -70,6 +75,31 @@ function outcomeText(value, label) {
 function outcomeHash(value, label) {
   if (!SHA256.test(value ?? "")) throw outcomeError(`${label} must be a sha256`);
   return value;
+}
+
+function validateStageOutcomeProducer(record, stage, { requireSource = false, requireAgentRunBinding = false } = {}) {
+  const producer = outcomeObject(record.producer, `${stage} stage outcome producer`);
+  const kind = outcomeText(producer.kind, `${stage} stage outcome producer.kind`);
+  if (!new Set(["stage-agent", "workflowhub-session"]).has(kind)) {
+    throw outcomeError(`${stage} stage outcome producer.kind is invalid`);
+  }
+  outcomeText(producer.host, `${stage} stage outcome producer.host`);
+  let sourceId = null;
+  let sourceFamily = null;
+  const hasSourceId = producer.source_id !== undefined;
+  const hasSourceFamily = producer.source_family !== undefined;
+  if (requireSource || hasSourceId || hasSourceFamily) {
+    sourceId = outcomeText(producer.source_id, `${stage} stage outcome producer.source_id`);
+    sourceFamily = outcomeText(producer.source_family, `${stage} stage outcome producer.source_family`);
+    if (sourceFamily !== sourceId.split("/")[0]) {
+      throw outcomeError(`${stage} stage outcome producer source identity mismatch`);
+    }
+  }
+  const agentRunId = outcomeText(producer.agent_run_id, `${stage} stage outcome producer.agent_run_id`);
+  if (requireAgentRunBinding && agentRunId !== record.attempt_id) {
+    throw outcomeError(`${stage} stage outcome producer agent run identity mismatch`);
+  }
+  return Object.freeze({ kind, sourceId, sourceFamily, agentRunId });
 }
 
 function outcomeEvidence(ctx, entry, label, binding) {
@@ -296,7 +326,16 @@ function currentMaterialBinding(ctx) {
     }
   });
   const revision = materialRevisionFromValues(values);
-  return { values, revision, hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : createHash("sha256").update(content).digest("hex")])) };
+  const materialScope = STAGE_FACT_MATERIALS[ctx.stage] ?? CURRENT_MATERIAL_FILES;
+  const scopeValues = materialScope.map((file) => values.find(([name]) => name === file) ?? [file, null]);
+  return {
+    values,
+    revision,
+    hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : createHash("sha256").update(content).digest("hex")])),
+    material_scope: [...materialScope],
+    material_scope_revision: stageMaterialScopeRevision(ctx.stage, Object.fromEntries(values)),
+    material_scope_hashes: Object.fromEntries(scopeValues.map(([file, content]) => [file, content === null ? null : createHash("sha256").update(content).digest("hex")])),
+  };
 }
 
 function sameJson(left, right) {
@@ -477,12 +516,19 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   }
   const boundRef = review.quality_review_ref;
   const boundHash = review.quality_review_hash;
+  if (stage === "verify-code" && record.status === "completed"
+      && (typeof boundRef !== "string" || !boundRef.trim() || typeof boundHash !== "string" || !boundHash.trim())) {
+    throw outcomeError("stage outcome code_review requires a complete dsh-code-review ref/hash pair");
+  }
   if ((boundRef === undefined) !== (boundHash === undefined)) {
     throw outcomeError("stage outcome code_review quality_review_ref/hash must be provided together");
   }
   let resolution = codeReviewRepairResolution(result);
   if (boundRef !== undefined) {
-    if (!/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(boundRef)
+    const resultRef = REVIEW_RESULT_REF.test(boundRef);
+    const attemptRef = REVIEW_ATTEMPT_REF.test(boundRef);
+    const allowedRef = resultRef || (record.status !== "completed" && attemptRef);
+    if (!allowedRef
         || !SHA256.test(boundHash)) {
       throw outcomeError("stage outcome code_review quality_review_ref/hash is invalid");
     }
@@ -565,16 +611,29 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   outcomeText(record.attempt_id, "stage outcome attempt_id");
   if (input.attempt_id !== undefined && input.attempt_id !== record.attempt_id) throw outcomeError("stage outcome attempt identity mismatch");
   if (!STAGE_OUTCOME_STATUSES.has(record.status)) throw outcomeError("stage outcome status is invalid");
-  const snapshot = expectedBinding?.snapshot ?? ctx.kernel.currentVNextSnapshot();
+  validateStageOutcomeProducer(record, stage);
+  const currentSnapshot = ctx.kernel.currentVNextSnapshot();
+  const snapshot = expectedBinding?.snapshot ?? (
+    isStageSnapshotCurrent(stage, record.snapshot_tree, currentSnapshot.tree, {
+      snapshotRoot: ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot ?? null,
+      taskId: ctx.identity.taskId,
+    })
+      ? { ...currentSnapshot, tree: record.snapshot_tree }
+      : currentSnapshot
+  );
   if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot_tree is stale");
   const materials = currentMaterialBinding(ctx);
   if (expectedBinding?.materials && (materials.revision !== expectedBinding.materials.revision || !sameJson(materials.hashes, expectedBinding.materials.hashes))) {
     throw outcomeError("current materials changed after stage invocation was claimed");
   }
-  if (record.material_revision !== materials.revision) throw outcomeError("stage outcome material_revision is stale");
-  if (JSON.stringify(record.material_hashes) !== JSON.stringify(materials.hashes)) {
-    throw outcomeError(`stage outcome material_hashes do not match current materials: ${CURRENT_MATERIAL_FILES.join(", ")}`);
-  }
+  const fullMaterialCurrent = record.material_revision === materials.revision
+    && sameJson(record.material_hashes, materials.hashes);
+  const scopedMaterialCurrent = record.material_scope !== undefined
+    && sameJson(record.material_scope, materials.material_scope)
+    && record.material_scope_revision === materials.material_scope_revision
+    && sameJson(record.material_scope_hashes, materials.material_scope_hashes);
+  if (!fullMaterialCurrent && !scopedMaterialCurrent) throw outcomeError("stage outcome material binding is stale");
+  const outcomeMaterialRevision = scopedMaterialCurrent ? record.material_revision : materials.revision;
   const stepsRef = `workflows/${stage}/steps.json`;
   const skillsRef = `workflows/${stage}/skill-deps.yaml`;
   if (record.steps_manifest_ref !== stepsRef || record.skills_manifest_ref !== skillsRef) throw outcomeError("stage outcome manifest refs are not canonical");
@@ -590,13 +649,13 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
     taskId: ctx.identity.taskId,
     stage,
     snapshotTree: snapshot.tree,
-    materialRevision: materials.revision,
+    materialRevision: outcomeMaterialRevision,
   };
   const stepOutcomes = record.step_outcomes.map((entry, index) => validateStepOutcome(ctx, stage, entry, manifest.steps[index], index, binding));
   const skillOutcomes = record.skill_outcomes.map((entry, index) => validateSkillOutcome(ctx, entry, skillManifest.skills[index], index, binding));
   const stageReview = stage === "verify-code"
-    ? validateCodeReviewOutcome(ctx, record, stage, snapshot, materials.revision, manifest, skillManifest)
-    : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materials.revision, materials, manifest, skillManifest);
+    ? validateCodeReviewOutcome(ctx, record, stage, snapshot, outcomeMaterialRevision, manifest, skillManifest)
+    : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, outcomeMaterialRevision, materials, manifest, skillManifest);
   return Object.freeze({
     ref,
     sha256: actualHash,
@@ -627,6 +686,31 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
 }
 
 /**
+ * Adapter for read-only status/close projections.  Those consumers must use
+ * the same complete authentication chain as an official stage run; they may
+ * not infer completion from the content-addressed envelope alone.
+ */
+export function authenticateStageOutcomeForProjection(context, stage, ref) {
+  const task = assertTaskHandle(context?.task);
+  const kernel = assertTaskKernel(context?.kernel);
+  const workflowRunId = outcomeText(kernel.deriveStageWorkflowRunId(stage), `${stage} workflowRunId`);
+  let candidate;
+  try { candidate = JSON.parse(task.readRecord(ref)); }
+  catch (error) { throw outcomeError(`stage outcome receipt is unavailable: ${error.message}`); }
+  if (candidate?.task_id !== task.identity.taskId || candidate?.stage !== stage || candidate?.run_id !== workflowRunId) return null;
+  const authenticated = authenticateStageOutcome({
+    ...context,
+    task,
+    kernel,
+    identity: context.identity ?? task.identity,
+    stage,
+    workflowRunId,
+  }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+  if (authenticated.value.run_id !== workflowRunId) throw outcomeError(`${stage} stage outcome workflow run identity mismatch`);
+  return authenticated;
+}
+
+/**
  * Resolve the one current, completed build-code execution that a verify-code
  * reviewer may inspect. Historical, stale, incomplete, and ambiguously
  * duplicated outcomes are not review authority.
@@ -637,29 +721,49 @@ export function authenticateCurrentBuildCodeStageOutcome(context = {}) {
   if (kernel.task !== task) throw outcomeError("build-code outcome TaskHandle/TaskKernel mismatch");
   const identity = context.identity ?? task.identity;
   if (identity?.taskId !== task.identity.taskId) throw outcomeError("build-code outcome task identity mismatch");
+  const workflowRunId = outcomeText(context.workflowRunId, "build-code outcome workflowRunId");
+  const derivedWorkflowRunId = kernel.deriveStageWorkflowRunId("build-code");
+  if (workflowRunId !== derivedWorkflowRunId) {
+    throw outcomeError("build-code outcome workflowRunId does not match the kernel-derived workflow run identity");
+  }
   const authenticated = [];
-  for (const ref of task.listCanonicalStageOutcomeRefs("build-code")) {
+  const completedRefs = task.listCanonicalStageOutcomeRefs("build-code");
+  for (const ref of completedRefs) {
     let raw;
     let candidate;
     try { raw = task.readRecord(ref); candidate = JSON.parse(raw); }
-    catch { continue; }
+    catch {
+      // A malformed content-addressed sibling has no trustworthy run scope.
+      // It is not allowed to poison a separately authenticated current run;
+      // the final cardinality check still fails closed if no valid current
+      // outcome remains.
+      continue;
+    }
     if (candidate?.status !== "completed") continue;
+    // Only a candidate explicitly bound to this kernel-derived run can be a
+    // current authentication failure. Foreign or missing run ids are stale /
+    // unscoped siblings and must not affect the current run's selection.
+    if (candidate.run_id !== workflowRunId) continue;
     try {
-      const current = authenticateStageOutcome({ ...context, task, kernel, identity, workflowRunId: candidate.run_id ?? null }, "build-code", { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+      const current = authenticateStageOutcome({ ...context, task, kernel, identity, workflowRunId, stage: "build-code" }, "build-code", { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
       const producer = outcomeObject(current.value.producer, "build-code stage outcome producer");
-      const sourceId = outcomeText(producer.source_id, "build-code stage outcome producer.source_id");
-      const sourceFamily = outcomeText(producer.source_family, "build-code stage outcome producer.source_family");
-      if (sourceFamily !== sourceId.split("/")[0]) throw outcomeError("build-code stage outcome producer source identity mismatch");
+      if (current.value.run_id !== workflowRunId) throw outcomeError("build-code stage outcome workflow run identity mismatch");
+      const { kind, sourceId, agentRunId } = validateStageOutcomeProducer(current.value, "build-code", {
+        requireSource: true,
+        requireAgentRunBinding: true,
+      });
       authenticated.push(Object.freeze({
         ...current,
         raw,
         actor: Object.freeze({
-          source_kind: outcomeText(producer.kind, "build-code stage outcome producer.kind"),
+          source_kind: kind,
           source_id: sourceId,
-          run_id: outcomeText(producer.agent_run_id, "build-code stage outcome producer.agent_run_id"),
+          run_id: agentRunId,
         }),
       }));
-    } catch { /* Only a fully authenticated current outcome is eligible. */ }
+    } catch (error) {
+      throw outcomeError(`build-code completed stage outcome is invalid: ${error.message}`);
+    }
   }
   if (authenticated.length !== 1) throw outcomeError("exactly one current completed build-code outcome is required");
   return authenticated[0];
@@ -680,6 +784,19 @@ function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
   try {
     return Object.freeze({ value: authenticateStageOutcome(ctx, stage, input, expectedBinding), diagnostic: null });
   } catch (error) {
+    const suppliedQualityReview = input?.receipts?.quality_review;
+    // An explicit unavailable review attempt is itself a binding claim. If
+    // the supplied stage outcome proves that claim stale or contradictory,
+    // preserve the exact protocol diagnostic instead of downgrading it to the
+    // generic optional-outcome notice. A missing/other malformed outcome still
+    // keeps the existing optional unavailable semantics.
+    if (stage === "verify-code"
+        && typeof suppliedQualityReview === "string"
+        && REVIEW_ATTEMPT_REF.test(suppliedQualityReview)
+        && typeof error?.message === "string"
+        && error.message.startsWith("MATERIAL_INCOMPLETE: unavailable stage outcome code_review is not bound to an unavailable review attempt:")) {
+      throw error;
+    }
     const invalid = error?.code === "MATERIAL_INCOMPLETE";
     return Object.freeze({
       value: null,
@@ -737,8 +854,9 @@ function plainResult(value) {
   return value;
 }
 
-function stageFailureDiagnostic(error, reason) {
+function stageFailureDiagnostic(error, reason, stage = null) {
   const summary = error instanceof Error ? error.message : String(error);
+  const classification = classifyProtocolError(error, { stage, surface: "stage" });
   return Object.freeze({
     status: "failed",
     reason,
@@ -746,6 +864,13 @@ function stageFailureDiagnostic(error, reason) {
       ? error.code
       : "STAGE_EXECUTION_FAILED",
     error_summary: summary,
+    ...(classification.classification === "protocol_error" ? {
+      classification: classification.classification,
+      class_id: classification.class_id,
+      diagnostic: classification.diagnostic,
+    } : {
+      classification: classification.classification,
+    }),
   });
 }
 
@@ -1119,7 +1244,9 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
   const refs = typeof ctx.task.listCanonicalQualityFactRefs === "function"
     ? ctx.task.listCanonicalQualityFactRefs()
     : [];
-  for (const factRef of [...refs].reverse()) {
+  const materialRevision = ctx.kernel.currentVNextMaterialRevision();
+  const candidates = new Map();
+  for (const factRef of refs) {
     try {
       const factRaw = ctx.task.readRecord(factRef);
       const fact = JSON.parse(factRaw);
@@ -1135,12 +1262,23 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
           || typeof evidence.sha256 !== "string") continue;
       const evidenceRaw = ctx.task.readRecord(evidence.ref);
       const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
-      if (evidenceHash === evidence.sha256) return { ref: evidence.ref, sha256: evidence.sha256 };
+      const confirmation = JSON.parse(evidenceRaw);
+      if (evidenceHash !== evidence.sha256
+          || !isHumanConfirmationVersion(confirmation, { current: true })
+          || confirmation.task_id !== ctx.task.identity.taskId
+          || confirmation.stage !== ctx.stage
+          || confirmation.decision !== "accepted"
+          || confirmation.snapshot_tree !== snapshotTree
+          || confirmation.material_revision !== materialRevision) continue;
+      candidates.set(`${evidence.ref}:${evidence.sha256}`, { ref: evidence.ref, sha256: evidence.sha256 });
     } catch {
       // Ignore unrelated or historical quality facts; the current run remains fail-closed.
     }
   }
-  return null;
+  // Multiple distinct current confirmations are ambiguous.  Do not select by
+  // lexical ref order: execution and close must either share one exact proof
+  // or remain incomplete until the operator supplies an explicit confirmation.
+  return candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
 function authenticateStageReviewResult(task, result) {
@@ -1156,7 +1294,7 @@ function authenticateStageReviewResult(task, result) {
       || attempt.error !== null) {
     throw new Error("review attempt/result binding is invalid");
   }
-  const attemptId = result.attempt_ref.match(/^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/)?.[1];
+  const attemptId = result.attempt_ref.match(/^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt identity is invalid");
   const latest = new Map();
   for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
@@ -1303,7 +1441,9 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   riskAcceptanceRefs,
   executionItems,
   executionBinding,
+  recordedAt = null,
 }) {
+  const effectiveRecordedAt = recordedAt ?? new Date().toISOString();
   const subjectEvidence = evidenceRefs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
   const evidenceValue = {
     schema_version: "stage-quality-evidence.v1",
@@ -1341,7 +1481,7 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
     summary: { actual_outcome: status, evidence_type: "stage quality fact" },
     freshness: {
       status: "current",
-      evaluated_at: new Date().toISOString(),
+      evaluated_at: effectiveRecordedAt,
       snapshot_tree: snapshot.tree,
       material_revision: ctx.kernel.currentVNextMaterialRevision(),
       evidence_freshness: [{ ref: evidenceRef, sha256: evidenceHash, status: "current" }],
@@ -1358,14 +1498,14 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
     status: qualityFactStatus,
     subject,
     evidence: [{ ref: acceptanceRef, sha256: acceptanceHash, evidence_type: "acceptance_evidence" }],
-  });
+  }, { recorded_at: effectiveRecordedAt });
   return Object.freeze({
     fact,
     evidence: Object.freeze({ ref: acceptanceRef, sha256: acceptanceHash }),
   });
 }
 
-function publishStageEndSpecAnalyzeFact(ctx, result, snapshot) {
+function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null) {
   if (!Object.prototype.hasOwnProperty.call(STAGE_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze")) return null;
   const analyzerResult = result.spec_analyze?.result;
   const consistent = analyzerResult?.status === "consistent";
@@ -1380,6 +1520,7 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot) {
       ? "current stage-end spec-analyze is semantically consistent"
       : `current stage-end spec-analyze is ${analyzerResult?.status ?? "unavailable"}`,
     evidenceRefs: stageOutcomeEvidence,
+    recordedAt,
   });
 }
 
@@ -1419,6 +1560,45 @@ function canonicalJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function appendProtocolErrorTrace(ctx, { classification, occurredAt, snapshot, materials }) {
+  if (classification?.classification !== "protocol_error" || typeof classification.class_id !== "string") {
+    throw new Error("protocol error trace requires a classified protocol error");
+  }
+  if (typeof occurredAt !== "string" || !Number.isFinite(Date.parse(occurredAt))) {
+    throw new Error("protocol error trace occurred_at must be an ISO timestamp");
+  }
+  if (!snapshot || !SHA256.test(snapshot.source_digest ?? "")) {
+    throw new Error("protocol error trace requires an authenticated source digest");
+  }
+  if (!materials || !Array.isArray(materials.values)) {
+    throw new Error("protocol error trace requires authenticated material values");
+  }
+  const materialRevision = materialRevisionFromValues(materials.values);
+  if (materials.revision !== materialRevision || !/^revision-[a-f0-9]{64}$/.test(materialRevision)) {
+    throw new Error("protocol error trace requires the authenticated material revision");
+  }
+  if (typeof ctx.task?.taskPath !== "string" || typeof ctx.identity?.taskId !== "string" || ctx.identity.taskId.trim() === "") {
+    throw new Error("protocol error trace requires an authenticated task root");
+  }
+  if (typeof ctx.workflowRunId !== "string" || ctx.workflowRunId.trim() === "") {
+    throw new Error("protocol error trace requires the current workflow run id");
+  }
+  const status = "repaired_in_place";
+  const tracePayload = { stage: ctx.stage, class_id: classification.class_id, occurred_at: occurredAt, status };
+  return appendTaskFact(ctx.task.taskPath, {
+    task_id: ctx.identity.taskId,
+    stage: ctx.stage,
+    material_digest: materialRevision.slice("revision-".length),
+    source_digest: snapshot.source_digest,
+    invocation_id: ctx.workflowRunId,
+    source: `protocol_error:${classification.class_id}`,
+    status,
+    content_hash: createHash("sha256").update(canonicalJson(tracePayload), "utf8").digest("hex"),
+    created_at: occurredAt,
+    output_ref: "facts.jsonl",
+  });
 }
 
 function dataIdentityMatchesAcceptanceScenario(dataIdentity, acceptanceScenario) {
@@ -1560,10 +1740,13 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
   }
 }
 
-function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
+function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, publicationTimestamp, { requireStageOutcome = false } = {}) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
   // second coordination control plane, not a source-of-truth requirement.
+  if (typeof publicationTimestamp !== "string" || !Number.isFinite(Date.parse(publicationTimestamp))) {
+    throw new Error("stage publication requires one authenticated publication timestamp");
+  }
   const snapshot = assertVNextSourceStable(ctx, preflightSnapshot);
   const materials = currentMaterialBinding(ctx);
   if (preflightMaterials && (materials.revision !== preflightMaterials.revision || !sameJson(materials.hashes, preflightMaterials.hashes))) {
@@ -1579,7 +1762,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
   // the current WorkflowHub session repairs it in place instead of silently handing it down.
-  const stageAnalyzeFact = publishStageEndSpecAnalyzeFact(ctx, result, snapshot);
+  const stageAnalyzeFact = publishStageEndSpecAnalyzeFact(ctx, result, snapshot, publicationTimestamp);
   if (stageAnalyzeFact) {
     qualityFactRefs.push(stageAnalyzeFact.fact.ref);
   }
@@ -1683,6 +1866,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
             ? { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash }
             : null,
         } : {}),
+        recordedAt: publicationTimestamp,
       });
       factEvidenceRef = acceptanceFact.evidence.ref;
       factEvidenceHash = acceptanceFact.evidence.sha256;
@@ -1719,7 +1903,10 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
         ...(kind === "review" && reviewStatuses.has(subject) ? { review_status: reviewStatuses.get(subject) } : {}),
         subject,
         evidence: factEvidence.map(({ ref, sha256 }) => ({ ref, sha256, evidence_type: evidenceType })),
-      }, resolvedReviewAuthorization);
+      }, {
+        ...(resolvedReviewAuthorization ?? {}),
+        recorded_at: publicationTimestamp,
+      });
     qualityFactRefs.push(fact.ref);
     if (!gating) qualityAdvisoryFactRefs.push(fact.ref);
   }
@@ -1738,6 +1925,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
         status,
         detail: item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
         evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
+        recordedAt: publicationTimestamp,
       });
       qualityFactRefs.push(leaf.fact.ref);
     }
@@ -1757,7 +1945,10 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     };
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx));
-  const completion = deriveStageCompletion(ctx.stage, observations);
+  const completion = deriveStageCompletion(ctx.stage, observations, {
+    requireStageOutcome,
+    stageOutcomeStatus: result.stage_outcome_status,
+  });
   for (const binding of result.skill_consumer_bindings ?? []) {
     if (binding.status === "incomplete") {
       qualityAdvisories.push(`${binding.skill_id}:consumer_incomplete`);
@@ -1889,7 +2080,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
     }));
   } catch (error) {
     if (scheduleReflection !== null) {
-      const diagnostic = stageFailureDiagnostic(error, "stage_handler_failed");
+      const diagnostic = stageFailureDiagnostic(error, "stage_handler_failed", stage);
       const availabilityReason = stageReflectionAvailabilityReason(error);
       const reflection = await scheduleReflection({
         stageStatus: "failed",
@@ -1907,22 +2098,100 @@ export async function runStage(stage, context, handler, publication = {}, intern
     throw error;
   }
 
+  // Capture publication time once. If a publisher fails after writing some
+  // create-only records, the retry must reuse the same immutable bytes rather
+  // than creating a second timestamped publication candidate.
+  const publicationTimestamp = new Date().toISOString();
+  let publicationPromise = null;
+  const publish = () => {
+    if (publicationPromise !== null) return publicationPromise;
+    const attempt = Promise.resolve()
+      .then(() => publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials, publicationTimestamp, {
+        requireStageOutcome: internal?.requireStageOutcome === true,
+      }));
+    publicationPromise = attempt.catch((error) => {
+      publicationPromise = null;
+      throw error;
+    });
+    return publicationPromise;
+  };
+  const publishInputs = Object.freeze({
+    result,
+    snapshot: vNextPreflightSnapshot,
+    materials: vNextPreflightMaterials,
+    publish,
+  });
+  // The internal seam is a test-only fault injector around the real publisher,
+  // never an alternate publisher. Ignore its return value and require it to
+  // invoke the captured publisher exactly once on every successful attempt.
+  const publishStage = typeof internal?.publishStage === "function"
+    ? async () => {
+      let publishCalls = 0;
+      let capturedPublish = null;
+      let open = true;
+      const publish = () => {
+        if (!open) throw new Error("internal publication seam invoked after its transaction ended");
+        publishCalls += 1;
+        if (publishCalls > 1) throw new Error("internal publication seam invoked the captured publisher more than once");
+        capturedPublish = Promise.resolve(publishInputs.publish());
+        return capturedPublish;
+      };
+      try {
+        await internal.publishStage(Object.freeze({ publish }));
+      } finally {
+        open = false;
+      }
+      if (publishCalls !== 1 || capturedPublish === null) {
+        throw new Error("internal publication seam must invoke the captured publisher exactly once");
+      }
+      return capturedPublish;
+    }
+    : () => publishInputs.publish();
   let published;
   try {
-    published = publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials);
+    published = await publishStage();
   } catch (error) {
-    if (scheduleReflection !== null) {
-      const diagnostic = stageFailureDiagnostic(error, "stage_publication_failed");
-      const reflection = await scheduleReflection({
-        stageStatus: "failed",
-        stageOutcomeDiagnostic: diagnostic,
-        observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
-      });
-      if (reflection.status === "failed" && error && typeof error === "object") {
-        error.reflection_error = reflection.error ?? "stage reflection failed";
+    const classification = classifyProtocolError(error, { stage, surface: "stage" });
+    if (classification.classification === "protocol_error" && classification.retryable === true) {
+      const occurredAt = new Date().toISOString();
+      try {
+        published = await publishStage();
+      } catch (retryError) {
+        if (retryError && typeof retryError === "object" && error && typeof error === "object") {
+          Object.defineProperty(retryError, "initial_error", {
+            value: error,
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        if (scheduleReflection !== null) {
+          const diagnostic = stageFailureDiagnostic(retryError, "stage_publication_failed", stage);
+          const reflection = await scheduleReflection({
+            stageStatus: "failed",
+            stageOutcomeDiagnostic: diagnostic,
+            observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
+          });
+          if (reflection.status === "failed" && retryError && typeof retryError === "object") {
+            retryError.reflection_error = reflection.error ?? "stage reflection failed";
+          }
+        }
+        throw retryError;
       }
+      appendProtocolErrorTrace(ctx, { classification, occurredAt, snapshot: vNextPreflightSnapshot, materials: vNextPreflightMaterials });
+    } else {
+      if (scheduleReflection !== null) {
+        const diagnostic = stageFailureDiagnostic(error, "stage_publication_failed", stage);
+        const reflection = await scheduleReflection({
+          stageStatus: "failed",
+          stageOutcomeDiagnostic: diagnostic,
+          observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
+        });
+        if (reflection.status === "failed" && error && typeof error === "object") {
+          error.reflection_error = reflection.error ?? "stage reflection failed";
+        }
+      }
+      throw error;
     }
-    throw error;
   }
   if (scheduleReflection === null) return published;
   const stageReflection = await scheduleReflection({
@@ -2114,6 +2383,34 @@ export function verifyOfficialEvidence(ctx, result) {
   return result;
 }
 
+function discloseResolvedCodeReview(result, stageOutcome) {
+  if (stageOutcome?.value?.code_review_resolution !== "resolved") return result;
+  const missingItems = Array.isArray(result?.missing_items)
+    ? result.missing_items.filter((item) => typeof item !== "string" || !RESOLVED_CODE_REVIEW_MISSING.test(item))
+    : result?.missing_items;
+  const completionSubjects = result?.facts?.completion_subjects;
+  return {
+    ...result,
+    ...(Array.isArray(result?.missing_items) ? { missing_items: missingItems } : {}),
+    facts: {
+      ...(result?.facts ?? {}),
+      ...(completionSubjects && typeof completionSubjects === "object" && !Array.isArray(completionSubjects)
+        ? {
+            completion_subjects: {
+              ...completionSubjects,
+              ...(completionSubjects.code_review && typeof completionSubjects.code_review === "object"
+                ? { code_review: { ...completionSubjects.code_review, status: "passed" } }
+                : {}),
+            },
+          }
+        : {}),
+    },
+    verification: typeof result?.verification === "string"
+      ? `${result.verification}；已按当前 stage outcome 将同 task finding 处置标记为 resolved`
+      : result?.verification,
+  };
+}
+
 /**
  * Consume the narrow result returned by broker-backed wh-review.  The review
  * CLI only creates this intent; this authenticated stage-runtime boundary is
@@ -2137,7 +2434,7 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
     throw new Error("review fact intent is not a verify-code review intent");
   }
   const evidence = intent.evidence[0];
-  if (!evidence || typeof evidence.ref !== "string" || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(evidence.ref)
+  if (!evidence || typeof evidence.ref !== "string" || !/^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/.test(evidence.ref)
       || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")
       || evidence.evidence_type !== "review_result") {
     throw new Error("review fact intent evidence is invalid");
@@ -2200,7 +2497,7 @@ export async function publishOfficialStageOutcome({ context, outcome, stage, att
 }
 
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
-export function runOfficialStage(stage, context, invocation, publication) {
+export function runOfficialStage(stage, context, invocation, publication, { requireStageOutcome = false } = {}) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
@@ -2215,6 +2512,10 @@ export function runOfficialStage(stage, context, invocation, publication) {
     ctx,
     async (worker, _upstream, preflight) => {
       const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
+      if (requireStageOutcome && !stageOutcome.value) {
+        const reason = stageOutcome.diagnostic?.reason ?? "stage_outcome_unavailable";
+        throw outcomeError(`${stage} requires a current authenticated Stage Agent outcome (${reason})`);
+      }
       const stageOutcomeStatus = stageOutcome.value?.value?.status ?? stageOutcome.diagnostic?.status ?? "unavailable";
       Object.assign(stageReflectionInput, {
         stageStatus: stageOutcomeStatus === "completed" ? "completed" : "failed",
@@ -2247,16 +2548,33 @@ export function runOfficialStage(stage, context, invocation, publication) {
           : (handlerInput.receipts = {});
         const stageReview = stageOutcome.value?.code_review ?? null;
         const boundReviewRef = stageReview?.quality_review_ref;
+        const boundReviewHash = stageReview?.quality_review_hash;
         const suppliedReviewRef = receipts.quality_review;
         if (!stageOutcome.value && suppliedReviewRef !== undefined) {
           throw new Error("verify-code quality_review requires a bound dsh-code-review stage outcome");
         }
-        if (stageOutcome.value && boundReviewRef === undefined && suppliedReviewRef !== undefined) {
-          throw new Error("verify-code quality_review is not bound to the dsh-code-review stage outcome");
+        if (stageOutcome.value && !stageReview) {
+          throw new Error("verify-code quality_review is not bound to a dsh-code-review stage outcome");
+        }
+        if (stageOutcome.value?.value?.status === "completed"
+            && (typeof boundReviewRef !== "string" || !boundReviewRef.trim()
+            || typeof boundReviewHash !== "string" || !boundReviewHash.trim())) {
+          throw new Error("verify-code quality_review is not bound to a complete dsh-code-review ref/hash pair");
         }
         if (boundReviewRef !== undefined) {
           if (suppliedReviewRef !== undefined && suppliedReviewRef !== boundReviewRef) {
-            throw new Error("verify-code quality_review does not match the dsh-code-review stage outcome");
+            const error = new Error("verify-code quality_review does not match the dsh-code-review stage outcome");
+            Object.defineProperty(error, "diagnostic", {
+              value: Object.freeze({
+                check_id: "review_binding",
+                expected: Object.freeze({ ref: boundReviewRef, hash: boundReviewHash }),
+                actual: Object.freeze({ ref: suppliedReviewRef }),
+              }),
+              enumerable: false,
+              configurable: false,
+              writable: false,
+            });
+            throw error;
           }
           receipts.quality_review = boundReviewRef;
         }
@@ -2314,13 +2632,14 @@ export function runOfficialStage(stage, context, invocation, publication) {
       const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
+      const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome);
       // The concrete reflection is published only after the stage result has
       // crossed the single write boundary. Keep an internal result marker so
       // the authenticated stage-outcome consumer binding can observe that the
       // declared reflection result is scheduled before final publication.
       let handlerResult = typeof officialWorker.runStageEndReflection === "function"
-        ? { ...verifiedHandlerResult, stage_reflection: { status: "scheduled" } }
-        : verifiedHandlerResult;
+        ? { ...disclosedHandlerResult, stage_reflection: { status: "scheduled" } }
+        : disclosedHandlerResult;
       const skillConsumerBindings = consumeSkillOutcomeBindings(officialWorker, handlerInput, stageOutcome, handlerResult);
       if (stage === "verify-code" && stageOutcome.value?.code_review?.quality_review_ref) {
         const reviewFacts = handlerResult.facts?.code_review ?? {};
@@ -2368,6 +2687,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
     publication,
     {
       stageReflectionInput,
+      requireStageOutcome,
       stageReflection: {
         ...(typeof publication?.runStageReflection === "function" ? { execute: publication.runStageReflection } : {}),
       },

@@ -2448,6 +2448,15 @@
       "consumer": "maintainer reading current iteration brief",
       "delete_condition": "remove when M16 brief is retired",
       "content_change": "atomic current brief projection"
+    },
+    {
+      "source": "runtime/stage/protocol-error-whitelist.mjs",
+      "destination": "runtime/stage/protocol-error-whitelist.mjs",
+      "status": "add",
+      "owner": "workflowhub-verify-close-protocol-robustness-20260902 build-code",
+      "consumer": "stage-runner publication diagnostics and private preflight validation",
+      "delete_condition": "remove when protocol-error classification is retired and its consumers are removed",
+      "content_change": "immutable conservative protocol-error classifier with one explicit retryable publication-fault class"
     }
   ]
 }

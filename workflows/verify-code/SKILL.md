@@ -8,9 +8,7 @@ version: 5.1.0
 
 ## 同一会话自动记录
 
-本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个
-manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有
-记录命令；命令失败就保留真实 `incomplete`/`unavailable`，不能补填成功。
+本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验。旧 task context 只读保留，不会和新 task 的事件混在一起；未登记的 task id 仍直接失败。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；命令失败就保留真实 `incomplete`/`unavailable`，不能补填成功。
 
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=verify-code --subject-kind=step --subject-id=<step_slug>
@@ -111,6 +109,10 @@ build-code 已有的测试事实可以作为代码审查输入，但 verify-code
 - `failed`：代码本身有明确失败，回同一 task 修复。
 
 `incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
+
+## Preflight self-check
+
+Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=verify-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
 
 ## 阶段末交接
 

@@ -89,6 +89,9 @@ const VERIFY_LEAF_KEYS = new Set([
   "acceptance_criterion_id", "result", "status", "source_digest", "acceptance_leaf", "nested_evidence",
   "scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions", "implementation_anchor", "verification_anchor",
 ]);
+const VERIFY_SUMMARY_IDENTITY_FIELDS = new Set([
+  "schema_version", "task_id", "stage", "ac_id", "method", "evidence_ref", "evidence_hash", "created_at",
+]);
 
 function validAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -234,6 +237,10 @@ export function publishQualityFact(taskRoot, kind, value, options = {}) {
 
 export function publishVerifySummary(taskRoot, summary, options = {}) {
   if (!summary || typeof summary !== "object" || Array.isArray(summary) || typeof summary.status !== "string") throw new TypeError("verify summary is invalid");
+  const identityOverrides = Object.keys(summary).filter((key) => VERIFY_SUMMARY_IDENTITY_FIELDS.has(key));
+  if (identityOverrides.length) {
+    throw new TypeError(`verify summary cannot override authenticated identity fields: ${identityOverrides.join(", ")}`);
+  }
   return withStoreLock(resolve(taskRoot), () => {
     const index = structuredClone(readTaskIndex(taskRoot));
     const taskRaw = readFileSync(resolve(taskRoot, "task.json"), "utf8");

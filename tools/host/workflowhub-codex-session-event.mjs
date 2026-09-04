@@ -120,7 +120,7 @@ function validateCodeReviewInput(value, stage, taskId) {
   }
   if (value.quality_review_ref !== undefined
       && (typeof value.quality_review_ref !== "string"
-        || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(value.quality_review_ref)
+        || !/^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/.test(value.quality_review_ref)
         || typeof value.quality_review_hash !== "string"
         || !/^[a-f0-9]{64}$/.test(value.quality_review_hash))) {
     throw new TypeError("code_review quality review binding is invalid");

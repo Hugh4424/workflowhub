@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../runtime/task/git-worktree-snapshot.mjs";
+import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues, materializeGitSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
@@ -18,7 +18,8 @@ import { ArtifactDir, artifactReference } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
 import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
-import { deriveCurrentProductRelease, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, deriveStageOutcomeStatuses, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
+import { authenticateStageOutcomeForProjection } from "../runtime/stage/stage-runner.mjs";
 import { activeAcceptanceCriterionIds } from "../runtime/stage/stage-content-contracts.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -679,6 +680,27 @@ function factMatchesExpected(value, expected, root, taskId) {
   return treeMatches && materialMatches;
 }
 
+// Quality facts are immutable observations. A retry can publish a newer
+// terminal observation for the same predicate without changing the source
+// snapshot, so selecting every matching file as a conflict would make a
+// repaired retry impossible to close. Match the stage projection semantics:
+// select one uniquely latest observation and keep equal/invalid timestamps
+// fail-closed.
+function selectLatestCurrentQualityFact(items, subject) {
+  if (items.length === 1) return items[0];
+  const ranked = items.map((item) => ({
+    item,
+    recordedAt: Date.parse(item.value.recorded_at ?? ""),
+  }));
+  if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) {
+    throw new Error(`current verify-code quality facts conflict: ${subject}`);
+  }
+  const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
+  const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt);
+  if (latest.length !== 1) throw new Error(`current verify-code quality facts conflict: ${subject}`);
+  return latest[0].item;
+}
+
 function deriveMiniReviewStatus(task, miniReview) {
   if (miniReview.value.status !== "recorded") return "unavailable";
   const firstEvidence = miniReview.value.evidence?.[0];
@@ -812,18 +834,16 @@ function currentVerifyFacts(task, expected = {}) {
   const values = currentValues
     .filter(({ value }) => value?.stage === "verify-code"
     );
-  const bySubject = new Map();
+  const candidatesBySubject = new Map();
   for (const item of values) {
-    const previous = bySubject.get(item.value.subject);
-    if (!previous) {
-      bySubject.set(item.value.subject, item);
-      continue;
-    }
-    // Current duplicate facts are ambiguous. Close must share the same
-    // conflict semantics as deriveStageCompletion; timestamp-based
-    // latest-wins would silently bypass an unresolved quality conflict.
-    throw new Error(`current verify-code quality facts conflict: ${item.value.subject}`);
+    const candidates = candidatesBySubject.get(item.value.subject) ?? [];
+    candidates.push(item);
+    candidatesBySubject.set(item.value.subject, candidates);
   }
+  const bySubject = new Map([...candidatesBySubject.entries()].map(([subject, items]) => [
+    subject,
+    selectLatestCurrentQualityFact(items, subject),
+  ]));
   const requiredSubjects = Object.keys(STAGE_PREDICATES["verify-code"]);
   const facts = Object.fromEntries(requiredSubjects.map((subject) => {
     // mini-task has one deliberately smaller review topic:
@@ -1373,14 +1393,14 @@ function archiveFacts(root, ref, delivery) {
   return { commit, tree_preserved: treePreserved, only_renames: onlyRenames };
 }
 
-function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
+function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true } = {}) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
   const dirtySource = sourceWorktreeStatus(root);
   if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (expectedLocal !== null && branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
-  if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
+  if (checkRemote && remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
 }
 
 function plannedMergePreflight(delivery) {
@@ -1509,6 +1529,7 @@ export function prepareDeliveryClosePlan({
   assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
   const currentSnapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
   const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
+  if (deliverySnapshotCommit === currentSnapshot.commit) materializeGitSnapshot(root, currentSnapshot);
   const materialRevision = currentMaterialRevision(task, worktree);
   const materialArtifacts = ArtifactDir.open(worktree, task);
   const materialValues = Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, materialArtifacts.read(name)]));
@@ -1529,6 +1550,23 @@ export function prepareDeliveryClosePlan({
   let productRelease = null;
   if (!allowMiniTaskFocused) {
     try {
+      const stageOutcomeStatuses = deriveStageOutcomeStatuses({
+        task_id: task.identity.taskId,
+        read: task.readRecord,
+        stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, task.listCanonicalStageOutcomeRefs(stage)])),
+        snapshot_tree: currentSnapshot.tree,
+        material_revision: materialRevision,
+        material_scope_revisions: stageMaterialScopeRevisions(materialValues),
+        snapshot_root: worktree,
+        authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({
+          task,
+          kernel,
+          identity: task.identity,
+          workspace,
+          artifacts: materialArtifacts,
+          stage,
+        }, stage, ref),
+      });
       productRelease = deriveCurrentProductRelease({
         task_id: task.identity.taskId,
         read: task.readRecord,
@@ -1539,6 +1577,7 @@ export function prepareDeliveryClosePlan({
         snapshot_root: worktree,
         expected_acceptance_ids: activeAcceptanceCriterionIds(materialArtifacts.read("spec.md")),
         evaluate_freshness: evaluateFactFreshness,
+        stage_outcome_statuses: stageOutcomeStatuses,
       });
     } catch (error) {
       qualityReasons.push(`product-release: ${error.message}`);
@@ -1821,7 +1860,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "commit-delivery") return {
         probe: published,
         execute: async () => {
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
           const tip = branchOid(root, delivery.task_branch);
           if (tip !== delivery.task_commit) {
@@ -1850,7 +1889,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "archive-spec") return {
         probe: archived,
         execute: async () => {
-          targetPreflight(delivery, null);
+          targetPreflight(delivery, null, { checkRemote: false });
           if (!mergeState().satisfied) throw new Error("target branch is not merged before archive");
           const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(root, delivery.spec_source_path))) {
@@ -1873,9 +1912,9 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "merge-task-branch") return {
         probe: mergeState,
         execute: async () => {
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           plannedMergePreflight(delivery);
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           try {
             git(root, ["merge", "--no-ff", "--no-edit", delivery.task_branch]);
           } catch (error) {
@@ -1891,7 +1930,6 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           targetPreflight(delivery, null);
           const merged = mergeState();
           if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
-          if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed before push");
           git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
         },
         verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
