@@ -78,6 +78,11 @@ const FULL_PHASE_DIFF_CODE_EXTENSIONS = new Set([
   ".pyi", ".rb", ".rs", ".sass", ".scss", ".sh", ".sql", ".svelte",
   ".swift", ".ts", ".tsx", ".vue", ".zsh",
 ]);
+const VERIFY_CODE_EXCLUDED_PATH_SEGMENTS = new Set([
+  ".git", "node_modules", ".venv", "vendor", "dist", "build", "coverage",
+  "test-results", "__pycache__", "generated",
+]);
+const VERIFY_CODE_TEST_PATH_SEGMENTS = new Set(["test", "tests", "__tests__", "spec", "specs"]);
 
 // verify-code reviews the current implementation, not every test, fixture,
 // report, and workflow note changed while the task was being executed. Keep
@@ -158,31 +163,85 @@ export function phaseDiffDeliveryForPath(path) {
     : "summary";
 }
 
+function excludedVerifyCodePath(path) {
+  const segments = String(path).split("/");
+  const lowerSegments = segments.map((segment) => segment.toLowerCase());
+  if (lowerSegments.some((segment) => VERIFY_CODE_EXCLUDED_PATH_SEGMENTS.has(segment))) return true;
+  const basename = lowerSegments.at(-1) ?? "";
+  return /\.(?:min|bundle|generated)(?:\.[^.]+)+$/.test(basename);
+}
+
+/** Classify source changes without resolving or normalizing their paths. */
+export function classifyReviewableCodePath(path) {
+  if (typeof path !== "string" || excludedVerifyCodePath(path)) return null;
+  if (!FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())) return null;
+  const segments = path.toLowerCase().split("/");
+  const basename = segments.at(-1) ?? "";
+  const isTest = segments.some((segment) => VERIFY_CODE_TEST_PATH_SEGMENTS.has(segment))
+    || /(?:^|[._-])(?:test|spec)(?:[._-]|$)/.test(basename);
+  return isTest ? "test" : "implementation";
+}
+
 export function verifyCodeDiffDeliveryForPath(path) {
-  return VERIFY_CODE_RELEVANT_TEST_FILES.has(path)
+  return typeof path === "string" && !excludedVerifyCodePath(path) && (VERIFY_CODE_RELEVANT_TEST_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
     // verify-code is used by projects outside WorkflowHub too.  A project
     // path must not fall back to a summary merely because it is not in this
     // runtime's own prefix list; otherwise the provider receives no code
     // anchor for the actual subject under review.
-    || FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())
+    || classifyReviewableCodePath(path) !== null)
     ? "included"
     : "summary";
 }
 
-function boundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, sourceDiffBytes, budgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES) {
+function verifyCodeCandidateSort(left, right) {
+  const leftKind = classifyReviewableCodePath(left.path) === "implementation" ? 0 : 1;
+  const rightKind = classifyReviewableCodePath(right.path) === "implementation" ? 0 : 1;
+  const leftPriority = VERIFY_CODE_DIFF_PRIORITY_INDEX.get(left.path) ?? Number.MAX_SAFE_INTEGER;
+  const rightPriority = VERIFY_CODE_DIFF_PRIORITY_INDEX.get(right.path) ?? Number.MAX_SAFE_INTEGER;
+  return leftPriority - rightPriority
+    || leftKind - rightKind
+    || Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8"));
+}
+
+export function selectBoundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, sourceDiffBytes, budgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES) {
   if (stage !== "verify-code" || selectedChangeIds.size > 0 || sourceDiffBytes <= VERIFY_CODE_FULL_INLINE_LIMIT_BYTES) return null;
-  let remaining = budgetBytes;
+  if (!Number.isSafeInteger(budgetBytes) || budgetBytes < 0) throw new Error("MATERIAL_INCOMPLETE: verify-code included diff budget is invalid");
   const included = new Set();
   const candidates = sections
-    .filter((section) => verifyCodeDiffDeliveryForPath(section.path) === "included")
-    .sort((left, right) =>
-      (VERIFY_CODE_DIFF_PRIORITY_INDEX.get(left.path) ?? Number.MAX_SAFE_INTEGER) - (VERIFY_CODE_DIFF_PRIORITY_INDEX.get(right.path) ?? Number.MAX_SAFE_INTEGER)
-      || left.path.localeCompare(right.path),
-    );
+    .filter((section) => classifyReviewableCodePath(section.path) !== null)
+    .sort(verifyCodeCandidateSort);
+  const byKind = (kind) => candidates.filter((section) => classifyReviewableCodePath(section.path) === kind);
+  const requiredKinds = ["implementation", "test"].filter((kind) => byKind(kind).length > 0);
+  const mandatory = [];
+  if (requiredKinds.length === 2) {
+    for (const implementation of byKind("implementation")) {
+      for (const test of byKind("test")) {
+        if (implementation.bytes.length + test.bytes.length <= budgetBytes) {
+          mandatory.push(implementation, test);
+          break;
+        }
+      }
+      if (mandatory.length > 0) break;
+    }
+    if (mandatory.length === 0) {
+      throw new Error("MATERIAL_INCOMPLETE: verify-code implementation and test diff fallbacks exceed the included diff budget");
+    }
+  } else if (requiredKinds.length === 1) {
+    const fallback = byKind(requiredKinds[0]).find((section) => section.bytes.length <= budgetBytes);
+    if (!fallback) throw new Error(`MATERIAL_INCOMPLETE: verify-code ${requiredKinds[0]} diff fallback exceeds the included diff budget`);
+    mandatory.push(fallback);
+  }
+  const mandatoryPaths = new Set(mandatory.map((section) => section.path));
+  let remaining = budgetBytes;
   for (const section of candidates) {
-    if (section.bytes.length <= remaining) {
+    if (!mandatoryPaths.has(section.path)) continue;
+    included.add(section.path);
+    remaining -= section.bytes.length;
+  }
+  for (const section of candidates) {
+    if (!included.has(section.path) && section.bytes.length <= remaining) {
       included.add(section.path);
       remaining -= section.bytes.length;
     }
@@ -1280,6 +1339,45 @@ function diffSections(source, cachedBytes = null) {
   });
 }
 
+function realUnifiedDiffForPath(bytes, expectedPath) {
+  const text = bytes.toString("utf8");
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  return diffPathFromHeader(firstLine) === expectedPath
+    && /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@(?: |$)/m.test(text);
+}
+
+function validateManifestPacketPlanBinding(bundleRoot, manifest, packetPlan) {
+  if (!Array.isArray(manifest) || !packetPlan || typeof packetPlan !== "object" || Array.isArray(packetPlan)) {
+    throw new Error("MATERIAL_INCOMPLETE: manifest and packet-plan are required for delivery binding");
+  }
+  const manifestByPath = new Map();
+  for (const entry of manifest) {
+    if (!entry || !safeRelative(entry.path) || manifestByPath.has(entry.path)
+        || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || !HASH.test(entry.sha256)) {
+      throw new Error("MATERIAL_INCOMPLETE: delivery manifest entry is invalid or duplicated");
+    }
+    manifestByPath.set(entry.path, entry);
+  }
+  const plannedPaths = Object.values(packetPlan.included ?? {}).flat();
+  if (plannedPaths.some((path) => !safeRelative(path))) {
+    throw new Error("MATERIAL_INCOMPLETE: packet-plan included paths are invalid");
+  }
+  const planned = new Set(plannedPaths);
+  if (planned.size !== plannedPaths.length) throw new Error("MATERIAL_INCOMPLETE: packet-plan repeats an included path");
+  for (const path of planned) {
+    if (path === "manifest.json") continue;
+    const entry = manifestByPath.get(path);
+    if (!entry) throw new Error(`MATERIAL_INCOMPLETE: packet-plan path ${path} is not bound to the delivery manifest`);
+    const filePath = join(bundleRoot, ...path.split("/"));
+    if (!existsSync(filePath) || statSync(filePath).size !== entry.bytes || sha256File(filePath) !== entry.sha256) {
+      throw new Error(`MATERIAL_INCOMPLETE: packet-plan path ${path} does not match manifest bytes or hash`);
+    }
+  }
+  for (const path of manifestByPath.keys()) {
+    if (!planned.has(path)) throw new Error(`MATERIAL_INCOMPLETE: manifest path ${path} is not listed in packet-plan`);
+  }
+}
+
 function semanticAnchorRanges(change, anchor) {
   let delta = 0;
   for (const hunk of change.hunks) {
@@ -1337,7 +1435,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
   const selectedChangeIds = selectedPhaseChangeIds(materials);
   const sections = diffSections(source);
-  const boundedIncludedPaths = boundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, source.diffBytes, includedDiffBudgetBytes);
+  const boundedIncludedPaths = selectBoundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, source.diffBytes, includedDiffBudgetBytes);
   const shards = [];
   let ordinal = 0;
   for (const section of sections) {
@@ -1424,9 +1522,10 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   return index;
 }
 
-export function validateDiffIndexBundle(bundleRoot, { stage = "build-code" } = {}) {
+export function validateDiffIndexBundle(bundleRoot, { stage = "build-code", manifest = null, packetPlan = null } = {}) {
   const indexPath = join(bundleRoot, "diff-index.json");
   if (!existsSync(indexPath)) return;
+  if (manifest !== null || packetPlan !== null) validateManifestPacketPlanBinding(bundleRoot, manifest, packetPlan);
   let index;
   try { index = JSON.parse(readFileSync(indexPath, "utf8")); } catch {
     throw new Error("MATERIAL_INCOMPLETE: diff-index.json is invalid");
@@ -1436,7 +1535,15 @@ export function validateDiffIndexBundle(bundleRoot, { stage = "build-code" } = {
   }
   const covered = new Set();
   const selectedChangeIds = new Set(index.selected_change_ids ?? []);
+  const verifyCodeKinds = new Map();
+  const shardIds = new Set();
+  const changeIds = new Set();
+  if (!Array.isArray(index.changes)) throw new Error("MATERIAL_INCOMPLETE: diff index changes must be an array");
   for (const change of index.changes ?? []) {
+    if (!change || typeof change.change_id !== "string" || !safeRelative(change.path) || changeIds.has(change.change_id)) {
+      throw new Error("MATERIAL_INCOMPLETE: diff index contains a duplicate or invalid change_id");
+    }
+    changeIds.add(change.change_id);
     covered.add(change.change_id);
     const shards = Array.isArray(change.shards) ? change.shards : [];
     if (!Array.isArray(change.new_line_ranges) || change.new_line_ranges.some((range) =>
@@ -1454,12 +1561,67 @@ export function validateDiffIndexBundle(bundleRoot, { stage = "build-code" } = {
       throw new Error(`MATERIAL_INCOMPLETE: changed path ${change.path ?? change.change_id} has no provider-visible diff shard`);
     }
     for (const shard of shards) {
+      if (!shard || typeof shard.shard_id !== "string" || !safeRelative(shard.shard_id) || shard.shard_id.includes("/") || shardIds.has(shard.shard_id)
+          || !Number.isSafeInteger(shard.offset) || shard.offset < 0
+          || !Number.isSafeInteger(shard.bytes) || shard.bytes < 0 || !HASH.test(shard.sha256)) {
+        throw new Error("MATERIAL_INCOMPLETE: diff shard descriptor is invalid or duplicated");
+      }
+      shardIds.add(shard.shard_id);
       if (!["included", "summary"].includes(shard.delivery)) throw new Error(`MATERIAL_INCOMPLETE: diff shard ${shard.shard_id} has an unknown delivery state`);
       const path = join(bundleRoot, "diff-shards", `${shard.shard_id}.diff`);
       if (!existsSync(path) || statSync(path).size !== shard.bytes || sha256File(path) !== shard.sha256) {
         throw new Error(`MATERIAL_INCOMPLETE: selected diff shard ${shard.shard_id} is missing or tampered`);
       }
       if (shard.delivery === "summary" && shard.summary !== true) throw new Error(`MATERIAL_INCOMPLETE: summary diff shard ${shard.shard_id} must declare summary=true`);
+      if (shard.delivery === "summary") {
+        let summary;
+        const summaryBytes = readFileSync(path);
+        const summaryText = summaryBytes.toString("utf8");
+        try { summary = JSON.parse(summaryText); } catch { throw new Error(`MATERIAL_INCOMPLETE: summary diff shard ${shard.shard_id} is not bound to its changed path`); }
+        if (summary.schema_version !== "wh-review-diff-summary.v1"
+            || summary.delivery !== "summary"
+            || summary.path !== change.path
+            || summary.change_id !== change.change_id
+            || !Number.isSafeInteger(summary.source_bytes) || summary.source_bytes < 0
+            || !Array.isArray(summary.hunk_ids) || summary.hunk_ids.some((id) => typeof id !== "string" || id.length === 0)
+            || summaryText !== `${JSON.stringify(summary)}\n`) {
+          throw new Error(`MATERIAL_INCOMPLETE: summary diff shard ${shard.shard_id} is not bound to its changed path`);
+        }
+        if (manifest !== null && manifest.some((entry) => entry.path === `diff-shards/${shard.shard_id}.diff`)) {
+          throw new Error(`MATERIAL_INCOMPLETE: summary diff shard ${shard.shard_id} must not be in the delivery manifest`);
+        }
+        if (packetPlan !== null && Object.values(packetPlan.included ?? {}).flat().includes(`diff-shards/${shard.shard_id}.diff`)) {
+          throw new Error(`MATERIAL_INCOMPLETE: summary diff shard ${shard.shard_id} must not be in packet-plan`);
+        }
+      }
+      if (shard.delivery === "included" && manifest !== null && !manifest.some((entry) => entry.path === `diff-shards/${shard.shard_id}.diff` && entry.bytes === shard.bytes && entry.sha256 === shard.sha256)) {
+        throw new Error(`MATERIAL_INCOMPLETE: diff shard ${shard.shard_id} is not bound to the delivery manifest`);
+      }
+      if (shard.delivery === "included" && packetPlan !== null && !Object.values(packetPlan.included ?? {}).flat().includes(`diff-shards/${shard.shard_id}.diff`)) {
+        throw new Error(`MATERIAL_INCOMPLETE: diff shard ${shard.shard_id} is not listed in packet-plan`);
+      }
+    }
+    const included = shards.filter(({ delivery }) => delivery === "included").sort((left, right) => left.offset - right.offset);
+    if (included.some((shard, index) => shard.offset !== (index === 0 ? 0 : included[index - 1].offset + included[index - 1].bytes))) {
+      throw new Error(`MATERIAL_INCOMPLETE: included diff shards for ${change.path ?? change.change_id} are not contiguous`);
+    }
+    if (stage === "verify-code" && classifyReviewableCodePath(change.path ?? "") !== null) {
+      const kind = classifyReviewableCodePath(change.path);
+      if (included.length > 0) {
+        const content = Buffer.concat(included.map((shard) => readFileSync(join(bundleRoot, "diff-shards", `${shard.shard_id}.diff`))));
+        if (!realUnifiedDiffForPath(content, change.path)) {
+          throw new Error(`MATERIAL_INCOMPLETE: reviewable verify-code change ${change.path} has no real unified diff hunk`);
+        }
+        verifyCodeKinds.set(kind, true);
+      }
+    }
+  }
+  if (stage === "verify-code") {
+    const requiredKinds = new Set((index.changes ?? [])
+      .map((change) => classifyReviewableCodePath(change.path ?? ""))
+      .filter(Boolean));
+    for (const kind of requiredKinds) {
+      if (!verifyCodeKinds.has(kind)) throw new Error(`MATERIAL_INCOMPLETE: verify-code requires an included ${kind} diff when that kind changed`);
     }
   }
   if (covered.size !== index.coverage?.change_ids_total || covered.size !== index.coverage?.change_ids_indexed) {
@@ -1951,6 +2113,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifest = canonicalMaterialManifest(entries);
   const materialId = sha256(Buffer.from(manifest, "utf8"));
   write(bundleRoot, "manifest.json", Buffer.from(manifest, "utf8"));
+  if (bundleDiffIndex !== null) validateDiffIndexBundle(bundleRoot, { stage, manifest: entries, packetPlan });
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
