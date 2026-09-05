@@ -61,13 +61,12 @@ describe("current interaction boundary", () => {
     }
   });
 
-  it("requires every stage skill to emit same-session step and skill boundaries", () => {
+  it("requires every stage skill to disclose omitted step and skill outcomes", () => {
     for (const stage of WORKFLOW_STAGES) {
       const skill = read("workflows", stage, "SKILL.md");
-      expect(skill).toContain("workflowhub-codex-session-event.mjs start");
-      expect(skill).toContain("workflowhub-codex-session-event.mjs finish");
-      expect(skill).toContain("record-spec-analyze");
-      expect(skill).toMatch(/不启动第二个 Agent/);
+      expect(skill).toContain("阶段末遗漏披露");
+      expect(skill).toMatch(/未完成.*失败.*跳过.*不适用/);
+      expect(skill).not.toContain("workflowhub-codex-session-event.mjs");
     }
   });
 

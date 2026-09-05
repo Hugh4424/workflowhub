@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
-import { sessionHandoffPath } from "../../tools/host/workflowhub-codex-session-state.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -89,23 +88,4 @@ describe("task bootstrap target repository boundary", () => {
     expect(() => bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2", "runner-root": f.repo, stage: "verify-code" })).toThrow(/AGENTS|runner identity/i);
   });
 
-  it("binds the active project-hook session without requiring a task id environment variable", () => {
-    const f = fixture();
-    const sessionId = "session-bootstrap-auto";
-    const rollout = join(f.home, ".codex", "sessions", "2026", "08", "18", "rollout-2026-08-18T00-00-00-session-bootstrap-auto.jsonl");
-    mkdirSync(join(f.home, ".codex", "sessions", "2026", "08", "18"), { recursive: true });
-    writeFileSync(rollout, "");
-    const hook = join(process.cwd(), "tools", "host", "workflowhub-codex-session-hook.mjs");
-    try {
-      execFileSync(process.execPath, [hook], {
-        cwd: f.repo,
-        input: `${JSON.stringify({ hook_event_name: "SessionStart", session_id: sessionId, transcript_path: rollout, cwd: f.repo })}\n`,
-        env: { ...process.env, HOME: f.home },
-      });
-      const result = bootstrapTask({ project: "workflowhub", task: "bootstrap-auto-task", "target-repo": f.repo }, { ...f, cwd: f.repo });
-      expect(result.session_binding).toMatchObject({ status: "bound", task_binding: { project_name: "workflowhub", task_id: "bootstrap-auto-task" } });
-    } finally {
-      rmSync(sessionHandoffPath(f.repo), { force: true });
-    }
-  });
 });

@@ -6,18 +6,9 @@ version: 5.1.0
 
 # Verify Code：代码审查
 
-## 同一会话自动记录
+## 阶段末遗漏披露
 
-本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验。旧 task context 只读保留，不会和新 task 的事件混在一起；未登记的 task id 仍直接失败。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；命令失败就保留真实 `incomplete`/`unavailable`，不能补填成功。
-
-```sh
-node tools/host/workflowhub-codex-session-event.mjs start --stage=verify-code --subject-kind=step --subject-id=<step_slug>
-node tools/host/workflowhub-codex-session-event.mjs finish --stage=verify-code --subject-kind=step --subject-id=<step_slug> --status=<completed|failed|skipped|not_applicable> --summary="<真实结果>" --evidence=<真实证据引用>
-```
-
-skill 使用同一命令记录实际版本、触发和执行结果。verify-code 不执行前四
-阶段的 `record-spec-analyze`/`spec-analyze`；阶段末发布当前代码审查 outcome，并单独保留真实
-确认事实。
+阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 ## 阶段末复盘（必须执行）
 

@@ -19,6 +19,8 @@ const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\
 const FULL_TEST_COMMAND = "npm test";
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
+const IMPLEMENTATION_CAPTURE_LOCK_REF = "locks/implementation-capture.execution.lock";
+const IMPLEMENTATION_CAPTURE_LOCK_WAIT_MS = 10_000;
 export const TEST_CAPTURE_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_TEST_CAPTURE_TIMEOUT_MS = 15 * 60 * 1000;
 const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
@@ -319,24 +321,51 @@ function currentImplementationReceipt({ task, workspace, version }) {
   const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n")
     .filter(Boolean)
     .filter((path) => !path.startsWith(".multica/") && !path.startsWith("quality/"));
+  const untrackedEntries = untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) }));
   const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
-  const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
+  const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, patch, untracked: untrackedEntries }, null, 2)}\n`;
   const diffHash = sha256(diff), diffRef = `quality/evidence/implementation/${diffHash}.diff`;
-  publishIdempotently({ task, write: createTaskKernel(task).publishCanonicalRecord, ref: diffRef, raw: diff, label: "implementation diff evidence" });
   return {
     value: { schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "build-code", producer: { stage: "build-code", component: "implementation", version }, changed, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash },
     diffHash,
+    diffRaw: diff,
   };
+}
+
+function publishImplementationRecords({ task, workspace, version = "1.0.0", receiptRef = null }) {
+  const safeTask = assertTaskHandle(task);
+  const safeWorkspace = assertWorkspace(workspace);
+  let published;
+  safeTask.withRecordLock(IMPLEMENTATION_CAPTURE_LOCK_REF, () => {
+    // Capture the snapshot and every untracked blob while the implementation
+    // publication lease is held. Otherwise a concurrent source edit could
+    // land between the hash read and the immutable record writes.
+    const capture = currentImplementationReceipt({ task: safeTask, workspace: safeWorkspace, version });
+    const write = createTaskKernel(safeTask).publishCanonicalRecord;
+    const raw = canonicalJson(capture.value);
+    const ref = receiptRef ?? `quality/evidence/implementation/${sha256(raw)}.json`;
+    // Preflight every immutable target before the first write.  This keeps a
+    // deterministic conflict from leaving only the diff half of the
+    // implementation evidence behind.
+    const existingDiff = readCanonicalRecord(safeTask, capture.value.diff_ref);
+    if (existingDiff !== undefined && existingDiff !== capture.diffRaw) {
+      throw new Error("implementation diff evidence already exists with different content");
+    }
+    const existingReceipt = readCanonicalRecord(safeTask, ref);
+    if (existingReceipt !== undefined && existingReceipt !== raw) {
+      throw new Error("implementation snapshot receipt already exists with different content");
+    }
+    publishIdempotently({ task: safeTask, write, ref: capture.value.diff_ref, raw: capture.diffRaw, label: "implementation diff evidence" });
+    publishIdempotently({ task: safeTask, write, ref, raw, label: "implementation snapshot receipt" });
+    published = Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(capture.value) });
+  }, { waitMs: IMPLEMENTATION_CAPTURE_LOCK_WAIT_MS });
+  return published;
 }
 
 /** Publish a create-only implementation snapshot under its content-addressed ref. */
 export function writeCurrentImplementationReceipt({ task, workspace, version = "1.0.0" } = {}) {
   const safeTask = assertTaskHandle(task);
-  const value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
-  const raw = canonicalJson(value);
-  const ref = `quality/evidence/implementation/${sha256(raw)}.json`;
-  publishIdempotently({ task: safeTask, write: createTaskKernel(safeTask).publishCanonicalRecord, ref, raw, label: "implementation snapshot receipt" });
-  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
+  return publishImplementationRecords({ task: safeTask, workspace, version });
 }
 
 /** Publish the one current transcript-authenticated spec-clarify interaction receipt. */
@@ -422,6 +451,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   const write = createTaskKernel(safeTask).publishCanonicalRecord;
   const producer = { stage, component, version };
   let value;
+  let implementationWorkspace;
   if (registration.kind === "decision-log") {
     if (Object.keys(payload).some((key) => !new Set(["decision_log", "contract_refs"]).has(key))
         || typeof payload.decision_log !== "string" || payload.decision_log.trim() === "") {
@@ -457,7 +487,8 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     if (Object.keys(payload).length !== 0) {
       throw new TypeError("implementation payload must be empty; phase_completion is derived by the official build-code handler");
     }
-    value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
+    if (revisionOf !== undefined) throw new Error("REPLACEMENT_RETIRED: official records are create-only; publish a new task material instead");
+    implementationWorkspace = workspace;
   } else if (registration.kind === "verification-items") {
     if (Object.keys(payload).some((key) => !new Set(["items", "review_cycle", "requirement_replay"]).has(key)) || !Array.isArray(payload.items)) {
       throw new TypeError("verification payload requires items and optional review_cycle/requirement_replay");
@@ -582,6 +613,12 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     });
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, refs };
   }
+  if (implementationWorkspace !== undefined) return publishImplementationRecords({
+    task: safeTask,
+    workspace: implementationWorkspace,
+    version,
+    receiptRef: "quality/evidence/implementation.json",
+  });
   const raw = canonicalJson(value);
   if (revisionOf !== undefined) throw new Error("REPLACEMENT_RETIRED: official records are create-only; publish a new task material instead");
   // Verification is the one official receipt that may be produced again after

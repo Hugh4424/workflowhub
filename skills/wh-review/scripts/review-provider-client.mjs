@@ -33,6 +33,22 @@ function wireSummary(wire) {
   return `exit=${Number.isInteger(wire?.exitCode) ? wire.exitCode : "spawn_error"}; stdout_sha256=${digest(wire?.stdout)}; stderr_sha256=${digest(wire?.stderr)}`;
 }
 
+function contractFailure(error, wire) {
+  Object.defineProperty(error, "diagnostic", {
+    value: Object.freeze({
+      classification: "contract_failure",
+      raw_stdout: String(wire?.stdout ?? ""),
+      raw_stderr: String(wire?.stderr ?? ""),
+      stdout_sha256: digest(wire?.stdout),
+      stderr_sha256: digest(wire?.stderr),
+    }),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return error;
+}
+
 function safeBrokerError(value) {
   const error = value?.error ?? value;
   if (!error || typeof error !== "object" || Array.isArray(error) || typeof error.code !== "string" || typeof error.message !== "string") return null;
@@ -300,7 +316,7 @@ function parsePublicRun(wire) {
       if (error?.code && error.code !== "SyntaxError") throw error;
     }
     if (wire?.spawnError) throw failure("BROKER_SPAWN_FAILED", `3rd-review public run could not start; ${wireSummary(wire)}`);
-    throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review public run did not return JSON; ${wireSummary(wire)}`);
+    throw contractFailure(failure("PROTOCOL_INCOMPATIBLE", `3rd-review public run did not return JSON; ${wireSummary(wire)}`), wire);
   }
   const brokerError = safeBrokerError(result);
   if (brokerError) throw brokerError;
