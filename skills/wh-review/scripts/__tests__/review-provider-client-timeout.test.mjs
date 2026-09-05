@@ -9,6 +9,11 @@ const materials = {
   deliveryManifest: [],
 };
 
+test("default broker wait covers the current long-running public review", () => {
+  const client = new ReviewProviderClient({ command: [process.execPath], config: "fixture-config" });
+  expect(client.timeoutMs).toBeGreaterThanOrEqual(600_000);
+});
+
 test("client bounds a hanging broker and returns a typed timeout", async () => {
   const client = new ReviewProviderClient({
     command: [process.execPath, "-e", "setTimeout(() => {}, 1000)"],

@@ -6,7 +6,10 @@ import { join } from "node:path";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
-const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = 120_000;
+// v4 3rd-review removed provider wall-clock deadlines. Keep a bounded outer
+// client wait, but allow the long-running providers used by real review groups
+// to reach a terminal result before the client tears down the broker.
+const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = 600_000;
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
