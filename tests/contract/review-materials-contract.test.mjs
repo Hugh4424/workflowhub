@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,11 +17,14 @@ import {
   validateVerifyAcceptanceSummary,
   validateDiffIndexBundle,
   phaseDiffDeliveryForPath,
+  classifyReviewableCodePath,
+  selectBoundedVerifyCodeDiffPaths,
   verifyCodeDiffDeliveryForPath,
   buildReviewMaterials,
   reviewInstructionsFor,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
+import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -163,11 +166,83 @@ describe("current review material and capture contracts", () => {
     writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify({
       schema_version: "wh-review-diff-index.v1", delivery_mode: "selected_context",
       coverage: { change_ids_total: 1, change_ids_indexed: 1 },
-      changes: [{ change_id: "C-1", path: "src.mjs", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [{ delivery: "included", shard_id: "shard-1", bytes: Buffer.byteLength(shard), sha256: sha256(shard) }] }],
+      changes: [{ change_id: "C-1", path: "src.mjs", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [{ delivery: "included", shard_id: "shard-1", offset: 0, bytes: Buffer.byteLength(shard), sha256: sha256(shard) }] }],
     })}\n`);
     expect(() => validateDiffIndexBundle(bundleRoot)).not.toThrow();
     writeFileSync(join(bundleRoot, "diff-shards", "shard-1.diff"), `${shard}tampered`);
     expect(() => validateDiffIndexBundle(bundleRoot)).toThrow(/missing or tampered/);
+  });
+
+  it("requires real unified hunks for every reviewable verify-code change", () => {
+    const bundleRoot = mkdtempSync(join(tmpdir(), "workflowhub-verify-diff-index-"));
+    roots.push(bundleRoot);
+    mkdirSync(join(bundleRoot, "diff-shards"));
+    const implementation = "diff --git a/src/app.ts b/src/app.ts\n@@ -1 +1 @@\n+IMPLEMENTATION_MARKER\n";
+    const testSummary = `${JSON.stringify({
+      schema_version: "wh-review-diff-summary.v1", path: "tests/app.test.ts", change_id: "C-2",
+      status: "modified", source_bytes: 72, hunk_ids: ["H-test"], delivery: "summary",
+    })}\n`;
+    writeFileSync(join(bundleRoot, "diff-shards", "impl.diff"), implementation);
+    writeFileSync(join(bundleRoot, "diff-shards", "test.diff"), testSummary);
+    const entry = (change_id, path, shard_id, body, delivery, summary = undefined) => ({
+      change_id, path, new_line_ranges: [{ start_line: 1, end_line: 1 }],
+      shards: [{ shard_id, offset: 0, bytes: Buffer.byteLength(body), sha256: sha256(body), delivery, ...(summary ? { summary: true } : {}) }],
+    });
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify({
+      schema_version: "wh-review-diff-index.v1", delivery_mode: "selected_context",
+      coverage: { change_ids_total: 2, change_ids_indexed: 2 },
+      changes: [entry("C-1", "src/app.ts", "impl", implementation, "included"), entry("C-2", "tests/app.test.ts", "test", testSummary, "summary", true)],
+    })}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot, { stage: "verify-code" })).toThrow(/requires an included test diff/);
+    writeFileSync(join(bundleRoot, "diff-shards", "test.diff"), `${testSummary}tampered\n`);
+    const trailingSummaryIndex = JSON.parse(readFileSync(join(bundleRoot, "diff-index.json"), "utf8"));
+    trailingSummaryIndex.changes[1].shards[0] = {
+      shard_id: "test", offset: 0, bytes: statSync(join(bundleRoot, "diff-shards", "test.diff")).size,
+      sha256: sha256(readFileSync(join(bundleRoot, "diff-shards", "test.diff"))), delivery: "summary", summary: true,
+    };
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify(trailingSummaryIndex)}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot, { stage: "verify-code" })).toThrow(/summary diff shard.*bound/);
+    const testDiff = "diff --git a/tests/app.test.ts b/tests/app.test.ts\n@@ -1 +1 @@\n+TEST_MARKER\n";
+    writeFileSync(join(bundleRoot, "diff-shards", "test.diff"), testDiff);
+    const index = JSON.parse(readFileSync(join(bundleRoot, "diff-index.json"), "utf8"));
+    index.changes[1].shards[0] = { shard_id: "test", offset: 0, bytes: Buffer.byteLength(testDiff), sha256: sha256(testDiff), delivery: "included" };
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify(index)}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot, { stage: "verify-code" })).not.toThrow();
+  });
+
+  it("requires one real diff per changed kind, but allows other code paths to be summary-only", () => {
+    const bundleRoot = mkdtempSync(join(tmpdir(), "workflowhub-verify-diff-kinds-"));
+    roots.push(bundleRoot);
+    mkdirSync(join(bundleRoot, "diff-shards"));
+    const diff = (path, marker) => `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n+${marker}\n`;
+    const implementation = diff("src/first.ts", "IMPLEMENTATION_MARKER");
+    const test = diff("tests/first.test.ts", "TEST_MARKER");
+    const summary = (path, change_id) => `${JSON.stringify({
+      schema_version: "wh-review-diff-summary.v1", path, change_id, status: "modified",
+      source_bytes: 72, hunk_ids: ["H-summary"], delivery: "summary",
+    })}\n`;
+    const files = new Map([
+      ["impl", implementation], ["impl-summary", summary("src/second.ts", "C-2")], ["test", test],
+    ]);
+    for (const [name, body] of files) writeFileSync(join(bundleRoot, "diff-shards", `${name}.diff`), body);
+    const shard = (shard_id, body, delivery) => ({
+      shard_id, offset: 0, bytes: Buffer.byteLength(body), sha256: sha256(body), delivery,
+      ...(delivery === "summary" ? { summary: true } : {}),
+    });
+    const makeIndex = (implementationDelivery = "included") => ({
+      schema_version: "wh-review-diff-index.v1", delivery_mode: "selected_context",
+      coverage: { change_ids_total: 3, change_ids_indexed: 3 },
+      changes: [
+        { change_id: "C-1", path: "src/first.ts", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [shard("impl", implementationDelivery === "included" ? implementation : summary("src/first.ts", "C-1"), implementationDelivery)] },
+        { change_id: "C-2", path: "src/second.ts", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [shard("impl-summary", files.get("impl-summary"), "summary")] },
+        { change_id: "C-3", path: "tests/first.test.ts", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [shard("test", test, "included")] },
+      ],
+    });
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify(makeIndex())}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot, { stage: "verify-code" })).not.toThrow();
+    writeFileSync(join(bundleRoot, "diff-shards", "impl.diff"), summary("src/first.ts", "C-1"));
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify(makeIndex("summary"))}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot, { stage: "verify-code" })).toThrow(/requires an included implementation diff/);
   });
 
   it("keeps implementation diffs complete and bounds non-code large-Phase diffs to summaries", () => {
@@ -191,6 +266,175 @@ describe("current review material and capture contracts", () => {
     expect(verifyCodeDiffDeliveryForPath("paperbuilder/application/position_comments.py")).toBe("included");
     expect(verifyCodeDiffDeliveryForPath("tests/test_position_comments_application.py")).toBe("included");
     expect(verifyCodeDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
+  });
+
+  it("classifies external implementation and test paths while excluding generated sources", () => {
+    expect(classifyReviewableCodePath("frontend/src/workbench-screen.tsx")).toBe("implementation");
+    expect(classifyReviewableCodePath("tests/test_position_comments_application.py")).toBe("test");
+    expect(classifyReviewableCodePath("vendor/adapter.py")).toBeNull();
+    expect(classifyReviewableCodePath("frontend/dist/app.min.js")).toBeNull();
+    expect(classifyReviewableCodePath("generated/client.generated.ts")).toBeNull();
+    expect(verifyCodeDiffDeliveryForPath("vendor/adapter.py")).toBe("summary");
+    expect(verifyCodeDiffDeliveryForPath("frontend/dist/app.min.js")).toBe("summary");
+  });
+
+  it("selects a stable bounded set with implementation and test fallbacks", () => {
+    const sections = [
+      { path: "tests/z.test.ts", bytes: Buffer.alloc(40) },
+      { path: "paperbuilder/application/core.py", bytes: Buffer.alloc(40) },
+      { path: "vendor/generated.py", bytes: Buffer.alloc(1) },
+      { path: "skills/wh-review/scripts/review-materials.mjs", bytes: Buffer.alloc(30) },
+    ];
+    const selected = selectBoundedVerifyCodeDiffPaths(sections, new Set(), "verify-code", 161 * 1024, 80);
+    expect([...selected]).toEqual(["skills/wh-review/scripts/review-materials.mjs", "tests/z.test.ts"]);
+  });
+
+  it("orders priority candidates before implementation, test, and UTF-8 path", () => {
+    const sections = [
+      { path: "tests/contract/review-materials-contract.test.mjs", bytes: Buffer.alloc(40) },
+      { path: "z-project/src/app.ts", bytes: Buffer.alloc(40) },
+      { path: "a-project/src/app.py", bytes: Buffer.alloc(40) },
+    ];
+    const selected = selectBoundedVerifyCodeDiffPaths(sections, new Set(), "verify-code", 161 * 1024, 80);
+    expect([...selected]).toEqual(["tests/contract/review-materials-contract.test.mjs", "a-project/src/app.py"]);
+    expect([...selectBoundedVerifyCodeDiffPaths([...sections].reverse(), new Set(), "verify-code", 161 * 1024, 80)])
+      .toEqual([...selected]);
+    expect([...selectBoundedVerifyCodeDiffPaths([
+      { path: "😀-project/src/app.ts", bytes: Buffer.alloc(40) },
+      { path: "é-project/src/app.ts", bytes: Buffer.alloc(40) },
+    ], new Set(), "verify-code", 161 * 1024, 40)]).toEqual(["é-project/src/app.ts"]);
+  });
+
+  it("fails closed when a required implementation or test fallback cannot fit", () => {
+    expect(() => selectBoundedVerifyCodeDiffPaths([
+      { path: "frontend/src/app.ts", bytes: Buffer.alloc(81) },
+      { path: "tests/app.test.ts", bytes: Buffer.alloc(10) },
+    ], new Set(), "verify-code", 161 * 1024, 90)).toThrow(/implementation and test diff fallbacks exceed/);
+    expect(() => selectBoundedVerifyCodeDiffPaths([
+      { path: "frontend/src/app.ts", bytes: Buffer.alloc(91) },
+    ], new Set(), "verify-code", 161 * 1024, 90)).toThrow(/implementation diff fallback exceeds/);
+    expect(() => selectBoundedVerifyCodeDiffPaths([
+      { path: "frontend/src/app.ts", bytes: Buffer.alloc(1) },
+    ], new Set(), "verify-code", 161 * 1024, 0)).toThrow(/implementation diff fallback exceeds/);
+    const onlyTests = selectBoundedVerifyCodeDiffPaths([
+      { path: "tests/app.test.ts", bytes: Buffer.alloc(10) },
+    ], new Set(), "verify-code", 161 * 1024, 10);
+    expect([...onlyTests]).toEqual(["tests/app.test.ts"]);
+  });
+
+  it("delivers external implementation and test shards with manifest and packet-plan bindings", async () => {
+    const { root, task, workspace } = taskFixture();
+    mkdirSync(join(workspace.worktreeRoot, "frontend", "src"), { recursive: true });
+    mkdirSync(join(workspace.worktreeRoot, "tests"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "frontend/src/app.ts"), `export const marker = "IMPLEMENTATION_MARKER";\n${"x".repeat(80 * 1024)}\n`);
+    writeFileSync(join(workspace.worktreeRoot, "tests/app.test.ts"), `test("marker", () => "TEST_MARKER");\n${"y".repeat(60 * 1024)}\n`);
+    writeFileSync(join(workspace.worktreeRoot, "notes.md"), `notes\n${"n".repeat(40 * 1024)}\n`);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: task.identity.taskId,
+        stage: "verify-code",
+        materials: {
+          changed_files: "frontend/src/app.ts; tests/app.test.ts; notes.md",
+          implementation_assessment: "The application implementation is under review.",
+          test_context: "The external test file covers the marker behavior.",
+          open_risks: "No additional risk material.",
+          review_instructions: reviewInstructionsFor("verify-code"),
+        },
+      });
+      const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+      const byPath = new Map(index.changes.map((change) => [change.path, change]));
+      for (const path of ["frontend/src/app.ts", "tests/app.test.ts"]) {
+        const change = byPath.get(path);
+        expect(change.shards.some(({ delivery }) => delivery === "included")).toBe(true);
+        const bytes = Buffer.concat(change.shards.filter(({ delivery }) => delivery === "included")
+          .map(({ shard_id }) => readFileSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`))));
+        expect(bytes.toString("utf8")).toMatch(/@@/);
+        expect(bytes.toString("utf8")).toMatch(path.includes("tests") ? /TEST_MARKER/ : /IMPLEMENTATION_MARKER/);
+      }
+      const notes = byPath.get("notes.md");
+      expect(notes.shards.every(({ delivery }) => delivery === "summary")).toBe(true);
+      const notesBody = readFileSync(join(bundle.bundleRoot, "diff-shards", `${notes.shards[0].shard_id}.diff`), "utf8");
+      expect(notesBody).not.toMatch(/diff --git|@@/);
+      const manifestPaths = new Set(bundle.manifest.map(({ path }) => path));
+      const planPaths = new Set(Object.values(bundle.packetPlan.included).flat());
+      for (const shard of index.changes.flatMap(({ shards }) => shards).filter(({ delivery }) => delivery === "included")) {
+        const path = `diff-shards/${shard.shard_id}.diff`;
+        expect(manifestPaths.has(path)).toBe(true);
+        expect(planPaths.has(path)).toBe(true);
+      }
+      const firstIncluded = index.changes.flatMap(({ shards }) => shards).find(({ delivery }) => delivery === "included");
+      const firstIncludedPath = `diff-shards/${firstIncluded.shard_id}.diff`;
+      expect(() => validateDiffIndexBundle(bundle.bundleRoot, {
+        stage: "verify-code",
+        manifest: bundle.manifest.filter((entry) => entry.path !== firstIncludedPath),
+        packetPlan: bundle.packetPlan,
+      })).toThrow(/not bound to the delivery manifest/);
+      const planWithoutShard = {
+        ...bundle.packetPlan,
+        included: Object.fromEntries(Object.entries(bundle.packetPlan.included).map(([key, paths]) => [
+          key, paths.filter((path) => path !== firstIncludedPath),
+        ])),
+      };
+      expect(() => validateDiffIndexBundle(bundle.bundleRoot, {
+        stage: "verify-code", manifest: bundle.manifest, packetPlan: planWithoutShard,
+      })).toThrow(/not listed in packet-plan/);
+      const planWithUnboundPath = {
+        ...bundle.packetPlan,
+        included: {
+          ...bundle.packetPlan.included,
+          required: [...(bundle.packetPlan.included.required ?? []), "diff-shards/unbound.diff"],
+        },
+      };
+      expect(() => validateDiffIndexBundle(bundle.bundleRoot, {
+        stage: "verify-code", manifest: bundle.manifest, packetPlan: planWithUnboundPath,
+      })).toThrow(/packet-plan path .*not bound to the delivery manifest/);
+      expect(readFileSync(join(bundle.bundleRoot, "contracts/provider-protocol.md"), "utf8"))
+        .not.toMatch(/reviewed_file/);
+      const provider = "kimi/coding";
+      const fakeProvider = new ReviewProviderClient({ invoke: async ({ attachmentsRoot, attachments, attachmentDelivery }) => {
+        expect(attachmentDelivery).toBe("file_only");
+        expect(attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+        const packetRoot = join(attachmentsRoot, bundle.sourcePrefix);
+        for (const entry of attachments.entries) {
+          const bytes = readFileSync(join(packetRoot, entry.destination));
+          expect(bytes.length).toBe(entry.size);
+          expect(sha256(bytes)).toBe(entry.sha256);
+        }
+        const diffIndex = JSON.parse(readFileSync(join(packetRoot, "diff-index.json"), "utf8"));
+        const included = diffIndex.changes.flatMap(({ shards }) => shards).filter(({ delivery }) => delivery === "included");
+        expect(included.length).toBeGreaterThanOrEqual(2);
+        expect(included.every(({ shard_id }) => readFileSync(join(packetRoot, "diff-shards", `${shard_id}.diff`), "utf8").includes("@@ -"))).toBe(true);
+        const runtimeId = "fake-file-only-runtime";
+        const output = JSON.stringify({ findings: [] });
+        const error = null;
+        const identity = { adapter: "kimi", config_id: "fake-config", model: null, provider, source_id: "fake-source" };
+        return { exitCode: 0, stderr: "", stdout: `${JSON.stringify({
+          version: "workflowhub-result.v3", host_provider: "codex/terra", material_id: bundle.materialId,
+          outcome: "completed", providers: [{
+            attempts: [{ attempt_id: "fake-attempt", completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "completed" }],
+            continuable: false, deadline_ms: null, error, identity,
+            material: { contract_hash: bundle.contractHash, contract_id: bundle.contractId, material_id: bundle.materialId, semantic_hash: "fake-semantic" },
+            output, provenance: { raw_output_sha256: null, raw_stderr_sha256: null, runtime_id: runtimeId },
+            recovery: { fresh_execution_retry_count: 0, provider_internal_retry_count: 0, same_session_repair_count: 0 },
+            result_protocol: "workflowhub-result.v3", session_id: null, status: "completed",
+            timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
+          }], round: 1, runtime_id: runtimeId, selected_tier: 0,
+        })}\n` };
+      }});
+      const result = await fakeProvider.runGroup({
+        hostProvider: "codex/terra", providers: [provider], materials: bundle,
+        prompt: "Read only the supplied bundle and return findings.", attachmentDelivery: "file_only",
+      });
+      expect(result.providers[0].output).toBe(JSON.stringify({ findings: [] }));
+      expect(result.providers[0].output).not.toContain("reviewed_file");
+    } finally {
+      source.dispose();
+    }
   });
 
   it("uses the current canonical receipt writer through both build and verify capture wrappers", async () => {
