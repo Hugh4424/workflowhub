@@ -32,3 +32,7 @@ npm run check
 5. **验收（test-acceptance）**：独立验证交付是否达标。
 
 每个阶段是一个独立技能，按目录约定组织（见 `skills/`、`workflows/`、`config/`）。
+
+## 多 CLI 宿主接线
+
+宿主调用阶段时必须显式提供 `--project` 与 `--task`，或运行在已认证的 task worktree。外部 Stage Agent 的结果只能经现有 bridge 提交 `session` 或 `unavailable`，并绑定 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`；旧 session/env、transcript 扫描和质量 receipt 不参与身份或结果生成。接线细则见 [`skills/workflowhub-host-protocol/SKILL.md`](skills/workflowhub-host-protocol/SKILL.md)。

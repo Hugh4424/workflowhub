@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { assertTaskKernel } from "../../core/task-capability.mjs";
+import { assertTaskKernel } from "../task/task-capability.mjs";
 import { aggregateCanonicalProviderResults, providerAdapter } from "./canonical-review-result.mjs";
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;

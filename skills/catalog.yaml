@@ -19,6 +19,7 @@ skills:
     m16_contract: consumer-scan-proof.v1
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 每个 authoring stage 结束时产出轻量判断层复盘
     design_idea: 用当前会话记忆、lessons 与本 stage outcome 生成可追溯判断，不制造质量分数或推进门禁
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
@@ -32,6 +33,7 @@ skills:
     local_bundle_hash: 266d24d43ecc01b8a0aef9502ac79bb8e2b0fb3580b77361576f5bb23fea0bbf
     last_reviewed_at: "2026-07-14"
     status: adopted
+    metrics_enabled: false
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
     standalone: true
@@ -46,6 +48,7 @@ skills:
     local_bundle_hash: abc4e8b9680aeec2000298178b135aaf02bcc088b2de121b8ed0e29f225903d4
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 生成下游唯一权威需求记录
     design_idea: 将已收敛输入固化为结构化 decision log
     used_by_stages: [make-decision]
@@ -59,6 +62,7 @@ skills:
     local_bundle_hash: b0d29f16c9c519bd795d42320ca75d972f4707dca42deee91a6cf159c927436a
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 用领域模型和现有文档压力测试方案
     design_idea: 边追问边沉淀 CONTEXT 和 ADR
     used_by_stages: [make-decision]
@@ -75,6 +79,7 @@ skills:
     local_bundle_hash: 4f211fb462932454bac880431dd7dd2a381fcbf8f93b0e85ebb55b03c6ee5ef5
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 对 intake direction 冻结材料执行四角度纯盲审
     design_idea: wh-review 唯一 provider owner；lens 不提问、不持有 transport
     used_by_stages: [make-decision]
@@ -88,6 +93,7 @@ skills:
     local_bundle_hash: c36970ae6d0639d5d0cc33fb1858c63534fb40bb2bcb548b65de0b3fd20dc413
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 审查方案是否遵守四阶梯最小路径
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
     used_by_stages: [make-decision, build-spec, build-plan, build-code]
@@ -101,6 +107,7 @@ skills:
     local_bundle_hash: 9783d36400aa089a644ec6c5c1b21a0f736ccbc51c09887ab8bcf45bf98c2465
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 对话式收敛方向、歧义、风险和范围
     design_idea: 一次一组独立问题，按影响重排，达到阈值即收敛
     used_by_stages: [make-decision]
@@ -114,6 +121,7 @@ skills:
     local_bundle_hash: 1623561aca7b2f8288140187ff357310bd80a7011ee5f2d6d34737c37bcc78a5
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 规划前形成内存研究材料
     design_idea: 冻结输入、内存交接、不新增正式产物
     used_by_stages: [build-spec, build-plan]
@@ -127,6 +135,7 @@ skills:
     local_bundle_hash: 7c919fa05eae4e0240e2fcc4d33fb2286634b3f2832b178ac20965d3c9c5e7f1
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     standalone: true
@@ -141,6 +150,7 @@ skills:
     local_bundle_hash: 3f3d95f7b55808a2fcdf3514bc6f1fb55006044af2548bc8a6169e1945d7784d
     last_reviewed_at: "2026-08-31"
     status: adapted
+    metrics_enabled: true
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、独立问题成批、依赖问题拆批写回
     standalone: true
@@ -155,6 +165,7 @@ skills:
     local_bundle_hash: a6bf7baaacc8be5605ebb5121cc6d14e4a3675d9beaa6a0b51e86b9ff6c2b167
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
@@ -171,6 +182,7 @@ skills:
     local_bundle_hash: 072b8284056893b236816376ccdb98b238718f1ad02d65b8d2b273072e3a03ae
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
     standalone: true
@@ -187,6 +199,7 @@ skills:
     local_bundle_hash: debaf18c4794b0fa00472e4cd4d079b2ec17df3d456254b62fc5eed638c6c944
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 前四 stage 收尾唯一语义检查与质量事实契约 owner
     design_idea: report-only packet lens with existing atomic quality publication
     used_by_stages: [make-decision, build-spec, build-plan, build-code]
@@ -200,6 +213,7 @@ skills:
     local_bundle_hash: 7f19cda6dbf81b472c996781f29ff19c2038517267d1cd10c154d8585f842027
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: verify-code 当前实现的高质量代码审查 lens
     design_idea: correctness、lifecycle、security、consumer fit 和真实测试强度
     standalone: true
@@ -219,6 +233,7 @@ skills:
     local_bundle_hash: 22512da6779c471471905f54a7ae4479d43da596a61cecdec6cc757518bb37db
     last_reviewed_at: "2026-07-14"
     status: absorbed
+    metrics_enabled: false
     standalone: true
     purpose: 为 canonical workflow step 生成或校验 typed receipt
     design_idea: 只承载步骤证据，不引入第二 verdict engine
@@ -233,6 +248,7 @@ skills:
     local_bundle_hash: c4e736fb8b55e3a0996caeead7368a77b2cbd31becc98af5eb4c70c47b513621
     last_reviewed_at: "2026-07-14"
     status: absorbed
+    metrics_enabled: false
     standalone: true
     purpose: 在阶段间传递有界审计摘要
     design_idea: 保留可验证引用，不复制第二份事实源
@@ -247,6 +263,7 @@ skills:
     local_bundle_hash: 92655a6403eb6e444ada2c785b685c2c7cb5aec3abf8b2106469d631df9425f2
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: false
     standalone: true
     purpose: 关联原始需求、AC、实现和验证证据
     design_idea: 以 manifest/hash 绑定的 ledger 与 coverage 保持需求谱系
@@ -258,9 +275,10 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: e15f394d4ac400c6e033c91da7989fdaad0404aac2b07d3cf2ebe2806e623cc8
+    local_bundle_hash: 0697bc49b3e80745a65612eba89b06032b8965065df3c3c93599a0deab15761f
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: false
     standalone: true
     purpose: 记录宿主把 WorkflowHub 阶段事实投影到外部任务系统的规则
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
@@ -275,6 +293,7 @@ skills:
     local_bundle_hash: e8ae578a075f6b8b483977838437cf8e5725aed38c536d65d9bb74662faad13a
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: false
     standalone: true
     purpose: 审计本机 WorkflowHub 技能与 Multica 技能和 agent 提示词的一致性
     design_idea: 按发布闭包同步阶段三件套、托管技能和 agent；先生成唯一差异计划，用户确认后才同步
@@ -285,10 +304,11 @@ skills:
     update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 7e67fed857a3ae96d5e618fa171aa4329a75c6a69f8b7994a273d82b51dc52cf
+    local_version: 4.1.0
+    local_bundle_hash: c6d7801f99afa4df3130205048aefa3d156928fdc1fa92c26dac82bcc5aea364
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: workflowhub 唯一异源审查调度层
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
@@ -302,6 +322,7 @@ skills:
     local_bundle_hash: ae7448ebc599bc460c38f1615d459cf14eda6801fbaf015d3da432280e5647d4
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: false
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
     design_idea: 复用四材料、两类专用审查、真实结果和唯一 task-close
     standalone: true
@@ -316,6 +337,7 @@ skills:
     local_bundle_hash: b571c3deb4109ef5b6a6e8b837b62200a5acb4592c0b946c0625e25175bb90bc
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 产品方向审查 lens
     design_idea: premise、scope、leverage、alternatives、delivery risk
     used_by_stages: [make-decision, build-spec]
@@ -329,6 +351,7 @@ skills:
     local_bundle_hash: 7be5ec4257737961a394c9351bdf7982474b5cd746cd00648f3ded396e21822a
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
     design_idea: 只在 UI scope 时审查设计风险
     used_by_stages: [build-spec]
@@ -342,6 +365,7 @@ skills:
     local_bundle_hash: c6f2106125692adf36a17ce6845b5615b6d060728efe9dd68fb6f2d2147319e4
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
     design_idea: report-only engineering plan review
     used_by_stages: [build-plan]
@@ -355,6 +379,7 @@ skills:
     local_bundle_hash: e87012fd585550d14f5078e8d97b3ccbab7889136e8ee95f450721a20d03155d
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
     # Includes the existing wh-review lens dispatch in build-code and
@@ -365,46 +390,20 @@ skills:
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
     dependency_closure: [skills/review]
     update_policy: 人工比较 review checklist，只保留 lens 规则
-  - name: qa-only
-    path: skills/qa-only/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 3156025abdaf245f7e2a3ee46a3a1e2237707735a334b294a38ae9fce6e25902
-    last_reviewed_at: "2026-07-14"
-    status: adapted
-    purpose: 用户结果、复现证据和遗漏场景验收 lens
-    design_idea: report-only acceptance review
-    standalone: true
-    used_by_stages: []
-    upstream: [{ <<: *gstack, path: "qa-only", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only" }]
-    local_changes: 去浏览器 daemon；只消费 sealed packet
-    dependency_closure: [skills/qa-only]
-    update_policy: 人工吸收 QA checklist，不引入 gstack runtime
-  - name: verify-change
-    path: skills/verify-change/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: a65b96058474ec76535396ef885d1b2edddb94421354f9a02a2e5dc7a9cc45e1
-    last_reviewed_at: "2026-07-14"
-    status: adapted
-    purpose: 验收闭环和验证证据 lens
-    design_idea: 对 supplied evidence 做 report-only 检查
-    standalone: true
-    used_by_stages: []
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/verify-change", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change" }]
-    local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
-    dependency_closure: [skills/verify-change]
-    update_policy: 仅同步验收检查规则，不恢复旧 lifecycle
   - name: resolving-merge-conflicts
     path: skills/resolving-merge-conflicts/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 5aa9176b84f89a3cf51520adfa735e679594ebf626f4f5d7af2b6c6fe4a5afe7
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: false
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
     used_by_stages: []
+    consumer: "core/task-close.mjs:1411 (merge conflict error path)"
     upstream: []
-    local_changes: WorkflowHub close 冲突恢复约束
+    local_changes: WorkflowHub close 冲突恢复约束；唯一消费者=core/task-close.mjs:1411 合并冲突报错路径
     dependency_closure: [skills/resolving-merge-conflicts]
     update_policy: 随 verify-code close 合同变更审查
   - name: test-strategy
@@ -413,6 +412,7 @@ skills:
     local_bundle_hash: 46dc51676f159e20c95991868dd5365c7063c09e94bbf50d6825e5dabeaee629
     last_reviewed_at: "2026-07-14"
     status: absorbed
+    metrics_enabled: false
     purpose: 从 AC、UI impact 和风险生成测试路由
     design_idea: 独立上下文产出 AC-to-test-route strategy
     standalone: true
@@ -429,6 +429,7 @@ skills:
     local_bundle_hash: 35627c10094c38c9e57913347de93f7f656601a43c8367f48baf9bf365af5c5d
     last_reviewed_at: "2026-07-14"
     status: adopted
+    metrics_enabled: false
     purpose: 对方向级分歧执行可选对抗审查
     design_idea: 双方对等陈述，judge 不参与倡议，最多两轮
     standalone: true
@@ -443,6 +444,7 @@ skills:
     local_bundle_hash: 7f50397d98926dd5345f337f7e8cc2407cca061733fdc5821f32ae46c2e0db68
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: false
     purpose: 用可重复证据定位根因后单点修复
     design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
     standalone: true
@@ -460,6 +462,7 @@ skills:
     local_bundle_hash: 6e989caada28c4ebc20617474586efa62718a0c78f6e39e9a1c1cdc376aeeb05
     last_reviewed_at: "2026-07-14"
     status: absorbed
+    metrics_enabled: false
     purpose: 严格消费 revise_required finding
     design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
     standalone: true
@@ -474,6 +477,7 @@ skills:
     local_bundle_hash: d2ffa5d6f6db9a4d2a16052b8685cb1fdc6a3db32d38b9abab35a2fc1c5c65bb
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 为 build-plan 的每个 Phase/最终测试预判层级，并在 build-code 按真实改动重路由
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
     standalone: true
@@ -488,6 +492,7 @@ skills:
     local_bundle_hash: c59ba3c2def665e78aec7fe5fe70effa1b6531877dd83b3a39c192e3308aec2f
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: build-plan 的 advisory 测试设计输入，不承担执行器或交付 gate
     design_idea: blueprint 先于执行器，覆盖行为、状态、错误、seam 和交付限制
     standalone: true
@@ -502,6 +507,7 @@ skills:
     local_bundle_hash: aa1e90e5178bfe8db9aad6fecebc6e05b2add7406c0c7e08de434b07acc2dffc
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: build-code 对真实后端改动执行风险导向测试策略并保存报告
     design_idea: 真实接口、数据、错误、权限和并发边界优先
     standalone: true
@@ -516,6 +522,7 @@ skills:
     local_bundle_hash: be95bfd74d7891c9ca44bd507d7754a81f9dc3dd5cfce55af0d61ee3a8d42e89
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: build-code 对真实前端改动执行状态、交互和 UI 测试策略
     design_idea: 真实用户状态覆盖，适用时接 isolated browser QA
     standalone: true
@@ -530,6 +537,7 @@ skills:
     local_bundle_hash: 5a9ac25c2a9173bf72c907d0f80917ee1f6354ac4febe6b09e9e0ccdd0123d46
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: build-code 对真实跨边界改动执行最小真实链路策略
     design_idea: 从用户输入贯通服务、数据、返回和呈现的 slice
     standalone: true
@@ -544,6 +552,7 @@ skills:
     local_bundle_hash: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
     last_reviewed_at: "2026-07-14"
     status: adopted
+    metrics_enabled: false
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
@@ -559,6 +568,7 @@ skills:
     local_bundle_hash: 99a3ef9e7f5ff7178266a4d4865a01e8ec47d38424da8c6488c5ee72d1df302b
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
     design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
     standalone: true
@@ -573,6 +583,7 @@ skills:
     local_bundle_hash: 0817e2ab99557a5b7d9af47f21b8decf44f4d7f3991545fcfccb1b89d570f14e
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
@@ -587,6 +598,7 @@ skills:
     local_bundle_hash: 6e8c4ecb64d9ceb51099469c212b80539e1c4d65c9acd8b465b5a4e0727a934b
     last_reviewed_at: "2026-07-14"
     status: native
+    metrics_enabled: true
     purpose: 为 build-spec UI 分支生成真实组件预览和截图证据
     design_idea: 真实组件输入、可运行本地渲染和用户授权降级
     standalone: true
@@ -601,6 +613,7 @@ skills:
     local_bundle_hash: 2049ebfb27713db624d7bc87b6e654127191be8ee67ca5b4a61a83b8893bd479
     last_reviewed_at: "2026-07-14"
     status: adapted
+    metrics_enabled: true
     purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图
     design_idea: reuse/modify/extend/add/remove 动作与真实 consumer 绑定
     standalone: true

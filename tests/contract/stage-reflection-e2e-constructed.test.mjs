@@ -407,7 +407,7 @@ describe("stage-reflection constructed end-to-end contract", () => {
   });
 
   it("requires every AC mapping row to point at an existing evidence path", () => {
-    const mapping = readFileSync(join(repoRoot, "quality/evidence/stage-reflection-ac-mapping.md"), "utf8");
+    const mapping = readFileSync(join(repoRoot, "tests/fixtures/stage-reflection/ac-mapping.md"), "utf8");
     const rows = mapping.split(/\r?\n/).filter((line) => line.startsWith("| AC-"));
     expect(rows).toHaveLength(12);
     expect(rows.find((line) => line.startsWith("| AC-001"))).toContain("deferred_to_next_real_task");

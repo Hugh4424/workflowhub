@@ -239,7 +239,7 @@ async function runBridge(input) {
         host: requiredText(input.unavailable.host, "unavailable.host"),
         sourceId: requiredText(input.unavailable.source_id, "unavailable.source_id"),
         sourceFamily: requiredText(input.unavailable.source_family, "unavailable.source_family"),
-        agentRunId: requiredText(input.unavailable.agent_run_id, "unavailable.agent_run_id"),
+        agentRunId: requiredText(input.agent_run_id, "agent_run_id"),
         reason: requiredText(input.unavailable.reason, "unavailable.reason"),
       });
   return Object.freeze({

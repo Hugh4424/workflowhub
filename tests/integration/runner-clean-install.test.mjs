@@ -47,6 +47,15 @@ describe("runner release", () => {
     expect(result.stage_skill_smoke.stages.map(({ stage }) => stage)).toEqual([
       "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
     ]);
+    expect(result.five_stage_task).toMatchObject({
+      status: "passed",
+      run_from_installed_runner: true,
+      stage_count: 5,
+    });
+    expect(result.five_stage_task.stages.map(({ stage }) => stage)).toEqual([
+      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
+    ]);
+    expect(result.five_stage_task.stages.every(({ exit_code }) => exit_code === 0)).toBe(true);
     for (const stage of result.stage_skill_smoke.stages) {
       expect(stage.manifest_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(stage.skill_hash).toMatch(/^[a-f0-9]{64}$/);

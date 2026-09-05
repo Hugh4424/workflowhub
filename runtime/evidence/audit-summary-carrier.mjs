@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
-import { assertTaskReadCapability } from "../../core/task-capability.mjs";
+import { assertTaskReadCapability } from "../task/task-capability.mjs";
 
 export const AUDIT_CARRIER_VERSION = "v1";
 

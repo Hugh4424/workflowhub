@@ -50,13 +50,9 @@ describe("retired host session binding", () => {
     expect(bridge).toContain("agent_run_id");
   });
 
-  it("keeps the batch files in one pending change set until commit authorization", () => {
-    const changed = new Set([
-      ...execFileSync("git", ["diff", "--name-only", "HEAD"], { cwd: root, encoding: "utf8" }).trim().split("\n").filter(Boolean),
-      ...execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).trim().split("\n").filter(Boolean),
-    ]);
+  it("keeps the retired binding contract source-visible in the repository", () => {
+    const tracked = new Set(execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).trim().split("\n").filter(Boolean));
     const required = [
-      ...legacyModules,
       ...workflowSkills,
       "tools/host/workflowhub-stage-agent-bridge.mjs",
       "tools/cli/stage-runtime.mjs",
@@ -64,6 +60,6 @@ describe("retired host session binding", () => {
       "tests/contract/session-binding-removed.test.mjs",
       "docs/adr/0024-remove-host-session-binding.md",
     ];
-    for (const relative of required) expect(changed, relative).toContain(relative);
+    for (const relative of required) expect(tracked, relative).toContain(relative);
   });
 });

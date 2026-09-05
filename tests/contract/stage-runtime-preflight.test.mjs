@@ -64,7 +64,7 @@ describe("stage-runtime private run:preflight", () => {
       "doctor", "status", "run", "review", "verify", "confirm", "authorize",
     ]);
     await expect(stageRuntimeCliMain(["--help"], { delegate })).resolves.toMatchObject({
-      actions: { run: ["execute", "preflight", "draft"] },
+      actions: { run: ["execute", "preflight", "draft", "reflect"] },
     });
     await expect(stageRuntimeCliMain([
       "run", "--action=preflight", "--stage=verify-code", "--input=payload.json",

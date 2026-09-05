@@ -1,5 +1,13 @@
 # Reuse registry
 
+机器真相是 [`skills/catalog.yaml`](../skills/catalog.yaml)；本文记录同一套复用状态词表和 typed I/O 消费者合同，不覆盖 catalog 的固定版本与来源字段。
+
+## 状态词表与 M17 审计
+
+复用状态只使用：`native`、`adopted`、`adapted`、`absorbed`、`rejected`、`watch`。2026-09-05 扫描当前 `skills/` 路径未发现 `_spike` 目录或文件；该结论不推断仓外历史目录状态。
+
+2026-09-05 M17 X 处置：X2 委派不引入；X3 保持独立 3rd-review broker，通过 `wh-review` 薄入口声明 `>=1.2.0` 运行依赖，当前 host adapter 探针因 broker 未暴露 semver 报告 `unknown`；X4 `debate` 状态为 `adopted`，仅作可选诊断，不进入核心 Bundle。
+
 ## 8-consumer typed I/O registry
 
 此 registry 是本次 canonical audit cutover 的 8 个消费者清单。`Decision` 只裁定复用边界；它不授权第二个 verdict authority。`steps.json` 只声明 expected topology，journal/receipt 只记录 observed facts，只有 audit aggregator 产出 canonical verdict。

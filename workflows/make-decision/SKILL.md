@@ -58,7 +58,8 @@ The current task has four working materials:
 4. `tasks.md`
 
 四份材料都落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
-`task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不是材料替代物，且不新增 gate。
+ `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不是材料替代物，且不新增 gate。
+ 新项目可参考 `docs/templates/project-gitignore.md` 选择执行侧车忽略规则；该模板不修改存量仓库。
 `m15-retirement` 会话负责的材料迁移不在本技能范围内；仓外
 `Knowledge/Projects/workflowhub/tasks/Projects/` 清理也不在本任务范围内。
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, selectTrustedReviewProviders, validateAllWhReviewRoutes } from "../third-review-host-config.mjs";
+import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, probeThirdReviewBroker, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, selectTrustedReviewProviders, validateAllWhReviewRoutes } from "../third-review-host-config.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -29,7 +29,7 @@ function configuredRoot() {
 describe("trusted third-review host configuration", () => {
   it("loads one canonical packet root only when the broker allowlist accepts its packet source", () => {
     const { packetRoot, brokerConfig, hostConfig } = configuredRoot();
-    expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toEqual({ command: [process.execPath, "/broker/scripts/3rd-review.mjs"], config: realpathSync(brokerConfig), attachmentRoot: realpathSync(packetRoot), attachmentSource: PACKET_SOURCE_PREFIX });
+    expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toEqual({ command: [process.execPath, "/broker/scripts/3rd-review.mjs"], config: realpathSync(brokerConfig), attachmentRoot: realpathSync(packetRoot), attachmentSource: PACKET_SOURCE_PREFIX, brokerProbe: { status: "unknown", required_engine: ">=1.2.0", reason: "3rd-review broker does not expose a semver engine_version" } });
   });
 
   it("does not expose or require the broker runtime root", () => {
@@ -39,6 +39,30 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     expect(trusted).not.toHaveProperty("runtimeRoot");
+  });
+
+  it("keeps broker compatibility unknown when no semver is exposed", () => {
+    expect(probeThirdReviewBroker({ version: 4 })).toEqual({
+      status: "unknown",
+      required_engine: ">=1.2.0",
+      reason: "3rd-review broker does not expose a semver engine_version",
+    });
+  });
+
+  it("reports compatible when the broker meets the declared engine range", () => {
+    expect(probeThirdReviewBroker({ version: 4, engine_version: "1.2.0" })).toEqual({
+      status: "compatible",
+      required_engine: ">=1.2.0",
+      detected_version: "1.2.0",
+    });
+  });
+
+  it("reports incompatible when the broker is below the declared engine range", () => {
+    expect(probeThirdReviewBroker({ version: 4, engine_version: "1.1.9" })).toEqual({
+      status: "incompatible",
+      required_engine: ">=1.2.0",
+      detected_version: "1.1.9",
+    });
   });
 
   it("fails loud when the broker allowlist omits the fixed packet source", () => {
