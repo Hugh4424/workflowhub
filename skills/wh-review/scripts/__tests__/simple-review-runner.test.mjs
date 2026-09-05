@@ -335,4 +335,53 @@ describe("simple material-only review", () => {
     });
     expect(result.material_id).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it("preserves the broker error code when a provider member identity is degraded", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-identity-degraded-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-identity-degraded", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed",
+          identity: { provider: "model-a", source_id: "model-a", config_id: "model-a" },
+          error: { code: "PUBLIC_RESULT_INVALID", message: "provider output exposes private host path /Users/Hugh/Downloads/make-decision调研深度优化方案.md" },
+          timing: null, usage: null,
+        }] };
+      } },
+    });
+    const member = result.provider_results[0];
+    expect(member).toMatchObject({ provider: "model-a", status: "failed", identity_degraded: true });
+    expect(member.error.code).toBe("PUBLIC_RESULT_INVALID");
+    expect(member.error.code).not.toBe("PROVIDER_IDENTITY_INVALID");
+    expect(member.error.message).toContain("broker member identity was degraded");
+    expect(member.error.message).not.toContain("/Users/");
+  });
+
+  it("keeps PROVIDER_IDENTITY_INVALID for a degraded member without a broker error", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-identity-plain-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-identity-plain", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed",
+          identity: { provider: "model-a", source_id: "rogue-source", config_id: "rogue-config" },
+          error: null, timing: null, usage: null,
+        }] };
+      } },
+    });
+    const member = result.provider_results[0];
+    expect(member).toMatchObject({ status: "failed", identity_degraded: true });
+    expect(member.error.code).toBe("PROVIDER_IDENTITY_INVALID");
+    expect(member.error.message).toContain("broker member identity was degraded");
+  });
 });

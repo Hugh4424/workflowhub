@@ -9,6 +9,7 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
+import { redactProviderHostPaths } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 
 function redactHostPaths(value) {
@@ -161,8 +162,15 @@ function buildBundle(attachmentRoot, input) {
     writeFileSync(target, bytes, { flag: "wx", mode: 0o600 });
     entries.push({ path, bytes: bytes.length, sha256: hash(bytes) });
   };
-  write("review-instructions.md", Buffer.from(`${instructions(input)}\n`, "utf8"));
-  Object.entries(input.materials ?? {}).forEach(([key, value], index) => write(safeName(key, index, value), materialBytes(value)));
+  // The provider-visible bundle is a derived view of caller materials. Host
+  // absolute paths (from the original requirement text, review notes, or any
+  // JSON material) must never reach the provider; keep the bundle bytes and
+  // the material identity computed over the same redacted values.
+  write("review-instructions.md", Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8"));
+  Object.entries(input.materials ?? {}).forEach(([key, value], index) => {
+    const redacted = redactProviderHostPaths(value);
+    write(safeName(key, index, redacted), materialBytes(redacted));
+  });
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   write("manifest.json", manifest);
   // Keep the bundle identity identical to the frozen packet identity. The
@@ -181,11 +189,15 @@ function buildBundle(attachmentRoot, input) {
 }
 
 function materialIdForInput(input) {
-  const entries = [{ path: "review-instructions.md", bytes: Buffer.byteLength(`${instructions(input)}\n`, "utf8") }];
-  entries[0].sha256 = hash(Buffer.from(`${instructions(input)}\n`, "utf8"));
+  // Mirror buildBundle exactly: the provider-visible identity is computed over
+  // host-path-redacted values, never over raw caller bytes.
+  const instructionBytes = Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8");
+  const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length }];
+  entries[0].sha256 = hash(instructionBytes);
   Object.entries(input.materials ?? {}).forEach(([key, value], index) => {
-    const bytes = materialBytes(value);
-    entries.push({ path: safeName(key, index, value), bytes: bytes.length, sha256: hash(bytes) });
+    const redacted = redactProviderHostPaths(value);
+    const bytes = materialBytes(redacted);
+    entries.push({ path: safeName(key, index, redacted), bytes: bytes.length, sha256: hash(bytes) });
   });
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
@@ -409,10 +421,21 @@ export async function runSimpleReview(input, dependencies = {}) {
           && identity.source_id === expectedIdentity.source_id));
       seenProviders.add(provider);
       if (!identityValid) {
+        // Identity degradation is a member-level fact, not a replacement for
+        // the broker's failure reason. Keep the broker's original machine
+        // code (e.g. PUBLIC_RESULT_INVALID when the provider output exposed a
+        // private host path) and only annotate that the member identity was
+        // degraded; do not hide the real cause behind PROVIDER_IDENTITY_INVALID.
+        const degraded = publicProviderResult(item);
         return {
-          ...publicProviderResult(item),
+          ...degraded,
           status: "failed",
-          error: { code: "PROVIDER_IDENTITY_INVALID", message: "provider result is not bound to the trusted review selection" },
+          identity_degraded: true,
+          error: {
+            code: item.error?.code ?? "PROVIDER_IDENTITY_INVALID",
+            message: "provider result is not bound to the trusted review selection; broker member identity was degraded: "
+              + (degraded.error?.message ?? "identity mismatch"),
+          },
         };
       }
       if (item.status === "completed" && typeof item.output === "string" && item.error === null) {
