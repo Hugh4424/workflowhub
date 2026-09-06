@@ -14,6 +14,10 @@
 | R-004 | 在 make-decision 过程中与用户一起仔细梳理：完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项 | 用户原话："先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项" | 已覆盖（目标/成功失败边界/范围/非目标节；D-203/D-204） |
 | R-005 | Talk 用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接 | 用户原话："Talk 请用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接" | 已覆盖（T 表+Step 记录；D-401） |
 | R-006 | 总结文件里给出的推荐改造方案（canonical gap/current selector/close-readiness 预检/状态分层等）是否作为本任务方向，由 make-decision 与用户收敛后确认 | 来源：总结文件"推荐实施顺序"一段；建议，非已确认需求 | 已覆盖（D-201~D-204；聚焦改造经 Talk2/3+裁决确认） |
+| R-007 | 评估 requirement-convergence-depth 任务（make-decision 强升级）的实现效果 | 用户原话："我们之前一起做了...把make-decision阶段做了很强的更新升级，请你基于当前make-decision的执行情况，帮我看看这个任务实现的效果如何？" | 已分析（F-031~F-033；research-Q1） |
+| R-008 | 诊断 build-spec/build-plan 阶段 token 消耗巨大（"好几亿"）的根因，并给出优化；评估是否可做 make-decision 式上下文管理与子代理派发优化 | 用户原话："到了build-spec和build-plan阶段缺花费了大量的时间和token，一个任务的spec和plan阶段要花费好几亿token...为什么会这样？应该如何优化？是不是也可以进行类似make-decision一样的上下文管理和子代理派发优化？" | 已分析（F-034~F-036；research-Q2）；优化机制经 Talk R1/R2 收敛（T-014~T-020） |
+| R-009 | 评估"高智力模型做 spec/plan 设计、低智力模型做 code/verify 执行"思路的效果；**用户澄清后真实含义**=四材料（decision-log/spec/plan/tasks）是否足够清晰、专业、详细，足以让低智力模型在 build-code/verify-code 也保证交付质量 | 用户原话1："我目前的workflowhub流程主要靠make-decision阶段把需求彻底确定，然后靠着高智力模型在build-spec和build-plan阶段设计详细的执行方案，后面build-code和verify-code阶段派出智力一般的模型来执行...请帮我看看目前这个思路执行的效果如何？"；用户原话2（Q4 澄清）："我只是让你分析一下目前decision-log、spec、plan、tasks是否足够清晰专业详细，足够后面build-code和verify-code使用低智力模型也能保证交付质量，不是让你记录和建议各个stage的模型使用。" | 已分析（F-037~F-039；research-Q3）；模板升级经 Talk R2 收敛（T-017~T-018） |
+| R-010 | 三问分析结论作为新需求放入当前任务一起开发；且新需求必须按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），保持与既有 verify-code 质量问题治理同等质量 | 用户原话："请基于上述三个问题帮我仔细分析，可以从make-decision第一步开始，重新收敛一些新需求，放在当前任务的里一起开发"+"我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍，保证这些需求能和之前的verify-code质量问题保持一样的质量" | 本文件继续 make-decision：R-007~R-009 进入同一决策收敛环（本轮） |
 
 ### 需求框架（function/research 先选一类）
 
@@ -27,6 +31,9 @@
 | N-002 | 论断：总结文件根因判定 | confirmed | ready | make-decision 主会话 | 无（框架结论成立、5 条断言证伪，见核实表） |
 | N-003 | 证据：4 个任务过程与总结文件一致性 | confirmed | ready | 核查子代理 | 无（F-010~F-016） |
 | N-004 | 裁决：治理范围+方案选项 | confirmed | ready | 用户 | 无（D-001/D-201/T-001~T-012） |
+| N-005 | 新问题：build-spec/build-plan 阶段 token 消耗巨大+无度量 | confirmed | ready | 取证子代理（b12b32f9） | 无（F-033~F-035；research-Q2） |
+| N-006 | 新论断：四材料质量对"低智力执行"保障=中；三缺口（标签错位/拒绝条件无表达位/verify 不验材料） | confirmed | ready | 取证子代理（a4d19fdd/f2368ca8） | 无（F-036~F-039；research-Q3） |
+| N-007 | 新裁决：质量-成本治理增量（模板升级+verify 独立性+上下文优化） | confirmed | ready | 用户 | 无（T-013~T-020；本卡第 II 部分） |
 
 ## 目标
 
@@ -356,6 +363,16 @@ artifacts: []
 | F-028 | 辩论中两处事实修正：丙误用 F-016（真实含义=无 blocked 结构化记录，支持移除而非保留）；丙"E 属现状复制"不成立（F-021 证明桥接入口无相等校验、测试收据写入不绑快照，E 是真实修复） | 裁决书"事实判定"节 | 已核实 |
 | F-029 | 答辩一致性证据：findings 行号漂移（#11/22 同点异行等）与案卷自引路径错误成立，不影响主题裁决 | 乙 position 核验说明、丙 position 三 | 已核实 |
 | F-030 | detail-advice 红蓝审查真实执行：status=available-with-failures、pair_status=partial（grok/grok、pi/v4flash 因 trusted 配置 source_id=null → PROVIDER_IDENTITY_INVALID，身份未绑定非执行失败）；red 21 条+blue 18 条=39 条（28 major+9 minor+2 blocking）；注意 CLI 组合逻辑 error 文案 REVIEW_NO_SEMANTIC_RESULT 与实际语义结果矛盾（组合 bug 证据，归治理范围外记录） | worktree evidence/detail-review/result.json（101,645B） | 已核实 |
+| F-031 | **问题1 取证结论**：requirement-convergence-depth 任务实现落盘率≈100%（8 phase+10 项关键能力全在 main：pair_id/role/disputed schema、isPairedMakeDecisionInput、debate skill、deep-research skill、M/S/B/P、决策链提醒、AGENTS.md:21、check-skill-closure、mailbox 契约）；实现=单 snapshot（5a3af360，64 文件+7153/-150）+ merge 699f0a6f + 归档 b16d5bcf；本任务 make-decision 实际完整使用了升级能力（方向审查 pair_status=complete、细节 pair_status=partial 6/10、debate round-1 10 文件、Talk 结构化 12 项） | 子代理审计 0b2049cb + worktree evidence/ + git 历史 | 已核实 |
+| F-032 | 红蓝双发**仅限 make-decision**：isPairedMakeDecisionInput 硬性条件 stage==="make-decision"&&track∈{direction,detail}（simple-review-runner.mjs:524）；build-spec/build-plan 审查=多 provider 单发（无 red/blue role 注入，review-materials.mjs roleFocus 分支同样仅 make-decision） | simple-review-runner.mjs:524、review-materials.mjs:958-984 | 已核实 |
+| F-033 | **问题2 取证结论（额度）**：系统无 token 度量——task-metrics.jsonl（6 行）tokens 字段全 null；completed 调用 usage 全 null；全库 index.json/stage-reflection grep "tokens" 0 命中；仅 failed 调用有 usage（合计≈145 万 token，单次最大 grok-4.6=534,365）→"几亿 token"无法从档案层证实/证伪，该数字极可能来自 CLI/Web 侧会话统计 | 子代理取证 b12b32f9 | 已核实 |
+| F-034 | **问题2 取证结论（结构）**：cost 代理指标——convergence build-spec review 输入 119,325 字符（raw 7,449+decision 71,495+draft_spec 40,381）、build-plan review 输入 282,170 字符（7,449+spec 45,643+acceptance 11,466+plan 67,204+tasks 150,408；input.json 432,482B 曾致 600s 超时）；tasks.md 终稿 206,736B（归档 272,705B）；PB T12 spec+plan+tasks=61,772B+research 6 份 203KB；T12 tasks.md 全篇修订 5 次/spec 3 次/plan 3 次 | 子代理取证 b12b32f9 + 各 worktree 实测 | 已核实 |
+| F-035 | **问题2 取证结论（放大因子）**：审查 provider 完成率——convergence：make-decision 16 次 12completed/4failed(75%)、build-spec 2/3、build-plan 2 轮 2/5+3/5、build-code 部分 REVIEW_EXECUTION_TIMEOUT/CANCELLED、**verify-code 0 provider**；m17：make-decision≈2/5、build-spec 2/4、build-plan 1/4；失败模式=grok PROVIDER_IDENTITY_INVALID（source_id=null）、pi PROVIDER_OUTPUT_INVALID、codex PUBLIC_RESULT_INVALID/EVIDENCE_ANCHOR_INVALID | 子代理取证 f2368ca8 + attempts 记录 | 已核实 |
+| F-036 | **问题3 取证（模型分工）**：task.json 无 host_provider/model 字段（5 任务核对）；出现的模型名全部是审查者身份；反例①convergence build-code 执行者=codex/luna(gpt-5.6-luna)；反例②m17 五阶段同 host=codex（前三阶段同 session-4625a035）；配置 tiers[0]=[antigravity/opus,opencode/pax3.8,codex/luna] 但实际审查选中 kimi/coding、antigravity/flash（flash/编码档） | 子代理取证 f2368ca8 + ~/.config/3rd-review/config.json | 已核实 |
+| F-037 | **问题3 审计（材料质量-缺口①模板/校验器标签错位）**：spec-specify 模板 AC 卡用 `**验证方法**：`（bold），validateAcceptanceDesignMinimum 只认 plain 行首 `验证：|验收：|判定：|oracle：`（L2948）→**按模板生成的 spec 会被判"缺 oracle 规则"**（WH 任务曾用脚本插 28 个 plain 标签行"绕过"而非修模板）；`通过：/失败：/证据：`三段**零校验覆盖**（校验器仅查≥8 字符场景+一个验证类标签） | 子代理审计 a4d19fdd + stage-content-contracts.mjs:2934-2958 | 已核实 |
+| F-038 | **问题3 审计（材料质量-缺口②③）**：verify-code steps.json step1 明文"不在本阶段重新验证材料完整性"；三个历史任务 verify.json 全 status=unknown+material_digest 全零→"材料不足→verify 失败"无直接证据链；真实可证关联=**协议/绑定错误风暴**（verify-close 任务因之而生：绑定类错误≥5 次、SCHEMA_VALIDATION_FAILED≥5 次、单任务 build-code 重跑 31 次，见其 decision-log F-001/PFACT-001/002）+gate_cmd 不可执行（m17 3×exit 127=npm test 缺失）；AC 格式三任务三套写法 | 子代理审计 a4d19fdd + archive/verify 记录 | 已核实 |
+| F-039 | 材料质量体系保障度评分（审计结论）：无歧义性=中高、可执行粒度=高（tasks 层互反+同命令同 oracle 校验强）、可验证性=中（正向为主）、边界完整=中、可追溯性=高；**最大缺口**：①拒绝条件类 AC 无表达位（模板仅文本提示"负例"非法定字段）②verify 独立性≈0 ③模板/校验器标签错位导致"材料不达标却不知情" | research-Q3-materials-quality.md | 已核实 |
+| F-040 | **Talk R1/R2 收敛（新需求）**：Q1=分析+落地（本任务扩展含成本治理+模板升级+verify 独立性的完整实现，多 phase）；Q2=**不做 token 度量机制**（用户自见用量），直接做优化；Q3=材料分层索引+M/S/B/P 派发扩展组合；Q4=澄清问题3 真实含义（四材料质量审计，非模型使用记录）；Q5=审计+模板升级（负向 oracle/拒绝条件位+校验器同步）；Q6=verify 独立性纳入本任务；Q7=上下文机制覆盖 build-spec/build-plan 为主；Q8=先质量后效率+新需求完整走 make-decision 流程 | ask_user_question 用户真实回复（4+4 题卡） | 已确认 |
 
 ## 总结文件核实表（与 task store 对账）
 
@@ -398,6 +415,14 @@ artifacts: []
 | T-010 | gap_id 稳定性：①同快照确定性派生 ②坚持跨时间稳定 | ①唯一可去重又不违宪的语义；②需新增持久登记=违宪 | ① 同快照内确定性派生 | 无新增开放问题 | R3/Q2 结构化问答 answers[1] |
 | T-011 | 验收方式：①负向夹具为主+dogfood 补充 ②维持 dogfood 为主 | ①可证伪；②自证 | ① 负向夹具为主 + dogfood 补充 | 无新增开放问题 | R3/Q3 结构化问答 answers[2] |
 | T-012 | 预检链：①按裁决收窄（9 字段清单+覆盖边界声明）②保留全链路 | ①聚焦、不依赖 build-spec 补需求；②范围最大、仍不能覆盖后期缺口 | ① 按裁决收窄 | 无新增开放问题 | R3/Q4 结构化问答 answers[3] |
+| T-013 | 问题1（convergence 任务效果）：独立取证结论=实现 100% 落盘+本任务真实使用+质量改善（详见 research-Q1）——作为事实采纳还是需要进一步验证 | 事实已由 4 路子代理取证（F-031~F-033）；采纳=作为本任务背景事实与交付物 | ① 采纳（事实+分析作为交付物：README 式三问报告） | 无新增；衍生范围问题→Q1 | R1（新）/Q1 陈述 + 用户默认（回答见 T-014） |
+| T-014 | 新需求范围：①分析+落地 ②分析+设计 ③仅分析 | ①本任务扩为多 phase 完整实现（周期最长）；②快但多一次跨任务交接；③问题不消失 | ① 分析+落地（推荐） | 无新增开放问题 | R1（新）/Q1 结构化问答（2026-09-06） |
+| T-015 | token 度量：是否先补度量再优化？ | 用户明确：度量自己可见（CLI/Web 用量），不需要机制 | ② 不做 token 度量机制，直接优化 | 无新增；度量=用户侧观察 | R1（新）/Q2 自定义答复："不用补度量，我只是想优化，度量我自己可以看得见" |
+| T-016 | 上下文机制形态：①材料索引+派发组合 ②只派发 ③只索引 | ①主上下文占用最大下降；②改动小但主会话仍读全量；③重读减 70%+但起草/处置仍占主上下文 | ① 索引+派发组合（推荐） | 无新增；覆盖范围→T-018 | R1（新）/Q3 结构化问答 |
+| T-017 | 问题3 真实含义（用户澄清）：四材料质量审计 vs 模型使用记录 | 用户原话："我只是让你分析一下目前 decision-log、spec、plan、tasks 是否足够清晰专业详细，足够后面 build-code 和 verify-code 使用低智力模型也能保证交付质量" | ② 四材料质量审计（模型分工仅背景事实） | 方向修正：research-Q3 重写为材料质量审计 | R1（新）/Q4 自定义答复（重大澄清） |
+| T-018 | 材料质量缺口处置深度：①审计+模板升级 ②仅审计报告 ③审计+模板+本任务 dogfood | ①核心机制（负向 oracle/拒绝条件法定化+校验器同步）；②机制没变下个任务还踩坑；③范围最大 | ① 审计+模板升级（推荐） | 无新增；verify 独立性→T-019 | R2（新）/Q5 结构化问答 |
+| T-019 | verify 独立性：①纳入本任务 ②延后另立 ③不做 | ①直击 verify 洪流源头（执行率≈0 已证实）；②短期等不到解；③保持现状 | ① 纳入本任务（推荐） | 无新增 | R2（新）/Q6 结构化问答 |
+| T-020 | 上下文机制覆盖范围+实施顺序：①spec+plan 为主 ②全部四阶段 ③仅 build-plan；顺序：①先质量后效率… | 消耗大头=spec+plan（WH 587KB）；make-decision 已有收敛环 | ① spec+plan 为主；① 先质量后效率 | 无新增；用户追加要求：新需求完整走 make-decision 流程（Talk→审查→grill），与既有 verify-code 质量问题同等质量 | R2（新）/Q7+Q8 结构化问答（Q8 自定义："先质量后效率，另外我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍"） |
 
 ## 调研
 
@@ -491,13 +516,12 @@ artifacts: []
 - 处理：make-decision 暂停于 step 11（approve-decision）；用户新需求到达后，先判定是否改变方向——改变则修订决策并重新 Talk/确认，不改变则补记录后继续；不做任何下游阶段推进。
 - 未确认内容：最终决策确认（approval_binding）；交互 aggregate（待确认后组装）。
 
-## step 11 记录（进行中，等待用户新需求）
+## step 11 记录（暂停已解除，新需求进入收敛环）
 
-- 实际做了什么：向用户呈递最终决策卡（方向/范围/非目标/成功标准/风险/审查事实/延期项），请求真实确认（approve-decision）。
-- 用户答复：先落盘存档，再慢慢提新需求（非确认，也不是拒绝）。已按答复完成存档 commit ccfd4a9f；stage 保持 in_progress。
-- 未完成/跳过：approval_binding 未绑定；交互 aggregate 未组装（须以用户确认的最终决策组装——当前最终决策仍是"用户已确认的系列选择"（T-001~T-012），但整体确认被用户主动暂停）。
-
-> 说明：本 stage 的所有方向性内容已经过用户三轮 Talk 逐一确认（T-001~T-012）；step 11 的整体确认被用户主动挂起以容纳新需求，属于正常交互暂停，不改变已确认的方向语义。
+- 原状：向用户呈递最终决策卡，用户答复"先落盘存档，再慢慢提新需求"（非确认，也不是拒绝）；已按答复完成存档 commit ccfd4a9f；stage 保持 in_progress。
+- **2026-09-06 更新**：用户提出三问新需求（R-007~R-010）；已完成三轮取证分析（research-Q1/Q2/Q3；4 路子代理）+ Talk R1/R2 结构化问答（T-013~T-020，8 项收敛）；方向卡升级 v4（I 收口治理不变+II 质量-成本治理增量）；事实与需求已落盘（F-031~F-040、R-007~R-010、N-005~N-007）。
+- 用户要求（T-020）：新需求按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），与既有 verify-code 质量问题治理同等质量。
+- **下一步**：step 6 direction-advice 增量轮（方向卡 v4 红蓝审查）→ step 6c debate round-2 → step 7 talk-round-3（裁决争议）→ step 8 grill → 草稿更新 → step 10 detail-advice → step 11 最终确认（整体含 v3+v4）。
 
 ## 拒绝方案
 
