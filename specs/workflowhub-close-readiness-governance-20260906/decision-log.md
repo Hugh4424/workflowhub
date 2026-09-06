@@ -343,7 +343,7 @@ artifacts: []
 ### D-302
 - question/final_option: 材料质量缺口处置？审计+模板升级（负向 oracle/拒绝条件法定化+校验器对齐，用户 Q5）
 - recommendation/plain_language: 推荐；"低智力执行保质量"的核心机制
-- decision: ①spec-specify AC 模板改 plain `验证：` 与校验器对齐+四段式法定（验证/通过/失败/证据）；②校验器四段式校验+行为变更类 AC 含可证伪拒绝条件（负向 oracle 字段级要求）；③tasks 卡 oracle 负例字段化；④verify-code 入口材料轻量只读校验（材料存在+身份绑定+非占位符，非 gate）；⑤AC 写法模板统一（三套→一套）
+- decision: ①spec-specify AC 模板改 plain `验证：` 与校验器对齐+四段式（验证/通过/失败/证据）全部 AC 强制；②校验器四段式存在性校验+AC"失败："段非空；③任务卡 oracle 结构化 `{pass, reject}`（reject=可证伪拒绝断言；行为变更类任务校验 oracle.reject 非空；不采用关键词/语法规则判型）；④verify-code 入口材料轻量只读校验 4 项（材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定，非 gate）；⑤AC 写法模板统一（三套→一套）
 - source_type/reference/exact_excerpt: Talk R2（新）/Q5 "审计+模板升级（推荐）"；research-Q3 F-037~F-039
 - approval_binding: pending
 - facts_and_constraints: 模板/校验器=既有机制修正（非新控制面）；宪法"记录事实而非阻断"
@@ -361,17 +361,17 @@ artifacts: []
 
 ```text
 ### D-303
-- question/final_option: verify 独立性？纳入本任务（用户 Q6）：verify-code 必须产生至少 1 个异源独立审查事实
+- question/final_option: verify 独立性？纳入本任务（用户 Q6）：verify-code 发起异源独立审查请求+三态事实记录
 - recommendation/plain_language: 推荐；直击 verify 洪流源头（执行率≈0 已证实，F-035/F-038）
-- decision: verify-code 阶段步骤级要求产生异源独立审查事实（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）；通道不可用=true unavailable 如实记录（不阻塞，不替代成自查）；执行率守卫形态（步骤条件 vs 收口提示）build-spec 定义并验证不构成新 gate
-- source_type/reference/exact_excerpt: Talk R2（新）/Q6 "纳入本任务（推荐）"
+- decision: verify-code 阶段发起异源独立审查请求（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）+三态事实记录（executed/failed/unavailable）+阶段汇报如实声明；非步骤完成条件/收口条件/pass 门槛（记录事实不阻断）；异源判定=既有身份校验链（provider_identities/source_id 比对执行者身份）；unavailable=如实记录（不算失败/不阻塞/不替代自查）；配套 OPEN-004 配置修复为实施前提
+- source_type/reference/exact_excerpt: Talk R2（新）/Q6 "纳入本任务（推荐）"；裁决书 round-2 裁决 3；T-019
 - approval_binding: pending
-- facts_and_constraints: 审查=质量事实非推进许可证（宪法）；AGENTS.md 质量裁决独立来源
-- Logic: 低智力自查≠独立审查→verify 洪流→至少 1 异源事实托底
+- facts_and_constraints: 审查=质量事实非推进许可证（宪法）；AGENTS.md 质量裁决独立来源；F-042 身份校验链沿革
+- Logic: 低智力自查≠独立审查→verify 洪流→发起独立审查+三态记录（事实层面闭合，不设 gate）
 - choice_reason/impact: 用户确认；影响=verify-code SKILL/steps/验证链
-- consequences_and_risks: provider 不可用→frequent unavailable（RISK-005，如实记录）；成本小幅上升
-- rejected_alternatives: 延后（短期无解）；不做（现状）
-- unresolved_items/owner: 守卫具体形态归 build-spec（构建期验证）
+- consequences_and_risks: provider 不可用→frequent unavailable（RISK-005，三态如实记录不阻塞）；成本小幅上升
+- rejected_alternatives: 守卫=步骤完成条件（新 gate 违宪，裁决 1 否决）；延后（短期无解）；不做（现状）
+- unresolved_items/owner: 通道细节与 OPEN-004 修复归 build-spec
 - Supersedes: none
 module: 质量-成本治理
 requirement_ids: [R-010]
@@ -381,17 +381,17 @@ artifacts: []
 
 ```text
 ### D-304
-- question/final_option: 上下文优化范围与形态？材料分层索引+M/S/B/P 派发扩展，build-spec/build-plan 为主（用户 Q3/Q7）
-- recommendation/plain_language: 推荐；覆盖消耗大头（WH 587KB、审查 28.2 万字符×5×2）
-- decision: ①材料分层索引（节-摘要-行号；主会话默认读索引按需读片段；载体=材料内嵌导航节或 evidence/ 派生文件，build-spec 按"不新增持久对象"规则验证）；②M/S/B/P 扩展：findings 处置/终检复查/调研全部子代理化（主会话审摘要定稿）；③审查材料注入瘦身（摘要+关键段+文件引用）；④模板口径单源（模板与机检规则同源）
-- source_type/reference/exact_excerpt: Talk R1（新）/Q3 "索引+派发组合（推荐）"、Talk R2（新）/Q7 "spec+plan 为主"
+- question/final_option: 上下文优化范围与形态？全阶段 Execution model 移植（用户 Q3/Q7/T-023：完整移植执行规范）
+- recommendation/plain_language: 推荐；覆盖消耗大头（WH 587KB、审查 28.2 万字符×5×2）且与 make-decision 同构
+- decision: ①build-spec/build-plan SKILL 各加"Execution model"章节（step×M/S/B 矩阵+上下文守恒 6 条：全量落盘/主会话只留 ref+sha256+摘要≤500字/S 回传≤500字且 severity|位置|问题|建议一行一条/并行上限 调研≤4-debate≤4-审查=2role/交互 M 独占/每步只依赖上一步摘要+ref 不回塞全文；复用 make-decision L279-313 规则壳）；②spec-specify/spec-plan/spec-tasks 输入契约从"Read the current…全文"改"收冻结 packet"（对齐 spec-research）；③材料分层索引（载体=材料文件头部内嵌"材料导航"节：节列表+每节 1 句摘要+读取时机；零新文件/随材料更新/可再生/非权威；读法=节标题锚点 grep→offset 片段；生成时机=起草即生成+定稿更新）；④子代理派发扩展（findings 处置/终检复查/调研子代理化，主会话只审摘要）；⑤审查材料包内容分层（投递链保持 file_only 冻结链不变=F-041；包内导航/摘要文件+按需详细文件）；⑥simplicity-guard/plan-eng-review inline 声明与执行位置对齐
+- source_type/reference/exact_excerpt: Talk R1（新）/Q3 "索引+派发组合（推荐）"、R2/Q7 "spec+plan 为主"、R3/T-023 "完整移植执行规范（推荐）"；F-043
 - approval_binding: pending
-- facts_and_constraints: F-033~F-035；索引=只读派生（非权威/可再生/不持久，AGENTS.md vNext 边界）
-- Logic: 成本大头=全量重读+全量注入+无差分→索引省主会话读、派发省主上下文、瘦身省审查上下文
-- choice_reason/impact: 用户确认；影响=build-spec/build-plan SKILL+审查材料管线+主会话执行模型
-- consequences_and_risks: 审查瘦身可能降召回（RISK-006，对照验证可回退）；索引漂移（联动更新）
-- rejected_alternatives: 只派发/只索引（单边收益）；全四阶段（用户未选，DEFERRED-006）
-- unresolved_items/owner: 索引精确载体/审查瘦身抽取比归 build-spec 验证
+- facts_and_constraints: F-033~F-035、F-041~F-043；导航节=只读派生（非权威/可再生/不持久，AGENTS.md vNext 边界）
+- Logic: 成本大头=主会话全量重读+阶段内子代理独立上下文+审查材料包全量→执行规范+导航节+派发化+包组织=四管齐下；审查者本就读冻结包（file_only），无需改投递链
+- choice_reason/impact: 用户确认；影响=build-spec/build-plan SKILL+三输入契约+审查材料管线的组织+主会话执行模型
+- consequences_and_risks: 流程变更面（两 SKILL+三输入契约+20 测试，RISK-006 按 phase 隔离）；主窗口最小化为目标（不承诺总 token 下降——丁质询接受）
+- rejected_alternatives: 只派发/只索引（单边收益）；审查"瘦身"（机制已存在，T-023a 弃）；task_dir 直读（破坏冻结链，T-023a 弃）；全四阶段（DEFERRED-006）
+- unresolved_items/owner: 导航节精确格式/冻结 packet 契约细节归 build-spec 转译
 - Supersedes: none
 module: 质量-成本治理
 requirement_ids: [R-008, R-010]
@@ -496,6 +496,9 @@ artifacts: []
 | F-038 | **问题3 审计（材料质量-缺口②③）**：verify-code steps.json step1 明文"不在本阶段重新验证材料完整性"；三个历史任务 verify.json 全 status=unknown+material_digest 全零→"材料不足→verify 失败"无直接证据链；真实可证关联=**协议/绑定错误风暴**（verify-close 任务因之而生：绑定类错误≥5 次、SCHEMA_VALIDATION_FAILED≥5 次、单任务 build-code 重跑 31 次，见其 decision-log F-001/PFACT-001/002）+gate_cmd 不可执行（m17 3×exit 127=npm test 缺失）；AC 格式三任务三套写法 | 子代理审计 a4d19fdd + archive/verify 记录 | 已核实 |
 | F-039 | 材料质量体系保障度评分（审计结论）：无歧义性=中高、可执行粒度=高（tasks 层互反+同命令同 oracle 校验强）、可验证性=中（正向为主）、边界完整=中、可追溯性=高；**最大缺口**：①拒绝条件类 AC 无表达位（模板仅文本提示"负例"非法定字段）②verify 独立性≈0 ③模板/校验器标签错位导致"材料不达标却不知情" | research-Q3-materials-quality.md | 已核实 |
 | F-040 | **Talk R1/R2 收敛（新需求）**：Q1=分析+落地（本任务扩展含成本治理+模板升级+verify 独立性的完整实现，多 phase）；Q2=**不做 token 度量机制**（用户自见用量），直接做优化；Q3=材料分层索引+M/S/B/P 派发扩展组合；Q4=澄清问题3 真实含义（四材料质量审计，非模型使用记录）；Q5=审计+模板升级（负向 oracle/拒绝条件位+校验器同步）；Q6=verify 独立性纳入本任务；Q7=上下文机制覆盖 build-spec/build-plan 为主；Q8=先质量后效率+新需求完整走 make-decision 流程 | ask_user_question 用户真实回复（4+4 题卡） | 已确认 |
+| F-041 | **审查投递已是 file_only 模式（用户质疑"禁读文件"的答案核心）**：simple-review runner 生成 `.wh-review-packets/simple-*/` 材料包（review-instructions.md + materials/*.md，逐条 hash），broker 以 `attachment-delivery` 投递，attachments.json 中 `embed:false`=材料**不嵌入 prompt**，作为冻结只读副本复制到 provider 私有 bundle 供审查者按需读取；"禁访问仓库/宿主路径"的真实语义=**材料投递边界**（只能读 broker 投递的冻结材料包，不能读仓库全貌/宿主任意路径），**不是"审查者不能读文件"**；用户方案（审查专用文件放 task_dir 供审查调用）与现有 packet/bundle 机制**同构**，差距=材料包内容未做"导航+摘要+按需"分层 | /var/folders/.../T/wh-review-public-*/attachments.json + 3rd-review/SKILL.md file_only 段 | 已核实 |
+| F-042 | **异源审查隔离设计（调研 E）**：隔离=多层叠加（调用方指令 simple-review-runner.mjs:143 + adapter 自带 reviewInstruction + cursor deny Read(**)/claude-code allowedTools Read(bundle/**)/kimi 契约 bundle 相对路径 + 临时目录冻结副本（/tmp/3rd-review/<rt>/workspace/<p>/bundle/，chmod 400/500，复验）+ 路径防泄漏（material_id 基于脱敏值、绝对路径 fail-closed））；设计意图=防①污染/越权②不可复现③宿主路径泄露④递归调用；文档明示"材料投递边界，不声称替代 OS sandbox"；用户"task_dir 直读"会破坏②③；正确姿势=宿主读 task_dir→materials 值传入→自动脱敏冻结→审查者仍只读副本（=现有链）；取舍核心=宿主侧脱敏冻结后选 always_embed（小）或 file_only（大/需行号锚点） | 3rd-review 调研（7675f08d） | 已核实 |
+| F-043 | **spec/plan 全流程上下文现状（调研 F）**：build-spec 15 步+build-plan 13 步均无 step×执行者矩阵、无上下文守恒 6 条（全量落盘/主会话只留 ref+sha256+摘要≤500字/S 回传≤500字/并行上限/交互 M 独占/每步依赖上一步摘要）、无争议分级（findings 全由 M 直接处置）、无索引/导航规范（build-spec L222 仅一句"build a source/decision index"）；重载步骤=build-spec 1(读decision-log全文)/4(spec-specify)/11-13、build-plan 1(读四材料全文)/4(spec-plan)/6(plan-eng-review)/8(spec-tasks)/9-11；**make-decision SKILL L279-313 Execution model 规则壳可复用**；改造面=两 SKILL 加 Execution model 章节+spec-specify/spec-plan/spec-tasks 输入契约改"收冻结 packet"+simplicity-guard/plan-eng-review inline 声明对齐 | build-spec/build-plan SKILL+steps.json+skill-deps 调研（54e31ea2） | 已核实 |
 
 ## 总结文件核实表（与 task store 对账）
 
@@ -546,6 +549,9 @@ artifacts: []
 | T-018 | 材料质量缺口处置深度：①审计+模板升级 ②仅审计报告 ③审计+模板+本任务 dogfood | ①核心机制（负向 oracle/拒绝条件法定化+校验器同步）；②机制没变下个任务还踩坑；③范围最大 | ① 审计+模板升级（推荐） | 无新增；verify 独立性→T-019 | R2（新）/Q5 结构化问答 |
 | T-019 | verify 独立性：①纳入本任务 ②延后另立 ③不做 | ①直击 verify 洪流源头（执行率≈0 已证实）；②短期等不到解；③保持现状 | ① 纳入本任务（推荐） | 无新增 | R2（新）/Q6 结构化问答 |
 | T-020 | 上下文机制覆盖范围+实施顺序：①spec+plan 为主 ②全部四阶段 ③仅 build-plan；顺序：①先质量后效率… | 消耗大头=spec+plan（WH 587KB）；make-decision 已有收敛环 | ① spec+plan 为主；① 先质量后效率 | 无新增；用户追加要求：新需求完整走 make-decision 流程（Talk→审查→grill），与既有 verify-code 质量问题同等质量 | R2（新）/Q7+Q8 结构化问答（Q8 自定义："先质量后效率，另外我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍"） |
+| T-021 | 规模知情（debate round-2 裁决 5）：本任务=I 收口治理+II 质量-成本治理（约 8-10 phase 单语义维度拆分）| 周期最长；拆出=多一次交接（历史上交接断裂发生过多次） | ① 确认继续（推荐） | 无新增；phase 拆解归 build-plan | R3/Q1 结构化问答（2026-09-06） |
+| T-022 | 审查输入取舍（裁决 2 初稿）：全量 vs 切片对照 | 用户质疑隔离设计（"异源审查不也是普通 CLI 吗？为什么禁读文件？能否审查前整理专用文件放 task_dir 供审查调用？"）并要求覆盖**整个 build-spec/build-plan 阶段**的上下文管理（不只审查） | ⏳ 调研中：①异源审查隔离设计与 packet 机制（子代理 7675f08d）②spec/plan 全流程上下文现状（子代理 54e31ea2）；结果后重询 | 开放项→T-023 | R3/Q2 用户自定义答复（重大方向补充） |
+| T-023 | 调研后最终取舍：①审查投递形态 ②全阶段上下文规范程度 | 调研结论：隔离=材料投递边界（防污染/不可复现/路径泄露/递归调用）；审查者本就读冻结包文件（file_only）；"task_dir 直读"会破坏冻结链；build-spec/plan 无 Execution model/上下文守恒/索引规范，make-decision L279-313 规则壳可复用 | ① 保持冻结链+包内容分层（推荐）；② 完整移植执行规范（推荐） | 无新增开放问题；方向收敛（进入 grill+草稿+detail review） | R3/Q3+Q4 结构化问答（2026-09-06） |
 
 ## 调研
 
