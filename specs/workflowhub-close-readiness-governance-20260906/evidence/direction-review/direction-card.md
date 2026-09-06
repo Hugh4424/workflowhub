@@ -10,7 +10,7 @@
 ## I. 收口治理（v3 全文保留，语义不变）
 
 1. **A+B 收口预检链**（9 字段最小合同；载体=spec.md AC 扩展字段；预检=只读 advisory 三态；覆盖边界声明；不每阶段重跑）。
-2. **D 唯一缺口源**（同快照确定性派生 gap_id；聚合键不含投影源；投影源为 provenance；确认消缺；不持久）。
+2. **D 唯一缺口源**（同快照确定性派生 gap_id=规范化内容（去首尾/连续空白、字段序归一）+同快照确定性派生；聚合键不含投影源；投影源为 provenance；**确认消缺=按 snapshot/material 匹配的 human-confirmation fact 消费（stale 确认不消费）；多投影优先级=同一派生源发散（实现归 build-spec）**；不持久）。
 3. **E 边界校验**（bridge agent_run_id!==attempt_id→拒绝；收据不绑快照→拒绝；语义缺失→记录+投影不阻断）。
 4. **F 状态分层**（六状态分离展示；quality_status 唯一来源=独立质量决议；禁展示层推导新状态机）。
 5. **C/G 并入**（C 冒烟实施前验证可裁剪；G review 语义收紧）。
@@ -20,7 +20,7 @@
 | 状态 | 唯一来源 | 值域 | stale 语义 |
 |---|---|---|---|
 | can_continue | 执行事实（工作区+材料可读） | true/false | 随当前材料重算 |
-| stage_status | 当前 stage outcome/completion | completed/in_progress(+unavailable) | 过期=conflict/stale 如实展示 |
+| stage_status | 当前 stage outcome/completion | completed/in_progress/failed/timeout/cancelled(+unavailable 记录) | 过期=conflict/stale 如实展示；failed/timeout/cancelled 保持原状态不得改写成 completed |
 | quality_status | 独立质量决议（spec-analyze/review 事实） | passed/incomplete/unknown | 缺事实=incomplete；禁预检/收口投影写入或推导 |
 | acceptance_status | 逐 AC 验收证据 | pass/fail/unknown/deferred/not_applicable | 证据不绑当前快照=stale |
 | product_release_status | deriveProductRelease（五阶段 current completion+AC+verify 确认） | released/not_released | 输入非 current→not_released |
@@ -32,15 +32,15 @@
 
 - **背景（research-Q3）**：四材料保障度=中；缺口=①模板/校验器标签错位（bold `**验证方法**：` vs 校验器 plain `验证：`，历史用脚本"绕过"）②通过/失败/证据三段零校验 ③拒绝条件类 AC 无表达位 ④verify 不验材料完整性（三任务 verify unknown+零 digest）。
 - **锁定语义**：
-  1. **模板-校验器对齐**：spec 模板 AC 卡改 plain `验证：`（与校验器 L2948 正则一致），四段式（验证/通过/失败/证据）**全部 AC 强制**；校验器升级为四段式存在性校验+AC"失败："段非空。
-  2. **负向 oracle 法定化**：任务卡 oracle 结构化为机读字段 `{pass: ..., reject: ...}`（reject=可证伪拒绝断言，如"身份不符必须拒绝写入""收据不绑当前快照=不通过""findings:[] 无 provenance 不算通过"）；校验器检查行为变更类任务的 oracle.reject 非空；**不采用关键词/语法规则判型**（保证语义）。
+  1. **模板-校验器对齐**：spec 模板 AC 卡改 plain `验证：`（与校验器 L2948 正则一致），四段式（验证/通过/失败/证据）**全部 AC 强制且四段均须非空**；校验器升级为四段式存在性+非空校验。
+  2. **负向 oracle 法定化**：任务卡 oracle 结构化为机读字段 `{pass: ..., reject: ...}`（reject=可证伪拒绝断言，如"身份不符必须拒绝写入""收据不绑当前快照=不通过""findings:[] 无 provenance 不算通过"）；**机读判定=具有 RED/GREEN 配对的任务（verification_role∈{RED,GREEN} 且 paired_task≠N/A）强制 oracle.reject 非空**（复用现成机读字段，无新增分类元数据），校验器同步；聚合/非行为类（verification_role=N/A）不强制；**不采用关键词/语法规则判型**（保证语义）。
   3. **verify 入口材料轻量只读校验**（4 项：材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定）——事实校验，非 gate、不阻断。
   4. AC 写法模板统一（三套→一套）。
 - **宪法边界**：模板+校验器=既有机制修正；verify 材料校验=只读事实校验。
 
 ### II-2 verify 独立性（T-019/T-023 确认）
 
-- **锁定语义**：verify-code 阶段**发起**异源独立审查请求（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）+ **三态事实记录**（executed/failed/unavailable）+ 阶段汇报如实声明；**不是步骤完成条件、不是收口条件、不是 pass 门槛**（记录事实不阻断推进）；异源判定=既有身份校验链（provider_identities/source_id 比对执行者身份；配套 OPEN-004 配置修复为实施前提）；unavailable=如实记录（不算失败、不阻塞、不替代自查）。
+- **锁定语义**：verify-code 阶段**发起**异源独立审查请求（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）+ **三态事实记录**（executed=成功产出审查事实 / failed=已发起但执行失败，记录失败原因（允许一次重试，重试纪律=既有通道）不阻塞 / unavailable=通道不可用，如实记录原因）+ 阶段汇报如实声明；**不是步骤完成条件、不是收口条件、不是 pass 门槛**（记录事实不阻断推进）；异源判定=既有身份校验链（provider_identities/source_id 比对执行者身份；**OPEN-004 配置修复=实施前置环境动作（修改 3rd-review config 的 source_id 绑定，属用户侧配置，build-plan 前置执行、用户授权后动）**）；unavailable/failed=如实记录（不算失败、不阻塞、不替代自查）。
 - 目标：本任务 verify 阶段"只有审查事实"不再缺失（自查证据≠独立审查事实）。
 
 ### II-3 全阶段上下文管理（T-016/T-020/T-023 确认：完整移植执行规范）
@@ -51,7 +51,7 @@
   2. **材料输入契约改造**：spec-specify/spec-plan/spec-tasks 的输入从"Read the current…全文"改为"收冻结 packet"（对齐 spec-research 模式：宿主侧组装→脱敏冻结→按需读）。
   3. **材料分层索引（载体=材料内嵌"材料导航"节）**：每份四材料在文件头部内嵌导航节（节列表+每节 1 句摘要+读取时机建议）；零新文件、随材料更新、可再生、非权威；读法=节标题锚点（grep 定位）→按 offset 读片段；生成时机=起草即生成+定稿更新（不是 build-plan 末端）。
   4. **子代理派发扩展**：findings 处置/终检复查/调研子代理化（主会话只审摘要定稿，回传≤500 字）；simplicity-guard/plan-eng-review 的 inline 声明与实际执行位置对齐。
-  5. **审查材料包内容分层**：投递链路保持现有 file_only 冻结链不变（F-041/F-042：审查者本就读冻结包文件）；优化=包内 review-instructions.md 引导+材料分层（导航/摘要文件+按需详细文件）；"task_dir 直读"方案废弃（破坏冻结/零路径暴露/可复现链）。
+  5. **审查材料包内容分层**：投递链路保持现有 file_only 冻结链不变（F-041/F-042：审查者本就读冻结包文件）；优化=包内 review-instructions.md（**既有包文件，内容升级为引导：先读导航/摘要材料、再按需读详细材料**）+材料分层组织；**零新文件**=四材料导航节（见 3）不新增材料文件；"task_dir 直读"方案废弃（破坏冻结/零路径暴露/可复现链）。
 - **覆盖边界**：build-spec/build-plan 为主；make-decision 已 OK 不动；build-code/verify-code 顺带受益（tasks.md 导航节）；四阶段统一留 DEFERRED-006。
 - **目标口径**：主会话窗口占用最小化 + 材料包组织优化（不承诺总 token 下降；不做 token 度量）。
 
@@ -75,7 +75,7 @@
 - 成功（I 部分 v3 不变 + II 部分，全部限本任务可判）：
   - 材料质量：本任务按新模板生成的 spec 直接被校验器通过（无需"绕过脚本"）；AC 四段式+oracle.reject 经校验器检查为通过；本任务 verify.json 呈现真实材料身份（非零 digest+当前 snapshot 绑定）。
   - verify 独立性：本任务 verify 发起独立审查请求并留下三态事实记录（unavailable=如实记录）。
-  - 上下文：本任务 build-spec/build-plan 的审查材料包与阶段内子代理输入采用"导航+摘要+按需"组织；主会话重读/派发行为按执行规范执行（观察记录）；材料包内容对比 convergence 基线（review-input 字节数实测记录）。
+  - 上下文：本任务 build-spec/build-plan 的审查材料包与阶段内子代理输入采用"导航+摘要+按需"组织；主会话重读/派发行为按执行规范执行（观察记录）；材料包内容对比 convergence 基线（review-input 字节数实测记录；**无最低阈值——未获下降证据时如实结论"未证明下降"，不虚构达标**）。
 - 失败（I+II）：把未核实论断当事实；新增违宪控制面；假绿；方向未确认进入 build-spec；执行规范成为新 gate；模板升级破坏既有 AC 语义。
 
 ## 风险与延期
