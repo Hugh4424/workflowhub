@@ -9,6 +9,11 @@
 3. "请按标准 WorkflowHub 开始这个任务吧，先创建worktree，然后从 make-decision 开始，不要跳阶段，也不要依赖 build-spec 补需求"
 4. "先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项"
 5. "Talk 请用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接"
+6. "1：我们之前一起做了'...workflowhub-requirement-convergence-depth-20260905'任务，把make-decision阶段做了很强的更新升级，请你基于当前make-decision的执行情况，帮我看看这个任务实现的效果如何？"（问题1，R-007）
+7. "2：之前在 PB｜T12｜只读复盘与统计 与 WH-需求收敛强化 等任务时，make-decision阶段还算可以控制，可是到了build-spec和build-plan阶段缺花费了大量的时间和token，一个任务的spec和plan阶段要花费好几亿token，请你帮我看看为什么会这样？应该如何优化？是不是也可以进行类似make-decision一样的上下文管理和子代理派发优化？"（问题2，R-008）
+8. "3：我目前的workflowhub流程主要靠make-decision阶段把需求彻底确定，然后靠着高智力模型在build-spec和build-plan阶段设计详细的执行方案，后面build-code和verify-code阶段派出智力一般的模型来执行。一次来提高token效率和节约成本，请帮我看看目前这个思路执行的效果如何？"（问题3，R-009；后续澄清：真实含义=审计 decision-log/spec/plan/tasks 是否足够清晰专业详细，足够后面 build-code 和 verify-code 使用低智力模型也能保证交付质量，不是记录各 stage 模型使用）
+9. "请基于上述三个问题帮我仔细分析，可以从make-decision第一步开始，重新收敛一些新需求，放在当前任务的里一起开发"（R-010）
+10. "先质量后效率，另外我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍，保证这些需求能和之前的verify-code质量问题保持一样的质量"（R-010 流程要求）
 
 ## 关键背景：总结文件与核查结论（以核查为准）
 

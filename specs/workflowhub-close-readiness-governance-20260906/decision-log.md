@@ -58,7 +58,8 @@
 - 用户流程（已确认）：五 stage 标准执行流程；预检→review→confirm/authorize→close 各自展示位；无页面（non_ui）。
 - 页面范围：non_ui（三输入规则核实，见 UI applicability 节）。
 - 数据状态（已确认）：六状态从既有事实派生、分离展示；预检三态只读；gap_id 域=单次渲染快照；缺口投影消费 confirmations；底层投影来源保留（去重仅渲染层）。
-- 非目标/延期：见非目标节；延期项=预检载体形态（lens 复用 vs 新只读 profile）build-spec 按控制面登记规则验证、phase 精确边界归 build-plan、重放验证另立后续任务、diagnostic fixture schema 细节归 build-spec。
+- **新增范围（新需求，T-013~T-020 确认）**：在多 phase 内叠加"质量-成本治理"增量（方向卡 v4 第 II 部分）——①材料质量升级（spec/plan/tasks 模板与校验器对齐+四段式+负向 oracle/拒绝条件法定化+verify 入口材料轻量只读校验）；②verify 独立性（至少 1 个异源独立审查事实）；③上下文优化（材料分层索引+ M/S/B/P 派发扩展到 build-spec/build-plan+审查注入瘦身+模板口径单源）；不改变 I 部分任何语义（v3 收口治理原样保留）；交付物含三问分析报告（research-Q1/Q2/Q3，作为本任务诊断交付的组成部分）。
+- 非目标/延期：见非目标节；延期项=预检载体形态（lens 复用 vs 新只读 profile）build-spec 按控制面登记规则验证、phase 精确边界归 build-plan、重放验证另立后续任务、diagnostic fixture schema 细节归 build-spec；**新增延期**=材料索引载体形态与"不新增持久对象"兼容判定（DEFERRED-005）、四阶段统一上下文机制（DEFERRED-006）。
 
 ## 非目标（已确认，T-008/T-012）
 
@@ -316,6 +317,128 @@ derived_from: [D-201]
 artifacts: []
 ```
 
+### M5 质量-成本治理（新需求增量，方向卡 v4 第 II 部分；approval_binding 全部 pending）
+
+```text
+### D-301
+- question/final_option: 新需求任务形态？本任务扩展为"收口治理+质量-成本治理"统一多 phase（用户 Q1=分析+落地）
+- recommendation/plain_language: 推荐；免任务间交接；与既有 D-002 多 phase 形态一致
+- decision: 本任务范围扩展：I 收口治理（v3 不变）+ II 质量-成本治理（模板升级/verify 独立性/上下文优化）；build-code 分 phase 实施，每 phase 独立开发测试验收审查
+- source_type/reference/exact_excerpt: Talk R1（新）/Q1 "分析+落地（推荐）"；R-007~R-010
+- approval_binding: pending（step 11 整体确认）
+- facts_and_constraints: F-031~F-040；宪法边界（索引非材料/不持久，见 D-305）
+- Logic: 三问分析→机制缺口清单→与既有收口治理同属"质量可信+成本可控"一轴→统一任务统一验收
+- choice_reason/impact: 用户确认；影响=本任务周期与范围（两轮治理）
+- consequences_and_risks: 周期最长（RISK-002 放大）；phase 划分由 build-plan 锁定
+- rejected_alternatives: 仅分析（问题不消失）；另立任务（交接断裂，T-014 选项②被拒）
+- unresolved_items/owner: phase 边界归 build-plan
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-007, R-008, R-009, R-010]
+derived_from: [D-001, D-002]
+artifacts: []
+```
+
+```text
+### D-302
+- question/final_option: 材料质量缺口处置？审计+模板升级（负向 oracle/拒绝条件法定化+校验器对齐，用户 Q5）
+- recommendation/plain_language: 推荐；"低智力执行保质量"的核心机制
+- decision: ①spec-specify AC 模板改 plain `验证：` 与校验器对齐+四段式法定（验证/通过/失败/证据）；②校验器四段式校验+行为变更类 AC 含可证伪拒绝条件（负向 oracle 字段级要求）；③tasks 卡 oracle 负例字段化；④verify-code 入口材料轻量只读校验（材料存在+身份绑定+非占位符，非 gate）；⑤AC 写法模板统一（三套→一套）
+- source_type/reference/exact_excerpt: Talk R2（新）/Q5 "审计+模板升级（推荐）"；research-Q3 F-037~F-039
+- approval_binding: pending
+- facts_and_constraints: 模板/校验器=既有机制修正（非新控制面）；宪法"记录事实而非阻断"
+- Logic: 缺口①②③为"材料不达标却不知情/无法表达拒绝语义"→模板+校验器对齐即从根修；verify 材料校验=事实校验
+- choice_reason/impact: 用户确认；影响=spec/plan/tasks 模板+stage-content-contracts+verify-code 步骤
+- consequences_and_risks: 存量 spec 合规波动（RISK-004）；迁移面=仅新生成 spec；历史 spec 不回溯
+- rejected_alternatives: 仅审计报告（机制不变）；+dogfood（用户未选，范围控制）
+- unresolved_items/owner: 四段式精确格式/拒绝条件字段 schema 归 build-spec 转译
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-009, R-010]
+derived_from: [D-301]
+artifacts: []
+```
+
+```text
+### D-303
+- question/final_option: verify 独立性？纳入本任务（用户 Q6）：verify-code 必须产生至少 1 个异源独立审查事实
+- recommendation/plain_language: 推荐；直击 verify 洪流源头（执行率≈0 已证实，F-035/F-038）
+- decision: verify-code 阶段步骤级要求产生异源独立审查事实（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）；通道不可用=true unavailable 如实记录（不阻塞，不替代成自查）；执行率守卫形态（步骤条件 vs 收口提示）build-spec 定义并验证不构成新 gate
+- source_type/reference/exact_excerpt: Talk R2（新）/Q6 "纳入本任务（推荐）"
+- approval_binding: pending
+- facts_and_constraints: 审查=质量事实非推进许可证（宪法）；AGENTS.md 质量裁决独立来源
+- Logic: 低智力自查≠独立审查→verify 洪流→至少 1 异源事实托底
+- choice_reason/impact: 用户确认；影响=verify-code SKILL/steps/验证链
+- consequences_and_risks: provider 不可用→frequent unavailable（RISK-005，如实记录）；成本小幅上升
+- rejected_alternatives: 延后（短期无解）；不做（现状）
+- unresolved_items/owner: 守卫具体形态归 build-spec（构建期验证）
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-010]
+derived_from: [D-301]
+artifacts: []
+```
+
+```text
+### D-304
+- question/final_option: 上下文优化范围与形态？材料分层索引+M/S/B/P 派发扩展，build-spec/build-plan 为主（用户 Q3/Q7）
+- recommendation/plain_language: 推荐；覆盖消耗大头（WH 587KB、审查 28.2 万字符×5×2）
+- decision: ①材料分层索引（节-摘要-行号；主会话默认读索引按需读片段；载体=材料内嵌导航节或 evidence/ 派生文件，build-spec 按"不新增持久对象"规则验证）；②M/S/B/P 扩展：findings 处置/终检复查/调研全部子代理化（主会话审摘要定稿）；③审查材料注入瘦身（摘要+关键段+文件引用）；④模板口径单源（模板与机检规则同源）
+- source_type/reference/exact_excerpt: Talk R1（新）/Q3 "索引+派发组合（推荐）"、Talk R2（新）/Q7 "spec+plan 为主"
+- approval_binding: pending
+- facts_and_constraints: F-033~F-035；索引=只读派生（非权威/可再生/不持久，AGENTS.md vNext 边界）
+- Logic: 成本大头=全量重读+全量注入+无差分→索引省主会话读、派发省主上下文、瘦身省审查上下文
+- choice_reason/impact: 用户确认；影响=build-spec/build-plan SKILL+审查材料管线+主会话执行模型
+- consequences_and_risks: 审查瘦身可能降召回（RISK-006，对照验证可回退）；索引漂移（联动更新）
+- rejected_alternatives: 只派发/只索引（单边收益）；全四阶段（用户未选，DEFERRED-006）
+- unresolved_items/owner: 索引精确载体/审查瘦身抽取比归 build-spec 验证
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-008, R-010]
+derived_from: [D-301]
+artifacts: []
+```
+
+```text
+### D-305
+- question/final_option: 宪法边界判定（新机制身份）？
+- recommendation/plain_language: 关键，防止违宪
+- decision: 材料索引=只读派生视图（非第五材料/非权威/可再生/不持久）；verify 材料校验=只读事实校验（非质量裁决/非 gate/不阻断）；verify 独立审查=复用既有通道（不新增公共入口）；模板+校验器=既有机制修正。新机制一律按"控制面登记规则"在 build-spec 验证（唯一 consumer/owner/删除条件）
+- source_type/reference/exact_excerpt: AGENTS.md vNext 边界；CONSTITUTION F8/F9/F10/F11、Q2/Q3
+- approval_binding: pending
+- facts_and_constraints: 宪法禁新持久对象/第五材料/新 gate/新公共入口
+- Logic: 所有新增形态先做"身份判定"再实施→违宪风险前置消灭
+- choice_reason/impact: 方向约束；影响=build-spec 验证清单
+- consequences_and_risks: 若不登记=违宪（红线）
+- rejected_alternatives: 新增独立索引工具（可能成新控制面，拒绝）
+- unresolved_items/owner: 各机制控制面登记归 build-spec
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-010]
+derived_from: [D-301]
+artifacts: []
+```
+
+```text
+### D-306
+- question/final_option: 实施顺序？先质量后效率：①材料质量（模板+校验）②上下文机制（索引+派发）③verify 独立性（收口）——用户 Q8
+- recommendation/plain_language: 推荐；先保"低智力可执行"底线再省成本
+- decision: phase 顺序原则=模板/校验器 → 审查瘦身与索引/派发 → verify 独立性；每 phase 独立验收；精确边界 build-plan 锁定
+- source_type/reference/exact_excerpt: Talk R2（新）/Q8 "先质量后效率"
+- approval_binding: pending
+- facts_and_constraints: 依赖关系：模板先行走新 spec；上下文优化依赖模板稳定（不互相污染）
+- Logic: 质量底线优先于成本优化；成本优化的效果在质量稳定后可测量
+- choice_reason/impact: 用户确认；影响=build-plan phase 划分
+- consequences_and_risks: 若先效率后质量=省了不该省的（用户拒绝）
+- rejected_alternatives: 先效率后质量；交 build-plan 自由定
+- unresolved_items/owner: 精确 phase 归 build-plan
+- Supersedes: none
+module: 质量-成本治理
+requirement_ids: [R-010]
+derived_from: [D-301]
+artifacts: []
+```
+
 ## UI applicability（已核实，非草案）
 
 ```json
@@ -508,6 +631,19 @@ artifacts: []
 | FND-D08（#20/#36） | 根因→夹具未逐项映射 | 验收不可证伪 | fixed（根因→夹具→oracle 映射表） | 验收细节 | owner=主会话 |
 | FND-D09（#39） | dogfood 无观察合同 | 自证风险无对冲 | fixed（观察合同：阶段/样本/独立观察者/窗口/判定） | 验收细节 | owner=主会话 |
 | FND-D10（#1/#2/#3/#7/#8/#11/#12/#13/#14/#21/#24/#25/#28/#31/#32/#33/#37/#38） | 剩余一致性/语义小项（六项验收数、观察口径、范围节标注、合同描述、Exit checks、F 表状态、展示位回填、R-011 悬空、延期交接、别名收敛、样本口径） | 文本-事实错位 | fixed（逐一已修，见对应节） | 本文件各处 | owner=主会话 |
+| FND-V4-01（blocking） | 关键规范（独立审查守卫形态/材料索引载体/负向 oracle 分类/四段式范围）延期 build-spec → 违反"不依赖 build-spec 补需求" | 方向未真正收敛 | **辩论 round-2 组A**：方向期锁定最小语义（守卫=发起+记录事实非结果条件；索引载体=材料内嵌导航节；负向 oracle=oracle 结构含 reject；四段式=全部 AC 强制） | 裁决书 round-2 | owner=主会话+用户（T-021+） |
+| FND-V4-02（major #40×2） | "摘要+关键段+文件引用"审查瘦身与异源审查隔离约束冲突（审查环境禁访问仓库文件/宿主路径，simple-review-runner.mjs:143） | 独立审查漏审风险 | **辩论 round-2 组B**：候选①审查保持全量注入（质量优先）②打包时预生成摘要随包注入（省钱） | 用户裁决（T-022） | owner=用户 |
+| FND-V4-03（major #33×3） | 执行率守卫=步骤/收口条件 → 新 gate 违宪（"记录事实不阻断"） | 违宪红线 | fixed 候选：守卫改为"必须发起独立审查请求并记录结果事实；结果 unavailable 如实记录；非 pass 条件"（质量事实≠推进许可）——方向卡 v4.1 修正 | 裁决书 round-2 组A | owner=主会话 |
+| FND-V4-04（major #5/#19/#23/#39 索引组） | 索引载体未定（内嵌节 vs evidence/ 派生文件）+ 不持久矛盾 + 生成时机（build-plan 末端与降本目标倒置） | 可能第五材料/持久对象/时序失效 | 方向期锁定：载体=材料内嵌"材料导航"节（零新文件、随材料更新、可再生）；主会话默认读导航节按行号片段读原文；生成时机=起草时+定稿时更新 | 裁决书 round-2 组A | owner=主会话 |
+| FND-V4-05（major #26×2） | verify 材料校验"四件套"实为 3 项（缺非零 digest/当前快照绑定）且无法解决 unknown+零 digest | 校验不达目标 | 方向期锁定 4 项：材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定（只读事实校验） | 裁决书 round-2 | owner=主会话 |
+| FND-V4-06（major #65×2） | 成功标准"历史三任务 unknown+零 digest 不再出现"与非目标"不改历史"矛盾 | 验收不可判 | 修正：改为"本任务 dogfood 的 verify.json 呈现真实材料身份（非零 digest/绑定）；历史记录不回改" | 方向卡 v4.1 | owner=主会话 |
+| FND-V4-07（major #67×2） | 成本成功标准无基线/计数口径/回退条件（且不做 token 度量） | 优化效果不可判 | 修正：观察口径=审查注入字符数对比 convergence 基线（28.2 万→目标百分比）+主会话重读轮次（read 调用次数记录）；下降无阈值则诚实记录"未达预期"；回退=恢复全量注入 | 方向卡 v4.1 | owner=主会话 |
+| FND-V4-08（major #3） | R-007~R-010 未建 talk→审查→grill 覆盖映射 | 流程不闭合 | 已补：T-013~T-020 + 本审查（v4 方向）+ 辩论 round-2 + T-021~T-023 + grill round-2 记录（本文件） | 本文件 | owner=主会话 |
+| FND-V4-09（major #53） | 六状态契约外置 decision-log（不在审查提交材料） | 方向卡自身无法提供实现和验收核心契约 | 方向卡 v4.1 摘要嵌入六状态要点表（详细矩阵仍指 decision-log） | 方向卡 v4.1 | owner=主会话 |
+| FND-V4-10（major #23/#64/#25） | 负向 oracle 分类无元数据规范/校验器无法确定性判定 | 法定化不可执行 | 方向期锁定最小规范：AC 卡四段式（验证/通过/失败/证据）全部强制；任务卡 oracle 结构化 {pass, reject}（reject=必须拒绝/不得通过/视为失败断言，关键词驱逐式+机检存在性）；校验器检查 AC"失败："段非空+oracle.reject 非空 | 裁决书 round-2 组A | owner=主会话 |
+| FND-V4-11（minor #73 DEFERRED-005） | 索引载体判定延期=违反"不跳阶段" | 同上（并入 FND-V4-04，不再延期） | fixed（并入 v4.1 锁定） | 方向卡 v4.1 | owner=主会话 |
+| FND-V4-12（major #33 异源判定） | II-2"异源"要求与非目标"不做模型绑定"表面冲突 | 语义矛盾 | 澄清：异源=审查 provider 身份与执行者不同（既有审查机制语义），非"模型智力分级/绑定"；非目标只管"不记录建议模型使用" | 方向卡 v4.1 | owner=主会话 |
+| FND-V4-13（minor #25/#64） | 范围小节补记/结构性表述 | 文本小项 | fixed（随 v4.1 统一修订） | 方向卡 v4.1 | owner=主会话 |
 
 ## 最终确认
 
