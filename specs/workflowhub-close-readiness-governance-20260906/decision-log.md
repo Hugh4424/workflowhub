@@ -564,6 +564,7 @@ artifacts: []
 | grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
 | --- | --- | --- | --- | --- |
 | G-001 | 术语冲突：无（"收口预检"复用"阶段收口/预检"既有词，无新领域术语） | 挑战后无改变方向的未决缺口；隐藏前提（gap_id 矛盾/多 phase 自洽/dogfood 自证）已由四队辩论钉出并处置（见裁决书） | ADR=不创建（可逆、无"无背景会意外"架构决策、取舍已入 decision-log D 系列）；四项退出 check 全 pass | 裁决书.md；CONTEXT.md:73/77/331 核实 |
+| G-002 | 术语冲突：无新增。新机制用词沿用既有（"执行模型"=make-decision M/S/B/P 同名词；"冻结 packet"=spec-research 既有描述；"材料导航节"=既有"source/decision index"（build-spec SKILL L222）的显式化，不引入新领域术语） | 挑战后无改变方向的未决缺口；**隐藏前提 3 项**：①审查者按需读 bundle（kimi 适配器指令="Read only these relative bundle paths"——按清单读，读多少取决于 review-instructions 引导强度，分层效果为不确定量，记 RISK-007）②校验器四段式/reject 升级不破坏既有 20 个 contract 测试（构建期验证，先写 RED）③执行模型移植与既有 inline/independent 声明不冲突（F-043 已核对；simplicity-guard 实际走 provider packet lens 路径需在实施期对齐，记 DEFERRED-008） | ADR=不创建（可逆=新机制可回退；无"无背景会意外"=语义均沿用既有；取舍已完整记录于裁决书 round-2 与 D-30x）；四项退出 check 全 pass | F-042 调研 + kimi.mjs:40 + build-spec SKILL L222 |
 
 ### step 6 direction-advice（completed, 2026-09-06）
 
@@ -612,6 +613,45 @@ artifacts: []
 - 结果：status=available-with-failures、pair partial（grok/pi 身份未绑定，F-030）；39 条 findings（28 major+9 minor+2 blocking），全部为决策记录一致性/方向语义明确化，**无方向级争议** → 不触发 talk round 4，主会话直接修复（FND-D01~D10）。
 - 修复：头部/OPEN/Exit checks/拒绝方案/风险延期表定稿；D-205/206/207 独立条目；9 字段语义表；数据状态矩阵；失败分支表；根因→夹具映射；dogfood 观察合同；R-011 悬空修正；F 表状态更新；框架切换记录。
 - 未完成/跳过：pair partial 的两 provider 未重跑（语义结果已由 3 provider×2 role 产出；配置身份问题记录 F-030，不在本 stage 修配置）。
+
+### step 6-v4 direction-advice（completed, 2026-09-06，新需求轮）
+
+- 实际做了什么：用户三问（R-007~R-010）经三轮取证分析（research-Q1/Q2/Q3，4 路子代理：0b2049cb/b12b32f9/f2368ca8/a4d19fdd）与 Talk R1/R2（T-013~T-020）收敛；方向卡升级 v4；重建 input.json（raw-requirement 追加 R-007~R-010 原话 + direction-card v4 全文），以 wh-review-cli run 真实执行红蓝配对方向审查。
+- 结果：status=available、pair complete、outcome=completed、6/6 provider 全 completed；25 条 findings（1 blocking+19 major+5 minor）；material_id=2e017b2a…（F-024 同机制，v4 轮 result-v4.json 落盘）。
+- 处置：25 条 findings 进入 step 6b-v4 辩论与 step 7-v4 处置；主要主题（关键规范延期=补需求红线、审查瘦身与异源隔离冲突、守卫=新 gate 嫌疑、成本无基线、历史矛盾、索引时序倒置、六状态外置、四件套不闭合、异源判定冲突、覆盖映射缺失）。
+- 未完成/跳过：无；红蓝均有语义结果。
+
+### step 6b-v4 debate round-2（completed, 2026-09-06）
+
+- 实际做了什么：法官立案（round-2/00-案卷.md，25 findings 聚 A~F 六组）→ 四队独立上下文立场书（position-甲/乙/丙/丁）→ mailbox 交叉质询（challenge-甲/乙/丙/丁）→ 法官裁决（round-2/裁决书.md：事实判定 6 项+裁决 1-7+用户确认 2 项+反偏见自检）。
+- 关键裁决：锁最小语义（守卫=发起+三态记录非条件；索引=材料内嵌导航节；负向 oracle=oracle 结构 {pass,reject}；四段式全 AC 强制；索引生成时机=起草即生成）；审查注入修正（T-022 调研后：投递链保持 file_only 冻结链+包内容分层；"瘦身/切片"取消）；全阶段 Execution model 移植（T-023b）；范围 confirm（T-021）。
+- 结果：completed。裁决+修正全部落入方向卡 v4.1 与 D-302/303/304。
+- 未完成/跳过：无（四队全部真实产出；两处用户确认进 step 7-v4）。
+
+### step 7-v4 talk-round-3（completed, 2026-09-06，v4 轮）
+
+- 实际做了什么：①T-021 规模知情（I+II 约 8-10 phase）→用户确认继续；②T-022 审查输入取舍→用户质疑"为什么禁读文件"并强调"整个阶段"治理→**两路专项调研**（子代理 7675f08d：隔离=材料投递边界防污染/不可复现/路径泄露/递归，审查者本就读冻结包 file_only；子代理 54e31ea2：spec/plan 无 Execution model/无上下文守恒/无索引，make-decision L279-313 可复用）；③T-023 调研后重询→用户确认"保持冻结链+包内容分层"+"完整移植执行规范"。
+- 用户答复：T-021=确认继续；T-022=需要调研的问题+全阶段治理补充；T-023=两项推荐均采纳。
+- 队列变化：无剩余开放项；方向 v4.1 语义定稿（F-041~F-043 事实+裁决修正+方向卡 v4.1）。
+- 后果/风险：方向卡 v4.1 按裁决 1-7+T-023 修正（锁最小语义、弃审查瘦身、扩执行模型移植、六状态摘要入卡、成功标准改 dogfood 口径）；进入 Grill-v4 与草稿-v4。
+
+### step 8-v4 grill-with-docs（completed, 2026-09-06）
+
+- 覆盖矩阵（v4 增量）：goal=质量-成本治理（T-013~T-023 确认）✓；flow_or_surface=五阶段流程不变+信息面展示位（阶段汇报=既有遗漏披露范围）✓；data_or_state=六状态摘要入方向卡+材料导航节=只读派生+verify 三态事实 ✓；success_failure_acceptance=全部限本任务 dogfood 口径（裁决 4）✓；constraint_non_goal_defer=非目标更新（弃 token 度量/模型绑定/task_dir 直读/瘦身）+DEFERRED-006/008 ✓。
+- 挑战结论：无新增术语冲突（"执行模型/冻结 packet/材料导航节"均沿用既有词）；隐藏前提 3 项（审查者按需读强度 RISK-007、校验器升级不破 20 测试、simplicity-guard 路径对齐 DEFERRED-008）已记录；无改变方向缺口。
+- 面向用户提问：无（方向级问题 Talk R1-R3 已覆盖）。
+- 四项退出检查：外部接口核实（file_only 投递链 F-041/F-042、adapter 按清单读 kimi.mjs:40）pass；命名唯一定义（导航节=只读派生非材料；三态=executed/failed/unavailable）pass；失败语义明确（unavailable=记录不阻断）pass；范围边界写死（非目标+延期表）pass。
+
+### step 9-v4 write-decision-draft（completed, 2026-09-06）
+
+- 实际做了什么：方向卡 v4.1 定稿（I 部分 v3 不变+II 部分裁决修正版）；D-301~D-306 决策条目（M5 组）+D-302/303/304 修正；R-007~R-010 入表；F-031~F-043 入表；T-013~T-023 入 Talk 表；N-005~N-007 节点；风险 RISK-004~007 与延期 DEFERRED-006/008 入表；G-002 grill 记录；step 6-11 v4 轮记录。
+- 产物：decision-log.md（v4 轮版）+evidence/direction-review/direction-card.md（v4.1）+evidence/research-Q1/Q2/Q3.md（3 份取证分析）+evidence/debate/round-2/（10+ 文件）。
+- 结果：completed。所有用户确认选择已映射；无未确认方向级内容。
+- 未完成/跳过：approval_binding（step 11-v4 最终确认后绑定）。
+
+### step 10-v4 detail-advice（进行中）
+
+- 下一步：构造 detail 审查输入（raw-requirement + direction-card v4.1 + decision-log v4 全文）→ wh-review-cli detail 红蓝审查 → 处置 → step 11-v4 最终确认。
 
 ## 审查处置
 
@@ -688,10 +728,16 @@ artifacts: []
 | RISK-001 | make-decision 与历史任务同样可能遇到"证据不可复核/外部 review unavailable"影响完成判定 | 若 detail/direction review provider 不可用 | 本 stage 如实记录 unavailable，不伪造（detail 已发生 2 provider 身份未绑定，已如实记录） |
 | RISK-002 | 改造横跨 build-spec/build-plan/runtime/展示/测试 5 处，周期最长 | 若 phase 划分或契约转译不当 | build-plan 锁定 phase 边界；每 phase 独立验收 |
 | RISK-003 | dogfood 自证（本任务顺利执行时产生不了重复缺口） | 若只靠 dogfood 验收 | 已改为负向夹具为主（D-401）；观察合同见"验收细节"节 |
+| RISK-004 | 模板/校验器对齐引发存量 spec 合规波动 | 仅新生成 spec 受影响；本任务 spec 是首个新消费者（改错即自卡） | 构建期先写 RED 测试再改校验器；历史 spec 不回溯 |
+| RISK-005 | verify 独立审查在 provider 不可用时 frequent unavailable | 约 40-75% 通道成功率（F-035） | 三态事实记录+如实声明；不阻塞（裁决 3）；多通道并发（红蓝 6/6 实证） |
+| RISK-006 | 执行规范移植流程变更面（两 SKILL+三输入契约+20 测试交叉） | 改错无法归因 | build-plan 按"一个 phase 一个语义维度"拆分（裁决 5） |
+| RISK-007 | 审查材料包分层效果依赖 review-instructions 引导强度（审查者按清单读，读多少取决于引导） | 分层省 token 效果不确定 | dogfood 观察：本任务审查包记录 review-instructions 与材料包字节；效果不足则引导加强（可逆） |
 | DEFERRED-001 | 预检载体形态：spec-analyze lens 复用 vs 新只读 profile | 需在 build-spec 验证与现有只读分析通道兼容性；不兼容则按控制面登记规则（唯一 consumer/owner/删除条件） | build-spec 验证，owner=build-spec |
 | DEFERRED-002 | phase 精确边界（每 phase 交付物/切换条件） | build-plan 锁定 | build-plan，owner=build-plan |
 | DEFERRED-003 | 真实任务重放验证（M17/T09 同型） | 依赖外部 provider/宿主 | 另立后续任务，owner=用户 |
 | DEFERRED-004 | 完整状态矩阵值域/转换/过期表；夹具与 oracle 明细；9 字段 schema 细节 | 实现契约（方向期语义已锁定） | build-spec/build-plan 转译 |
+| DEFERRED-006 | 四阶段统一上下文机制（build-code/verify-code 也装执行模型+导航节） | 先 spec+plan 验证效果（T-023/Q7） | 后续任务，owner=用户 |
+| DEFERRED-008 | simplicity-guard/plan-eng-review 的"provider packet lens"路径与 build-plan 直接调用位置对齐 | 执行模型移植时需核实实际执行路径（F-043 标记） | build-spec/build-plan 实施期验证，owner=build-spec |
 
 ## 未决项
 
