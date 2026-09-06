@@ -486,7 +486,18 @@ artifacts: []
 
 ## 最终确认
 
-- 状态：pending（step 11 用户确认进行中；确认后补 binding 与交互 aggregate）
+- 状态：**pending（等待用户新需求）**——用户对最终决策卡的答复为："请你先把目前的decision落盘存档，我再慢慢提我的新需求"；确认动作未发生。
+- 存档点：任务分支 commit `ccfd4a9f`（decision-log.md v1、direction-card v3、direction/detail 审查结果、debate round-1 全部材料共 21 文件）；材料路径 specs/workflowhub-close-readiness-governance-20260906/。
+- 处理：make-decision 暂停于 step 11（approve-decision）；用户新需求到达后，先判定是否改变方向——改变则修订决策并重新 Talk/确认，不改变则补记录后继续；不做任何下游阶段推进。
+- 未确认内容：最终决策确认（approval_binding）；交互 aggregate（待确认后组装）。
+
+## step 11 记录（进行中，等待用户新需求）
+
+- 实际做了什么：向用户呈递最终决策卡（方向/范围/非目标/成功标准/风险/审查事实/延期项），请求真实确认（approve-decision）。
+- 用户答复：先落盘存档，再慢慢提新需求（非确认，也不是拒绝）。已按答复完成存档 commit ccfd4a9f；stage 保持 in_progress。
+- 未完成/跳过：approval_binding 未绑定；交互 aggregate 未组装（须以用户确认的最终决策组装——当前最终决策仍是"用户已确认的系列选择"（T-001~T-012），但整体确认被用户主动暂停）。
+
+> 说明：本 stage 的所有方向性内容已经过用户三轮 Talk 逐一确认（T-001~T-012）；step 11 的整体确认被用户主动挂起以容纳新需求，属于正常交互暂停，不改变已确认的方向语义。
 
 ## 拒绝方案
 
