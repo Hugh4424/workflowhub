@@ -8,7 +8,7 @@
     },
     {
       "path": "SKILL.md",
-      "sha256": "989f8fcb087d2ffe99093647a20cbb80a8e525cd062d452e39756e76e48f8ee9"
+      "sha256": "32e92f62d1a36cbeb39af527ea81668f4bfc8845bda476b9d4cceaf5e2b2784a"
     },
     {
       "path": "examples/sample-input.md",
@@ -24,19 +24,19 @@
     },
     {
       "path": "references/anti-bias-guardrails.md",
-      "sha256": "552bea7a7765500b84b1bfe6a64d3cb0e0a80caf772a88f47b73e4df66010c53"
+      "sha256": "0d51105d4f649046b11576ea89f59bd77daa60f538b9e63cdc1b8c6284e2492e"
     },
     {
       "path": "references/arbitration-protocol.md",
-      "sha256": "9006295ca2c7d1feea5463002dfd28b273dbe51a01de43508bafb9caa97ced55"
+      "sha256": "ab52918c8ccd63e8778db0677bc6485f4f8a5c5120cad8c5ef60f20fa4719477"
     },
     {
       "path": "references/output-template.md",
-      "sha256": "9c0bcbb91d4720c451ccfd817ecf1ad73b6b8f27d0a27148652777c205c49e45"
+      "sha256": "4ff6ee5c1902a08ba65f55dd1f16c676cbc73df0e2bad985cdb87ce89e32e2b1"
     },
     {
       "path": "references/role-spawn-templates.md",
-      "sha256": "2cc6f4dc1f090948028933d54db2613c7d392ff04d9c6d96f5fc30aa9f2255c2"
+      "sha256": "334c11f3fe6f1f78ced8e1a6701a8d0678ebd1dfd9c5f51fa636f5634f3b5b75"
     }
   ],
   "sources": [

@@ -3206,6 +3206,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
     spec: materials["spec.md"],
     plan: materials["plan.md"],
     tasks: materials["tasks.md"],
+    decisionLog: materials["decision-log.md"],
   });
   if (!executable.ok) {
     throw new Error(`build-plan minimum executable contract failed: ${executable.errors.join("; ")}`);

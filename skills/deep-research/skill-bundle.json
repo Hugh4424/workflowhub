@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "skill": "deep-research",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "2a1bf9e8a6a1e86b963c320d7b060b7eab7a136c76eb8dcf7977a0eda6453664"
+    }
+  ]
+}

@@ -209,7 +209,11 @@ async function runBridge(input) {
   const hasSession = input.session && typeof input.session === "object" && !Array.isArray(input.session);
   const hasUnavailable = input.unavailable && typeof input.unavailable === "object" && !Array.isArray(input.unavailable);
   if (hasExecution) throw new TypeError("bridge accepts only the narrow session or unavailable outcome; execution is historical-only");
-  if ([hasSession, hasUnavailable].filter(Boolean).length !== 1) throw new TypeError("session or unavailable host result is required exactly once");
+  if ([hasSession, hasUnavailable].filter(Boolean).length !== 1) {
+    const error = new Error("Stage Agent result missing or duplicated: submit exactly one session or unavailable host result");
+    error.code = "BRIDGE_STAGE_AGENT_RESULT_MISSING";
+    throw error;
+  }
   if (Object.hasOwn(input, "receipts")) throw new TypeError("bridge accepts no quality receipts; stage-runtime owns current quality publication");
 
   let context = bootstrapStage(stage, {

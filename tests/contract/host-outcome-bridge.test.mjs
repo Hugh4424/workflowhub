@@ -95,6 +95,40 @@ describe("explicit host outcome bridge contract", () => {
     })).rejects.toThrow(/agent_run_id/i);
   });
 
+  it("publishes unavailable verify-code reviews bound to the current identity", async () => {
+    const state = fixture("host-outcome-verify-code");
+    const valid = readFixture("valid-unavailable.json");
+    const result = await workflowHubBridgeMain({
+      ...valid,
+      task_id: state.task.identity.taskId,
+      stage: "verify-code",
+      task_path: state.task.taskPath,
+      attempt_id: "attempt-host-outcome-verify-code",
+      agent_run_id: "agent-host-outcome-verify-code",
+    });
+    const outcome = JSON.parse(state.task.readRecord(result.outcome_ref));
+    expect(outcome).toMatchObject({
+      stage: "verify-code",
+      status: "unavailable",
+      code_review: {
+        snapshot_tree: outcome.snapshot_tree,
+        material_revision: outcome.material_revision,
+        result: { status: "unavailable" },
+      },
+    });
+  });
+
+  it("fails with an explicit producer diagnostic when neither session nor unavailable is submitted", async () => {
+    const state = fixture("host-outcome-missing-producer");
+    const valid = readFixture("valid-unavailable.json");
+    const { unavailable: _unavailable, ...missing } = valid;
+    await expect(workflowHubBridgeMain({
+      ...missing,
+      task_path: state.task.taskPath,
+      agent_run_id: "agent-host-outcome-missing-producer",
+    })).rejects.toMatchObject({ code: "BRIDGE_STAGE_AGENT_RESULT_MISSING" });
+  });
+
   it("rejects a bridge task id that does not match task_path", async () => {
     const state = fixture();
     const valid = readFixture("valid-unavailable.json");

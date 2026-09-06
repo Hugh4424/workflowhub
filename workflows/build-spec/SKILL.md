@@ -192,6 +192,19 @@ direction-changing ambiguity is returned to `make-decision` as an upstream
 decision gap. Continue all unaffected drafting and repair while recording the
 gap plainly.
 
+## Findings 处置对话分工
+
+build-spec 审查产生的争议 findings 处置对话=复用 spec-clarify。它仍然只处理
+当前规格中的材料歧义和 finding 决定轴，沿用既有 stage outcome 侧校验、真实
+`ask -> wait -> user reply -> resume` 生命周期和交互 receipt；答复回写 finding
+时保留 `source=user_reply` 与 `evidence_ref=reply_ref`。不新增对话技能、状态机、
+stage 或 gate。
+
+`talk-with-zhipeng` 不进入 build-spec 的技能声明或执行路径；`grill-with-docs`
+保持 grill 独占，只在 make-decision 作为方向挑战使用。build-spec 不运行 Talk
+或 Grill，也不把二者的历史答复当作 spec-clarify 的用户回复；缺少、过期或中断
+的交互 receipt 保持 `incomplete`，不得推断或伪造答复。
+
 ## Boundaries
 
 Do not add implementation file lists, code symbols, engineering alternatives,

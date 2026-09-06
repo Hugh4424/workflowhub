@@ -497,7 +497,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   });
   // Identity comes only from explicit CLI values or the authenticated
   // worktree.  Host session state is intentionally not consulted here.
-  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect"]).has(command)
+  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect", "confirm"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
@@ -703,6 +703,28 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }, stageReflectionPublication(services));
   }
   if (command === "confirm") {
+    if (input !== undefined) {
+      const allowed = new Set(["review_result_ref", "finding_id", "card_ref", "card_hash", "selected_option", "reply_ref", "reply_hash"]);
+      if (!input || typeof input !== "object" || Array.isArray(input)
+          || Object.keys(input).some((key) => !allowed.has(key))) {
+        throw new TypeError("confirm risk input accepts review_result_ref, finding_id, card_ref, card_hash, selected_option, reply_ref, and reply_hash only");
+      }
+      for (const key of allowed) {
+        if (typeof input[key] !== "string" || input[key].trim() === "") {
+          throw new TypeError(`confirm risk input requires ${key}`);
+        }
+      }
+      return context.kernel.acceptReviewRisk({
+        stage: values.stage,
+        reviewResultRef: input.review_result_ref,
+        findingId: input.finding_id,
+        cardRef: input.card_ref,
+        cardHash: input.card_hash,
+        selectedOption: input.selected_option,
+        replyRef: input.reply_ref,
+        replyHash: input.reply_hash,
+      });
+    }
     if (typeof values["reply-text"] !== "string" || values["reply-text"].trim() === "") throw new TypeError("confirm requires --reply-text=<user reply>");
     if (typeof values["step-slug"] !== "string" || values["step-slug"].trim() === "") throw new TypeError("confirm requires --step-slug=<current step>");
     return context.kernel.publishHumanConfirmation(values.stage, {

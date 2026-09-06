@@ -6,6 +6,19 @@
 | --- | --- | --- | --- |
 | R-001 |  |  |  |
 
+### 需求框架（先选一类，再逐步回填）
+
+- **framework**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
+- **选择理由**：
+- **回填规则**：调研、Talk、审查、Grill 只能扩展已有节点；混合任务以 `functional` 为外层，在受影响节点下挂 `research` 子树。
+
+| node_id | 节点 | status | evidence_status | evidence_owner | next_review_trigger |
+| --- | --- | --- | --- | --- | --- |
+| N-001 | 背景 / 问题 | open | pending |  |  |
+| N-002 | 目标 / 论断 | open | pending |  |  |
+| N-003 | 方案 / 证据 / 裁决 | open | pending |  |  |
+| N-004 | 验收 / 扩展 | open | pending |  |  |
+
 ## 目标
 
 - 目标：
@@ -26,6 +39,22 @@
 
 ## 决定
 
+决定区按需求框架的方案或裁决模块使用 `### <module>` 分组；每组内按
+`需求/question → facts/constraints → option → decision → feature/consumer → acceptance`
+链序排列。跨模块依赖必须写 `D-ID + derived_from`，根决定写
+`derived_from: []`。以下四个字段只属于文本层链记录，不改
+`decision-entry.v1`：
+
+```text
+module: <module-name>
+requirement_ids: [R-001]
+derived_from: [D-001]
+artifacts: [spec.md#FR-001]
+```
+
+节点缺证据时保留 `status: open|deferred`、`evidence_status: pending`、
+`evidence_owner` 和 `next_review_trigger`，不得静默写成 confirmed。
+
 每个决定都使用唯一的 `decision-entry.v1` 字段；每个字段只写决策所需的
 一句话或一个来源引用，不复制 spec：
 
@@ -43,6 +72,10 @@
 - rejected_alternatives:
 - unresolved_items/owner:
 - Supersedes:
+module:
+requirement_ids: []
+derived_from: []
+artifacts: []
 ```
 
 ## 三轮 talk
@@ -87,7 +120,7 @@
 | --- | --- | --- | --- |
 | RISK-001 |  |  |  |
 
-## 质量边界
+### 质量边界
 
 - 质量事实：
 - 推进资格：
@@ -110,7 +143,7 @@
 - 术语/ADR 冲突及处理：
 - 不复制 spec 的边界：
 
-## Exit checks
+### Exit checks
 
 - 上下文一致：
 - owner/接口一致：

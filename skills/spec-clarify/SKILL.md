@@ -9,6 +9,13 @@ Receive the current `spec.md`, accepted upstream decision material, and
 controlled named-artifact callbacks from build-spec. Never derive or accept
 task, root, repository, or product paths.
 
+### 问答工具 IO 契约
+
+结构化问答工具的每题输入固定为 `question_id`、`axis`、`options`（最多 3 个，逐项写明
+含义、直接后果和主要风险）与 `recommended`。输出固定包含 `answers`（`option_id` 或
+`free_text`）以及宿主认证的 `reply_ref`、`reply_hash`。宿主没有该工具时，使用同内容的
+大白话文本卡，并如实登记工具降级事实；不得伪造工具调用或回复凭证。
+
 Before asking anything, classify every relevant statement as:
 
 1. **Locked upstream decision**: already decided; inherit its wording, option

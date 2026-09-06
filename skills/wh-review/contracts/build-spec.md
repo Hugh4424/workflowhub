@@ -12,7 +12,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与本次审查有关的 reviewer 技能文件；UI scope 才包含 UI reviewer 技能。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-同一 task 的同一普通审查面只记录一次 semantic advice result；runner 仍完整校验首轮
+同一 task 的同一普通审查面只记录一次 semantic advice result；每次 build-spec 只发一个短 request，runner 仍完整校验首轮
 材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
 如果首轮只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
 
@@ -49,6 +49,8 @@ build-spec 只消费可信异源 advice，不要求 provider `pass` 或 findings
 ## 审查重点
 
 - 每项原始需求和批准决策是否进入 spec。
+- 逐项检查 AC 可判断性与验收盲区：每条 AC 是否有可观察行为、明确 oracle、成功/失败边界和可打破的断言；不能只以文件存在或摘要作为证明。
+- 指令必须主动检查横向第三路、隐藏前提、防虚假共识和纵向否定；这些是同一次审查中的强化视角，不另起 review 或新增 stage。
 - 已批准决策是否先分成 locked、unresolved 和 newly discovered ambiguity；locked 内容、顺序、选项和推荐是否原样保留且未被重问。
 - 每次 clarification 是否只处理一个决策轴，并按依赖顺序处理多个轴；是否只针对 unresolved 或 new ambiguity。
 - 所有候选项与 locked 决定冲突时，是否返回上游矛盾而不是展示假选项；上游已有选项和推荐时是否保持单轴保真。

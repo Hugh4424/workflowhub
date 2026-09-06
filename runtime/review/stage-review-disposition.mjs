@@ -4,7 +4,7 @@ const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code
 const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40,64}$/;
 const FINDING_ID = /^F-[a-f0-9]{12,16}$/;
-const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
+const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
 const FINDING_DISPOSITION_FIELDS = new Set([
   "finding_id", "original_fact", "source", "consequence", "status", "next_action",
   "evidence_ref", "owner", "consumer", "retain_or_delete",
@@ -44,13 +44,17 @@ export function isActionableSeriousFinding(cluster) {
  * to clusters for legacy fixtures that predate the reportable `findings` field.
  */
 export function canonicalReviewFindings(result) {
-  const findings = Array.isArray(result?.findings)
+  const hasExplicitFindings = Object.prototype.hasOwnProperty.call(result ?? {}, "findings");
+  if (hasExplicitFindings && !Array.isArray(result.findings)) {
+    throw new TypeError("review findings must be an array");
+  }
+  const findings = hasExplicitFindings
     ? result.findings.filter((finding) => finding && typeof finding.id === "string")
     : [];
   // An explicit empty `findings` array is the canonical statement that no
   // reportable finding was adopted.  Only records predating the field may
   // fall back to adjudication clusters.
-  if (Object.prototype.hasOwnProperty.call(result ?? {}, "findings")) return findings;
+  if (hasExplicitFindings) return findings;
   return Array.isArray(result?.adjudication?.clusters) ? result.adjudication.clusters : [];
 }
 
@@ -64,7 +68,7 @@ function requiredText(value, label) {
  * findings have an extra risk-acceptance requirement, but minor findings are
  * not silently dropped from the disposition contract.
  */
-export function validateReportableFindingDispositions({ result, dispositions, authorizedRiskFindingIds = [] } = {}) {
+export function validateReportableFindingDispositions({ result, dispositions, authorizedRiskFindingIds = [], userReply = undefined } = {}) {
   const findings = canonicalReviewFindings(result).filter((finding) => typeof finding?.id === "string");
   const ids = [...new Set(findings.map(({ id }) => id))];
   if (ids.length === 0) return Object.freeze({ facts: { status: "not_applicable", items: [] }, missing_items: [] });
@@ -75,14 +79,36 @@ export function validateReportableFindingDispositions({ result, dispositions, au
     });
   }
   if (!Array.isArray(dispositions)) throw new TypeError("finding_dispositions must be an array");
+  if (userReply === undefined && dispositions.some((entry) => entry?.status === "user_decided")) {
+    throw new Error("user_decided requires a bound user reply");
+  }
+  let normalizedDispositions = dispositions;
+  let replyBinding = null;
+  if (userReply !== undefined) {
+    const reply = object(userReply, "user reply");
+    const replyFindingId = requiredText(reply.finding_id, "user_reply.finding_id");
+    const replyRef = requiredText(reply.reply_ref, "user_reply.reply_ref");
+    if (!HASH.test(reply.reply_hash ?? "")) throw new TypeError("user_reply.reply_hash must be sha256");
+    const index = dispositions.findIndex((entry) => entry?.finding_id === replyFindingId);
+    if (index < 0) throw new Error(`user reply finding is not in finding_dispositions: ${replyFindingId}`);
+    const current = dispositions[index];
+    if (current?.status !== "needs_human") throw new Error(`user reply requires needs_human disposition: ${replyFindingId}`);
+    normalizedDispositions = dispositions.map((entry, entryIndex) => entryIndex === index
+      ? { ...entry, status: "user_decided", source: "user_reply", evidence_ref: replyRef }
+      : entry);
+    replyBinding = Object.freeze({ finding_id: replyFindingId, reply_ref: replyRef, reply_hash: reply.reply_hash });
+  }
   const seen = new Set();
-  const items = dispositions.map((entry, index) => {
+  const items = normalizedDispositions.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new TypeError(`finding_dispositions[${index}] must be an object`);
     for (const key of Object.keys(entry)) {
       if (!FINDING_DISPOSITION_FIELDS.has(key)) throw new Error(`finding_dispositions[${index}] has unknown field ${key}`);
     }
     for (const key of FINDING_DISPOSITION_FIELDS) requiredText(entry[key], `finding_dispositions[${index}].${key}`);
     if (!FINDING_DISPOSITION_STATUSES.has(entry.status)) throw new Error(`finding_dispositions[${index}].status is invalid`);
+    if (entry.status === "user_decided" && entry.source !== "user_reply") {
+      throw new Error(`finding_dispositions[${index}].user_decided requires source=user_reply`);
+    }
     if (seen.has(entry.finding_id)) throw new Error(`duplicate finding disposition: ${entry.finding_id}`);
     seen.add(entry.finding_id);
     return Object.freeze({ ...entry });
@@ -101,6 +127,7 @@ export function validateReportableFindingDispositions({ result, dispositions, au
       ...(missing.length ? [`finding disposition is missing for: ${missing.join(", ")}`] : []),
       ...(unauthorizedRisk.length ? [`accepted_risk requires an authenticated user risk receipt for: ${unauthorizedRisk.join(", ")}`] : []),
     ]),
+    ...(replyBinding ? { reply_bindings: Object.freeze([replyBinding]) } : {}),
   });
 }
 

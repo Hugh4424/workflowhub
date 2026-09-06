@@ -15,6 +15,7 @@ const makeDecision = read("workflows", "make-decision", "SKILL.md");
 const buildSpec = read("workflows", "build-spec", "SKILL.md");
 const buildPlan = read("workflows", "build-plan", "SKILL.md");
 const hostProtocol = read("skills", "workflowhub-host-protocol", "SKILL.md");
+const closure = read("runtime", "evidence", "check-skill-closure.mjs");
 const makeSteps = readJson("workflows", "make-decision", "steps.json").steps;
 const WORKFLOW_STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const HASH = "a".repeat(64);
@@ -126,6 +127,25 @@ describe("current interaction boundary", () => {
     expect(makeDecision).toMatch(/Do not invent user answers/i);
     expect(talk).toMatch(/一组互相独立|一组独立关键问题/);
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
+  });
+
+  it("binds Talk3 to red-blue disputes and makes Talk4 conditional", () => {
+    expect(makeDecision).toMatch(/Talk round 3 uses the same real lifecycle[\s\S]{0,500}red\/blue direction-review finding dispute list/i);
+    expect(makeDecision).toMatch(/red\/blue direction-review finding dispute list[\s\S]{0,260}unresolved items from the debate decision/i);
+    expect(makeDecision).toMatch(/conditional Talk round 4[\s\S]{0,260}direction-level[\s\S]{0,180}acceptance/i);
+    expect(makeDecision).toMatch(/If no[\s\S]{0,120}Talk round 4[\s\S]{0,220}repairs[\s\S]{0,160}implementation-level findings/i);
+    expect(makeDecision).toMatch(/round_count[\s\S]{0,180}actual number[\s\S]{0,180}3[\s\S]{0,120}4/);
+    expect(makeSteps.find((step) => step.step_slug === "talk-round-3").observable_result)
+      .toMatch(/red\/blue[\s\S]*debate unresolved items/i);
+    expect(makeSteps.find((step) => step.step_slug === "detail-advice").observable_result)
+      .toMatch(/direction-level[\s\S]*acceptance-impacting[\s\S]*conditional Talk round 4/i);
+  });
+
+  it("keeps closure enforcement and dialogue ownership aligned", () => {
+    expect(closure).toMatch(/Findings disposition dialogue reuses spec-clarify/i);
+    expect(closure).toMatch(/Talk and Grill remain make-decision-only/i);
+    expect(makeDecision).toMatch(/grill-with-docs[\s\S]*Only the main agent may execute user-facing Talk or Grill/i);
+    expect(buildSpec).toMatch(/findings 处置对话=复用 spec-clarify/i);
   });
 
   it("executes the 14 steps in Talk -> direction advice -> Grill -> detail advice -> confirmation -> consistency -> reflection order", () => {

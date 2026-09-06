@@ -396,22 +396,24 @@ skills/anysearch/scripts/shared/doc_spec.md	keep	no approved deletion or move pr
 skills/anysearch/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	f2e86bd385d81fc6f586b7f38c2448c4b23f4a65866334630cd9f94d4a35ce3c
 skills/backend-testing/SKILL.md	keep	no approved deletion or move proof in Phase 0	12a43b1514fad2e10379d24e90e7b4b5517c72747bfb8cff259bb99cc2b02e69
 skills/backend-testing/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	f83bb2a93dd198f4908f78a0d9c0802b72996f8f8d4d5148b2fb451eb14b6165
-skills/catalog.yaml	keep	skill provenance owner; consumed by closure checker and release builder; remove only with replacement source	5374d1c8bd59337c6ff62e5023a7c5aeb6731be2acdc4234618f250f1321b02c
+skills/catalog.yaml	keep	skill provenance owner; consumed by closure checker and release builder; remove only with replacement source	24e81dceaa16877c7d91e8db5e79bdd445ed26aeba3d73ae2e5e151be1016005
 skills/debate/LICENSE	keep	no approved deletion or move proof in Phase 0	a2d31d50352630fff4bb4fd61efe6e4764d8ea3833b6ba4bd041af79833e0ccc
-skills/debate/SKILL.md	keep	no approved deletion or move proof in Phase 0	989f8fcb087d2ffe99093647a20cbb80a8e525cd062d452e39756e76e48f8ee9
-skills/debate/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	7759fda198cdb3887a501c3ca532a4fa562f798bd7819e1634a724ab7617e56a
+skills/debate/SKILL.md	keep	no approved deletion or move proof in Phase 0	32e92f62d1a36cbeb39af527ea81668f4bfc8845bda476b9d4cceaf5e2b2784a
+skills/debate/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	f6380425e301fc4fb7367c56babcf862568d6ff237577a2b694ede478f65e017
 skills/debate/examples/sample-input.md	keep	no approved deletion or move proof in Phase 0	8b2196f52eacc48d71e023ad8a186bf3bdc2f383308062300b90c259ba6e13ed
 skills/debate/examples/sample-verdict.md	keep	no approved deletion or move proof in Phase 0	388de02edb89385b646e350dbc1bcc94bb6abcded4b6cda4f0dd749f50ec7971
 skills/debate/pk-rules.test.ts	keep	no approved deletion or move proof in Phase 0	c1ba054e3115cd23575906bfb5bffcd94d051cc3fe807c5bb72c8d92d269464f
 skills/debate/pk-rules.ts	keep	no approved deletion or move proof in Phase 0	6eef29d3cb390659cfc85b01c24ab6d0dfb4a9efb01f404148db5ec59e7bc6bf
-skills/debate/references/anti-bias-guardrails.md	keep	no approved deletion or move proof in Phase 0	552bea7a7765500b84b1bfe6a64d3cb0e0a80caf772a88f47b73e4df66010c53
-skills/debate/references/arbitration-protocol.md	keep	no approved deletion or move proof in Phase 0	9006295ca2c7d1feea5463002dfd28b273dbe51a01de43508bafb9caa97ced55
-skills/debate/references/output-template.md	keep	no approved deletion or move proof in Phase 0	9c0bcbb91d4720c451ccfd817ecf1ad73b6b8f27d0a27148652777c205c49e45
-skills/debate/references/role-spawn-templates.md	keep	no approved deletion or move proof in Phase 0	2cc6f4dc1f090948028933d54db2613c7d392ff04d9c6d96f5fc30aa9f2255c2
-skills/debate/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	2354e013ee8f2cbe816e721a7ffec230ff189403f2486bddcc6792e96d01d8ac
-skills/decision-log/SKILL.md	keep	no approved deletion or move proof in Phase 0	17267787b72d1431fee955799dad9cd179e0177b5269f85f131e80f42c0f6a19
-skills/decision-log/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4e605becf7bab037d131e4e49ab5491c2213162ee62c42ce7009f97c135f1c07
-skills/decision-log/templates/decision-log-template.md	keep	no approved deletion or move proof in Phase 0	a0ca3ee52d24b644badf321b151cabebd1f7fe1af103630aa52561a5051d7238
+skills/debate/references/anti-bias-guardrails.md	keep	no approved deletion or move proof in Phase 0	0d51105d4f649046b11576ea89f59bd77daa60f538b9e63cdc1b8c6284e2492e
+skills/debate/references/arbitration-protocol.md	keep	no approved deletion or move proof in Phase 0	ab52918c8ccd63e8778db0677bc6485f4f8a5c5120cad8c5ef60f20fa4719477
+skills/debate/references/output-template.md	keep	no approved deletion or move proof in Phase 0	4ff6ee5c1902a08ba65f55dd1f16c676cbc73df0e2bad985cdb87ce89e32e2b1
+skills/debate/references/role-spawn-templates.md	keep	no approved deletion or move proof in Phase 0	334c11f3fe6f1f78ced8e1a6701a8d0678ebd1dfd9c5f51fa636f5634f3b5b75
+skills/debate/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	d01eae02098bcab73fc7923587bca1d4dacd13af294d22e943cf672586537329
+skills/decision-log/SKILL.md	keep	P7 decision-log framework and chain-field text owner; remove with decision-log skill consumer	e4c7b4de559c05915f196dd9e8e66767d0c680e929aaafa4a16092404ffa35d9
+skills/decision-log/skill-bundle.json	keep	P7 bundle manifest consumed by local resolver and closure checker; remove with decision-log skill	6f2ea60c094a431b56c27c4758e67e350f251cb0c6978659ff40621ace6af312
+skills/decision-log/templates/decision-log-template.md	keep	P7 decision-log framework and chain-field template consumer; remove with decision-log skill	346ea0867ea5ee5681f5ed3eaf5817b982326f9c169befac6f570da1beae3327
+skills/deep-research/SKILL.md	keep	make-decision deep research contract owner; consumed by make-decision; remove only when the research mechanism is replaced	2a1bf9e8a6a1e86b963c320d7b060b7eab7a136c76eb8dcf7977a0eda6453664
+skills/deep-research/skill-bundle.json	keep	deep-research bundle manifest; consumed by local resolver and closure checker; remove with the skill	cc727b0e3945c882271d3db4d10840552a45c7a991236f4a2a286a015af0ca1b
 skills/diagnosing-bugs/LICENSE	keep	no approved deletion or move proof in Phase 0	e301933145fa4c00f81f41167b08d6508729b447ead053db6929a0eeb5b3496b
 skills/diagnosing-bugs/SKILL.md	keep	no approved deletion or move proof in Phase 0	2da11831b509a49d301047beb0af0c04c90338d4bd8defaade0a1d056e22311f
 skills/diagnosing-bugs/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	7ee7a430da8570c4179e2deaaeb6c95c5ed721a66e9792e80d71136d218d5adb
@@ -457,7 +459,7 @@ skills/requirement-lineage/agents/openai.yaml	keep	no approved deletion or move 
 skills/requirement-lineage/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	5d748f47c817c89e951626056f709af491c33e7af65dd66534e70b77e01afa47
 skills/resolving-merge-conflicts/SKILL.md	keep	no approved deletion or move proof in Phase 0	cae6d381f7c966b97cbbc6547ae4d7c2542e15ab3d75d297112435c2a746c17f
 skills/resolving-merge-conflicts/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	1207eb6f243aca6625379085935762f0c03c477af24304f0313dc582324ca0ca
-skills/reuse-registry.md	keep	human-readable UI skill reuse projection; consumed by maintainers; remove only with catalog-only replacement	9832b1948d196fe5f27a6535eadcd4838e0fbc141ef66ab2d8eb7debcbad98d9
+skills/reuse-registry.md	keep	human-readable UI skill reuse projection; consumed by maintainers; remove only with catalog-only replacement	aad135498d06bad10d264161829f238293fa93caa60c759d5ce4fa0e052c18ab
 skills/review/SKILL.md	keep	no approved deletion or move proof in Phase 0	eac2b92c5b5c094153b1ac96e241961196ec67f5ab5811cfa46b85966b70bba5
 skills/review/review-bundle.json	keep	no approved deletion or move proof in Phase 0	c685b09a5fb6c31f33fdd322ecfd5f021d714a3011dc33aa04c5a61075799e73
 skills/review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	9e99b9ea247f7275971f9a7f4cf9b1efd36f9b81c4f8caafd2fce5539680a084
@@ -473,8 +475,10 @@ skills/spec-clarify/skill-bundle.json	keep	no approved deletion or move proof in
 skills/spec-plan/SKILL.md	keep	no approved deletion or move proof in Phase 0	51a49282f62b3f7d4d77c58c03f55786b196206bbd2ef5213d0196f16ebe276e
 skills/spec-plan/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	807521480d4bdfbb16d5d18629f66a2d5126eee77b1c7c14028310056ca9f8d2
 skills/spec-plan/templates/plan-template.md	keep	UI plan template owner; consumed by build-plan and build-code; remove fields only with approved replacement plan format	3697755202f630d1ec0f86bce624b88218ab040b160e2a297c2cf6314dc03e08
-skills/spec-research/SKILL.md	keep	no approved deletion or move proof in Phase 0	5f7601d891166b944477d9b25f6111bd1b7b50c06d16a0142270dbb0d34d7003
-skills/spec-research/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	ea09f17382c02e0a7d5c87fb7f823cdc61f18afdeafadfa6493860b6282f4439
+skills/spec-research/SKILL.md	keep	no approved deletion or move proof in Phase 0	2b25a831b7c640fd4bcdb45bfcfd206f0a20ad48f30b7126252ef15f2f3afb0e
+skills/spec-research/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	369dc7f0b293a9c057422ab5457205ab670a1716bbde9ce450800ea33a0ba1ba
+skills/stage-reflection/SKILL.md	keep	stage-end reflection contract owner; consumed by authoring stages; remove only when replaced by an equivalent stage reflection consumer	cfa76728d64c37d2ff619678c6ac54c9b4277d1bcea4de24c26175ef05b13152
+skills/stage-reflection/skill-bundle.json	keep	stage-reflection bundle manifest; consumed by local resolver and closure checker; remove with the skill	b3400ce01d37722099ce4805ba78dce997d6bae854980a5e082612c71a0a3daa
 skills/spec-specify/SKILL.md	keep	no approved deletion or move proof in Phase 0	7092928f99b245a478ef4a1c8e980ec53dd5b8fa4c12a097c50175509dc2652b
 skills/spec-specify/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	6b2d12f3aec41acbadc1b8bdbf91c49c735649829d1b085d6a2a7f68380eda38
 skills/spec-specify/templates/spec-template.md	keep	no approved deletion or move proof in Phase 0	1d0e4ad7019d56f54e7c4b90755d7cc692d47ee3da54719894c8e456b40e0c3f
@@ -1152,13 +1156,15 @@ tools/cli/check-stage-quality.mjs	keep	no approved deletion or move proof in Pha
 tools/cli/check-task-record-paths.mjs	keep	no approved deletion or move proof in Phase 0	ba16209e9667fb3bcfad9744c5b42092e224b9bbd941a410687bfd29db660fe7
 tools/cli/collect-task-facts.mjs	keep	no approved deletion or move proof in Phase 0	3c5d4182b92f98b4bd2a7aeb8a74516b05df1d5bc8b0bd59f5d8ad0af6e5bcfb
 tools/cli/noop.mjs	keep	no approved deletion or move proof in Phase 0	d19f74f3acfaa61fbde924ffd2973dc9d32729be3c256e32198b35077a31cb2a
-tools/cli/run-checks.mjs	keep	no approved deletion or move proof in Phase 0	c7e8d57c1f304e7176b4eba1b7bb65652fc77b746d5cf8737a98da635a2c43c1
+tools/cli/run-checks.mjs	keep	P7 registers decision-log chain advisory checker without adding a gate; remove registration with checker consumer	6756252e0ceca56f8e689fbfc3a25bc7243d14b5222527c0cf39bfcdde21d0f8
 tools/cli/run-wh-review-audit-e2e.mjs	keep	no approved deletion or move proof in Phase 0	9f23bd81a484ad1948ab31328b89b969a1e5a91364899079377c819ff62978c4
 tools/cli/run-wh-review-provider-smoke.mjs	keep	no approved deletion or move proof in Phase 0	838d14fe7b865c8b71a40d07efedef759a64b8db55512e137289d1a285ac92a9
 tools/cli/scan-core-files.mjs	keep	no approved deletion or move proof in Phase 0	8f338e1e7249d57142a629a0107188ade97177bdbede5bb1976b200765577434
 tools/cli/smoke-local-skill-dispatch.mjs	keep	no approved deletion or move proof in Phase 0	5f16c29f7feb39bba094d971f09cf9018150d2f0d53869499657eb348c16d152
 tools/cli/source-manifest.mjs	keep	no approved deletion or move proof in Phase 0	80a82b7eb50a07d60618e7004c0d4df2ba84738dee72d08bcdc570637269b506
 tools/cli/stage-runtime.mjs	keep	no approved deletion or move proof in Phase 0	ba0023c5765735a47cf313d268f0c13ba898db5f0f9f65a63d99ca0b0c7b5277
+tools/cli/check-decision-log-chain.mjs	keep	P7 advisory chain-field checker consumer is run-checks; remove when the checker is replaced or its consumer is removed	9e1f229f66583d89a40ce0a90b3968d07c84d4e41227bf210fc0651394f25c18
+tests/contract/decision-log-chain-warnings.test.mjs	keep	P7 contract coverage for chain warning categories and non-blocking exit; remove with checker	b8b7eb48d987e2c9546c490161dcc1c5dd998014dbe3524d44b502aa1628bbca
 tools/cli/task-bootstrap.mjs	keep	no approved deletion or move proof in Phase 0	b8239e8ac757b55a858c48793856ed121c2d3160785e8a04eb3d62fba22f4c8e
 tools/cli/task-close.mjs	keep	no approved deletion or move proof in Phase 0	0a465e20ef7136212ede28a5b0ebeb17fcf4dee012f6468b0be5351fb7381799
 tools/cli/validate-field-mapping.mjs	keep	no approved deletion or move proof in Phase 0	302aa2a93660cb63de2032a53b173fd1fcf107cb541a2d7998fdec0485b295c8
@@ -1179,8 +1185,8 @@ workflows/build-plan/steps.json	keep	no approved deletion or move proof in Phase
 workflows/build-spec/SKILL.md	keep	no approved deletion or move proof in Phase 0	204fd62e8d356c036f67d051cc9d1beb7920e73f2e731d164f1073a825e5311a
 workflows/build-spec/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	28b6b3130139af7379e28dcc449b0a93a9fff5258fdd3b89236e9232ef14dfaf
 workflows/build-spec/steps.json	keep	no approved deletion or move proof in Phase 0	4c0884b1177816cdf5798105c3efe5db981fd31ba00622e444f67b665740498d
-workflows/make-decision/SKILL.md	keep	no approved deletion or move proof in Phase 0	75cca27b895115bfef3bd45320dc379c38863049d80bfaa0ab60d71b863b044f
-workflows/make-decision/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	1a017e1bbac7f1d42ba2b14630066e563e2f8e984470bac8536070aa1b0fdf1b
+workflows/make-decision/SKILL.md	keep	no approved deletion or move proof in Phase 0	0e3420a4b97070e95f53062756d960e2ea0ef1fd2caea37ea649a3f79f23f0c1
+workflows/make-decision/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	5ebc444e046654d1297763a405a044d2fea6ee894d86872d6ac5c93e3d14d180
 workflows/make-decision/steps.json	keep	no approved deletion or move proof in Phase 0	aae28739ab89e37c23651dfd46e3c556902502d5d80e9c2d410539d0409b429a
 workflows/verify-code/SKILL.md	keep	no approved deletion or move proof in Phase 0	b0921da053d811959aad4bde9ac4ae8b74c56643c2c574f96f8863df9fbadec0
 workflows/verify-code/capture.mjs	keep	no approved deletion or move proof in Phase 0	54d4ba7b8f00de36174d89879532541f473fa78ec6a8a936019c986166a7a652

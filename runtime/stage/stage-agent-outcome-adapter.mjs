@@ -469,8 +469,15 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
  * spec-analyze remains material_incomplete.  The value is still useful because
  * it lets the official route publish the real failure and monitoring facts.
  */
-function unavailableExecution({ stage, host, agentRunId, reason, manifest, skills }) {
+function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId, reason, manifest, skills, snapshotTree, materialRevision }) {
   const safeReason = text(reason, "unavailable reason");
+  const producer = {
+    kind: "stage-agent",
+    host: text(host, "unavailable host"),
+    agent_run_id: text(agentRunId, "unavailable agent run id"),
+    ...(sourceId === undefined ? {} : { source_id: text(sourceId, "unavailable source id") }),
+    ...(sourceFamily === undefined ? {} : { source_family: text(sourceFamily, "unavailable source family") }),
+  };
   const stepSubjects = manifest.steps.map((step) => step.step_slug);
   const firstSubject = stepSubjects[0]
     ? { subject_kind: "step", subject_id: stepSubjects[0] }
@@ -509,14 +516,14 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
   if (stage === "verify-code") {
     return {
       status: "unavailable",
-      provenance: { kind: "stage-agent", host: text(host, "unavailable host"), agent_run_id: text(agentRunId, "unavailable agent run id") },
+      provenance: producer,
       steps: steps,
       skills: skillsOutcomes,
       code_review: {
         schema_version: "workflowhub-code-review-stage-outcome.v1",
         stage,
-        snapshot_tree: null,
-        material_revision: null,
+        snapshot_tree: snapshotTree,
+        material_revision: materialRevision,
         step_slug: "approve-verification",
         skill_id: "dsh-code-review",
         result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
@@ -544,7 +551,7 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
   };
   return {
     status: "unavailable",
-    provenance: { kind: "stage-agent", host: text(host, "unavailable host"), agent_run_id: text(agentRunId, "unavailable agent run id") },
+    provenance: producer,
     steps,
     skills: skillsOutcomes,
     spec_analyze: specAnalyze,
@@ -561,13 +568,25 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
  */
 export function publishStageAgentOutcome({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-agent-1", workflowRunId = null, execution,
-  requirementAuthentication = null,
+  requirementAuthentication = null, stageIdentity = null,
 } = {}) {
-  const safeTask = assertTaskHandle(task);
+  const capturedIdentity = stageIdentity ?? (() => {
+    const safeTask = assertTaskHandle(task);
+    const active = activeWorkspace({ workspace, candidateWorkspace });
+    const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
+    return Object.freeze({
+      safeTask,
+      active,
+      safeArtifacts,
+      snapshot: active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot),
+      materials: readMaterials(safeArtifacts, stage),
+    });
+  })();
+  const safeTask = capturedIdentity.safeTask;
   const safeKernel = assertTaskKernel(kernel);
   if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
-  const active = activeWorkspace({ workspace, candidateWorkspace });
-  const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
+  const active = capturedIdentity.active;
+  const safeArtifacts = capturedIdentity.safeArtifacts;
   const input = object(execution, "Stage Agent execution");
   const provenance = object(input.provenance, "Stage Agent execution.provenance");
   if (!new Set(["stage-agent", "workflowhub-session"]).has(provenance.kind)) throw new Error("execution provenance.kind must be stage-agent or workflowhub-session");
@@ -581,8 +600,8 @@ export function publishStageAgentOutcome({
   text(attemptId, "attemptId");
   if (!Array.isArray(input.steps) || !Array.isArray(input.skills)) throw new TypeError("Stage Agent execution must include steps and skills arrays");
 
-  const snapshot = active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot);
-  const materials = readMaterials(safeArtifacts, stage);
+  const snapshot = capturedIdentity.snapshot;
+  const materials = capturedIdentity.materials;
   const stepsManifestRef = `workflows/${stage}/steps.json`;
   const skillsManifestRef = `workflows/${stage}/skill-deps.yaml`;
   const stepsManifestRaw = readFileSync(new URL(stepsManifestRef, REPOSITORY_ROOT), "utf8");
@@ -905,19 +924,34 @@ export function createWorkflowHubSessionRecorder({
  */
 export function publishUnavailableStageAgentOutcome({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-agent-1", workflowRunId = null,
-  host, agentRunId, reason,
+  host, sourceId, sourceFamily, agentRunId, reason,
 } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const active = activeWorkspace({ workspace, candidateWorkspace });
+  const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
+  const stageIdentity = Object.freeze({
+    safeTask,
+    active,
+    safeArtifacts,
+    snapshot: active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot),
+    materials: readMaterials(safeArtifacts, stage),
+  });
   const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
   const skills = loadStageSkillManifest(new URL("../../", import.meta.url).pathname, stage).manifest;
   return publishStageAgentOutcome({
     task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId, workflowRunId,
+    stageIdentity,
     execution: unavailableExecution({
       stage,
       host,
+      sourceId,
+      sourceFamily,
       agentRunId,
       reason,
       manifest,
       skills,
+      snapshotTree: stageIdentity.snapshot.tree,
+      materialRevision: stageIdentity.materials.revision,
     }),
   });
 }

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +14,14 @@ import {
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
+function canonicalMaterialId(entries) {
+  const normalized = entries
+    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
+    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
+    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
 
 describe("simple material-only review", () => {
   it("rehydrates and dispatches only the exact serialized provider input", async () => {
@@ -39,6 +48,188 @@ describe("simple material-only review", () => {
     });
     expect(seen).toEqual([{ strictProtocol: true, materialId: packet.material_id, implementation: "A bytes" }]);
     expect(() => rehydrateProviderInput(Buffer.from("{}"), attachmentRoot)).toThrow(/invalid/);
+  });
+
+  it("computes material_id from sorted semantic entries and excludes transport entries", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-matid-contract-")));
+    roots.push(attachmentRoot);
+    let observed;
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { zebra: "zebra bytes", alpha: "alpha bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: {
+        async runGroup(request) {
+          const manifest = JSON.parse(readFileSync(join(request.materials.bundleRoot, "manifest.json"), "utf8"));
+          const manifestBytes = readFileSync(join(request.materials.bundleRoot, "manifest.json"));
+          observed = {
+            materialId: request.materials.materialId,
+            entries: [
+              ...manifest.files,
+              { path: "manifest.json", bytes: manifestBytes.length, sha256: createHash("sha256").update(manifestBytes).digest("hex") },
+              { path: "canonical-evidence.json", bytes: 17, sha256: "f".repeat(64) },
+            ],
+          };
+          return { runtimeId: "runtime-matid-contract", outcome: "completed", providers: [] };
+        },
+      },
+    });
+    expect(result.status).toBe("unavailable");
+    expect(observed.materialId).toBe(canonicalMaterialId(observed.entries));
+    await expect(runSimpleReview({ stage: "build-code", host_provider: "codex", materials: {} }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+    })).rejects.toThrow("materials are required");
+  });
+
+  it.each(["direction", "detail"])("dispatches one red/blue pair for make-decision %s", async (reviewTrack) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), `simple-wh-review-red-blue-${reviewTrack}-`)));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "make-decision",
+      review_track: reviewTrack,
+      host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: {
+        async runGroup(request) {
+          calls.push({ pair_id: request.pair_id, role: request.role, materialId: request.materials.materialId });
+          return {
+            runtimeId: `runtime-${request.role}`, outcome: "completed",
+            providers: [{
+              provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+              output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+            }],
+          };
+        },
+      },
+    });
+    expect(calls).toHaveLength(2);
+    expect(new Set(calls.map(({ pair_id }) => pair_id)).size).toBe(1);
+    expect(calls.map(({ role }) => role).sort()).toEqual(["blue", "red"]);
+    expect(new Set(calls.map(({ materialId }) => materialId)).size).toBe(1);
+    expect(result).toMatchObject({ status: "available", pair_id: calls[0].pair_id });
+    expect(result.role_results).toEqual(expect.objectContaining({
+      red: expect.objectContaining({ pair_id: calls[0].pair_id, role: "red" }),
+      blue: expect.objectContaining({ pair_id: calls[0].pair_id, role: "blue" }),
+    }));
+  });
+
+  it("keeps pair role metadata when a paired provider member identity is degraded", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-identity-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-pair-identity", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed",
+          identity: { provider: "model-a", source_id: "rogue-source", config_id: "rogue-config" },
+          error: null, timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(result.provider_results.map(({ role }) => role).sort()).toEqual(["blue", "red"]);
+    expect(result.provider_results.every(({ pair_id, role, identity_degraded }) => pair_id === result.pair_id
+      && ["red", "blue"].includes(role) && identity_degraded === true)).toBe(true);
+  });
+
+  it("marks a pair with mismatched material identities as partial", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-material-mismatch-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      pairId: "pair-material-mismatch",
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup(request) {
+        return {
+          material_id: request.role === "red" ? request.materials.materialId : "f".repeat(64),
+          runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
+            provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+            output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+          }],
+        };
+      } },
+    });
+    expect(result).toMatchObject({
+      status: "available-with-failures", pair_status: "partial", material_consistency: "partial",
+      error: { code: "PAIR_MATERIAL_MISMATCH" },
+    });
+    expect(result.material_id).toBeNull();
+    expect(result.material_ids.red).not.toBe(result.material_ids.blue);
+  });
+
+  it.each(["red", "blue"])("marks %s incomplete while retaining the other role", async (incompleteRole) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), `simple-wh-review-pair-${incompleteRole}-incomplete-`)));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "make-decision", review_track: "detail", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      pairId: `pair-${incompleteRole}-incomplete`,
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup(request) {
+        if (request.role === incompleteRole) {
+          return { runtimeId: `runtime-${request.role}`, outcome: "unavailable", providers: [{
+            provider: "model-a", status: "failed", identity: { provider: "model-a" },
+            error: { code: "RATE_LIMITED", message: "fixture" }, timing: null, usage: null,
+          }] };
+        }
+        return { runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
+          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(result).toMatchObject({ status: "available-with-failures", [`${incompleteRole}_incomplete`]: true });
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: incompleteRole, status: "failed", error: expect.objectContaining({ code: "RATE_LIMITED" }) }),
+      expect.objectContaining({ role: incompleteRole === "red" ? "blue" : "red", status: "completed" }),
+    ]));
+  });
+
+  it("retains successful providers when one role has a single provider failure", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-provider-failure-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      pairId: "pair-provider-failure",
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      client: { async runGroup(request) {
+        const failed = request.role === "red";
+        return { runtimeId: `runtime-${request.role}`, outcome: failed ? "partial" : "completed", providers: [
+          { provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null },
+          { provider: "model-b", status: failed ? "failed" : "completed", identity: { provider: "model-b" }, error: failed ? { code: "RATE_LIMITED", message: "fixture" } : null, output: failed ? undefined : JSON.stringify({ findings: [] }), timing: null, usage: null },
+        ] };
+      } },
+    });
+    expect(result).toMatchObject({ status: "available-with-failures", red_incomplete: true });
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "model-a", role: "red", status: "completed" }),
+      expect.objectContaining({ provider: "model-b", role: "red", status: "failed", error: expect.objectContaining({ code: "RATE_LIMITED" }) }),
+      expect.objectContaining({ provider: "model-b", role: "blue", status: "completed" }),
+    ]));
   });
 
   it("reviews submitted bytes without Workspace or TaskHandle", async () => {
@@ -78,7 +269,7 @@ describe("simple material-only review", () => {
     expect(result).toMatchObject({ status: "available", stage: "make-decision", review_track: "detail" });
     expect(result.findings).toHaveLength(1);
     expect(result.provider_results[0].evidence_anchor_valid).toEqual([true]);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(calls[0].decision).toBe("current decision bytes");
     expect(calls[0].instructions).toContain("complete user flow");
     expect(calls[0].prompt).toContain("Return exactly one JSON object");
@@ -285,6 +476,7 @@ describe("simple material-only review", () => {
       },
     });
     expect(result).toMatchObject({ status: "unavailable", error: { code: publicCode } });
+    expect(result.provider_selection).toMatchObject({ providers: ["model-a"] });
     if (publicCode !== sourceCode) expect(result.error.cause_code).toBe(sourceCode);
   });
 
@@ -384,4 +576,5 @@ describe("simple material-only review", () => {
     expect(member.error.code).toBe("PROVIDER_IDENTITY_INVALID");
     expect(member.error.message).toContain("broker member identity was degraded");
   });
+
 });

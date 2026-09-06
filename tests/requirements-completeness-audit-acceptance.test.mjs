@@ -72,6 +72,14 @@ describe("requirements-completeness-audit current acceptance matrix", () => {
       expect(source).toContain(code);
     }
   });
+
+  it("AC-011 keeps single_round routes while exposing the paired red/blue contract", () => {
+    const contract = read("skills/wh-review/contracts/make-decision.md");
+    expect(contract).toContain("role=red");
+    expect(contract).toContain("role=blue");
+    expect(contract).toContain("red 与 blue 各一次 broker group request");
+    expect(read("skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs")).toContain("preserves make-decision single_round routes");
+  });
 });
 
 export { cases };

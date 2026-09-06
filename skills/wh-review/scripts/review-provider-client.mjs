@@ -9,7 +9,17 @@ const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_s
 // v4 3rd-review removed provider wall-clock deadlines. Keep a bounded outer
 // client wait, but allow the long-running providers used by real review groups
 // to reach a terminal result before the client tears down the broker.
+// Very large material bundles (e.g. full plan+tasks) can legitimately exceed
+// the default; operators may raise the outer wait explicitly via env without
+// changing the default for normal bundles.
 const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = 600_000;
+const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
+  const raw = process.env.WH_REVIEW_BROKER_TIMEOUT_MS;
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+})();
+const EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS = REVIEW_BROKER_TIMEOUT_FROM_ENV ?? DEFAULT_REVIEW_BROKER_TIMEOUT_MS;
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
@@ -60,7 +70,7 @@ function safeBrokerError(value) {
   return failure(error.code, error.message);
 }
 
-function execute(command, args, { timeoutMs = DEFAULT_REVIEW_BROKER_TIMEOUT_MS } = {}) {
+function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -332,7 +342,7 @@ function parsePublicRun(wire) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, timeoutMs = DEFAULT_REVIEW_BROKER_TIMEOUT_MS } = {}) {
+  constructor({ command = null, config = null, invoke = null, timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new TypeError("timeoutMs must be a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));

@@ -63,8 +63,9 @@ function sameCluster(cluster, candidate) {
   const left = normalizedIssue(seed.finding.issue); const right = normalizedIssue(candidate.finding.issue);
   return left.join(" ") === right.join(" ") || overlap(left, right) >= 0.7;
 }
-function clusterRecord(cluster) {
-  const members = [...cluster.members].sort((left, right) => left.provider.localeCompare(right.provider) || left.index - right.index);
+function clusterRecord(cluster, roleCoverage = []) {
+  const members = [...cluster.members].sort((left, right) => left.provider.localeCompare(right.provider)
+    || (left.role ?? "").localeCompare(right.role ?? "") || left.index - right.index);
   const severity = members.some(({ finding }) => finding.severity === "blocking") ? "blocking"
     : members.some(({ finding }) => finding.severity === "major") ? "major" : "minor";
   const validDirect = members.filter(({ finding, anchorValid }) => ["direct", "machine"].includes(finding.evidence_kind) && anchorValid !== false);
@@ -78,6 +79,22 @@ function clusterRecord(cluster) {
     } else { disposition = "needs_corroboration"; evidenceStatus = "single_inference"; }
   }
   const finding = members[0].finding;
+  const roles = [...new Set(roleCoverage.map(({ role }) => role).filter((role) => role === "red" || role === "blue"))].sort();
+  const providerRoles = Object.fromEntries([...new Set(members.map(({ provider }) => provider))].sort().map((provider) => [
+    provider,
+    [...new Set(members.filter((member) => member.provider === provider).map(({ role }) => role)
+      .filter((role) => role === "red" || role === "blue"))].sort(),
+  ]));
+  const severityConflict = new Set(members.map(({ finding: member }) => member.severity)).size > 1;
+  const evidenceConflict = new Set(members.map(({ finding: member }) => member.evidence_kind ?? "unspecified")).size > 1;
+  const roleSilence = roles.length > 1 && roleCoverage.some(({ provider, role }) => role
+    && !members.some((member) => member.provider === provider && member.role === role));
+  const roleFacts = roles.length > 0 ? {
+    roles,
+    provider_roles: providerRoles,
+    consensus: new Set(members.map(({ provider }) => provider)).size >= 2,
+    disputed: severityConflict || evidenceConflict || roleSilence,
+  } : {};
   return {
     id: `F-${createHash("sha256").update(findingKey(finding)).digest("hex").slice(0, 12)}`,
     severity, path: finding.path, ...(finding.line ? { line: finding.line } : {}),
@@ -90,8 +107,9 @@ function clusterRecord(cluster) {
     providers: [...new Set(members.map(({ provider }) => provider))],
     adapter_count: new Set(members.map(({ adapter }) => adapter)).size,
     finding_count: members.length, disposition, evidence_status: evidenceStatus,
-    provider_findings: members.map(({ provider, adapter, finding: member, anchorValid }) => ({
-      provider, adapter, severity: member.severity, evidence_kind: member.evidence_kind ?? "unspecified",
+    ...roleFacts,
+    provider_findings: members.map(({ provider, adapter, role, finding: member, anchorValid }) => ({
+      provider, adapter, ...(role ? { role } : {}), severity: member.severity, evidence_kind: member.evidence_kind ?? "unspecified",
       evidence_anchor_valid: anchorValid !== false,
     })),
   };
@@ -146,13 +164,13 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
     if (!current || rank < currentRank || (rank === currentRank && index < current.index)) byProvider.set(item.provider, { item, index });
   });
   const valid = [...byProvider.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider));
-  const candidates = valid.flatMap((item) => {
+  const candidates = validReviewItems.flatMap((item) => {
     // The source identity was already authenticated above. Reuse that exact
     // identity for finding adjudication instead of deriving a second adapter
     // value from the provider label.
     const identity = sourceIdentityOf(item, { requireIdentity, requireSourceId });
     return item.review.findings.map((finding, index) => ({
-      provider: item.provider, adapter: identity.adapter, finding, index,
+      provider: item.provider, adapter: identity.adapter, role: item.role ?? null, finding, index,
       anchorValid: item.evidenceAnchors?.[index] ?? true,
     }));
   }).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
@@ -161,7 +179,7 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
     const cluster = grouped.find((entry) => sameCluster(entry, candidate));
     if (cluster) cluster.members.push(candidate); else grouped.push({ members: [candidate] });
   }
-  const clusters = grouped.map(clusterRecord).sort((left, right) => left.id.localeCompare(right.id));
+  const clusters = grouped.map((cluster) => clusterRecord(cluster, validReviewItems)).sort((left, right) => left.id.localeCompare(right.id));
   const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
   const findings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
   const adjudication = { version: "wh-review-adjudication.v1", clusters, actionable };

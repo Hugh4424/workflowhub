@@ -164,6 +164,18 @@ launcher 侧 projector 在全局锁内全量重建并原子替换的 derived 全
 **跳步事实（skip fact）**：
 正式执行记录中标为跳过并带有原因的步骤结果；它不是成功，也不由采集器推测。
 
+**争议 findings（disputed findings）**：
+独立审查结果中存在真实分歧、方向级或验收影响的 finding 集合；按 spec §5 审查与交互契约进入用户问答或分级裁决，不等同于普通 finding。
+
+**红蓝审查（red-blue review）**：
+同一逻辑 review fact 的两次独立请求：红队做无方向摘要盲审，蓝队按 spec §5 对方向、隐藏前提和反共识风险做对抗性审查；两者都只是质量事实，不是 gate。
+
+**需求框架（requirement framework）**：
+make-decision 开始时选择并持续回填的结构骨架；按 spec §5 FR-DLOG-001 使用功能类或研究类 preset，不另建需求账本。
+
+**决策链（decision chain）**：
+从需求/question、事实约束、选项到 decision、consumer 和 acceptance 的可追溯文本链；按 spec §5 FR-DLOG-002 以模块、D-ID 和 derived_from 表达，不新增 decision-entry.v1 字段。
+
 ## 历史恢复记录（仅审计）
 
 旧版本曾使用 recovery generation、stage recovery run/source、recovery gate、phase

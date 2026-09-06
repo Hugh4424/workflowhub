@@ -350,10 +350,15 @@ describe("simple wh-review contracts", () => {
   it("makes direction request count explicit without turning it into a retry loop", () => {
     const contract = readFileSync(join(root, "wh-review", "contracts", "make-decision.md"), "utf8");
     expect(contract).toMatch(/`single_round` 表示一个逻辑 review fact 完成后/);
-    expect(contract).toMatch(/direction 也只发一个 broker group request/);
+    expect(contract).toMatch(/red 与 blue 各一次 broker group request/);
+    expect(contract).toMatch(/每个 role 只调用一次/);
     expect(contract).toMatch(/reconstruct\/reveal\/challenge 顺序和 reveal boundary/);
-    expect(contract).toMatch(/detail 也只发[\s\S]*一个短请求/);
+    expect(contract).toMatch(/detail 的每个 role 也只发一个短请求/);
     expect(contract).toMatch(/不再为了追求空 findings[\s\S]*自动发起后续复审/);
+    const buildSpec = readFileSync(join(root, "wh-review", "contracts", "build-spec.md"), "utf8");
+    expect(buildSpec).toMatch(/build-spec 只发一个短 request/);
+    expect(buildSpec).toMatch(/AC 可判断性与验收盲区/);
+    expect(buildSpec).toMatch(/横向第三路[\s\S]*隐藏前提[\s\S]*防虚假共识[\s\S]*纵向否定/);
   });
 
   it("reports scope expansion as findings without rejecting necessary protections", () => {

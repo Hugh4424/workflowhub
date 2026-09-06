@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "skill": "stage-reflection",
-  "files": ["SKILL.md"],
+  "files": [{"path": "SKILL.md", "sha256": "cfa76728d64c37d2ff619678c6ac54c9b4277d1bcea4de24c26175ef05b13152"}],
   "contract": "consumer-scan-proof.v1",
   "contract_owner": "runtime/evidence/workflow-evolution.mjs"
 }

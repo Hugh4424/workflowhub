@@ -18,6 +18,48 @@ Missing load-bearing reasoning is reported rather than invented.
 
 ## Minimum content contract
 
+### Requirement framework presets
+
+At the start of make-decision, choose and record one requirement framework
+before research, Talk, review, or Grill expands the log. Use the smallest
+framework that still explains the task:
+
+- `functional`: `背景 → 问题 → 目标 → 方案 → 验收 → 扩展` for feature or workflow changes.
+- `research`: `问题 → 论断 → 证据 → 裁决` for research-led or evidence-led decisions.
+
+The selected preset is a skeleton, not a second source of truth. Each later
+research result, Talk answer, review finding, and Grill conclusion fills an
+existing node or adds a clearly named child node; it must not create a parallel
+requirement list. If a task genuinely mixes both kinds, record `functional`
+as the outer framework and attach a `research` child under the affected
+question/solution node. Each node records `status: confirmed|open|deferred|not_applicable`
+and, when evidence is still missing, the declarative marker
+`evidence_status: pending` plus `evidence_owner` and `next_review_trigger`.
+Never turn a pending marker into a confirmed fact by omission.
+
+### Decision chain and module grouping
+
+Organize the Decisions section by the framework's solution or裁决 modules,
+using one `### <module>` heading per module and keeping decisions in causal
+chain order: requirement/question → facts/constraints → option → decision →
+feature/consumer → acceptance. A decision that depends on another module
+names the earlier `D-ID` and writes `derived_from: [D-ID]`; use `derived_from: []`
+for a root decision. Every decision entry also records the text-only chain
+fields `module`, `requirement_ids`, and `artifacts`. These are documentation
+fields only: do not add them to `decision-entry.v1` or make them a runtime gate.
+
+When a node is not yet supported, keep the node and its pending evidence marker
+visible in the log. A later entry may close it by reference, but must not erase
+the earlier open fact.
+
+The executable warning rules live in the repository tool
+`tools/cli/check-decision-log-chain.mjs`, not inside the portable skill bundle;
+`run-checks.mjs` is its sole current aggregator consumer. The bundle carries
+this normative text contract and the template, while the repository tool and
+its contract test are registered and hashed separately in the repository
+inventory. This separation keeps the skill portable without creating a second
+checker or runtime schema.
+
 Keep the log as a decision index: one compact row per original requirement,
 research point, Talk/Grill conclusion, review finding, and load-bearing decision.
 Do not copy the spec, page flow, API fields, task steps, or test procedure into

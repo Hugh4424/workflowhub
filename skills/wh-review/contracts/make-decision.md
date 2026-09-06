@@ -1,6 +1,6 @@
 # Make Decision 审查合同
 
-provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。`direction` 和 `detail` 是两个独立 track，各自产生结果；它们共享本次 `snapshot_tree`，但材料和 `material_id` 不同。
+provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。`direction` 和 `detail` 是两个独立 track，各自产生一个 paired review fact；每个 track 共享本次 `snapshot_tree` 和 `material_id`，并各发一个 `role=red` 与一个 `role=blue` 的独立 request。两次 request 使用同一 `pair_id`，结果保留 provider×role provenance。
 
 ## 共同材料
 
@@ -12,7 +12,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与这些材料一致的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-每次真正执行 `make-decision` 时，`direction` 和 `detail` 各审查一次当次输入。
+每次真正执行 `make-decision` 时，`direction` 和 `detail` 各执行一次当次输入的 red/blue pair；每个 role 只调用一次，不把 paired request 变成重试循环。
 旧结果只作为不可变历史保留，不自动复用，也不通过正文、版本、material_id 或
 semantic hash 判断“还是不是同一份”。同一次执行不为追求空 findings 重审。
 如果本次只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
@@ -40,7 +40,7 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 
 审查重点：真实问题、方向对位、更小更稳的路径、关键前提、范围和时机。
 
-审查顺序固定为一次 public request、一个逻辑 review fact：请求携带 broker-owned
+审查顺序固定为一个逻辑 paired review fact：red 与 blue 各一次 broker group request，合计两次 public request。每个 request 携带 broker-owned
 `direction-review.v1` flow。内部先从原始需求和事实重建“要解决什么、不能做什么、失败会
 怎样”，到 reveal 边界后才呈现当前选择，再挑战选择和更小的替代路径。reconstruct 不得
 读取当前选择；WorkflowHub 不得用第二次 public request 拼出这个顺序。只报告会伤害交付的
@@ -96,8 +96,7 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 
 findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
 通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings 自动发起后续复审；
-direction 也只发一个 broker group request，内部 flow
-必须提供可观察的 reconstruct/reveal/challenge 顺序和 reveal boundary。detail 也只发一个短请求。
+direction 的每个 role request 内部仍必须提供可观察的 reconstruct/reveal/challenge 顺序和 reveal boundary；detail 的每个 role 也只发一个短请求。两种 track 都不得为了追求空 findings 再发后续复审。
 finding 处理和最终快照变化属于业务材料变更；旧 findings 不被改写，也不生成
 独立 resolution action。下一次真正重跑该阶段时，再审查那次的当前输入。
 
