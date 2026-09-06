@@ -658,6 +658,28 @@ artifacts: []
 - 修复：头部 v4 轮状态；目标节补④⑤⑥；范围/非目标/D-306/9 字段表/FND-V4-10 残留清除；验收细节补 II 7 行+七项修正；失败分支表补 2 行；方向卡 II-1/II-2/II-3 语义补全（四段非空/机读判定/verify failed/审查包澄清/成本口径）；D-303 OPEN-004 归属修正；D-205 gap_id 规范化算法；Exit checks v4 定稿。
 - 未完成/跳过：grok/pi 未重跑（语义结果已由 3 provider×2 role 产出，6/10；配置身份=OPEN-004 已转实施前置环境动作）；下一轮=step 11-v4 approve-decision（用户最终确认整体含 v3+v4）。
 
+### step 11-v4 approve-decision（completed, 2026-09-06）
+
+- 实际做了什么：向用户呈递最终确认卡（三问复述+方案全貌大白话版）；用户要求先收到完整复述→主会话交付 decision-log 全貌复述；用户答复"好的，收口吧，在build-spec前停下"。
+- 完成动作：confirm 行为发布人类确认回执（quality/confirmations/da1b2e45….json，decision=accepted，reply_text=用户原话，material_revision/snapshot_tree 绑定）；交互聚合组装（quality/evidence/interactions/553d26a5….json：7 轮 Talk 真实转录+clarify 无方向变更歧义+original_requirement/decision/confirmation 三绑定）；decision-log 最终确认节更新为 accepted。
+- 未完成/跳过：无；用户明确停在 build-spec 前。
+
+### step 12-v4 stage-end-spec-analyze（completed, 2026-09-06）
+
+- 实际做了什么：阶段末一致性检查（Exit checks v4 四项+check-decision-log-chain 0 警告+交互聚合校验（file 结构自校验+decision_hash 与当前 decision-log sha256 一致+confirmation ref 存在且 hash 匹配））。
+- 结果：通过——上下文一致（R/N/F/T/D/Step 与已确认事实吻合，62+25+43 findings 处置闭环）；owner/接口一致（无新公共入口/无新持久对象/无新 gate；导航节=只读派生、verify 校验=事实校验）；失败语义明确（失败分支表补齐 verify 材料校验+独立审查 failed/unavailable）；范围与延期明确（非目标新增 6 项+DEFERRED-001~004/006/008；DEFERRED-005/007 消除有记录）。
+- 未完成/跳过：无。
+
+### step 13-v4 publish-decision（completed, 2026-09-06）
+
+- 实际做了什么：向用户交付大白话全貌复述（decision-log 九节：任务是什么/诊断结论/方案 I/三问结论/方案 II/非目标/验收/风险延期/流程证据）；用户确认后发布人类确认回执；本文档记录最终 outcome。
+- 未完成/跳过：无。
+
+### step 14-v4 stage-reflection（completed, 2026-09-06）
+
+- 实际做了什么：按 stage-reflection 六区块产出 judgment（what_helped/what_to_improve/blockers/intervention_reasons/what_to_simplify/simplifiable_now），落盘 quality/stage-reflection/make-decision.json；教训追加 lessons/make-decision.jsonl。
+- 未完成/跳过：官方 reflect action 在交互宿主不可用（与既有记录一致，如实标注；不以私有替代冒充）。
+
 ## 审查处置
 
 | finding_id | 原始事实/来源 | 后果 | status | next_action/evidence_ref | owner/consumer/retain_or_delete |
@@ -703,17 +725,19 @@ artifacts: []
 
 ## 最终确认
 
-- 状态：**pending（等待用户新需求）**——用户对最终决策卡的答复为："请你先把目前的decision落盘存档，我再慢慢提我的新需求"；确认动作未发生。
-- 存档点：任务分支 commit `ccfd4a9f`（decision-log.md v1、direction-card v3、direction/detail 审查结果、debate round-1 全部材料共 21 文件）；材料路径 specs/workflowhub-close-readiness-governance-20260906/。
-- 处理：make-decision 暂停于 step 11（approve-decision）；用户新需求到达后，先判定是否改变方向——改变则修订决策并重新 Talk/确认，不改变则补记录后继续；不做任何下游阶段推进。
-- 未确认内容：最终决策确认（approval_binding）；交互 aggregate（待确认后组装）。
+- 状态：**accepted（用户确认收口）**——用户答复："好的，收口吧，在build-spec前停下"（此前一轮："确认收口，请你用大白话把整个 decision-log 简要的复述一遍，我要知道整体方案是否合理"→主会话完成全貌复述）。
+- 确认回执：quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json（human-confirmation.v3，decision=accepted，material_revision=revision-e7dae267…，snapshot_tree=f89fa1dc…，reply_text=用户原话）。
+- 交互聚合：quality/evidence/interactions/553d26a515c2eec683e16afe55226c22e1052f6a2b910a8c9d23332952ed0ad9.json（workflowhub-interaction-aggregate.v1：7 轮 Talk（R1-R7 全量问题/选项/答复原样转录）、clarify 无方向变更歧义、decision/confirmation 绑定）。
+- 处理：make-decision **收口完成**，停在 build-spec 前（用户要求）。approval_binding 已通过确认回执+聚合绑定；后续阶段（build-spec）等用户指令。
 
-## step 11 记录（暂停已解除，新需求进入收敛环）
+## step 11 记录（completed，2026-09-06 收口）
 
 - 原状：向用户呈递最终决策卡，用户答复"先落盘存档，再慢慢提新需求"（非确认，也不是拒绝）；已按答复完成存档 commit ccfd4a9f；stage 保持 in_progress。
 - **2026-09-06 更新**：用户提出三问新需求（R-007~R-010）；已完成三轮取证分析（research-Q1/Q2/Q3；4 路子代理）+ Talk R1/R2 结构化问答（T-013~T-020，8 项收敛）；方向卡升级 v4（I 收口治理不变+II 质量-成本治理增量）；事实与需求已落盘（F-031~F-040、R-007~R-010、N-005~N-007）。
 - 用户要求（T-020）：新需求按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），与既有 verify-code 质量问题治理同等质量。
-- **下一步**：step 6 direction-advice 增量轮（方向卡 v4 红蓝审查）→ step 6c debate round-2 → step 7 talk-round-3（裁决争议）→ step 8 grill → 草稿更新 → step 10 detail-advice → step 11 最终确认（整体含 v3+v4）。
+- 用户答复：**"好的，收口吧，在build-spec前停下"**（此前 T-024 轮用户要求先收到大白话全貌复述，主会话已交付完整复述）。
+- 完成动作：确认回执发布（quality/confirmations/da1b2e45….json，human-confirmation.v3 accepted）；交互聚合组装（质量聚合 553d26a5….json，7 轮 Talk 真实转录）；decision-log 最终确认节更新；**make-decision 收口完成，停在 build-spec 前**。
+- 未完成/跳过：无（外部 provider grok/pi 身份未绑定=OPEN-004 已转实施前置动作，如实记录；detail review pair partial 已如实记录）。
 
 ## 拒绝方案
 
