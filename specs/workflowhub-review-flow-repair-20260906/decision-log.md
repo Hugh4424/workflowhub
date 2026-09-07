@@ -216,3 +216,11 @@
 | scope | 范围 | 只改 workflowhub 侧四类表面；排除重审逻辑（归 close-readiness）；排除 3rd-review 引擎 | T-004/T-005/F-015/F-016 |
 | solution | 方案与取舍 | D-001~D-008 决策链 + 五块方案（配置层/preflight/落盘/schema/E2E）+ 测试矩阵与迁移 dogfood；**取舍与被拒项**：keep-profiles 方案（T-001 B/C 被拒）、preflight 只警告（T-002 B 被拒）、裸跑写 task_dir（G-002 C 被拒）、E2E 不改+改用户配置（G-003 B/C 被拒）、兼容层保旧 hash（G-001 B 被拒）、每次拦截新写（G-004 B 被拒）；**未决项**见"未决项"节 | F-010~F-019；G-001~G-004 |
 | acceptance | 验收口径 | 五条成功标准（场景=本任务后续阶段 build-spec 起的真实审查调用；数据源=task_dir quality/reviews 记录、doctor 输出、config 迁移前后对比；通过条件=成功标准 1-5 逐条可观察；失败条件=红线清单任一被触） | T-008 |
+
+## 合并 main 后的基线更新（2026-09-07）
+
+- 已将 `main=692c27ea325f6bb7be31613c6e44037958eab850` 合并到本任务分支，产生 merge commit `356c3305`；无冲突，`git diff --check` 通过。
+- `main` 已包含 close-readiness 的实际实现及归档材料（合并提交 `82ba3d86`、归档提交 `692c27ea`）。因此 F-015/F-016 和 publish-decision 中“未合并 main”“并行且零文件重叠”“合并前只审一次暂不生效”均是 2026-09-06 make-decision 时点事实，不再代表当前 build-spec 基线。
+- D-001~D-008、D-007 的范围边界不变：本任务仍不实现重审/预算抑制；但 build-spec 必须把当前 main 已存在的 review budget、provider usage、四材料 stage-input packet、finding disposition 消费者纳入兼容检查，不能重复实现 close-readiness 逻辑。
+- build-spec 开始前重读当前消费者：`runtime/evidence/stage-content-evidence.mjs`、`runtime/review/stage-review-disposition.mjs`、`runtime/task/material-workspace.mjs`、`runtime/stage/*` 及对应聚焦测试。改 attempt/result schema 或写入路径时，必须保留 main 已消费的 `usage` 事实和认证绑定。
+- task store 中的 approval、`material_revision`、`snapshot_tree` 继续作为历史事实保留；合并后的后续阶段必须重新生成当前 worktree 的 stage 输入和材料绑定，不覆盖旧 receipt。
