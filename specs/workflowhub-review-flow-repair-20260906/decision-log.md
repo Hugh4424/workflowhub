@@ -193,7 +193,7 @@
 | 检查项 | 状态 |
 | --- | --- |
 | Talk 全部 resolved（R1-R3，9 问） | 通过（T-001~T-009）。注：决策日志按规范相位命名记为"R1-R3"，实际交互问答共 5 轮（Q1-Q3 / Q4-Q6+Q5-Q6 / Q4 重问 / Q7 / Q8-Q9，interaction aggregate round_count=5，remaining 全空） |
-| 条件 talk round 4 触发评估 | 不触发（direction/detail advice 无方向级未决；detail 均为实施级修复） |
+| 条件 talk round 4 触发评估 | 不触发（direction/detail advice 无遗留方向问题；detail 均为实施级修复） |
 | research 完成或如实标注 | 通过，**如实标注**：研究证据=F 表各行的主源引用（代码路径/行号/本机配置/根因文档）+ 9 个子代理独立核实（R-sub-1/2/3、四文档精读、advice×3、spec-analyze）；未单独立 research-report 文件，均以 F 表引用与 evidence 文件为凭 |
 | Grill 已跑（G1-G4 全部实名答复） | 通过（G 表） |
 | decision-log 为当前版 | 通过（本文件，含全部修订） |
@@ -206,7 +206,7 @@
 
 ## 未决项
 
-- 无方向级未决。实施级注记（随 build-spec/build-code 处理，不阻塞批准）：E2E 行为细粒度（从 initial 取第一个的具体取法）；policy_snapshot_hash 一次性失效的具体触发点（build-code 验证）；裸跑 sink 的保留/清理策略细节（build-plan 细化，登记 owner/consumer/删除条件）。
+- 方向问题已全部收敛、无遗留。实施级注记（随 build-spec/build-code 处理，不阻塞批准）：E2E 行为细粒度（从 initial 取第一个的具体取法）；policy_snapshot_hash 一次性失效的具体触发点（build-code 验证）；裸跑 sink 的保留/清理策略细节（build-plan 细化，登记 owner/consumer/删除条件）。
 
 ## 收敛检查（target/scope/solution/acceptance）
 
