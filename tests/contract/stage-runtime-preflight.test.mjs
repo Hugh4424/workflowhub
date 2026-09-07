@@ -167,6 +167,16 @@ describe("stage-runtime private run:preflight", () => {
     expect(readdirSync(state.root).sort()).toEqual(before);
   });
 
+  it("accepts the freeze, reply, fallback, and review-budget fields at the official entry", () => {
+    expect(() => validateStageInvocation("build-plan", {
+      receipts: {},
+      decision_freeze: { material_revision: "revision-a", snapshot_tree: "a".repeat(40) },
+      fallback_protocol: {},
+      review_budget: { attempts: [], request: { kind: "initial" } },
+      user_reply: { finding_id: "F-a", reply_ref: "quality/confirmations/reply.json", reply_hash: "b".repeat(64) },
+    })).not.toThrow();
+  });
+
   it("returns valid=0 with no stdout diagnostics and protocol-invalid=2 with a stdout array", () => {
     const state = fixture();
     const validPath = join(state.root, "valid.json");

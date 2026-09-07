@@ -310,14 +310,14 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
     );
   }
   if (stageReview.stage !== "verify-code"
-      || stageReview.step_slug !== "approve-verification"
+      || stageReview.step_slug !== "finalize-code-review"
       || stageReview.skill_id !== "dsh-code-review"
       || typeof stageReview.quality_review_ref !== "string"
       || !HASH.test(stageReview.quality_review_hash ?? "")) {
     throwResolvedReviewError(
       "resolved review authorization code_review binding is invalid",
       "review_identity",
-      { stage: "verify-code", step_slug: "approve-verification", skill_id: "dsh-code-review", ref: "canonical review result", hash: "sha256" },
+      { stage: "verify-code", step_slug: "finalize-code-review", skill_id: "dsh-code-review", ref: "canonical review result", hash: "sha256" },
       { stage: stageReview.stage ?? null, step_slug: stageReview.step_slug ?? null, skill_id: stageReview.skill_id ?? null, ref: stageReview.quality_review_ref ?? null, hash: stageReview.quality_review_hash ?? null },
     );
   }

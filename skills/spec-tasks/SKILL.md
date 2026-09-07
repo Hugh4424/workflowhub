@@ -10,6 +10,14 @@ Read the current `decision-log.md`, `spec.md`, and `plan.md`. Write only
 boundaries, risks, rollback, and the authoritative mapping remain in `plan.md`.
 `tasks.md` remains the sole current material for task-card details.
 
+When invoked by build-plan, consume only the host-frozen stage-input packet and
+its packet navigation/summary; do not read the task directory or re-inject the
+full four-material set into the main context. Preserve the packet hash and
+material binding in execution facts. New `tasks.md` output includes a
+regenerable `## 材料导航` section near the top with section, summary, and
+M/S/B/P timing columns. Missing packet/binding facts remain unavailable with a
+real reason and next action.
+
 Use `templates/tasks-template.md`. Generated cards contain real values, not
 authoring comments, empty sections, or copied rationale. A task card is an
 execution design and a compact current work record; it is not a second runtime

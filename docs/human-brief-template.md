@@ -93,6 +93,6 @@
 
 ## Close 授权不使用本模板
 
-verify-code 的阶段确认只接受验证结果。后续 commit、push、merge、archive、cleanup
+verify-code 不再要求用户确认当前代码审查结论。后续 commit、push、merge、archive、cleanup
 使用独立的 close 授权：逐项列出大白话动作、目标、后果和风险。计划 hash 只在内部
-绑定确认，不显示在公开留言，也不能复用阶段确认。
+绑定确认，不显示在公开留言，也不能把 close 授权当作代码审查结论。

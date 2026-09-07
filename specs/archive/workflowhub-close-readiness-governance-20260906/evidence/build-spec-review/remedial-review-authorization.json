@@ -1,0 +1,10 @@
+{
+  "purpose": "Bounded host execution authorization; not a review result or product approval",
+  "question_id": "spec-review-budget-exception",
+  "reply_text": "授权一次补救审查（推荐）",
+  "confirmation_ref": "quality/confirmations/fda42d1424234a09b67bde9e7af0528edbb1639329eb33b53b8494043384dc41.json",
+  "scope": "Exactly one additional complete-material broker group request after local repairs and fixed-vector checks, containing simplicity-guard and plan-ceo-review in that same packet.",
+  "reason": "Historical v61/v62 submitted excerpts, and prior lens execution remains unproven.",
+  "limits": ["No whole make-decision replay", "No automatic extra review rounds", "Preserve previous provenance and failures", "New findings do not silently authorize more calls"],
+  "execution_status": "not_started"
+}

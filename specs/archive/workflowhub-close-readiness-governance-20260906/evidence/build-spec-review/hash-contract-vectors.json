@@ -1,0 +1,1113 @@
+{
+  "evidence_kind": "build-spec-hash-contract-fixed-vectors",
+  "generated_at_utc": "2026-09-06T15:35:01.726Z",
+  "spec_sha256": "c38d0513c05c7d101f191231eb73596adb14eaa00d670437c4c2884e882397ef",
+  "contract": {
+    "gap": {
+      "algorithm_version": "gap-id.v1",
+      "normalization": "N",
+      "canonical_json": "J/B",
+      "clause_lines": "spec.md:387-395"
+    },
+    "packet": {
+      "algorithm_version": "stage-input-packet.v1",
+      "file_normalization": "T",
+      "canonical_json": "J/B",
+      "clause_lines": "spec.md:495-504"
+    }
+  },
+  "gap_vectors": [
+    {
+      "id": "gap-001",
+      "title": "canonical baseline with provenance deduplication",
+      "input_binding": {
+        "algorithm_version": "gap-id.v1",
+        "task_id": "task-α",
+        "material_name": "spec",
+        "material_revision": "r-07",
+        "gap_kind": "missing_fact",
+        "expected_fact": "expected e\nline",
+        "actual_fact": null,
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": {
+        "task_id": {
+          "value": "task-α",
+          "utf8_hex": "7461736b2dceb1"
+        },
+        "material_name": {
+          "value": "spec",
+          "utf8_hex": "73706563"
+        },
+        "material_revision": {
+          "value": "r-07",
+          "utf8_hex": "722d3037"
+        },
+        "gap_kind": {
+          "value": "missing_fact",
+          "utf8_hex": "6d697373696e675f66616374"
+        },
+        "expected_fact": {
+          "value": "expected e line",
+          "utf8_hex": "65787065637465642065206c696e65"
+        },
+        "actual_fact": {
+          "value": "unknown",
+          "utf8_hex": "756e6b6e6f776e"
+        }
+      },
+      "subject": "[\"task-α\",\"spec\",\"r-07\"]",
+      "manifest": null,
+      "preimage": [
+        "gap-id.v1",
+        "[\"task-α\",\"spec\",\"r-07\"]",
+        "missing_fact",
+        "expected e line",
+        "unknown"
+      ],
+      "preimage_utf8_hex": "5b226761702d69642e7631222c225b5c227461736b2dceb15c222c5c22737065635c222c5c22722d30375c225d222c226d697373696e675f66616374222c2265787065637465642065206c696e65222c22756e6b6e6f776e225d",
+      "expected_digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "owner-reason-producer-change",
+          "expected": "accepted_same_digest_owner_reason_provenance_excluded",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c",
+          "digest_equals_base": true
+        },
+        {
+          "id": "snapshot-change",
+          "expected": "accepted_same_digest_but_snapshot_binding_stale",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c",
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "id": "gap-002",
+      "title": "input field order does not change canonical output",
+      "input_binding": {
+        "actual_fact": null,
+        "expected_fact": "expected e\nline",
+        "gap_kind": "missing_fact",
+        "material_revision": "r-07",
+        "material_name": "spec",
+        "task_id": "task-α",
+        "algorithm_version": "gap-id.v1",
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": {
+        "task_id": {
+          "value": "task-α",
+          "utf8_hex": "7461736b2dceb1"
+        },
+        "material_name": {
+          "value": "spec",
+          "utf8_hex": "73706563"
+        },
+        "material_revision": {
+          "value": "r-07",
+          "utf8_hex": "722d3037"
+        },
+        "gap_kind": {
+          "value": "missing_fact",
+          "utf8_hex": "6d697373696e675f66616374"
+        },
+        "expected_fact": {
+          "value": "expected e line",
+          "utf8_hex": "65787065637465642065206c696e65"
+        },
+        "actual_fact": {
+          "value": "unknown",
+          "utf8_hex": "756e6b6e6f776e"
+        }
+      },
+      "subject": "[\"task-α\",\"spec\",\"r-07\"]",
+      "manifest": null,
+      "preimage": [
+        "gap-id.v1",
+        "[\"task-α\",\"spec\",\"r-07\"]",
+        "missing_fact",
+        "expected e line",
+        "unknown"
+      ],
+      "preimage_utf8_hex": "5b226761702d69642e7631222c225b5c227461736b2dceb15c222c5c22737065635c222c5c22722d30375c225d222c226d697373696e675f66616374222c2265787065637465642065206c696e65222c22756e6b6e6f776e225d",
+      "expected_digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "reordered-fields",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c",
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "id": "gap-003",
+      "title": "N whitespace set and NFC Unicode behavior",
+      "input_binding": {
+        "algorithm_version": "gap-id.v1",
+        "task_id": " \tA  ​﻿é\n ",
+        "material_name": " spec ",
+        "material_revision": " r-08 ",
+        "gap_kind": "  Unicode kind  ",
+        "expected_fact": "  café́ ",
+        "actual_fact": "empty",
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": {
+        "task_id": {
+          "value": "A ​﻿é",
+          "utf8_hex": "4120e2808befbbbfc3a9"
+        },
+        "material_name": {
+          "value": "spec",
+          "utf8_hex": "73706563"
+        },
+        "material_revision": {
+          "value": "r-08",
+          "utf8_hex": "722d3038"
+        },
+        "gap_kind": {
+          "value": "Unicode kind",
+          "utf8_hex": "556e69636f6465206b696e64"
+        },
+        "expected_fact": {
+          "value": "café́",
+          "utf8_hex": "636166c3a9cc81"
+        },
+        "actual_fact": {
+          "value": "empty",
+          "utf8_hex": "656d707479"
+        }
+      },
+      "subject": "[\"A ​﻿é\",\"spec\",\"r-08\"]",
+      "manifest": null,
+      "preimage": [
+        "gap-id.v1",
+        "[\"A ​﻿é\",\"spec\",\"r-08\"]",
+        "Unicode kind",
+        "café́",
+        "empty"
+      ],
+      "preimage_utf8_hex": "5b226761702d69642e7631222c225b5c224120e2808befbbbfc3a95c222c5c22737065635c222c5c22722d30385c225d222c22556e69636f6465206b696e64222c22636166c3a9cc81222c22656d707479225d",
+      "expected_digest": "gap-7f265e29299a7f598758d76b5dd12e1a916cee3cda939dd6529f737edd69b990",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "feff-and-zero-width-space-retained",
+          "expected": "accepted_and_retained_in_normalized_component",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-7f265e29299a7f598758d76b5dd12e1a916cee3cda939dd6529f737edd69b990"
+          },
+          "digest": "gap-7f265e29299a7f598758d76b5dd12e1a916cee3cda939dd6529f737edd69b990",
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "id": "gap-004",
+      "title": "illegal type is rejected without an id",
+      "input_binding": {
+        "algorithm_version": "gap-id.v1",
+        "task_id": 42,
+        "material_name": "spec",
+        "material_revision": "r-07",
+        "gap_kind": "missing_fact",
+        "expected_fact": "expected e\nline",
+        "actual_fact": null,
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": null,
+      "preimage": null,
+      "preimage_utf8_hex": null,
+      "expected_digest": null,
+      "mutations_or_invalid_samples": [
+        {
+          "id": "task-id-number",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "N rejects non-string input",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "id": "gap-005",
+      "title": "conflicting producer subject binding is rejected",
+      "input_binding": {
+        "algorithm_version": "gap-id.v1",
+        "task_id": "task-α",
+        "material_name": "spec",
+        "material_revision": "r-07",
+        "gap_kind": "missing_fact",
+        "expected_fact": "expected e\nline",
+        "actual_fact": null,
+        "subject_id": "[\"task-other\",\"spec\",\"r-07\"]",
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": null,
+      "preimage": null,
+      "preimage_utf8_hex": null,
+      "expected_digest": null,
+      "mutations_or_invalid_samples": [
+        {
+          "id": "subject-mismatch",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "subject binding mismatch",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "id": "gap-006",
+      "title": "invalid algorithm version is rejected",
+      "input_binding": {
+        "algorithm_version": "gap-id.v0",
+        "task_id": "task-α",
+        "material_name": "spec",
+        "material_revision": "r-07",
+        "gap_kind": "missing_fact",
+        "expected_fact": "expected e\nline",
+        "actual_fact": null,
+        "owner": "build-spec",
+        "snapshot_tree": "tree-A",
+        "provenance": [
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          },
+          {
+            "producer": "alpha",
+            "reason_text": "second"
+          },
+          {
+            "producer": "zeta",
+            "reason_text": "  first\t"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": null,
+      "preimage": null,
+      "preimage_utf8_hex": null,
+      "expected_digest": null,
+      "mutations_or_invalid_samples": [
+        {
+          "id": "unknown-version",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "invalid algorithm_version",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    }
+  ],
+  "packet_vectors": [
+    {
+      "id": "packet-001",
+      "title": "canonical baseline with sorted file entries and manifest arrays",
+      "input_binding": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          },
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ],
+        "packet_freeze_hash": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+      },
+      "files": {
+        "docs/alpha.txt": {
+          "raw_hex": "efbbbf41c2a0e2808befbbbf0d0a420d0a",
+          "normalized_hex": "efbbbf41c2a0e2808befbbbf0a420a",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        "meta/summary.txt": {
+          "raw_hex": "0d0ae2808373756d6d6172790d",
+          "normalized_hex": "0ae2808373756d6d6172790a",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        "z-details.txt": {
+          "raw_hex": "6c617374206c696e650a",
+          "normalized_hex": "6c617374206c696e650a",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      },
+      "file_entries": [
+        {
+          "path": "docs/alpha.txt",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        {
+          "path": "meta/summary.txt",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        {
+          "path": "z-details.txt",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      ],
+      "manifest_minus_hash": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "preimage_utf8_hex": "7b2266696c655f656e7472696573223a5b7b2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b2270617468223a226d6574612f73756d6d6172792e747874222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d2c7b2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c226d616e69666573745f6d696e75735f68617368223a7b22616c676f726974686d5f76657273696f6e223a2273746167652d696e7075742d7061636b65742e7631222c22646572697665645f66696c6573223a5b7b22617574686f72697479223a226e6f6e2d6d6174657269616c222c22636f6e73756d6572223a22737065632d73706563696679222c2270617468223a226d6574612f73756d6d6172792e747874222c2270726f6475636572223a226275696c642d73706563222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434222c22736f757263655f646967657374223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d5d2c226d6174657269616c5f7265766973696f6e223a22722d3037222c226f776e6572223a226275696c642d73706563222c22736e617073686f745f74726565223a22747265652d41222c22736f757263655f6d6174657269616c73223a5b7b226d6174657269616c5f6e616d65223a2273706563222c2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b226d6174657269616c5f6e616d65223a227a2d64657461696c73222c2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c227374616765223a22737065632d73706563696679222c227461736b5f6964223a227461736b2dceb1227d7d",
+      "expected_digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "manifest-field-order",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+          "digest_equals_base": true
+        },
+        {
+          "id": "owner-is-included",
+          "expected": "accepted_different_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "48b3a1bfcb6b3dc1d993d02fdc91e653dec8956282a0b6b1786936d6d43f8ce4"
+          },
+          "digest": "48b3a1bfcb6b3dc1d993d02fdc91e653dec8956282a0b6b1786936d6d43f8ce4",
+          "digest_equals_base": false
+        },
+        {
+          "id": "hash-self-exclusion",
+          "expected": "accepted_same_digest_when_hash_recomputed",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "id": "packet-002",
+      "title": "CRLF/LF normalization and Unicode whitespace retention",
+      "input_binding": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          },
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ],
+        "packet_freeze_hash": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+      },
+      "files": {
+        "docs/alpha.txt": {
+          "raw_hex": "efbbbf41c2a0e2808befbbbf0d0a420d0a",
+          "normalized_hex": "efbbbf41c2a0e2808befbbbf0a420a",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        "meta/summary.txt": {
+          "raw_hex": "0d0ae2808373756d6d6172790d",
+          "normalized_hex": "0ae2808373756d6d6172790a",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        "z-details.txt": {
+          "raw_hex": "6c617374206c696e650a",
+          "normalized_hex": "6c617374206c696e650a",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      },
+      "file_entries": [
+        {
+          "path": "docs/alpha.txt",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        {
+          "path": "meta/summary.txt",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        {
+          "path": "z-details.txt",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      ],
+      "manifest_minus_hash": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "preimage_utf8_hex": "7b2266696c655f656e7472696573223a5b7b2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b2270617468223a226d6574612f73756d6d6172792e747874222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d2c7b2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c226d616e69666573745f6d696e75735f68617368223a7b22616c676f726974686d5f76657273696f6e223a2273746167652d696e7075742d7061636b65742e7631222c22646572697665645f66696c6573223a5b7b22617574686f72697479223a226e6f6e2d6d6174657269616c222c22636f6e73756d6572223a22737065632d73706563696679222c2270617468223a226d6574612f73756d6d6172792e747874222c2270726f6475636572223a226275696c642d73706563222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434222c22736f757263655f646967657374223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d5d2c226d6174657269616c5f7265766973696f6e223a22722d3037222c226f776e6572223a226275696c642d73706563222c22736e617073686f745f74726565223a22747265652d41222c22736f757263655f6d6174657269616c73223a5b7b226d6174657269616c5f6e616d65223a2273706563222c2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b226d6174657269616c5f6e616d65223a227a2d64657461696c73222c2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c227374616765223a22737065632d73706563696679222c227461736b5f6964223a227461736b2dceb1227d7d",
+      "expected_digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "crlf-to-lf-equivalence",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+          "digest_equals_base": true
+        },
+        {
+          "id": "unicode-whitespace-changed",
+          "expected": "accepted_different_digest_unicode_whitespace_is_not_collapsed",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "4b536a21c8084b75f2d76004d5582afd9019660101fd047d5cc727f6c241d2ae"
+          },
+          "digest": "4b536a21c8084b75f2d76004d5582afd9019660101fd047d5cc727f6c241d2ae",
+          "digest_equals_base": false
+        },
+        {
+          "id": "trailing-newline-changed",
+          "expected": "accepted_different_digest_trailing_newline_is_significant",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "9abdb0723cbe873a7dc7058fb422ea3587cc5f9f7b42b96338bff1efe44f41cf"
+          },
+          "digest": "9abdb0723cbe873a7dc7058fb422ea3587cc5f9f7b42b96338bff1efe44f41cf",
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "id": "packet-003",
+      "title": "invalid paths are unavailable rather than repaired",
+      "input_binding": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          },
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ],
+        "packet_freeze_hash": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+      },
+      "files": {
+        "docs/alpha.txt": {
+          "raw_hex": "efbbbf41c2a0e2808befbbbf0d0a420d0a",
+          "normalized_hex": "efbbbf41c2a0e2808befbbbf0a420a",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        "meta/summary.txt": {
+          "raw_hex": "0d0ae2808373756d6d6172790d",
+          "normalized_hex": "0ae2808373756d6d6172790a",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        "z-details.txt": {
+          "raw_hex": "6c617374206c696e650a",
+          "normalized_hex": "6c617374206c696e650a",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      },
+      "file_entries": [
+        {
+          "path": "docs/alpha.txt",
+          "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+        },
+        {
+          "path": "meta/summary.txt",
+          "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4"
+        },
+        {
+          "path": "z-details.txt",
+          "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+        }
+      ],
+      "manifest_minus_hash": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          },
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "preimage_utf8_hex": "7b2266696c655f656e7472696573223a5b7b2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b2270617468223a226d6574612f73756d6d6172792e747874222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d2c7b2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c226d616e69666573745f6d696e75735f68617368223a7b22616c676f726974686d5f76657273696f6e223a2273746167652d696e7075742d7061636b65742e7631222c22646572697665645f66696c6573223a5b7b22617574686f72697479223a226e6f6e2d6d6174657269616c222c22636f6e73756d6572223a22737065632d73706563696679222c2270617468223a226d6574612f73756d6d6172792e747874222c2270726f6475636572223a226275696c642d73706563222c22736861323536223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434222c22736f757263655f646967657374223a2239373232656639373265323832663538333366346331376132633133393932306564333862326264373033363037346134636261333637643965313763646434227d5d2c226d6174657269616c5f7265766973696f6e223a22722d3037222c226f776e6572223a226275696c642d73706563222c22736e617073686f745f74726565223a22747265652d41222c22736f757263655f6d6174657269616c73223a5b7b226d6174657269616c5f6e616d65223a2273706563222c2270617468223a22646f63732f616c7068612e747874222c22736861323536223a2235646636363938306637626638613336306165613430633337613333306233663036653339613738663764323139343038653233336662646331643762306165227d2c7b226d6174657269616c5f6e616d65223a227a2d64657461696c73222c2270617468223a227a2d64657461696c732e747874222c22736861323536223a2239353339316163383333643263393838323162336463333631323232623632366336373365633832343338313265643738323139373961323438643533663739227d5d2c227374616765223a22737065632d73706563696679222c227461736b5f6964223a227461736b2dceb1227d7d",
+      "expected_digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c",
+      "mutations_or_invalid_samples": [
+        {
+          "id": "invalid-path-1",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path : empty path",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-2",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path /absolute.txt: leading or trailing slash",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-3",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path trailing/: leading or trailing slash",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-4",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path dir\\file.txt: backslash",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-5",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path dir//file.txt: empty path segment",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-6",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path ./dot.txt: dot path segment",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-7",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path ../parent.txt: dot path segment",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-8",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path nul\u0000.txt: NUL",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-9",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "The first argument must be of type string or an instance of Buffer, ArrayBuffer, or Array or an Array-like Object. Received type number (42)",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "id": "packet-004",
+      "title": "unknown algorithm version is unavailable",
+      "input_binding": {
+        "algorithm_version": "stage-input-packet.v0",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          },
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": null,
+      "files": null,
+      "file_entries": null,
+      "manifest_minus_hash": null,
+      "preimage_utf8_hex": null,
+      "expected_digest": null,
+      "mutations_or_invalid_samples": [
+        {
+          "id": "unknown-version",
+          "expected": "rejected_unavailable_invalid_version",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "unknown algorithm_version",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "id": "packet-005",
+      "title": "duplicate manifest key is unavailable",
+      "input_binding": {
+        "algorithm_version": "stage-input-packet.v1",
+        "task_id": "task-α",
+        "stage": "spec-specify",
+        "material_revision": "r-07",
+        "snapshot_tree": "tree-A",
+        "owner": "build-spec",
+        "source_materials": [
+          {
+            "material_name": "z-details",
+            "path": "z-details.txt",
+            "sha256": "95391ac833d2c98821b3dc361222b626c673ec8243812ed7821979a248d53f79"
+          },
+          {
+            "material_name": "spec",
+            "path": "docs/alpha.txt",
+            "sha256": "5df66980f7bf8a360aea40c37a330b3f06e39a78f7d219408e233fbdc1d7b0ae"
+          }
+        ],
+        "derived_files": [
+          {
+            "path": "meta/summary.txt",
+            "source_digest": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "sha256": "9722ef972e282f5833f4c17a2c139920ed38b2bd7036074a4cba367d9e17cdd4",
+            "producer": "build-spec",
+            "consumer": "spec-specify",
+            "authority": "non-material"
+          }
+        ]
+      },
+      "normalized_components": null,
+      "subject": null,
+      "manifest": {
+        "raw_json": "{\"algorithm_version\":\"stage-input-packet.v1\",\"owner\":\"a\",\"owner\":\"b\"}"
+      },
+      "files": null,
+      "file_entries": null,
+      "manifest_minus_hash": null,
+      "preimage_utf8_hex": null,
+      "expected_digest": null,
+      "mutations_or_invalid_samples": [
+        {
+          "id": "duplicate-owner-key",
+          "expected": "rejected_unavailable_duplicate_key",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "duplicate key: owner",
+            "digest": null
+          },
+          "digest": null,
+          "digest_equals_base": false
+        }
+      ]
+    }
+  ]
+}

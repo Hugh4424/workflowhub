@@ -1,0 +1,25 @@
+{
+  "purpose": "Actual current-session work log; not a receipt or completed stage outcome",
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "stage": "build-spec",
+  "host": "dsh",
+  "source_id": "dsh/gpt-6-astra",
+  "source_family": "dsh",
+  "agent_run_id": "session-58630c15-6fce-4892-9336-630d4b3781d3",
+  "source_ref": "dsh-session:session-58630c15-6fce-4892-9336-630d4b3781d3",
+  "events": [
+    {
+      "task_id": "workflowhub-close-readiness-governance-20260906",
+      "stage": "build-spec",
+      "subject_kind": "step",
+      "subject_id": "read-decision-log",
+      "started_at_ms": 1788705544969,
+      "ended_at_ms": 1788705579315,
+      "status": "incomplete",
+      "reason": "Current pass read R-001 through R-011 and M6 decisions; full authority/semantic coverage and remaining findings reconciliation are not yet complete.",
+      "result_summary": "Verified original requirement index, frozen M6 routing obligations and limited incremental-decision intent. Historical approval covers unchanged decision semantics, not current exact four-material revision. No declaration of current frozen-binding PASS.",
+      "input_refs": ["decision-log.md", "workflows/build-spec/SKILL.md", "workflows/build-spec/skill-deps.yaml"],
+      "evidence": []
+    }
+  ]
+}

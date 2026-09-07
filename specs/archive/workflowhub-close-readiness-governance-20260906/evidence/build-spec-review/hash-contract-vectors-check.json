@@ -1,0 +1,397 @@
+{
+  "evidence_kind": "build-spec-hash-contract-fixed-vectors-check",
+  "script_command": "node specs/workflowhub-close-readiness-governance-20260906/evidence/build-spec-review/generate-hash-contract-vectors.js",
+  "exit_code": 0,
+  "started_at_utc": "2026-09-06T15:35:01.726Z",
+  "ended_at_utc": "2026-09-06T15:35:01.733Z",
+  "spec_sha256": "c38d0513c05c7d101f191231eb73596adb14eaa00d670437c4c2884e882397ef",
+  "spec_clause_lines": {
+    "gap": "spec.md:387-395",
+    "packet": "spec.md:495-504"
+  },
+  "vector_file": "specs/workflowhub-close-readiness-governance-20260906/evidence/build-spec-review/hash-contract-vectors.json",
+  "vector_file_sha256": "f4bcf87039bef7c7527d400684b9c336f78c1d34cb4db48e8d406eede4f586fe",
+  "vector_counts": {
+    "gap_vectors": 6,
+    "packet_vectors": 5,
+    "total_mutations_or_invalid_samples": 24
+  },
+  "per_vector_checks": [
+    {
+      "section": "gap_vectors",
+      "id": "gap-001",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "owner-reason-producer-change",
+          "status": "verified",
+          "expected": "accepted_same_digest_owner_reason_provenance_excluded",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest_equals_base": true
+        },
+        {
+          "id": "snapshot-change",
+          "status": "verified",
+          "expected": "accepted_same_digest_but_snapshot_binding_stale",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "section": "gap_vectors",
+      "id": "gap-002",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "reordered-fields",
+          "status": "verified",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-e999f878c64225b975502b65b2cebaed2ebd0fb73112668949f4e4bffeb97f4c"
+          },
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "section": "gap_vectors",
+      "id": "gap-003",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "feff-and-zero-width-space-retained",
+          "status": "verified",
+          "expected": "accepted_and_retained_in_normalized_component",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_gap_identity",
+            "detail": "subject and digest recomputed",
+            "digest": "gap-7f265e29299a7f598758d76b5dd12e1a916cee3cda939dd6529f737edd69b990"
+          },
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "section": "gap_vectors",
+      "id": "gap-004",
+      "status": "verified-negative",
+      "expected_digest_present": false,
+      "mutation_checks": [
+        {
+          "id": "task-id-number",
+          "status": "verified",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "N rejects non-string input",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "gap_vectors",
+      "id": "gap-005",
+      "status": "verified-negative",
+      "expected_digest_present": false,
+      "mutation_checks": [
+        {
+          "id": "subject-mismatch",
+          "status": "verified",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "subject binding mismatch",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "gap_vectors",
+      "id": "gap-006",
+      "status": "verified-negative",
+      "expected_digest_present": false,
+      "mutation_checks": [
+        {
+          "id": "unknown-version",
+          "status": "verified",
+          "expected": "rejected_invalid_gap_identity",
+          "actual": {
+            "status": "rejected",
+            "code": "invalid_gap_identity",
+            "detail": "invalid algorithm_version",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "packet_vectors",
+      "id": "packet-001",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "manifest-field-order",
+          "status": "verified",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest_equals_base": true
+        },
+        {
+          "id": "owner-is-included",
+          "status": "verified",
+          "expected": "accepted_different_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "48b3a1bfcb6b3dc1d993d02fdc91e653dec8956282a0b6b1786936d6d43f8ce4"
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "hash-self-exclusion",
+          "status": "verified",
+          "expected": "accepted_same_digest_when_hash_recomputed",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest_equals_base": true
+        }
+      ]
+    },
+    {
+      "section": "packet_vectors",
+      "id": "packet-002",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "crlf-to-lf-equivalence",
+          "status": "verified",
+          "expected": "accepted_same_digest",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "287cb553410fb35ca79cda62240290bd106420388bf03773479cdcd3fdd2bd0c"
+          },
+          "digest_equals_base": true
+        },
+        {
+          "id": "unicode-whitespace-changed",
+          "status": "verified",
+          "expected": "accepted_different_digest_unicode_whitespace_is_not_collapsed",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "4b536a21c8084b75f2d76004d5582afd9019660101fd047d5cc727f6c241d2ae"
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "trailing-newline-changed",
+          "status": "verified",
+          "expected": "accepted_different_digest_trailing_newline_is_significant",
+          "actual": {
+            "status": "accepted",
+            "code": "valid_packet",
+            "detail": "manifest and T(file) entries validated",
+            "digest": "9abdb0723cbe873a7dc7058fb422ea3587cc5f9f7b42b96338bff1efe44f41cf"
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "packet_vectors",
+      "id": "packet-003",
+      "status": "verified",
+      "expected_digest_present": true,
+      "mutation_checks": [
+        {
+          "id": "invalid-path-1",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path : empty path",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-2",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path /absolute.txt: leading or trailing slash",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-3",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path trailing/: leading or trailing slash",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-4",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path dir\\file.txt: backslash",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-5",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path dir//file.txt: empty path segment",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-6",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path ./dot.txt: dot path segment",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-7",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path ../parent.txt: dot path segment",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-8",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "invalid path nul\u0000.txt: NUL",
+            "digest": null
+          },
+          "digest_equals_base": false
+        },
+        {
+          "id": "invalid-path-9",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_path",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "The first argument must be of type string or an instance of Buffer, ArrayBuffer, or Array or an Array-like Object. Received type number (42)",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "packet_vectors",
+      "id": "packet-004",
+      "status": "verified-negative",
+      "expected_digest_present": false,
+      "mutation_checks": [
+        {
+          "id": "unknown-version",
+          "status": "verified",
+          "expected": "rejected_unavailable_invalid_version",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "unknown algorithm_version",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    },
+    {
+      "section": "packet_vectors",
+      "id": "packet-005",
+      "status": "verified-negative",
+      "expected_digest_present": false,
+      "mutation_checks": [
+        {
+          "id": "duplicate-owner-key",
+          "status": "verified",
+          "expected": "rejected_unavailable_duplicate_key",
+          "actual": {
+            "status": "rejected",
+            "code": "unavailable",
+            "detail": "duplicate key: owner",
+            "digest": null
+          },
+          "digest_equals_base": false
+        }
+      ]
+    }
+  ]
+}

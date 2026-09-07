@@ -6,6 +6,14 @@ version: 3.2.0
 
 # Make Decision
 
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
+`build-spec`（`build-plan` 走 spec-clarify）；方向级问题回
+`make-decision` 做增量决策；材料缺口回对应 owner；环境不可用只记录
+attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
 ## Purpose
 
 Turn the original requirement into one readable, user-confirmed direction in

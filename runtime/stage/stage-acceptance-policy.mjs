@@ -3,7 +3,10 @@ const ACCEPTANCE_MODE = Object.freeze({
   "build-spec": "automatic",
   "build-plan": "human",
   "build-code": "automatic",
-  "verify-code": "human",
+  // verify-code records and validates the current code-review result. It no
+  // longer waits for a second human acknowledgement of that same result;
+  // physical close authorization remains a separate close-plan operation.
+  "verify-code": "automatic",
 });
 
 export function acceptanceModeFor(stage) {

@@ -6,6 +6,13 @@ version: 4.1.0
 
 # Build Spec
 
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
+`build-spec`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
 ## Responsibility and authority
 
 Turn the current `decision-log.md` into the current `spec.md`. The four
@@ -65,6 +72,22 @@ Review is a quality fact, not a progression gate or permission to continue
 working. Missing or unavailable quality evidence lowers the completion claim;
 it does not block same-task drafting or repair. An unavailable review is never
 `pass`.
+
+### Stage-input packet and context facts
+
+Before `spec-specify` executes, the host assembles and freezes a
+`stage-input-packet.v1` from the current materials. The packet is the only
+input surface for the inline skill and dispatched contexts: bind `task_id`,
+stage, `material_revision`, `snapshot_tree`, source SHA-256 values,
+derived-file producer/consumer, and `packet_freeze_hash`. The main session
+keeps only packet reference, hash, binding, and a summary no longer than 500
+characters. Navigation is a regenerable material section, not a fifth
+material. Packet failure is reported as unavailable with owner/next action;
+it is not converted to an empty input or a quality pass. Record provider usage
+when returned, otherwise `usage_status=unavailable`; record the three character
+proxies (`full_reread_count`, `subagent_input_bytes`,
+`review_material_bytes`) without token-budget or cost claims. No decrease is
+claimed without evidence.
 
 ## Conditional UI design path
 
