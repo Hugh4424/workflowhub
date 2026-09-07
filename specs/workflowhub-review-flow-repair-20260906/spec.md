@@ -159,7 +159,7 @@ WorkflowHub 配置加载、现有审查入口内静态预检、审查记录与�
   - **status**：verified
   - **证据**：decision-log.md R-001/R-002、T-001、D-001；批准记录 quality/confirmations/e47d2e1016d46ae226c3081976cfb95610de159bb5dbd85255a8d250d685f755.json。
   - **关联**：FR-CONFIG-001～003、AC-CONFIG-001～003。
-- **PFACT-002**：用户已确认静态必败 1 秒内返回、unknown 不拦截。
+- **PFACT-002**：用户已确认静态必败 1 秒内返回、未知外部状态不拦截。
   - **status**：verified
   - **证据**：同一批准记录及 D-002、T-002/T-008。
   - **关联**：FR-PREFLIGHT-001～003、AC-PREFLIGHT-001～003。
