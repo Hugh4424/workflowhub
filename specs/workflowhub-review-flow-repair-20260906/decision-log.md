@@ -64,6 +64,8 @@
 | G-003 | E2E 单 provider 约束 vs 本机 verify-code.initial=5 矛盾 | **A：E2E 改为从路由取第一个 provider**（不再要求 initial.length===1，行为不变） | E2E 回归范围明确；矛盾消除（D-006） | 无 ADR；verify-code 域边界确认；D-006 |
 | G-004 | 同材料同原因重复拦截的 attempt 增长 | **A：同指纹同原因幂等去重**（引用既有拦截记录，不新建） | 防刷记录；追溯更清晰 | 无 ADR；attempt 不可变红线；D-003/D-008 |
 
+| F-020 | 冻结契约文本路径自指不可达（2026-09-07 实测）：materialRevisionFromValues=四材料内容 SHA-256（runtime/task/git-worktree-snapshot.mjs materialRevisionFromValues），validateDecisionFreeze 要求三源绑定=当前版本；写入绑定标记→材料版本立即变化→必报 not for the current material revision（实测 R0=revision-da490244…写入后 R1=revision-6dbb8185…）；incremental_renewals 仅对象模型可表达，文本解析（decisionFreezeModel）不产出续签条目，生产链路只喂文本 → 文本日志的冻结校验恒为 paused；close-readiness 自身日志亦只记录批准时刻绑定并声明不冒充当前快照。属 close-readiness 冻结契约缺陷，修复归属待定（候选：冻结绑定节排除出材料哈希，tasks.md 已有执行记录排除先例），不归本任务范围 | 实测脚本输出（2026-09-07）；runtime/stage/stage-content-contracts.mjs validateDecisionFreeze/decisionFreezeModel；tests/contract/freeze-classification-budget-usage-protocol.test.mjs 三方冻结样例 |
+
 ## 决策链（D 表）
 
 | decision_id | 决策 | 选择与理由 | derived_from |
@@ -76,6 +78,8 @@
 | D-006 | E2E 路径 | 修复 E2E 单 provider 约束矛盾：E2E 从路由 initial 取第一个 provider 使用（不再要求 initial.length===1）（source：G-003；F-017/f③） | [D-001] |
 | D-007 | 并行边界 | 重审/预算/只审一次语义归 close-readiness（D-504/T-029/T-033/FR-LOOP-004/AC-LOOP-004），本任务绝不实现 budget/重审抑制；遇重复审查症状只记录事实；保留 attempt usage 字段与写入路径（FR-LOOP-005 消费）；仓库 loader 与其 OPEN-004 用户侧 config 修复互补（source：R-005；T-004；F-015/F-016） | []（用户范围指正） |
 | D-008 | 红线 | minimum_heterologous≥1、SAME_SOURCE、unavailable/空 findings 不伪装通过、不新增公共命令、**doctor 行为清单恰七项且 preflight 不得暴露为 doctor 子动作**、vNext 禁令、legacy tiers 兜底不动、幂等去重不得修改旧 attempt（不可变）、禁全量回归（只跑受影响聚焦测试）（source：T-008；F-008/F-013） | [D-002, D-003] |
+
+| D-009 | 冻结续签方式 | 合并 main 后新冻结契约要求文本 decision-log 三方绑定当前材料版本，实测存在自指死结（F-020）；按 close-readiness 作者惯例做诚实续签留痕：三方绑定记录续签确认发布时刻的版本与快照、绑确认回执，不冒充当前快照、不伪装 freeze passed；续签后按用户指示进 build-plan（用户 2026-09-07 选 B1） | [D-001~D-008 基线；合并 main 后的基线更新节；F-020] |
 
 ## 方案（Solution，方向级草案；build-spec 细化 FR/AC）
 
@@ -224,3 +228,30 @@
 - D-001~D-008、D-007 的范围边界不变：本任务仍不实现重审/预算抑制；但 build-spec 必须把当前 main 已存在的 review budget、provider usage、四材料 stage-input packet、finding disposition 消费者纳入兼容检查，不能重复实现 close-readiness 逻辑。
 - build-spec 开始前重读当前消费者：`runtime/evidence/stage-content-evidence.mjs`、`runtime/review/stage-review-disposition.mjs`、`runtime/task/material-workspace.mjs`、`runtime/stage/*` 及对应聚焦测试。改 attempt/result schema 或写入路径时，必须保留 main 已消费的 `usage` 事实和认证绑定。
 - task store 中的 approval、`material_revision`、`snapshot_tree` 继续作为历史事实保留；合并后的后续阶段必须重新生成当前 worktree 的 stage 输入和材料绑定，不覆盖旧 receipt。
+
+## 冻结续签（2026-09-07，合并后契约增量续签）
+
+- 背景：决策基线（D-001~D-008）在合并前旧契约下冻结并经用户确认（回执 quality/confirmations/e47d2e1016d46ae226c3081976cfb95610de159bb5dbd85255a8d250d685f755.json）；合并后新冻结契约要求三方绑定当前材料版本，实测文本路径存在自指死结（F-020）。
+- 用户裁决：2026-09-07 用户选 B1——按作者惯例做诚实续签留痕，不伪装 passed，续签后进 build-plan。
+- 续签确认回执：quality/confirmations/PENDING_CONFIRM_REF.json（human-confirmation.v3，decision=accepted，reply_text="B1：按作者惯例做诚实的续签留痕（推荐）"）。
+- 绑定值说明：下列 material_revision/snapshot_tree 为续签确认发布时刻的绑定事实；本行回填后材料已演进，freeze 校验将如实显示"绑定非当前"，不视为续签无效（F-020）。
+
+### M6 冻结续签（approval_binding 已 accepted，2026-09-07）
+
+- approval_binding: accepted（续签确认回执 quality/confirmations/PENDING_CONFIRM_REF.json）
+- decision_id: D-009
+- material_revision: PENDING_REVISION
+- snapshot_tree: PENDING_SNAPSHOT
+- decision: freeze packet 覆盖 用户流程/数据状态/成败边界/非目标（依次见 R 表与目标节、成功/失败边界节、非目标与延期项节；方向内容自 make-decision 收口以来无变更）
+
+## 最终确认（冻结续签）
+
+- 状态：**accepted**（用户 2026-09-07 续签裁决 B1；基线决策 D-001~D-008 维持不变）
+- material_revision: PENDING_REVISION
+- snapshot_tree: PENDING_SNAPSHOT
+
+## step 11 记录（冻结续签）
+
+- 状态：accepted（续签轮；首轮收口记录见"批准与发布记录"节）
+- material_revision: PENDING_REVISION
+- snapshot_tree: PENDING_SNAPSHOT
