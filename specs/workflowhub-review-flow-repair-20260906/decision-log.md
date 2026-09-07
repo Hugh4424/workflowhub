@@ -3,7 +3,9 @@
 > 生成日期：2026-09-06
 > 任务材料路径：specs/workflowhub-review-flow-repair-20260906/（认证 worktree：/Users/Hugh/Hugh/Project/workflowhub-workflowhub-review-flow-repair-20260906）
 > 分支：task/workflowhub/workflowhub-review-flow-repair-20260906；baseline：b16d5bcf
-> 当前 stage：make-decision（talk、grill、direction-advice×2、detail-advice、spec-analyze 均完成；**D-001~D-008 已获用户批准**，见"批准与发布记录"节；正在收口：publish-decision 与 stage-reflection）
+> 历史 make-decision 记录：make-decision（talk、grill、direction-advice×2、detail-advice、spec-analyze 均完成；**D-001~D-008 已获用户批准**，见"批准与发布记录"节；正在收口：publish-decision 与 stage-reflection）
+
+> 当前修订：2026-09-07 用户授权同任务范围增量；D-010～D-014 为当前追加决定，原批准与失败记录保留。当前仅修订四材料，必须在 build-code 前停下汇报。
 
 ## 原始需求（R 表）
 
@@ -16,6 +18,9 @@
 | R-005 | 每个阶段审查只进行一次：不因状态/快照变化重审，不追求"没有findings" | 用户原话："现在审查很多时候会进行很多次，规定只进行一次，但是往往会忘掉，总是追求'没有findings'或因为状态或快照变了，又要重新审查，太浪费时间和token了。" | 已确认（T-004；D-007：重审语义归 close-readiness 任务实现） |
 | R-006 | 基于四份根因分析文档调研后再修复 | 用户原话："请把这些文件和问题都仔细调研分析，看看审查流程到底是什么问题，应该怎样的修复？"（文档：workflowhub-review-process-root-cause-analysis-20260905 / PaperBuilder-T08审查流程根因调研 / t09-review-process-root-cause-analysis / workflowhub-m17-review-process-root-cause-analysis-20260905） | 调研完成（F-009） |
 | R-007 | 按标准 WorkflowHub 流程执行：先创建 worktree，从 make-decision 开始，不跳阶段，不依赖 build-spec 补需求；make-decision 中与用户一起梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项；注意主会话上下文控制与子代理派发；Talk 和 grill 用大白话说明选项、后果和风险 | 用户原话："请按标准 WorkflowHub 开始这个任务吧，先创建worktree，然后从 make-decision 开始，不要跳阶段，也不要依赖 build-spec 补需求…" | 进行中（本文件全篇） |
+
+| R-008 | 修复合法计划无法收口的材料契约冲突、语义误判、执行事件与引用断链，并以真实消费链回归防止同类问题复发 | 当前会话用户：“帮我分析build-plan未完成的根本原因是什么？应该如何彻底修复？如果可以的话我希望未来都不要再出现类似的问题了。”；后续授权见R-009 | 当前范围扩展，D-010～D-014 |
+| R-009 | 在当前任务追加范围决定，同步spec及plan/tasks，只做增量修订，在build-code前停下汇报 | 用户：“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json | 范围与当前动作已授权，不等于修订后计划已验收；D-010/D-014 |
 
 ## 事实基线（F 表）
 
@@ -93,20 +98,20 @@
 
 ### D-002 high_risk_fact
 
-`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
+- **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
 
 ### D-003 high_risk_fact
 
-`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
+- **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
 
 ### D-005 high_risk_fact
 
-`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
+- **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"three_inputs"}`
 
 ## UI applicability
 
 ```json
-{"result":"non_ui","sources":{"raw_requirement":"non_ui：R-001~R-007 均为 CLI 审查流程/配置文件/落盘追溯需求，无页面/前端诉求","project_inventory":"non_ui：workflowhub 为 CLI 编排工具，无前端面","planned_or_changed_frontend_fact":"non_ui：本任务不计划、不涉及任何前端改动"}}
+{"result":"non_ui","sources":{"raw_requirement":"non_ui：R-001~R-009为CLI审查、材料合同与事件记录需求，无页面/前端诉求","project_inventory":"non_ui：workflowhub 为 CLI 编排工具，无前端面","planned_or_changed_frontend_fact":"non_ui：本任务不计划、不涉及任何前端改动"}}
 ```
 
 ## 目标（已确认）
@@ -131,7 +136,7 @@
 | --- | --- | --- |
 | 配置文件 | 本机 ~/.config/workflowhub/config.json 迁移（去 profiles/priority）；仓库侧 wh_review 配置加载/校验（third-review-host-config.mjs 等） | 3rd-review 引擎本体与用户侧 provider 定义修复（close-readiness OPEN-004；本任务只保证 loader 不要求 profiles） |
 | CLI 命令 | wh-review run/doctor/verify-final 的行为与输出（preflight 入口、强制落盘、doctor 检查项更新） | 公共命令集合不变（七职责，doctor-interface 测试）；不新增命令 |
-| 落盘结构 | task_dir quality/reviews/（attempts/results/reports）与裸跑 sink | runtime/stage/* 与 stage-reflection（close-readiness 域） |
+| 落盘结构 | task_dir quality/reviews/（attempts/results/reports）与裸跑 sink | 预算/审查次数与stage-reflection机制仍排除；D-010～D-014仅纳入材料合同、host事件接收及引用链的窄修复 |
 | 输出信息 | doctor/preflight/报告输出格式（字段/期望/实际/动作、四类状态） | dsh-code-review 集成与 stage 语义（verify-code 域） |
 
 ### 数据状态（T-006 确认）
@@ -175,7 +180,7 @@
 ## 最终状态与交付物清单
 
 - 认证 worktree：/Users/Hugh/Hugh/Project/workflowhub-workflowhub-review-flow-repair-20260906（分支 task/workflowhub/workflowhub-review-flow-repair-20260906，baseline b16d5bcf）
-- 四材料：decision-log.md（本文件）；spec.md/plan.md/tasks.md 尚未创建（build-spec 起）
+- 四材料（make-decision 时点）：decision-log.md（本文件）；spec.md/plan.md/tasks.md 尚未创建（build-spec 起）
 - task store：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-flow-repair-20260906/（task.json、quality/confirmations/、quality/evidence/{original-requirement.txt,interactions/}、quality/facts/、quality/stage-reflection/、quality/verify.json）
 - 关键不可变事实：confirmation e47d2e10…；aggregate cda46e5f…（机器校验 ok）；material_revision revision-436209…；snapshot_tree 117e0c1d…；stage-reflection make-decision.json（degraded，judgments 4 条）
 
@@ -256,3 +261,135 @@
 - 状态：accepted（续签轮；首轮收口记录见"批准与发布记录"节）
 - material_revision: revision-fa6cc40ae7f7a61228f4a1e9f913ccaa7db58c25fe5b38db3d6306a6b81c3bdc
 - snapshot_tree: 55c7c650f01291f890ab09353f144b5ba65cd307
+
+## 2026-09-07 当前范围增量（用户已授权，实施前材料修订）
+
+原始需求保留R-001～R-007；R-008/R-009是本次新增来源。下列决定修订当前范围，不重做历史Talk/Grill，不复制或修改历史confirmation/review/outcome。
+
+### D-010 — 当前任务范围扩展
+
+- **schema**：decision-entry.v1（文档推理字段，不新增持久对象）
+- **module**：当前任务范围扩展
+- **requirement_ids**：R-008/R-009
+- **derived_from**：[]
+- **artifacts**：spec.md、plan.md、tasks.md受影响条目
+- **Question and final option**：继续在同一任务修复工作流自身缺陷，先更新四材料再实施；采用当前任务增量修复。
+- **Recommendation**：推荐；将已证实缺陷归本任务责任，避免仅改计划文本绕过错误；范围到现有owner，不新增控制面。
+- **Plain-language meaning**：继续在同一任务修复工作流自身缺陷，先更新四材料再实施。
+- **Decision**：原审查流程改造仍保留；新增材料合同一致性、语义/来源判断、host事件协议和引用传递、真实模板至正式consumer回归。原runtime/stage整体排除改为上述职责的明确例外；预算、重审、严格身份、usage消费、3rd-review本体及复盘机制仍排除。
+- **Source**：user_reply；原文“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json，sha256=7ddf2e5894c63ca04663f0a14305d0fea5c88662cfae83065aca5e79214cb97e；该回复承接本会话已展示的根因与范围修订建议。
+- **Approval binding**：scope_authorized（真实用户回复）；尚未生成本次正式阶段接受事实，不把范围授权当修订后计划最终确认。
+- **事实与约束**：D-007/D-008既定职责边界；本次纯函数重放已证明合法输入在消费者间互斥；独立只读诊断来源quality/evidence/diagnostics/build-plan-root-cause-20260907/analysis.md。
+- **Logic**：已证实故障 → 保留真实安全边界 → 继续在同一任务修复工作流自身缺陷，先更新四材料再实施 → 合法材料与执行事实可正确消费。
+- **Choice and reason**：将已证实缺陷归本任务责任，避免仅改计划文本绕过错误；范围到现有owner，不新增控制面。
+- **Impact**：范围、材料消费行为及验收改变；精确文件和任务顺序由plan/tasks唯一维护。
+- **后果和风险**：扩大实现面，需隔离前置修复与原业务改造并做真实消费链回归。
+- **Rejected alternatives**：直接在build-plan改生产代码；另建绕过任务；修改ID/角色迎合错误校验。
+- **Unresolved items**：无新增方向性问题；真实host自动hook不在现有调用权内，按DEFER-005交接；正式接受仍待后续真实证据。
+- **Supersedes**：D-007及表面范围中runtime/stage整体排除只对列明职责局部调整，原预算/次数排除不变。
+
+### D-011 — 材料合同统一
+
+- **schema**：decision-entry.v1（文档推理字段，不新增持久对象）
+- **module**：材料合同统一
+- **requirement_ids**：R-008
+- **derived_from**：["D-010"]
+- **artifacts**：spec.md、plan.md、tasks.md受影响条目
+- **Question and final option**：当前模板与全部消费者解释同一份合法材料；采用当前任务增量修复。
+- **Recommendation**：推荐；一个当前合同由现有解析器共享消费，修producer与consumer，保留真实无效输入拒绝。
+- **Plain-language meaning**：当前模板与全部消费者解释同一份合法材料。
+- **Decision**：决策ID支持既有D<number>与D-NNN且保持精确身份，D6与D-006不同；风险来自唯一显式high_risk_fact与真实spec引用，不要求局部D6/D7；N/A保留理由并统一解析；现行oracle统一ORACLE_ID加JSON，历史只读。
+- **Source**：user_reply；原文“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json，sha256=7ddf2e5894c63ca04663f0a14305d0fea5c88662cfae83065aca5e79214cb97e；该回复承接本会话已展示的根因与范围修订建议。
+- **Approval binding**：scope_authorized（真实用户回复）；尚未生成本次正式阶段接受事实，不把范围授权当修订后计划最终确认。
+- **事实与约束**：默认ID模板与风险parser冲突；Plan和Oracle对N/A互斥；模板文本oracle与JSON消费者不一致；独立只读诊断来源quality/evidence/diagnostics/build-plan-root-cause-20260907/analysis.md。
+- **Logic**：已证实故障 → 保留真实安全边界 → 当前模板与全部消费者解释同一份合法材料 → 合法材料与执行事实可正确消费。
+- **Choice and reason**：一个当前合同由现有解析器共享消费，修producer与consumer，保留真实无效输入拒绝。
+- **Impact**：范围、材料消费行为及验收改变；精确文件和任务顺序由plan/tasks唯一维护。
+- **后果和风险**：跨模板/技能/安装消费同步，不能把结构通过解释为语义或实现通过。
+- **Rejected alternatives**：全局改号；把N/A改GREEN；任意JSON当风险；放宽未知引用。
+- **Unresolved items**：无新增方向性问题；真实host自动hook不在现有调用权内，按DEFER-005交接；正式接受仍待后续真实证据。
+- **Supersedes**：none。
+
+### D-012 — 来源与语义判断
+
+- **schema**：decision-entry.v1（文档推理字段，不新增持久对象）
+- **module**：来源与语义判断
+- **requirement_ids**：R-008
+- **derived_from**：["D-010", "D-011"]
+- **artifacts**：spec.md、plan.md、tasks.md受影响条目
+- **Question and final option**：区分来源义务并取消词法冒充语义裁决；采用当前任务增量修复。
+- **Recommendation**：推荐；把确定性校验限制在可证明事实，保留有证据的语义判断与处置，不用semantic_match=true自报过关。
+- **Plain-language meaning**：区分来源义务并取消词法冒充语义裁决。
+- **Decision**：本地OPEN/DEFER从明确引入阶段向下交接；外部项仅引用外部task；原方向承诺仍须有下游去向。字串包含/否定词不作为语义通过或失败，使用既有有来源分析与独立review事实，缺少依据保持unknown/incomplete；身份/hash/证据完整性仍校验。
+- **Source**：user_reply；原文“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json，sha256=7ddf2e5894c63ca04663f0a14305d0fea5c88662cfae83065aca5e79214cb97e；该回复承接本会话已展示的根因与范围修订建议。
+- **Approval binding**：scope_authorized（真实用户回复）；尚未生成本次正式阶段接受事实，不把范围授权当修订后计划最终确认。
+- **事实与约束**：同义转述误拒且矛盾串误放；外部close-readiness OPEN-004被当本地义务；独立只读诊断来源quality/evidence/diagnostics/build-plan-root-cause-20260907/analysis.md。
+- **Logic**：已证实故障 → 保留真实安全边界 → 区分来源义务并取消词法冒充语义裁决 → 合法材料与执行事实可正确消费。
+- **Choice and reason**：把确定性校验限制在可证明事实，保留有证据的语义判断与处置，不用semantic_match=true自报过关。
+- **Impact**：范围、材料消费行为及验收改变；精确文件和任务顺序由plan/tasks唯一维护。
+- **后果和风险**：不得把真实需求遗漏包装成外部引用，不能删除真实独立finding。
+- **Rejected alternatives**：复制需求原句骗匹配；所有OPEN反写历史；关闭分析器；新增语义审查轮次。
+- **Unresolved items**：无新增方向性问题；真实host自动hook不在现有调用权内，按DEFER-005交接；正式接受仍待后续真实证据。
+- **Supersedes**：none。
+
+### D-013 — host执行事实协议
+
+- **schema**：decision-entry.v1（文档推理字段，不新增持久对象）
+- **module**：host执行事实协议
+- **requirement_ids**：R-008
+- **derived_from**：["D-010"]
+- **artifacts**：spec.md、plan.md、tasks.md受影响条目
+- **Question and final option**：可靠接收真实事件与业务输出，资源计时不作执行前提；采用当前任务增量修复。
+- **Recommendation**：推荐；对齐现有接口并修复引用传递，不把无计时等同无执行；当前会话遗漏不能倒填。
+- **Plain-language meaning**：可靠接收真实事件与业务输出，资源计时不作执行前提。
+- **Decision**：现有bridge接收有真实证据但无计时的事件；时间如提供必须成对有效，cost保持既有unavailable；input/output refs贯通既有writer与consumer；缺事件仍unavailable，旧报告不改。完善发生时记录的调用说明。复盘只验证现有单次非阻断与读取事实，不新增汇总机制。
+- **Source**：user_reply；原文“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json，sha256=7ddf2e5894c63ca04663f0a14305d0fea5c88662cfae83065aca5e79214cb97e；该回复承接本会话已展示的根因与范围修订建议。
+- **Approval binding**：scope_authorized（真实用户回复）；尚未生成本次正式阶段接受事实，不把范围授权当修订后计划最终确认。
+- **事实与约束**：bridge强制时间但recorder丢弃；output_refs两层被删；bridge无技能执行权；独立只读诊断来源quality/evidence/diagnostics/build-plan-root-cause-20260907/analysis.md。
+- **Logic**：已证实故障 → 保留真实安全边界 → 可靠接收真实事件与业务输出，资源计时不作执行前提 → 合法材料与执行事实可正确消费。
+- **Choice and reason**：对齐现有接口并修复引用传递，不把无计时等同无执行；当前会话遗漏不能倒填。
+- **Impact**：范围、材料消费行为及验收改变；精确文件和任务顺序由plan/tasks唯一维护。
+- **后果和风险**：未控制inline技能调用，不能保证自动采集所有host；跨宿主自动hook与遥测列DEFER-005。
+- **Rejected alternatives**：新增技能dispatcher/进程守护；扫描transcript/env；伪造起止时间；重写旧outcome。
+- **Unresolved items**：无新增方向性问题；真实host自动hook不在现有调用权内，按DEFER-005交接；正式接受仍待后续真实证据。
+- **Supersedes**：表面范围的host事件接收/引用字段窄例外；stage-reflection算法仍排除。
+
+### D-014 — 防复发与当前停止边界
+
+- **schema**：decision-entry.v1（文档推理字段，不新增持久对象）
+- **module**：防复发与当前停止边界
+- **requirement_ids**：R-008/R-009
+- **derived_from**：["D-010", "D-011", "D-012", "D-013"]
+- **artifacts**：spec.md、plan.md、tasks.md受影响条目
+- **Question and final option**：先修消费链，再做原业务改造；本轮停在build-code前；采用当前任务增量修复。
+- **Recommendation**：推荐；把已知类别固化为现有测试的正反例，不新增审批gate或全量测试平台。
+- **Plain-language meaning**：先修消费链，再做原业务改造；本轮停在build-code前。
+- **Decision**：在原业务任务前安排针对性RED/GREEN，以同一真实材料经全部validator、正式handler和分发模板验证；保留坏输入/错身份/缺确认负例。运行时待build-code实施；本轮只更新材料、必要审查与分析，之后汇报。
+- **Source**：user_reply；原文“好的，按计划继续吧，在build-code前停下汇报。”；quality/evidence/scope-repair-20260907/authorization.json，sha256=7ddf2e5894c63ca04663f0a14305d0fea5c88662cfae83065aca5e79214cb97e；该回复承接本会话已展示的根因与范围修订建议。
+- **Approval binding**：scope_authorized（真实用户回复）；尚未生成本次正式阶段接受事实，不把范围授权当修订后计划最终确认。
+- **事实与约束**：已有filled production test漏真实Oracle消费者；当前main与任务runtime相同；独立只读诊断来源quality/evidence/diagnostics/build-plan-root-cause-20260907/analysis.md。
+- **Logic**：已证实故障 → 保留真实安全边界 → 先修消费链，再做原业务改造；本轮停在build-code前 → 合法材料与执行事实可正确消费。
+- **Choice and reason**：把已知类别固化为现有测试的正反例，不新增审批gate或全量测试平台。
+- **Impact**：范围、材料消费行为及验收改变；精确文件和任务顺序由plan/tasks唯一维护。
+- **后果和风险**：未实施前旧机器错误仍存在；测试通过不替代用户最终确认；不承诺所有未来故障消失。
+- **Rejected alternatives**：仅补局部mock；全量重跑掩盖问题；增加新许可；本轮直接编码。
+- **Unresolved items**：无新增方向性问题；真实host自动hook不在现有调用权内，按DEFER-005交接；正式接受仍待后续真实证据。
+- **Supersedes**：none。
+
+### 来源格式修正与风险继承
+
+原D-002/D-003/D-005的风险语义不变，本次仅将裸JSON改为规定的 **high_risk_fact** 字段。原字节留在此前阶段快照及诊断；不重编号、不把D6/D7含义移植到本任务。当前合同与事件修复同样涉及用户可见的正式结果真实性，继续按non_ui + high_risk_user_visible的service验收设计，不降级。
+
+### 工程事项来源与延期
+
+DEFER-001～004的方向依据仍是T-009/D-007，编号在build-spec引入；OPEN-001/002是build-spec引入、交build-plan细化的工程问题。此处记录来源演进，不声称make-decision历史已有这些编号。外部close-readiness的OPEN-004仍由外部owner关闭，本任务仅记录依赖边界。
+
+- **DEFER-005**：全宿主自动skill hook、跨进程中断恢复与自动token/耗时采集；introduced_stage=make-decision本次增量；owner=宿主适配维护者；触发=有真实可接入的host执行入口及独立授权；handoff/consumer=现有宿主集成的后续设计；关闭条件=真实host调用产生可验证事件且不引入新dispatcher/双写；当前保留条件=bridge没有技能执行权，fixture不冒充真实跨宿主验收。
+
+### 本次收敛与权威边界
+
+- target：用户希望合法工作流可收口、同类缺陷不复发；R-008。
+- scope：当前任务新增D-010～D-014范围；不另建任务，R-009明确build-code前停止。
+- solution：统一现有合同和修复事件接收链；拒绝改业务编号绕过检查及新执行平台；自动hook作为明确延期而非虚假承诺。
+- acceptance：同一真实模板进入全部消费者，合法实例一致、无效反例仍失败；真实事件无计时可记录、引用不丢；原业务AC保留；实施前只产生设计与质量事实。
+- 当前缺口：旧runtime尚未修；F-020冻结文本自指/旧绑定、相邻usage消费缺陷仍保留，不因本次范围变更宣布解决。现有四材料允许后续同task修复；正式完成与最终用户确认另计。
