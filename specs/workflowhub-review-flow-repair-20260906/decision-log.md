@@ -102,7 +102,7 @@
 ## UI applicability
 
 ```json
-{"result":"non_ui","sources":{"raw_requirement":"R-001~R-007 均为 CLI 审查流程/配置文件/落盘追溯需求，无页面/前端诉求","project_inventory":"workflowhub 为 CLI 编排工具，无前端面","planned_or_changed_frontend_fact":"本任务不计划、不涉及任何前端改动"}}
+{"result":"non_ui","sources":{"raw_requirement":"non_ui：R-001~R-007 均为 CLI 审查流程/配置文件/落盘追溯需求，无页面/前端诉求","project_inventory":"non_ui：workflowhub 为 CLI 编排工具，无前端面","planned_or_changed_frontend_fact":"non_ui：本任务不计划、不涉及任何前端改动"}}
 ```
 
 ## 目标（已确认）
