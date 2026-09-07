@@ -1,0 +1,430 @@
+{
+ "purpose": "build-spec 阶段末 spec-analyze 的真实语义覆盖（最终材料版本 c38d0513）；由主会话按原始需求 R-001~R-011 逐条对照当前 spec/decision-log 后填写，不机械复制 expected→actual",
+ "task_id": "workflowhub-close-readiness-governance-20260906",
+ "stage": "build-spec",
+ "materials": {
+  "spec.md": {
+   "sha256": "c38d0513c05c7d101f191231eb73596adb14eaa00d670437c4c2884e882397ef"
+  },
+  "decision-log.md": {
+   "sha256": "d2bbf7f058b45d9af182bebea415070ab47eca4e81fef4fb1617aeaae3a07f15"
+  }
+ },
+ "evidence_refs": [
+  "decision-log",
+  "spec"
+ ],
+ "coverage": [
+  {
+   "requirement_id": "R-001",
+   "status": "covered",
+   "expected_behavior": "根因诊断与治理，close语义不变，完成记录如实抄写质量发布状态并分层展示，同一缺口只展示一次",
+   "actual_behavior": "本规格落实根因诊断与治理，close语义不变，完成记录如实抄写质量发布状态并分层展示，同一缺口只展示一次（FR-STATUS-001/002、FR-GAP-001/002、FR-BOUND-002），close 语义与展示边界来自 D-001/D-202/D-205/D-206。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-001",
+    "SCN-002",
+    "SCN-004",
+    "SCN-007",
+    "SCN-012"
+   ],
+   "oracle_refs": [
+    "AC-STATUS-001",
+    "AC-STATUS-002",
+    "AC-GAP-001",
+    "AC-GAP-002",
+    "AC-BOUND-002",
+    "AC-PREF-002"
+   ]
+  },
+  {
+   "requirement_id": "R-002",
+   "status": "covered",
+   "expected_behavior": "检查任务过程与总结文件，以独立只读核查为准核实 workflowhub 的问题",
+   "actual_behavior": "本规格落实检查任务过程与总结文件，以独立只读核查为准核实 workflowhub 的问题（D-101）：FR-DIAG-* 域以 F-010~F-029 已核实事实加框架结论经核查支持部分为诊断交付，观察合同含阶段样本独立观察者窗口判定口径。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-009"
+   ],
+   "oracle_refs": [
+    "AC-DIAG-001",
+    "AC-DIAG-003"
+   ]
+  },
+  {
+   "requirement_id": "R-003",
+   "status": "covered",
+   "expected_behavior": "按标准流程执行先建 worktree 从 make-decision 开始不跳阶段不依赖 build-spec 补需求",
+   "actual_behavior": "本规格落实按标准流程执行先建 worktree 从 make-decision 开始不跳阶段不依赖 build-spec 补需求（D-402）：FR-LOOP-001 冻结校验 build-spec 入口、FR-LOOP-002 分类路由方向级回 make-decision、五阶段顺序为硬约束。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-013"
+   ],
+   "oracle_refs": [
+    "AC-LOOP-001",
+    "AC-LOOP-002"
+   ]
+  },
+  {
+   "requirement_id": "R-004",
+   "status": "covered",
+   "expected_behavior": "完整用户流程、页面范围、数据状态、成功失败边界、非目标与延期项均在规格中覆盖",
+   "actual_behavior": "本规格已实现完整用户流程、页面范围、数据状态、成功失败边界、非目标与延期项均在规格中覆盖：FR-FLOW-* 流程、界面适用性为非界面、FR-STATUS-* 六状态、FR-BOUND-* 边界、§12 非目标与 DEFERRED-* 延期交接（D-203/D-204）。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-001",
+    "SCN-003",
+    "SCN-004",
+    "SCN-008",
+    "SCN-010"
+   ],
+   "oracle_refs": [
+    "AC-STATUS-001",
+    "AC-FLOW-001",
+    "AC-FLOW-003"
+   ]
+  },
+  {
+   "requirement_id": "R-005",
+   "status": "covered",
+   "expected_behavior": "Talk 用大白话说明选项后果风险，decision-log 记录原始需求关键事实选择理由延期交接",
+   "actual_behavior": "本规格落实 Talk 用大白话说明选项后果风险，decision-log 记录原始需求关键事实选择理由延期交接（D-401）：R 表/T 表/D 条目 question recommendation plain_language consequences rejected_alternatives unresolved_items，FR-REPORT-001 大白话阶段汇报、FR-LOOP-005 观测事实。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-009"
+   ],
+   "oracle_refs": [
+    "AC-REPORT-001"
+   ]
+  },
+  {
+   "requirement_id": "R-006",
+   "status": "covered",
+   "expected_behavior": "总结文件推荐改造方案经 make-decision 与用户收敛确认后作为方向纳入规格",
+   "actual_behavior": "本规格已实现总结文件推荐改造方案经 make-decision 与用户收敛确认后作为方向纳入规格：规范的 gap（FR-GAP-001/002）、状态分层（FR-STATUS-001/002）、预检（FR-PREF-002）、边界校验（FR-BOUND-*），来源 D-201~D-207 与确认回执。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-002",
+    "SCN-003",
+    "SCN-006",
+    "SCN-008"
+   ],
+   "oracle_refs": [
+    "AC-GAP-001",
+    "AC-GAP-002",
+    "AC-STATUS-001",
+    "AC-PREF-002",
+    "AC-BOUND-001"
+   ]
+  },
+  {
+   "requirement_id": "R-007",
+   "status": "covered",
+   "expected_behavior": "评估 requirement-convergence-depth 任务实现效果",
+   "actual_behavior": "本规格落实评估 requirement-convergence-depth 任务实现效果（research-Q1 F-031~F-033，D-301 扩展为本任务）：FR-LOOP-* 阶段治理闭环与 D-501~D-507 机制。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-013",
+    "SCN-014",
+    "SCN-015"
+   ],
+   "oracle_refs": [
+    "AC-LOOP-001",
+    "AC-LOOP-002",
+    "AC-LOOP-003",
+    "AC-LOOP-004",
+    "AC-LOOP-006"
+   ]
+  },
+  {
+   "requirement_id": "R-008",
+   "status": "covered",
+   "expected_behavior": "诊断 build-spec build-plan token 消耗巨大根因并优化，评估上下文管理与子代理派发优化",
+   "actual_behavior": "本规格落实诊断 build-spec build-plan token 消耗巨大根因并优化，评估上下文管理与子代理派发优化（D-304）：FR-CONTEXT-001 执行模型与六条守恒、FR-CONTEXT-002 导航节、FR-CONTEXT-003 冻结 packet、FR-LOOP-005 字符级指标与 usage 观测。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-003",
+    "SCN-011"
+   ],
+   "oracle_refs": [
+    "AC-CONTEXT-001",
+    "AC-CONTEXT-002",
+    "AC-CONTEXT-003",
+    "AC-LOOP-005"
+   ]
+  },
+  {
+   "requirement_id": "R-009",
+   "status": "covered",
+   "expected_behavior": "四材料足够清晰专业详细让低智力模型保交付质量",
+   "actual_behavior": "本规格落实四材料足够清晰专业详细让低智力模型保交付质量（D-302/T-032）：FR-MATERIAL-001 AC 四段卡与主键原样继承、FR-MATERIAL-002 结构化 oracle pass reject RED 强制、FR-MATERIAL-003 verify 入口四检查项。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-006",
+    "SCN-010",
+    "SCN-012"
+   ],
+   "oracle_refs": [
+    "AC-MATERIAL-001",
+    "AC-MATERIAL-002",
+    "AC-MATERIAL-003"
+   ]
+  },
+  {
+   "requirement_id": "R-010",
+   "status": "covered",
+   "expected_behavior": "三问分析结论作新需求放入当前任务按完整流程收敛且质量同等",
+   "actual_behavior": "本规格落实三问分析结论作新需求放入当前任务按完整流程收敛且质量同等（D-301~D-306、D-507）：FR-MATERIAL-* 模板升级、FR-REVIEW-001/002 verify 独立审查三态、FR-CONTEXT-* 上下文优化、FR-LOOP-* 阶段治理闭环，均获确认回执。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-002",
+    "SCN-010",
+    "SCN-014"
+   ],
+   "oracle_refs": [
+    "AC-REVIEW-001",
+    "AC-REVIEW-002",
+    "AC-MATERIAL-002",
+    "AC-LOOP-006"
+   ]
+  },
+  {
+   "requirement_id": "R-011",
+   "status": "covered",
+   "expected_behavior": "build-spec build-plan 基于冻结 decision-log 高效设计避免重复决策收敛，阶段治理闭环在当前任务实现",
+   "actual_behavior": "本规格落实 build-spec build-plan 基于冻结 decision-log 高效设计避免重复决策收敛，阶段治理闭环在当前任务实现（D-501~D-507）：FR-LOOP-001 冻结校验三方一致、FR-LOOP-002 分类路由、FR-LOOP-003 needs_human 暂停态、FR-LOOP-004 预算、FR-LOOP-005 观测、FR-LOOP-006 统一回退协议、增量决策续签链。",
+   "artifact_refs": [
+    "decision_log",
+    "spec"
+   ],
+   "evidence_refs": [
+    "decision-log",
+    "spec"
+   ],
+   "scenario_refs": [
+    "SCN-013",
+    "SCN-014",
+    "SCN-015",
+    "SCN-016"
+   ],
+   "oracle_refs": [
+    "AC-LOOP-001",
+    "AC-LOOP-002",
+    "AC-LOOP-003",
+    "AC-LOOP-004",
+    "AC-LOOP-005",
+    "AC-LOOP-006"
+   ]
+  }
+ ],
+ "clarify_outcome": {
+  "status": "completed",
+  "trigger": false,
+  "reason": "通过校验器与用户确认闭环：D-507 增量决策经真实 ask_user_question 获用户选择并发布确认回执；无其他方向级歧义",
+  "open_direction_changing_questions": 0,
+  "lifecycle_rounds": []
+ },
+ "current_stage_repairs": [
+  "D-507 增量决策（phase 验收事实）用户确认并补入 decision-log",
+  "FEEDBACK：修复恢复全量回灌矛盾（FR-CONTEXT-001/AC-CONTEXT-001）",
+  "FEEDBACK：修复 stage/review packet 边界与派生文件不进入审查链",
+  "FEEDBACK：GAP 与 packet 字节合同锁定并落盘固定向量（独立交叉验证）",
+  "FEEDBACK：12 条补救审查 findings 全部处置（DEFERRED-001 待验证、RISK 编号恢复、step11 canonical 规则、content_sha256 确定性、phase 验收被动化、身份缺失 invalid_gap_identity 等）"
+ ],
+ "remaining_risks": [
+  "DEFERRED-001 载体形态（lens vs profile）兼容性核查证据未落盘（OPEN-005），build-plan 不得假定 profile 已存在",
+  "FR-LOOP-001 新旧 step11 并存夹具未落盘（归 build-plan）",
+  "grok/grok provider 本轮 PROVIDER_IDENTITY_INVALID 失败；异源审查以 kimi/antigravity/codex 证据为准",
+  "延迟项按 §12 DEFERRED-* 交接（phase 边界归 build-plan、重放验证另立任务等）"
+ ],
+ "work_summary": "本轮 build-spec 完成决策冻结重校验、规格局部修复、D-507 增量确认、固定向量落盘与独立交叉验证、一次补救审查（12 findings 全处置）、四结构校验器重跑通过；阶段末 spec-analyze 语义覆盖完成。",
+ "original_requirements": [
+  {
+   "id": "R-001",
+   "source": "最近执行 WorkflowHub 任务时，任务执行到最后都有问题：verify-code 时会发现一大堆问题导致任务无法继续，最终只能进行风险 close",
+   "source_excerpt": "用户原话：\"我最近在执行workflowhub任务的时候，发现这些任务执行到最后都有一些问题，verify-code时会发现一大堆问题导致任务无法继续，最终只能进行风险close\"",
+   "related_decision_ids": [
+    "D-001",
+    "D-101",
+    "D-202",
+    "D-206"
+   ]
+  },
+  {
+   "id": "R-002",
+   "source": "检查这些任务的过程以及总结文件，找到 workflowhub 出了什么问题",
+   "source_excerpt": "用户原话：\"请检查这些任务的过程以及'/Users/Hugh/Downloads/workflowhub-m17-missing-stage-close-analysis-20260905.md'的总结文件，帮我看看workflowhub是出了什么问题？\"",
+   "related_decision_ids": [
+    "D-001",
+    "D-101"
+   ]
+  },
+  {
+   "id": "R-003",
+   "source": "必须按标准 WorkflowHub 流程执行：先创建 worktree、从 make-decision 开始、不跳阶段、不依赖 build-spec 补需求",
+   "source_excerpt": "用户原话：\"请按标准 WorkflowHub 开始这个任务吧，先创建worktree，然后从 make-decision 开始，不要跳阶段，也不要依赖 build-spec 补需求\"",
+   "related_decision_ids": [
+    "D-002",
+    "D-402"
+   ]
+  },
+  {
+   "id": "R-004",
+   "source": "在 make-decision 过程中与用户一起仔细梳理：完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项",
+   "source_excerpt": "用户原话：\"先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项\"",
+   "related_decision_ids": [
+    "D-203",
+    "D-204",
+    "D-205",
+    "D-207"
+   ]
+  },
+  {
+   "id": "R-005",
+   "source": "Talk 用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接",
+   "source_excerpt": "用户原话：\"Talk 请用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接\"",
+   "related_decision_ids": [
+    "D-401"
+   ]
+  },
+  {
+   "id": "R-006",
+   "source": "总结文件里给出的推荐改造方案（canonical gap/current selector/close-readiness 预检/状态分层等）是否作为本任务方向，由 make-decision 与用户收敛后确认",
+   "source_excerpt": "来源：总结文件\"推荐实施顺序\"一段；建议，非已确认需求",
+   "related_decision_ids": [
+    "D-201",
+    "D-202",
+    "D-203",
+    "D-204",
+    "D-205",
+    "D-206",
+    "D-207",
+    "D-402"
+   ]
+  },
+  {
+   "id": "R-007",
+   "source": "评估 requirement-convergence-depth 任务（make-decision 强升级）的实现效果",
+   "source_excerpt": "用户原话：\"我们之前一起做了...把make-decision阶段做了很强的更新升级，请你基于当前make-decision的执行情况，帮我看看这个任务实现的效果如何？\"",
+   "related_decision_ids": [
+    "D-301"
+   ]
+  },
+  {
+   "id": "R-008",
+   "source": "诊断 build-spec/build-plan 阶段 token 消耗巨大（\"好几亿\"）的根因，并给出优化；评估是否可做 make-decision 式上下文管理与子代理派发优化",
+   "source_excerpt": "用户原话：\"到了build-spec和build-plan阶段缺花费了大量的时间和token，一个任务的spec和plan阶段要花费好几亿token...为什么会这样？应该如何优化？是不是也可以进行类似make-decision一样的上下文管理和子代理派发优化？\"",
+   "related_decision_ids": [
+    "D-301",
+    "D-304"
+   ]
+  },
+  {
+   "id": "R-009",
+   "source": "评估\"高智力模型做 spec/plan 设计、低智力模型做 code/verify 执行\"思路的效果；**用户澄清后真实含义**=四材料（decision-log/spec/plan/tasks）是否足够清晰、专业、详细，足以让低智力模型在 build-code/verify-code 也保证交付质量",
+   "source_excerpt": "用户原话1：\"我目前的workflowhub流程主要靠make-decision阶段把需求彻底确定，然后靠着高智力模型在build-spec和build-plan阶段设计详细的执行方案，后面build-code和verify-code阶段派出智力一般的模型来执行...请帮我看看目前这个思路执行的效果如何？\"；用户原话2（Q4 澄清）：\"我只是让你分析一下目前decision-log、spec、plan、tasks是否足够清晰专业详细，足够后面build-code和verify-code使用低智力模型也能保证交付质量，不是让你记录和建议各个stage的模型使用。\"",
+   "related_decision_ids": [
+    "D-301",
+    "D-302"
+   ]
+  },
+  {
+   "id": "R-010",
+   "source": "三问分析结论作为新需求放入当前任务一起开发；且新需求必须按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），保持与既有 verify-code 质量问题治理同等质量",
+   "source_excerpt": "用户原话：\"请基于上述三个问题帮我仔细分析，可以从make-decision第一步开始，重新收敛一些新需求，放在当前任务的里一起开发\"+\"我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍，保证这些需求能和之前的verify-code质量问题保持一样的质量\"",
+   "related_decision_ids": [
+    "D-301",
+    "D-302",
+    "D-303",
+    "D-304",
+    "D-305",
+    "D-306",
+    "D-507"
+   ]
+  },
+  {
+   "id": "R-011",
+   "source": "本次 build-spec 调研暴露的\"阶段治理闭环\"缺口必须在 make-decision 中作为新需求收敛，并在当前任务中实现：build-spec/build-plan 应基于冻结 decision-log 高效设计，避免重复做决策收敛",
+   "source_excerpt": "用户原话：\"好的，基于调研出的这些问题，我们先回到make-decision阶段，看看是否需要新增一些改进需求，避免以后build-spec和build-plan继续浪费时间做决策收敛的工作，让build-spec和build-plan能更高效的基于冻结的decision-log进行规格和计划设计。这次调研发现的问题，我们都在make-decision中想办法解决或设计新的需求，在当前任务中实现！\"",
+   "related_decision_ids": [
+    "D-501",
+    "D-502",
+    "D-503",
+    "D-504",
+    "D-505",
+    "D-506",
+    "D-507"
+   ]
+  }
+ ]
+}

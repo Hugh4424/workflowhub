@@ -1,0 +1,8 @@
+{
+  "attempt_id": "attempt-build-plan-20260907-current-materials-v2",
+  "receipts": {
+    "stage_outcomes": "quality/evidence/stage-outcomes/build-plan/3c82cbc4136423c46b60d337f3772f1c5670ffbd27db268ed13a9a831cda65bf.json",
+    "review": "quality/reviews/attempts/9aee957d-f199-4a37-a091-b406d4ccf46a/attempt.json",
+    "confirmation": "quality/confirmations/e39e3d6547fcae8fce86e4e0365841ec246854912ba2d39ebabe75ed247d435f.json"
+  }
+}

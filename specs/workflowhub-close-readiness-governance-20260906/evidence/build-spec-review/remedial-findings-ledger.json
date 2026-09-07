@@ -1,0 +1,169 @@
+{
+ "kind": "remedial-review-canonical-findings",
+ "review_result_ref": "quality/reviews/results/build-spec-simple-85d30d33-58f1-4b21-9858-d87851991c15.json",
+ "recorded_at_utc": "2026-09-06T15:21:57Z",
+ "dispositions_recorded_at_utc": "2026-09-06T15:37:09Z",
+ "disposition_rule": "D-502/D-506：implementation_defect→spec 内修复；spec_ambiguity→基于已批准决定补文字；无方向级缺口；唯一写入文件=specs/workflowhub-close-readiness-governance-20260906/spec.md（另更新本台账）；未运行 stage execute/bridge/publish，未调用 provider，未发起新审查轮次",
+ "spec_sha_before": "3b43984ef13dd50096a6e45331ea27986c5f7ac100cb0df662ea183c4a477c0d",
+ "spec_sha_after": "c38d0513c05c7d101f191231eb73596adb14eaa00d670437c4c2884e882397ef",
+ "validator_results": {
+  "validateSpecContentProfile": {"ok": true, "errors": []},
+  "validateAcceptanceDesignMinimum": {"ok": true, "errors": []},
+  "validateSpecClarifyAndDirectionFidelity": {"ok": true, "errors": []},
+  "validateSpecFailureConditions": {"ok": true, "errors": []}
+ },
+ "vector_self_check": {
+  "exit_code": 0,
+  "command": "node specs/workflowhub-close-readiness-governance-20260906/evidence/build-spec-review/generate-hash-contract-vectors.js",
+  "gap_vectors": 6,
+  "packet_vectors": 5,
+  "digest_entries_equal_to_pre_edit": true,
+  "note": "向量文件未手工修改；重跑脚本仅刷新 spec_sha256/生成时间元数据（绑定新 spec sha），35 项 expected/mutation digest 与修订前逐项一致"
+ },
+ "findings": [
+  {
+   "index": 0,
+   "severity": "major",
+   "provider": "kimi/coding",
+   "issue": "DEFERRED-001 declares the build-spec compatibility verification (stage-end spec-analyze lens vs new read-only 收口预检 profile) as already concluded ('build-spec 兼容性核查已定案…定案为兼容的只读收口预检 profile'), but the decision-log assigns that verification as pending build-spec work ('需在 build-spec 验证与现有只读分析通道兼容性… build-spec 验证, owner=build-spec'), and the spec's own header (line 7) and closing note (line 1284) still state evidence is incomplete and the stage is not complete. No comparison evidence is documented, yet AC-PREF-001/002 already name this profile as producer, so build-plan will consume a '定案' that was never verifiably made — a false-completed handoff fact.",
+   "recommendation": "Reword DEFERRED-001 to '待验证' with an explicit open check item (and add it to the spec's outstanding-evidence list), or attach the actual comparison evidence (inputs, both candidate forms, rejection reason) before claiming 定案.",
+   "evidence": "Line 1222 reads 'DEFERRED-001（build-spec 兼容性核查已定案）：build-spec 已对比两类触发点与输出口径…定案为兼容的只读收口预检 profile', while raw_requirement.md line 969 assigns it as pending ('需在 build-spec 验证与现有只读分析通道兼容性… build-spec 验证，owner=build-spec') and line 7 says '固定向量和受影响 findings 证据仍待补齐，不表示阶段完成'.",
+   "path": "materials/03-draft_spec.md",
+   "line": 1222,
+   "disposition": "fixed",
+   "disposition_reason": "§12 DEFERRED-001 改写为“待验证，未定案”（spec.md L1224），删除“已定案/已选择 profile”表述，恢复 decision-log 已批准语义（需在 build-spec 验证与现有只读分析通道兼容性；不兼容则按控制面登记规则）；新增 OPEN-005 未决证据清单项（L1245-1252）与未决证据登记；头部 L7 与收尾 L1297 同步改为“DEFERRED-001 兼容性核查等证据仍待补齐/incomplete”；AC-PREF-001/002 收口合同 producer 改为“build-plan（收口预检载体形态待验证，见 DEFERRED-001/OPEN-005，未定案前不假定 profile 已存在）”（L890/L901），build-plan 不再假定 profile 已存在。无方向级缺口：严格按已批准决定补文字。"
+  },
+  {
+   "index": 1,
+   "severity": "minor",
+   "provider": "kimi/coding",
+   "issue": "Inside the single FR-CONTEXT-003 bullet, the disposition sentence '若冻结已成功但派发或摘要回传失败，可按既有通道重试一次，仍失败时标 unavailable，owner=对应阶段主会话，next_action=用户决定是否修复通道后重试' appears twice verbatim. The second instance carries the additional recovery-path constraint ('恢复路径不得把 packet 完整内容回灌主会话'), so the first occurrence is a stale duplicate that creates ambiguity about which text is authoritative.",
+   "recommendation": "Delete the first occurrence, keeping the single instance that is followed by the packet_freeze_hash note and the recovery-path constraint.",
+   "evidence": "Line 489 contains both '…若冻结已成功但派发或摘要回传失败，可按既有通道重试一次，仍失败时标 unavailable，owner=对应阶段主会话，next_action=用户决定是否修复通道后试；阶段输入 packet 的 packet_freeze_hash 唯一算法见下方…' and later the identical sentence again before '恢复路径不得把 packet 完整内容回灌主会话'.",
+   "path": "materials/03-draft_spec.md",
+   "line": 489,
+   "disposition": "fixed",
+   "disposition_reason": "FR-CONTEXT-003（spec.md L489）删除第一次出现的重复句，保留带“恢复路径不得把 packet 完整内容回灌主会话”约束的第二次出现；全文该句现仅出现一次（grep 计数=1），packet_freeze_hash 唯一算法说明与恢复路径约束均完整保留。"
+  },
+  {
+   "index": 2,
+   "severity": "minor",
+   "provider": "kimi/coding",
+   "issue": "FR-GAP-001 introduces observable failure-display semantics — on gap_id collision or malformed (numeric/array/object) identity fields the render must show gap_projection_unavailable with reason=invalid_gap_collision / invalid_gap_identity, refuse auto-merge, and block all gap-bound confirmation 消缺 '直到生产者修复' (also line 389 for unknown algorithm_version) — that no decision source authorizes. D-205 froze only the tuple/ordering/whitespace/SHA-256/version algorithm; collision and malformed-identity display behavior were never decided. This contradicts the spec header's claim (line 8) of only performing 'D-205/D-304 授权的确定性合同细化' with 'open_direction_changing_questions=0'.",
+   "recommendation": "Add an explicit traceability note tying these failure-display semantics to D-205/D-206 fail-loud philosophy as spec-authorized refinement, or confirm them via the spec-clarify/incremental-decision path (FR-LOOP-002) so verify-code has a decision to test against.",
+   "evidence": "Line 381: '任一情形成立时，当前渲染显示 `gap_projection_unavailable`、reason=invalid_gap_collision，不自动合并，也不允许任何 gap-bound confirmation 消缺，直到生产者修复' and '若任一 gap_id 身份字段是数字、数组或对象…当前渲染必须显示 `gap_projection_unavailable`…reason=invalid_gap_identity' — behavior with no D-205/D-304 decision citation, while line 383 cites only 'D-205、本轮用户澄清确认'.",
+   "path": "materials/03-draft_spec.md",
+   "line": 381,
+   "disposition": "fixed",
+   "disposition_reason": "FR-GAP-001 正文（spec.md L381）补溯源注记：collision 不自动合并与确认消缺禁用、malformed 身份字段 fail-loud 展示，由 D-205（human-confirmation 必须绑定 gap_id+snapshot+material 防同快照多缺口错配消费；跨投影/字段序/空白/快照变化与冲突固定样例由 build-spec 落盘）与 D-206（结构性不一致=协议错误→fail-loud 拒绝，不得被静默丢弃或改写成 unavailable 通过）共同授权，属于 D-205/D-206 授权的确定性合同细化，不是方向新增；依据行（L383）与 AC-GAP-001 来源/决策（L905）补 D-206。可追溯，无无来源语义残留；未走 spec-clarify/增量决策，因该语义可由已批准 D 追溯授权。"
+  },
+  {
+   "index": 3,
+   "severity": "minor",
+   "provider": "kimi/coding",
+   "issue": "'独立观察者' is one of the five mandatory elements of the dogfood contract in FR-DIAG-003 (with unavailable recording required per line 334 and AC-DIAG-003 failure on '缺少任一要素' at line 844), but the spec never defines what qualifies as an independent observer. The decision-log defined it concretely: '独立观察者：主会话之外由 build-code/verify-code 的独立审查与 stage-end 检查记录（若不可得则如实记 unavailable，不替代）' (raw_requirement.md line 1045). Without this criterion, build-plan/verify-code cannot deterministically judge AC-DIAG-003 pass/fail.",
+   "recommendation": "Carry the decision-log definition (or an equivalent qualification criterion) into FR-DIAG-003's 范围边界.",
+   "evidence": "Line 333: '观察阶段、样本、独立观察者、观察窗口和判定口径' is required, and line 842-844 make it pass/fail-relevant ('验证：检查观察合同是否写明阶段、样本、独立观察者、窗口和判定口径…失败：缺少任一要素'), yet no definition of 独立观察者 appears anywhere in the spec, while raw_requirement.md line 1045 supplies one.",
+   "path": "materials/03-draft_spec.md",
+   "line": 333,
+   "disposition": "fixed",
+   "disposition_reason": "FR-DIAG-003 范围边界（spec.md L334）按 decision-log「验收细节」节（L1045 附近）原文补入“独立观察者=主会话之外由 build-code/verify-code 的独立审查与 stage-end 检查记录（若不可得则如实记 unavailable，不替代）”定义并标注出处；语义未改写，AC-DIAG-003 五要素判定据此可确定性执行。"
+  },
+  {
+   "index": 4,
+   "severity": "minor",
+   "provider": "kimi/coding",
+   "issue": "The sentence '本次未生成向量；在后续 build-spec 针对性向量核对前，该证据项保持 incomplete，不转交 build-plan 才决定算法。' is grammatically broken and ambiguous in a decision-critical way: it can be read either as 'the algorithm is locked here and not handed to build-plan to decide' (consistent with the bullet's claim) or as the opposite. Since FR-PREF-001/D-402 forbid pushing requirement decisions downstream, this ambiguity could let build-plan treat the algorithm as still open.",
+   "recommendation": "Rewrite as e.g. '该证据项保持 incomplete；算法已在本条锁定，不由 build-plan 重新决定，后续 build-spec 仅生成固定向量核对。'",
+   "evidence": "Line 395 ends with '…该证据项保持 incomplete，不转交 build-plan 才决定算法。' — '不转交 build-plan 才决定算法' is not a well-formed statement of who decides the algorithm.",
+   "path": "materials/03-draft_spec.md",
+   "line": 395,
+   "disposition": "fixed",
+   "disposition_reason": "L395 病句随 finding 7 一并重写为“算法已在本条锁定，不由 build-plan 重新决定，后续 build-spec/verify 仅按固定向量核对”，歧义消除；且固定向量已落盘（见 finding 7 处置），不再存在“该证据项保持 incomplete”与已落盘事实的矛盾。"
+  },
+  {
+   "index": 5,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "第12节的风险与延期编号及语义已偏离 approved_decision，导致交接追踪不可靠。",
+   "recommendation": "恢复已批准的风险/延期 ID 与语义；新增条目必须使用新 ID，并提供明确的 supersedes/crosswalk。",
+   "evidence": "draft 将 RISK-008 定义为外部审查不可用、将 usage 风险改为 RISK-010，并遗漏 approved_decision 中的 RISK-001 与 DEFERRED-009；approved_decision 中 RISK-008 明确是 usage 记录风险，DEFERRED-009 是非配对行为任务 reject 语义评估。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "§12 恢复 approved ID 与语义：外部 review/证据不可复核风险恢复为 approved RISK-001（spec.md L1150，原误标 RISK-008，语义对齐 decision-log“make-decision 与历史任务同样可能遇到”）；usage 记录风险恢复为 approved RISK-008（L1214，原误标 RISK-010，补 owner=build-spec/III-5 T-030）；补 DEFERRED-009（L1230，非配对行为任务 reject 语义扩展评估，owner=用户，方向卡 v4.3）；顶部新增编号对齐 crosswalk 说明（L1148，RISK-010 作废不再使用）；DEFERRED-010 为 spec 侧新增编号并给 supersedes=none 与承接说明（L1231）。语义与 decision-log「风险与延期交接」表逐条对齐。"
+  },
+  {
+   "index": 6,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "FR-LOOP-001 要求头部、最终确认节和 step 11 三方一致，却没有定义多个历史 step 11 记录中的 canonical 记录选择规则，冻结校验可能误读历史的未确认记录。",
+   "recommendation": "为 canonical step 11 记录定义稳定 record_id、revision/hash 和选择优先级，并明确排除历史迁移记录；补充旧记录与当前确认并存时的拒绝/通过夹具。",
+   "evidence": "approved_decision 同时包含早期“先落盘存档、非确认、stage 保持 in_progress”的 step 11 记录，以及后续 step 11-v4 和第二轮 accepted 记录；draft 只要求读取“step 11 记录”，未规定取哪一条。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "FR-LOOP-001（spec.md L526）补 canonical step 11 记录选择规则：稳定 record_id=step 11-v4（approve-decision）及其后的最新 accepted 记录，绑定 decision-log 当前 revision/snapshot（revision-e9bc49bc/snapshot e94e3cee，第二轮确认回执 f1e28231）；选择优先级=最新 accepted 优先，早期“先落盘存档、非确认、stage 保持 in_progress”历史迁移记录一律排除、不参与三方一致判定；范围边界（L527）注明“旧记录与当前确认并存的拒绝/通过夹具由本阶段固定向量覆盖，本阶段未落盘该夹具，如实保持 incomplete 声明，不声称已生成”（夹具归 build-plan 既有归口）；AC-LOOP-001 通过/失败（L1085/L1086）同步。只把 decision-log 事实固化为确定性规则，未新增方向。"
+  },
+  {
+   "index": 7,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "D-205 要求在 build-spec 落盘 GAP 字节合同的固定样例，但 draft 明确声明 GAP 向量尚未生成；stage-input-packet 字节合同也同样把固定向量推迟到后续 build-spec，导致当前 AC 无法独立验证。",
+   "recommendation": "在交接 build-plan 前补齐 GAP 和 stage packet 的完整向量：输入、规范化结果、subject、预像字节、digest、非法输入及冲突样例，并直接绑定对应 AC。",
+   "evidence": "draft 在 GAP 字节合同中写明“本次未生成向量”，并在 packet 合同中写明“固定向量由后续 build-spec 生成”；approved_decision 的 D-205 已要求跨投影、字段序、空白、快照变化和冲突样例由 build-spec 落盘。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "GAP 字节合同（spec.md L395）与 packet 字节合同（L504）中“本次未生成向量/本次向量证据仍 incomplete/不声称已落盘”声明更新为已落盘：evidence/build-spec-review/hash-contract-vectors.json（gap 6 向量、packet 5 向量、24 项变异/非法样例检查）与 hash-contract-vectors-check.json（exit 0，绑定 spec sha），并绑定为 AC-GAP-001（L395）与 AC-CONTEXT-003（L504）验收证据项；FR-CONTEXT-003（L489）、FR-GAP-001 正文（L381）、头部 L7、收尾 L1297 同步。向量文件未手工修改；重跑自检脚本 exit 0，35 项 digest 与修订前逐项一致，仅 spec_sha256 元数据重新绑定。主会话已用独立实现交叉复算 gap-001/packet-001 与向量一致。"
+  },
+  {
+   "index": 8,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "FR-MATERIAL-003 的 content_sha256 计算范围不具备确定性：它要求排除“digest 字段自身所在行”，但同段又规定 digest 位于 runtime binding/packet manifest，且材料正文不要求包含该字段。不同实现无法得到同一 digest。",
+   "recommendation": "明确 digest 是纯外部元数据并从正文哈希范围完全排除，或定义正文内 digest 行的精确格式、位置和规范化规则；同时提供 hash 向量。",
+   "evidence": "draft 同时规定 `recomputed_sha256(current_full_body)` 排除 digest 行，以及 `content_sha256` 由 stage runtime/packet manifest 提供、材料正文不要求写 snapshot；未定义所谓 digest 行在哪里或如何识别。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "FR-MATERIAL-003（spec.md L451 两处）重述 content_sha256 确定性：digest 属于外部元数据（runtime binding/packet manifest 材料条目字段），从正文哈希范围完全排除——材料正文内不存在需排除的 digest 行，正文不要求也不允许自写 digest 行；重新表述为“当前材料正文的规范化 UTF-8 字节（LF 换行、保留末尾换行、含材料头部与导航节）的 SHA-256”。不再提及正文内 digest 行。"
+  },
+  {
+   "index": 9,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "FR-FLOW-002/003 和 AC-FLOW-003 将每个 phase 的用户验收设为必有 accepted、rejected、deferred 或 unavailable 事实，可能引入 Constitution F7 明确禁止的 build-code 每 phase 日常确认。draft 虽称其不是 gate，但仍未说明是否必须发起用户询问。",
+   "recommendation": "明确 phase 验收是被动、非阻断的事实记录，不得新增 build-code 用户确认提示；无既有确认交互时直接记录 unavailable/deferred。若确需逐 phase 询问，应先解决其与 F7 的冲突。",
+   "evidence": "draft 要求“每个 phase 的用户验收必须形成独立事实”，AC 要求每个 phase 必须出现四种结果之一；constitution F7 同时规定正常确认只保留 make-decision、build-plan、verify-code，build-code 不增加日常确认。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "FR-FLOW-003（spec.md L355）明确“验收记录是被动的、非阻断的事实记录：只消费既有 human-confirmation/interactions 载体上已存在的真实用户答复，仅当既有交互载体已有真实答复时记录 accepted/rejected/deferred；不存在既有确认交互时直接记录 unavailable（带真实原因）或 deferred，不得新增 build-code 阶段的用户确认提示或日常确认（宪法 F7：正常确认只保留 make-decision、build-plan、verify-code 三处，build-code 不增加日常确认），也不得为形成验收事实发起新的确认请求”；范围边界（L356）“不发起任何新的逐 phase 确认请求，F7 的确认边界保持不变”；AC-FLOW-003 验证/通过/失败（L875-877）与 §8 phase 表注（L702）同步。与 F7 无冲突。"
+  },
+  {
+   "index": 10,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "GAP 算法允许缺失或 null 的 material_name 归一为 `unknown` 并继续生成 subject_id/gap_id，使缺少材料身份的缺口仍可参与确认消缺，违背 material-bound confirmation 的 fail-closed 要求。",
+   "recommendation": "缺失/null 的 task 或 material identity 应生成 invalid_gap_identity、禁止生成 gap_id 和确认消费；若保留 `unknown` 哨兵，必须明确该结果永远不可 current、不可确认消缺。",
+   "evidence": "draft 的 GAP 字节合同规定缺失/null 分量经 N 转为 `unknown`，并由此构造 subject_id；同一 draft 又要求 gap-bound confirmation 绑定当前 material、snapshot 和 gap_id，未规定缺失 material identity 时禁止生成或消费该 ID。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "GAP 字节合同 N(x)（spec.md L390）与 subject_id 构造（L392）改为：task_id、material_name、material_revision 任一缺失或 null 一律判定 invalid_gap_identity，禁止生成 gap_id、禁止参与确认消缺、不进入 subject 构造；unknown 哨兵仅保留给 gap_kind、expected_fact、actual_fact 内容字段；L394 非法输入清单与 AC-GAP-001 通过/失败（L909/L910）同步。已核实不影响已落盘向量：全部向量身份字段使用合法值（gap-001 的 actual_fact=null 属内容字段，保留 unknown 哨兵符合新规则）；重跑向量自检脚本 exit 0，35 项 digest 与修订前逐项一致，未修改向量文件，无需负向样例补登记，也未触及向量任何位置。"
+  },
+  {
+   "index": 11,
+   "severity": "major",
+   "provider": "codex/luna",
+   "issue": "draft 将 DEFERRED-001 写成“build-spec 兼容性核查已定案”并选择 profile，但没有提交兼容性证据或该 profile 的完整控制面定义；approved_decision 明确把 lens/profile 选择留给 build-spec 验证。",
+   "recommendation": "补充实际兼容性核查证据、复用点和失败语义，并将最终选择绑定到 owner/consumer/删除条件；否则保持 DEFERRED-001 未决，不让 build-plan 假定 profile 已存在。",
+   "evidence": "approved_decision D-203 的 unresolved_items 仍是“载体形态（lens vs profile）归 build-spec 验证”；draft §12 却称核查已定案为兼容的只读 profile，材料中没有相应核查结果。",
+   "path": "materials/03-draft_spec.md",
+   "line": null,
+   "disposition": "fixed",
+   "disposition_reason": "与 index 0 同根因一并处置：DEFERRED-001 保持待验证/未定案（spec.md L1224），未选择 profile、未宣称已定案；OPEN-005（L1245-1252）登记未决证据（受影响 FR-PREF-001~002/AC-PREF-001~002，owner=build-spec 验证，build-plan 不得假定 profile 已存在）；AC-PREF-001/002 producer 字段（L890/L901）改为“build-plan（收口预检载体形态待验证）”；最终选择条件按 owner/consumer/删除条件的控制面登记规则表述，未让 build-plan 假定 profile 已存在。"
+  }
+ ]
+}

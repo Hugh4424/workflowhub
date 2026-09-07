@@ -64,7 +64,7 @@ function writeTemplate(argv) {
     "ac-trace": stepId("run-final-aggregate-and-ac-trace", "run-final-check-and-handoff", "publish-verification-result"),
     review: stepId("review-change", "run-one-independent-architecture-review", "publish-verification-attempt"),
     runtime: stepId("run-final-aggregate-and-ac-trace", "run-final-check-and-handoff"),
-    delivery: stepId("publish-code-result", "publish-verification-result", "approve-verification"),
+    delivery: stepId("publish-code-result", "publish-verification-result", "finalize-code-review"),
   };
   const incompleteCost = { duration_ms: null, tokens: null, status: "unavailable", reason: "not measured yet" };
   const stepEvidence = (step) => [{
@@ -113,7 +113,7 @@ function writeTemplate(argv) {
         stage,
         snapshot_tree: null,
         material_revision: null,
-        step_slug: stepId("approve-verification"),
+        step_slug: stepId("finalize-code-review"),
         skill_id: "dsh-code-review",
         result: {
           status: "unavailable",

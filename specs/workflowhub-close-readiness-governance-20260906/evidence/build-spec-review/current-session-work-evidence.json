@@ -1,0 +1,11 @@
+{
+  "stage": "build-spec",
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "host": "dsh",
+  "source_id": "dsh/gpt-6-astra",
+  "source_family": "dsh",
+  "agent_run_id": null,
+  "source_ref": null,
+  "correction_note": "本文件早期版本含估计出的时间戳，已废弃；只有真实测量到的生命周期才记录。最终 stage outcome 以 bridge 提交的 session.events 为准，这里只保留可复核的真实事实。",
+  "events": []
+}

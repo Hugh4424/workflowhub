@@ -6,6 +6,13 @@ version: 4.1.0
 
 # Build Plan
 
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义走
+`spec-clarify` 并回到 `build-spec`；方向级问题回 `make-decision` 做增量
+决策；材料缺口回对应 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
 ## Responsibility and authority
 
 Turn the current `decision-log.md` and `spec.md` into the current `plan.md`
@@ -60,6 +67,21 @@ Review is a quality fact, not a progression gate or permission to continue
 working. Missing or unavailable quality evidence lowers the completion claim;
 an unavailable review is never `pass` and does not block continued research,
 planning, or repair in this same task.
+
+### Stage-input packet and context facts
+
+Before `spec-plan` and `spec-tasks` execute, the host assembles one frozen
+`stage-input-packet.v1` bound to the current `task_id`, stage,
+`material_revision`, `snapshot_tree`, source digests, derived-file authority,
+and exact `packet_freeze_hash`. The inline skills and dispatched contexts read
+only this packet; the main session retains the packet reference, hash, binding,
+and a summary no longer than 500 characters. `plan.md` and `tasks.md` emit a
+regenerable `## 材料导航` section; it is not a fifth authority. Packet,
+dispatch, or summary failure stays unavailable/degraded with owner and next
+action. Provider usage is recorded when present or marked unavailable, and the
+three character proxies (`full_reread_count`, `subagent_input_bytes`,
+`review_material_bytes`) are observations only; do not claim token savings or a
+decrease without evidence.
 
 ## Boundaries: no direction replay
 

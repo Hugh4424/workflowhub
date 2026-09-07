@@ -1,0 +1,10 @@
+{
+  "profile": "spec-analyze.v1",
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "original_requirement": "收口治理改造",
+  "decision_coverage": "I+II+III 全覆盖",
+  "spec_sections": 16,
+  "fr_count": 153,
+  "gaps": [],
+  "plain_summary": "spec 已按 decision-log v4.3（I/II/III）完整重写，II-1 RED-only+T-032、D-205 gap_id 冻结算法、D-304 审查包边界、III 六机制全部落地；四 validator PASS；三轮审查 19 findings 全部处置（15 fixed/3 rejected_invalid/1 execution-layer 佐证）。"
+}

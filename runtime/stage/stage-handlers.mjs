@@ -11,7 +11,8 @@ import { validateSchema } from "../review/schema-validator.mjs";
 import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
-import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
+import { validateBrowserQaEvidence, validateReviewAttemptObservation, validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
+import { buildStageInputPacket, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
   validateAcceptanceDesignMinimum,
   validateExecutablePlanTaskMinimum,
@@ -35,8 +36,16 @@ import {
   projectAcceptanceExecutionData,
   readUiApplicabilityFromDecisionLog,
   validateSpecClarifyAndDirectionFidelity,
+  validateDecisionFreeze,
+  classifyFinding,
+  deriveGapId,
+  normalizeGapReasons,
+  validateFallbackProtocol,
+  validateFindingRouting,
+  validateMaterialOracleContract,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
+import { STAGE_MATERIALS, separateAttemptFindingFacts } from "./completion-predicates.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -56,10 +65,69 @@ function currentMaterialContent(worker, name) {
   });
 }
 
+function stageInputPacketFacts(worker, stage, materials) {
+  const snapshot = captureWorkerSnapshot(worker);
+  const required = STAGE_MATERIALS[stage] ?? [];
+  const missingMaterials = required.filter((name) => typeof materials?.[name] !== "string");
+  if (missingMaterials.length) {
+    return { facts: { status: "unavailable", reason: `stage input packet source materials missing: ${missingMaterials.join(", ")}` }, missing_items: [`stage input packet source materials missing: ${missingMaterials.join(", ")}`] };
+  }
+  if (typeof worker.currentMaterialRevision !== "string" || worker.currentMaterialRevision.trim() === "" || !/^[a-f0-9]{40}$/i.test(snapshot?.tree ?? "")) {
+    return { facts: { status: "unavailable", reason: "stage input packet binding is unavailable" }, missing_items: ["stage input packet binding is unavailable"] };
+  }
+  try {
+    const packet = buildStageInputPacket({
+      task_id: worker.identity.taskId,
+      stage,
+      material_revision: worker.currentMaterialRevision,
+      snapshot_tree: snapshot.tree,
+      source_materials: Object.fromEntries(required.map((name) => [name.replace(/\.md$/, ""), materials[name]])),
+    });
+    const verified = verifyStageInputPacket(packet);
+    if (!verified.ok) throw new Error(`stage input packet verification failed: ${verified.reason}`);
+    return {
+      facts: {
+        status: "recorded",
+        packet_freeze_hash: packet.packet_freeze_hash,
+        manifest: packet.manifest,
+        consumed_files: required,
+        consumer: "stage-handlers#stageInputPacketFacts",
+      },
+      packet,
+      missing_items: [],
+    };
+  } catch (error) {
+    return { facts: { status: "unavailable", reason: error.message }, missing_items: [`stage input packet unavailable: ${error.message}`] };
+  }
+}
+
 function captureWorkerSnapshot(worker) {
   if (typeof worker.snapshotWorkspace === "function") return worker.snapshotWorkspace();
   if (typeof worker.candidateWorkspace?.captureSnapshot === "function") return worker.candidateWorkspace.captureSnapshot();
   return null;
+}
+
+function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
+  const supplied = input?.decision_freeze;
+  const bindingErrors = [];
+  if (supplied?.material_revision !== undefined && supplied.material_revision !== worker.currentMaterialRevision) {
+    bindingErrors.push("decision freeze input material_revision does not match the current worker revision");
+  }
+  if (supplied?.snapshot_tree !== undefined && supplied.snapshot_tree !== snapshot.tree) {
+    bindingErrors.push("decision freeze input snapshot_tree does not match the current workspace snapshot");
+  }
+  const checked = validateDecisionFreeze({
+    decisionLog,
+    currentMaterialRevision: worker.currentMaterialRevision,
+    currentSnapshotTree: snapshot.tree,
+  });
+  if (bindingErrors.length === 0) return checked;
+  return Object.freeze({
+    ...checked,
+    ok: false,
+    status: "paused",
+    errors: Object.freeze([...checked.errors, ...bindingErrors]),
+  });
 }
 
 function materialIncomplete(message) {
@@ -171,10 +239,14 @@ function completionSubjectMissingItems(result) {
 }
 
 function addCompletion(stage, result, { worker, artifacts, reviews, verification, businessFacts, audit, completionResult }) {
+  const fallbackProtocol = result.fallback_protocol ?? null;
+  const baseResult = { ...result };
+  delete baseResult.fallback_protocol;
   const copy = COMPLETION_COPY[stage];
   const missing = [...new Set([
-    ...(result.missing_items ?? []),
-    ...completionSubjectMissingItems(result),
+    ...(baseResult.missing_items ?? []),
+    ...(fallbackProtocol?.missing_items ?? []),
+    ...completionSubjectMissingItems(baseResult),
   ])];
   const declaredAuditGaps = Array.isArray(result.facts?.audit_gaps)
     ? result.facts.audit_gaps.map((gap) => typeof gap === "string"
@@ -226,7 +298,17 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
     next_owner: copy.next_owner,
     user_action: missing.length ? "需要处理未完成项" : "无需操作",
   });
-  return { ...result, completion };
+  return {
+    ...baseResult,
+    facts: {
+      ...baseResult.facts,
+      ...(fallbackProtocol ? { fallback_protocol: fallbackProtocol.facts } : {}),
+    },
+    // Preserve the handler's public missing_items contract; completion
+    // subject gaps remain in the canonical completion fact as before.
+    missing_items: [...new Set([...(baseResult.missing_items ?? []), ...(fallbackProtocol?.missing_items ?? [])])],
+    completion,
+  };
 }
 const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
@@ -260,11 +342,11 @@ function shapeDiagnosticError(message, path, expected, actual, ErrorClass = Erro
 }
 
 function stageInputKeys(stage) {
-  if (stage === "build-code") return ["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts"];
+  if (stage === "build-code") return ["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply"];
   if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
-    return ["receipts", "finding_dispositions", "contract_facts"];
+    return ["receipts", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? [] : ["decision_freeze"] )];
   }
-  return ["receipts", "finding_dispositions"];
+  return ["receipts", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
 }
 
 export function validateStageInvocation(stage, input, { currentOnly = true, expectedCriterionIds = null } = {}) {
@@ -1746,6 +1828,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     "PROCESS_TIMEOUT",
     "ROUTE_UNAVAILABLE",
     "REVIEW_BROKER_START_FAILED",
+    "BROKER_EXIT_NONZERO",
     "REVIEW_BROKER_EXIT_NONZERO",
     "REVIEW_EXECUTION_TIMEOUT",
     "REVIEW_CANCELLED",
@@ -1868,8 +1951,37 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
   ];
 }
 
+function canonicalReviewBudgetAttempts(worker) {
+  if (typeof worker.listCanonicalReviewAttemptRefs !== "function" || typeof worker.readReceipt !== "function") return [];
+  return worker.listCanonicalReviewAttemptRefs().flatMap((attemptRef) => {
+    try {
+      const record = worker.readReceipt(attemptRef);
+      const value = record?.value;
+      if (!value || typeof value !== "object") return [];
+      const status = value.terminal_status === "semantic"
+        ? "completed"
+        : value.terminal_status === "failed" ? "failed" : "unavailable";
+      return [{
+        attempt_id: value.attempt_id,
+        attempt_ref: attemptRef,
+        attempt_hash: record.sha256,
+        material_revision: value.material_revision ?? null,
+        kind: value.review_scope === "phase" ? "phase" : "initial",
+        ...(value.phase_id ? { phase_id: value.phase_id } : {}),
+        status,
+      }];
+    } catch {
+      return [];
+    }
+  });
+}
+
 function findingDispositions(reviews, invocation, expectedStage = null, currentSnapshot = null, workspaceRoot = null, taskId = null) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
+  const attemptFacts = reviewRecords.map((review) => ({
+    status: review?.facts?.status ?? "unknown",
+    ...(review?.facts?.error ? { error: review.facts.error } : {}),
+  }));
   // Only terminal review facts may contribute to current finding disposition
   // or risk authorization. Unavailable records remain visible to their
   // caller, but they must never authorize a current disposition.
@@ -1888,6 +2000,18 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
     return !terminal || !review?.value || (expectedStage !== null && review.value.stage !== expectedStage) || !snapshotCurrent;
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
+    const onlyUnavailable = reviewRecords.length > 0 && reviewRecords.every((review) => review?.facts?.status === "unavailable");
+    if (onlyUnavailable) {
+      const separated = separateAttemptFindingFacts({
+        attempt_status: "unavailable",
+        attempt_error: attemptFacts.find((entry) => entry.error)?.error ?? null,
+        findings: [],
+      });
+      return {
+        facts: { status: "missing", items: [], attempts: [separated.attempt] },
+        missing_items: ["current review result is unavailable for finding disposition"],
+      };
+    }
     const reasons = dispositionReviews.length === 0
       ? ["current review result is unavailable for finding disposition"]
       : invalidReviews.map((review) => {
@@ -1897,7 +2021,7 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
         return `${status} review result${stage && expectedStage !== null && stage !== expectedStage ? ` from ${stage}` : ""}${stale ? " for the current snapshot" : ""} is not available for finding disposition`;
       });
     return {
-      facts: { status: "missing", items: [] },
+      facts: { status: "missing", items: [], attempts: attemptFacts },
       missing_items: [...new Set(reasons)],
     };
   }
@@ -1908,7 +2032,61 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
     result,
     dispositions: supplied,
     authorizedRiskFindingIds: [...authorizedRiskIds],
+    userReply: invocation.user_reply,
   });
+  const routedItems = findings.flatMap((reviewValue) => canonicalReviewFindings(reviewValue)
+    .filter((finding) => typeof finding?.id === "string")
+    .map((finding) => {
+      const suppliedDisposition = (Array.isArray(supplied) ? supplied : []).find((entry) => entry?.finding_id === finding.id) ?? {};
+      const explicitFacts = {
+        ...finding,
+        finding_id: finding.id,
+        kind: suppliedDisposition.kind ?? finding.kind,
+        impact_dimensions: suppliedDisposition.impact_dimensions ?? finding.impact_dimensions,
+        dimensions: suppliedDisposition.dimensions ?? finding.dimensions,
+        evidence_refs: suppliedDisposition.evidence_refs ?? finding.evidence_refs,
+        evidence_ref: suppliedDisposition.evidence_ref ?? finding.evidence_ref,
+      };
+      const hasSuppliedDisposition = Array.isArray(supplied) && supplied.some((entry) => entry?.finding_id === finding.id);
+      const hasRoutingInput = hasSuppliedDisposition
+        || suppliedDisposition.kind !== undefined
+        || suppliedDisposition.impact_dimensions !== undefined
+        || suppliedDisposition.dimensions !== undefined
+        || finding.classification !== undefined
+        || finding.kind !== undefined
+        || finding.impact_dimensions !== undefined
+        || finding.dimensions !== undefined
+        || finding.evidence_status !== undefined
+        || finding.evidence_refs !== undefined
+        || finding.evidence_ref !== undefined;
+      if (!hasRoutingInput) return { finding_id: finding.id, status: "not_applicable", classification: null, route: null, errors: [] };
+      const classified = classifyFinding(explicitFacts);
+      const classification = suppliedDisposition.classification ?? finding.classification ?? classified.classification;
+      const route = validateFindingRouting({ finding: explicitFacts, classification, disposition: suppliedDisposition });
+      const reasons = suppliedDisposition.reasons ?? finding.reasons ?? finding.reason ?? [];
+      const gapSeed = suppliedDisposition.gap ?? finding.gap;
+      const gap = gapSeed && typeof gapSeed === "object" && !Array.isArray(gapSeed)
+        ? deriveGapId({
+          task_id: gapSeed.task_id ?? taskId,
+          material_revision: gapSeed.material_revision ?? null,
+          gap_kind: gapSeed.gap_kind ?? route.classification,
+          content: gapSeed.content ?? finding.issue ?? finding.title ?? "",
+        })
+        : null;
+      const gapErrors = gap && !gap.ok ? [gap.reason] : [];
+      return {
+        finding_id: finding.id,
+        status: route.ok && gapErrors.length === 0 ? "recorded" : "incomplete",
+        classification: route.classification,
+        route: route.route,
+        reasons: normalizeGapReasons(reasons),
+        ...(gap ? { gap } : {}),
+        errors: [...route.errors, ...gapErrors],
+      };
+    }));
+  const routingMissing = routedItems
+    .filter((item) => item.status === "incomplete")
+    .map((item) => `finding ${item.finding_id} routing is incomplete: ${item.errors.join("; ")}`);
   const sourceReviewRefs = dispositionReviews
     .filter((review) => review?.value && review.ref && review.evidence?.sha256)
     .map((review) => ({ ref: review.ref, sha256: review.evidence.sha256 }));
@@ -1918,10 +2096,32 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
   return {
     facts: {
       ...dispositionResult.facts,
+      attempts: attemptFacts,
+      ...(dispositionResult.reply_bindings ? { reply_bindings: dispositionResult.reply_bindings } : {}),
+      ...(routedItems.length > 0 ? { routing: { status: routingMissing.length === 0 ? "recorded" : "incomplete", items: routedItems } } : {}),
       source_review_refs: sourceReviewRefs,
       risk_acceptance_refs: riskAcceptanceRefs,
     },
-    missing_items: dispositionResult.missing_items,
+    missing_items: [...dispositionResult.missing_items, ...routingMissing],
+  };
+}
+
+function fallbackProtocolFacts(worker, invocation) {
+  if (invocation?.fallback_protocol === undefined) {
+    return { facts: { status: "not_applicable" }, missing_items: [] };
+  }
+  const checked = validateFallbackProtocol({
+    stage: worker.stage,
+    ...invocation.fallback_protocol,
+  });
+  const activeFallbackGap = checked.ok && checked.status === "incomplete"
+    ? [`fallback protocol remains incomplete: ${checked.route?.next_action ?? checked.reason ?? "same-task continuation required"}`]
+    : [];
+  return {
+    facts: checked,
+    missing_items: checked.ok
+      ? activeFallbackGap
+      : [`fallback protocol is incomplete: ${checked.errors.join("; ")}`],
   };
 }
 
@@ -2054,14 +2254,39 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     producerStage,
     invocation,
   );
+  const usageObservation = Array.isArray(item.value.provider_results) || Array.isArray(item.value.provider_attempts)
+    ? validateReviewAttemptObservation({
+      attempt: item.value,
+      proxy_metrics: item.value.context_proxy_metrics ?? null,
+      expected_material_revision: worker.currentMaterialRevision,
+      expected_snapshot_tree: item.value.snapshot_tree ?? null,
+    })
+    : null;
+  const budgetObservation = invocation.review_budget
+    ? validateReviewBudget({
+      material_revision: worker.currentMaterialRevision,
+      attempts: invocation.review_budget.attempts,
+      canonical_attempts: canonicalReviewBudgetAttempts(worker),
+      request: invocation.review_budget.request,
+    })
+    : null;
   return {
-    facts: { status: "recorded", result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
+    facts: {
+      status: "recorded", result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree,
+      ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }),
+      ...scopeFacts(scope),
+      ...(usageObservation ? { usage_observation: usageObservation } : {}),
+      ...(budgetObservation ? { budget: budgetObservation } : {}),
+    },
     ref: item.ref,
     evidence: item.evidence,
     value: item.value,
     scope,
     risk_evidence: riskEvidence,
-    missing_items: dispositionWarnings,
+    missing_items: [
+      ...dispositionWarnings,
+      ...(budgetObservation?.ok ? [] : budgetObservation ? [`review budget: ${budgetObservation.reason ?? budgetObservation.errors.join("; ")}`] : []),
+    ],
   };
 }
 
@@ -3052,6 +3277,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
+    fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
       worktree_root: worker.candidateWorkspace.worktreeRoot,
       baseline_commit: worker.candidateWorkspace.baselineCommit,
@@ -3133,9 +3359,15 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const directionFidelity = validateSpecClarifyAndDirectionFidelity(item.value.content, decisionLog);
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-spec Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
+  const decisionFreeze = currentDecisionFreeze(worker, input, decisionLog, before);
   const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
   const after = object(worker.snapshotWorkspace(), "build-spec post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
+  const packetMaterials = { "decision-log.md": decisionLog, "spec.md": item.value.content };
+  for (const name of ["plan.md", "tasks.md"]) {
+    try { packetMaterials[name] = worker.readArtifact(name); } catch { /* packet fact below remains unavailable */ }
+  }
+  const stageInputPacket = stageInputPacketFacts(worker, "build-spec", packetMaterials);
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
   const specEvidence = { ref: item.ref, sha256: item.content_hash ?? item.evidence.sha256 };
   const clarifyStatus = directionFidelity.ok && (clarify || directionFidelity.clarify.trigger === false)
@@ -3160,8 +3392,11 @@ HANDLERS.set("build-spec", async (worker, input) => {
     );
   }
   return addCompletion("build-spec", {
+    fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
       spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest,
+      decision_freeze: decisionFreeze,
+      stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,
       completion_subjects: completionSubjects,
       ...(research ? { research: research.facts } : {}),
@@ -3187,6 +3422,8 @@ HANDLERS.set("build-spec", async (worker, input) => {
       ...ui.missing_items,
       ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
       ...directionFidelity.errors.map((error) => `spec direction fidelity: ${error}`),
+      ...(decisionFreeze.ok ? [] : decisionFreeze.errors.map((error) => `decision freeze: ${error}`)),
+      ...stageInputPacket.missing_items,
     ],
   }, {
     worker,
@@ -3219,9 +3456,19 @@ HANDLERS.set("build-plan", async (worker, input) => {
   });
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
+  const decisionFreeze = currentDecisionFreeze(worker, input, materials["decision-log.md"], before);
+  const stageInputPacket = stageInputPacketFacts(worker, "build-plan", materials);
   const missingItems = structural.ok
     ? []
     : structural.errors.map((error) => `plan-task contract incomplete: ${error}`);
+  if (!decisionFreeze.ok) missingItems.push(...decisionFreeze.errors.map((error) => `decision freeze: ${error}`));
+  const materialOracle = validateMaterialOracleContract({
+    spec: materials["spec.md"],
+    plan: materials["plan.md"],
+    tasks: materials["tasks.md"],
+  });
+  if (!materialOracle.ok) missingItems.push(...materialOracle.errors.map((error) => `material/oracle contract incomplete: ${error}`));
+  missingItems.push(...stageInputPacket.missing_items);
   const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
   const componentQuality = componentQualityConsumerFacts(worker, input);
   missingItems.push(...componentQuality.missing_items);
@@ -3292,11 +3539,15 @@ HANDLERS.set("build-plan", async (worker, input) => {
   };
   const testRouting = declaredTestRouting(structural);
   return addCompletion("build-plan", {
+    fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
       plan_ref: planRef,
       tasks_ref: tasksRef,
       snapshot_tree: before.tree,
       source_digest: before.source_digest,
+      decision_freeze: decisionFreeze,
+      material_oracle: materialOracle,
+      stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,
       completion_subjects: {
         fr_coverage: subjectFact(fr?.accepted_count > 0 && fr.covered_count === fr.accepted_count ? "passed" : "missing", [planEvidence, tasksEvidence], "FR coverage from current plan/tasks"),
@@ -3352,6 +3603,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       })()
       : acceptanceCoverageFacts(worker, input, snapshot?.tree);
     return addCompletion("build-code", {
+      fallback_protocol: fallbackProtocolFacts(worker, input),
       facts: {
         changed: [],
         contract_facts: contractFacts,
@@ -3449,6 +3701,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     && coverage.items.length === coverage.accepted_criterion_ids.length
     && coverage.items.every((entry) => entry.status === "covered" && entry.evidence_refs.length > 0);
   return addCompletion("build-code", {
+    fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
       changed: actualChangedFiles,
       contract_facts: contractFacts,
@@ -3528,6 +3781,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const e2eAcceptance = e2eAcceptanceFacts(worker);
 
   const result = addCompletion("verify-code", {
+    fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
       code_review: review.facts,
       code_review_summary: {

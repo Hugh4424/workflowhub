@@ -33,7 +33,7 @@
 维护者参考，不是 Agent 运行时依赖。
 
 - **make-decision**：使用本 Stage 自包含的决策摘要和“请确认”块。
-- **其余决策 gate**（build-plan/verify-code）：四项后加“请确认”块（继续/返工/暂停 + 每项后果）。
+- **其余决策 gate**（build-plan）：四项后加“请确认”块（继续/返工/暂停 + 每项后果）。verify-code 自动记录代码审查结果，不加重复确认块。
 - **自动放行**（build-spec/build-code）：只写四项，不带"请确认"，结尾说明阶段已完成、将自动进入下一阶段，并原样列出审查事实和未解决项。
 
 硬规则（直接写进各 Stage SKILL）：
@@ -53,7 +53,7 @@ agent 中途要问人时，问题按"请确认"块格式走：大白话问题 + 
 - **build-spec**：去掉强确认门。输出进度汇报摘要，自动接受阶段结果并进入 build-plan；审查异常和未解决项作为事实带到 build-plan gate。
 - **build-plan**：保留人确认（Step 9）。结尾输出决策摘要。**删掉违宪句**（见 2.5）。
 - **build-code**：不设每 Phase 或收尾人工确认。输出进度汇报摘要，自动接受阶段结果并进入 verify-code。
-- **verify-code**：保留阶段确认，用来接受验证结论。阶段接受后另行冻结 close 动作计划；commit、push、merge、archive、cleanup 必须取得绑定计划 hash 的独立授权，不能复用 verify-code 确认。
+- **verify-code**：自动记录当前代码审查结论；commit、push、merge、archive、cleanup 另行取得绑定计划 hash 的独立 close 授权，不能把 close 授权当成代码审查确认。
 
 ### 2.4 机器事实采集（已推迟，不是本次交付内容）
 

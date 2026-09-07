@@ -1,0 +1,17 @@
+{
+  "schema": "workflowhub.context-baseline.v1",
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "baseline_name": "convergence-build-plan-20260905",
+  "baseline_chars": 282170,
+  "unit": "UTF-16 code units",
+  "scope": "materials/packet content injected into the main session",
+  "source": "decision-log.md F-034 (character count) and F-043 (context survey)",
+  "producer": "build-spec main session",
+  "generated_before": "spec freeze",
+  "consumer": "build-plan main session",
+  "owner": "build-spec main session",
+  "purpose": "observe current context organization and reading behavior; no token-reduction promise",
+  "confirmation_ref": "quality/confirmations/a71319ffcd4b8e55c68c7c0089126b39392cf4917e6d9d5e67786bfaca3da2f5.json",
+  "full_reread_definition": "complete sequential read of one material from beginning to end within one stage",
+  "observation_window": "current build-spec start through build-plan stage-end plain-language handoff; build-spec and build-plan segments recorded separately"
+}

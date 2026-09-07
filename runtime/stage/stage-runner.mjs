@@ -492,8 +492,8 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   if (review.stage !== stage || review.snapshot_tree !== snapshot.tree || review.material_revision !== materialRevision) {
     throw outcomeError("stage outcome code_review is not bound to the current stage snapshot and materials");
   }
-  const reviewStep = manifest.steps.find((step) => step.step_slug === "approve-verification");
-  if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to approve-verification");
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
+  if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to finalize-code-review");
   const reviewSkill = skillManifest.skills?.find((skill) => skill.name === "dsh-code-review");
   if (!reviewSkill || review.skill_id !== reviewSkill.name) throw outcomeError("stage outcome code_review must bind dsh-code-review");
   const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === reviewSkill.name);

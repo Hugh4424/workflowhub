@@ -326,7 +326,7 @@ function publicConfirm(state, stage) {
     "build-spec": "freeze-spec",
     "build-plan": "publish-plan-result",
     "build-code": "authenticate-current-task-completion",
-    "verify-code": "approve-verification",
+    "verify-code": "finalize-code-review",
   }[stage];
   const result = spawnSync(process.execPath, [
     runtime, "confirm", "--action=decision", `--stage=${stage}`, "--project=WorkflowHub",
@@ -1053,7 +1053,6 @@ describe("current vNext five-stage runtime", () => {
     expect(first.quality_warnings ?? []).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/),
     ]));
-    publicConfirm(state, "verify-code");
     const reopened = await run(createTaskKernel(state.task, { candidateWorkspace: state.candidate }));
     expect(reopened.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
     expect(reopened.status).toBe("completed");
@@ -1138,7 +1137,6 @@ describe("current vNext five-stage runtime", () => {
       stage: "verify-code",
       qualityReview: { ref: qualityReview.resultRef },
     });
-    publicConfirm(state, "verify-code");
     const verifyRun = publicRun(state, "verify-code", {
       receipts: { quality_review: qualityReview.resultRef, stage_outcomes: verifyOutcome.ref },
     });
@@ -1154,7 +1152,7 @@ describe("current vNext five-stage runtime", () => {
     for (const stage of stages) {
       if (stage === "build-code") writeFileSync(join(state.candidate.worktreeRoot, "src/app.txt"), "implemented\n");
       const result = await runStage(stage, context(stage, state), async () => {
-        const currentEvidence = evidence(state, stage);
+        const currentEvidence = evidence(state, stage, { confirm: stage !== "verify-code" });
         const facts = { ...currentEvidence.facts, source: "current-five-stage-test", stage };
         if (stage === "make-decision") {
           Object.assign(facts.completion_subjects, completeConvergenceFacts());

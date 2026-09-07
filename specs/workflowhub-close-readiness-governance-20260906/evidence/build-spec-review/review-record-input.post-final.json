@@ -1,0 +1,212 @@
+{
+  "result": {
+    "status": "available",
+    "stage": "build-spec",
+    "review_track": null,
+    "review_kind": null,
+    "material_id": "5110549fffdcd748c6aaf65a3fcada50396348a2e9e8dafa49d718be96eae28d",
+    "runtime_id": "315050c8-6b32-43b8-ab3d-0ab8f4fc2e49",
+    "outcome": "completed",
+    "minimum_heterologous": 1,
+    "provider_selection": {
+      "providers": [
+        "kimi/coding",
+        "antigravity/flash",
+        "codex/luna"
+      ],
+      "provider_identities": {
+        "kimi/coding": {
+          "source_id": "kimi/coding",
+          "config_id": "0ee93fd24d36dbef5f110eb6e59f9935d9ce092612178721946720fb535c519b"
+        },
+        "antigravity/flash": {
+          "source_id": "antigravity/flash",
+          "config_id": "5ba41c80161607da5076d431c6a44c6670a069415d02dc1ed3097df2a2903172"
+        },
+        "codex/luna": {
+          "source_id": "codex/luna",
+          "config_id": "0a2e6a47d93a7f6e251b8edc1d89f029bd960ac0291ff0fd7d44eaf6e23c3898"
+        }
+      }
+    },
+    "provider_results": [
+      {
+        "provider": "kimi/coding",
+        "status": "completed",
+        "identity": {
+          "provider": "kimi/coding",
+          "adapter": "kimi",
+          "model": "kimi-for-coding/kimi-for-coding",
+          "source_id": "kimi/coding",
+          "config_id": "0ee93fd24d36dbef5f110eb6e59f9935d9ce092612178721946720fb535c519b"
+        },
+        "session_id": "session_612cfdde-c0e2-4ab7-849e-784806920be0",
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788684382161,
+          "completed_at_ms": 1788684756850,
+          "duration_ms": 374689
+        },
+        "usage": null,
+        "evidence_anchor_valid": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "provider": "antigravity/flash",
+        "status": "completed",
+        "identity": {
+          "provider": "antigravity/flash",
+          "adapter": "antigravity",
+          "model": "gemini-3.8-flash-high",
+          "source_id": "antigravity/flash",
+          "config_id": "5ba41c80161607da5076d431c6a44c6670a069415d02dc1ed3097df2a2903172"
+        },
+        "session_id": null,
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788684382187,
+          "completed_at_ms": 1788684592343,
+          "duration_ms": 210156
+        },
+        "usage": null,
+        "evidence_anchor_valid": []
+      },
+      {
+        "provider": "codex/luna",
+        "status": "completed",
+        "identity": {
+          "provider": "codex/luna",
+          "adapter": "codex",
+          "model": "gpt-5.6-luna",
+          "source_id": "codex/luna",
+          "config_id": "0a2e6a47d93a7f6e251b8edc1d89f029bd960ac0291ff0fd7d44eaf6e23c3898"
+        },
+        "session_id": "01a075e5-b50c-7fa0-b5a7-dfed2c201a40",
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788684382213,
+          "completed_at_ms": 1788684770981,
+          "duration_ms": 388768
+        },
+        "usage": null,
+        "evidence_anchor_valid": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 402,
+        "issue": "FR-CONTEXT-001 anchors the cost-observation baseline at `evidence/context-baseline.json` = convergence build-plan 282170 characters with source cited as 'decision-log F-043', but the 282,170 figure does not appear in F-043; F-043 is the spec/plan full-flow context survey (重载步骤/无执行规范), while the exact 282,170 count is established in F-034 (build-plan review 输入 282,170 字符).",
+        "recommendation": "Change the citation from 'decision-log F-043' to 'decision-log F-034'（或 F-034+F-043 组合）so build-plan anchors the baseline to the fact that actually contains the number.",
+        "evidence_kind": "direct",
+        "evidence": "03-draft_spec.md:402 reads '来源 decision-log F-043' for baseline 282170; 02-approved_decision.md:503 (F-043) contains no 282170, while 02-approved_decision.md:494 (F-034) states 'build-plan review 输入 282,170 字符'.",
+        "root_cause": "Baseline fact was copied from D-304's narrative (审查 28.2 万字符) which sits adjacent to F-043 in the decision-log, and the wrong fact id was carried into the spec.",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 779,
+        "issue": "AC-MATERIAL-003's 收口合同 sets producer=verify-code 材料检查实现 but owner=build-code 阶段实现者, breaking the owner=producer-stage pattern used by every other AC (e.g., AC-REVIEW-001 producer=verify-code → owner=verify-code 阶段主会话; AC-STATUS-001/002 producer=verify-code → owner=verify-code 阶段主会话; AC-GAP/BOUND producer=build-code → owner=build-code 阶段实现者). The verify-entry 4-item check is grouped under 材料质量治理（II-1）per D-302, so ownership ambiguity could misassign the implementation phase in build-plan.",
+        "recommendation": "Either set owner=verify-code 阶段主会话 to match producer, or add one clause stating explicitly that the check is implemented in the build-code phase and consumed at verify entry (the apparent intent), so build-plan does not have to guess.",
+        "evidence_kind": "direct",
+        "evidence": "03-draft_spec.md:779 AC-MATERIAL-003 收口合同: 'producer=verify-code 材料检查实现 … owner=build-code 阶段实现者', whereas line 790 AC-REVIEW-001 and line 735 AC-STATUS-001 pair producer and owner in the same stage.",
+        "root_cause": "The 4-item material check was inherited from D-302's 材料质量 phase but its runtime position is verify entry; the contract fields were filled from different halves of that decision without reconciling owner.",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 539,
+        "issue": "Section 8 '可重试事实的 current 选择' introduces normative new fields and semantics — immutable attempt_id, monotonic attempt_no, replaces_attempt_ref, and a current-selection rule — for independent-review, phase-acceptance and packet-rebuild facts. The approved decision-log only decides 'failed 允许一次既有通道重试' and '原状态保留' (失败分支表); it contains no attempt_no/replaces_attempt_ref mechanism. Under R-003's hard constraint '不依赖 build-spec 补需求' this is an unpinned semantic addition, however reasonable, that implementers must notice.",
+        "recommendation": "Trace this block to its origin explicitly (it implements the accepted one-retry decisions D-303/AC-REVIEW-001/失败分支表), or add one line in 来源/决策 mapping citing those decisions, so reviewers can verify it is translation rather than new direction.",
+        "evidence_kind": "inferred",
+        "evidence": "03-draft_spec.md:539-541 mandates '不可变 attempt_id 与单调递增 attempt_no，并记录 replaces_attempt_ref'; 02-approved_decision.md:852-853 only states '记录失败原因；允许一次重试' and 'timeout/cancelled → 原状态保留', with no attempt_no or replaces_attempt_ref anywhere in the D/T/F series.",
+        "root_cause": "The detail-review fixes (FND-D13/D14) settled retry behavior qualitatively; build-spec formalized it into attempt-chain fields without recording which decision entries authorize the mechanism.",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "FR-REVIEW-001 允许缺少身份字段时 review_result=executed、provenance_status=incomplete；FR-REVIEW-002 又要求身份缺失时结果为 unavailable、reason=invalid_identity。verify-code 同时属于实施 phase，缺少适用优先级会导致同一事实产生两种结果。桥接写入对两者同时缺失也没有明确拒绝规则。",
+        "recommendation": "建立统一身份校验矩阵：任一必需身份字段缺失或两者不等时拒绝/记录 unavailable；仅非身份 provenance 缺失时允许 executed+incomplete，并明确 FR-REVIEW-001 与 FR-REVIEW-002 的优先级。",
+        "evidence_kind": "direct",
+        "evidence": "FR-REVIEW-001 写明缺任一 provenance 字段时 review_result 可保持 executed；FR-REVIEW-002 写明 identity 缺失或 reviewer 与 executor 相同必须为 unavailable/invalid_identity；FR-BOUND-001 只定义不一致，未定义一方或双方缺失。",
+        "root_cause": "身份完整性、异源判定和 provenance 完整性被分散到多个需求中，缺少单一状态契约。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "预检依赖“声明覆盖范围”，但规格没有定义覆盖边界声明的结构、完整性校验、owner 或未列出 AC 的处理。FR-PREF-001 又规定所有 in-scope AC 默认适用，当前 AC-PREF-001/002 没有测试遗漏 AC 的负向场景，因此实现可以通过缩小覆盖范围来得到 ready。",
+        "recommendation": "定义强制覆盖清单，至少包含全部 AC ID、producer/consumer、覆盖阶段和明确排除项；未列出的 in-scope AC 必须产生 unknown/unavailable，并加入遗漏覆盖边界的负向夹具。",
+        "evidence_kind": "direct",
+        "evidence": "FR-PREF-002 仅要求预检在“已声明覆盖范围”内工作；FR-PREF-001 要求无豁免清单；现有验收只验证合同三态，没有验证未声明 AC 不得静默消失。",
+        "root_cause": "覆盖边界被作为文字概念引用，没有成为可校验的数据契约。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "材料质量要求没有闭合 spec→plan→tasks 的跨文件追溯不变量。FR-MATERIAL-001 只要求 tasks oracle 携带 ac_id/fr_id 并能映射回 AC，却没有要求 plan 保留同一 ID、禁止 orphan/duplicate，或规定三份材料中哪个版本是权威。低能力执行者仍可能得到形式完整但指向错误 AC 的 tasks。",
+        "recommendation": "明确 spec 的 fr_id/ac_id 为跨材料稳定主键，要求 plan 原样继承，tasks 每个 oracle 恰好映射一个当前 AC；增加缺失、重复、错指和 plan/tasks 漂移的机器校验。",
+        "evidence_kind": "direct",
+        "evidence": "FR-MATERIAL-001 规定 tasks oracle 要映射对应 AC，但没有 spec、plan、tasks 三方 ID 继承和一对一约束；AC-MATERIAL-001 的验证也未要求跨文件一致性。",
+        "root_cause": "单份材料内的字段完整性被定义了，但跨材料交接关系没有定义。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "负向 oracle 的关键语义不可确定验收。FR-MATERIAL-002 要求 reject 是可证伪拒绝断言、不得空泛或同义反复；同时又规定结构检查器只检查字段存在性、非空、合法性和明显占位符，语义交给 build-plan 或人工。AC-MATERIAL-002 却把“含可证伪拒绝断言”作为通过条件，未提供可复现判定。",
+        "recommendation": "拆分结构通过与语义通过：为 reject 定义可机器判定的最小约束和明确禁止值，或明确该项只能由独立人工/审查 oracle 判定，并在 AC 中禁止结构检查器宣称语义通过。",
+        "evidence_kind": "direct",
+        "evidence": "FR-MATERIAL-002 同时要求 reject 不得空泛/同义反复、结构检查器不裁决语义；AC-MATERIAL-002 又要求含“可证伪拒绝断言”即可通过该项检查。",
+        "root_cause": "产品语义要求与机器校验边界不一致，缺少语义验收 oracle。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "gap_id 的跨生产者确定性仍不可互操作。FR-GAP-001 使用未定义的“canonical JSON”，只规定字符串 NFC/空白规则，没有规定 expected_fact、actual_fact 的允许类型，也没有指定序列化算法、键排序、数字和数组处理。不同实现可能为同一缺口生成不同 hash，核心去重目标会失效。",
+        "recommendation": "锁定 canonical payload 的 JSON 类型和规范化规则，指定具体序列化算法（包括键序、数字、Unicode、转义、分隔符和 UTF-8 字节范围），并加入多类型及跨生产者相同输入的 ID 一致性夹具。",
+        "evidence_kind": "direct",
+        "evidence": "FR-GAP-001 规定 hash=gap-<sha256(serialized).slice(0,16)> 和“canonical JSON”，但没有定义 serialized 的具体算法或四个字段的非字符串值域。",
+        "root_cause": "缺口身份算法写了 hash 结果格式，但没有定义可复现的输入序列化契约。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "执行模型中的“审查=2 role”与已批准决策的阶段范围不一致且未解释。approved decision 的 F-032 明确红蓝双发仅限 make-decision，build-spec/build-plan 是多 provider 单发；规格 FR-CONTEXT-001 和 AC-CONTEXT-001 却要求审查保持 2 role，可能迫使 build-spec/build-plan 引入红蓝配对并改变成本与审查拓扑。",
+        "recommendation": "按阶段明确并行契约：make-decision 保持 2-role 红蓝；build-spec/build-plan 明确为多 provider 单发，或若确实改为 2-role，则同步修订批准决策、范围、成本和验收。",
+        "evidence_kind": "direct",
+        "evidence": "材料 02 的 F-032 写明 build-spec/build-plan 审查为多 provider 单发且无 red/blue role 注入；材料 03 的 FR-CONTEXT-001/AC-CONTEXT-001 写明审查=2 role。",
+        "root_cause": "并行上限中的 role 术语没有绑定阶段和审查形态，导致既有规则与新规格无法唯一解释。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "issue": "FR-MATERIAL-003 要求 content_sha256 精确等于 recomputed_sha256(current_full_body)，但没有定义 current_full_body 的确切字节范围、是否包含材料导航/头部、换行规范、末尾换行和编码。相同材料在不同读取或写入实现中可能得到不同 digest，从而错误报告 incomplete 或 digest_mismatch。",
+        "recommendation": "定义 digest 的规范字节串：明确 UTF-8、换行与末尾空白、头部/导航是否包含，以及 digest 字段自身是否排除；用同一规范生成和验证测试夹具。",
+        "evidence_kind": "direct",
+        "evidence": "FR-MATERIAL-003 要求对 current_full_body 重算并精确比较，但全文没有定义 current_full_body 的字节级组成。",
+        "root_cause": "严格 digest 验收缺少规范化输入边界。",
+        "provider": "codex/luna"
+      }
+    ]
+  }
+}
