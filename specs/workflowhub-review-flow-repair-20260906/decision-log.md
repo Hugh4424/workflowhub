@@ -233,25 +233,25 @@
 
 - 背景：决策基线（D-001~D-008）在合并前旧契约下冻结并经用户确认（回执 quality/confirmations/e47d2e1016d46ae226c3081976cfb95610de159bb5dbd85255a8d250d685f755.json）；合并后新冻结契约要求三方绑定当前材料版本，实测文本路径存在自指死结（F-020）。
 - 用户裁决：2026-09-07 用户选 B1——按作者惯例做诚实续签留痕，不伪装 passed，续签后进 build-plan。
-- 续签确认回执：quality/confirmations/PENDING_CONFIRM_REF.json（human-confirmation.v3，decision=accepted，reply_text="B1：按作者惯例做诚实的续签留痕（推荐）"）。
+- 续签确认回执：quality/confirmations/b66063556b54e84fdac62af23277829365b5dcf90b7b5a33b9f7e0553c23e006.json（human-confirmation.v3，decision=accepted，reply_text="B1：按作者惯例做诚实的续签留痕（推荐）"）。
 - 绑定值说明：下列 material_revision/snapshot_tree 为续签确认发布时刻的绑定事实；本行回填后材料已演进，freeze 校验将如实显示"绑定非当前"，不视为续签无效（F-020）。
 
 ### M6 冻结续签（approval_binding 已 accepted，2026-09-07）
 
-- approval_binding: accepted（续签确认回执 quality/confirmations/PENDING_CONFIRM_REF.json）
+- approval_binding: accepted（续签确认回执 quality/confirmations/b66063556b54e84fdac62af23277829365b5dcf90b7b5a33b9f7e0553c23e006.json）
 - decision_id: D-009
-- material_revision: PENDING_REVISION
-- snapshot_tree: PENDING_SNAPSHOT
+- material_revision: revision-fa6cc40ae7f7a61228f4a1e9f913ccaa7db58c25fe5b38db3d6306a6b81c3bdc
+- snapshot_tree: 55c7c650f01291f890ab09353f144b5ba65cd307
 - decision: freeze packet 覆盖 用户流程/数据状态/成败边界/非目标（依次见 R 表与目标节、成功/失败边界节、非目标与延期项节；方向内容自 make-decision 收口以来无变更）
 
 ## 最终确认（冻结续签）
 
 - 状态：**accepted**（用户 2026-09-07 续签裁决 B1；基线决策 D-001~D-008 维持不变）
-- material_revision: PENDING_REVISION
-- snapshot_tree: PENDING_SNAPSHOT
+- material_revision: revision-fa6cc40ae7f7a61228f4a1e9f913ccaa7db58c25fe5b38db3d6306a6b81c3bdc
+- snapshot_tree: 55c7c650f01291f890ab09353f144b5ba65cd307
 
 ## step 11 记录（冻结续签）
 
 - 状态：accepted（续签轮；首轮收口记录见"批准与发布记录"节）
-- material_revision: PENDING_REVISION
-- snapshot_tree: PENDING_SNAPSHOT
+- material_revision: revision-fa6cc40ae7f7a61228f4a1e9f913ccaa7db58c25fe5b38db3d6306a6b81c3bdc
+- snapshot_tree: 55c7c650f01291f890ab09353f144b5ba65cd307
