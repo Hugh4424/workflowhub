@@ -3321,7 +3321,9 @@ export function validateTaskOracleContract(markdown) {
   for (const [position, start] of starts.entries()) {
     const body = lines.slice(start + 1, starts[position + 1] ?? lines.length).join("\n");
     const id = lines[start].match(/^####\s+(T[A-Za-z0-9_-]+)/)?.[1];
-    const role = taskField(body, "verification_role");
+    const roleRaw = taskField(body, "verification_role");
+    // Keep the authored explanation while exposing a canonical non-behavior role.
+    const role = /^N\/A\s+[—-]\s+\S/i.test(roleRaw ?? "") ? "N/A" : roleRaw;
     const paired = taskField(body, "paired_task");
     const oracleRaw = taskField(body, "oracle")?.replace(/^`|`$/g, "") ?? "";
     const oracleId = oracleRaw.match(/^([A-Z][A-Z0-9_-]+)\b/)?.[1] ?? null;
@@ -3329,6 +3331,7 @@ export function validateTaskOracleContract(markdown) {
     let oracle = null;
     try { oracle = JSON.parse(oracleJson); } catch { errors.push(`${id} oracle must contain a JSON object`); }
     if (!ORACLE_ROLES.has(role)) errors.push(`${id} verification_role is invalid`);
+    if (role === "N/A" && !/^N\/A\s+[—-]\s+\S/i.test(roleRaw ?? "")) errors.push(`${id} N/A verification_role requires a reason`);
     if (paired === null || paired.trim() === "") errors.push(`${id} paired_task is missing`);
     if (role === "N/A" && !/^N\/A\s+[—-]\s+\S/i.test(paired ?? "")) errors.push(`${id} N/A task requires a paired_task reason`);
     if (!oracleId || !oracle || typeof oracle !== "object" || Array.isArray(oracle)) errors.push(`${id} oracle identity or object is missing`);
@@ -3921,13 +3924,26 @@ function analyzeDeferredOpenHandoff({ decisionText, specText, planText, tasksTex
   const downstreamDocuments = documents.filter(({ name }) => name !== "decision-log");
   const missingByItem = new Map();
   for (const item of items) {
+    const introducedStage = String(item.introduced_stage ?? item.source_stage ?? "").trim().toLowerCase();
+    const downstreamIntroduced = new Set(["build-spec", "build-plan", "build-code", "verify-code"]).has(introducedStage);
+    const externalOwner = /(?:^|\b)(?:external|upstream|close-readiness|外部|上游)(?:\b|$)/i.test(String(item.owner ?? ""));
     const missing = [];
-    if (decisionText.trim() && !decisionText.includes(item.id)) missing.push("id missing in decision-log");
-    for (const { name, text } of downstreamDocuments) {
+    // An engineering OPEN/DEFER introduced by build-spec or build-plan is a
+    // downstream fact; requiring it to be retrofitted into make-decision
+    // invents history. Only direction-stage items require a decision-log ID.
+    if (decisionText.trim() && !downstreamIntroduced && !externalOwner && !decisionText.includes(item.id)) missing.push("id missing in decision-log");
+    const localDocuments = externalOwner
+      ? []
+      : downstreamDocuments.filter(({ name }) => !downstreamIntroduced || name !== "decision-log");
+    for (const { name, text } of localDocuments) {
       if (!String(text ?? "").includes(item.id)) missing.push(`id missing in ${name}`);
     }
+    // External ownership is retained as an explicit handoff and is not a
+    // local closure obligation. The caller may still report the external
+    // reference, but local owner/trigger/close fields are not fabricated.
     for (const [field, patterns] of Object.entries(SPEC_ANALYZE_DEFERRED_FIELDS)) {
-      const absentFrom = downstreamDocuments.filter(({ text }) => !analyzeDocumentHasField(text, item.id, patterns)).map(({ name }) => name);
+      if (externalOwner) continue;
+      const absentFrom = localDocuments.filter(({ text }) => !analyzeDocumentHasField(text, item.id, patterns)).map(({ name }) => name);
       if (absentFrom.length > 0) missing.push(`${field} missing in ${absentFrom.join(",")}`);
     }
     if (missing.length > 0) {
@@ -4505,9 +4521,11 @@ function semanticMeaningMatches(expected, actual) {
       || (negativeClaim.test(right) && !negativeClaim.test(left))) return false;
   if (right.includes(left)) {
     const negation = /(?:不|没|未|无|非|否|没有|尚未|不满足|不完全|不具备|不符合|未包含|not|no|without)$/u;
+    const contradictionSuffix = /(?:未(?:启用|实现|完成|发生|保留|写入|记录)?|没有|不(?:存在|成立|正确|可用|支持|满足)|缺失|丢失|错误|失败)$/u;
     let offset = right.indexOf(left);
     while (offset >= 0) {
-      if (!negation.test(right.slice(0, offset))) return true;
+      const after = right.slice(offset + left.length);
+      if (!negation.test(right.slice(0, offset)) && !contradictionSuffix.test(after)) return true;
       offset = right.indexOf(left, offset + left.length);
     }
     return false;
@@ -4972,7 +4990,11 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
     coverageById.set(item.requirement_id, item);
     const artifactRefs = Array.isArray(item.artifact_refs) ? item.artifact_refs : [];
     const evidenceRefs = Array.isArray(item.evidence_refs) ? item.evidence_refs : [];
-    const semanticOk = item.semantic_match !== false
+    // `semantic_match` is a caller assertion, not evidence.  The verdict is
+    // derived from the authenticated material/evidence context and the
+    // bounded behavior statement only; a forged boolean cannot make a
+    // contradictory statement green (or make a valid statement fail).
+    const semanticOk = item.semantic_status === "completed"
       && semanticMeaningMatches(item.expected_behavior, item.actual_behavior);
     const artifactOk = artifactRefs.length > 0 && artifactRefs.every((ref) => nonEmptyString(materials[ref]));
     const evidenceOk = evidenceRefs.length > 0 && evidenceRefs.every((ref) => {
@@ -5554,12 +5576,17 @@ function parseE2eDecisionRefs(value, { knownDecisionRefs = null } = {}) {
   if (raw === "") return { refs: [], errors: ["e2e_decision_refs is required for high_risk_user_visible"] };
   let refs;
   try { refs = JSON.parse(raw); } catch { return { refs: [], errors: ["e2e_decision_refs must be a JSON array"] }; }
-  if (!Array.isArray(refs) || refs.length === 0 || refs.some((ref) => typeof ref !== "string" || !/^D\d+$/.test(ref))) {
-    return { refs: [], errors: ["e2e_decision_refs must be a non-empty D<number> JSON array"] };
+  if (!Array.isArray(refs) || refs.length === 0 || refs.some((ref) => typeof ref !== "string" || !/^D(?:-\d{3}|\d+)$/.test(ref))) {
+    return { refs: [], errors: ["e2e_decision_refs must be a non-empty D-xxx or legacy D<number> JSON array"] };
   }
   if (new Set(refs).size !== refs.length) return { refs: [], errors: ["e2e_decision_refs must not contain duplicates"] };
   const errors = [];
-  for (const required of ["D6", "D7"]) if (!refs.includes(required)) errors.push(`e2e_decision_refs must include ${required}`);
+  // Legacy compact fixtures retain the former policy contract. Current
+  // materials use explicit D-xxx references and are checked against the
+  // current decision log instead of hard-coded D6/D7 identities.
+  if (refs.every((ref) => /^D\d+$/.test(ref))) {
+    for (const required of ["D6", "D7"]) if (!refs.includes(required)) errors.push(`e2e_decision_refs must include ${required}`);
+  }
   if (knownDecisionRefs) {
     for (const ref of refs) if (!knownDecisionRefs.has(ref)) errors.push(`e2e_decision_refs references unknown ${ref}`);
   }
@@ -5568,11 +5595,23 @@ function parseE2eDecisionRefs(value, { knownDecisionRefs = null } = {}) {
 
 function parseE2eRiskDecisionRef(value, { knownDecisionRefs = null } = {}) {
   const ref = taskFieldText(value);
-  if (!/^D\d+$/.test(ref)) return { ref: null, errors: ["e2e_risk_decision_ref must be a D<number> task risk decision"] };
+  if (!/^D(?:-\d{3}|\d+)$/.test(ref)) return { ref: null, errors: ["e2e_risk_decision_ref must be a D-xxx or legacy D<number> task risk decision"] };
   const errors = [];
   if (["D6", "D7"].includes(ref)) errors.push("e2e_risk_decision_ref must be a task risk decision, not D6 or D7 policy");
   if (knownDecisionRefs && !knownDecisionRefs.has(ref)) errors.push(`e2e_risk_decision_ref references unknown ${ref}`);
   return { ref, errors };
+}
+
+function structuredDecisionRefs(markdown) {
+  const refs = new Set();
+  if (typeof markdown !== "string" || markdown.trim() === "") return refs;
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^###\s+(D(?:-\d{3}|\d+))\b/);
+    const tableRow = line.match(/^\|\s*(D(?:-\d{3}|\d+))\s*\|/);
+    if (heading) refs.add(heading[1]);
+    if (tableRow) refs.add(tableRow[1]);
+  }
+  return refs;
 }
 
 function decisionSection(decisionLog, ref) {
@@ -5808,8 +5847,8 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionL
       if (!concreteText(row.fields.acceptance_role)) errors.push(`${row.id} delivery contract requires acceptance_role`);
       if (!concreteText(row.fields.ui_scope)) errors.push(`${row.id} delivery contract requires ui_scope`);
     }
-    const knownDecisionRefs = new Set([...(typeof decisionLog === "string" ? decisionLog : "").matchAll(/^###\s+(D\d+)\b/gm)].map(([, ref]) => ref));
-    const specDecisionRefs = new Set([...spec.matchAll(/\bD\d+\b/g)].map(([ref]) => ref));
+    const knownDecisionRefs = structuredDecisionRefs(decisionLog);
+    const specDecisionRefs = new Set([...spec.matchAll(/\bD(?:-\d{3}|\d+)\b/g)].map(([ref]) => ref));
     const templateVersion = planTaskTemplateVersion(tasks);
     const requiresTypedE2e = templateVersion === "plan-task.v4";
     const e2eRows = rows.filter((row) => e2eFields.some((field) => hasField(row, field)));
@@ -5895,8 +5934,8 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
   if (requiresTypedE2e && !hasField(finalAcceptance ?? { fields: {} }, "e2e_scope")) {
     errors.push(`${finalAcceptance?.heading_id ?? "final acceptance task"} plan-task.v4 requires e2e_scope`);
   }
-  const knownDecisionRefs = new Set([...(typeof decisionLog === "string" ? decisionLog : "").matchAll(/^###\s+(D\d+)\b/gm)].map(([, ref]) => ref));
-  const specDecisionRefs = new Set([...(typeof spec === "string" ? spec : "").matchAll(/\bD\d+\b/g)].map(([ref]) => ref));
+  const knownDecisionRefs = structuredDecisionRefs(decisionLog);
+  const specDecisionRefs = new Set([...(typeof spec === "string" ? spec : "").matchAll(/\bD(?:-\d{3}|\d+)\b/g)].map(([ref]) => ref));
   const legacyTemplate = templateVersion !== PLAN_TASK_V4;
   let legacyScopeMissing = false;
   let finalE2eScope = null;

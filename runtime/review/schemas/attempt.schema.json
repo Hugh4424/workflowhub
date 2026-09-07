@@ -147,6 +147,8 @@
       "additionalProperties": false
     },
     "policy_snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "request_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "dispatch_state": { "enum": ["dispatched", "blocked_before_dispatch", "reused"] },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
     "coverage": {
       "type": "object",

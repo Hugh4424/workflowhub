@@ -28,6 +28,7 @@ function packet(overrides = {}) {
       expected_behavior: "用户要求完整覆盖并减少无谓阻塞",
       actual_behavior: "当前阶段实现了用户要求完整覆盖并减少无谓阻塞",
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["decision_log"],
@@ -228,7 +229,7 @@ describe("authoring-stage spec-analyze profiles", () => {
       stage: "build-plan",
       packet: packet({ coverage: [{
         ...packet().coverage[0],
-        actual_behavior: "hash已检查，支持批量提问",
+          actual_behavior: "hash已检查，支持批量提问", semantic_status: "completed",
         expected_behavior: "支持批量提问",
       }] }),
     });

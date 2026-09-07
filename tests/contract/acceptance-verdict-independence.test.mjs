@@ -78,6 +78,18 @@ describe("acceptance verdict independence", () => {
     expect(deriveStageCompletion("verify-code", [...base, observation("e2e_acceptance")])).toMatchObject({ status: "completed" });
   });
 
+  it("ignores stale E2E facts when projecting the current verify-code requirements", () => {
+    const stale = {
+      ...observation("e2e_acceptance", "missing"),
+      authenticated: false,
+      freshness: { status: "stale" },
+    };
+    expect(deriveStageCompletion("verify-code", [observation("code_review"), stale])).toMatchObject({
+      status: "completed",
+      missing: [],
+    });
+  });
+
   it.each(["failed", "missing"])("selects the uniquely latest E2E terminal (%s), never an older pass", (latestStatus) => {
     const base = [observation("code_review"), observation("human_confirmation")];
     const oldPass = observation("e2e_acceptance", "passed", "2026-08-30T00:00:00.000Z");

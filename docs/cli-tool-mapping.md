@@ -7,7 +7,7 @@
 | 工具 | 调用方 | 权限边界 | 关键字段 | 缺失语义 |
 |---|---|---|---|---|
 | `stage-runtime.mjs` | Codex、DSH、人工/CI | 认证仓库、任务存储 | `--project`、`--task`、`--stage`、`outcome_ref` | 身份缺失即失败 |
-| `workflowhub-stage-agent-bridge.mjs` | Claude/宿主适配层 | 只写当前 task outcome | `project_name`、`task_id`、`task_path`、`stage`、`attempt_id`、`agent_run_id` | `session`/`unavailable` 二选一 |
+| `workflowhub-stage-agent-bridge.mjs` | Claude/宿主适配层 | 只写当前 task outcome | `project_name`、`task_id`、`task_path`、`stage`、`attempt_id`、`agent_run_id`；session 事件含 `subject_kind`、`subject_id`、状态、可选成对时间、`input_refs`、`output_refs` | `session`/`unavailable` 二选一；缺事件保持 `unavailable` |
 | `repo-skills-manifest.mjs` | 维护者、CI | 只读 catalog；写生成物 | 八字段 manifest；origin 数组保留多来源 | 漂移逐字段非零退出 |
 | `wh-review` broker | `wh-review` 薄入口 | host-owned config 和 allowlist | provider provenance、review result | provider 不可得为 `unavailable` |
 
@@ -30,6 +30,6 @@ node tools/cli/stage-runtime.mjs status \
   --stage=build-code --project=workflowhub --task=<task-id>
 ```
 
-宿主结果必须通过 bridge 提交。`session` 代表已执行结果，必须带 `agent_run_id`、宿主/source 字段、当前 task 和阶段事件；无法取得结果时提交 `unavailable` 并带原因。WorkflowHub 不读取、扫描或反查 Claude transcript，也不使用旧 session 环境变量猜身份。
+宿主结果必须通过 bridge 提交。`session` 代表已执行结果，必须带 `agent_run_id`、宿主/source 字段、当前 task 和阶段事件。事件时间可以省略；省略时只保留提交顺序，不推断并发或耗时。`output_refs` 是独立的 task-local 业务输出引用，和 evidence refs 分开保存。无法取得结果时提交 `unavailable` 并带原因。WorkflowHub 不读取、扫描或反查 Claude transcript，也不使用旧 session 环境变量猜身份；bridge 不是自动 hook 或跨进程恢复器。
 
 缺失语义固定为：无法判断是 `unknown`；来源存在但当前不可取是 `unavailable`；应有字段或材料缺失是 `missing`。三者不互换，质量缺口保留在事实记录中。

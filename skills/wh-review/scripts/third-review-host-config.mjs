@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -47,6 +47,111 @@ function realDirectory(path, label) {
 
 function hostConfigPath() { return join(process.env.HOME || homedir(), ".config", "workflowhub", "config.json"); }
 export const THIRD_REVIEW_BROKER_ENGINE = ">=1.2.0";
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function absoluteRegularPath(value, label) {
+  if (typeof value !== "string" || !isAbsolute(value)) throw new TypeError(`${label} must be an absolute path`);
+  return value;
+}
+
+function createAtomicTemp(target, bytes) {
+  const parent = dirname(target);
+  const directory = mkdtempSync(join(parent, ".workflowhub-config-"));
+  const temporary = join(directory, "payload.json");
+  try {
+    writeFileSync(temporary, bytes, { flag: "wx", mode: 0o600 });
+    return { directory, temporary };
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function atomicReplace(target, bytes) {
+  const { directory, temporary } = createAtomicTemp(target, bytes);
+  try {
+    renameSync(temporary, target);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function conflictError(message) {
+  const error = new Error(`CONFIG_RESTORE_CONFLICT: ${message}`);
+  error.code = "CONFIG_RESTORE_CONFLICT";
+  return error;
+}
+
+/**
+ * Remove the duplicate WorkflowHub-side provider declarations while keeping
+ * route order and every unrelated setting byte-addressable through the backup.
+ * This is an explicit private operation seam; it is not a public CLI action.
+ */
+export function migrateWhReviewConfig({ configPath, backupPath, expectedHash = null } = {}) {
+  const target = regularFile(absoluteRegularPath(configPath, "configPath"), "workflowhub host config");
+  const backup = absoluteRegularPath(backupPath, "backupPath");
+  if (existsSync(backup)) throw new Error("backupPath already exists; migration will not overwrite it");
+  const before = readFileSync(target);
+  const beforeHash = sha256(before);
+  if (expectedHash !== null && beforeHash !== expectedHash) throw conflictError("current config changed before migration");
+  let parsed;
+  try { parsed = JSON.parse(before.toString("utf8")); }
+  catch (error) { throw new Error(`workflowhub host config is invalid JSON: ${error.message}`); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("workflowhub host config must be an object");
+  const migrated = structuredClone(parsed);
+  if (migrated.wh_review && typeof migrated.wh_review === "object" && !Array.isArray(migrated.wh_review)) {
+    delete migrated.wh_review.profiles;
+    delete migrated.wh_review.priority;
+  }
+  const after = Buffer.from(`${JSON.stringify(migrated, null, 2)}\n`, "utf8");
+  const afterHash = sha256(after);
+  // Create the backup with wx so a prior backup can never be silently replaced.
+  writeFileSync(backup, before, { flag: "wx", mode: 0o600 });
+  try {
+    const reread = readFileSync(target);
+    if (sha256(reread) !== beforeHash) throw conflictError("current config drifted during migration");
+    if (afterHash !== beforeHash) atomicReplace(target, after);
+    const finalBytes = readFileSync(target);
+    const finalHash = sha256(finalBytes);
+    if (finalHash !== afterHash) throw new Error("migration write verification failed");
+    return Object.freeze({
+      configPath: target,
+      backupPath: backup,
+      beforeHash,
+      afterHash,
+      backupHash: sha256(readFileSync(backup)),
+      changed: afterHash !== beforeHash,
+    });
+  } catch (error) {
+    // Preserve the original backup and surface the conflict; callers can use
+    // the guarded restore seam after inspecting the current bytes.
+    throw error;
+  }
+}
+
+/** Restore a migration backup only when both current and backup bytes match. */
+export function restoreWhReviewConfig({ configPath, backupPath, expectedCurrentHash, expectedBackupHash } = {}) {
+  const target = regularFile(absoluteRegularPath(configPath, "configPath"), "workflowhub host config");
+  const backup = regularFile(absoluteRegularPath(backupPath, "backupPath"), "workflowhub config backup");
+  if (typeof expectedCurrentHash !== "string" || !/^[a-f0-9]{64}$/.test(expectedCurrentHash)) throw new TypeError("expectedCurrentHash must be a SHA-256 hash");
+  if (typeof expectedBackupHash !== "string" || !/^[a-f0-9]{64}$/.test(expectedBackupHash)) throw new TypeError("expectedBackupHash must be a SHA-256 hash");
+  const backupBytes = readFileSync(backup);
+  const backupHash = sha256(backupBytes);
+  if (backupHash !== expectedBackupHash) throw conflictError("backup bytes do not match expectedBackupHash");
+  const currentBytes = readFileSync(target);
+  const currentHash = sha256(currentBytes);
+  if (currentHash !== expectedCurrentHash) throw conflictError("current config bytes do not match expectedCurrentHash");
+  const reread = readFileSync(target);
+  if (sha256(reread) !== expectedCurrentHash) throw conflictError("current config drifted before restore");
+  atomicReplace(target, backupBytes);
+  const afterBytes = readFileSync(target);
+  const afterHash = sha256(afterBytes);
+  if (afterHash !== backupHash) throw new Error("restore write verification failed");
+  return Object.freeze({ configPath: target, backupPath: backup, beforeHash: expectedCurrentHash, afterHash, restored: true });
+}
 
 function parseSemver(value) {
   const match = typeof value === "string" && /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
@@ -201,7 +306,7 @@ function route(value, label) {
 }
 
 function validateRouteProfiles(route, profiles, label) {
-  if (Object.keys(profiles).length === 0) return;
+  if (!profiles || Object.keys(profiles).length === 0) return;
   for (const [name, providers] of [["initial", route.initial], ["closure", route.closure ?? []]]) {
     let previousPriority = -1;
     for (const provider of providers) {
@@ -277,9 +382,9 @@ export function validateAllWhReviewRoutes(whReview) {
 function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
-  for (const key of Object.keys(value)) if (!["version", "profiles", "stages", "mini_task"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
-  const allowedProfiles = requestedProfileNames(value, { requestedStage, requestedTrack, requestedReviewKind });
-  const profiles = augmentFocusedProfiles(value, profileDeclarations(value.profiles, "workflowhub host wh_review.profiles", allowedProfiles), allowedProfiles);
+  if (Object.hasOwn(value, "profiles")) throw new Error("workflowhub host wh_review.profiles is not supported; migrate provider definitions to 3rd-review config");
+  if (Object.hasOwn(value, "priority")) throw new Error("workflowhub host wh_review.priority is not supported; migrate provider definitions to 3rd-review config");
+  for (const key of Object.keys(value)) if (!["version", "stages", "mini_task"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
   const embeddedMiniTask = value.stages.mini_task ?? value.stages["mini-task"];
   if (embeddedMiniTask !== undefined && value.mini_task !== undefined) throw new Error("workflowhub host wh_review mini-task routes must have one config location");
   const configuredStages = { ...value.stages };
@@ -335,7 +440,7 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
       }
     }
   }
-  const policy = { version: 2, profiles, stages, ...(Object.keys(miniTask).length ? { mini_task: miniTask } : {}) };
+  const policy = { version: 2, stages, ...(Object.keys(miniTask).length ? { mini_task: miniTask } : {}) };
   if (requestedStage === null) validateAllWhReviewRoutes(policy);
   else validateWhReviewRoute(policy, requestedStage, requestedTrack);
   return policy;
@@ -387,7 +492,6 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   verifyPacketAllowlist(configPath, attachmentRoot);
   const broker = brokerConfig(configPath);
   const whReview = whReviewPolicy(config.wh_review, { requestedStage, requestedTrack, requestedReviewKind });
-  validateWhReviewProfileDeclarations(whReview, broker, { requestedStage, requestedTrack, requestedReviewKind });
   const routeWarnings = whReview && requestedStage !== null
     ? routeEntries(config.wh_review.stages).filter(({ stage }) => REVIEW_STAGES.has(stage)).flatMap(({ stage, track }) => {
       if (stage === requestedStage && track === requestedTrack) return [];
@@ -407,6 +511,7 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
 }
 
 function routeWithProfilePriorities(route, profiles) {
+  if (!profiles || Object.keys(profiles).length === 0) return route;
   const profileSpecs = Object.fromEntries([...route.initial, ...(route.closure ?? [])]
     .filter((provider) => profiles[provider] !== undefined)
     .map((provider) => [provider, { provider, ...profiles[provider] }]));

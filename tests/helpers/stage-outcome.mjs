@@ -240,6 +240,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       expected_behavior: materialText["decision-log.md"],
       actual_behavior: `${materialText["decision-log.md"]}并保留可验证产物`,
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-fixture-stage-end"],
       oracle_refs: ["ORACLE-fixture-stage-end"],
       artifact_refs: [profile.required_materials.find((name) => name !== "original_requirement") ?? "decision_log"],

@@ -266,6 +266,10 @@ export function deriveStageCompletion(stage, observations = [], { requireStageOu
     // The verify handler emits this subject only after private canonical
     // readers have authenticated its execution/review/confirmation chain.
     ...(stage === "verify-code" && observations.some((observation) => {
+      // Historical or stale E2E facts must not turn on a current verify-code
+      // requirement.  The fact is only a conditional predicate when the
+      // current authenticated projection actually published it.
+      if (observation?.authenticated !== true || observation?.freshness?.status !== "current") return false;
       const fact = observation?.fact?.value ?? observation?.fact;
       return fact?.stage === stage
         && fact.kind === "acceptance_criterion"

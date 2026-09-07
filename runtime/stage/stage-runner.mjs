@@ -133,6 +133,45 @@ function outcomeEvidence(ctx, entry, label, binding) {
   return { ref, sha256 };
 }
 
+function validateOutputRefs(value, label) {
+  if (!Array.isArray(value)) throw outcomeError(`${label} must be an array`);
+  value.forEach((ref, index) => {
+    if (typeof ref !== "string" || ref.trim() === "") throw outcomeError(`${label}[${index}] must be a non-empty reference`);
+    const normalized = ref.trim();
+    if (normalized.startsWith("/") || normalized.includes("\\") || normalized.split("/").includes("..")) {
+      throw outcomeError(`${label}[${index}] is outside the task evidence namespace`);
+    }
+    const parts = normalized.split("/");
+    const supported = normalized === "quality/verify.json"
+      || (parts.length >= 3 && parts[0] === "quality"
+        && new Set(["evidence", "tests", "reviews", "facts"]).has(parts[1])
+        && parts.slice(2).every((part) => /^[A-Za-z0-9._-]+$/.test(part)));
+    if (!supported) throw outcomeError(`${label}[${index}] is not a supported task-local output reference`);
+  });
+  return value;
+}
+
+function validateExistingOutputOwnership(ctx, refs, label) {
+  for (const [index, ref] of refs.entries()) {
+    let raw;
+    try { raw = ctx.task.readRecord(ref); }
+    catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw outcomeError(`${label}[${index}] cannot be read: ${error?.message ?? error}`);
+    }
+    try {
+      const value = JSON.parse(raw);
+      if (value && typeof value === "object" && !Array.isArray(value)
+          && Object.hasOwn(value, "task_id") && value.task_id !== ctx.identity.taskId) {
+        throw outcomeError(`${label}[${index}] references a record owned by another task`);
+      }
+    } catch (error) {
+      if (error?.code === "MATERIAL_INCOMPLETE" && /owned by another task/.test(error.message)) throw error;
+      // Plain text business outputs are valid task-local records.
+    }
+  }
+}
+
 function validateOutcomeCost(value, label) {
   const cost = outcomeObject(value, label);
   const allowed = new Set(["duration_ms", "tokens", "status", "reason"]);
@@ -172,6 +211,8 @@ function validateStepOutcome(ctx, stage, actual, expected, index, binding) {
   if (!OUTCOME_STATUSES.has(value.status)) throw outcomeError(`step_outcomes[${index}].status is invalid`);
   if (!Array.isArray(value.input_refs)) throw outcomeError(`step_outcomes[${index}].input_refs must be an array`);
   value.input_refs.forEach((ref, refIndex) => outcomeText(ref, `step_outcomes[${index}].input_refs[${refIndex}]`));
+  const outputRefs = validateOutputRefs(value.output_refs ?? [], `step_outcomes[${index}].output_refs`);
+  validateExistingOutputOwnership(ctx, outputRefs, `step_outcomes[${index}].output_refs`);
   outcomeText(value.result_summary, `step_outcomes[${index}].result_summary`);
   if (!Array.isArray(value.evidence_refs)) throw outcomeError(`step_outcomes[${index}].evidence_refs must be an array`);
   const evidence = value.evidence_refs.map((entry, refIndex) => outcomeEvidence(ctx, entry, `step_outcomes[${index}].evidence_refs[${refIndex}]`, {
@@ -197,6 +238,8 @@ function validateSkillOutcome(ctx, actual, expected, index, binding) {
   }
   outcomeText(value.version, `skill_outcomes[${index}].version`);
   outcomeText(value.result_summary, `skill_outcomes[${index}].result_summary`);
+  const outputRefs = validateOutputRefs(value.output_refs ?? [], `skill_outcomes[${index}].output_refs`);
+  validateExistingOutputOwnership(ctx, outputRefs, `skill_outcomes[${index}].output_refs`);
   if (!Array.isArray(value.evidence_refs)) throw outcomeError(`skill_outcomes[${index}].evidence_refs must be an array`);
   const evidence = value.evidence_refs.map((entry, refIndex) => outcomeEvidence(ctx, entry, `skill_outcomes[${index}].evidence_refs[${refIndex}]`, {
     ...binding,

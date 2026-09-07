@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 
 import {
@@ -35,6 +35,7 @@ import { openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { validateProjectName, validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
+import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -658,14 +659,27 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     });
   }
   if (command === "review-record") {
-    if (!input || typeof input !== "object" || Array.isArray(input) || !Object.prototype.hasOwnProperty.call(input, "result")) {
-      throw new TypeError("review-record input requires a 'result' field with the simple review public result");
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
     }
-    const refs = recordSimpleReviewResult({
-      task: context.task,
-      result: input.result,
-      kernel: context.kernel,
-    });
+    const hasRequest = Object.prototype.hasOwnProperty.call(input, "request");
+    const hasResult = Object.prototype.hasOwnProperty.call(input, "result");
+    if (hasRequest === hasResult) throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
+    const refs = hasRequest
+      ? await recordSimpleReviewRequest({
+        task: context.task,
+        kernel: context.kernel,
+        request: input.request,
+        runRound: typeof services.runReviewRound === "function" ? services.runReviewRound : runSimpleReview,
+        materialIdForRequest: typeof services.materialIdForRequest === "function"
+          ? services.materialIdForRequest
+          : (request) => createSimpleReviewPacket(request).material_id,
+      })
+      : recordSimpleReviewResult({
+        task: context.task,
+        result: input.result,
+        kernel: context.kernel,
+      });
     return { status: "recorded", ...refs };
   }
   if (command === "reflect") {
@@ -759,7 +773,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
         doctor: ["workspace"],
         status: ["begin", "repair"],
         run: ["execute", "preflight", "draft", "reflect"],
-        review: ["risk"],
+        review: ["risk", "record"],
         verify: ["execute"],
         confirm: ["decision"],
         authorize: ["commit", "push", "merge", "archive", "cleanup"],

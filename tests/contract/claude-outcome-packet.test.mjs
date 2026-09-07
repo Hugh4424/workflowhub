@@ -117,6 +117,96 @@ describe("Claude/host explicit outcome packet contract", () => {
     });
   });
 
+  it("preserves explicitly ordered untimed events and output references", async () => {
+    const state = fixture("claude-untimed-output-fixture");
+    const input = readFixture();
+    input.task_id = state.task.identity.taskId;
+    input.session.task_id = state.task.identity.taskId;
+    input.task_path = state.task.taskPath;
+    input.attempt_id = "attempt-claude-untimed-output";
+    input.agent_run_id = "agent-claude-untimed-output";
+    input.session.events = [
+      {
+        subject_kind: "step", subject_id: "stage-end-spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+        status: "incomplete", result_summary: "untimed host event", reason: "fixture", output_refs: ["quality/evidence/host-produced.json"],
+      },
+      {
+        subject_kind: "skill", subject_id: "spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+        status: "incomplete", trigger: true, executed: true, version: "fixture-1", result_summary: "untimed skill event", reason: "fixture",
+      },
+    ];
+    const result = await workflowHubBridgeMain(input);
+    const outcome = JSON.parse(state.task.readRecord(result.outcome_ref));
+    const recordedStep = outcome.step_outcomes.find((entry) => entry.step_slug === "stage-end-spec-analyze");
+    expect(recordedStep.output_refs).toEqual(["quality/evidence/host-produced.json"]);
+    expect(recordedStep.cost.status).toBe("unavailable");
+  });
+
+  it("rejects unsafe output references at the host boundary", async () => {
+    const state = fixture("claude-unsafe-output-fixture");
+    const input = readFixture();
+    input.task_id = state.task.identity.taskId;
+    input.session.task_id = state.task.identity.taskId;
+    input.task_path = state.task.taskPath;
+    input.session.events = [{
+      subject_kind: "step", subject_id: "stage-end-spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+      status: "incomplete", result_summary: "unsafe output", reason: "fixture", output_refs: ["../outside.json"],
+    }];
+    await expect(workflowHubBridgeMain(input)).rejects.toThrow(/outside the task evidence namespace/i);
+  });
+
+  it.each(["other-task/output.json", "quality/unknown/output.json"]) ("rejects unsupported task-local output namespace %s", async (outputRef) => {
+    const state = fixture("claude-unsupported-output-fixture");
+    const input = readFixture();
+    input.task_id = state.task.identity.taskId;
+    input.session.task_id = state.task.identity.taskId;
+    input.task_path = state.task.taskPath;
+    input.session.events = [{
+      subject_kind: "step", subject_id: "stage-end-spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+      status: "incomplete", result_summary: "unsupported output", reason: "fixture", output_refs: [outputRef],
+    }];
+    await expect(workflowHubBridgeMain(input)).rejects.toThrow(/supported task-local output reference/i);
+  });
+
+  it("rejects an existing structured output record owned by another task", async () => {
+    const state = fixture("claude-cross-task-output-fixture");
+    state.task.createRecordAtomic("quality/evidence/foreign-output.json", JSON.stringify({ task_id: "another-task", value: "foreign" }));
+    const input = readFixture();
+    input.task_id = state.task.identity.taskId;
+    input.session.task_id = state.task.identity.taskId;
+    input.task_path = state.task.taskPath;
+    input.session.events = [{
+      subject_kind: "step", subject_id: "stage-end-spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+      status: "incomplete", result_summary: "cross-task output", reason: "fixture", output_refs: ["quality/evidence/foreign-output.json"],
+    }];
+    await expect(workflowHubBridgeMain(input)).rejects.toThrow(/owned by another task/i);
+  });
+
+  it("rejects overlapping timed events even when another event is untimed", async () => {
+    const state = fixture("claude-mixed-timing-fixture");
+    const input = readFixture();
+    input.task_id = state.task.identity.taskId;
+    input.session.task_id = state.task.identity.taskId;
+    input.task_path = state.task.taskPath;
+    input.attempt_id = "attempt-claude-mixed-timing";
+    input.agent_run_id = "agent-claude-mixed-timing";
+    input.session.events = [
+      {
+        subject_kind: "step", subject_id: "stage-end-spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+        started_at_ms: 10, ended_at_ms: 20, status: "incomplete", result_summary: "timed step", reason: "fixture",
+      },
+      {
+        subject_kind: "skill", subject_id: "spec-analyze", task_id: state.task.identity.taskId, stage: "build-code",
+        status: "incomplete", trigger: true, executed: true, version: "fixture-1", result_summary: "untimed skill", reason: "fixture",
+      },
+      {
+        subject_kind: "step", subject_id: "implement-change", task_id: state.task.identity.taskId, stage: "build-code",
+        started_at_ms: 15, ended_at_ms: 25, status: "incomplete", result_summary: "overlapping timed step", reason: "fixture",
+      },
+    ];
+    await expect(workflowHubBridgeMain(input)).rejects.toThrow(/overlaps or moves the lifecycle clock backward/i);
+  });
+
   it("rejects a missing host result instead of inventing execution", async () => {
     const input = readFixture();
     delete input.session;

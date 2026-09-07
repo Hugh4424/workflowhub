@@ -48,6 +48,53 @@ function text(value, label) {
   return value;
 }
 
+function supportedTaskOutputRef(value) {
+  if (value === "quality/verify.json") return true;
+  const parts = value.split("/");
+  return parts.length >= 3
+    && parts[0] === "quality"
+    && new Set(["evidence", "tests", "reviews", "facts"]).has(parts[1])
+    && parts.slice(2).every((part) => /^[A-Za-z0-9._-]+$/.test(part));
+}
+
+function outputRefs(value, label) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
+  return value.map((ref, index) => {
+    if (typeof ref !== "string" || ref.trim() === "") throw new TypeError(`${label}[${index}] must be a non-empty reference`);
+    const normalized = ref.trim();
+    if (normalized.startsWith("/") || normalized.includes("\\") || normalized.split("/").includes("..")) {
+      throw new Error(`${label}[${index}] is outside the task evidence namespace`);
+    }
+    if (!supportedTaskOutputRef(normalized)) throw new Error(`${label}[${index}] is not a supported task-local output reference`);
+    return normalized;
+  });
+}
+
+function validateExistingOutputOwnership(task, refs, label) {
+  for (const [index, ref] of refs.entries()) {
+    let raw;
+    try { raw = task.readRecord(ref); }
+    catch (error) {
+      // Outputs may be declared before the producer writes them. Only a
+      // missing record is tolerated; permission, I/O, and storage failures
+      // must remain visible at the authenticated bridge boundary.
+      if (error?.code === "ENOENT") continue;
+      throw new Error(`${label}[${index}] cannot be read: ${error?.message ?? error}`);
+    }
+    try {
+      const value = JSON.parse(raw);
+      if (value && typeof value === "object" && !Array.isArray(value)
+          && Object.hasOwn(value, "task_id") && value.task_id !== task.identity.taskId) {
+        throw new Error(`${label}[${index}] references a record owned by another task`);
+      }
+    } catch (error) {
+      if (error?.message?.includes("owned by another task")) throw error;
+      // Plain text business outputs are valid task-local records.
+    }
+  }
+}
+
 function status(value, label) {
   if (!STATUSES.has(value)) throw new TypeError(`${label} must be a supported stage outcome status`);
   return value;
@@ -496,6 +543,7 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
     order: step.order,
     status: "unavailable",
     input_refs: [],
+    output_refs: [],
     result_summary: `Stage Agent 未提供 ${step.step_slug} 的真实执行结果`,
     evidence: evidence("step", step.step_slug),
     reason: safeReason,
@@ -508,6 +556,7 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
     executed: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
     version: "unavailable",
     input_refs: [],
+    output_refs: [],
     result_summary: `Stage Agent 未提供 ${skill.name} 的真实执行结果`,
     evidence: evidence("skill", skill.name),
     reason: safeReason,
@@ -634,12 +683,16 @@ export function publishStageAgentOutcome({
       order: expected.order,
       status: result.outcomeStatus,
       input_refs: Array.isArray(entry.input_refs) ? [...entry.input_refs] : (() => { throw new TypeError(`step ${expected.step_slug}.input_refs must be an array`); })(),
+      output_refs: outputRefs(entry.output_refs, `step ${expected.step_slug}.output_refs`),
       result_summary: result.resultSummary,
       evidence_refs: result.evidenceRefs,
       ...(result.outcomeStatus === "completed" ? {} : { reason: text(entry.reason ?? entry.error, `step ${expected.step_slug}.reason`) }),
       cost: cost(entry.cost, `step ${expected.step_slug}.cost`),
     };
   });
+  for (const [index, outcome] of stepOutcomes.entries()) {
+    validateExistingOutputOwnership(safeTask, outcome.output_refs, `step_outcomes[${index}].output_refs`);
+  }
   const skillOutcomes = input.skills.map((entry, index) => {
     const expected = skills.skills[index];
     if (entry.skill_id !== expected.name) throw new Error(`${stage} Stage Agent skill ${index + 1} does not match the declared manifest`);
@@ -652,6 +705,7 @@ export function publishStageAgentOutcome({
       executed: entry.executed,
       version: text(entry.version, `skill ${expected.name}.version`),
       input_refs: Array.isArray(entry.input_refs) ? [...entry.input_refs] : [],
+      output_refs: outputRefs(entry.output_refs, `skill ${expected.name}.output_refs`),
       result_summary: result.resultSummary,
       evidence_refs: result.evidenceRefs,
       consumer_binding: consumerBindings[index],
@@ -659,6 +713,9 @@ export function publishStageAgentOutcome({
       cost: cost(entry.cost, `skill ${expected.name}.cost`),
     };
   });
+  for (const [index, outcome] of skillOutcomes.entries()) {
+    validateExistingOutputOwnership(safeTask, outcome.output_refs, `skill_outcomes[${index}].output_refs`);
+  }
   const adapterInput = {
     ...input,
     steps: input.steps.map((entry, index) => ({ ...entry, __adapter_result: { evidenceRefs: stepOutcomes[index].evidence_refs } })),
@@ -822,6 +879,7 @@ export function createWorkflowHubSessionRecorder({
             order: current.expected.order,
             status: outcomeStatus,
             input_refs: Array.isArray(value.input_refs) ? [...value.input_refs] : current.expected.entry_conditions.map(({ uri_or_path }) => uri_or_path),
+            output_refs: outputRefs(value.output_refs, `${subjectKind} ${subjectId}.output_refs`),
             result_summary: resultSummary,
             evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
             ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
@@ -834,6 +892,7 @@ export function createWorkflowHubSessionRecorder({
             executed: value.executed,
             version: text(value.version, `skill ${subjectId}.version`),
             input_refs: Array.isArray(value.input_refs) ? [...value.input_refs] : [],
+            output_refs: outputRefs(value.output_refs, `${subjectKind} ${subjectId}.output_refs`),
             result_summary: resultSummary,
             evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
             ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
@@ -854,6 +913,7 @@ export function createWorkflowHubSessionRecorder({
           order: stepBySlug.get(subjectId).order,
           status: "unavailable",
           input_refs: [],
+          output_refs: [],
           result_summary: `当前 WorkflowHub 会话未记录步骤 ${subjectId}`,
           evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
           reason,
@@ -866,6 +926,7 @@ export function createWorkflowHubSessionRecorder({
           executed: false,
           version: "unavailable",
           input_refs: [],
+          output_refs: [],
           result_summary: `当前 WorkflowHub 会话未记录技能 ${subjectId}`,
           evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
           reason,

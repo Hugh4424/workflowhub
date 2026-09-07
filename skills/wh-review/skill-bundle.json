@@ -107,15 +107,15 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "db00dbb5b32f00c9c1801084697851400a93c368b074fe53e1c50cf47f6b5643"
+      "sha256": "ae6e92ccd59bc5c2bf147fdba0116ea5a4d57cc9cd56b3c3967e3dbd8f6a43a5"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "0b4021a8a4db253a6147ab4a1d39a8bf1b722e4c9094148f7e3a09441c78254c"
+      "sha256": "daf59815c3f22e0b52359fd1f0dd42e7456e7e42e23b14c43ad3bb6a7a75c057"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "3ef5fbb50cd0940d7ec68f07cab82f05be66b6a1337d63bc05e6cee6ee12063d"
+      "sha256": "673fa187403aa788f38eaf2d40685180130ad20c8655ae667d18305d25e83054"
     },
     {
       "path": "stage-skill-plan.json",
