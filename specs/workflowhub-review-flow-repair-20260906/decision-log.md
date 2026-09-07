@@ -233,12 +233,13 @@
 
 - 背景：决策基线（D-001~D-008）在合并前旧契约下冻结并经用户确认（回执 quality/confirmations/e47d2e1016d46ae226c3081976cfb95610de159bb5dbd85255a8d250d685f755.json）；合并后新冻结契约要求三方绑定当前材料版本，实测文本路径存在自指死结（F-020）。
 - 用户裁决：2026-09-07 用户选 B1——按作者惯例做诚实续签留痕，不伪装 passed，续签后进 build-plan。
-- 续签确认回执：quality/confirmations/b66063556b54e84fdac62af23277829365b5dcf90b7b5a33b9f7e0553c23e006.json（human-confirmation.v3，decision=accepted，reply_text="B1：按作者惯例做诚实的续签留痕（推荐）"）。
+- 续签确认回执：quality/confirmations/cfc63f73dc7943c8f3afa88bdff026da92c694a2e57e6b3c2d4771ae430030c4.json（human-confirmation.v3，decision=accepted，reply_text="B1：按作者惯例做诚实的续签留痕（推荐）"）。
+- 重复回执披露：续签确认首次发布于 cfc63f73dc7943c8f3afa88bdff026da92c694a2e57e6b3c2d4771ae430030c4（03:12:13，本节引用此件）；主会话重取引用时误重发产生内容等价的重复回执 b66063556b54e84fdac62af23277829365b5dcf90b7b5a33b9f7e0553c23e006（03:12:33，仅 confirmed_at 不同）；confirm 动作跨调用非幂等，两记录均不可变保留、以首次发布为准。
 - 绑定值说明：下列 material_revision/snapshot_tree 为续签确认发布时刻的绑定事实；本行回填后材料已演进，freeze 校验将如实显示"绑定非当前"，不视为续签无效（F-020）。
 
 ### M6 冻结续签（approval_binding 已 accepted，2026-09-07）
 
-- approval_binding: accepted（续签确认回执 quality/confirmations/b66063556b54e84fdac62af23277829365b5dcf90b7b5a33b9f7e0553c23e006.json）
+- approval_binding: accepted（续签确认回执 quality/confirmations/cfc63f73dc7943c8f3afa88bdff026da92c694a2e57e6b3c2d4771ae430030c4.json）
 - decision_id: D-009
 - material_revision: revision-fa6cc40ae7f7a61228f4a1e9f913ccaa7db58c25fe5b38db3d6306a6b81c3bdc
 - snapshot_tree: 55c7c650f01291f890ab09353f144b5ba65cd307
