@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import Ajv2020 from "ajv/dist/2020.js";
+import qualityFactSchema from "../schemas/quality-fact.v1.json" with { type: "json" };
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -6,9 +8,134 @@ const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\
 const FULL_TEST_COMMAND = "npm test";
 const IMPLEMENTATION_DIFF_REF = /^quality\/evidence\/implementation\/[a-f0-9]{64}\.diff$/;
 const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 const SAFE_PATH = /^(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+))(?:\/(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+)))*$/;
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
+const qualityFactValidator = new Ajv2020({ allErrors: true, strict: false,
+  formats: { "date-time": (value) => Number.isFinite(Date.parse(value)) },
+}).compile(qualityFactSchema);
+
+export function validateCanonicalQualityFact(value) {
+  if (!qualityFactValidator(value)) throw new Error("canonical quality fact does not match quality-fact.v1");
+  return value;
+}
+
+function canonicalJson(value) {
+  if (typeof value === "number" && !Number.isFinite(value)) throw new Error("acceptance assertion must contain finite JSON values");
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+/** Pure semantic checks shared by the host outcome reader and nested freshness. */
+export function validateStageOutcomeProducerIdentity(record, stage, { requireSource = false } = {}) {
+  const producer = record?.producer;
+  const nonempty = (value) => typeof value === "string" && value.trim() !== "";
+  if (!producer || typeof producer !== "object" || Array.isArray(producer)) throw new Error(`${stage} stage outcome producer identity is invalid`);
+  if (!nonempty(producer.kind)) throw new Error(`${stage} stage outcome producer.kind must be non-empty`);
+  if (!new Set(["stage-agent", "workflowhub-session"]).has(producer.kind)) throw new Error(`${stage} stage outcome producer.kind is invalid`);
+  if (!nonempty(producer.host)) throw new Error(`${stage} stage outcome producer.host must be non-empty`);
+  if (!nonempty(producer.agent_run_id)) throw new Error(`${stage} stage outcome producer.agent_run_id must be non-empty`);
+  if (producer.session_id !== undefined && !nonempty(producer.session_id)) throw new Error(`${stage} stage outcome producer.session_id must be non-empty`);
+  if ((producer.kind === "workflowhub-session" || producer.source_ref !== undefined) && !nonempty(producer.source_ref)) throw new Error(`${stage} stage outcome producer.source_ref must be non-empty`);
+  let sourceId = null, sourceFamily = null;
+  if (requireSource || producer.source_id !== undefined || producer.source_family !== undefined) {
+    if (!nonempty(producer.source_id)) throw new Error(`${stage} stage outcome producer.source_id must be non-empty`);
+    if (!nonempty(producer.source_family)) throw new Error(`${stage} stage outcome producer.source_family must be non-empty`);
+    if (producer.source_family !== producer.source_id.split("/")[0]) throw new Error(`${stage} stage outcome producer source identity mismatch`);
+    sourceId = producer.source_id; sourceFamily = producer.source_family;
+  }
+  return Object.freeze({ kind: producer.kind, sourceId, sourceFamily, agentRunId: producer.agent_run_id });
+}
+
+export function validateStageOutcomeProof(raw, reference, binding, label = "stage outcome proof") {
+  const match = /^quality\/evidence\/stage-outcome-proofs\/([a-f0-9]{64})\.json$/.exec(reference?.ref ?? "");
+  if (!match || match[1] !== reference.sha256 || hashText(raw) !== reference.sha256) throw new Error(`${label}.ref hash mismatch`);
+  let evidence;
+  try { evidence = JSON.parse(raw); } catch { throw new Error(`${label}.ref must contain structured semantic evidence`); }
+  if (evidence?.schema_version !== "workflowhub-stage-outcome-evidence.v1") throw new Error(`${label}.ref has an invalid evidence schema`);
+  for (const [key, expected] of Object.entries({
+    task_id: binding.taskId, attempt_id: binding.attemptId, stage: binding.stage,
+    snapshot_tree: binding.snapshotTree, material_revision: binding.materialRevision,
+    subject_kind: binding.subjectKind, subject_id: binding.subjectId,
+    outcome_status: binding.outcomeStatus, result_summary: binding.resultSummary,
+  })) {
+    if (evidence[key] !== expected) throw new Error(`${label}.ref semantic binding mismatch: ${key}`);
+  }
+  if (!(evidence.producer_identity === undefined && binding.allowLegacyApprovalProof === true)
+      && canonicalJson(evidence.producer_identity) !== canonicalJson(binding.producerIdentity)) throw new Error(`${label}.ref producer identity binding mismatch`);
+  return evidence;
+}
+
+/** Derive assertions from actual child JSON; its claimed verdict is never consumed. */
+export function deriveAcceptanceExecutionAssertions(raw, criterionIds) {
+  let value;
+  try {
+    const text = Buffer.isBuffer(raw) ? new TextDecoder("utf-8", { fatal: true }).decode(raw) : raw;
+    value = JSON.parse(text);
+  } catch { throw new Error("acceptance execution output is not valid UTF-8 JSON"); }
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(value.entries)
+      || !Array.isArray(criterionIds) || criterionIds.length === 0 || value.entries.length !== criterionIds.length) throw new Error("acceptance execution must return every declared AC exactly once");
+  const seen = new Set();
+  return value.entries.map((entry) => {
+    const id = entry?.acceptance_criterion_id;
+    if (!criterionIds.includes(id) || seen.has(id) || !Array.isArray(entry.assertions) || entry.assertions.length === 0) throw new Error("acceptance execution has unknown, duplicate, missing AC or empty assertions");
+    seen.add(id);
+    const assertions = new Set();
+    return { acceptance_criterion_id: id, assertions: entry.assertions.map((assertion) => {
+      if (!assertion || typeof assertion !== "object" || Array.isArray(assertion)
+          || typeof assertion.id !== "string" || assertion.id.trim() === "" || assertions.has(assertion.id)
+          || !Object.hasOwn(assertion, "expected") || !Object.hasOwn(assertion, "actual")) throw new Error("acceptance execution assertion is incomplete or duplicate");
+      assertions.add(assertion.id);
+      return { id: assertion.id, expected: assertion.expected, actual: assertion.actual,
+        result: canonicalJson(assertion.expected) === canonicalJson(assertion.actual) ? "passed" : "failed" };
+    }) };
+  });
+}
+
+export function validateAcceptanceExecutionEvidence(value) {
+  const subject = value?.subject_fact;
+  const execution = subject?.execution;
+  if (value?.schema_version !== "stage-quality-evidence.v1" || value.stage !== "build-code"
+      || typeof value.task_id !== "string" || !value.task_id || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+      || !OID.test(value.snapshot_tree ?? "") || typeof value.subject !== "string" || !value.subject.startsWith("AC-")
+      || !subject || !new Set(["passed", "failed", "missing"]).has(subject.status) || value.status !== subject.status
+      || !execution || !new Set(["command", "service"]).has(execution.tier)
+      || !(execution.exit_code === null || Number.isInteger(execution.exit_code))
+      || !(execution.signal === null || (typeof execution.signal === "string" && execution.signal.trim() !== ""))
+      || typeof execution.timed_out !== "boolean" || typeof execution.cancelled !== "boolean"
+      || (execution.timed_out && execution.cancelled)
+      || !new Set(["completed", "failed", "not_started"]).has(execution.cleanup?.status)
+      || !Number.isSafeInteger(execution.timeout_ms) || execution.timeout_ms < 1
+      || !Array.isArray(subject.assertions)) throw new Error("acceptance execution per-AC evidence is invalid");
+  for (const stream of ["stdout", "stderr"]) {
+    const hash = execution[`${stream}_hash`];
+    if (!HASH.test(hash ?? "") || execution[`${stream}_ref`] !== `quality/evidence/stage-quality/build-code/acceptance-${stream}-${hash}.bin`) throw new Error(`acceptance ${stream} bytes binding is invalid`);
+  }
+  if (!["source", "sample", "scenario"].every((key) => typeof execution[key] === "string" && execution[key].trim())) throw new Error("acceptance execution scenario identity is incomplete");
+  if (execution.tier === "command") {
+    if (typeof execution.command !== "string" || !execution.command.trim() || !Array.isArray(execution.args) || execution.args.some((arg) => typeof arg !== "string")) throw new Error("acceptance argv identity is invalid");
+  } else if (typeof execution.module_ref !== "string" || !SAFE_PATH.test(execution.module_ref)
+      || typeof execution.export_name !== "string" || !execution.export_name.trim()
+      || !HASH.test(execution.module_sha256 ?? "") || !Object.hasOwn(execution, "input")) throw new Error("acceptance service identity is invalid");
+  const binding = subject.execution_binding;
+  if (!binding || !HASH.test(binding.stage_outcome_hash ?? "")
+      || binding.stage_outcome_ref !== `quality/evidence/stage-outcomes/build-code/${binding.stage_outcome_hash}.json`) throw new Error("acceptance execution stage outcome binding is invalid");
+  const actor = subject.executor_actor;
+  if (!actor || !new Set(["stage-agent", "workflowhub-session"]).has(actor.source_kind)
+      || typeof actor.source_id !== "string" || !actor.source_id.trim() || typeof actor.run_id !== "string" || !actor.run_id.trim()) throw new Error("acceptance execution actor is unavailable");
+  const seen = new Set();
+  for (const assertion of subject.assertions) {
+    if (!assertion || typeof assertion.id !== "string" || !assertion.id.trim() || seen.has(assertion.id)
+        || !Object.hasOwn(assertion, "expected") || !Object.hasOwn(assertion, "actual")
+        || assertion.result !== (canonicalJson(assertion.expected) === canonicalJson(assertion.actual) ? "passed" : "failed")) throw new Error("acceptance assertion result is not runtime-derived");
+    seen.add(assertion.id);
+  }
+  if (subject.status === "passed" && (execution.exit_code !== 0 || execution.signal !== null
+      || execution.timed_out || execution.cancelled || execution.cleanup.status !== "completed"
+      || subject.assertions.length === 0 || subject.assertions.some((assertion) => assertion.result !== "passed"))) throw new Error("acceptance execution cannot pass without successful process and assertions");
+  return value;
+}
 
 // v1 remains readable for historical records. Only v2/v3 carry the material
 // and Workspace provenance required by current authorization and release

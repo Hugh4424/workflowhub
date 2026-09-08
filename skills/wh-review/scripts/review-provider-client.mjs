@@ -6,13 +6,10 @@ import { join } from "node:path";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
-// v4 3rd-review removed provider wall-clock deadlines. Keep a bounded outer
-// client wait, but allow the long-running providers used by real review groups
-// to reach a terminal result before the client tears down the broker.
-// Very large material bundles (e.g. full plan+tasks) can legitimately exceed
-// the default; operators may raise the outer wait explicitly via env without
-// changing the default for normal bundles.
-const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = 600_000;
+// v4 3rd-review owns provider liveness and terminal state. WorkflowHub must
+// not add a second wall-clock deadline that kills a healthy provider midway
+// through a review. A timeout remains an explicit test/operator override.
+const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = null;
 const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
   const raw = process.env.WH_REVIEW_BROKER_TIMEOUT_MS;
   if (raw === undefined) return null;
@@ -98,8 +95,8 @@ function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS
       if (settled) return;
       finish({ exitCode: null, stdout, stderr, spawnError: { code: error?.code ?? "SPAWN_ERROR" }, timedOut });
     });
-    child.once("close", (exitCode) => finish({ exitCode, stdout, stderr, timedOut }));
-    timeoutTimer = setTimeout(() => {
+    child.once("close", (exitCode, signal) => finish({ exitCode, signal, stdout, stderr, timedOut }));
+    if (timeoutMs !== null) timeoutTimer = setTimeout(() => {
       if (settled) return;
       timedOut = true;
       terminate("SIGTERM");
@@ -314,10 +311,11 @@ function validateDirectionFlow(value) {
 }
 
 function parsePublicRun(wire) {
-  if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
+  const timeout = () => failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
   let result = null;
   try { result = JSON.parse(wire?.stdout ?? ""); }
   catch {
+    if (wire?.timedOut) throw timeout();
     // stderr is a diagnostic channel, not a second result channel. Only the
     // explicitly safe public error object may cross it; a JSON-looking group
     // or findings object there must not be mistaken for a terminal result.
@@ -330,6 +328,14 @@ function parsePublicRun(wire) {
     }
     if (wire?.spawnError) throw failure("BROKER_SPAWN_FAILED", `3rd-review public run could not start; ${wireSummary(wire)}`);
     throw contractFailure(failure("PROTOCOL_INCOMPATIBLE", `3rd-review public run did not return JSON; ${wireSummary(wire)}`), wire);
+  }
+  if (wire?.timedOut) {
+    // Only a terminal public v3 object emitted by this very child can survive
+    // cancellation. Its full binding is checked in runGroup before exposure.
+    const controlledExit = [0, 3, 143].includes(wire.exitCode)
+      || (wire.exitCode === null && wire.signal === "SIGTERM");
+    if (!controlledExit || result?.version !== protocol) throw timeout();
+    return result;
   }
   const brokerError = safeBrokerError(result);
   if (brokerError) throw brokerError;
@@ -344,7 +350,7 @@ function parsePublicRun(wire) {
 export class ReviewProviderClient {
   constructor({ command = null, config = null, invoke = null, timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new TypeError("timeoutMs must be a positive safe integer");
+    if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)) throw new TypeError("timeoutMs must be null or a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
     this.timeoutMs = timeoutMs;
   }
@@ -389,11 +395,12 @@ export class ReviewProviderClient {
       ...(materials.semanticHash ? { semantic_hash: materials.semanticHash } : {}),
     };
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
-    const result = parsePublicRun(await this.invoke({
+    const wire = await this.invoke({
       command: "run", request, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: effectiveAttachmentDelivery,
-    }));
+    });
+    const result = parsePublicRun(wire);
     if (result.version === protocol) {
-      if (strictProtocol === false) {
+      if (strictProtocol === false && wire?.timedOut !== true) {
         return Object.freeze({
           runtimeId: typeof result.runtime_id === "string" ? result.runtime_id : null,
           outcome: typeof result.outcome === "string" ? result.outcome : null,
@@ -422,6 +429,9 @@ export class ReviewProviderClient {
         round: validated.round,
         selectedTier: validated.selected_tier,
         providers: validated.providers,
+        ...(wire?.timedOut ? { transport_timeout: Object.freeze({
+          code: "PROCESS_TIMEOUT", exit_code: wire.exitCode ?? null, signal: wire.signal ?? null,
+        }) } : {}),
       });
     }
     throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review returned a legacy result; this WorkflowHub consumer requires workflowhub-result.v3");
@@ -442,7 +452,7 @@ export class ReviewProviderClient {
       // Local filesystem, spawn, and configuration failures can include host
       // paths. Preserve only a safe typed diagnostic; do not flatten every
       // invocation problem into a protocol mismatch.
-      if (error?.code === "PROCESS_TIMEOUT" || error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
+      if (error?.code === "PROCESS_TIMEOUT" || error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "MATERIAL_TOO_LARGE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
       throw failure("BROKER_INVOCATION_FAILED", `3rd-review public ${command} could not be invoked`);
     } finally {
       if (temporary !== null) {

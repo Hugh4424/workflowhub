@@ -24,9 +24,13 @@ per-AC evidence, independent review, and explicit finding disposition.
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须包含六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，分别说明帮助、改进、阻塞、人工介入原因、应简化和现在可简化之处。每个区块条目写真实 `evidence_refs` 与 `confidence`；已检查无发现明确写 `none_observed`，不知道写 `unknown` 并说明 `unknown_reason`，不适用写 `not_applicable` 及理由，不能静默缺失。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须显式引用本阶段唯一真实 `quality/evidence/stage-outcomes/<stage>/<sha256>.json`；writer 重读并完整认证来源，核对 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree，run/executor 来自认证 outcome。缺来源、executor 或 judgment 保持 `unavailable`，保留实际错误，不借用旧复盘。
 
-实际验证由 `validate-stage-reflection.mjs` 负责，它在内部调用 `deriveConsumptionEdges`。不要让技能或实现另行声称消费边：较早 subject 的 `output_refs` 仅在较晚 subject 的 `input_refs` 含同一引用时形成 edge；stage outcome/output 缺失会使 `coverage_status=partial`、消费保持 unknown，不能推出零消费。只有完整扫描、近 30 天 output 的 `zero_consumption_proof`，并且人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才能保留，否则 validator 改为 `needs_evidence`。当前 route 若尚未实现，保留真实 unavailable/dependency，不用未支持命令替代。
+JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
+
+消费实际返回的 `quality/stage-reflection/<stage>/<semantic-key>.json` 与原始 bytes 的 `sha256`；key 与 bytes hash 含义不同。同来源同判断重试复用首次 ref、时间和 bytes，来源或判断变化产生新原件；旧 `<stage>.json` 只作显式历史读取。复盘异常、lesson 合并失败和原 stage 错误分别保留，不覆盖原件，也不改变原 stage 失败。
+
+`validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。
 
 When the host automatically binds the current WorkflowHub session to an
 explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery comes before extended
@@ -106,7 +110,6 @@ interaction, then DTO-to-typed-ViewModel wiring; the test route must observe
 the real consumer and recovery behavior rather than a component snapshot.
 Non-UI phases keep the existing backend or fullstack route and record the UI
 skill as not applicable.
-No new stage or no gate is introduced by this conditional handoff.
 
 For an applicable UI phase, the official `build-code` handler is the only
 execution seam for controlled browser QA. It may invoke the existing
@@ -125,6 +128,40 @@ first persist direct `browser-qa-evidence.v1` bytes, then return the matching
 canonical `{ref,sha256}` and payload. Missing or mismatched source, sample,
 scenario, tier, task, attempt, material, snapshot, or invocation remains
 `unavailable`; a normal QA run remains compatible without this optional field.
+
+## Real acceptance and review inputs
+
+For a Task with `acceptance_role=acceptance`, consume its declared `acceptance_data`:
+command scenarios supply `execution.command`, `args`, and `timeout_ms`; service
+scenarios supply worktree-relative `module_ref`, `export_name`, `input`, and
+`timeout_ms`. The official build-code handler invokes the private runner for
+these scenarios. The runtime records actual assertions, exit/signal, timeout,
+cancellation, cleanup, raw stdout/stderr refs, per-AC evidence, and the aggregate
+bound to the authenticated executor outcome. The aggregate subject is
+`acceptance_execution`; retain its actual
+`quality/evidence/stage-quality/build-code/acceptance_execution-<rawsha>.json`
+ref and raw bytes `sha256`. Obtain `quality_fact_ref` from the returned
+`quality_fact_refs`: read the `kind=acceptance_criterion`,
+`subject=acceptance_execution` fact and its evidence wrapper, whose explicit
+aggregate ref/hash must match. The `quality/facts/<digest>.json` path uses the
+quality fact's semantic digest; it is neither the aggregate ref nor its raw hash.
+Hand these exact values to ordinary verify-code review as
+`input.request.reviewed_execution={ref,sha256,quality_fact_ref}`. This selector
+is for the ordinary verify-code request, not the build-code Phase review.
+Compare each actual result with
+its oracle; exit 0 or a hand-written `executed` field does not prove acceptance.
+Missing, failed, skipped, and unavailable items remain visible. Non-UI does not
+make command/service acceptance not applicable.
+
+Submit each Phase review through existing public `review --action=record` with
+`input.request`: `stage=build-code`, `subject_kind=phase`, `phase_id=<current phase>`,
+`review_scope=phase`, the actual host provider, and current review materials.
+The existing request route owns dispatch, reuse and canonical recording;
+consume its returned result/attempt refs in the stage input. Preserve independent
+role results, coverage, member failures, usage/timing and record failures.
+For final integration review use `review_scope=integration`, `subject_kind=worktree`
+and `phase_id=null` with the integration material profile. A result-only record
+is an import of existing evidence, never proof that a review was dispatched.
 
 ## Work loop
 

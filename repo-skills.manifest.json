@@ -45,6 +45,18 @@
       "metrics_enabled": true
     },
     {
+      "id": "deep-research",
+      "path": "skills/deep-research/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；无工具时保留不合格事实，不新增 gate",
+      "owner_stage": [
+        "make-decision"
+      ],
+      "metrics_enabled": true
+    },
+    {
       "id": "grill-with-docs",
       "path": "skills/grill-with-docs/SKILL.md",
       "version": "1.0.0",
@@ -404,7 +416,7 @@
       "origin_framework": [
         "Hugh4424/debate"
       ],
-      "local_changes": "保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描",
+      "local_changes": "保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；local_bundle_hash 使用 resolver canonical file-closure hash，inventory 最后一列记录 manifest 文件自身 sha256",
       "owner_stage": [],
       "metrics_enabled": false
     },

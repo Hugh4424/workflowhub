@@ -405,7 +405,7 @@ function missingStage(root, taskRoot, taskId, stage, stageIndex, outcomeByStage,
   };
 }
 
-function readTask(root, project, taskRoot, taskId, nowMs) {
+function readTask(root, project, taskRoot, taskId, nowMs, lessons) {
   assertTrustedPath(root, taskRoot, "task path");
   const reflectionRoot = join(taskRoot, "quality", "stage-reflection");
   let files = [];
@@ -416,11 +416,26 @@ function readTask(root, project, taskRoot, taskId, nowMs) {
       .sort();
   }
   const byStage = new Map(files.map((filename) => [filename.slice(0, -5), readReflection(root, project, taskRoot, taskId, filename.slice(0, -5), filename, nowMs)]));
+  const referencedReflections = [];
+  for (const stage of STAGES) {
+    // Lesson source refs are explicit provenance. Never enumerate content-ref
+    // directories or choose a current judgment by hash or timestamp.
+    const refs = [...new Set((lessons?.by_stage?.[stage] ?? []).filter((row) => row.task_id === taskId)
+      .map((row) => row.reflection_ref).filter((ref) => typeof ref === "string"
+        && new RegExp(`^quality/stage-reflection/${stage}/[a-f0-9]{64}\\.json$`).test(ref)))];
+    const entries = refs.map((ref) => readReflection(root, project, taskRoot, taskId, stage, ref.slice("quality/stage-reflection/".length), nowMs));
+    referencedReflections.push(...entries);
+    if (entries.length === 1) byStage.set(stage, entries[0]);
+    else if (entries.length > 1) byStage.set(stage, { stage, state: "unavailable", reflection_status: null,
+      error: { summary: "multiple explicitly referenced judgments; no current reflection selected" },
+      judgments: [], interventions: [], lessons_added: [], reflection_ref: null });
+  }
   const outcomeByStage = new Map(STAGES.map((stage) => [stage, hasValidStageOutcome(root, taskRoot, taskId, stage, nowMs)]));
   const stages = STAGES.map((stage, index) => byStage.get(stage) ?? missingStage(root, taskRoot, taskId, stage, index, outcomeByStage, nowMs));
   const generated = stages.map((stage) => stage.generated_at).filter(Boolean).sort().at(-1) ?? null;
   return {
     task_id: taskId,
+    referenced_reflections: referencedReflections,
     state: stages.some((stage) => stage.state === "unavailable")
       ? "unavailable"
       : stages.some((stage) => stage.state === "failed")
@@ -431,7 +446,7 @@ function readTask(root, project, taskRoot, taskId, nowMs) {
             ? stages.some((stage) => stage.state === "not_scheduled") ? "not_scheduled" : "empty"
             : "ready",
     generated_at: generated,
-    coverage: { present: files.length, total: STAGES.length },
+    coverage: { present: byStage.size, total: STAGES.length },
     stages,
     judgment_layer: "judgment",
     is_fact: false,
@@ -619,13 +634,13 @@ function project({ root, tasksRoot, now }) {
   if (!SAFE_SEGMENT.test(project)) fail("project must be one safe path segment");
   const nowMs = Date.parse(now);
   const diagnostics = [];
+  const lessons = readLessons(root, project, diagnostics);
   const tasks = readdirSync(tasksRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
     .map((entry) => entry.name)
     .filter((taskId) => SAFE_SEGMENT.test(taskId))
     .sort((a, b) => a.localeCompare(b))
-      .map((taskId) => readTask(root, project, join(tasksRoot, taskId), taskId, nowMs));
-  const lessons = readLessons(root, project, diagnostics);
+      .map((taskId) => readTask(root, project, join(tasksRoot, taskId), taskId, nowMs, lessons));
   const historicalCandidates = historicalReferenceCandidates(lessons);
   for (const task of tasks) {
     const referencedReflectionRefs = new Map(task.stages.map((stage) => [

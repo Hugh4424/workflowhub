@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { createCanonicalReceiptWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
@@ -200,12 +201,23 @@ describe("resolved-review close authorization diagnostics", () => {
 
   it("retains the resolved-review authorization on a valid repaired finding", () => {
     const state = fixture("close-diagnostics-valid-resolution");
+    const sourcePath = join(state.candidate.worktreeRoot, "fixture");
+    writeFileSync(sourcePath, "module.exports = 0;\n");
     const review = currentReview(state, { verdict: "fail" });
     const finding = review.value.findings[0];
+    writeFileSync(sourcePath, "module.exports = 1;\n");
+    const check = createCanonicalReceiptWriter({ task: state.task, workspace: openCurrentTaskWorkspace(state.task),
+      stage: "verify-code", component: "verify-code-test-capture",
+    }).captureTests({ command: "node -e \"require('node:assert/strict').equal(require('./fixture'), 1)\"",
+      receiptRef: "quality/tests/diagnostic-repair.json", outputRef: "quality/tests/output/diagnostic-repair.output",
+    });
     const outcome = outcomeWithReviewResult(state, review, {
       status: "findings",
       findings: review.value.findings,
-      repairs: [{ finding_id: finding.id, status: "fixed" }],
+      repairs: [{ finding_id: finding.id, status: "fixed", reason: "The implementation now returns the required value and its affected check passes",
+        source_refs: [{ path: "fixture", sha256: sha256(readFileSync(sourcePath)) }],
+        check_refs: [{ ref: check.receipt_ref, sha256: check.receipt_hash }],
+      }],
     });
     const input = resolvedInput({ evidence: reviewEvidence(review) });
     const result = publishResolved(state, input, authorizationFor(outcome));

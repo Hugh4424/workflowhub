@@ -9,9 +9,13 @@ import { fileURLToPath } from "node:url";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
+import { runStageReflection as runReflectionWriter } from "../../runtime/stage/stage-reflect.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
 import { RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
+
+import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
+import { validateReflection } from "../../tools/cli/validate-stage-reflection.mjs";
 
 const repoRoot = resolve(join(import.meta.dirname, "../.."));
 const validFixture = JSON.parse(readFileSync(join(repoRoot, "tests/fixtures/stage-reflect/judgment-valid.json"), "utf8"));
@@ -51,14 +55,36 @@ function fixture() {
   });
   const workspace = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  for (const material of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) artifacts.writeAtomic(material, `# ${material}\n`);
+  for (const [material, content] of Object.entries(canonicalStageMaterials())) artifacts.writeAtomic(material, content);
   const kernel = createTaskKernel(task, { candidateWorkspace: workspace, artifacts, now: () => NOW });
   const context = { stage: "build-spec", task, kernel, identity: task.identity, manifest: task.manifest, workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), candidateWorkspace: workspace, artifacts, storageRoot: root };
+  context.reflectionOutcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace, stage: "build-spec", attemptId: "reflection-a" });
   return { root, task, kernel, context };
 }
 
+function inputFor(context, input) {
+  if (!input) return input;
+  const outcome = context.reflectionOutcome;
+  return {
+    ...input, schema_version: "stage-reflection.v2",
+    judgments: [{ subject_id: "reflection-source", subject_kind: "step", classification: "keep", severity: "low",
+      reason: "Current authenticated stage outcome supports this fixture judgment.", evidence_refs: [outcome.ref],
+      confidence: "medium", next_review_trigger: "next execution" }, ...(input.judgments ?? [])],
+    identity: { task_id: context.identity.taskId, worktree: context.candidateWorkspace.worktreeRoot,
+      branch: context.candidateWorkspace.branch, attempt: outcome.value.attempt_id,
+      snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+    ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
+    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    source_completeness: { compaction: false, truncation: false, visible_scope: "fixture outcome", unknown_reasons: [] },
+  };
+}
+async function runStageReflection(context, options) {
+  const result = await runReflectionWriter(context, { ...options, input: inputFor(context, options.input) });
+  if (result.publication) context.lastReflectionRef = result.publication.ref;
+  return result;
+}
 function raw(value) { return `${JSON.stringify(value, null, 2)}\n`; }
-function reflectionPath(state) { return join(state.task.taskPath, "quality", "stage-reflection", "build-spec.json"); }
+function reflectionPath(state) { return join(state.task.taskPath, state.context.lastReflectionRef ?? "quality/stage-reflection/build-spec.json"); }
 function lessonPath(state) { return join(state.root, "Projects", "StageReflect", "lessons", "build-spec.jsonl"); }
 function availabilityRoot(state) { return join(state.task.taskPath, "quality", "evidence", "stage-reflection-availability"); }
 function failureRoot(state) { return join(state.task.taskPath, "quality", "evidence", "stage-reflection-failures"); }
@@ -103,15 +129,76 @@ describe("stage-reflect contract", () => {
     await expect(runStageReflection(state.context, { input: validFixture, now: NOW })).resolves.toMatchObject({ status: "completed" });
   });
 
-  it("returns idempotent success for same bytes and explicit conflict for different bytes", async () => {
+  it("reuses semantic A across automatic timestamps and preserves A when judgment B is published", async () => {
+    const state = fixture();
+    expect(authenticateStageOutcomeForProjection(state.context, "build-spec", state.context.reflectionOutcome.ref)).toMatchObject({ ref: state.context.reflectionOutcome.ref });
+    const first = await runStageReflection(state.context, { input: validFixture, now: NOW });
+    expect(first.status).toBe("completed");
+    expect(first.reflection.status).toBe("ok");
+    expect(first.publication.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
+    const original = state.task.readRecord(first.publication.ref);
+    const lessons = readFileSync(lessonPath(state), "utf8");
+    const duplicate = await runStageReflection(state.context, { input: { ...validFixture, generated_at: "2026-08-31T01:00:00.000Z" }, now: "2026-08-31T01:00:00.000Z" });
+    expect(duplicate.publication).toMatchObject({ ref: first.publication.ref, sha256: first.publication.sha256, status: "idempotent" });
+    expect(state.task.readRecord(first.publication.ref)).toBe(original);
+    expect(readFileSync(lessonPath(state), "utf8")).toBe(lessons);
+    const changed = { ...validFixture, status: "failed", error: { summary: "different judgment" } };
+    const second = await runStageReflection(state.context, { input: changed, now: "2026-08-31T02:00:00.000Z" });
+    expect(second.publication.ref).not.toBe(first.publication.ref);
+    expect(state.task.readRecord(first.publication.ref)).toBe(original);
+    expect(JSON.parse(state.task.readRecord(second.publication.ref)).error.summary).toBe("different judgment");
+    expect(existsSync(join(state.task.taskPath, "quality/stage-reflection/build-spec.json"))).toBe(false);
+  });
+
+  it("reuses A when the same original intervention is normalized by a v3 confirmation", async () => {
+    const state = fixture();
+    const confirmation = state.kernel.publishHumanConfirmation("build-spec", {
+      decision: "accepted", subject_ref: null, step_slug: "stage-reflection",
+      reply_text: "Canonical confirmed reply.",
+    });
+    expect(confirmation.value.schema_version).toBe("human-confirmation.v3");
+    const input = { ...validFixture, interventions: [{
+      confirmation_ref: confirmation.ref, step_slug: "original-untrusted-step",
+      reply_text: "Original nonempty reply before confirmation normalization.", attribution: "human", confidence: "medium",
+    }] };
+    const originalInput = raw(input);
+    const first = await runStageReflection(state.context, { input, now: NOW });
+    expect(first).toMatchObject({ status: "completed", reflection: { interventions: [{
+      step_slug: "stage-reflection", reply_text: "Canonical confirmed reply.",
+    }] } });
+    const original = state.task.readRecord(first.publication.ref);
+    const firstTime = JSON.parse(original).generated_at;
+    const duplicate = await runStageReflection(state.context, { input, now: "2026-08-31T01:00:00.000Z" });
+    expect(duplicate.publication).toMatchObject({ ref: first.publication.ref, sha256: first.publication.sha256, status: "idempotent" });
+    expect(state.task.readRecord(duplicate.publication.ref)).toBe(original);
+    expect(duplicate.reflection.generated_at).toBe(firstTime);
+    expect(raw(input)).toBe(originalInput);
+  });
+
+  it("keeps a missing authenticated source unavailable even when A already exists", async () => {
     const state = fixture();
     const first = await runStageReflection(state.context, { input: validFixture, now: NOW });
-    const duplicate = await runStageReflection(state.context, { input: validFixture, now: NOW });
-    expect(first.publication.sha256).toBe(duplicate.publication.sha256);
-    expect(duplicate.publication).toMatchObject({ status: "idempotent", idempotent: true });
-    const changed = { ...validFixture, generated_at: "2026-08-31T01:00:00.000Z", status: "failed", error: { summary: "different judgment" } };
-    await expect(runStageReflection(state.context, { input: changed, now: NOW })).rejects.toMatchObject({ code: "EEXIST" });
-    expect(JSON.parse(readFileSync(reflectionPath(state), "utf8"))).toMatchObject({ ...validFixture, lessons_added: [expect.stringMatching(/^lessons\/build-spec\.jsonl#/)] });
+    const original = state.task.readRecord(first.publication.ref);
+    const input = inputFor(state.context, validFixture);
+    input.judgments[0].evidence_refs = [];
+    const result = await runReflectionWriter(state.context, { input, now: NOW });
+    expect(result.status).toBe("unavailable");
+    expect(result.publication == null).toBe(true);
+    expect(state.task.readRecord(first.publication.ref)).toBe(original);
+  });
+
+  it("reads explicit historical and content refs without selecting another judgment", async () => {
+    const state = fixture();
+    const legacyRef = "quality/stage-reflection/build-spec.json";
+    state.kernel.publishCanonicalRecord(legacyRef, raw(validFixture));
+    const first = await runStageReflection(state.context, { input: validFixture, now: NOW });
+    const second = await runStageReflection(state.context, { input: { ...validFixture, status: "failed", error: { summary: "B" } }, now: NOW });
+    for (const [ref, status] of [[legacyRef, "ok"], [first.publication.ref, "ok"], [second.publication.ref, "failed"]]) {
+      const read = validateReflection({ storageRoot: state.root, taskRoot: state.task.taskPath, project: "StageReflect", taskId: "task-reflect", stage: "build-spec", reflectionRef: ref, now: NOW });
+      expect(read.reflection_ref).toBe(ref);
+      expect(read.reflection.status).toBe(status);
+    }
+    expect(state.task.readRecord(legacyRef)).toBe(raw(validFixture));
   });
 
   it("keeps an unavailable runner path outside the fixed judgment path", async () => {
@@ -159,7 +246,7 @@ describe("stage-reflect contract", () => {
     expect(readRows(state)).toEqual([]);
     expect(readdirSync(failureRoot(state))).toHaveLength(1);
 
-    const retry = await runStageReflection(state.context, { input: validFixture, now: NOW });
+    const retry = await runStageReflection(state.context, { input: { ...validFixture, generated_at: "2026-08-31T01:00:00.000Z" }, now: "2026-08-31T01:00:00.000Z" });
     expect(retry).toMatchObject({ status: "recovered", publication: { status: "idempotent" }, lesson: { status: "merged" } });
     expect(readRows(state)).toEqual([
       expect.objectContaining({ entry_kind: "raw_observation", merged: true }),
@@ -228,7 +315,8 @@ describe("stage-reflect contract", () => {
       testHooks: {
         beforeReflectionPublish: ({ fixedRef }) => {
           const path = join(state.task.taskPath, fixedRef);
-          mkdirSync(join(state.task.taskPath, "quality", "stage-reflection"), { recursive: true });
+          mkdirSync(join(path, ".."), { recursive: true });
+          state.context.lastReflectionRef = fixedRef;
           writeFileSync(path, JSON.stringify({ foreign: true }) + "\n", "utf8");
         },
       },

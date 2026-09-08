@@ -81,36 +81,40 @@ async function createTask(root, project, taskId, { writeMaterials = true, inputs
   return { ...bootstrapped, repo };
 }
 
-function reflectionExecutor({ confirmationRef, mode }) {
-  return async ({ taskId, stage, stageStatus }) => {
-    if (mode === "failure") throw new Error("intentional reflection executor failure");
+function reflectionExecutor({ confirmationRef, mode, context }) {
+  return async ({ taskId, stage, stageStatus, stageOutcome }) => {
     return {
-      schema_version: "stage-reflection.v1",
+      schema_version: "stage-reflection.v2",
       record_kind: "judgment",
       task_id: taskId,
       stage,
       stage_status: stageStatus,
       generated_at: new Date().toISOString(),
-      status: "ok",
-      error: null,
+      status: mode === "failure" ? "failed" : "ok",
+      error: mode === "failure" ? { summary: "explicit failed executor judgment" } : null,
       judgments: [{
         subject_id: "stage-reflection",
         subject_kind: "step",
         classification: "simplify",
         severity: "medium",
         reason: mode === "validation" ? "悬空证据应进入 degraded。" : "正式入口成功完成阶段复盘。",
-        evidence_refs: mode === "validation" ? ["quality/evidence/missing.md"] : [],
+        evidence_refs: [stageOutcome.ref, ...(mode === "validation" ? ["quality/evidence/missing.md"] : [])],
         confidence: mode === "validation" ? "high" : "medium",
         next_review_trigger: "下一次同类阶段完成时",
       }],
-      interventions: [{
+      interventions: confirmationRef ? [{
         confirmation_ref: confirmationRef,
         step_slug: "stage-reflection",
         reply_text: "继续记录当前阶段介入。",
         attribution: "human",
         confidence: "medium",
-      }],
+      }] : [],
       lessons_added: [],
+      identity: { task_id: taskId, worktree: context.candidateWorkspace.worktreeRoot, branch: git(context.candidateWorkspace.worktreeRoot, ["symbolic-ref", "--short", "HEAD"]),
+        attempt: stageOutcome.value.attempt_id, snapshot_tree: stageOutcome.value.snapshot_tree, material_revision: stageOutcome.value.material_revision },
+      ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
+      status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+      source_completeness: { compaction: false, truncation: false, visible_scope: "fixture stage outcome", unknown_reasons: [] },
     };
   };
 }
@@ -145,11 +149,23 @@ describe("stage-reflection real producer-to-consumer chain", () => {
       const successOutcome = writeStageOutcomeFixture({ task: successTask, kernel: successKernel, artifacts: successArtifacts, workspace: successWorkspace, stage: "build-spec", attemptId: "attempt-chain-success" });
       const successInput = writeInput(root, "success-run.json", { receipts: { stage_outcomes: successOutcome.ref }, attempt_id: "attempt-chain-success" });
       const successConfirmation = await publicRun(["confirm", "--action=decision", "--stage=build-spec", `--project=${project}`, "--task=chain-success", "--decision=accepted", "--reply-text=继续记录当前阶段介入。", "--step-slug=stage-reflection"], { cwd: success.repo });
-      const successResult = await publicRun(["run", "--action=execute", "--stage=build-spec", `--project=${project}`, "--task=chain-success", `--input=${successInput}`], { cwd: success.repo, services: { stageReflectionExecutor: reflectionExecutor({ confirmationRef: successConfirmation.ref, mode: "success" }) } });
+      const successResult = await publicRun(["run", "--action=execute", "--stage=build-spec", `--project=${project}`, "--task=chain-success", `--input=${successInput}`], { cwd: success.repo, services: { stageReflectionExecutor: reflectionExecutor({ confirmationRef: successConfirmation.ref, mode: "success", context: { candidateWorkspace: successWorkspace } }) } });
       expect(successResult).toMatchObject({ stage: "build-spec", stage_outcome_status: "completed", stage_reflection: { persisted: true } });
 
-      const failureResult = await publicRun(["run", "--action=execute", "--stage=verify-code", `--project=${project}`, "--task=chain-failure"], { cwd: failure.repo, services: { stageReflectionExecutor: reflectionExecutor({ mode: "failure" }) } });
-      expect(failureResult).toMatchObject({ stage: "verify-code", stage_reflection: { reflection_status: "failed", persisted: true } });
+      const successRaw = successTask.readRecord(successResult.stage_reflection.ref);
+      const reflectInput = writeInput(root, "success-explicit-reflect.json", { ...JSON.parse(successRaw), generated_at: new Date(Date.now() + 1000).toISOString() });
+      const explicitRepeat = await publicRun(["run", "--action=reflect", "--stage=build-spec", `--project=${project}`, "--task=chain-success", `--input=${reflectInput}`], { cwd: success.repo });
+      expect(explicitRepeat.publication).toMatchObject({ ref: successResult.stage_reflection.ref, sha256: successResult.stage_reflection.sha256, status: "idempotent" });
+      expect(successTask.readRecord(successResult.stage_reflection.ref)).toBe(successRaw);
+
+      const failureTask = openTask(failure.task_path, project, "chain-failure");
+      const failureWorkspace = openCurrentTaskWorkspace(failureTask);
+      const failureArtifacts = ArtifactDir.open(failureWorkspace.worktreeRoot, failureTask);
+      const failureKernel = createTaskKernel(failureTask, { workspace: failureWorkspace, artifacts: failureArtifacts });
+      const failureOutcome = writeStageOutcomeFixture({ task: failureTask, kernel: failureKernel, artifacts: failureArtifacts, workspace: failureWorkspace, stage: "build-spec", attemptId: "attempt-chain-failure" });
+      const failureInput = writeInput(root, "failure-run.json", { receipts: { stage_outcomes: failureOutcome.ref }, attempt_id: "attempt-chain-failure" });
+      const failureResult = await publicRun(["run", "--action=execute", "--stage=build-spec", `--project=${project}`, "--task=chain-failure", `--input=${failureInput}`], { cwd: failure.repo, services: { stageReflectionExecutor: reflectionExecutor({ mode: "failure", context: { candidateWorkspace: failureWorkspace } }) } });
+      expect(failureResult).toMatchObject({ stage: "build-spec", stage_reflection: { reflection_status: "failed", persisted: true } });
 
       await expect(publicRun(["run", "--action=execute", "--stage=build-plan", `--project=${project}`, "--task=chain-not-scheduled"], {
         cwd: notScheduled.repo,
@@ -163,7 +179,7 @@ describe("stage-reflection real producer-to-consumer chain", () => {
       const validationOutcome = writeStageOutcomeFixture({ task: validationTask, kernel: validationKernel, artifacts: validationArtifacts, workspace: validationWorkspace, stage: "build-spec", attemptId: "attempt-chain-validation" });
       const validationInput = writeInput(root, "validation-run.json", { receipts: { stage_outcomes: validationOutcome.ref }, attempt_id: "attempt-chain-validation" });
       const validationConfirmation = await publicRun(["confirm", "--action=decision", "--stage=build-spec", `--project=${project}`, "--task=chain-validation", "--decision=accepted", "--reply-text=继续记录当前阶段介入。", "--step-slug=stage-reflection"], { cwd: validation.repo });
-      const validationResult = await publicRun(["run", "--action=execute", "--stage=build-spec", `--project=${project}`, "--task=chain-validation", `--input=${validationInput}`], { cwd: validation.repo, services: { stageReflectionExecutor: reflectionExecutor({ confirmationRef: validationConfirmation.ref, mode: "validation" }) } });
+      const validationResult = await publicRun(["run", "--action=execute", "--stage=build-spec", `--project=${project}`, "--task=chain-validation", `--input=${validationInput}`], { cwd: validation.repo, services: { stageReflectionExecutor: reflectionExecutor({ confirmationRef: validationConfirmation.ref, mode: "validation", context: { candidateWorkspace: validationWorkspace } }) } });
       expect(validationResult).toMatchObject({ stage: "build-spec", stage_reflection: { persisted: true, reflection_status: "degraded" } });
 
       const out = join(root, "reflection-page");
@@ -171,7 +187,7 @@ describe("stage-reflection real producer-to-consumer chain", () => {
       const data = readPageData(join(out, "data.js"));
       const byId = new Map(data.tasks.map((task) => [task.task_id, task]));
       expect(byId.get("chain-success").stages.find((stage) => stage.stage === "build-spec")).toMatchObject({ state: "ok", reflection_status: "ok" });
-      expect(byId.get("chain-failure").stages.find((stage) => stage.stage === "verify-code")).toMatchObject({ state: "failed", reflection_status: "failed" });
+      expect(byId.get("chain-failure").stages.find((stage) => stage.stage === "build-spec")).toMatchObject({ state: "failed", reflection_status: "failed" });
       expect(byId.get("chain-not-scheduled").stages.find((stage) => stage.stage === "build-plan")).toMatchObject({ state: "not_scheduled", judgment_layer: "fact", is_fact: true });
       const availabilityRoot = join(notScheduled.task_path, "quality/evidence/stage-reflection-availability");
       const availabilityFiles = readdirSync(availabilityRoot).filter((name) => name.endsWith(".json"));
@@ -185,8 +201,10 @@ describe("stage-reflection real producer-to-consumer chain", () => {
       expect(Array.isArray(data.evolution.candidates)).toBe(true);
       expect(data.source.ai_used).toBe(false);
       expect(Array.isArray(data.diagnostics)).toBe(true);
-      expect(existsSync(join(success.task_path, "quality/stage-reflection/build-spec.json"))).toBe(true);
-      expect(existsSync(join(validation.task_path, "quality/stage-reflection/build-spec.json"))).toBe(true);
+      expect(byId.get("chain-success").stages.find((stage) => stage.stage === "build-spec")).toMatchObject({ reflection_ref: successResult.stage_reflection.ref, input_sha256: successResult.stage_reflection.sha256 });
+      expect(successResult.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
+      expect(existsSync(join(success.task_path, successResult.stage_reflection.ref))).toBe(true);
+      expect(existsSync(join(validation.task_path, validationResult.stage_reflection.ref))).toBe(true);
     });
   }, 120_000);
 });

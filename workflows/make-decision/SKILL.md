@@ -44,7 +44,6 @@ three inputs and recompute the result; do not reuse the previous conclusion.
 
 This is a conditional fact consumed by the existing five stages. It adds no
 new stage, public command, fifth material, independent state machine, or gate.
-No new stage or no gate is introduced by this applicability check.
 
 ## 阶段末遗漏披露
 
@@ -52,9 +51,13 @@ No new stage or no gate is introduced by this applicability check.
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。用大白话说，JSON 要分别回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化，并写入六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每个区块条目带真实 `evidence_refs` 和 `confidence`；已检查但没有观察到写 `none_observed`，不知道写 `unknown` 并说明 `unknown_reason`，确实不适用写 `not_applicable` 及理由，不能静默省略。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用本次 `make-decision` 的 canonical stage outcome，去重后唯一；writer 重读并认证该原件，派生真实 executor、run、attempt、材料与 snapshot 身份。缺来源或判断时保留 `unavailable`，不借用旧运行身份。
 
-`validate-stage-reflection.mjs` 在验证时内部调用 `deriveConsumptionEdges`，不是由技能另行调用。它只把较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 的同一引用配成消费边；扫描不完整时 `coverage_status` 为 `partial`、消费保持 unknown 且 `zero_consumption_proof` 不可用，单个 output 没有后续边也不能直接称为零消费。只有完整扫描、近 30 天登记 output 的零 consumer 证明和人工 rejected/同一步骤两次介入，`remove_candidate` 才能保留，否则降为 `needs_evidence`。如果当前运行时尚未提供该 route，保留真实 unavailable/dependency，不用私有或自造命令替代。
+六个结构化区块是 `what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；条目绑定真实 `evidence_refs` 与 `confidence`。已检查未观察到写 `none_observed`，无法判断写 `unknown` 与 `unknown_reason`，不适用写 `not_applicable` 与理由。
+
+消费实际返回的 `ref`、`sha256`：新原件为 `quality/stage-reflection/make-decision/<reflection_key>.json`，`reflection_key` 是语义身份，`sha256` 是原件 bytes hash，两者不能互换。同一运行、来源、材料与判断 A 重试 A 时复用首次原件和时间；新运行或新判断 B 生成新 ref，A 保持不变。失败/缺失仍写其真实状态，不通过删字段、扫描 latest 或读取旧固定 `<stage>.json` 冒充本次完成；旧原件只读保留。
+
+`validate-stage-reflection.mjs` 在验证时内部调用 `deriveConsumptionEdges`，不是由技能另行调用。它只把较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 的同一引用配成消费边；扫描不完整时 `coverage_status` 为 `partial`、消费保持 unknown 且 `zero_consumption_proof` 不可用，单个 output 没有后续边也不能直接称为零消费。只有完整扫描、近 30 天登记 output 的零 consumer 证明和人工 rejected/同一步骤两次介入，`remove_candidate` 才能保留，否则降为 `needs_evidence`。验证或发布失败时保留实际错误与 unavailable；同一来源重试仍消费原有公开入口，不生成替代记录。
 
 ## Authority
 
@@ -86,6 +89,16 @@ Keep three conclusions separate:
 
 A failed fact write never freezes the conversation or material repair. Preserve
 the error, fix the binding or content, and continue in the same task.
+
+## 当前 producer 与审查引用
+
+本阶段只消费当前原始需求和已存在的材料，不把未来 `spec.md`、`plan.md` 或 `tasks.md` 当方向确认前置。验收在这里明确用户场景、数据来源、成功 oracle 和失败条件；实际 command/service 执行由后续 build-code 负责，同次独立复核与用户确认由 verify-code 消费，方向审查不替代它们。
+
+真实 Stage Agent 通过现有 bridge 显式提交 project/task/stage/attempt/run 身份与 `session` 或 `unavailable`。正式 `run` 使用 bridge 返回的 `quality/evidence/stage-outcomes/make-decision/<sha256>.json`；保留原件 hash、producer 与失败事实，不从旧 session/env 或 transcript 猜本次执行。
+
+方向、细节审查仍各走原有角色和顺序。既有 `review --action=record` 的 `request` 路径执行并记录一次审查；保留实际返回的 `attempt_ref`、可空的 `result_ref` 和 `report_ref`，再分别通过 `receipts.direction_review`、`receipts.detail_review` 交给 `stage-handlers#safeReviewFacts`。result 可用时引用实际 canonical result，只有 unavailable attempt 时引用该 attempt，不拼造 UUID/hash 路径或空结果。保留每个角色的真实语义、provider、transport、错误与 provenance；`recorded` 只证明记录完成。当前材料或 route 改变后按既有预算处理，不为 clean 标签重派。usage/timing 从已认证 attempt 的 `provider_attempts[].execution` 读取；缺失为 unavailable，真实零值仍为零。
+
+普通方向确认绑定 `decision-log.md` 批准内容范围；后续材料细化不使该批准失效，真正方向改变仍需新的真实答复。caller 从 canonical confirmation、quality fact 与真实 approve-decision outcome 认证同一来源；风险接受、close 和其他阶段仍保留各自严格身份绑定。
 
 ## Portable dependencies
 
@@ -219,7 +232,7 @@ decision and questions to the user.
 The old interaction aggregate still has a compatibility `clarify` slot because
 its existing runtime validator is owned by the later build-spec handoff. In
 this stage that slot is not a make-decision Clarify execution or confirmation;
-P3 must move its active ownership to build-spec without adding a new object.
+Only the current build-spec Clarify outcome proves that activity; this compatibility slot does not.
 
 After the user confirms the final current decision, the current WorkflowHub session directly
 assembles exactly one immutable interaction aggregate with these fields. This

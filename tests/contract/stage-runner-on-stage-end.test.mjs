@@ -9,7 +9,10 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 
+import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+
 const roots = [];
+const contexts = new Map();
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 
 afterEach(() => {
@@ -44,7 +47,7 @@ function fixture(taskId) {
   });
   const candidateWorkspace = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
-  for (const material of MATERIALS) artifacts.writeAtomic(material, `# ${material}\n`);
+  for (const [material, content] of Object.entries(canonicalStageMaterials())) artifacts.writeAtomic(material, content);
   const kernel = createTaskKernel(task, { candidateWorkspace, artifacts });
   const context = {
     stage: "build-spec",
@@ -56,11 +59,38 @@ function fixture(taskId) {
     candidateWorkspace,
     artifacts,
   };
+  contexts.set(taskId, context);
   return { root, task, kernel, context };
 }
 
-function reflection({ taskId, stageStatus, ...overrides }) {
+function inputFor(context, input) {
+  if (!input) return input;
+  const outcome = context.reflectionOutcome;
   return {
+    ...input, schema_version: "stage-reflection.v2",
+    judgments: [{ subject_id: "reflection-source", subject_kind: "step", classification: "keep", severity: "low",
+      reason: "Current authenticated stage outcome supports this fixture judgment.", evidence_refs: [outcome.ref],
+      confidence: "medium", next_review_trigger: "next execution" }, ...(input.judgments ?? [])],
+    identity: { task_id: context.identity.taskId, worktree: context.candidateWorkspace.worktreeRoot,
+      branch: context.candidateWorkspace.branch, attempt: outcome.value.attempt_id,
+      snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+    ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
+    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    source_completeness: { compaction: false, truncation: false, visible_scope: "fixture outcome", unknown_reasons: [] },
+  };
+}
+function authenticatedInput(taskId, value) {
+  const context = contexts.get(taskId);
+  const outcomeStatus = value.stage_status === "failed" ? "incomplete" : "completed";
+  if (!context.reflectionOutcome || context.reflectionOutcome.value.status !== outcomeStatus) {
+    context.reflectionOutcome = writeStageOutcomeFixture({ task: context.task, kernel: context.kernel, artifacts: context.artifacts,
+      workspace: context.candidateWorkspace, stage: context.stage, attemptId: `reflection-${value.stage_status}`, status: outcomeStatus });
+  }
+  return inputFor(context, value);
+}
+
+function reflection({ taskId, stageStatus, ...overrides }) {
+  return authenticatedInput(taskId, {
     schema_version: "stage-reflection.v1",
     record_kind: "judgment",
     task_id: taskId,
@@ -73,7 +103,7 @@ function reflection({ taskId, stageStatus, ...overrides }) {
     interventions: [],
     lessons_added: [],
     ...overrides,
-  };
+  });
 }
 
 function lessonPath(state) {
@@ -106,7 +136,7 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
       throw new Error("reflection executor failed");
     });
     expect(result.status).not.toBe("failed");
-    expect(result.stage_reflection).toMatchObject({ status: "failed", step_status: "failed" });
+    expect(result.stage_reflection).toMatchObject({ status: "unavailable", step_status: "unavailable", persisted: false, ref: null });
     expect(result.stage_reflection.error).toMatch(/reflection executor failed/);
   });
 
@@ -134,7 +164,7 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
       reflection_status: "degraded",
       persisted: true,
     });
-    expect(JSON.parse(state.task.readRecord("quality/stage-reflection/build-spec.json"))).toMatchObject({
+    expect(JSON.parse(state.task.readRecord(result.stage_reflection.ref))).toMatchObject({
       status: "degraded",
       error: null,
       lessons_added: [],
@@ -144,21 +174,16 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
   it.each([
     ["timeout", async () => { throw new Error("reflection timeout"); }],
     ["failed", async () => { throw new Error("reflection failed"); }],
-  ])("keeps the machine raw observation when reflection is %s", async (_scenario, execute) => {
+  ])("keeps executor %s unavailable when no judgment was returned", async (_scenario, execute) => {
     const state = fixture(`raw-prelude-${_scenario}`);
-    await runReflection(state, "failed", execute);
-    const raw = readFileSync(lessonPath(state), "utf8").trim().split("\n").map((line) => JSON.parse(line));
-    expect(raw).toHaveLength(1);
-    expect(raw[0]).toMatchObject({
-      entry_kind: "raw_observation",
-      task_id: state.task.identity.taskId,
-      stage: "build-spec",
-      reflection_ref: "quality/stage-reflection/build-spec.json",
-      merged: false,
-    });
+    const result = await runReflection(state, "failed", execute);
+    expect(result.stage_reflection).toMatchObject({ status: "unavailable", persisted: false, ref: null });
+    expect(result.stage_reflection.error).toMatch(/reflection (timeout|failed)/);
+    expect(existsSync(join(state.task.taskPath, "quality/stage-reflection/build-spec.json"))).toBe(false);
+    expect(existsSync(lessonPath(state))).toBe(false);
   });
 
-  it("does not report a failed record as a successful reflection and preserves fixed-path conflicts", async () => {
+  it("preserves failed judgment A while publishing corrected judgment B", async () => {
     const failedRecord = fixture("reflection-record-failed");
     const failed = await runReflection(failedRecord, "completed", async ({ taskId, stageStatus }) => reflection({
       taskId,
@@ -179,18 +204,18 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
       generated_at: "2026-08-31T00:00:00.000Z",
     }));
     expect(conflict.stage_reflection).toMatchObject({
-      status: "failed",
-      step_status: "failed",
-      persisted: false,
-      ref: null,
+      status: "completed",
+      step_status: "completed",
+      persisted: true,
     });
-    expect(conflict.stage_reflection.error).toMatch(/EEXIST|different|conflict/i);
+    expect(conflict.stage_reflection.ref).not.toBe(failed.stage_reflection.ref);
+    expect(JSON.parse(failedRecord.task.readRecord(failed.stage_reflection.ref)).status).toBe("failed");
     const lessons = readFileSync(lessonPath(failedRecord), "utf8")
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(lessons).toHaveLength(1);
-    expect(lessons.every((entry) => entry.entry_kind === "raw_observation" && entry.merged === false)).toBe(true);
+    expect(lessons.filter((entry) => entry.entry_kind === "raw_observation")).toHaveLength(2);
+    expect(lessons.filter((entry) => entry.entry_kind === "merged_lesson")).toHaveLength(1);
   });
 
   it("preserves the original stage error when the non-blocking reflection also fails", async () => {
@@ -236,6 +261,7 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
         error_summary: "original stage failure",
       },
     });
+    expect(existsSync(lessonPath(state))).toBe(true);
     expect(readFileSync(lessonPath(state), "utf8")).toContain("original stage failure");
   });
 
@@ -276,10 +302,10 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
     const result = await runReflection(state, "completed", () => new Promise(() => {}), { timeoutMs: 10 });
     expect(result.status).not.toBe("failed");
     expect(result.stage_reflection).toMatchObject({
-      status: "failed",
-      step_status: "failed",
-      reflection_status: "failed",
-      persisted: true,
+      status: "unavailable",
+      step_status: "unavailable",
+      reflection_status: "unavailable",
+      persisted: false,
     });
     expect(result.stage_reflection.error).toMatch(/timed out after 10ms/);
   }, 15_000);

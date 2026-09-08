@@ -236,10 +236,21 @@ describe("current interaction boundary", () => {
       decision: { ref: "decision-log.md", hash: decisionHash, revision: `revision-${HASH}` },
       confirmation: { ref: `quality/confirmations/${HASH}.json`, hash: HASH, result: "accepted" },
       talk: { status: "completed", round_count: 1, lifecycle_rounds: [lifecycle("talk")] },
-      grill: { status: "completed", summary: "冲突已处理", decision_updates: ["保持当前范围"] },
+      grill: { status: "completed", lifecycle_rounds: [completedGrillRound()], summary: "冲突已处理", decision_updates: ["保持当前范围"] },
       advice: { status: "completed", result_ref: `quality/reviews/results/${HASH}.json`, result_hash: HASH },
     };
     expect(contracts.validateInteractionAggregateContract(aggregate).ok).toBe(true);
+    // AC-INTERACT-001: a structurally valid partial reply cannot close Talk.
+    const partial = structuredClone(aggregate);
+    const pendingQuestion = structuredClone(partial.talk.lifecycle_rounds[0].events[0].questions[0]);
+    pendingQuestion.question_id = "success-boundary";
+    pendingQuestion.axis = "success-boundary";
+    partial.talk.lifecycle_rounds[0].events[0].questions.push(pendingQuestion);
+    partial.talk.lifecycle_rounds[0].events[2].remaining_question_ids = ["success-boundary"];
+    expect(validateInteractionLifecycleContract(partial.talk.lifecycle_rounds[0]).ok).toBe(true);
+    expect(contracts.validateInteractionAggregateContract(partial).ok,
+      "T001: a real partial reply with unresolved questions must not be accepted as completed Talk").toBe(false);
+
     expect(contracts.validateInteractionAggregateContract({ ...aggregate, confirmation: undefined }).errors.join("\n")).toMatch(/MATERIAL_INCOMPLETE|confirmation/i);
     expect(contracts.validateInteractionAggregateContract({ ...aggregate, talk: { ...aggregate.talk, lifecycle_rounds: [] } }).ok).toBe(false);
   });
@@ -275,5 +286,151 @@ describe("current ambiguity handling", () => {
     expect(buildPlan).toMatch(/This stage owns only `plan\.md` and `tasks\.md`/i);
     expect(buildPlan).toMatch(/Do not implement code or execute RED\/GREEN/i);
     expect(buildPlan).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
+  });
+});
+
+
+describe("T001 real reply preservation", () => {
+  it("keeps an unanswered card incomplete instead of selecting the recommendation", () => {
+    const unanswered = lifecycle("talk");
+    unanswered.events = unanswered.events.slice(0, 2);
+    expect(validateInteractionLifecycleContract(unanswered).ok).toBe(false);
+    expect(unanswered.events).toHaveLength(2);
+  });
+
+  it("does not ask an already answered question again in another round", () => {
+    const first = lifecycle("talk");
+    const second = lifecycle("talk");
+    for (const event of second.events) {
+      event.round = 2;
+      event.card_ref = "conversation/card-2";
+    }
+    expect(validateInteractionLifecycleContract(first).ok).toBe(true);
+    expect(validateInteractionLifecycleContract(second).ok).toBe(true);
+    expect(contracts.validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: [first, second] }).ok,
+      "T001: changing the card identity does not make an answered question unanswered").toBe(false);
+  });
+});
+
+
+describe("T001 explicit withdrawal", () => {
+  it("records a real withdrawal but rejects it as completed Talk", () => {
+    const withdrawn = lifecycle("talk");
+    withdrawn.events[2].status = "withdrawn";
+    withdrawn.events[2].answers = [];
+    withdrawn.events[2].remaining_question_ids = ["scope"];
+    expect(validateInteractionLifecycleContract(withdrawn).ok,
+      "T001: explicit user withdrawal is a valid interaction fact").toBe(true);
+    const aggregate = {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: "task-ui-contract",
+      stage: "make-decision",
+      snapshot_tree: "b".repeat(40),
+      original_requirement: { ref: "decision-log.md", hash: HASH },
+      decision: { ref: "decision-log.md", hash: HASH, revision: `revision-${HASH}` },
+      confirmation: { ref: `quality/confirmations/${HASH}.json`, hash: HASH, result: "accepted" },
+      talk: { status: "completed", round_count: 1, lifecycle_rounds: [withdrawn] },
+      grill: { status: "completed", lifecycle_rounds: [completedGrillRound()], summary: "保留真实撤回" },
+      advice: { status: "unavailable", reason: "用户已撤回" },
+    };
+    expect(contracts.validateInteractionAggregateContract(aggregate).ok,
+      "T001: withdrawal must never be promoted to completed Talk").toBe(false);
+    withdrawn.events[2].source = "agent";
+    expect(validateInteractionLifecycleContract(withdrawn).ok).toBe(false);
+  });
+});
+
+describe("T002 interaction continuation and withdrawal consumers", () => {
+  function completedTalk(rounds) {
+    return {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: "task-ui-contract", stage: "make-decision", snapshot_tree: "b".repeat(40),
+      original_requirement: { ref: "decision-log.md", hash: HASH },
+      decision: { ref: "decision-log.md", hash: HASH, revision: `revision-${HASH}` },
+      confirmation: { ref: `quality/confirmations/${HASH}.json`, hash: HASH, result: "accepted" },
+      talk: { status: "completed", round_count: rounds.length, lifecycle_rounds: rounds },
+      grill: { status: "completed", lifecycle_rounds: [completedGrillRound()], summary: "独立问题均有处置" },
+      advice: { status: "unavailable", reason: "该样本只验证交互消费" },
+    };
+  }
+
+  function partialThenAnswer(nextQuestionId = "success-boundary") {
+    const first = lifecycle("talk");
+    const pending = { ...structuredClone(first.events[0].questions[0]), question_id: "success-boundary", axis: "success-boundary" };
+    first.events[0].questions.push(pending);
+    first.events[2].remaining_question_ids = [pending.question_id];
+    const second = lifecycle("talk");
+    for (const event of second.events) {
+      event.round = 2;
+      event.card_ref = "conversation/card-2";
+    }
+    second.events[0].questions = [{ ...pending, question_id: nextQuestionId, axis: nextQuestionId }];
+    second.events[2].answers = [{ question_id: nextQuestionId, number: 2 }];
+    return [first, second];
+  }
+
+  it("completes only after the next real reply answers the remaining question", () => {
+    const rounds = partialThenAnswer();
+    for (const round of rounds) expect(validateInteractionLifecycleContract(round).ok).toBe(true);
+    expect(contracts.validateInteractionAggregateContract(completedTalk(rounds)).ok).toBe(true);
+  });
+
+  it("does not lose an earlier pending question when the next round answers a different one", () => {
+    const rounds = partialThenAnswer("new-topic");
+    for (const round of rounds) expect(validateInteractionLifecycleContract(round).ok).toBe(true);
+    expect(contracts.validateInteractionAggregateContract(completedTalk(rounds)).ok).toBe(false);
+  });
+
+  it.each(["talk", "grill", "spec-clarify"])("preserves authentic %s withdrawal and rejects forged or contradictory replies", (kind) => {
+    const withdrawn = lifecycle(kind);
+    withdrawn.events[2].status = "withdrawn";
+    withdrawn.events[2].answers = [];
+    if (kind === "grill") withdrawn.events[2].remaining_frontier_ids = ["frontier-a", "frontier-b"];
+    else withdrawn.events[2].remaining_question_ids = ["scope"];
+    expect(validateInteractionLifecycleContract(withdrawn).ok).toBe(true);
+
+    const falseSource = structuredClone(withdrawn);
+    falseSource.events[2].source = "agent";
+    expect(validateInteractionLifecycleContract(falseSource).ok).toBe(false);
+    const wrongReply = structuredClone(withdrawn);
+    wrongReply.events[3].reply_hash = "c".repeat(64);
+    expect(validateInteractionLifecycleContract(wrongReply).ok).toBe(false);
+    const answered = structuredClone(withdrawn);
+    answered.events[2].answers = lifecycle(kind).events[2].answers;
+    expect(validateInteractionLifecycleContract(answered).ok).toBe(false);
+    const lostPending = structuredClone(withdrawn);
+    if (kind === "grill") lostPending.events[2].remaining_frontier_ids = [];
+    else lostPending.events[2].remaining_question_ids = [];
+    expect(validateInteractionLifecycleContract(lostPending).ok).toBe(false);
+  });
+});
+
+
+function completedGrillRound() {
+  const round = lifecycle("grill");
+  round.events[2].answers.push({ frontier_id: "frontier-b", answer: "确认", number: 2 });
+  round.events[2].remaining_frontier_ids = [];
+  return round;
+}
+
+describe("P1 review Grill completion authenticity", () => {
+  it.each(["missing", "agent_reply", "partial", "withdrawn", "reply_mismatch"])("rejects a completed Grill aggregate with %s lifecycle", (fault) => {
+    const round = completedGrillRound();
+    const value = {
+      schema_version: "workflowhub-interaction-aggregate.v1", task_id: "task-ui-contract", stage: "make-decision", snapshot_tree: "b".repeat(40),
+      original_requirement: { ref: "decision-log.md", hash: HASH },
+      decision: { ref: "decision-log.md", hash: HASH, revision: `revision-${HASH}` },
+      confirmation: { ref: `quality/confirmations/${HASH}.json`, hash: HASH, result: "accepted" },
+      talk: { status: "completed", round_count: 1, lifecycle_rounds: [lifecycle("talk")] },
+      grill: { status: "completed", summary: "真实讨论已完成", lifecycle_rounds: [round] },
+      advice: { status: "unavailable", reason: "fixture only" },
+    };
+    expect(contracts.validateInteractionAggregateContract(value).ok).toBe(true);
+    if (fault === "missing") delete value.grill.lifecycle_rounds;
+    if (fault === "agent_reply") round.events[2].source = "agent";
+    if (fault === "partial") { round.events[2].answers.pop(); round.events[2].remaining_frontier_ids = ["frontier-b"]; }
+    if (fault === "withdrawn") { round.events[2].status = "withdrawn"; round.events[2].answers = []; round.events[2].remaining_frontier_ids = ["frontier-a", "frontier-b"]; }
+    if (fault === "reply_mismatch") round.events[3].reply_hash = "f".repeat(64);
+    expect(contracts.validateInteractionAggregateContract(value).ok).toBe(false);
   });
 });

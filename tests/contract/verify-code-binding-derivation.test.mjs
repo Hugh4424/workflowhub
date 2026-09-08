@@ -313,3 +313,29 @@ describe("verify-code canonical review binding derivation", () => {
     expect(Object.isFrozen(error.diagnostic)).toBe(true);
   });
 });
+
+// The existing formalReview fixture deliberately has no execution binding.
+// Admission of the explicit confirmation receipt must preserve that limitation.
+describe("P3 T009 explicit confirmation receipt consumer", () => {
+  it("admits a post-review confirmation without upgrading a historical review into execution acceptance", async () => {
+    const state = fixture("p9-explicit-confirmation-receipt");
+    const review = formalReview(state);
+    const before = state.task.readRecord(review.resultRef);
+    const outcome = publishOutcome(state, review);
+    const confirmation = state.context.kernel.publishHumanConfirmation("verify-code", {
+      decision: "accepted", subject_ref: review.resultRef,
+      reply_text: "fixture user accepts this existing code review only", step_slug: "confirm-code-review-result",
+    });
+    const result = await runOfficialStage("verify-code", state.context, {
+      attempt_id: "verify-code-binding-attempt",
+      receipts: { stage_outcomes: outcome.ref, review: review.resultRef, confirmation: confirmation.ref },
+    });
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find(({ subject }) => subject === "code_review")).toMatchObject({
+      status: "recorded", evidence: [{ ref: review.resultRef, sha256: sha256(before) }],
+    });
+    expect(facts.some(({ subject, status }) => subject === "e2e_acceptance" && status === "passed")).toBe(false);
+    expect(JSON.parse(state.task.readRecord(review.resultRef))).not.toHaveProperty("e2e_binding");
+    expect(state.task.readRecord(review.resultRef)).toBe(before);
+  });
+});

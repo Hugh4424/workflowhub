@@ -171,7 +171,29 @@ function readMaterials(artifacts, stage = null) {
   });
 }
 
-function writeProof({ kernel, taskId, stage, attemptId, snapshotTree, materialRevision, subjectKind, subjectId, outcomeStatus, resultSummary, evidence }) {
+// The immutable per-subject proof and its outcome envelope share this exact
+// producer identity. Generic stage-agent sources remain optional; the host
+// session boundary supplies the complete explicit source identity.
+function stageProducerIdentity(provenance) {
+  const identity = {
+    kind: provenance.kind,
+    host: text(provenance.host, "execution provenance.host"),
+    agent_run_id: text(provenance.agent_run_id, "execution provenance.agent_run_id"),
+  };
+  if (!new Set(["stage-agent", "workflowhub-session"]).has(identity.kind)) throw new Error("execution provenance.kind must be stage-agent or workflowhub-session");
+  if (provenance.source_id !== undefined || provenance.source_family !== undefined) {
+    identity.source_id = text(provenance.source_id, "execution provenance.source_id");
+    identity.source_family = text(provenance.source_family, "execution provenance.source_family");
+    if (identity.source_family !== identity.source_id.split("/")[0]) throw new Error("execution provenance source identity mismatch: source_family");
+  }
+  if (provenance.session_id !== undefined) identity.session_id = text(provenance.session_id, "execution provenance.session_id");
+  if (identity.kind === "workflowhub-session" || provenance.source_ref !== undefined) {
+    identity.source_ref = text(provenance.source_ref, "execution provenance.source_ref");
+  }
+  return Object.freeze(identity);
+}
+
+function writeProof({ kernel, taskId, stage, attemptId, snapshotTree, materialRevision, subjectKind, subjectId, outcomeStatus, resultSummary, evidence, producerIdentity }) {
   object(evidence, `${subjectKind} ${subjectId} evidence`);
   const value = {
     schema_version: "workflowhub-stage-outcome-evidence.v1",
@@ -184,6 +206,7 @@ function writeProof({ kernel, taskId, stage, attemptId, snapshotTree, materialRe
     outcome_status: outcomeStatus,
     result_summary: resultSummary,
     attempt_id: attemptId,
+    producer_identity: producerIdentity,
     host_evidence: structuredClone(evidence),
   };
   const raw = canonicalJson(value);
@@ -193,7 +216,7 @@ function writeProof({ kernel, taskId, stage, attemptId, snapshotTree, materialRe
   return Object.freeze({ ref, sha256: digest });
 }
 
-function proofForSubject({ kernel, taskId, stage, attemptId, snapshotTree, materialRevision }, entry, subjectKind, subjectId) {
+function proofForSubject({ kernel, taskId, stage, attemptId, snapshotTree, materialRevision, producerIdentity }, entry, subjectKind, subjectId) {
   const value = object(entry, `${subjectKind} ${subjectId}`);
   const resultSummary = text(value.result_summary, `${subjectKind} ${subjectId}.result_summary`);
   const outcomeStatus = status(value.status, `${subjectKind} ${subjectId}.status`);
@@ -201,7 +224,7 @@ function proofForSubject({ kernel, taskId, stage, attemptId, snapshotTree, mater
     throw new TypeError(`${subjectKind} ${subjectId} requires actual evidence; completed outcomes cannot be empty`);
   }
   const evidenceRefs = value.evidence.map((evidence, index) => writeProof({
-    kernel, taskId, stage, attemptId, snapshotTree, materialRevision,
+    kernel, taskId, stage, attemptId, snapshotTree, materialRevision, producerIdentity,
     subjectKind, subjectId, outcomeStatus, resultSummary,
     evidence: object(evidence, `${subjectKind} ${subjectId}.evidence[${index}]`),
   }));
@@ -638,13 +661,7 @@ export function publishStageAgentOutcome({
   const safeArtifacts = capturedIdentity.safeArtifacts;
   const input = object(execution, "Stage Agent execution");
   const provenance = object(input.provenance, "Stage Agent execution.provenance");
-  if (!new Set(["stage-agent", "workflowhub-session"]).has(provenance.kind)) throw new Error("execution provenance.kind must be stage-agent or workflowhub-session");
-  text(provenance.host, "execution provenance.host");
-  text(provenance.agent_run_id, "execution provenance.agent_run_id");
-  if (provenance.kind === "workflowhub-session") {
-    text(provenance.session_id, "execution provenance.session_id");
-    text(provenance.source_ref, "execution provenance.source_ref");
-  }
+  const producerIdentity = stageProducerIdentity(provenance);
   const stageStatus = stageOutcomeStatus(input.status, "Stage Agent execution.status");
   text(attemptId, "attemptId");
   if (!Array.isArray(input.steps) || !Array.isArray(input.skills)) throw new TypeError("Stage Agent execution must include steps and skills arrays");
@@ -660,7 +677,7 @@ export function publishStageAgentOutcome({
   if (input.steps.length !== manifest.steps.length || input.skills.length !== (skills.skills?.length ?? 0)) {
     throw new Error(`${stage} Stage Agent execution must contain every declared step and skill exactly once`);
   }
-  const context = { kernel: safeKernel, taskId: safeTask.identity.taskId, stage, attemptId, snapshotTree: snapshot.tree, materialRevision: materials.revision };
+  const context = { kernel: safeKernel, taskId: safeTask.identity.taskId, stage, attemptId, snapshotTree: snapshot.tree, materialRevision: materials.revision, producerIdentity };
   const consumerBindings = input.skills.map((entry, index) => validateSkillConsumerBinding({
       dependency: skills.skills[index],
       outcome: entry,
@@ -731,15 +748,7 @@ export function publishStageAgentOutcome({
     ...(workflowRunId === null ? {} : { run_id: text(workflowRunId, "workflowRunId") }),
     attempt_id: attemptId,
     status: stageStatus,
-    producer: {
-      kind: provenance.kind,
-      host: provenance.host,
-      agent_run_id: provenance.agent_run_id,
-      ...(provenance.source_id ? { source_id: provenance.source_id } : {}),
-      ...(provenance.source_family ? { source_family: provenance.source_family } : {}),
-      ...(provenance.session_id ? { session_id: provenance.session_id } : {}),
-      ...(provenance.source_ref ? { source_ref: provenance.source_ref } : {}),
-    },
+    producer: producerIdentity,
     snapshot_tree: snapshot.tree,
     material_revision: materials.revision,
     material_hashes: materials.hashes,
@@ -791,7 +800,7 @@ function lifecycleEvidence({ sourceRef, sessionId, subjectKind, subjectId }) {
   return {
     kind: "workflowhub-session-lifecycle",
     source_ref: sourceRef,
-    session_id: sessionId,
+    ...(sessionId === undefined ? {} : { session_id: sessionId }),
     subject_kind: subjectKind,
     subject_id: subjectId,
   };
@@ -814,7 +823,7 @@ function sessionManifest(stage) {
  */
 export function createWorkflowHubSessionRecorder({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-workflowhub-session-1", workflowRunId = null,
-  host, sourceId, sourceFamily, sessionId, sourceRef, requirementAuthentication = null,
+  host, sourceId, sourceFamily, agentRunId, sessionId, sourceRef, requirementAuthentication = null,
 } = {}) {
   const safeTask = assertTaskHandle(task);
   const safeKernel = assertTaskKernel(kernel);
@@ -824,7 +833,9 @@ export function createWorkflowHubSessionRecorder({
   const safeHost = text(host, "host");
   const safeSourceId = text(sourceId, "sourceId");
   const safeSourceFamily = text(sourceFamily, "sourceFamily");
-  const safeSessionId = text(sessionId, "sessionId");
+  const safeAgentRunId = text(agentRunId, "agentRunId");
+  const safeSessionId = sessionId === undefined ? undefined : text(sessionId, "sessionId");
+  if (safeSourceFamily !== safeSourceId.split("/")[0]) throw new Error("source identity mismatch: sourceFamily");
   const safeSourceRef = text(sourceRef, "sourceRef");
   if (safeSourceRef.startsWith("/") || safeSourceRef.includes("..") || safeSourceRef.includes("\\")) {
     throw new TypeError("sourceRef must be an opaque non-path reference");
@@ -961,7 +972,7 @@ export function createWorkflowHubSessionRecorder({
       }
       const execution = {
         status: resolvedStatus,
-        provenance: { kind: "workflowhub-session", host: safeHost, source_id: safeSourceId, source_family: safeSourceFamily, agent_run_id: safeSessionId, session_id: safeSessionId, source_ref: safeSourceRef },
+        provenance: { kind: "workflowhub-session", host: safeHost, source_id: safeSourceId, source_family: safeSourceFamily, agent_run_id: safeAgentRunId, ...(safeSessionId === undefined ? {} : { session_id: safeSessionId }), source_ref: safeSourceRef },
         steps,
         skills,
         ...(stage === "verify-code"

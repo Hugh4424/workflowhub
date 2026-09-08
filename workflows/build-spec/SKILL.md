@@ -44,11 +44,25 @@ The current `spec.md` remains the single revision target; never create a
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每个区块及其条目带真实 `evidence_refs` 与 `confidence`；没有观察到写 `none_observed`，无法判断写 `unknown` + `unknown_reason`，不适用写 `not_applicable` + 原因，禁止静默空缺。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用本次 `build-spec` 的 canonical stage outcome，去重后唯一；writer 重读并认证该原件，派生真实 executor、run、attempt、材料与 snapshot 身份。缺来源或判断时保留 `unavailable`，不借用旧运行身份。
 
-验证由 `validate-stage-reflection.mjs` 完成；它内部调用 `deriveConsumptionEdges`，不是技能单独运行消费边工具。较早 subject 的 `output_refs` 只有与较晚 subject 的 `input_refs` 同值时才形成边；任一 stage outcome 或声明 output 缺失时扫描不完整，`coverage_status` 为 `partial`，消费保持 unknown，不能推出 `zero_consumption_proof`。完整扫描、近 30 天 output 且 consumer 全为零，再加人工 rejected 或同一步骤两次介入，才保留 `remove_candidate`；否则是 `needs_evidence`。若当前运行时尚未提供该 route，保留真实 unavailable/dependency，不发明替代命令。
+六个结构化区块是 `what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；条目绑定真实 `evidence_refs` 与 `confidence`。已检查未观察到写 `none_observed`，无法判断写 `unknown` 与 `unknown_reason`，不适用写 `not_applicable` 与理由。
 
-当 `spec-clarify trigger=true` 时，spec-analyze 输入同时携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。Codex host 只从已登记 transcript 认证被当前 `spec-clarify` skill 事件包围的 assistant ask 与 user reply；认证结果与这两个材料身份一起冻结。public run 仅在没有显式 `stage_outcomes` 且身份仍精确匹配时，生成同次 content-addressed `quality/evidence/interactions/` receipt。身份漂移、缺 transcript 或触发改为 false 都保持 Clarify incomplete/missing，不重绑旧回复。
+消费实际返回的 `ref`、`sha256`：新原件为 `quality/stage-reflection/build-spec/<reflection_key>.json`，`reflection_key` 是语义身份，`sha256` 是原件 bytes hash，两者不能互换。同一运行、来源、材料与判断 A 重试 A 时复用首次原件和时间；新运行或新判断 B 生成新 ref，A 保持不变。失败/缺失仍写其真实状态，不通过删字段、扫描 latest 或读取旧固定 `<stage>.json` 冒充本次完成；旧原件只读保留。
+
+验证由 `validate-stage-reflection.mjs` 完成；它内部调用 `deriveConsumptionEdges`，不是技能单独运行消费边工具。较早 subject 的 `output_refs` 只有与较晚 subject 的 `input_refs` 同值时才形成边；任一 stage outcome 或声明 output 缺失时扫描不完整，`coverage_status` 为 `partial`，消费保持 unknown，不能推出 `zero_consumption_proof`。完整扫描、近 30 天 output 且 consumer 全为零，再加人工 rejected 或同一步骤两次介入，才保留 `remove_candidate`；否则是 `needs_evidence`。验证或发布失败时保留实际错误与 unavailable；同一来源重试仍消费原有公开入口，不生成替代记录。
+
+当 `spec-clarify trigger=true` 时，spec-analyze 输入携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。由本次显式 session/Stage Agent outcome 认证 `ask -> wait -> user reply -> resume` 及匹配的 card、reply、hash；当前 Clarify receipt 进入 `receipts.clarify`，由 `stage-handlers#clarifyFacts` 消费。缺答复、身份漂移、partial、withdrawn 或中断保留对应事实，不能从旧 transcript/env 补答复、重绑旧确认或把 trigger=false 当作已完成。
+
+## 当前 producer、审查与验收引用
+
+本阶段只细化当前决策与规格；未来 `plan.md`、`tasks.md` 的完备性不成为写规格的前置。AC 保留场景、数据来源、可判真 oracle 和失败条件。实际 command/service 验收由 build-code 的现有执行器产生原件，verify-code 消费同次独立 review 与真实用户确认；规格审查与 AC 文本都不替代执行证据。
+
+真实 Stage Agent 经现有 bridge 显式提交 project/task/stage/attempt/run 身份及 `session` 或 `unavailable`，正式 `run` 消费实际返回的 `quality/evidence/stage-outcomes/build-spec/<sha256>.json`。保留 producer/hash 与失败事实，不推断旧会话身份。
+
+通过既有 `review --action=record` 的 `request` 路径审查当前规格，保留实际 `attempt_ref`、可空的 `result_ref`、`report_ref`，并把 canonical result 或 unavailable attempt 的实际 ref 放入 `receipts.review`，由 `stage-handlers#safeReviewFacts` 认证。保留每个角色的语义、provider、transport、错误与 provenance；不得把记录成功、空 findings、partial 或 unavailable 当作规格通过，也不为 clean 标签重复整轮审查。usage/timing 只回读已认证 attempt 的 `provider_attempts[].execution`，缺失保留 unavailable，实际零值仍为零。
+
+方向批准从当前依赖的 canonical confirmation、quality fact 与真实 approve-decision outcome 认证；当前 `spec.md` 的细化不改变已批准 decision 内容范围，真正方向变化仍回 make-decision。风险接受与本阶段自己的确认继续使用严格材料/身份绑定。
 
 ## Portable dependencies
 
@@ -111,9 +125,8 @@ non-UI path. If it is `unknown`, missing, or conflicts with caller facts,
 preserve the conflict and hand it back to make-decision; do not invent product
 scope in build-spec. A missing `Design.md`, real component input, preview,
 fixture, or version can produce `unknown`/`not_bindable`, `unavailable`, or
-`N/A + reason`; this is a quality fact and rework risk, not a gate or no gate.
-There is no new stage, public command, fifth material, or no-design gate.
-No new stage or no gate is introduced by this conditional path.
+`N/A + reason`; this is a quality fact and rework risk within the existing stage.
+Keep the current public commands and four materials.
 
 The UI Contract keeps a required `page_or_region`, its interaction flow,
 visible labels, and a state matrix. Every state has a required `name` and

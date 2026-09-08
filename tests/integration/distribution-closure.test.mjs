@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { checkReleaseClosure } from "../../runtime/evidence/check-skill-closure.mjs";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
@@ -26,6 +26,18 @@ describe("skill bundle release", () => {
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       expect(release.files.some(({ path: locator }) => locator === `workflows/${stage}/SKILL.md`)).toBe(true);
       expect(release.files.some(({ path: locator }) => locator === `workflows/${stage}/skill-deps.yaml`)).toBe(true);
+    }
+    const currentFiles = [
+      ...["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].flatMap((stage) =>
+        ["SKILL.md", "steps.json", "skill-deps.yaml"].map((file) => `workflows/${stage}/${file}`)),
+      "skills/spec-plan/templates/plan-template.md", "skills/spec-tasks/templates/tasks-template.md",
+    ];
+    for (const locator of currentFiles) {
+      const entry = release.files.find((file) => file.path === locator);
+      expect(entry, `release must include current ${locator}`).toBeDefined();
+      const sourceBytes = fs.readFileSync(path.join(ROOT, locator));
+      expect(entry.sha256).toBe(createHash("sha256").update(sourceBytes).digest("hex"));
+      expect(fs.readFileSync(path.join(outputDir, locator))).toEqual(sourceBytes);
     }
     for (const lens of ["simplicity-guard", "plan-eng-review"]) {
       expect(release.files.some(({ path: locator }) => locator === `skills/${lens}/SKILL.md`)).toBe(true);
@@ -147,4 +159,18 @@ describe("skill bundle release", () => {
       expect(result.errors).toContain("skill release file entry is invalid");
     }
   });
+});
+
+
+test.each(["missing", "tampered"])("P5 released workflow source rejects %s bytes after a valid baseline", async (mutation) => {
+  const releaseRoot = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-p5-release-source-"));
+  temps.push(releaseRoot);
+  const locator = "workflows/build-plan/steps.json";
+  const target = path.join(releaseRoot, locator);
+  const manifest = await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: releaseRoot });
+  expect(validateSkillBundleRelease({ releaseRoot })).toEqual(manifest);
+  if (mutation === "missing") fs.rmSync(target);
+  else fs.appendFileSync(target, "\n ");
+  expect(() => validateSkillBundleRelease({ releaseRoot })).toThrow(mutation === "missing" ? /missing or unsafe/ : /hash mismatch/);
+  expect(fs.existsSync(path.join(releaseRoot, "node_modules"))).toBe(false);
 });

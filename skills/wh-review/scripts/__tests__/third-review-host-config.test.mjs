@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, migrateWhReviewConfig, probeThirdReviewBroker, resolveTrustedReviewRoute, restoreWhReviewConfig, selectTrustedReviewProviderSelection, selectTrustedReviewProviders, validateAllWhReviewRoutes } from "../third-review-host-config.mjs";
 
+import { validateProviderResultsAgainstSelection } from "../simple-review-runner.mjs";
+
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
 
@@ -330,19 +332,38 @@ describe("trusted third-review host configuration", () => {
     })).toThrow(/insufficient enabled heterologous providers/i);
   });
 
-  it("uses the configured profile key when an enabled candidate has no raw source identity", () => {
+  it.each([undefined, "operator-source/grok"])("P2 source normalization accepts broker identity for source %s", (configuredSource) => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
-    delete broker.providers.kimi.source_id;
+    const provider = "grok/grok";
+    broker.providers[provider] = { enabled: true, model: "grok-4.6", ...(configuredSource === undefined ? {} : { source_id: configuredSource }) };
     writeFileSync(brokerConfig, JSON.stringify(broker));
-    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", {
-      initial: ["kimi"], mode: "full_only", minimum_heterologous: 1,
-    })).toMatchObject({
-      providers: ["kimi"],
-      requestedProfiles: ["kimi"],
-      eligibleProfiles: ["kimi"],
-      sameSourceExcluded: [],
+    const selection = selectTrustedReviewProviderSelection(brokerConfig, "codex", {
+      initial: [provider], mode: "full_only", minimum_heterologous: 1,
     });
+    // 3rd-review v4 config contract: only an omitted source defaults to the
+    // full profile key; the source participates in the normalized config hash.
+    const source = configuredSource === undefined ? provider : configuredSource;
+    const identity = { provider, adapter: "grok", source_id: source,
+      config_id: sha256(JSON.stringify({ id: provider, source_id: source, model: "grok-4.6", effort: null, thinking: null, deadline_ms: null })) };
+    expect(selection).toMatchObject({ providers: [provider], eligibleProfiles: [provider], sameSourceExcluded: [] });
+    expect(validateProviderResultsAgainstSelection([{ provider, status: "failed", identity }], selection)).toMatchObject({
+      providers: [provider],
+      provider_identities: { [provider]: { source_id: source, config_id: identity.config_id } },
+    });
+    for (const wrong of [{ ...identity, source_id: "untrusted-source" }, { ...identity, config_id: "0".repeat(64) }]) {
+      expect(() => validateProviderResultsAgainstSelection([{ provider, identity: wrong }], selection)).toThrow(/does not match trusted selection/);
+    }
+  });
+
+  it.each([null, "", 17, "source\ninvalid", "source\u0000invalid"])("P2 source normalization rejects explicitly invalid source %j", (source) => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers.kimi.source_id = source;
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", {
+      initial: ["kimi"], mode: "full_only", minimum_heterologous: 1,
+    })).toThrow(/source_id.*safe non-empty string/);
   });
 
   it("uses the exact configured profile key for host exclusion without requiring raw source identity", () => {

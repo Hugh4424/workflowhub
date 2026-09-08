@@ -30,8 +30,15 @@ import {
   createSimpleReviewPacket,
   dispatchFrozenProviderInput,
   runSimpleReview,
+  reviewSubjectFields,
+  resolveSimpleReviewRouteIdentity,
   serializeProviderInput,
 } from "./simple-review-runner.mjs";
+import {
+  compactReviewDiff,
+  compactVerifyCodeMaterials,
+  TASK_BOUND_PROVIDER_INPUT_MAX_BYTES,
+} from "./review-input-bounds.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -59,8 +66,8 @@ function bareSinkMaterialId(request) {
   // Recovery requests may already carry the material identity. Use
   // it directly so a bare request cannot collide with another request that
   // has no material payload (for example, a stale unavailable recovery fact).
-  if (typeof request?.material_id === "string" && request.material_id !== "") return request.material_id;
-  if (typeof request?.materialId === "string" && request.materialId !== "") return request.materialId;
+  if (!request.materials && typeof request?.material_id === "string" && request.material_id !== "") return request.material_id;
+  if (!request.materials && typeof request?.materialId === "string" && request.materialId !== "") return request.materialId;
   try {
     return createSimpleReviewPacket({
       stage: request.stage,
@@ -80,36 +87,29 @@ function bareSinkKey(request) {
     review_kind: request.review_kind ?? request.reviewKind ?? null,
     review_scope: request.review_scope ?? request.reviewScope ?? null,
     subject: request.subject ?? null,
-    review_policy: request.review_policy ?? request.reviewPolicy ?? null,
-    reason: request.reason ?? request.reason_code ?? request.recheck_reason ?? null,
+    ...reviewSubjectFields(request),
     host_provider: request.host_provider ?? request.hostProvider ?? null,
     material_id: bareSinkMaterialId(request),
   })).digest("hex");
 }
 
-function bareSinkRecord(request, result, key) {
+function bareSinkRecord(request, result, key, routeIdentity = null) {
   return {
     version: "workflowhub-review-sink.v1",
     authoritative: false,
     request_key: key,
+    route_identity: routeIdentity,
     request: {
       stage: request.stage ?? null,
       review_track: request.review_track ?? request.reviewTrack ?? null,
       review_kind: request.review_kind ?? request.reviewKind ?? null,
       review_scope: request.review_scope ?? request.reviewScope ?? null,
       subject: request.subject ?? null,
-      review_policy: request.review_policy ?? request.reviewPolicy ?? null,
+      ...reviewSubjectFields(request),
       host_provider: request.host_provider ?? request.hostProvider ?? null,
       material_id: bareSinkMaterialId(request),
     },
-    result: {
-      status: result?.status ?? "unavailable",
-      ...(result?.error_code ? { error_code: result.error_code } : {}),
-      error: result?.error ?? (result?.error_code ? { code: result.error_code, message: "review recovery failed" } : null),
-      attempt_ref: result?.attempt_ref ?? result?.attemptRef ?? null,
-      result_ref: result?.result_ref ?? result?.resultRef ?? null,
-      report_ref: result?.report_ref ?? result?.reportRef ?? null,
-    },
+    result: structuredClone(result),
   };
 }
 
@@ -123,16 +123,20 @@ function readBareReviewSink(request) {
   if (!existsSync(ref)) return null;
   try {
     const value = JSON.parse(readFileSync(ref, "utf8"));
-    if (value?.version !== "workflowhub-review-sink.v1" || value.request_key !== bareSinkKey(request)) return null;
+    if (value?.version !== "workflowhub-review-sink.v1" || value.request_key !== bareSinkKey(request)) throw new Error("review sink identity is invalid");
     return { ...value, sink_ref: ref };
-  } catch { return null; }
+  } catch (cause) {
+    const error = new Error("review sink exists but cannot be authenticated", { cause });
+    error.code = "REVIEW_SINK_INVALID";
+    throw error;
+  }
 }
 
-function writeBareReviewSink(request, result) {
+function writeBareReviewSink(request, result, routeIdentity = null) {
   const key = bareSinkKey(request);
   const { root, ref } = bareSinkLocation(request);
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const record = bareSinkRecord(request, result, key);
+  const record = bareSinkRecord(request, result, key, routeIdentity);
   const bytes = `${JSON.stringify(record)}\n`;
   if (existsSync(ref)) {
     const existing = readFileSync(ref, "utf8");
@@ -147,12 +151,43 @@ function writeBareReviewSink(request, result) {
   return { sink_ref: ref, authoritative: false, reused: false };
 }
 
-async function runBareReview(request, runRound) {
+async function runBareReview(request, runRound, resolveRouteIdentity) {
   const key = bareSinkKey(request);
   const previous = bareSinkLocks.get(key) ?? Promise.resolve();
   const current = previous.then(async () => {
+    // Route identity comes exclusively from current trusted host configuration.
+    // The bare sink has no authenticated retry budget. A changed route cannot
+    // turn its saved result into permission to dispatch another review.
     const existing = readBareReviewSink(request);
-    if (existing) return { ...existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true };
+    let routeIdentity = null;
+    try {
+      routeIdentity = request.stage && (request.host_provider ?? request.hostProvider)
+        ? resolveRouteIdentity(request)?.route_identity : null;
+      if (routeIdentity !== null && !/^[a-f0-9]{64}$/.test(routeIdentity ?? "")) throw new TypeError("trusted route identity must be a sha256 hex string");
+    } catch (error) {
+      const diagnostic = { code: "ROUTE_UNAVAILABLE", message: safeRecoveryError(error).message };
+      if (existing) return {
+        ...existing.result, route_error: diagnostic,
+        sink_ref: existing.sink_ref, authoritative: false, reused: true,
+      };
+      const unavailable = {
+        status: "unavailable", stage: request.stage,
+        review_track: request.review_track ?? request.reviewTrack ?? null,
+        review_kind: request.review_kind ?? request.reviewKind ?? null,
+        ...reviewSubjectFields(request), material_id: bareSinkMaterialId(request),
+        runtime_id: null, outcome: "unavailable", dispatch_state: "blocked_before_dispatch",
+        provider_results: [], findings: [], error: diagnostic,
+      };
+      return { ...unavailable, ...writeBareReviewSink(request, unavailable, null) };
+    }
+    if (existing) {
+      if ((existing.route_identity ?? null) !== routeIdentity) return {
+        status: "unavailable", ...reviewSubjectFields(request),
+        error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: "trusted review route changed but bare review has no authenticated retry budget" },
+        prior_result: existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true,
+      };
+      return { ...existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true };
+    }
     let result;
     try {
       result = await runRound(request);
@@ -169,7 +204,12 @@ async function runBareReview(request, runRound) {
         ...(review?.reportRef ? { report_ref: review.reportRef } : {}),
       };
     }
-    return { ...result, ...writeBareReviewSink(request, result) };
+    const subject = reviewSubjectFields(request);
+    for (const [field, value] of Object.entries(subject)) {
+      if (result[field] !== undefined && result[field] !== value) throw new TypeError(`review result ${field} conflicts with the request`);
+    }
+    result = { ...result, ...subject };
+    return { ...result, ...writeBareReviewSink(request, result, routeIdentity) };
   });
   const tracked = current.catch(() => undefined);
   bareSinkLocks.set(key, tracked);
@@ -424,11 +464,13 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
   if (snapshot.tree !== subjectBinding.snapshot_tree || typeof snapshot.commit !== "string" || snapshot.commit.trim() === "") {
     throw new Error("verify-code E2E review has no current implementation snapshot commit");
   }
-  const diff = execFileSync("git", ["diff", "--binary", "--no-ext-diff", trusted.workspace.baselineCommit, snapshot.commit, "--"], {
+  const fullDiff = execFileSync("git", ["diff", "--binary", "--no-ext-diff", trusted.workspace.baselineCommit, snapshot.commit, "--"], {
     cwd: trusted.workspace.worktreeRoot,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
   });
+  const bounded = compactReviewDiff(fullDiff);
+  const diff = bounded.diff;
   const materials = {
     "decision-log.md": ArtifactDir.open(trusted.workspace.worktreeRoot, trusted.task).read("decision-log.md"),
     "spec.md": ArtifactDir.open(trusted.workspace.worktreeRoot, trusted.task).read("spec.md"),
@@ -441,7 +483,11 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
       baseline_commit: trusted.workspace.baselineCommit,
       snapshot_commit: snapshot.commit,
       snapshot_tree: snapshot.tree,
-      diff_sha256: createHash("sha256").update(diff).digest("hex"),
+      diff_sha256: bounded.index.diff_sha256,
+      full_diff_sha256: bounded.index.full_diff_sha256,
+      full_diff_bytes: bounded.index.full_diff_bytes,
+      diff_bytes: bounded.index.diff_bytes,
+      delivery: bounded.index,
     },
   };
   const testRefs = trusted.task.listCanonicalTestReceiptRefs?.() ?? [];
@@ -478,7 +524,12 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
       materials[`browser-${browserIndex}-test-output.txt`] = entry.output;
     }
   }
-  return Object.freeze(materials);
+  const projected = compactVerifyCodeMaterials(materials).materials;
+  const providerBytes = Object.values(projected).reduce((total, value) => total + (Buffer.isBuffer(value) ? value.length : Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8")), 0);
+  if (providerBytes > TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) {
+    throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded 300 KiB budget"), { code: "MATERIAL_TOO_LARGE" });
+  }
+  return Object.freeze(projected);
 }
 
 function frozenGroupResult({ group, stage, reviewTrack, reviewKind, materialId, expectedProviders, expectedProviderIdentities, reviewPolicy }) {
@@ -899,9 +950,10 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
   });
 }
 
-export async function runReviewRecovery(input, { runRound = runReviewRound, recordContext = null, sameSourceFallback = null } = {}) {
+export async function runReviewRecovery(input, { runRound = runReviewRound, recordContext = null, sameSourceFallback = null, resolveRouteIdentity = resolveSimpleReviewRouteIdentity } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review recovery input is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
+  if (typeof resolveRouteIdentity !== "function") throw new TypeError("resolveRouteIdentity must be a host function");
   if (sameSourceFallback !== null) throw new TypeError("sameSourceFallback is retired; 3rd-review owns heterologous recovery");
   const request = structuredClone(input);
   for (const field of RETIRED_RECOVERY_FIELDS) delete request[field];
@@ -909,9 +961,9 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, reco
     if (!recordContext || typeof recordContext !== "object" || !recordContext.task || !recordContext.kernel) {
       throw new TypeError("recordContext requires the authenticated task and kernel");
     }
-    return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound });
+    return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound, resolveRouteIdentity });
   }
-  return runBareReview(request, runRound);
+  return runBareReview(request, runRound, resolveRouteIdentity);
 }
 
 export async function runReviewRound(input) {

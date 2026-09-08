@@ -176,7 +176,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: b655203ba0f07cd6e5d77b045ef13c308e764a6922b16f02630c324f2892e784
+    local_bundle_hash: 7d5a216ce1f7b8f7e0a126a94d752e8fb055841f4f3fc0c51ce95485a03c4287
     last_reviewed_at: "2026-07-14"
     status: adapted
     metrics_enabled: true
@@ -193,7 +193,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: bdf415b268e5ac4a66e4a5a785c76c4859a297a9d3f57789dd1c34fffb39ddaa
+    local_bundle_hash: a1fdf660c924f10f50246ddd45a314c3a58b23288e0ac1899c8e0deba2a42164
     last_reviewed_at: "2026-07-14"
     status: adapted
     metrics_enabled: true
@@ -319,7 +319,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 4f7942fc468746d08764a923823fc37ba9b4bab242da67565aa96a43a0e3e175
+    local_bundle_hash: 9910ed16ddc15a308823ea37d85e6ee2505212a12804ceeabb581b454e9c84fb
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true

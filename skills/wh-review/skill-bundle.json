@@ -83,11 +83,11 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "17ce35470636fdb1b800bfe1c09fff3d5c49bd3d16d940c838c8e6fcf66fc489"
+      "sha256": "8117b169f89a93b3ab42d02e4268b5c473823398486b5d34d01bc5fc280bd3c3"
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "598070e4ca1c7220e9126d0829424ad1f1b68d7a1d4b49522531b528f2c9dce0"
+      "sha256": "79c328194a897d6b8996710edd7995bb377b24f19e8f576de7c300981dda9853"
     },
     {
       "path": "scripts/review-runner.mjs",
@@ -107,19 +107,23 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "ae6e92ccd59bc5c2bf147fdba0116ea5a4d57cc9cd56b3c3967e3dbd8f6a43a5"
+      "sha256": "5e8ca1e42e7d1210b8e6d7a8e600bbb482bced66308baa850eec4f3ae4062c2a"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "daf59815c3f22e0b52359fd1f0dd42e7456e7e42e23b14c43ad3bb6a7a75c057"
+      "sha256": "7aec9dee50918f6b3892032622246e276d11b4ee72727b2478a8f270ba6d41f2"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "673fa187403aa788f38eaf2d40685180130ad20c8655ae667d18305d25e83054"
+      "sha256": "9cf49be63a1357687db5616cf53a9995d7f4e5e3220ceb15df22a89f71700597"
     },
     {
       "path": "stage-skill-plan.json",
       "sha256": "6a54b969fc66eb0befdc803e601f8ff20e3517c69e8f9a501f7a078bf69019f7"
+    },
+    {
+      "path": "scripts/review-input-bounds.mjs",
+      "sha256": "8bb09fdbad38b365763671dad7a0e297e0a98bf67c1e53078ea6c23e8eede131"
     }
   ]
 }

@@ -1,5 +1,10 @@
 stage: build-spec
 skills:
+  # Review results use the actual canonical result ref, or unavailable attempt ref,
+  # in receipts.review; safeReviewFacts authenticates them.
+  # stage-reflection consumes the current authenticated outcome and v2 judgment.
+  # Use its returned ref/sha256; <reflection_key> is a semantic key, not a raw hash.
+  # A/A reuses the original; B writes a new ref; unavailable never implies success.
   - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, trigger: conditional_research, bundle: skills/spec-research/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.research"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.research" } }
   - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, trigger: spec_ambiguity, bundle: skills/spec-clarify/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#clarifyFacts", inputs: ["receipts.clarify"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.clarify" } }
   - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, trigger: spec_draft, bundle: skills/spec-specify/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["artifacts.spec.md"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.spec_ref" } }
@@ -11,7 +16,7 @@ skills:
   - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["contract_facts.plan_design_review", "artifacts.spec.md"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.plan_design_review" } }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "facts.review" } }
   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["stage_outcome.spec_analyze"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "stage_outcome.spec_analyze" } }
-  - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["stage_outcome.step_outcomes", "stage_outcome.skill_outcomes"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "stage_reflection" } }
+  - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["stage_outcome.producer", "stage_outcome.attempt_id", "stage_outcome.run_id", "stage_outcome.material_revision", "stage_outcome.snapshot_tree", "stage_outcome.step_outcomes", "stage_outcome.skill_outcomes"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "stage_reflection" } }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

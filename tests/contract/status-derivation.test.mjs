@@ -117,6 +117,14 @@ function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
 }
 
 describe("status is derived from current quality facts", () => {
+  it("P3 T007 exposes an actual failed current execution predicate without hiding it behind a completed outcome", () => {
+    const observations = facts("build-code", { risk_tests_fresh: { status: "failed" } });
+    const completion = deriveStageCompletion("build-code", observations, { requireStageOutcome: true, stageOutcomeStatus: "completed" });
+    expect(completion.status).toBe("in_progress");
+    const groups = deriveStatusGroups({ stage: "build-code", quality: completion, observations });
+    expect(groups.actionable_now).toContain("risk_tests_fresh");
+    expect(groups.external_unavailable).not.toContain("risk_tests_fresh:failed");
+  });
   it("does not turn upstream quality gaps into actions that block the current stage", () => {
     const groups = deriveStatusGroups({
       stage: "verify-code",

@@ -4,7 +4,7 @@ import { officialStageHandler } from "./stage-handlers.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { readFileSync, realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, isStageSnapshotCurrent, stageMaterialScopeRevision, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
@@ -14,16 +14,17 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { isHumanConfirmationVersion, validateCanonicalTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof, deriveAcceptanceExecutionAssertions, validateAcceptanceExecutionEvidence } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
-import { parseReviewerOutput } from "../review/review-output.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
 import { isDateTime, normalizeStageReflectionAvailability, publishStageReflectionAvailability, runStageReflection } from "./stage-reflect.mjs";
 import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 import { classifyProtocolError } from "./protocol-error-whitelist.mjs";
 import { appendTaskFact } from "../task/task-store.mjs";
+import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
+import { runWorkspaceCommand, runCandidateWorkspaceCommand } from "../task/workspace-runner.mjs";
+import { authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult } from "../evidence/freshness.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -42,7 +43,7 @@ const UPSTREAM_INPUT = Object.freeze({
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
 const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -77,59 +78,22 @@ function outcomeHash(value, label) {
   return value;
 }
 
-function validateStageOutcomeProducer(record, stage, { requireSource = false, requireAgentRunBinding = false } = {}) {
-  const producer = outcomeObject(record.producer, `${stage} stage outcome producer`);
-  const kind = outcomeText(producer.kind, `${stage} stage outcome producer.kind`);
-  if (!new Set(["stage-agent", "workflowhub-session"]).has(kind)) {
-    throw outcomeError(`${stage} stage outcome producer.kind is invalid`);
-  }
-  outcomeText(producer.host, `${stage} stage outcome producer.host`);
-  let sourceId = null;
-  let sourceFamily = null;
-  const hasSourceId = producer.source_id !== undefined;
-  const hasSourceFamily = producer.source_family !== undefined;
-  if (requireSource || hasSourceId || hasSourceFamily) {
-    sourceId = outcomeText(producer.source_id, `${stage} stage outcome producer.source_id`);
-    sourceFamily = outcomeText(producer.source_family, `${stage} stage outcome producer.source_family`);
-    if (sourceFamily !== sourceId.split("/")[0]) {
-      throw outcomeError(`${stage} stage outcome producer source identity mismatch`);
-    }
-  }
-  const agentRunId = outcomeText(producer.agent_run_id, `${stage} stage outcome producer.agent_run_id`);
-  if (requireAgentRunBinding && agentRunId !== record.attempt_id) {
-    throw outcomeError(`${stage} stage outcome producer agent run identity mismatch`);
-  }
-  return Object.freeze({ kind, sourceId, sourceFamily, agentRunId });
+function validateStageOutcomeProducer(record, stage, options = {}) {
+  try { return validateStageOutcomeProducerIdentity(record, stage, options); }
+  catch (error) { throw outcomeError(error.message); }
 }
 
 function outcomeEvidence(ctx, entry, label, binding) {
   const value = outcomeObject(entry, label);
   const ref = outcomeText(value.ref, `${label}.ref`);
   const sha256 = outcomeHash(value.sha256, `${label}.sha256`);
-  if (!ref.startsWith("quality/") || ref.includes("..")) throw outcomeError(`${label}.ref is outside the quality namespace`);
+  const proofMatch = /^quality\/evidence\/stage-outcome-proofs\/([a-f0-9]{64})\.json$/.exec(ref);
+  if (!proofMatch || proofMatch[1] !== sha256) throw outcomeError(`${label}.ref is not bound to its canonical proof hash`);
   let raw;
   try { raw = ctx.task.readRecord(ref); }
   catch (error) { throw outcomeError(`${label}.ref is unavailable: ${error.message}`); }
-  const actual = createHash("sha256").update(raw).digest("hex");
-  if (actual !== sha256) throw outcomeError(`${label}.ref hash mismatch`);
-  let evidence;
-  try { evidence = JSON.parse(raw); }
-  catch { throw outcomeError(`${label}.ref must contain structured semantic evidence`); }
-  if (evidence?.schema_version !== "workflowhub-stage-outcome-evidence.v1") {
-    throw outcomeError(`${label}.ref has an invalid evidence schema`);
-  }
-  for (const [key, expected] of Object.entries({
-    task_id: binding.taskId,
-    stage: binding.stage,
-    snapshot_tree: binding.snapshotTree,
-    material_revision: binding.materialRevision,
-    subject_kind: binding.subjectKind,
-    subject_id: binding.subjectId,
-    outcome_status: binding.outcomeStatus,
-    result_summary: binding.resultSummary,
-  })) {
-    if (evidence[key] !== expected) throw outcomeError(`${label}.ref semantic binding mismatch: ${key}`);
-  }
+  try { validateStageOutcomeProof(raw, { ref, sha256 }, binding, label); }
+  catch (error) { throw outcomeError(error.message); }
   return { ref, sha256 };
 }
 
@@ -280,7 +244,8 @@ function consumerInputAvailable(worker, handlerInput, stageOutcome, input) {
     return valueAtPath(handlerInput.contract_facts, input.slice("contract_facts.".length)) !== undefined;
   }
   if (input.startsWith("stage_outcome.")) {
-    return valueAtPath(stageOutcome?.value, input.slice("stage_outcome.".length)) !== undefined;
+    const stageOutcomeRecord = stageOutcome?.value?.value ?? stageOutcome?.value;
+    return valueAtPath(stageOutcomeRecord, input.slice("stage_outcome.".length)) !== undefined;
   }
   if (input.startsWith("artifacts.")) {
     const artifactName = input.slice("artifacts.".length);
@@ -320,10 +285,11 @@ export function validateSkillConsumerExecution({ worker, handlerInput, stageOutc
       }
       return consumerInputAvailable(worker, handlerInput, stageOutcome, input);
     });
+  const stageOutcomeRecord = stageOutcome?.value?.value ?? stageOutcome?.value;
   const resultAvailable = binding.result === undefined
     ? true
     : binding.result.startsWith("stage_outcome.")
-      ? valueAtPath(stageOutcome?.value, binding.result.slice("stage_outcome.".length)) !== undefined
+      ? valueAtPath(stageOutcomeRecord, binding.result.slice("stage_outcome.".length)) !== undefined
       : valueAtPath(handlerResult, binding.result) !== undefined;
   const consumerObserved = consumerInvocationObserved(worker, stageOutcome, binding.consumer);
   const consumed = inputAvailable && resultAvailable && consumerObserved;
@@ -601,6 +567,15 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
       try { validateSchema("result", bound); }
       catch (error) { throw outcomeError(`stage outcome code_review quality review is invalid: ${error.message}`); }
       resolution = codeReviewRepairResolution(result, bound);
+      if (Array.isArray(result.repairs) && result.repairs.some((repair) => REVIEW_REPAIR_STATUSES.has(repair?.status))) {
+        try {
+          resolution = authenticateCodeReviewRepairs({ review: bound, result, taskId: ctx.identity.taskId,
+            snapshotTree: snapshot.tree, materialRevision,
+            workspaceRoot: ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot,
+            read: ctx.task.readRecord,
+          });
+        } catch (error) { throw outcomeError(`stage outcome code_review repair evidence is invalid: ${error.message}`); }
+      }
       if (bound.task_id !== ctx.identity.taskId || bound.stage !== stage
           || bound.subject_kind !== "worktree" || bound.phase_id !== null || bound.review_scope !== null
           || (bound.snapshot_tree !== snapshot.tree && resolution !== "resolved")
@@ -690,6 +665,8 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   if (!Array.isArray(record.skill_outcomes) || record.skill_outcomes.length !== (skillManifest?.skills?.length ?? 0)) throw outcomeError("stage outcome must contain every declared skill exactly once");
   const binding = {
     taskId: ctx.identity.taskId,
+    attemptId: record.attempt_id,
+    producerIdentity: record.producer,
     stage,
     snapshotTree: snapshot.tree,
     materialRevision: outcomeMaterialRevision,
@@ -754,11 +731,11 @@ export function authenticateStageOutcomeForProjection(context, stage, ref) {
 }
 
 /**
- * Resolve the one current, completed build-code execution that a verify-code
- * reviewer may inspect. Historical, stale, incomplete, and ambiguously
- * duplicated outcomes are not review authority.
+ * Resolve one current build-code execution with authenticated producer proofs.
+ * Incomplete quality does not erase the executor identity; it remains incomplete
+ * in the returned value and in the independent completion predicates.
  */
-export function authenticateCurrentBuildCodeStageOutcome(context = {}) {
+export function authenticateCurrentBuildCodeStageOutcome(context = {}, options = {}) {
   const task = assertTaskHandle(context.task);
   const kernel = assertTaskKernel(context.kernel);
   if (kernel.task !== task) throw outcomeError("build-code outcome TaskHandle/TaskKernel mismatch");
@@ -769,46 +746,55 @@ export function authenticateCurrentBuildCodeStageOutcome(context = {}) {
   if (workflowRunId !== derivedWorkflowRunId) {
     throw outcomeError("build-code outcome workflowRunId does not match the kernel-derived workflow run identity");
   }
+  outcomeObject(options, "build-code outcome binding");
+  if (Object.keys(options).some((key) => !new Set(["outcomeRef", "outcomeHash"]).has(key))) {
+    throw outcomeError("build-code outcome binding has unsupported fields");
+  }
+  const explicit = Object.hasOwn(options, "outcomeRef") || Object.hasOwn(options, "outcomeHash");
+  if (explicit) {
+    // The already authenticated bridge/current execution supplies both fields.
+    // A partial or invalid binding must never fall back to historical scanning.
+    const ref = outcomeText(options.outcomeRef, "build-code outcome binding outcomeRef");
+    const expectedHash = outcomeHash(options.outcomeHash, "build-code outcome binding outcomeHash");
+    const match = STAGE_OUTCOME_REF.exec(ref);
+    if (!match || match[1] !== "build-code" || match[2] !== expectedHash) {
+      throw outcomeError("build-code outcome ref/hash binding is not canonical");
+    }
+  }
+  const authenticate = (ref, raw, candidate) => {
+    const current = authenticateStageOutcome({ ...context, task, kernel, identity, workflowRunId, stage: "build-code" }, "build-code", { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+    if (explicit && current.sha256 !== options.outcomeHash) throw outcomeError("build-code outcome expected hash binding mismatch");
+    if (current.value.run_id !== workflowRunId) throw outcomeError("build-code stage outcome workflow run identity mismatch");
+    const { kind, sourceId, agentRunId } = validateStageOutcomeProducer(current.value, "build-code", { requireSource: true });
+    if (![...current.step_outcomes, ...current.skill_outcomes].some((entry) => entry.evidence_refs.length > 0)) {
+      throw outcomeError("build-code execution has no authenticated producer proof");
+    }
+    return Object.freeze({
+      ...current,
+      raw,
+      actor: Object.freeze({ source_kind: kind, source_id: sourceId, run_id: agentRunId }),
+    });
+  };
   const authenticated = [];
-  const completedRefs = task.listCanonicalStageOutcomeRefs("build-code");
-  for (const ref of completedRefs) {
+  const refs = explicit ? [options.outcomeRef] : task.listCanonicalStageOutcomeRefs("build-code");
+  for (const ref of refs) {
     let raw;
     let candidate;
     try { raw = task.readRecord(ref); candidate = JSON.parse(raw); }
-    catch {
-      // A malformed content-addressed sibling has no trustworthy run scope.
-      // It is not allowed to poison a separately authenticated current run;
-      // the final cardinality check still fails closed if no valid current
-      // outcome remains.
+    catch (error) {
+      if (explicit) throw outcomeError(`build-code outcome binding ref is unavailable: ${error.message}`);
+      // An unscoped malformed sibling cannot nominate an actor. The legacy
+      // no-ref path still requires one unambiguous authenticated execution.
       continue;
     }
-    if (candidate?.status !== "completed") continue;
-    // Only a candidate explicitly bound to this kernel-derived run can be a
-    // current authentication failure. Foreign or missing run ids are stale /
-    // unscoped siblings and must not affect the current run's selection.
-    if (candidate.run_id !== workflowRunId) continue;
-    try {
-      const current = authenticateStageOutcome({ ...context, task, kernel, identity, workflowRunId, stage: "build-code" }, "build-code", { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
-      const producer = outcomeObject(current.value.producer, "build-code stage outcome producer");
-      if (current.value.run_id !== workflowRunId) throw outcomeError("build-code stage outcome workflow run identity mismatch");
-      const { kind, sourceId, agentRunId } = validateStageOutcomeProducer(current.value, "build-code", {
-        requireSource: true,
-        requireAgentRunBinding: true,
-      });
-      authenticated.push(Object.freeze({
-        ...current,
-        raw,
-        actor: Object.freeze({
-          source_kind: kind,
-          source_id: sourceId,
-          run_id: agentRunId,
-        }),
-      }));
-    } catch (error) {
-      throw outcomeError(`build-code completed stage outcome is invalid: ${error.message}`);
+    if (!new Set(["completed", "incomplete"]).has(candidate?.status) || candidate.run_id !== workflowRunId) {
+      if (explicit) throw outcomeError("build-code outcome binding does not identify a current execution");
+      continue;
     }
+    try { authenticated.push(authenticate(ref, raw, candidate)); }
+    catch (error) { throw outcomeError(`build-code execution stage outcome is invalid: ${error.message}`); }
   }
-  if (authenticated.length !== 1) throw outcomeError("exactly one current completed build-code outcome is required");
+  if (authenticated.length !== 1) throw outcomeError("exactly one current completed build-code outcome or authenticated incomplete execution is required; supply an explicit outcomeRef/outcomeHash binding when records are ambiguous");
   return authenticated[0];
 }
 
@@ -971,7 +957,7 @@ async function executeReflectionWithDeadline(execute, input, timeoutMs) {
 
 function reflectionRecord(ctx, stage, stageStatus, generatedAt, value, error = null) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? structuredClone(value) : {};
-  if (record.schema_version !== "stage-reflection.v1"
+  if (record.schema_version !== "stage-reflection.v2"
       || record.record_kind !== "judgment"
       || record.task_id !== ctx.identity.taskId
       || record.stage !== stage
@@ -981,7 +967,7 @@ function reflectionRecord(ctx, stage, stageStatus, generatedAt, value, error = n
       || !Array.isArray(record.judgments)
       || !Array.isArray(record.interventions)
       || !Array.isArray(record.lessons_added)) {
-    if (!error) throw new Error("stage reflection executor returned an invalid stage-reflection.v1 record");
+    if (!error) throw new Error("stage reflection executor returned an invalid stage-reflection.v2 record");
   }
   if (error) {
     return {
@@ -1034,7 +1020,7 @@ export async function runStageEndReflection(context, {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new TypeError("stage reflection timeoutMs must be a positive safe integer");
   const declaredStep = loadStageManifest(stage, REPOSITORY_ROOT).steps.find((step) => step.on_stage_end === true);
   if (!declaredStep) throw new Error(`stage ${stage} does not declare an on_stage_end reflection step`);
-  const reflectionRef = stageReflectionRef(stage);
+  const reflectionRef = null;
   const observedAt = reflectionTimestamp(now);
   const generated = reflectionTimestamp(generatedAt ?? observedAt);
   if (availabilityState !== undefined || reasonCode !== undefined || typeof execute !== "function") {
@@ -1078,11 +1064,16 @@ export async function runStageEndReflection(context, {
     executionError = error instanceof Error ? error : new Error(String(error));
   }
   if (executionError) {
-    value = reflectionRecord(ctx, stage, stageStatus, generated, null, executionError);
+    const unavailable = await runStageReflection(ctx, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+    return Object.freeze({ ...unavailable, error: executionError.message, prelude });
   } else {
     const executedValue = executed?.value && typeof executed.value === "object" && !Array.isArray(executed.value)
       ? executed.value
       : executed;
+    if (executedValue === null || executedValue === undefined) {
+      const unavailable = await runStageReflection(ctx, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+      return Object.freeze({ ...unavailable, prelude });
+    }
     try {
       value = reflectionRecord(ctx, stage, stageStatus, generated, executedValue);
     } catch (error) {
@@ -1103,6 +1094,7 @@ export async function runStageEndReflection(context, {
   try {
     result = await runStageReflection(ctx, {
       input: value,
+      stageOutcome,
       observation: lessonText,
       now: observedAt,
     });
@@ -1118,6 +1110,7 @@ export async function runStageEndReflection(context, {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  if (!result.publication) return Object.freeze({ ...result, prelude });
   const reflection = result.reflection ?? value;
   const reflectionStatus = reflection.status === "failed" ? "failed" : "completed";
   const reflectionError = executionError?.message ?? (result.status === "degraded" ? result.lesson?.error : null);
@@ -1128,7 +1121,7 @@ export async function runStageEndReflection(context, {
     ref: result.publication?.ref ?? null,
     sha256: result.publication?.sha256 ?? null,
     persisted: result.publication !== null && result.publication !== undefined,
-    prelude,
+    prelude: Object.freeze({ ...prelude, reflection_ref: result.publication?.ref ?? null }),
     ...(reflectionError ? { error: reflectionError } : {}),
   });
 }
@@ -1159,7 +1152,7 @@ function publishVNextEvidence(ctx, ref, raw) {
   try {
     return ctx.kernel.publishCanonicalRecord(ref, raw);
   } catch (error) {
-    if (error?.code !== "EEXIST" || ctx.task.readRecord(ref) !== raw) throw error;
+    if (error?.code !== "EEXIST" || (Buffer.isBuffer(raw) ? !ctx.task.readRecordBytes(ref).equals(raw) : ctx.task.readRecord(ref) !== raw)) throw error;
     return { ref, idempotent: true };
   }
 }
@@ -1183,37 +1176,36 @@ function currentMaterialTexts(ctx) {
   }));
 }
 
-function readCurrentE2eAcceptanceEvidence(ctx) {
+function readCurrentE2eAcceptanceEvidence(ctx, receipts = {}) {
   const materials = currentMaterialTexts(ctx);
-  const projection = projectAcceptanceExecutionData(materials?.["tasks.md"], {
-    decisionLog: materials?.["decision-log.md"],
-    spec: materials?.["spec.md"],
-  });
+  const projection = projectAcceptanceExecutionData(materials?.["tasks.md"], { decisionLog: materials?.["decision-log.md"], spec: materials?.["spec.md"] });
   if (!projection.requires_independent_verdict) return Object.freeze({ required: false });
-  const snapshot = ctx.kernel.currentVNextSnapshot();
-  const materialRevision = ctx.kernel.currentVNextMaterialRevision();
-  const facts = (ctx.task.listCanonicalQualityFactRefs?.() ?? []).flatMap((ref) => {
-    try {
-      const raw = ctx.task.readRecord(ref);
-      const value = JSON.parse(raw);
-      if (value?.schema_version !== "quality-fact.v1" || value.task_id !== ctx.identity.taskId
-          || value.stage !== "build-code" || value.kind !== "acceptance_criterion"
-          || value.subject !== "acceptance_execution" || value.snapshot_tree !== snapshot.tree
-          || value.material_revision !== materialRevision) return [];
-      return [{ ref, sha256: createHash("sha256").update(raw).digest("hex"), value }];
-    } catch { return []; }
-  });
-  const executionFact = facts.at(-1);
-  const executionEvidence = executionFact?.value?.evidence?.[0];
-  const execution = executionFact?.value?.status === "passed" && executionEvidence
-    ? { status: "passed", ref: executionEvidence.ref, sha256: executionEvidence.sha256, executor_actor: null }
-    : { status: "missing", ref: null, sha256: null, executor_actor: null };
-  return Object.freeze({
-    required: true,
-    execution: Object.freeze(execution),
-    independent_review: Object.freeze({ status: "missing", ref: null, sha256: null, reviewer_actor: null, frozen_material: null }),
-    user_confirmation: Object.freeze({ status: "missing", ref: null, sha256: null }),
-  });
+  const result = { required: true,
+    execution: { status: "missing", ref: null, sha256: null, executor_actor: null },
+    independent_review: { status: "missing", ref: null, sha256: null, reviewer_actor: null, frozen_material: null },
+    user_confirmation: { status: "missing", ref: null, sha256: null } };
+  if (!REVIEW_RESULT_REF.test(receipts.review ?? "")) return result;
+  const current = { task_id: ctx.identity.taskId, stage: "verify-code", snapshot_tree: ctx.kernel.currentVNextSnapshot().tree,
+    material_revision: ctx.kernel.currentVNextMaterialRevision(), material_scope_revision: stageMaterialScopeRevision("verify-code", materials) };
+  const read = (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
+    ? ctx.task.readRecordBytes(ref) : ctx.task.readRecord(ref);
+  const dependencies = {};
+  try {
+    const reviewRaw = read(receipts.review), review = JSON.parse(reviewRaw);
+    const reviewReference = { ref: receipts.review, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
+    const authenticated = authenticateOrdinaryExecutionReview(review, current, read, dependencies, "execution-review", reviewReference);
+    result.execution = { status: "passed", ...authenticated.execution.wrapperReference, executor_actor: authenticated.execution.actor };
+    result.independent_review = { status: "recorded", ...reviewReference, reviewer_actor: authenticated.binding.reviewer_actor, frozen_material: authenticated.binding.frozen_material };
+    if (typeof receipts.confirmation === "string") {
+      const confirmationRaw = read(receipts.confirmation), confirmation = JSON.parse(confirmationRaw);
+      const reference = { ref: receipts.confirmation, sha256: createHash("sha256").update(confirmationRaw).digest("hex") };
+      authenticateExecutionConfirmation(confirmation, reference, reviewReference, current, read, dependencies);
+      result.user_confirmation = { status: "accepted", ...reference };
+    }
+  } catch (error) {
+    result.reason = error.message;
+  }
+  return Object.freeze(result);
 }
 
 function specAnalyzeDisclosure(value) {
@@ -1324,48 +1316,6 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
   return candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
-function authenticateStageReviewResult(task, result) {
-  validateSchema("result", result);
-  const attempt = JSON.parse(task.readRecord(result.attempt_ref));
-  validateSchema("attempt", attempt);
-  if (attempt.task_id !== task.identity.taskId
-      || attempt.stage !== result.stage
-      || attempt.review_track !== result.review_track
-      || attempt.snapshot_tree !== result.snapshot_tree
-      || attempt.material_id !== result.material_id
-      || attempt.terminal_status !== "semantic"
-      || attempt.error !== null) {
-    throw new Error("review attempt/result binding is invalid");
-  }
-  const attemptId = result.attempt_ref.match(/^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/)?.[1];
-  if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt identity is invalid");
-  const latest = new Map();
-  for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
-  const providerOutputs = [];
-  for (const providerAttempt of latest.values()) {
-    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
-    const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
-    if (output.schema_version !== "wh-review-provider-output.v1"
-        || output.task_id !== task.identity.taskId
-        || output.stage !== attempt.stage
-        || output.attempt_id !== attemptId
-        || output.provider !== providerAttempt.provider
-        || typeof output.content !== "string"
-        || output.content_hash !== createHash("sha256").update(output.content).digest("hex")) {
-      throw new Error(`review provider output provenance is invalid: ${providerAttempt.provider}`);
-    }
-    providerOutputs.push({
-      ref: providerAttempt.output_ref,
-      provider: providerAttempt.provider,
-      ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
-      ...(providerAttempt.execution ? { execution: providerAttempt.execution } : {}),
-      ...(output.evidence_anchor_valid === undefined ? {} : { evidenceAnchors: output.evidence_anchor_valid }),
-      review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
-    });
-  }
-  return authenticateCanonicalReviewResult({ attempt, result, providerOutputs });
-}
-
 function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } = {}) {
   if (!candidate) return { status: "missing" };
   let record;
@@ -1392,7 +1342,7 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } 
           // attempt, terminal provider members, provider outputs, and
           // aggregation have all been authenticated. Do not let a copied or
           // partially failed result satisfy the final code-review predicate.
-          authenticateStageReviewResult(task, record);
+          authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
           return subject === "code_review"
             ? hasSeriousFinding
@@ -1405,7 +1355,7 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } 
       }
       if (stage === "build-code" && subject === "integration_review") {
         try {
-          authenticateStageReviewResult(task, record);
+          authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
           return { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean" };
         } catch {
@@ -1484,17 +1434,19 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   riskAcceptanceRefs,
   executionItems,
   executionBinding,
+  executionEvidence,
   recordedAt = null,
 }) {
   const effectiveRecordedAt = recordedAt ?? new Date().toISOString();
   const subjectEvidence = evidenceRefs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
-  const evidenceValue = {
+  const evidenceValue = executionEvidence ?? {
     schema_version: "stage-quality-evidence.v1",
     task_id: ctx.identity.taskId,
     stage: ctx.stage,
     subject,
     status,
     snapshot_tree: snapshot.tree,
+    material_revision: ctx.kernel.currentVNextMaterialRevision(),
     subject_fact: {
       status,
       detail: detail ?? "stage did not provide a subject-specific completion fact",
@@ -1726,7 +1678,102 @@ function currentBrowserAcceptanceBinding(candidate, { binding, attemptId, invoca
     && String(candidate.service_identity?.instance ?? "").toLowerCase() !== "fixture";
 }
 
-async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null) {
+const ACCEPTANCE_SERVICE_LAUNCHER = `
+const [url, name, input] = process.argv.slice(1);
+const module = await import(url);
+if (typeof module[name] !== 'function') throw new Error('acceptance service export must be a function');
+const result = await module[name](JSON.parse(input));
+process.stdout.write(JSON.stringify(result));
+`;
+
+async function executePrivateAcceptance(ctx, scenario, binding, authenticatedStageOutcome, signal) {
+  if (!scenario.execution) return unavailableAcceptanceScenario(scenario, `${scenario.tier} acceptance execution requires explicit execution`);
+  const currentOutcome = authenticatedStageOutcome?.value;
+  if (!currentOutcome?.value) return unavailableAcceptanceScenario(scenario, "acceptance execution has no authenticated producer");
+  let producer;
+  try { producer = validateStageOutcomeProducer(currentOutcome.value, "build-code", { requireSource: true }); }
+  catch (error) { return unavailableAcceptanceScenario(scenario, error.message); }
+  const executorActor = Object.freeze({ source_kind: producer.kind, source_id: producer.sourceId, run_id: producer.agentRunId });
+  const executionBinding = { stage_outcome_ref: currentOutcome.ref, stage_outcome_hash: currentOutcome.sha256 };
+  const ids = binding.acceptance_criterion_ids;
+  if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) return unavailableAcceptanceScenario(scenario, "acceptance scenario requires unique declared ACs");
+  const declared = scenario.execution;
+  const root = realpathSync(ctx.workspace?.worktreeRoot ?? ctx.candidateWorkspace?.worktreeRoot);
+  let command, args, modulePath, moduleHash;
+  if (scenario.tier === "service") {
+    if (typeof declared.module_ref !== "string" || isAbsolute(declared.module_ref)
+        || declared.module_ref.split(/[\\/]/).includes("..")) return unavailableAcceptanceScenario(scenario, "acceptance service module must be worktree-relative");
+    try {
+      modulePath = realpathSync(join(root, declared.module_ref));
+      if (!inside(root, modulePath) || modulePath === root) throw new Error("module escapes the authenticated worktree");
+      moduleHash = createHash("sha256").update(readFileSync(modulePath)).digest("hex");
+    } catch (error) { return unavailableAcceptanceScenario(scenario, `acceptance service module is unavailable: ${error.message}`); }
+    command = process.execPath;
+    args = ["--input-type=module", "--eval", ACCEPTANCE_SERVICE_LAUNCHER, pathToFileURL(modulePath).href, declared.export_name, JSON.stringify(declared.input)];
+  } else {
+    command = declared.command;
+    args = declared.args;
+  }
+  const options = { asynchronous: true, timeoutMs: declared.timeout_ms, signal };
+  const result = await (ctx.workspace
+    ? runWorkspaceCommand(ctx.workspace, command, args, options)
+    : runCandidateWorkspaceCommand(ctx.candidateWorkspace, command, args, options));
+  const outputBindings = {};
+  for (const stream of ["stdout", "stderr"]) {
+    const bytes = result[stream];
+    if (!Buffer.isBuffer(bytes)) throw new Error(`acceptance runner ${stream} must preserve raw bytes`);
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const ref = `quality/evidence/stage-quality/build-code/acceptance-${stream}-${hash}.bin`;
+    publishVNextEvidence(ctx, ref, bytes);
+    outputBindings[`${stream}_ref`] = ref;
+    outputBindings[`${stream}_hash`] = hash;
+  }
+  let rows = [], reason = null;
+  try { rows = deriveAcceptanceExecutionAssertions(result.stdout, ids); }
+  catch (error) { reason = error.message; }
+  const after = ctx.kernel.currentVNextSnapshot();
+  let moduleStable = true;
+  if (modulePath) {
+    try { moduleStable = createHash("sha256").update(readFileSync(modulePath)).digest("hex") === moduleHash; }
+    catch { moduleStable = false; }
+  }
+  const stable = after.tree === binding.snapshot_tree && ctx.kernel.currentVNextMaterialRevision() === binding.material_revision
+    && moduleStable;
+  if (!stable) reason = "acceptance source or materials changed during execution";
+  const inconclusive = Boolean(reason) || result.timed_out || result.cancelled || result.cleanup.status !== "completed" || Boolean(result.error);
+  const processPassed = result.status === 0 && result.signal === null;
+  if (!reason && !processPassed) reason = "acceptance process did not exit successfully";
+  const execution = {
+    ...declared, tier: scenario.tier, source: scenario.source, sample: scenario.sample, scenario: scenario.scenario,
+    ...(moduleHash ? { module_sha256: moduleHash } : {}),
+    exit_code: result.status, signal: result.signal, timed_out: result.timed_out, cancelled: result.cancelled,
+    cleanup: result.cleanup, ...outputBindings,
+    ...(result.error ? { error: { code: result.error.code ?? "ACCEPTANCE_PROCESS_ERROR", message: result.error.message } } : {}),
+  };
+  const evidenceRefs = ids.map((id) => {
+    const assertions = rows.find((row) => row.acceptance_criterion_id === id)?.assertions ?? [];
+    const status = inconclusive ? "missing" : !processPassed || assertions.some((assertion) => assertion.result === "failed") ? "failed" : "passed";
+    const value = {
+      schema_version: "stage-quality-evidence.v1", task_id: binding.task_id, stage: "build-code",
+      material_revision: binding.material_revision, snapshot_tree: binding.snapshot_tree, subject: id, status,
+      subject_fact: { status, detail: reason ?? (status === "passed" ? "runtime assertions match" : "runtime assertion failed"),
+        evidence_refs: ["stdout", "stderr"].map((stream) => ({ ref: execution[`${stream}_ref`], sha256: execution[`${stream}_hash`] })),
+        assertions, execution, executor_actor: executorActor, execution_binding: executionBinding },
+    };
+    validateAcceptanceExecutionEvidence(value);
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    const sha256 = createHash("sha256").update(raw).digest("hex");
+    const ref = `quality/evidence/stage-quality/build-code/${id}-${sha256}.json`;
+    publishVNextEvidence(ctx, ref, raw);
+    return { ref, sha256 };
+  });
+  const passed = !inconclusive && processPassed && rows.length === ids.length
+    && rows.every((row) => row.assertions.every((assertion) => assertion.result === "passed"));
+  return Object.freeze({ status: passed ? "executed" : "failed", tier: scenario.tier,
+    executor: "workspace-command", ...(passed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
+}
+
+async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, authenticatedStageOutcome = null, signal = undefined) {
   if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)) throw new TypeError("acceptance scenario must be an object");
   const snapshot = ctx.kernel.currentVNextSnapshot();
   const materialRevision = ctx.kernel.currentVNextMaterialRevision();
@@ -1742,7 +1789,7 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
     source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: scenario.tier,
     acceptance_criterion_ids: Object.freeze([...(scenario.acceptance_criterion_ids ?? [])]),
   });
-  if (scenario.tier !== "browser") return unavailableAcceptanceScenario(scenario, `${scenario.tier} acceptance execution has no canonical scenario-bound evidence contract`);
+  if (scenario.tier !== "browser") return executePrivateAcceptance(ctx, scenario, binding, authenticatedStageOutcome, signal);
   if (typeof publication.runControlledUiQa !== "function") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no controlled QA adapter");
   if (typeof attemptId !== "string" || attemptId.trim() === "") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no current attempt binding");
   const acceptanceScenario = Object.freeze({ source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: "browser" });
@@ -1962,12 +2009,22 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     for (const item of result.facts.acceptance_coverage.items) {
       const subject = typeof item?.acceptance_criterion_id === "string" ? item.acceptance_criterion_id : null;
       if (!subject) continue;
-      const status = item.status === "covered" ? "passed" : "missing";
+      const actualLeaves = (result.facts.acceptance_execution?.items ?? [])
+        .filter((entry) => entry.tier !== "browser")
+        .flatMap((entry) => entry.evidence_refs ?? []).flatMap((reference) => {
+          const raw = ctx.task.readRecord(reference.ref);
+          if (createHash("sha256").update(raw).digest("hex") !== reference.sha256) throw new Error("runtime acceptance leaf changed before publication");
+          const value = JSON.parse(raw);
+          return value.subject === subject ? [validateAcceptanceExecutionEvidence(value)] : [];
+        });
+      const status = actualLeaves.some((value) => value.status === "failed") ? "failed"
+        : item.status === "covered" ? "passed" : "missing";
       const leaf = publishAcceptanceQualityFact(ctx, snapshot, {
         subject,
         status,
         detail: item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
         evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
+        ...(actualLeaves.length === 1 ? { executionEvidence: actualLeaves[0] } : {}),
         recordedAt: publicationTimestamp,
       });
       qualityFactRefs.push(leaf.fact.ref);
@@ -2134,7 +2191,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
         stageOutcomeDiagnostic: diagnostic,
         observation: `stage ${stage} ended with handler failure: ${diagnostic.error_summary}`,
       });
-      if (reflection.status === "failed" && error && typeof error === "object") {
+      if ((reflection.status === "failed" || typeof reflection.error === "string" && reflection.error.length > 0) && error && typeof error === "object") {
         error.reflection_error = reflection.error ?? "stage reflection failed";
       }
     }
@@ -2214,7 +2271,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
             stageOutcomeDiagnostic: diagnostic,
             observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
           });
-          if (reflection.status === "failed" && retryError && typeof retryError === "object") {
+          if ((reflection.status === "failed" || typeof reflection.error === "string" && reflection.error.length > 0) && retryError && typeof retryError === "object") {
             retryError.reflection_error = reflection.error ?? "stage reflection failed";
           }
         }
@@ -2229,7 +2286,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
           stageOutcomeDiagnostic: diagnostic,
           observation: `stage ${stage} ended with publication failure: ${diagnostic.error_summary}`,
         });
-        if (reflection.status === "failed" && error && typeof error === "object") {
+        if ((reflection.status === "failed" || typeof reflection.error === "string" && reflection.error.length > 0) && error && typeof error === "object") {
           error.reflection_error = reflection.error ?? "stage reflection failed";
         }
       }
@@ -2243,7 +2300,103 @@ export async function runStage(stage, context, handler, publication = {}, intern
   return Object.freeze({ ...published, stage_reflection: stageReflection });
 }
 
-function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, authenticatedStageOutcome = null, reflectionScheduler = null) {
+// An explicit approved-decision chain is historical provenance, not a new
+// current execution. Authenticate its original bytes and proof at the approval
+// identity; do not require the old Git snapshot/blob to still be available.
+function readDecisionFreezeSources(ctx, input) {
+  const refs = outcomeObject(input, "decision freeze input");
+  const readHashed = (ref, pattern, label) => {
+    const match = typeof ref === "string" ? pattern.exec(ref) : null;
+    if (!match) throw outcomeError(`${label} ref is not canonical`);
+    let raw;
+    try { raw = ctx.task.readRecord(ref); }
+    catch (error) { throw outcomeError(`${label} ref is unavailable: ${error.message}`); }
+    const digest = createHash("sha256").update(raw).digest("hex");
+    if (digest !== match[1]) throw outcomeError(`${label} ref hash mismatch`);
+    let value;
+    try { value = JSON.parse(raw); } catch { throw outcomeError(`${label} must be JSON`); }
+    return { ref, sha256: digest, value: outcomeObject(value, label) };
+  };
+  const confirmation = readHashed(refs.confirmation_ref, /^quality\/confirmations\/([a-f0-9]{64})\.json$/, "decision freeze confirmation");
+  if (!isHumanConfirmationVersion(confirmation.value, { current: true })) throw outcomeError("decision freeze confirmation version is not current");
+  validateHumanConfirmation(confirmation.value, { taskId: ctx.identity.taskId, stage: "make-decision", requireAccepted: true });
+  const decisionRef = (ctx.artifacts ?? ArtifactDir.open((ctx.candidateWorkspace ?? ctx.workspace).worktreeRoot, ctx.task)).reference("decision-log.md");
+  if (confirmation.value.subject_ref !== undefined && confirmation.value.subject_ref !== null && confirmation.value.subject_ref !== decisionRef) {
+    throw outcomeError("decision freeze confirmation subject is not the current decision document");
+  }
+  if (confirmation.value.step_slug !== undefined && confirmation.value.step_slug !== "approve-decision") throw outcomeError("decision freeze confirmation step is not approve-decision");
+
+  const factMatch = typeof refs.quality_fact_ref === "string" ? /^quality\/facts\/([a-f0-9]{64})\.json$/.exec(refs.quality_fact_ref) : null;
+  if (!factMatch) throw outcomeError("decision freeze quality fact ref is not canonical");
+  let fact;
+  try { fact = JSON.parse(ctx.task.readRecord(refs.quality_fact_ref)); }
+  catch (error) { throw outcomeError(`decision freeze quality fact is unavailable: ${error.message}`); }
+  if (fact?.schema_version !== "quality-fact.v1" || fact.fact_id !== `quality-${factMatch[1]}` || qualityFactDigest(fact) !== factMatch[1]) {
+    throw outcomeError("decision freeze quality fact typed hash mismatch");
+  }
+  // Reuse the existing fact schema/identity writer as a pure validator. Its
+  // timestamp is provenance; no new fact is published by this read-only path.
+  createQualityFact({ taskId: fact.task_id, stage: fact.stage, materialRevision: fact.material_revision,
+    materialScope: fact.material_scope, materialScopeRevision: fact.material_scope_revision,
+    snapshotTree: fact.snapshot_tree, kind: fact.kind, status: fact.status, subject: fact.subject,
+    evidence: fact.evidence, recordedAt: fact.recorded_at });
+  if (fact.task_id !== ctx.identity.taskId || fact.stage !== "make-decision" || fact.kind !== "confirmation"
+      || fact.subject !== "human_confirmation" || fact.status !== "passed"
+      || fact.material_revision !== confirmation.value.material_revision || fact.snapshot_tree !== confirmation.value.snapshot_tree
+      || !sameJson(fact.material_scope, ["decision-log.md"]) || !/^revision-[a-f0-9]{64}$/.test(fact.material_scope_revision ?? "")
+      || fact.evidence.length !== 1 || fact.evidence[0].evidence_type !== "human_confirmation"
+      || fact.evidence[0].ref !== confirmation.ref || fact.evidence[0].sha256 !== confirmation.sha256) {
+    throw outcomeError("decision freeze quality fact does not bind the approved confirmation and decision scope");
+  }
+
+  const outcome = readHashed(refs.stage_outcome_ref, /^quality\/evidence\/stage-outcomes\/make-decision\/([a-f0-9]{64})\.json$/, "decision freeze stage outcome");
+  const value = outcome.value;
+  if (value.schema_version !== "workflowhub-stage-outcomes.v1" || value.task_id !== ctx.identity.taskId || value.stage !== "make-decision"
+      || value.run_id !== ctx.kernel.deriveStageWorkflowRunId("make-decision")
+      || !STAGE_OUTCOME_STATUSES.has(value.status) || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
+      || !sameJson(value.material_scope, fact.material_scope) || value.material_scope_revision !== fact.material_scope_revision) {
+    throw outcomeError("decision freeze approval outcome identity does not match the approved fact");
+  }
+  outcomeText(value.attempt_id, "decision freeze approval attempt_id");
+  validateStageOutcomeProducer(value, "make-decision");
+  if (confirmation.value.attempt_ref !== undefined && confirmation.value.attempt_ref !== value.attempt_id) {
+    throw outcomeError("decision freeze confirmation attempt identity mismatch");
+  }
+  if (!Array.isArray(value.step_outcomes)) throw outcomeError("decision freeze approval steps are missing");
+  const approvals = value.step_outcomes.filter((entry) => entry?.step_slug === "approve-decision");
+  if (approvals.length !== 1 || approvals[0].status !== "completed" || !Array.isArray(approvals[0].evidence_refs) || approvals[0].evidence_refs.length === 0) {
+    throw outcomeError("decision freeze requires one completed approve-decision step with original proof");
+  }
+  const step = approvals[0];
+  const binding = { taskId: ctx.identity.taskId, stage: "make-decision", attemptId: value.attempt_id,
+    snapshotTree: value.snapshot_tree, materialRevision: value.material_revision, producerIdentity: value.producer,
+    subjectKind: "step", subjectId: "approve-decision", outcomeStatus: "completed", resultSummary: step.result_summary,
+    allowLegacyApprovalProof: true };
+  // Envelope input/output refs alone can be rehashed independently of the
+  // proof. The actual approval evidence must name this confirmation.
+  let linked = false;
+  for (const [index, reference] of step.evidence_refs.entries()) {
+    const proofRef = outcomeEvidence(ctx, reference, `decision freeze approve-decision proof[${index}]`, binding);
+    const proof = JSON.parse(ctx.task.readRecord(proofRef.ref));
+    // A legacy proof can authenticate the explicit approval it actually
+    // recorded; missing producer_identity never becomes actor authority.
+    if (proof.host_evidence?.source_ref === confirmation.ref || proof.host_evidence?.confirmation_ref === confirmation.ref) linked = true;
+    if (proof.host_evidence?.kind === "workflowhub-session-lifecycle"
+        && (proof.host_evidence.source_ref !== value.producer.source_ref
+          || (proof.host_evidence.session_id !== undefined && proof.host_evidence.session_id !== value.producer.session_id))) {
+      throw outcomeError("decision freeze historical lifecycle source identity mismatch");
+    }
+  }
+  if (!linked) throw outcomeError("decision freeze approve-decision step does not reference the same confirmation");
+  const dir = ctx.artifacts ?? ArtifactDir.open((ctx.candidateWorkspace ?? ctx.workspace).worktreeRoot, ctx.task);
+  const currentDecisionScopeRevision = materialRevisionFromValues([["decision-log.md", dir.read("decision-log.md")]]);
+  const approved = Object.freeze({ status: "accepted", material_revision: fact.material_revision,
+    snapshot_tree: fact.snapshot_tree, material_scope: Object.freeze([...fact.material_scope]), material_scope_revision: fact.material_scope_revision });
+  return Object.freeze({ approval_binding: approved, final_confirmation: approved, step_11: approved,
+    currentDecisionScopeRevision, evidence_refs: Object.freeze([confirmation.ref, refs.quality_fact_ref, outcome.ref]) });
+}
+
+function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, authenticatedStageOutcome = null, reflectionScheduler = null, signal = undefined) {
   const artifactDir = ctx.artifacts
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
@@ -2275,6 +2428,7 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
     } : {}),
     manifest: ctx.manifest,
     accepted: Object.freeze({ readInput: (slot) => ctx.kernel.readInput(slot) }),
+    ...(["build-spec", "build-plan"].includes(ctx.stage) ? { readDecisionFreezeSources: (input) => readDecisionFreezeSources(ctx, input) } : {}),
     readReceipt: (ref) => {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
@@ -2351,10 +2505,10 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       ? { runControlledUiQa: publication.runControlledUiQa }
       : {}),
     ...(ctx.stage === "build-code" ? {
-      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id),
+      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, authenticatedStageOutcome, signal),
     } : {}),
     ...(ctx.stage === "verify-code" ? {
-      readE2eAcceptanceEvidence: () => readCurrentE2eAcceptanceEvidence(ctx),
+      readE2eAcceptanceEvidence: () => readCurrentE2eAcceptanceEvidence(ctx, invocation.receipts),
     } : {}),
     ...(artifactDir ? {
       readArtifact: (name) => artifactDir.read(name),
@@ -2540,7 +2694,7 @@ export async function publishOfficialStageOutcome({ context, outcome, stage, att
 }
 
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
-export function runOfficialStage(stage, context, invocation, publication, { requireStageOutcome = false } = {}) {
+export function runOfficialStage(stage, context, invocation, publication, { requireStageOutcome = false, signal } = {}) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
@@ -2672,7 +2826,7 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
             })),
         }
         : null;
-      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection);
+      const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection, signal);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
       const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome);
