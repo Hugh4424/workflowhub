@@ -6,7 +6,7 @@ import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
-import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, verifyWorkerBrief } from "../task/material-workspace.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import {
   STAGE_SPEC_ANALYZE_PROFILES,
@@ -48,6 +48,34 @@ function text(value, label) {
   return value;
 }
 
+const WORKER_SUMMARY_KEYS = new Set(["conclusion", "ref", "sha256"]);
+const WORKER_SUMMARY_REF = /^quality\/(?:evidence|tests|reviews|facts)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+
+function workerSummaryUnavailable(...errors) {
+  return Object.freeze({ ok: false, status: "unavailable", errors: Object.freeze(errors) });
+}
+
+/**
+ * Validate the transport-only return from a narrow worker.  The referenced
+ * immutable bytes remain owned by the existing task evidence reader; this
+ * function only authenticates the reference and its digest.
+ */
+export function validateWorkerSummary(value, { read } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return workerSummaryUnavailable("worker_summary_shape_invalid");
+  const unknown = Object.keys(value).filter((key) => !WORKER_SUMMARY_KEYS.has(key));
+  if (unknown.length) return workerSummaryUnavailable("worker_summary_unknown_field", ...unknown);
+  if (typeof value.conclusion !== "string" || value.conclusion.trim() === "") return workerSummaryUnavailable("worker_summary_conclusion_missing");
+  if (Array.from(value.conclusion).length > 500) return workerSummaryUnavailable("worker_summary_conclusion_too_long");
+  if (typeof value.ref !== "string" || !WORKER_SUMMARY_REF.test(value.ref) || value.ref.includes("..")) return workerSummaryUnavailable("worker_summary_ref_invalid");
+  if (typeof value.sha256 !== "string" || !SHA256.test(value.sha256)) return workerSummaryUnavailable("worker_summary_hash_invalid");
+  if (typeof read !== "function") return workerSummaryUnavailable("worker_summary_reader_unavailable");
+  let raw;
+  try { raw = read(value.ref); } catch { return workerSummaryUnavailable("worker_summary_evidence_unavailable"); }
+  if (!(typeof raw === "string" || Buffer.isBuffer(raw))) return workerSummaryUnavailable("worker_summary_evidence_invalid");
+  if (sha256(raw) !== value.sha256) return workerSummaryUnavailable("worker_summary_hash_mismatch");
+  return Object.freeze({ ok: true, status: "ready", conclusion: value.conclusion, ref: value.ref, sha256: value.sha256 });
+}
+
 function supportedTaskOutputRef(value) {
   if (value === "quality/verify.json") return true;
   const parts = value.split("/");
@@ -68,6 +96,42 @@ function outputRefs(value, label) {
     }
     if (!supportedTaskOutputRef(normalized)) throw new Error(`${label}[${index}] is not a supported task-local output reference`);
     return normalized;
+  });
+}
+
+function normalizeCoordination(value, { task, taskId, stage } = {}) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Stage Agent coordination must be an object");
+  const allowed = new Set(["ok", "status", "task_id", "session_id", "worker_count", "max_concurrent", "read_concurrency", "events", "briefs", "summaries"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`Stage Agent coordination contains unsupported fields: ${unknown.join(", ")}`);
+  if (value.status !== "recorded" || value.task_id !== taskId || typeof value.session_id !== "string" || value.session_id.trim() === "") {
+    throw new Error("Stage Agent coordination is not an authenticated recorded fact");
+  }
+  if (!Array.isArray(value.events) || !Array.isArray(value.briefs) || !Array.isArray(value.summaries)) {
+    throw new TypeError("Stage Agent coordination requires events, briefs, and summaries arrays");
+  }
+  const briefs = value.briefs.map((brief, index) => {
+    const checked = verifyWorkerBrief(brief);
+    if (!checked.ok || checked.task_id !== taskId || checked.stage !== stage) throw new Error(`worker brief ${index} is not bound to the current stage: ${checked.errors?.join(", ") ?? "identity mismatch"}`);
+    return structuredClone(brief);
+  });
+  const summaries = value.summaries.map((summary, index) => {
+    const checked = validateWorkerSummary(summary, { read: task.readRecord });
+    if (!checked.ok) throw new Error(`worker summary ${index} is unavailable: ${checked.errors.join(", ")}`);
+    return structuredClone(summary);
+  });
+  return Object.freeze({
+    schema_version: "workflowhub-stage-coordination.v1",
+    task_id: taskId,
+    stage,
+    session_id: value.session_id,
+    worker_count: value.worker_count,
+    max_concurrent: value.max_concurrent,
+    read_concurrency: value.read_concurrency,
+    events: structuredClone(value.events),
+    briefs,
+    summaries,
   });
 }
 
@@ -733,6 +797,7 @@ export function publishStageAgentOutcome({
   for (const [index, outcome] of skillOutcomes.entries()) {
     validateExistingOutputOwnership(safeTask, outcome.output_refs, `skill_outcomes[${index}].output_refs`);
   }
+  const coordination = normalizeCoordination(input.coordination, { task: safeTask, taskId: safeTask.identity.taskId, stage });
   const adapterInput = {
     ...input,
     steps: input.steps.map((entry, index) => ({ ...entry, __adapter_result: { evidenceRefs: stepOutcomes[index].evidence_refs } })),
@@ -762,6 +827,7 @@ export function publishStageAgentOutcome({
     step_outcomes: stepOutcomes,
     skill_outcomes: skillOutcomes,
     ...(stage === "verify-code" ? { code_review: stageReview } : { spec_analyze: stageReview }),
+    ...(coordination === null ? {} : { coordination }),
   };
   const raw = canonicalJson(value);
   const digest = sha256(raw);
@@ -948,7 +1014,7 @@ export function createWorkflowHubSessionRecorder({
   return Object.freeze({
     startStep: (stepSlug) => begin("step", text(stepSlug, "stepSlug")),
     startSkill: (skillId) => begin("skill", text(skillId, "skillId")),
-    finish({ status: stageStatus, spec_analyze, code_review } = {}) {
+    finish({ status: stageStatus, spec_analyze, code_review, coordination } = {}) {
       if (closed) throw new Error("WorkflowHub session recorder is already closed");
       if (activeSubjects.size) throw new Error("WorkflowHub session recorder has unfinished step/skill lifecycles");
       const steps = subjects.steps.map((entry) => finishedSteps.get(entry.step_slug) ?? missingOutcome("step", entry.step_slug));
@@ -978,6 +1044,7 @@ export function createWorkflowHubSessionRecorder({
         ...(stage === "verify-code"
           ? { code_review: object(code_review, "code_review") }
           : { spec_analyze: object(spec_analyze, "spec_analyze") }),
+        ...(coordination === undefined ? {} : { coordination }),
       };
       const published = publishStageAgentOutcome({
         task: safeTask, kernel: safeKernel, artifacts: safeArtifacts, workspace, candidateWorkspace,

@@ -748,11 +748,16 @@ export function deriveCurrentProductRelease({
     const snapshotCurrent = isStageSnapshotCurrent(value?.stage, value?.snapshot_tree, snapshotTree, { snapshotRoot, taskId });
     const scopeMatchesStage = value?.material_scope === undefined
       || JSON.stringify(value.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[value.stage]);
+    const acMaterialOnlyRevision = value?.kind === "acceptance_criterion"
+      && value.material_scope === undefined
+      && value.material_scope_revision === undefined
+      && value.material_revision !== materialRevision
+      && value.snapshot_tree === snapshotTree;
     const factMaterialCurrent = !scopeMatchesStage
       ? false
       : value?.material_scope_revision !== undefined
         ? value.material_scope_revision === materialScopeRevisions[value.stage]
-        : value?.material_revision === materialRevision;
+        : value?.material_revision === materialRevision || acMaterialOnlyRevision;
     if (value?.schema_version !== "quality-fact.v1"
         || value.task_id !== taskId
         || !stageObservations.has(value.stage)

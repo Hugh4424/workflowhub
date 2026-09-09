@@ -141,6 +141,8 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
   const sourceDigest = normalizedHash(acceptanceEvidence.source_digest ?? test.value.source_digest, "source digest");
   if (test.value.source_digest !== undefined && test.value.source_digest !== sourceDigest) throw new Error("MATERIAL_INCOMPLETE: test receipt source digest mismatch");
   const testExitCode = test.value.exit_code;
+  const testProfileUnavailable = test.value.runtime_profile !== undefined
+    && (test.value.runtime_profile_status !== "ready" || test.value.runtime_profile_authenticated !== true);
   const aggregate = authenticatedRecord(handle, acceptanceEvidence.evidence_ref, acceptanceEvidence.evidence_hash, "acceptance evidence aggregate", EVIDENCE_REF);
   if (aggregate.value?.schema_version !== "workflowhub-receipt.v1" || aggregate.value.task_id !== handle.identity.taskId || aggregate.value.stage !== "verify-code" || aggregate.value.producer?.component !== "evidence" || !Array.isArray(aggregate.value.refs)) {
     throw new Error("MATERIAL_INCOMPLETE: acceptance evidence aggregate provenance is invalid");
@@ -169,7 +171,7 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
       const metadataIncomplete = Object.values(metadata).some((value) => Array.isArray(value) ? value.includes("unknown") : value === "unknown")
         || !metadata.implementation_anchor
         || !metadata.verification_anchor;
-      const testIncomplete = !Number.isInteger(testExitCode) || testExitCode !== 0;
+      const testIncomplete = testProfileUnavailable || !Number.isInteger(testExitCode) || testExitCode !== 0;
       const incomplete = metadataIncomplete || testIncomplete;
       return {
         acceptance_criterion_id: id,

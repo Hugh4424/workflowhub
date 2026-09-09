@@ -243,6 +243,41 @@ function reviewRequestError(error) {
   return { code, message };
 }
 
+function reviewClosure(request, identity, materialId, requestKey, routeIdentity = null) {
+  return {
+    version: "wh-review-closure.v1",
+    request_key: requestKey,
+    source: identity.source,
+    material_scope: request.review_scope ?? request.reviewScope ?? null,
+    subject_kind: request.subject_kind ?? "worktree",
+    subject_sha256: textHash(canonicalJson(request.subject ?? null)),
+    snapshot_tree: identity.tree,
+    material_revision: identity.materialRevision,
+    material_id: materialId,
+    authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+    packet_sha256: materialId,
+    prompt_sha256: textHash(String(request.prompt ?? "")),
+    route_identity: routeIdentity,
+    policy_snapshot_hash: request.policy_snapshot_hash ?? null,
+  };
+}
+
+function routeRepairClosureIdentity(closure) {
+  if (!closure || closure.version !== "wh-review-closure.v1") return null;
+  const { request_key: _requestKey, route_identity: _routeIdentity, ...stable } = closure;
+  return textHash(canonicalJson(stable));
+}
+
+function closureMatches(closure, identity, materialId, request) {
+  if (!closure || closure.version !== "wh-review-closure.v1") return false;
+  const expected = reviewClosure(request, identity, materialId, closure.request_key, closure.route_identity);
+  return canonicalJson(closure) === canonicalJson(expected)
+    && closure.snapshot_tree === identity.tree
+    && closure.material_revision === identity.materialRevision
+    && closure.material_id === materialId
+    && closure.authenticated_evidence_sha256 === authenticatedEvidenceHash(request.authenticated_evidence);
+}
+
 function recordError(error, fallback) {
   const value = error ?? fallback;
   if (!value || typeof value !== "object" || Array.isArray(value)
@@ -298,6 +333,8 @@ function normalizeIdentity(item, provider) {
 function providerAttemptRecord(item, runtimeId, outputRef = null) {
   const completed = item?.status === "completed" && item?.error === null;
   const status = completed ? "completed" : item?.status === "cancelled" ? "cancelled" : "failed";
+  const execution = item?.execution && typeof item.execution === "object" ? item.execution : {};
+  const retry = execution.retry ?? item?.retry ?? { count: 0, progress_events: 0 };
   return {
     provider: item.provider,
     status,
@@ -307,14 +344,15 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
     output_ref: outputRef,
     raw_output_ref: null,
     error: status === "completed" ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
+    ...(item?.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     execution: {
-      adapter: providerAdapter(item.provider),
-      model: item.identity?.model ?? "unknown",
-      effort: null,
-      thinking: null,
-      timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
-      usage: item.usage ?? null,
-      retry: { count: 0, progress_events: 0 },
+      adapter: execution.adapter ?? providerAdapter(item.provider),
+      model: Object.hasOwn(execution, "model") ? execution.model : (item.identity?.model ?? "unknown"),
+      effort: Object.hasOwn(execution, "effort") ? execution.effort : null,
+      thinking: Object.hasOwn(execution, "thinking") ? execution.thinking : null,
+      timing: execution.timing ?? item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
+      usage: execution.usage ?? item.usage ?? null,
+      retry: { count: retry.count ?? 0, progress_events: retry.progress_events ?? 0 },
       runtime_id: runtimeId ?? "unknown",
       session_file_path: null,
     },
@@ -362,7 +400,7 @@ function authenticateBudgetContext(context, identity, requestKey, result) {
   if (context === null) return null;
   if (!context || typeof context !== "object" || Array.isArray(context)
       || Object.keys(context).sort().join(",") !== "kind,material_revision,phase_id,route_identity,snapshot_tree"
-      || !["initial", "focused", "phase"].includes(context.kind)
+      || !["initial", "focused", "phase", "route_repair"].includes(context.kind)
       || context.material_revision !== identity.materialRevision || context.snapshot_tree !== identity.tree
       || !SHA256_HEX.test(context.route_identity ?? "") || !SHA256_HEX.test(requestKey ?? "")
       || context.phase_id !== (result?.phase_id ?? null)
@@ -422,7 +460,13 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
     prepared: { refs: { attempt_ref: ref, result_ref: resultRef, report_ref: attempt.report_ref },
       semantic_status: canonical ? "available" : "unavailable", coverage: canonical ? "satisfied" : "incomplete" },
     fact: { attempt_id: attempt.attempt_id, attempt_ref: ref, attempt_hash: textHash(raw), material_revision: attempt.material_revision,
-      kind, ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}), status: canonical ? "completed" : attempt.terminal_status } };
+      kind, ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}), status: canonical ? "completed" : attempt.terminal_status,
+      terminal_status: attempt.terminal_status, dispatch_state: attempt.dispatch_state,
+      route_identity: null, error_code: attempt.error?.code ?? null,
+      closure_identity: null,
+      has_semantic_output: Boolean(canonical),
+      provider_attempts: attempt.provider_attempts.map((item) => ({ status: item.status,
+        output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })), } };
 }
 
 function readCanonicalBudgetHistory(task) {
@@ -443,7 +487,7 @@ function readCanonicalBudgetHistory(task) {
     const identity = { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source };
     const context = saved.budget_context ?? null;
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
-      { paired: Boolean(attempt.pair_id), budgetContext: context, executionContext: saved.execution_context ?? null });
+      { paired: Boolean(attempt.pair_id), budgetContext: context, executionContext: saved.execution_context ?? null, closureManifest: attempt.closure_manifest ?? null });
     if (prepared.refs.attempt_ref !== ref || prepared.refs.report_ref !== attempt.report_ref
         || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical budget report binding is invalid");
     for (const [recordRef, expected] of prepared.records) {
@@ -456,6 +500,12 @@ function readCanonicalBudgetHistory(task) {
       kind: context?.kind ?? (attempt.review_scope === "phase" ? "phase" : "initial"),
       ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}),
       status: attempt.terminal_status === "semantic" ? "completed" : attempt.terminal_status,
+      terminal_status: attempt.terminal_status, dispatch_state: attempt.dispatch_state,
+      route_identity: context?.route_identity ?? null, error_code: attempt.error?.code ?? null,
+      closure_identity: routeRepairClosureIdentity(attempt.closure_manifest),
+      has_semantic_output: prepared.semantic_status === "available",
+      provider_attempts: attempt.provider_attempts.map((item) => ({ status: item.status,
+        output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })),
     } };
     } catch (error) { error.review_attempt_ref = ref; throw error; }
   });
@@ -492,6 +542,10 @@ function readCanonicalBudgetHistory(task) {
     seenPairs.add(pairRef);
     // A complete pair is one round even when both role attempts failed.
     entry.fact.status = members.every((member) => member.fact.status === "completed") ? "completed" : "unavailable";
+    entry.fact.terminal_status = entry.fact.status === "completed" ? "semantic" : "unavailable";
+    entry.fact.has_semantic_output = members.some((member) => member.fact.has_semantic_output);
+    entry.fact.provider_attempts = members.flatMap((member) => member.fact.provider_attempts);
+    entry.fact.error_code = entry.fact.has_semantic_output ? "REVIEW_QUORUM_INCOMPLETE" : "REVIEW_ALL_PROVIDERS_FAILED";
     return true;
     } catch (error) { error.review_attempt_ref = entry.fact.attempt_ref; throw error; }
   });
@@ -539,6 +593,8 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     }
   } catch (error) { routeError = reviewRequestError(error); }
   const requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
+  const closure = reviewClosure(request, before, materialId, requestKey, routeIdentity ?? null);
+  const currentClosureIdentity = routeRepairClosureIdentity(closure);
   // Serialize the shared round allowance across different request keys as well.
   const lockRef = "quality/reviews/request-locks/current-round.lock";
   const operation = async () => {
@@ -564,16 +620,25 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     const sameSubject = (prior) => prior.stage === request.stage
       && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
       && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
+      && (prior.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
       && (prior.phase_id ?? null) === (request.phase_id ?? null);
     const priorSubject = history.filter((entry) => entry.consumesRound && sameSubject(entry.attempt));
     const changed = priorSubject.some((entry) => entry.attempt.material_revision !== before.materialRevision);
+    const latestCurrent = priorSubject.filter((entry) => entry.attempt.material_revision === before.materialRevision).at(-1) ?? null;
+    const routeRepaired = routeIdentity && latestCurrent
+      && latestCurrent.fact.dispatch_state === "dispatched"
+      && latestCurrent.fact.route_identity && latestCurrent.fact.route_identity !== routeIdentity
+      && latestCurrent.fact.closure_identity === currentClosureIdentity;
     // A previously assigned focused round remains focused on the same revision.
     // Neither request bytes nor a code-only snapshot change reset its allowance.
     const kind = request.review_scope === "phase" ? "phase"
-      : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
+      : routeRepaired ? "route_repair"
+        : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
     const attempts = history.filter((entry) => entry.consumesRound).map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
     const reviewBudget = validateReviewBudget({ material_revision: before.materialRevision,
-      attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id } });
+      attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id,
+        route_identity: routeIdentity, closure_identity: currentClosureIdentity,
+        repair_attempt_ref: routeRepaired ? latestCurrent.fact.attempt_ref : null } });
     if (reusable) return { status: "recorded", reused: true, dispatch_state: "reused", ...reusable, review_budget: reviewBudget };
     if (!reviewBudget.ok) return { status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch",
       error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED", message: `review round budget unavailable: ${reviewBudget.reason}` }, review_budget: reviewBudget };
@@ -587,6 +652,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           review_track: request.review_track ?? request.reviewTrack ?? null,
           review_kind: request.review_kind ?? request.reviewKind ?? null,
           material_id: materialId, provider_results: [], findings: [], runtime_id: null,
+          ...(request.authenticated_evidence === undefined ? {} : {
+            authenticated_evidence: request.authenticated_evidence,
+            authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+          }),
           dispatch_state: "blocked_before_dispatch",
           error: routeError,
         };
@@ -612,10 +681,15 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       result = { ...result, [field]: request[field] };
     }
     const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-    if (after.tree !== before.tree || after.materialRevision !== before.materialRevision) {
-      const error = new Error("review source changed while dispatching; result was not recorded");
-      error.code = "REVIEW_SOURCE_DRIFT";
-      throw error;
+    const closureCurrent = closureMatches(closure, after, materialId, request);
+    if (!closureCurrent) {
+      result = {
+        ...result,
+        status: "unavailable",
+        outcome: "unavailable",
+        dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+        error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while dispatching; completed provider facts were retained without publishing a result" },
+      };
     }
     if (authenticatedMaterialId !== null && result.material_id !== materialId) {
       const error = new Error("review result material_id does not match the authenticated request material");
@@ -628,7 +702,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
       throw error;
     }
-    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey, budgetContext, executionContext });
+    const recordIdentity = closureCurrent ? after : before;
+    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey,
+      budgetContext: budgetContext ? { ...budgetContext, snapshot_tree: recordIdentity.tree, material_revision: recordIdentity.materialRevision } : null,
+      executionContext, closureManifest: closure, identityOverride: closureCurrent ? null : before });
     return {
       status: "recorded",
       reused: false,
@@ -660,7 +737,7 @@ function pairedReportRef(stage, taskId, identity, pairId, requestKey) {
   return reviewReportRef(stage, stableReviewId([taskId, identity.tree, identity.materialRevision, requestKey, pairId]));
 }
 
-function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired = false, budgetContext = null, executionContext = null } = {}) {
+function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired = false, budgetContext = null, executionContext = null, closureManifest = null } = {}) {
   const context = authenticateBudgetContext(budgetContext, identity, requestKey, result);
   if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review result must be an object");
   if (!["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status must be available or unavailable (including available-with-failures)");
@@ -714,7 +791,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   if ((result.findings ?? []).some((finding) => !completed.some((item) => item.provider === finding.provider))) throw new TypeError("review finding provider has no completed semantic output");
   const e2eBinding = executionBindingForResult(task, result, identity, executionContext);
   const taskId = task.identity.taskId, stage = result.stage;
-  const attemptId = stableReviewId([taskId, identity, requestKey, result, ...(context ? [context] : []), ...(executionContext ? [executionContext] : [])]);
+  const attemptId = stableReviewId([taskId, identity, requestKey, result, ...(context ? [context] : []), ...(executionContext ? [executionContext] : []), ...(closureManifest ? [closureManifest] : [])]);
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
   const resultRef = `quality/reviews/results/${stage}-simple-${attemptId}.json`;
   const reportRef = reviewReportRef(stage, attemptId);
@@ -737,8 +814,8 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   const allIdentified = result.provider_results.every((item) => item.identity?.provider === item.provider
     && item.identity?.adapter === providerAdapter(item.provider) && typeof item.identity?.source_id === "string" && item.identity.source_id.trim()
     && typeof item.identity?.config_id === "string" && item.identity.config_id.trim());
-  const covered = aggregation.status === "available" && allIdentified;
-  const semanticStatus = completed.length ? "available" : "unavailable";
+  const covered = result.status !== "unavailable" && aggregation.status === "available" && allIdentified;
+  const semanticStatus = result.status !== "unavailable" && completed.length ? "available" : "unavailable";
   const subject = {
     subject_kind: result.subject_kind ?? "worktree", phase_id: result.phase_id ?? null,
     review_scope: result.review_scope ?? (stage === "build-code" ? "integration" : null),
@@ -755,6 +832,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, ...binding,
     ...(requestKey ? { request_key: requestKey } : {}),
+    ...(closureManifest ? { closure_manifest: closureManifest } : {}),
     provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, outputRefs.get(item.provider) ?? null)),
     terminal_status: covered ? "semantic" : "unavailable",
     dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
@@ -778,15 +856,20 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   return { records, refs, semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete" };
 }
 
-export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null }) {
+export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null, closureManifest = null, identityOverride = null }) {
   const handle = assertTaskHandle(task);
   if (executionContext !== null && !EXECUTION_CONTEXTS.has(executionContext)) throw new TypeError("execution binding requires the same authenticated public request");
   if (Object.hasOwn(result ?? {}, "e2e_binding")) throw new TypeError("result-only review cannot claim execution binding");
-  const identity = assertAuthenticatedReviewIdentity(handle, kernel);
+  const currentIdentity = assertAuthenticatedReviewIdentity(handle, kernel);
+  const identity = identityOverride ?? currentIdentity;
+  if (identityOverride !== null && (!closureManifest || closureManifest.snapshot_tree !== identity.tree
+      || closureManifest.material_revision !== identity.materialRevision)) {
+    throw new TypeError("historical review identity requires a matching closure manifest");
+  }
   if (!result || !["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status is invalid");
   if (["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"].some((key) => Object.hasOwn(result, key))) throw new TypeError("review result identity fields must come from the authenticated current context");
   if (!result?.role_results) {
-    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext });
+    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext, closureManifest });
     for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw);
     return prepared.refs;
   }
@@ -802,7 +885,7 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
       ...(result.subject_kind === undefined ? {} : { subject_kind: result.subject_kind }),
       ...(result.phase_id === undefined ? {} : { phase_id: result.phase_id }),
       ...(result.review_scope === undefined ? {} : { review_scope: result.review_scope }),
-    }, identity, requestKey, { paired: true, budgetContext, executionContext });
+    }, identity, requestKey, { paired: true, budgetContext, executionContext, closureManifest });
   }
   const reportRef = pairedReportRef(result.stage, handle.identity.taskId, identity, result.pair_id, requestKey);
   const summary = {

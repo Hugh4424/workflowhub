@@ -116,6 +116,10 @@ function exactKeys(value, expected, label) {
 const v3MemberFields = ["attempts", "continuable", "deadline_ms", "error", "identity", "material", "output", "provenance", "recovery", "result_protocol", "session_id", "status", "timing", "usage"];
 const v3GroupFields = ["host_provider", "material_id", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const v3AttemptFields = ["attempt_id", "completed_at_ms", "duration_ms", "error", "kind", "provider_retry_count", "session_id", "started_at_ms", "status"];
+const managedStates = new Set(["starting", "running", "terminal"]);
+const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
+const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
+const managedOutcomes = new Set(["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"]);
 
 function validateV3Error(value, label) {
   if (value === null) return null;
@@ -310,6 +314,100 @@ function validateDirectionFlow(value) {
   return structuredClone(value);
 }
 
+function validateManagedMember(value, provider, runtimeId, materialId) {
+  exactKeys(value, managedMemberFields, "3rd-review managed provider result");
+  if (value.provider !== provider || value.runtime_id !== runtimeId || value.material_id !== materialId
+      || value.result_protocol !== "workflowhub-result.v2" || !["completed", "failed", "cancelled"].includes(value.status)
+      || typeof value.continuable !== "boolean"
+      || !(value.thinking === null || typeof value.thinking === "boolean")) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed provider result is invalid");
+  }
+  validateV3String(value.provider, "managed provider", { publicMetadata: true });
+  validateV3String(value.adapter, "managed provider adapter", { publicMetadata: true });
+  validateV3String(value.material_id, "managed provider material_id", { publicMetadata: true });
+  validateV3String(value.runtime_id, "managed provider runtime_id", { publicMetadata: true });
+  if (value.model !== null) validateV3String(value.model, "managed provider model", { publicMetadata: true });
+  if (value.effort !== null) validateV3String(value.effort, "managed provider effort", { publicMetadata: true });
+  if (value.session_id !== null) validateV3String(value.session_id, "managed provider session_id", { publicMetadata: true });
+  if (value.session_file_path !== null || value.raw_output_ref !== null) throw failure("PUBLIC_RESULT_INVALID", "managed provider result exposed a private reference");
+  exactKeys(value.timing, ["completed_at_ms", "duration_ms", "started_at_ms"], "managed provider timing");
+  const timing = Object.freeze({ ...validateV3Timing(value.timing, "managed provider") });
+  exactKeys(value.retry, ["count", "progress_events"], "managed provider retry");
+  if (!Number.isSafeInteger(value.retry.count) || value.retry.count < 0 || !Number.isSafeInteger(value.retry.progress_events) || value.retry.progress_events < 0) throw failure("PROTOCOL_INCOMPATIBLE", "managed provider retry facts are invalid");
+  const retry = Object.freeze({ ...value.retry });
+  const error = value.error === null ? null : Object.freeze(validateV3Error(value.error, "managed provider error"));
+  const unavailableDiagnostics = value.unavailable_diagnostics === null
+    ? null
+    : Object.freeze(validateV3Error(value.unavailable_diagnostics, "managed provider unavailable diagnostics"));
+  if (value.status === "completed" ? error !== null || unavailableDiagnostics !== null : error === null || unavailableDiagnostics === null
+      || error.code !== unavailableDiagnostics.code || error.message !== unavailableDiagnostics.message) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "managed provider diagnostics do not match its status");
+  }
+  if (value.output !== null && typeof value.output !== "string") throw failure("PROTOCOL_INCOMPATIBLE", "managed provider output is invalid");
+  const usage = validateV3Usage(value.usage, "managed provider usage");
+  return Object.freeze({
+    ...value,
+    error,
+    retry,
+    timing,
+    unavailable_diagnostics: unavailableDiagnostics,
+    usage: usage === null ? null : Object.freeze(usage),
+  });
+}
+
+function validateManagedGroup(value, { hostProvider, providers, runtimeId, materialId }) {
+  exactKeys(value, managedGroupFields, "3rd-review managed group");
+  if (value.version !== 4 || value.host_provider !== hostProvider || value.runtime_id !== runtimeId || !managedOutcomes.has(value.outcome)
+      || !Number.isSafeInteger(value.round) || value.round < 0 || !(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0))
+      || !Array.isArray(value.providers) || value.providers.length !== providers.size) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed group is invalid");
+  const seen = new Set();
+  const members = value.providers.map((member) => {
+    const provider = member?.provider;
+    if (!providers.has(provider) || seen.has(provider)) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed group provider selection is invalid");
+    seen.add(provider);
+    return validateManagedMember(member, provider, runtimeId, materialId);
+  });
+  if (seen.size !== providers.size) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed group omitted a configured provider");
+  return Object.freeze({ ...value, providers: Object.freeze(members) });
+}
+
+function parseManagedEnvelope(wire, context) {
+  if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review managed lifecycle exceeded the local broker timeout");
+  let result;
+  try { result = JSON.parse(wire?.stdout ?? ""); }
+  catch {
+    // stderr is a diagnostic channel. A broker may emit ordinary text there
+    // on a malformed/non-JSON response; do not let that text escape as a raw
+    // SyntaxError and bypass the typed lifecycle failure classification.
+    try {
+      const brokerError = safeBrokerError(JSON.parse(wire?.stderr ?? ""));
+      if (brokerError) throw brokerError;
+    } catch (error) {
+      if (error?.code && error.code !== "SyntaxError") throw error;
+    }
+    throw failure(wire?.spawnError ? "BROKER_SPAWN_FAILED" : "PROTOCOL_INCOMPATIBLE", `3rd-review managed lifecycle did not return JSON; ${wireSummary(wire)}`);
+  }
+  const brokerError = safeBrokerError(result);
+  if (brokerError) throw brokerError;
+  if (wire?.exitCode !== 0) throw failure("BROKER_EXIT_NONZERO", `3rd-review managed lifecycle exited without a public result; ${wireSummary(wire)}`);
+  if (!result || result.version !== "workflowhub-run.v1" || typeof result.request_id !== "string" || typeof result.runtime_id !== "string"
+      || !managedStates.has(result.state) || result.material_id !== context.materialId
+      || (context.requestId !== null && result.request_id !== context.requestId)
+      || (context.runtimeId !== null && result.runtime_id !== context.runtimeId)
+      || containsPrivatePath(result.request_id) || containsPrivatePath(result.runtime_id)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed lifecycle envelope is invalid");
+  }
+  const expectedKeys = result.state === "terminal"
+    ? ["group", "material_id", "request_id", "runtime_id", "state", "version"]
+    : ["material_id", "request_id", "runtime_id", "state", "version"];
+  exactKeys(result, expectedKeys, "3rd-review managed lifecycle envelope");
+  if (result.state === "terminal") {
+    return Object.freeze({ ...result, group: validateManagedGroup(result.group, { ...context, runtimeId: result.runtime_id }) });
+  }
+  if (Object.hasOwn(result, "group")) throw failure("PROTOCOL_INCOMPATIBLE", "non-terminal managed lifecycle envelope contains a group");
+  return Object.freeze(result);
+}
+
 function parsePublicRun(wire) {
   const timeout = () => failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
   let result = null;
@@ -353,6 +451,83 @@ export class ReviewProviderClient {
     if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)) throw new TypeError("timeoutMs must be null or a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
     this.timeoutMs = timeoutMs;
+  }
+
+  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null } = {}) {
+    if (!(typeof requestId === "string" && requestId.trim() !== "" && !containsPrivatePath(requestId)
+        && typeof hostProvider === "string" && hostProvider.trim() !== ""
+        && Array.isArray(providers) && providers.length > 0
+        && materials?.bundleRoot && materials?.materialId && prompt)) {
+      throw new TypeError("requestId, hostProvider, providers, materials, and prompt are required");
+    }
+    if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
+      throw new TypeError("providers must be a unique non-empty string array");
+    }
+    if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
+    if (reviewFlow && reviewMode !== "single_round") throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 requires single_round review mode");
+    const entries = (materials.deliveryManifest ?? materials.manifest ?? []).map(({ path, bytes, sha256 }) => ({
+      source: String(materials.sourcePrefix ?? "") + "/" + path, destination: path, size: bytes, sha256, embed: false,
+    }));
+    const request = {
+      version: 4,
+      host_provider: hostProvider,
+      required_result_protocol: "workflowhub-result.v2",
+      provider_allowlist: [...providers],
+      prompt,
+      deadline_ms: null,
+      ...(reviewMode ? { review_mode: reviewMode } : {}),
+      ...(reviewFlow ? { review_flow: validateDirectionFlow(reviewFlow) } : {}),
+      ...(materials.contractId ? { contract_id: materials.contractId } : {}),
+      ...(materials.contractHash ? { contract_hash: materials.contractHash } : {}),
+      ...(materials.semanticHash ? { semantic_hash: materials.semanticHash } : {}),
+    };
+    const attachments = { version: 1, bundle_id: materials.materialId, entries };
+    const wire = await this.invoke({
+      command: "start", requestId, request, attachments,
+      attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only",
+    });
+    return parseManagedEnvelope(wire, {
+      command: "start", requestId, runtimeId: null, materialId: materials.materialId,
+      hostProvider, providers: new Set(providers),
+    });
+  }
+
+  async statusManaged({ runtimeId, requestId = null, hostProvider, providers, materials } = {}) {
+    if (!(typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)
+        && typeof hostProvider === "string" && hostProvider.trim() !== ""
+        && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {
+      throw new TypeError("runtimeId, hostProvider, providers, and materials are required");
+    }
+    if (requestId !== null && (typeof requestId !== "string" || requestId.trim() === "" || containsPrivatePath(requestId))) {
+      throw new TypeError("requestId must be null or a non-empty public identifier");
+    }
+    if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
+      throw new TypeError("providers must be a unique non-empty string array");
+    }
+    const wire = await this.invoke({ command: "status", runtimeId });
+    return parseManagedEnvelope(wire, {
+      command: "status", requestId, runtimeId, materialId: materials.materialId,
+      hostProvider, providers: new Set(providers),
+    });
+  }
+
+  async cancelManaged({ runtimeId, requestId = null, hostProvider, providers, materials } = {}) {
+    if (!(typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)
+        && typeof hostProvider === "string" && hostProvider.trim() !== ""
+        && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {
+      throw new TypeError("runtimeId, hostProvider, providers, and materials are required");
+    }
+    if (requestId !== null && (typeof requestId !== "string" || requestId.trim() === "" || containsPrivatePath(requestId))) {
+      throw new TypeError("requestId must be null or a non-empty public identifier");
+    }
+    if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
+      throw new TypeError("providers must be a unique non-empty string array");
+    }
+    const wire = await this.invoke({ command: "cancel", runtimeId });
+    return parseManagedEnvelope(wire, {
+      command: "cancel", requestId, runtimeId, materialId: materials.materialId,
+      hostProvider, providers: new Set(providers),
+    });
   }
 
   async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true } = {}) {
@@ -437,15 +612,18 @@ export class ReviewProviderClient {
     throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review returned a legacy result; this WorkflowHub consumer requires workflowhub-result.v3");
   }
 
-  async #invokeCli({ command, request = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null }) {
+  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null }) {
     let temporary = null;
     try {
       temporary = mkdtempSync(join(tmpdir(), "wh-review-public-"));
       let args;
-      if (command === "run") {
+      if (["run", "start"].includes(command)) {
         const requestPath = join(temporary, "request.json"); const attachmentsPath = join(temporary, "attachments.json");
         writeFileSync(requestPath, `${JSON.stringify(request)}\n`, { mode: 0o600 }); writeFileSync(attachmentsPath, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
-        args = [...this.command.slice(1), "run", `--config=${this.config}`, `--request=${requestPath}`, `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
+        args = [...this.command.slice(1), command, `--config=${this.config}`, `--request=${requestPath}`, ...(command === "start" ? [`--request-id=${requestId ?? ""}`] : []), `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
+      } else if (["status", "cancel"].includes(command)) {
+        if (typeof runtimeId !== "string" || runtimeId.trim() === "") throw failure("PROTOCOL_INCOMPATIBLE", `${command} requires a runtime id`);
+        args = [...this.command.slice(1), command, `--config=${this.config}`, `--runtime-id=${runtimeId}`];
       } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported public broker command: ${command}`);
       return await execute(this.command[0], args, { timeoutMs: this.timeoutMs });
     } catch (error) {

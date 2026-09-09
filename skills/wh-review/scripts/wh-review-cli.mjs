@@ -502,6 +502,9 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
         snapshotTree: snapshot.tree,
         allowedProducerComponents: ["build-code-test-capture"],
       });
+      if (value.runtime_profile !== undefined && (value.runtime_profile_status !== "ready" || value.runtime_profile_authenticated !== true)) {
+        throw new Error("verify-code E2E review requires authenticated current build-code test evidence; runtime profile is unavailable");
+      }
       const output = trusted.task.readRecord(value.output_ref);
       if (createHash("sha256").update(output).digest("hex") !== value.output_hash) continue;
       currentTests += 1;

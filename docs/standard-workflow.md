@@ -79,7 +79,8 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 没有真实主题变化，不重复全文读取、测试、review 或 analyzer。材料、风险或有效 finding
 实际变化时，只重跑受影响的检查；build-code 的最终 aggregate 按计划在全部 phase 完成后
 运行一次。时间和 token 只作诊断，按 step、skill、读取、交互、provider wait、测试、review、
-返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate。
+返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate；review preflight 只记录
+当前请求的可观测事实，不改变 provider status 的运行时所有权。
 
 ### stage 结束
 

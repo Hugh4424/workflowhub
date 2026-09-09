@@ -1385,6 +1385,9 @@ function testEvidenceStatus(task, candidate, { stage, subject } = {}) {
       validateCanonicalFullTestReceipt(record, { taskId: task.identity.taskId, snapshotTree: record.snapshot_tree });
     }
     if (!Number.isInteger(record?.exit_code)) return { status: "unavailable" };
+    if (record.runtime_profile !== undefined && (record.runtime_profile_status !== "ready" || record.runtime_profile_authenticated !== true)) {
+      return { status: "unavailable", runtime_profile_status: record.runtime_profile_status ?? "unavailable" };
+    }
     return { status: record.exit_code === 0 ? "passed" : "failed" };
   } catch {
     return { status: "unavailable" };
@@ -1980,7 +1983,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     }
     const qualityFactStatus = kind === "review"
       ? (new Set(["recorded", "unavailable", "missing"]).has(status) ? status : "missing")
-      : (new Set(["passed", "failed", "missing"]).has(status) ? status : "missing");
+      : (new Set(["passed", "failed", "unavailable", "missing"]).has(status) ? status : "missing");
     const resolvedReviewAuthorization = kind === "review"
       && reviewStatuses.get(subject) === "resolved"
       ? { resolved_review: { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash } }
@@ -2566,13 +2569,17 @@ export function verifyOfficialEvidence(ctx, result) {
       taskId: ctx.identity.taskId,
       stage: ctx.stage,
       snapshotTree: tests.snapshot_tree,
+      requireRuntimeProfile: tests.runtime_profile !== undefined || tests.capability_proof !== undefined,
     });
-    for (const key of ["command", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"]) {
+    for (const key of ["command", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash", "runtime_profile", "runtime_profile_status", "runtime_profile_authenticated", "capability_proof", "behavior_fingerprint", "behavior_fingerprint_status"]) {
       if (receiptValue[key] !== tests[key]) throw new Error(`test receipt and facts.${key} are not bound`);
     }
     if ((tests.status === "passed" && receiptValue.exit_code !== 0)
         || (tests.status === "failed" && receiptValue.exit_code === 0)) {
       throw new Error("test fact status is not bound to the canonical receipt exit_code");
+    }
+    if (tests.status === "passed" && receiptValue.runtime_profile_status !== undefined && receiptValue.runtime_profile_status !== "ready") {
+      throw new Error("passed test fact requires an authenticated runtime profile");
     }
     const outputRaw = ctx.task.readRecord(receiptValue.output_ref);
     if (createHash("sha256").update(outputRaw).digest("hex") !== receiptValue.output_hash) throw new Error(`test output hash mismatch: ${receiptValue.output_ref}`);

@@ -26,6 +26,7 @@ const MAX_TEST_CAPTURE_TIMEOUT_MS = 15 * 60 * 1000;
 const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
 const VERIFY_REVIEW_STEPS = Object.freeze(["architect_review", "main_repair_1", "independent_review", "main_repair_2"]);
 const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
+const TRUSTED_CAPABILITY_PROOF_COMPONENT = "run-checks";
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "decision-log", ref: "quality/evidence/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "quality/evidence/spec.json" }),
@@ -227,8 +228,75 @@ export function readFrozenReviewMaterial({ task, ref, sha256: expectedSha256 } =
   return Object.freeze({ bytes, provider_input_sha256: value.content_sha256 });
 }
 
-function reusableTestCapture({ task, workspace, stage, component, command, receiptRef, outputRef }) {
-  const snapshot = captureWorkspaceSnapshot(workspace, task.identity.taskId);
+function profileMatches(receipt, runtimeProfile, capabilityProof, behaviorFingerprint) {
+  if (runtimeProfile !== undefined && JSON.stringify(receipt.runtime_profile ?? null) !== JSON.stringify(runtimeProfile)) return false;
+  if (capabilityProof !== undefined && JSON.stringify(receipt.capability_proof ?? null) !== JSON.stringify(capabilityProof)) return false;
+  if (behaviorFingerprint !== undefined && JSON.stringify(receipt.behavior_fingerprint ?? null) !== JSON.stringify(behaviorFingerprint)) return false;
+  return true;
+}
+
+function unavailableCapabilityProof(proof, runtimeProfile) {
+  return {
+    status: "unavailable",
+    executor_id: typeof proof?.executor_id === "string" && proof.executor_id.trim() !== ""
+      ? proof.executor_id
+      : runtimeProfile?.executor_id,
+    observations: [],
+  };
+}
+
+function authenticateCapabilityProof({ task, snapshotTree, runtimeProfile, capabilityProof }) {
+  if (capabilityProof?.status !== "passed") return capabilityProof;
+  if (capabilityProof.executor_id !== TRUSTED_CAPABILITY_PROOF_COMPONENT
+      || capabilityProof.executor_id !== runtimeProfile?.executor_id
+      || !Array.isArray(capabilityProof.observations)) {
+    return unavailableCapabilityProof(capabilityProof, runtimeProfile);
+  }
+  for (const observation of capabilityProof.observations) {
+    let raw;
+    try { raw = readCanonicalRecord(task, observation?.proof_ref); }
+    catch { return unavailableCapabilityProof(capabilityProof, runtimeProfile); }
+    if (typeof raw !== "string" || sha256(raw) !== observation?.proof_hash) {
+      return unavailableCapabilityProof(capabilityProof, runtimeProfile);
+    }
+    let proof;
+    try { proof = JSON.parse(raw); }
+    catch { return unavailableCapabilityProof(capabilityProof, runtimeProfile); }
+    if (proof?.schema_version !== "workflowhub-capability-observation.v1"
+        || proof.task_id !== task.identity.taskId
+        || proof.snapshot_tree !== snapshotTree
+        || proof.producer?.component !== TRUSTED_CAPABILITY_PROOF_COMPONENT
+        || typeof proof.producer?.version !== "string" || proof.producer.version.trim() === ""
+        || proof.executor_id !== capabilityProof.executor_id
+        || proof.capability !== observation.capability
+        || proof.requested !== observation.requested
+        || proof.decision !== observation.decision
+        || proof.observed !== true
+        || proof.mechanism !== observation.mechanism) {
+      return unavailableCapabilityProof(capabilityProof, runtimeProfile);
+    }
+  }
+  return capabilityProof;
+}
+
+function authenticatedProfileEvidence({ task, snapshotTree, runtimeProfile, capabilityProof }) {
+  const requestedProof = capabilityProof ?? runtimeProfile?.capability_proof;
+  const authenticatedProof = authenticateCapabilityProof({
+    task, snapshotTree, runtimeProfile, capabilityProof: requestedProof,
+  });
+  const authenticatedProfile = runtimeProfile === undefined ? undefined : {
+    ...runtimeProfile,
+    ...(requestedProof === undefined ? {} : { capability_proof: authenticatedProof }),
+  };
+  return {
+    runtimeProfile: authenticatedProfile,
+    capabilityProof: capabilityProof === undefined ? undefined : authenticatedProof,
+    status: authenticatedProof?.status === "passed" ? "ready" : "unavailable",
+    authenticated: authenticatedProof?.status === "passed",
+  };
+}
+
+function reusableTestCapture({ task, snapshot, stage, component, command, receiptRef, outputRef, runtimeProfile, capabilityProof, behaviorFingerprint }) {
   const candidateRefs = [
     receiptRef,
     ...(stage === "verify-code" && command.trim() === FULL_TEST_COMMAND && typeof task.listCanonicalTestReceiptRefs === "function"
@@ -260,6 +328,7 @@ function reusableTestCapture({ task, workspace, stage, component, command, recei
         || receipt.stage !== producerStage
         || !stageAllowed
         || !componentAllowed
+         || !profileMatches(receipt, runtimeProfile, capabilityProof, behaviorFingerprint)
         || receipt.command !== command
         || receipt.output_ref !== (candidateRef === receiptRef ? outputRef : receipt.output_ref)) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt conflicts with requested capture");
@@ -642,7 +711,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
   if (typeof component !== "string" || component.trim() === "") throw new TypeError("canonical receipt producer component required");
   const write = createTaskKernel(safeTask).publishCanonicalRecord;
   const writer = {
-    captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, timeoutMs = TEST_CAPTURE_TIMEOUT_MS, phaseEvidence = null } = {}) {
+    captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, timeoutMs = TEST_CAPTURE_TIMEOUT_MS, phaseEvidence = null, runtimeProfile = undefined, capabilityProof = undefined, behaviorFingerprint = undefined } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       const receiptPattern = /^quality\/tests\/[a-zA-Z0-9._/-]+\.json$/;
       const outputPattern = TEST_OUTPUT_REF;
@@ -651,9 +720,16 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         throw new TypeError(`test capture timeoutMs must be between 1 and ${MAX_TEST_CAPTURE_TIMEOUT_MS}ms`);
       }
       const capture = () => safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
-        const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, stage, component, command, receiptRef, outputRef });
+        const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+        const profileEvidence = authenticatedProfileEvidence({
+          task: safeTask,
+          snapshotTree: before.tree,
+          runtimeProfile,
+          capabilityProof,
+        });
+        const reusable = reusableTestCapture({ task: safeTask, snapshot: before, stage, component, command, receiptRef, outputRef, runtimeProfile: profileEvidence.runtimeProfile, capabilityProof: profileEvidence.capabilityProof, behaviorFingerprint });
         if (reusable !== undefined) return reusable;
-        const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId), headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
+        const headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
         const startedAt = now();
         const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command], { timeoutMs, killProcessGroup: true });
         const completedAt = now();
@@ -704,12 +780,17 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
           ...(timedOut ? { execution: { status: "timed_out", timeout_ms: timeoutMs, signal: proc.signal ?? "SIGTERM" } } : {}),
           ...(outputLimitExceeded ? { execution: { status: "output_limit_exceeded", output_limit_bytes: MAX_OUTPUT_BYTES, signal: proc.signal ?? null } } : {}),
           ...(phaseEvidenceValue === undefined ? {} : { phase_evidence: phaseEvidenceValue }),
+           ...(runtimeProfile === undefined ? {} : { runtime_profile: profileEvidence.runtimeProfile, runtime_profile_status: profileEvidence.status, runtime_profile_authenticated: profileEvidence.authenticated }),
+           ...(capabilityProof === undefined ? {} : { capability_proof: profileEvidence.capabilityProof }),
+           ...(behaviorFingerprint === undefined ? {} : { behavior_fingerprint: behaviorFingerprint }),
+           duration_ms: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
           ...(exitCode === 0 || phaseEvidenceValue !== undefined ? {} : {
             failure_attribution: captureFailure ?? { status: "failed", category: "test_command", code: `EXIT_${exitCode}`, exit_code: exitCode, reason: "test command exited non-zero" },
           }),
         };
         validateCanonicalTestReceipt(receipt, {
           taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, expectedProducerComponent: component,
+           requireRuntimeProfile: false,
         });
         const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
         return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
