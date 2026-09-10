@@ -582,6 +582,9 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
           requirePassed: false,
         });
       }
+      if (value.runtime_profile !== undefined && (value.runtime_profile_status !== "ready" || value.runtime_profile_authenticated !== true)) {
+        throw new Error("test receipt runtime profile is unavailable");
+      }
       if (!expectedPassed(fact.status, value.exit_code === 0, value.exit_code !== 0)) throw new Error("test outcome mismatch");
       const outputKey = `${key}:output:${value.output_ref}`;
       const outputRaw = readBound({ ref: value.output_ref, sha256: value.output_hash }, read, dependencies, outputKey);
@@ -717,10 +720,19 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
     && fact.material_scope_revision !== undefined
     && current.material_scope_revisions
     && fact.material_scope_revision === current.material_scope_revisions[fact.stage];
+  const acMaterialOnlyRevision = fact.kind === "acceptance_criterion"
+    && fact.material_scope === undefined
+    && fact.material_scope_revision === undefined
+    && fact.material_revision !== current.material_revision
+    && fact.snapshot_tree === current.snapshot_tree;
   const materialCurrent = scopedMaterialCurrent
     || (fact.material_scope === undefined
       && fact.material_scope_revision === undefined
-      && fact.material_revision === current.material_revision);
+      && (fact.material_revision === current.material_revision
+        // A quality fact keeps its original material revision as provenance.
+        // When every other authenticated identity remains unchanged, a later
+        // material-only revision is the one explicitly tolerated difference.
+        || acMaterialOnlyRevision));
   const dependencies = {
     material: adviceReview || recordOnly || materialCurrent ? "current" : "stale",
     tree: adviceReview || stageScopedSnapshot || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",

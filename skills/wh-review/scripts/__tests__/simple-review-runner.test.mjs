@@ -23,6 +23,16 @@ function canonicalMaterialId(entries) {
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
+function completeBuildPrdMaterials() {
+  return {
+    decision_log: "# Decision\\n\\nThe direction is frozen.\\n",
+    prd: "# PRD\\n\\nThe complete product requirements are here.\\n",
+    task_map: "## Task map\\n\\n- T001 owns the user result.\\n",
+    design_facts: { ui_applicability: "non_ui", status: "not_applicable" },
+    quality_facts: { status: "unavailable", coverage: "unknown" },
+  };
+}
+
 describe("simple material-only review", () => {
   it("rehydrates and dispatches only the exact serialized provider input", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-")));
@@ -48,6 +58,110 @@ describe("simple material-only review", () => {
     });
     expect(seen).toEqual([{ strictProtocol: true, materialId: packet.material_id, implementation: "A bytes" }]);
     expect(() => rehydrateProviderInput(Buffer.from("{}"), attachmentRoot)).toThrow(/invalid/);
+  });
+
+  it("rejects unknown or tampered envelope metadata before provider dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-envelope-tamper-")));
+    roots.push(attachmentRoot);
+    const packet = createSimpleReviewPacket({ stage: "verify-code", materials: { implementation: "A bytes" } });
+    const bytes = serializeProviderInput({
+      packet,
+      hostProvider: "codex",
+      providers: ["other/model"],
+      providerIdentities: { "other/model": { source_id: "review-source", config_id: "review-config" } },
+      reviewMode: "single_round",
+      prompt: "review exact bytes",
+      subjectBinding: { task_id: "task-1", material_revision: "revision-1" },
+      reviewPolicy: { source: "wh_review.v2", mode: "single_round" },
+    });
+    const original = JSON.parse(bytes.toString("utf8"));
+    const tamperCases = [
+      ["unknown top-level field", (value) => { value.extra = "unexpected"; }],
+      ["host provider", (value) => { value.host_provider = "forged-host"; }],
+      ["providers", (value) => { value.providers = ["forged/model"]; }],
+      ["provider identities", (value) => { value.provider_identities["other/model"].source_id = "forged-source"; }],
+      ["review mode", (value) => { value.review_mode = "adaptive"; }],
+      ["prompt", (value) => { value.prompt = "forged prompt"; }],
+      ["subject binding", (value) => { value.subject_binding.task_id = "forged-task"; }],
+      ["review policy", (value) => { value.review_policy.mode = "forged-mode"; }],
+    ];
+    const calls = [];
+    for (const [label, mutate] of tamperCases) {
+      const tampered = structuredClone(original);
+      mutate(tampered);
+      const tamperedBytes = Buffer.from(`${JSON.stringify(tampered)}\\n`, "utf8");
+      expect(() => rehydrateProviderInput(tamperedBytes, attachmentRoot), label)
+        .toThrow(/invalid|unsupported|integrity/i);
+      await expect(dispatchFrozenProviderInput({
+        bytes: tamperedBytes,
+        attachmentRoot,
+        client: { async runGroup() { calls.push(label); return { outcome: "completed" }; } },
+      })).rejects.toThrow(/invalid|unsupported|integrity/i);
+    }
+    expect(calls).toHaveLength(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("enforces build-prd allowlist and canonical generated instructions on direct packet creation", () => {
+    const base = completeBuildPrdMaterials();
+    expect(() => createSimpleReviewPacket({
+      stage: "build-prd", review_kind: "build_prd", materials: { ...base, review_instructions: "caller spoof" },
+    })).toThrow(/MATERIAL_FORBIDDEN/);
+    expect(() => createSimpleReviewPacket({
+      stage: "build-prd", review_kind: "build_prd", materials: { ...base, approved_spec: "forbidden" },
+    })).toThrow(/MATERIAL_FORBIDDEN/);
+    expect(() => createSimpleReviewPacket({
+      stage: "build-prd", review_kind: "build_prd", materials: { ...base, mystery: "unknown" },
+    })).toThrow(/MATERIAL_FORBIDDEN/);
+
+    const packet = createSimpleReviewPacket({ stage: "build-prd", review_kind: "build_prd", materials: base });
+    expect(packet.stage).toBe("build-prd");
+    expect(packet.review_kind).toBe("build_prd");
+    expect(packet.review_instructions).toBeUndefined();
+    expect(packet.materials.map(({ key }) => key)).toEqual(Object.keys(base));
+  });
+
+  it("rehydrates only a contract-valid build-prd packet and leaves no packet directory on tamper", () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-build-prd-tamper-")));
+    roots.push(attachmentRoot);
+    const packet = createSimpleReviewPacket({
+      stage: "build-prd", review_kind: "build_prd", materials: completeBuildPrdMaterials(),
+    });
+    const bytes = serializeProviderInput({
+      packet, hostProvider: "codex", providers: ["other/model"], reviewMode: "single_round", prompt: "review",
+    });
+    const tampered = JSON.parse(bytes.toString("utf8"));
+    const spoof = Buffer.from("caller spoof", "utf8");
+    const entry = tampered.packet.materials.find(({ key }) => key === "decision_log");
+    entry.content_base64 = spoof.toString("base64");
+    entry.sha256 = createHash("sha256").update(spoof).digest("hex");
+    tampered.packet.materials.push({
+      key: "review_instructions", value_kind: "text", content_base64: spoof.toString("base64"), sha256: entry.sha256,
+    });
+    const tamperedBytes = Buffer.from(`${JSON.stringify(tampered)}\\n`, "utf8");
+    expect(() => rehydrateProviderInput(tamperedBytes, attachmentRoot)).toThrow(/MATERIAL_FORBIDDEN|identity|integrity|invalid/i);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("rejects build-prd serialized packet tampering before dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-build-prd-dispatch-tamper-")));
+    roots.push(attachmentRoot);
+    const packet = createSimpleReviewPacket({
+      stage: "build-prd", review_kind: "build_prd", materials: completeBuildPrdMaterials(),
+    });
+    const bytes = serializeProviderInput({
+      packet, hostProvider: "codex", providers: ["other/model"], reviewMode: "single_round", prompt: "review",
+    });
+    const tampered = JSON.parse(bytes.toString("utf8"));
+    tampered.packet.materials[0].key = "approved_spec";
+    const tamperedBytes = Buffer.from(`${JSON.stringify(tampered)}\\n`, "utf8");
+    const calls = [];
+    await expect(dispatchFrozenProviderInput({
+      bytes: tamperedBytes, attachmentRoot,
+      client: { async runGroup() { calls.push("runGroup"); return { outcome: "completed" }; } },
+    })).rejects.toThrow(/MATERIAL_FORBIDDEN|identity|integrity|invalid/i);
+    expect(calls).toEqual([]);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
 
   it("binds authenticated supplemental evidence without changing the base material identity", () => {
@@ -172,6 +286,48 @@ describe("simple material-only review", () => {
     restored.materials.dispose();
   });
 
+  it("rejects a broker material identity that differs from the submitted bundle", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-broker-matid-mismatch-")));
+    roots.push(attachmentRoot);
+    const input = {
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { implementation: "current implementation" },
+    };
+    const bundleMaterialId = createSimpleReviewPacket(input).material_id;
+    const forgedMaterialId = "f".repeat(64);
+    const result = await runSimpleReview(input, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: { async runGroup(request) {
+        expect(request.strictProtocol).toBe(false);
+        return {
+          runtimeId: "runtime-forged-material-id",
+          outcome: "completed",
+          material_id: forgedMaterialId,
+          providers: [{
+            provider: "other/model", status: "completed", identity: { provider: "other/model" }, error: null,
+            output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+          }],
+        };
+      } },
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      material_id: bundleMaterialId,
+      runtime_id: "runtime-forged-material-id",
+      outcome: "completed",
+      provider_results: [],
+      findings: [],
+      error: {
+        code: "REVIEW_MATERIAL_IDENTITY_MISMATCH",
+      },
+    });
+    expect(result.material_id).not.toBe(forgedMaterialId);
+  });
+
   it.each(["direction", "detail"])("dispatches one red/blue pair for make-decision %s", async (reviewTrack) => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), `simple-wh-review-red-blue-${reviewTrack}-`)));
     roots.push(attachmentRoot);
@@ -254,11 +410,18 @@ describe("simple material-only review", () => {
       } },
     });
     expect(result).toMatchObject({
-      status: "available-with-failures", pair_status: "partial", material_consistency: "partial",
-      error: { code: "PAIR_MATERIAL_MISMATCH" },
+      status: "available-with-failures", pair_status: "partial", material_consistency: "consistent",
+      blue_incomplete: true,
     });
-    expect(result.material_id).toBeNull();
-    expect(result.material_ids.red).not.toBe(result.material_ids.blue);
+    expect(result.role_results.blue).toMatchObject({
+      status: "unavailable",
+      material_id: result.role_results.red.material_id,
+      error: { code: "REVIEW_MATERIAL_IDENTITY_MISMATCH" },
+      provider_results: [],
+      findings: [],
+    });
+    expect(result.material_id).toBe(result.role_results.red.material_id);
+    expect(result.material_ids.red).toBe(result.material_ids.blue);
   });
 
   it.each(["red", "blue"])("marks %s incomplete while retaining the other role", async (incompleteRole) => {
@@ -713,20 +876,30 @@ describe("simple material-only review", () => {
 });
 
 describe("review flow static preflight", () => {
-  function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null } = {}) {
+  function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null, callLog = null } = {}) {
     let brokerCalls = 0;
     const dependencies = {
-      loadConfig: () => ({
-        whReview: {},
-        config: "/unused/config.json",
-        attachmentRoot,
-        command: ["unused"],
-        brokerProbe: { status: "unknown", reason: "probe intentionally unavailable" },
-      }),
-      resolveRoute: () => route,
-      selectProviders: () => selection,
+      loadConfig: () => {
+        callLog?.push("loadConfig");
+        return {
+          whReview: {},
+          config: "/unused/config.json",
+          attachmentRoot,
+          command: ["unused"],
+          brokerProbe: { status: "unknown", reason: "probe intentionally unavailable" },
+        };
+      },
+      resolveRoute: () => {
+        callLog?.push("resolveRoute");
+        return route;
+      },
+      selectProviders: () => {
+        callLog?.push("selectProviders");
+        return selection;
+      },
       client: {
         async runGroup(request) {
+          callLog?.push("runGroup");
           brokerCalls += 1;
           return broker?.(request) ?? { runtimeId: "runtime-preflight", outcome: "unavailable", providers: [] };
         },
@@ -809,6 +982,24 @@ describe("review flow static preflight", () => {
     expect(result.error?.code).not.toBe("ROUTE_UNAVAILABLE");
   });
 
+  it("resolves the configured build-prd non-stage route before provider dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-build-prd-route-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, {
+      broker: async () => ({ runtimeId: "runtime-build-prd-route", outcome: "unavailable", providers: [] }),
+    });
+    const result = await runSimpleReview({
+      stage: "build-prd",
+      review_kind: "build_prd",
+      host_provider: "codex",
+      materials: completeBuildPrdMaterials(),
+    }, dependencies);
+
+    expect(calls()).toBe(1);
+    expect(result).toMatchObject({ status: "unavailable", outcome: "unavailable" });
+    expect(result.error?.code).not.toBe("MATERIAL_INCOMPLETE");
+  });
+
   it("fails closed for unknown material keys on integration review requests", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-unknown-integration-")));
     roots.push(attachmentRoot);
@@ -823,9 +1014,85 @@ describe("review flow static preflight", () => {
     expect(result).toMatchObject({
       status: "unavailable",
       dispatch_state: "blocked_before_dispatch",
-      error: { code: "MATERIAL_INCOMPLETE", diagnostic: { field: "approved_spec" } },
+      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "mystery_material", actual: "unknown" } },
     });
     expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("rejects an unknown material alongside valid build-spec materials before provider dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-valid-unknown-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: {
+        raw_requirement: "requirement",
+        approved_decision: "decision",
+        draft_spec: "spec",
+        junk_material: "must not dispatch",
+      },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_results: [],
+      findings: [],
+      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "junk_material", actual: "unknown" } },
+    });
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("rejects junk-only build-prd materials before route/provider dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-build-prd-junk-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const { dependencies } = trustedDependencies(attachmentRoot, { callLog: calls });
+    const result = await runSimpleReview({
+      stage: "build-prd",
+      review_kind: "build_prd",
+      host_provider: "codex",
+      materials: { junk_material: "must not dispatch" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_results: [],
+      findings: [],
+      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "junk_material", actual: "unknown" } },
+    });
+    expect(calls).toEqual([]);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("runs the build-prd allowlist before route resolution for unknown-only materials", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-build-prd-order-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "build-prd",
+      review_kind: "build_prd",
+      host_provider: "codex",
+      materials: { unknown_only: "must not dispatch" },
+    }, {
+      loadConfig: () => { calls.push("loadConfig"); throw new Error("loadConfig must not run"); },
+      resolveRoute: () => { calls.push("resolveRoute"); throw new Error("resolveRoute must not run"); },
+      selectProviders: () => { calls.push("selectProviders"); throw new Error("selectProviders must not run"); },
+      client: { async runGroup() { calls.push("runGroup"); return { outcome: "completed" }; } },
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "unknown_only", actual: "unknown" } },
+      provider_results: [],
+      findings: [],
+    });
+    expect(calls).toEqual([]);
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
 });

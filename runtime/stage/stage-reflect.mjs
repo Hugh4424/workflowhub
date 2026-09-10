@@ -35,6 +35,7 @@ export const STAGE_REFLECTION_STAGES = Object.freeze([
 ]);
 
 const STAGES = new Set(STAGE_REFLECTION_STAGES);
+const SHA256_HEX = /^[a-f0-9]{64}$/;
 const AVAILABILITY_STATES = new Set(["unavailable", "not_scheduled"]);
 const AVAILABILITY_REASONS = new Set([
   "executor_absent",
@@ -151,6 +152,104 @@ function assertInputIdentity(input, { stage, taskId }) {
   }
 }
 
+function assertExecutedReflectionProvenance(input) {
+  if (!["ok", "degraded", "failed"].includes(input?.status)) return;
+  const executor = input.executor;
+  const sourceId = executor?.source_id ?? executor?.executor_id ?? executor?.id;
+  const attemptId = executor?.attempt_id ?? input.identity?.attempt;
+  const startedAt = executor?.started_at ?? executor?.startedAt;
+  const completedAt = executor?.completed_at ?? executor?.completedAt;
+  const outputHash = input.output_hash;
+  if (!executor || typeof executor !== "object" || Array.isArray(executor)
+      || typeof sourceId !== "string" || sourceId.trim() === ""
+      || typeof attemptId !== "string" || attemptId.trim() === ""
+      || !isDateTime(startedAt) || !isDateTime(completedAt)
+      || Date.parse(completedAt) < Date.parse(startedAt)
+      || !SHA256_HEX.test(outputHash ?? "")
+      || !SHA256_HEX.test(executor?.output_hash ?? "")
+      || executor.output_hash !== outputHash) {
+    fail("executed stage reflection requires executor source, attempt, timing, and output hash", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+}
+
+/**
+ * Validate the host-produced sibling supplied to an official run.  The
+ * deterministic runner may authenticate and publish this value, but it must
+ * never manufacture the executor identity or a judgment.  The sibling keeps
+ * executor provenance and timing beside the v2 judgment; the canonical
+ * stage-outcome reference remains in judgments[].evidence_refs and is checked
+ * again by runStageReflection after publication.
+ */
+export function validateStageReflectionSibling(input, {
+  taskId,
+  stage,
+  stageStatus,
+  stageOutcome = null,
+  worktree = null,
+  materialRevision = null,
+  snapshotTree = null,
+} = {}) {
+  assertObject(input, "stage_reflection sibling");
+  if (input.schema_version !== "stage-reflection.v2" || input.record_kind !== "judgment") {
+    fail("stage_reflection sibling must be stage-reflection.v2 judgment", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  if (input.task_id !== taskId || input.stage !== stage || input.stage_status !== stageStatus) {
+    fail("stage_reflection sibling identity does not match the official run", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const executor = input.executor;
+  if (!executor || typeof executor !== "object" || Array.isArray(executor)) {
+    fail("stage_reflection sibling executor metadata is required", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const sourceId = executor.source_id ?? executor.executor_id ?? executor.id;
+  const attemptId = executor.attempt_id ?? input.identity?.attempt;
+  const startedAt = executor.started_at ?? executor.startedAt;
+  const completedAt = executor.completed_at ?? executor.completedAt;
+  const outputHash = input.output_hash;
+  if (typeof sourceId !== "string" || sourceId.trim() === ""
+      || typeof attemptId !== "string" || attemptId.trim() === ""
+      || !isDateTime(startedAt) || !isDateTime(completedAt)
+      || !SHA256_HEX.test(outputHash ?? "")
+      || !SHA256_HEX.test(executor.output_hash ?? "")
+      || executor.output_hash !== outputHash) {
+    fail("stage_reflection sibling executor attempt/timing/output hash is incomplete", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  if (Date.parse(completedAt) < Date.parse(startedAt)) {
+    fail("stage_reflection sibling executor completed_at precedes started_at", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  if (input.output_hash !== undefined && executor.output_hash !== undefined && input.output_hash !== executor.output_hash) {
+    fail("stage_reflection sibling output hash is inconsistent", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const identity = input.identity;
+  if (!identity || identity.task_id !== taskId || identity.attempt !== attemptId
+      || (worktree !== null && identity.worktree !== worktree)
+      || (materialRevision !== null && identity.material_revision !== materialRevision)
+      || (snapshotTree !== null && identity.snapshot_tree !== snapshotTree)) {
+    fail("stage_reflection sibling current binding does not match the official run", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${stage}/[a-f0-9]{64}\\.json$`);
+  const outcomeRefs = [...new Set((input.judgments ?? []).flatMap((item) => item?.evidence_refs ?? [])
+    .filter((ref) => typeof ref === "string" && outcomePattern.test(ref)))];
+  if (outcomeRefs.length !== 1) {
+    fail("stage_reflection sibling must reference exactly one stage outcome", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  if (stageOutcome && (outcomeRefs[0] !== stageOutcome.ref
+      || (stageOutcome.sha256 !== undefined && !outcomeRefs[0].endsWith(`${stageOutcome.sha256}.json`)))) {
+    fail("stage_reflection sibling source outcome does not match the official run", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  return Object.freeze({
+    ...input,
+      output_hash: outputHash,
+    executor: Object.freeze({
+      ...executor,
+      source_id: sourceId,
+      attempt_id: attemptId,
+      started_at: startedAt,
+      completed_at: completedAt,
+      output_hash: executor.output_hash,
+    }),
+  });
+}
+
 function readExisting(task, ref) {
   try {
     return task.readRecord(ref);
@@ -187,6 +286,110 @@ function publishImmutable({ task, kernel, ref, raw }) {
     conflict.code = "EEXIST";
     throw conflict;
   }
+}
+
+/**
+ * Persist an executor failure without manufacturing a judgment.  This is the
+ * compatibility path for the injected executor API: a missing executor still
+ * publishes an availability fact, while an executor that was actually
+ * invoked but failed gets a durable failed reflection record with no
+ * judgment, intervention, or lesson claims.
+ */
+export function publishStageReflectionExecutionFailure(context, {
+  stageStatus = "completed",
+  generatedAt,
+  error,
+  stageOutcome,
+} = {}) {
+  const parts = contextParts(context);
+  if (!(stageStatus === "completed" || stageStatus === "failed")) {
+    fail("stage reflection stageStatus must be completed or failed", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const observedAt = assertTimestamp(generatedAt ?? new Date().toISOString(), "generatedAt");
+  const summary = error instanceof Error ? error.message : String(error ?? "stage reflection executor failed");
+  const source = assertObject(stageOutcome, "stage reflection failure stage outcome");
+  const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
+  if (!outcomePattern.test(source.ref ?? "") || !SHA256_HEX.test(source.sha256 ?? "")) {
+    fail("stage reflection failure requires a canonical stage outcome ref/hash", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const sourceRaw = parts.task.readRecord(source.ref);
+  if (hash(sourceRaw) !== source.sha256 || !source.ref.endsWith(`${source.sha256}.json`)) {
+    fail("stage reflection failure stage outcome hash mismatch", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  let sourceValue;
+  try { sourceValue = JSON.parse(sourceRaw); }
+  catch (parseError) { fail(`stage reflection failure stage outcome JSON is invalid: ${parseError.message}`, "STAGE_REFLECTION_INPUT_INVALID"); }
+  if (sourceValue.task_id !== parts.taskId || sourceValue.stage !== parts.stage
+      || sourceValue.attempt_id !== source.value?.attempt_id
+      || sourceValue.snapshot_tree !== source.value?.snapshot_tree
+      || sourceValue.material_revision !== source.value?.material_revision) {
+    fail("stage reflection failure stage outcome identity mismatch", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const workspace = context.candidateWorkspace ?? context.workspace;
+  const branch = workspace?.branch ?? execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+    cwd: workspace.worktreeRoot,
+    encoding: "utf8",
+  }).trim();
+  const value = {
+    schema_version: "stage-reflection.v1",
+    record_kind: "judgment",
+    task_id: parts.taskId,
+    stage: parts.stage,
+    stage_status: stageStatus,
+    generated_at: observedAt,
+    status: "failed",
+    error: { summary: summary || "stage reflection executor failed" },
+    identity: {
+      task_id: parts.taskId,
+      worktree: workspace?.worktreeRoot ?? null,
+      branch,
+      attempt: sourceValue.attempt_id,
+      snapshot_tree: sourceValue.snapshot_tree,
+      material_revision: sourceValue.material_revision,
+    },
+    source: { ref: source.ref, sha256: source.sha256 },
+    judgments: [],
+    interventions: [],
+    lessons_added: [],
+  };
+  const raw = canonicalJson(value);
+  const reflectionRef = `quality/stage-reflection/${parts.stage}/${hash(raw)}.json`;
+  const publication = publishImmutable({
+    task: parts.task,
+    kernel: parts.kernel,
+    ref: reflectionRef,
+    raw,
+  });
+  let lesson = null;
+  let lessonError = null;
+  if (publication.status !== "idempotent") {
+    try {
+      lesson = appendLessonObservation({
+        root: parts.root,
+        proj: parts.project,
+        stage: parts.stage,
+        taskId: parts.taskId,
+        text: `stage ${parts.stage} reflection executor failed: ${summary}`,
+        reflectionRef,
+        now: observedAt,
+      });
+    } catch (appendError) {
+      lessonError = appendError instanceof Error ? appendError.message : String(appendError);
+    }
+  }
+  return Object.freeze({
+    status: "failed",
+    step_status: "failed",
+    reflection_status: "failed",
+    ref: publication.ref,
+    sha256: publication.sha256,
+    persisted: true,
+    publication,
+    reflection: value,
+    ...(lesson ? { lesson } : {}),
+    error: summary,
+    ...(lessonError ? { lesson_error: lessonError } : {}),
+  });
 }
 
 function identityForAvailability(parts) {
@@ -610,6 +813,7 @@ export async function runStageReflection(context, {
   // session output must leave no lesson, fixed record, or availability fact.
   assertInputIdentity(candidate, parts);
   if (candidate.schema_version !== "stage-reflection.v2") fail("new reflection requires stage-reflection.v2", "STAGE_REFLECTION_INPUT_INVALID");
+  assertExecutedReflectionProvenance(candidate);
   const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
   const outcomeRefs = [...new Set((candidate.judgments ?? []).flatMap((item) => item.evidence_refs ?? []).filter((ref) => typeof ref === "string" && outcomePattern.test(ref)))];
   if (outcomeRefs.length !== 1) {

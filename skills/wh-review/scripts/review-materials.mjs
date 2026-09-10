@@ -7,7 +7,7 @@ import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { isExecutionRecordOnlyMaterialDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
-import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { assertReviewIdentity, reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -32,6 +32,8 @@ const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._
 // and add no review information. Keep this projection fixed and small so a
 // large but valid frozen four-material packet is not rejected before dispatch.
 const MINI_TASK_PROVIDER_PROTOCOL = `# Provider Protocol (mini-task)\n\n本文件是 mini-task provider 可见的最小协议。WorkflowHub host 负责传输、manifest、快照、公共结果、重试和审查事实；provider 只负责阅读材料并返回 findings。\n\n## 材料边界\n\n- 只读取本次 bundle 内的文件，先读 bundle/review-instructions.md，再读 contracts/、requirements/ 和声明的 skills/。\n- 不访问真实仓库、bundle 外路径、Git、shell、网络或宿主绝对路径，不自行补取材料。\n- 材料缺失、不可读、传输失败或 hash 不符不是 finding；只报告 bundle 中能直接复核的问题。\n- mini-task.design 的审查对象是冻结的 raw_requirement、decision_log、spec、plan、tasks；mini-task.implementation 还应阅读当前实现、测试、AC trace 和 user result。\n\n## Reviewer 输出\n\n只返回一个 JSON 对象，不要输出 verdict、summary、pass/fail、checklist、流程说明或第二个 JSON：\n\n\`\`\`json\n{\n  "findings": []\n}\n\`\`\`\n\n每条 finding 使用：\n\n{\n  "severity": "blocking|major|minor",\n  "path": "bundle 内材料相对路径",\n  "line": 1,\n  "issue": "具体问题",\n  "root_cause": "可验证根因",\n  "recommendation": "具体修复建议",\n  "evidence_kind": "direct|machine|inferred",\n  "evidence": "一到两句可复核证据"\n}\n\npath 必须是 provider 可见的相对路径；没有可靠行号时省略 line 或写 null，不得猜测。blocking/major 必须有 root_cause、evidence_kind 和 evidence；按根因合并重复问题。findings 为空只表示本次 provider 没提出具体问题，不表示任务完成或可以发布。\n`;
+
+const BUILD_PRD_PROVIDER_PROTOCOL = `# Provider Protocol (build-prd report-only)\n\nThis packet is for the build-prd non-stage report-only surface. It is not a formal stage, does not create a canonical stage attempt/result, and does not grant completion or release permission. The host owns transport, manifest, snapshot, public result, retry, and review facts; the provider reads only this bundle and returns findings.\n\n## Material boundary\n\n- Read only the submitted build-prd bundle: review-instructions.md, contracts/, requirements/, and declared skills/.\n- Review only decision_log, prd, task_map, design_facts, quality_facts, and explicitly declared confirmation/source/delivery/analyze/reflection facts.\n- Do not substitute approved_spec, draft_plan, draft_tasks, plan, tasks, changes_diff, changed_files, test_evidence, ac_trace, or any material outside the bundle.\n- Preserve missing, unreadable, transport-failure, provider-failure, partial, and unavailable facts; never rewrite them as pass.\n\n## Reviewer output\n\nReturn exactly one JSON object with a findings array. Do not emit a verdict, summary, pass/fail label, checklist, process explanation, or second JSON object. Findings must be concrete and anchored to submitted bundle bytes. An empty findings array is advice only; it does not approve, complete, or release the PRD.\n`;
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
 export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 330 * 1024;
@@ -322,6 +324,13 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+function assertPlainMaterials(materials) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)
+      || Object.getPrototypeOf(materials) !== Object.prototype) {
+    throw new TypeError("MATERIAL_INCOMPLETE: materials must be a plain object");
+  }
+}
+
 /**
  * Validate the public make-decision detail input before runner-owned fields
  * are generated.  The caller supplies the current decision log bytes; the
@@ -482,7 +491,7 @@ function validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps }
   const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
     || (typeof source.sourceRoot === "string"
       && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
-  if (!snapshotCurrent || receipt.exit_code !== 0) {
+  if (!snapshotCurrent || receipt.exit_code !== 0 || (receipt.runtime_profile !== undefined && (receipt.runtime_profile_status !== "ready" || receipt.runtime_profile_authenticated !== true))) {
     throw new Error("MATERIAL_INCOMPLETE: build-code test evidence is not a passing current-snapshot fact");
   }
 }
@@ -526,7 +535,7 @@ function validateIntegrationFreshTests({ task, source, materials }) {
   const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
     || (typeof source.sourceRoot === "string"
       && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
-  if (!snapshotCurrent || receipt.exit_code !== 0) {
+  if (!snapshotCurrent || receipt.exit_code !== 0 || (receipt.runtime_profile !== undefined && (receipt.runtime_profile_status !== "ready" || receipt.runtime_profile_authenticated !== true))) {
     throw new Error("MATERIAL_INCOMPLETE: integration requires a fresh passing test receipt for the frozen final snapshot");
   }
 }
@@ -732,11 +741,11 @@ function requireChangeCoverage(key, map, changeMap) {
 
 function validateV2AuthorityMaps(_rule, materials, _strictV2Maps, changeMap = null) {
   for (const key of ["context_map", "evidence_map"]) {
-    if (!(key in materials)) continue;
+    if (!Object.prototype.hasOwnProperty.call(materials, key)) continue;
     validateAuthorityMap(key, materials[key]);
   }
   const suppliedBuildCodeMaps = ["phase_map", "impact_map", "reuse_map", "acceptance_map"]
-    .filter((key) => key in materials);
+    .filter((key) => Object.prototype.hasOwnProperty.call(materials, key));
   for (const key of suppliedBuildCodeMaps) {
     validateAuthorityMap(key, materials[key]);
     if (key === "acceptance_map") validateBuildCodeAcceptanceMap(materials[key]);
@@ -762,7 +771,7 @@ function validateV2AuthorityMaps(_rule, materials, _strictV2Maps, changeMap = nu
 function validateMaterialAllowlist(rule, materials) {
   const allowed = new Set([...rule.required, ...rule.optional]);
   for (const key of Object.keys(materials)) {
-    if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for this review`);
+    if (!Object.prototype.hasOwnProperty.call(materials, key) || !allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for this review`);
   }
 }
 
@@ -810,7 +819,8 @@ function originalRequirementSection(decisionLog) {
 }
 
 function deduplicateDecisionMaterials(materials) {
-  if (!("raw_requirement" in materials) || !("approved_decision" in materials)) return materials;
+  if (!Object.prototype.hasOwnProperty.call(materials, "raw_requirement")
+      || !Object.prototype.hasOwnProperty.call(materials, "approved_decision")) return materials;
   const comparableMarkdown = (value, key) => typeof value === "string"
     ? value.replaceAll("\r\n", "\n").replace(/[ \t]+$/gm, "").trimEnd()
     : reviewMaterialBytes(key, value);
@@ -937,13 +947,19 @@ export function buildPlanningArtifacts({
 
 const ruleFor = reviewRuleFor;
 
+function ruleForIdentity(stage, reviewTrack, reviewScope, reviewKind = null) {
+  return ruleFor(reviewKind === "build_prd" ? "build-prd" : reviewKind ?? stage, reviewTrack, reviewKind ? null : reviewScope);
+}
+
 function stagePlanFor(stage, track, reviewKind = null) {
+  if (reviewKind === "build_prd") return skillPlan.non_stage?.build_prd;
   if (reviewKind !== null && reviewKind !== undefined) return skillPlan.mini_task?.[reviewKind.split(".")[1]];
   const stagePlan = skillPlan.stages[stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
 function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
+  if (reviewKind === "build_prd") return "build-prd";
   if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") return `mini-task/${reviewKind.split(".")[1]}`;
   if (stage === "make-decision") return `${stage}/${track ?? ""}`;
   if (stage === "build-code") return `${stage}/${reviewScope ?? "phase"}`;
@@ -963,6 +979,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
       ? " role=red：独立审查当前材料，先找会改变方向或范围的直接缺口，不依赖另一角色结论。"
       : " role=blue：对抗性审查当前材料，主动寻找隐藏前提、反例、失败后果和更小替代路径，不把 red 结果当作结论。"
     : "";
+  if (reviewKind === "build_prd") return `Focus on one complete PRD review: coverage, card ownership, user flow and states, dependencies and handoff, applicable design/source facts, acceptance/failure criteria, and unnecessary scope. This is a non-stage report-only surface; debate is limited to substantive product-direction disagreement (at most two rounds), while analyze/reflection remain report-only facts. Preserve provider, transport, partial, and unavailable facts; do not invent build-plan materials or a stage result.${ordered}`;
   if (reviewKind === "mini_task.design") return `Focus on whether the mini-task four materials freeze one small, safe, complete design, its risks, dependencies, boundaries, tests, rollback, and delivery; do not invent product scope.${ordered}`;
   if (reviewKind === "mini_task.implementation") return `Focus on whether the mini-task implementation matches the frozen four materials, current diff/snapshot, tests, AC trace, real user result, coverage limits, and remaining risks.${ordered}`;
   if (stage === "make-decision" && track === "direction" && directionMode === "reconstruct") {
@@ -999,8 +1016,9 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
 }
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null) {
+  assertReviewIdentity({ stage, reviewTrack: track, reviewScope, reviewKind });
   if (role !== null && !["red", "blue"].includes(role)) throw new Error(`MATERIAL_INCOMPLETE: invalid review role ${role}`);
-  const rule = ruleFor(reviewKind ?? stage, track, reviewKind ? null : reviewScope);
+  const rule = ruleForIdentity(stage, track, reviewScope, reviewKind);
   const plan = stagePlanFor(stage, track, reviewKind);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
@@ -1014,7 +1032,9 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const reviewInstruction = "This is a full review of the supplied current stage subject.";
   const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode, role);
-  const verifyBound = reviewKind
+  const verifyBound = reviewKind === "build_prd"
+    ? "This is one dedicated non-stage build-prd review. Do not substitute a formal stage review, persist a canonical stage attempt/result, demand a provider verdict, or repeat an unchanged review."
+    : reviewKind
     ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
     ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
@@ -1026,7 +1046,9 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const miniImplementationBoundary = reviewKind === "mini_task.implementation"
     ? "For mini-task implementation, perform one implementation review. Allow one focused re-review only after an actual repair or subject change; repeated findings, an unchanged subject, or no trusted terminal result remain visible as needs_human, unavailable, or incomplete. Do not mechanically retry."
     : "";
-  const subjectReading = reviewKind === "mini_task.design"
+  const subjectReading = reviewKind === "build_prd"
+    ? "Read the complete PRD, parent decision, task map, design facts, quality facts, and any declared source/confirmation/delivery facts; do not infer missing materials or read a repository."
+    : reviewKind === "mini_task.design"
     ? "Read the frozen four materials and the design risks; no implementation diff or diff index is supplied for a design review."
     : reviewKind === "mini_task.implementation"
     ? "Read the current implementation diff/snapshot and the explicitly supplied tests, AC trace, and real user result."
@@ -1883,10 +1905,18 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
   write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify(summary, null, 2)}\n`, "utf8"));
 }
 
-export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, reviewKind = null, uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null } = {}) {
+export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, taskId, task, stage, phaseId = null,
+  reviewTrack, reviewScope, reviewKind, review_track, review_scope, review_kind,
+  uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
+  const identity = reviewIdentityFromInput({ stage, review_track, reviewTrack, review_scope, reviewScope, review_kind, reviewKind });
+  stage = identity.stage;
+  reviewTrack = identity.reviewTrack;
+  reviewScope = identity.reviewScope;
+  reviewKind = identity.reviewKind;
+  assertPlainMaterials(materials);
   const effectiveScope = reviewKind === null && stage === "build-code" ? (reviewScope ?? "phase") : null;
-  const rule = ruleFor(reviewKind ?? stage, reviewTrack, effectiveScope);
+  const rule = ruleForIdentity(stage, reviewTrack, effectiveScope, reviewKind);
   if (stage === "build-code" && effectiveScope === "integration" && !Object.hasOwn(materials, "test_evidence")) {
     // Semantic integration review can still inspect the final implementation
     // when the host has no current test receipt. Keep the missing fact explicit
@@ -1899,7 +1929,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       },
     };
   }
-  const missingRequired = rule.required.filter((key) => !(key in materials) || !materialPresent(materials[key]));
+  const missingRequired = rule.required.filter((key) => !Object.prototype.hasOwnProperty.call(materials, key) || !materialPresent(materials[key]));
   if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
   validateMaterialAllowlist(rule, materials);
   if (stage === "make-decision" && reviewTrack === "direction") {
@@ -1909,9 +1939,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         allowed.delete(key);
       }
     }
-    for (const key of Object.keys(materials)) if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
+    for (const key of Object.keys(materials)) if (!Object.prototype.hasOwnProperty.call(materials, key) || !allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
   }
-  for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
+  for (const key of rule.forbidden) if (Object.prototype.hasOwnProperty.call(materials, key)) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
   const usesDiffBundle = rule.source_bundle === "diff";
   const diffIndex = usesDiffBundle ? diffIndexFor(source) : null;
   const changeMap = usesDiffBundle ? changeMapFor({ source, phaseId, diffIndex }) : null;
@@ -2031,7 +2061,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
 
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
-  const bundleRoot = mkdtempSync(join(packetRoot, `bundle-${stage}-${reviewTrack ?? "default"}-`));
+  const bundleRoot = mkdtempSync(join(packetRoot, "bundle-"));
   let bundleDiffIndex = null;
   const boundedVerifyCodeDiff = stage === "verify-code" && source.diffBytes > VERIFY_CODE_FULL_INLINE_LIMIT_BYTES;
   if (rule.source_bundle === "diff") {
@@ -2070,10 +2100,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   const stagePlan = stagePlanFor(stage, reviewTrack, reviewKind);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${reviewKind ?? `${stage}/${reviewTrack ?? "default"}`}`);
-  const contractName = reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage === "make-decision" ? "make-decision" : stage;
+  const contractName = reviewKind === "build_prd" ? "build-prd" : reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage === "make-decision" ? "make-decision" : stage;
   const contractBytes = readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`);
   write(bundleRoot, `contracts/${contractName}.md`, contractBytes);
-  const providerProtocol = reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation"
+  const providerProtocol = reviewKind === "build_prd"
+    ? Buffer.from(BUILD_PRD_PROVIDER_PROTOCOL, "utf8")
+    : reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation"
     ? Buffer.from(MINI_TASK_PROVIDER_PROTOCOL, "utf8")
     : readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol");
   write(bundleRoot, "contracts/provider-protocol.md", providerProtocol);

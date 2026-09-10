@@ -75,6 +75,15 @@ description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任�
 
 1. 用一份显式绑定文件按宿主自己的任务 ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用宿主 claim ID 替代；`attempt_id` 与 `agent_run_id` 都必须是当前尝试的稳定非空标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
 2. Agent 结束后，宿主用 WorkflowHub 私有桥接入口提交一个显式 `session` 或 `unavailable` 结果，并交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。桥接不接受历史 `execution` 或质量 receipt；缺文件、身份不符、缺 `agent_run_id`、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。
+
+   如果宿主有真实 session/memory reflection executor，必须在同一 outcome 发布之后、正式
+   `run` 之前生成一个独立 `stage_reflection` sibling。它必须是
+   `stage-reflection.v2` judgment，带 `executor.source_id`、`executor.attempt_id`、
+   `executor.started_at`、`executor.completed_at`、`output_hash`，并在
+   `identity` 中绑定当前 task/worktree/branch/attempt/snapshot/material；至少一条、且
+   只能一条 judgment evidence ref 指向本次 canonical stage outcome。宿主把原始 JSON
+   作为 `run` input 的 `stage_reflection` 字段提交。WorkflowHub 只校验绑定并在 stage
+   publication 后消费它，不把 sibling 交给 stage handler，也不在 runtime 合成判断。
 3. 宿主绑定属于配置事实，不属于四份当前材料，也不创建第二套 WorkflowHub 状态机。桥接入口只校验并转发已提交的结构化结果，不启动 Agent、不读取 transcript、不扫描目录、不补零成本；正式 run 仍由 WorkflowHub 公共入口完成。
 
 ## 评论

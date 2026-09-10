@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 export { CURRENT_MATERIAL_FILES as MATERIAL_FILES } from "../task/material-workspace.mjs";
 
 import Ajv2020 from "ajv/dist/2020.js";
+import yaml from "js-yaml";
 
 import decisionEntrySchema from "../schemas/decision-entry.v1.json" with { type: "json" };
 import ambiguityLedgerV2Schema from "../schemas/ambiguity-ledger.v2.json" with { type: "json" };
@@ -22,6 +23,18 @@ const validateAmbiguityLedgerV2Schema = ajv.compile(ambiguityLedgerV2Schema);
 const validatePlanTaskV2Schema = ajv.compile(planTaskV2Schema);
 const MAX_MAKE_DECISION_STEP_ID = Math.max(...makeDecisionSteps.steps.map(({ step_id }) => step_id));
 
+// The OI outline is deliberately parsed from the existing decision-log
+// material.  These constants are the contract's vocabulary, not a second
+// persisted schema or ledger.
+export const DECISION_OUTLINE_FRAMEWORK_NODES = Object.freeze([
+  "background", "problem", "goal", "solution", "acceptance", "extension",
+]);
+export const DECISION_OUTLINE_FIXED_CATEGORIES = Object.freeze([
+  "complete_user_flow", "page_scope", "data_state", "success_failure_boundary", "non_goals", "deferred",
+]);
+const OI_STATUSES = new Set(["open", "confirmed", "deferred", "not_applicable"]);
+const OI_IMPACT_DIMENSIONS = new Set(["goal", "scope", "acceptance", "ordinary_detail"]);
+
 const REQUIRED_MAIN_SECTIONS = Object.freeze([
   "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
   "审查处置", "最终确认", "拒绝方案", "风险", "未决项", "Supersedes", "文档结果", "Exit checks",
@@ -39,6 +52,166 @@ export const DECISION_CORRECTIONS = Object.freeze({
 
 function result(errors, extras = {}) {
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), ...extras });
+}
+
+export const TEST_RUNTIME_PROFILE_NAMES = Object.freeze(["inner", "medium", "large"]);
+export const TEST_RUNTIME_PROFILE_LIMITS_MS = Object.freeze({
+  inner: 60_000,
+  medium: 300_000,
+  large: null,
+});
+const TEST_RUNTIME_CAPABILITIES = Object.freeze(["network", "db", "filesystem", "subprocess", "environment"]);
+const TEST_RUNTIME_PERMISSION_POLICIES = Object.freeze({
+  network: new Set(["deny", "localhost_only", "ci_only"]),
+  db: new Set(["deny", "localhost_only", "ci_only"]),
+  filesystem: new Set(["deny", "worktree_temp_only", "ci_only"]),
+  subprocess: new Set(["deny", "explicit_only", "ci_only"]),
+  environment: new Set(["local_ci", "ci_only"]),
+});
+const TEST_TIERS = new Set(["simple", "feature", "fullstack"]);
+const CAPABILITY_PROOF_STATUSES = new Set(["passed", "unavailable"]);
+const CAPABILITY_PROOF_DECISIONS = new Set([
+  "deny", "localhost_only", "worktree_temp_only", "explicit_only", "ci_only", "local_ci", "allow", "unknown",
+]);
+
+function isHash(value) {
+  return typeof value === "string" && HASH.test(value);
+}
+
+function validateCapabilityProof(value, errors, { requireProof, permissions = undefined }) {
+  if (value === undefined) {
+    if (requireProof) errors.push("capability proof is required");
+    return "unavailable";
+  }
+  if (!object(value)) {
+    errors.push("capability proof must be an object");
+    return "unavailable";
+  }
+  if (!CAPABILITY_PROOF_STATUSES.has(value.status)) {
+    errors.push("capability proof status must be passed or unavailable");
+    return "unknown";
+  }
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") {
+    errors.push("capability proof executor_id is required");
+  }
+  if (!Array.isArray(value.observations)) {
+    errors.push("capability proof observations must be an array");
+    return value.status;
+  }
+  const seen = new Set();
+  for (const observation of value.observations) {
+    if (!object(observation) || !TEST_RUNTIME_CAPABILITIES.includes(observation.capability)) {
+      errors.push("capability proof observation capability is invalid");
+      continue;
+    }
+    if (seen.has(observation.capability)) errors.push(`duplicate capability proof: ${observation.capability}`);
+    seen.add(observation.capability);
+    if (!CAPABILITY_PROOF_DECISIONS.has(observation.decision)) {
+      errors.push(`capability proof decision is invalid for ${observation.capability}`);
+      continue;
+    }
+    if (value.status === "passed") {
+      if (permissions?.[observation.capability] !== undefined
+          && (observation.requested !== permissions[observation.capability]
+            || observation.decision !== permissions[observation.capability])) {
+        errors.push(`capability proof decision does not match ${observation.capability} permission`);
+      }
+      if (typeof observation.requested !== "string" || observation.requested.trim() === "") {
+        errors.push(`capability proof requested policy is required for ${observation.capability}`);
+      }
+      if (typeof observation.mechanism !== "string" || observation.mechanism.trim() === "") {
+        errors.push(`capability proof mechanism is required for ${observation.capability}`);
+      }
+      if (typeof observation.proof_ref !== "string" || observation.proof_ref.trim() === "" || !isHash(observation.proof_hash)) {
+        errors.push(`capability proof ref/hash is required for ${observation.capability}`);
+      }
+      if (observation.observed !== true) errors.push(`capability proof observation is not authenticated for ${observation.capability}`);
+    }
+  }
+  if (value.status === "passed" && seen.size !== TEST_RUNTIME_CAPABILITIES.length) {
+    errors.push("capability proof must cover every runtime capability");
+  }
+  if (value.status === "passed") {
+    for (const observation of value.observations) {
+      if (observation.decision === "unknown" || observation.decision === "allow") {
+        errors.push(`capability proof ${observation.capability} is not a constrained decision`);
+      }
+    }
+  }
+  return value.status;
+}
+
+/**
+ * Validate the test runtime profile independently from the test tier.
+ * This is a descriptive contract: the executor must attach capability proof;
+ * an unavailable proof is preserved as unavailable and is never a pass.
+ */
+export function validateTestRuntimeProfile(value, { requireProof = false, allowUnavailable = false, declarationOnly = false } = {}) {
+  const errors = [];
+  if (!object(value)) return result(["test runtime profile must be an object"], { status: "incomplete" });
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(value.runtime_profile)) errors.push("runtime profile must be inner, medium, or large");
+  if (value.test_tier !== undefined && !TEST_TIERS.has(value.test_tier)) errors.push("test tier is invalid");
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") errors.push("runtime profile executor_id is required");
+  const profile = value.runtime_profile;
+  const ceiling = value.ceiling_ms;
+  if (!Number.isSafeInteger(ceiling) || ceiling < 1) errors.push("runtime profile ceiling_ms must be a positive integer");
+  else if (TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== null && TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== undefined && ceiling > TEST_RUNTIME_PROFILE_LIMITS_MS[profile]) {
+    errors.push(`${profile} runtime profile ceiling exceeds ${TEST_RUNTIME_PROFILE_LIMITS_MS[profile]}ms`);
+  }
+  if (profile === "large" && value.permissions?.environment !== "ci_only") {
+    errors.push("large runtime profile requires CI-only environment");
+  }
+  if (profile === "large" && !declarationOnly && value.capability_proof?.status === "passed" && value.permissions?.environment !== "ci_only") {
+    errors.push("large runtime profile proof requires CI-only environment");
+  }
+  if (!object(value.permissions)) {
+    errors.push("runtime profile permissions are required");
+  } else {
+    for (const capability of TEST_RUNTIME_CAPABILITIES) {
+      const policy = value.permissions[capability];
+      if (!TEST_RUNTIME_PERMISSION_POLICIES[capability].has(policy)) {
+        errors.push(`${capability} permission policy is invalid`);
+      }
+    }
+    const expected = profile === "inner"
+      ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny" }
+      : profile === "medium"
+        ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" }
+        : null;
+    for (const [capability, policy] of Object.entries(expected ?? {})) {
+      if (value.permissions[capability] !== policy) errors.push(`${profile} ${capability} permission must be ${policy}`);
+    }
+    if (profile === "large" && value.permissions.environment !== "ci_only") errors.push("large environment permission must be ci_only");
+    if (profile === "large" && Object.values(value.permissions).some((policy) => policy === "unknown")) errors.push("large unknown permission is denied");
+    if (profile === "medium" && value.permissions.environment !== "local_ci" && value.permissions.environment !== "ci_only") errors.push("medium environment must be local_ci or ci_only");
+    if (profile === "inner" && value.permissions.environment !== "local_ci") errors.push("inner environment permission must be local_ci");
+  }
+  if (value.behavior_fingerprint !== undefined) {
+    const fingerprint = value.behavior_fingerprint;
+    for (const side of ["before", "after"]) {
+      if (!object(fingerprint?.[side])) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      } else if (!(fingerprint[side].selection_hash === null && fingerprint[side].assertion_hash === null)
+          && (!isHash(fingerprint[side].selection_hash) || !isHash(fingerprint[side].assertion_hash))) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      }
+    }
+    if (isHash(fingerprint?.before?.selection_hash) && isHash(fingerprint?.after?.selection_hash)
+        && fingerprint.before.selection_hash !== fingerprint.after.selection_hash) errors.push("behavior selection fingerprint must remain equal");
+    if (isHash(fingerprint?.before?.assertion_hash) && isHash(fingerprint?.after?.assertion_hash)
+        && fingerprint.before.assertion_hash !== fingerprint.after.assertion_hash) errors.push("behavior assertion fingerprint must remain equal");
+  } else if (requireProof) {
+    errors.push("behavior fingerprint is required");
+  }
+  const proofStatus = validateCapabilityProof(value.capability_proof, errors, { requireProof, permissions: value.permissions });
+  if (proofStatus === "passed" && value.capability_proof.executor_id !== value.executor_id) errors.push("capability proof executor_id must match runtime profile executor_id");
+  if (proofStatus === "unknown") errors.push("capability proof is unavailable");
+  if (errors.length > 0) return result(errors, { status: proofStatus === "unavailable" || proofStatus === "unknown" ? "unavailable" : "incomplete" });
+  if (proofStatus === "unavailable") {
+    if (!allowUnavailable && !declarationOnly) return result(["capability proof is unavailable"], { status: "unavailable" });
+    return result([], { ok: false, status: "unavailable", profile: value.runtime_profile });
+  }
+  return result([], { status: "ready", profile: value.runtime_profile });
 }
 
 function schemaErrors(validate) {
@@ -2221,7 +2394,7 @@ export function validateInteractionAggregateContract(value) {
   if (!/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")) errors.push("interaction aggregate snapshot_tree must be a Git snapshot tree");
   const allowed = new Set([
     "schema_version", "task_id", "stage", "snapshot_tree", "original_requirement", "decision", "confirmation",
-    "talk", "grill", "advice", "decision_ref", "decision_hash", "clarify", "generated_at",
+    "talk", "grill", "advice", "decision_ref", "decision_hash", "clarify", "generated_at", "oi_dispositions",
   ]);
   for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`interaction aggregate contains unsupported field ${key}`);
   if (value.generated_at !== undefined && !Number.isFinite(Date.parse(value.generated_at))) {
@@ -2239,6 +2412,28 @@ export function validateInteractionAggregateContract(value) {
   const confirmation = value.confirmation;
   if (!object(confirmation) || !/^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(confirmation.ref ?? "") || !HASH.test(confirmation.hash ?? "") || confirmation.result !== "accepted") {
     errors.push("interaction aggregate confirmation must bind an accepted confirmation ref and hash");
+  }
+
+  // Core OI confirmation bindings live inside the existing interaction
+  // aggregate.  The list is optional for legacy aggregates that predate the
+  // OI contract; when present it is producer-owned semantic content and is
+  // validated strictly so a caller cannot relabel an unrelated confirmation.
+  if (value.oi_dispositions !== undefined) {
+    if (!Array.isArray(value.oi_dispositions) || value.oi_dispositions.length === 0) {
+      errors.push("interaction aggregate oi_dispositions must be a non-empty array when present");
+    } else {
+      const seenOiIds = new Set();
+      for (const [index, binding] of value.oi_dispositions.entries()) {
+        if (!object(binding) || !nonEmptyString(binding.oi_id) || !nonEmptyString(binding.task_id)
+            || !nonEmptyString(binding.outline_version) || !nonEmptyString(binding.selected_disposition)
+            || (!nonEmptyString(binding.visible_group_id) && !nonEmptyString(binding.batch_id))) {
+          errors.push(`interaction aggregate oi_dispositions[${index}] must bind task, outline, OI, group, and selected disposition`);
+          continue;
+        }
+        if (seenOiIds.has(binding.oi_id)) errors.push(`interaction aggregate oi_dispositions duplicates ${binding.oi_id}`);
+        seenOiIds.add(binding.oi_id);
+      }
+    }
   }
 
   const talk = value.talk;
@@ -2653,6 +2848,281 @@ function parseConvergenceRows(body) {
   return rows.length === 0 ? { columns: null, rows: [] } : { columns: rows[0].map((value) => value.toLowerCase()), rows: rows.slice(1) };
 }
 
+function markdownTables(markdown) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const tables = [];
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!/^\s*\|/.test(lines[index]) || !/^\s*\|?\s*:?-{2,}/.test(lines[index + 1])) continue;
+    const parse = (line) => line.split("|").map((cell) => cell.trim()).filter((cell, position, cells) => !(position === 0 && cell === "") && !(position === cells.length - 1 && cell === ""));
+    const headers = parse(lines[index]).map((value) => value.toLowerCase());
+    const rows = [];
+    for (let row = index + 2; row < lines.length && /^\s*\|/.test(lines[row]); row += 1) rows.push(parse(lines[row]));
+    tables.push({ headers, rows, start: index });
+    index += rows.length + 1;
+  }
+  return tables;
+}
+
+function tableColumn(headers, names) {
+  return headers.findIndex((header) => names.some((name) => header === name || header.includes(name)));
+}
+
+function splitOiIds(value) {
+  return [...new Set(String(value ?? "").split(/[\s,，、;；|]+/).map((item) => item.trim()).filter((item) => /^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(item)))];
+}
+
+function parseBoolean(value) {
+  if (value === true || value === false) return value;
+  if (/^(?:true|yes|是)$/i.test(String(value ?? "").trim())) return true;
+  if (/^(?:false|no|否)$/i.test(String(value ?? "").trim())) return false;
+  return null;
+}
+
+function parseOiYamlBlocks(markdown) {
+  const records = [];
+  for (const match of String(markdown ?? "").matchAll(/```(?:ya?ml|json)\s*\n([\s\S]*?)```/gi)) {
+    let value;
+    try { value = /^\s*\{/.test(match[1]) ? JSON.parse(match[1]) : yaml.load(match[1]); } catch { continue; }
+    const entries = Array.isArray(value) ? value : value && typeof value === "object" && Array.isArray(value.ois) ? value.ois : [value];
+    for (const entry of entries) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry) && (entry.oi_id || entry.id)) records.push(entry);
+    }
+  }
+  return records;
+}
+
+function substantiveOutlineValue(value) {
+  return substantiveConvergenceText(value)
+    && !/^(?:none|nil|n\/a|na|无|无内容|暂无|待定|tbd|todo|unknown|未知|占位|placeholder)$/i.test(String(value).trim());
+}
+
+function outlineTerminalField(value, ...keys) {
+  for (const key of keys) {
+    const candidate = value?.[key];
+    if (Array.isArray(candidate) && candidate.length > 0) return candidate.join("; ");
+    if (substantiveOutlineValue(candidate)) return candidate;
+  }
+  return null;
+}
+
+function normalizeOutlineReview(review) {
+  if (!review || typeof review !== "object") return null;
+  const candidates = [review.convergence_outline, review.materials?.convergence_outline, review.semantic_fields?.convergence_outline, review.value?.convergence_outline, review.value?.materials?.convergence_outline];
+  const outline = candidates.find((candidate) => candidate && typeof candidate === "object");
+  if (!outline) return null;
+  const entries = outline.entries ?? outline.items ?? outline.ois ?? outline.records;
+  return {
+    ...outline,
+    // Existing review packets put identity either beside or inside the
+    // semantic field.  Normalize both forms without creating a second
+    // persisted projection; the field remains the sole authority.
+    task_id: outline.task_id ?? review.task_id,
+    outline_version: outline.outline_version ?? review.outline_version,
+    entries: Array.isArray(entries) ? entries : [],
+  };
+}
+
+/**
+ * Parse and validate the single decision-log OI authority.  The returned
+ * `components` map is intentionally explicit so callers can disclose the
+ * exact missing conjunct instead of collapsing it into a generic failure.
+ */
+export function analyzeDecisionOutline(decisionLogMarkdown, {
+  taskId = null,
+  directionReview = null,
+  interactionAggregate = null,
+} = {}) {
+  const text = String(decisionLogMarkdown ?? "");
+  const errors = [];
+  const tables = markdownTables(text);
+  const frameworkTable = tables.find(({ headers }) => tableColumn(headers, ["framework_node"]) >= 0 && tableColumn(headers, ["oi_ids"]) >= 0);
+  const categoryTable = tables.find(({ headers }) => tableColumn(headers, ["category"]) >= 0 && tableColumn(headers, ["oi_ids"]) >= 0);
+  const frameworkRows = frameworkTable?.rows ?? [];
+  const categoryRows = categoryTable?.rows ?? [];
+  const nodeColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["framework_node"]) : -1;
+  const nodeOiColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["oi_ids"]) : -1;
+  const nodeEmptyColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["empty"]) : -1;
+  const nodeReasonColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["reason"]) : -1;
+  const categoryColumn = categoryTable ? tableColumn(categoryTable.headers, ["category"]) : -1;
+  const categoryOiColumn = categoryTable ? tableColumn(categoryTable.headers, ["oi_ids"]) : -1;
+  const categoryEmptyColumn = categoryTable ? tableColumn(categoryTable.headers, ["empty"]) : -1;
+  const categoryReasonColumn = categoryTable ? tableColumn(categoryTable.headers, ["reason"]) : -1;
+  const frameworkMap = new Map();
+  const categoryMap = new Map();
+  const parseCoverageRow = (row, oiIndex, emptyIndex, reasonIndex, label) => {
+    const ids = splitOiIds(row[oiIndex]);
+    const empty = parseBoolean(row[emptyIndex]);
+    const reason = row[reasonIndex] ?? "";
+    if (empty === true && !substantiveOutlineValue(reason)) errors.push(`${label} empty row requires a concrete reason`);
+    if (empty !== true && ids.length === 0) errors.push(`${label} must reference an OI or declare empty: true`);
+    if (empty === true && ids.length > 0) errors.push(`${label} cannot combine OI IDs with empty: true`);
+    return { oi_ids: ids, empty, reason };
+  };
+  for (const row of frameworkRows) {
+    const node = String(row[nodeColumn] ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FRAMEWORK_NODES.includes(node)) continue;
+    if (frameworkMap.has(node)) errors.push(`framework node ${node} is duplicated`);
+    frameworkMap.set(node, parseCoverageRow(row, nodeOiColumn, nodeEmptyColumn, nodeReasonColumn, `framework node ${node}`));
+  }
+  for (const row of categoryRows) {
+    const category = String(row[categoryColumn] ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(category)) continue;
+    if (categoryMap.has(category)) errors.push(`fixed category ${category} is duplicated`);
+    categoryMap.set(category, parseCoverageRow(row, categoryOiColumn, categoryEmptyColumn, categoryReasonColumn, `fixed category ${category}`));
+  }
+  if (!frameworkTable) errors.push("decision-log is missing the framework node OI table");
+  if (!categoryTable) errors.push("decision-log is missing the fixed category OI table");
+  for (const node of DECISION_OUTLINE_FRAMEWORK_NODES) if (!frameworkMap.has(node)) errors.push(`framework node ${node} is missing`);
+  for (const category of DECISION_OUTLINE_FIXED_CATEGORIES) if (!categoryMap.has(category)) errors.push(`fixed category ${category} is missing`);
+
+  const records = parseOiYamlBlocks(text);
+  const byId = new Map();
+  for (const raw of records) {
+    const record = { ...raw, oi_id: raw.oi_id ?? raw.id };
+    if (!/^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(record.oi_id ?? "")) { errors.push("OI record id is invalid"); continue; }
+    if (byId.has(record.oi_id)) { errors.push(`OI ${record.oi_id} is duplicated`); continue; }
+    byId.set(record.oi_id, record);
+  }
+  const referenced = new Set([...frameworkMap.values(), ...categoryMap.values()].flatMap((row) => row.oi_ids));
+  for (const id of referenced) if (!byId.has(id)) errors.push(`outline reference ${id} has no OI record`);
+  for (const id of byId.keys()) if (!referenced.has(id)) errors.push(`OI ${id} is not referenced by a framework node or fixed category`);
+  const first = [...byId.values()][0] ?? {};
+  const outlineVersion = first.outline_version ?? first.version ?? null;
+  const recordTaskId = first.task_id ?? null;
+  if (taskId !== null && recordTaskId !== taskId) errors.push("OI task_id does not bind the current task");
+  if (!substantiveOutlineValue(outlineVersion)) errors.push("OI outline_version is required");
+  for (const [id, record] of byId.entries()) {
+    const version = record.outline_version ?? record.version ?? null;
+    if (record.task_id !== recordTaskId) errors.push(`OI ${id} task_id is inconsistent with the current outline`);
+    if (version !== outlineVersion) errors.push(`OI ${id} outline_version is inconsistent with the current outline`);
+  }
+  const terminal = [];
+  let openCount = 0;
+  let coreProofCount = 0;
+  const aggregateValue = interactionAggregate?.value ?? interactionAggregate;
+  const aggregateOiBindings = new Map(
+    (Array.isArray(aggregateValue?.oi_dispositions) ? aggregateValue.oi_dispositions : [])
+      .filter((binding) => object(binding) && typeof binding.oi_id === "string")
+      .map((binding) => [binding.oi_id, binding]),
+  );
+  for (const [id, record] of byId.entries()) {
+    const status = String(record.status ?? "").trim().toLowerCase();
+    const category = String(record.category ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(category)) errors.push(`OI ${id} category is invalid`);
+    for (const [field, label] of [["source", "source"], ["question", "question"]]) if (!substantiveOutlineValue(record[field])) errors.push(`OI ${id} ${label} is missing`);
+    if (!OI_STATUSES.has(status)) { errors.push(`OI ${id} status is invalid`); continue; }
+    if (status === "open") { openCount += 1; continue; }
+    const impact = Array.isArray(record.impact_dimensions) ? record.impact_dimensions : [];
+    if (impact.length === 0 || impact.some((item) => !OI_IMPACT_DIMENSIONS.has(item))) errors.push(`OI ${id} impact_dimensions is invalid`);
+    const requiresUser = record.requires_user_decision === true;
+    const core = impact.some((item) => ["goal", "scope", "acceptance"].includes(item));
+    if (core && !requiresUser) errors.push(`OI ${id} core impact requires_user_decision=true`);
+    const group = record.visible_group_id ?? record.batch_id;
+    if (requiresUser && !substantiveOutlineValue(group)) errors.push(`OI ${id} visible_group_id or batch_id is required`);
+    if (status === "confirmed") {
+      for (const [label, keys] of [["selected_disposition", ["selected_disposition"]], ["evidence", ["evidence", "evidence_ref", "evidence_refs", "basis"]], ["acceptance", ["acceptance", "acceptance_criterion", "falsifiable_acceptance"]], ["counterexample", ["counterexample", "counterexample_boundary"]]]) {
+        if (!outlineTerminalField(record, ...keys)) errors.push(`OI ${id} confirmed ${label} is missing`);
+      }
+    } else if (status === "deferred") {
+      for (const [label, keys] of [["owner", ["owner"]], ["trigger", ["trigger", "trigger_condition"]], ["scope", ["scope", "scope_boundary"]], ["impact", ["impact"]], ["follow_up_acceptance", ["follow_up_acceptance", "follow_up", "next_acceptance"]]]) {
+        if (!outlineTerminalField(record, ...keys)) errors.push(`OI ${id} deferred ${label} is missing`);
+      }
+      if (!requiresUser) errors.push(`OI ${id} deferred item requires user decision`);
+    } else if (status === "not_applicable") {
+      if (!outlineTerminalField(record, "reason")) errors.push(`OI ${id} not_applicable reason is missing`);
+      if (!outlineTerminalField(record, "counterexample_boundary", "counterexample")) errors.push(`OI ${id} not_applicable counterexample boundary is missing`);
+    }
+    if (core) {
+      const interactionRef = record.interaction_ref;
+      const interactionHash = record.interaction_hash;
+      if (!substantiveOutlineValue(interactionRef) || !HASH.test(interactionHash ?? "")) errors.push(`OI ${id} core interaction proof is missing or invalid`);
+      else if (interactionAggregate) {
+        const aggregateRef = interactionAggregate.ref ?? interactionAggregate.interaction_ref;
+        const aggregateHash = interactionAggregate.sha256 ?? interactionAggregate.interaction_hash ?? interactionAggregate.hash;
+        const binding = aggregateOiBindings.get(id);
+        const expectedGroup = record.visible_group_id ?? record.batch_id;
+        const actualGroup = binding?.visible_group_id ?? binding?.batch_id;
+        const bindingCurrent = binding?.task_id === (taskId ?? recordTaskId)
+          && binding?.outline_version === outlineVersion
+          && binding?.oi_id === id
+          && actualGroup === expectedGroup
+          && binding?.selected_disposition === record.selected_disposition;
+        if (interactionRef !== aggregateRef || interactionHash !== aggregateHash
+            || aggregateValue.task_id !== (taskId ?? recordTaskId)
+            || aggregateValue.stage !== "make-decision"
+            || !bindingCurrent) {
+          errors.push(`OI ${id} core interaction proof is not current or does not bind its OI/group/disposition`);
+        } else coreProofCount += 1;
+      } else {
+        // A self-reported ref/hash is not a Talk proof.  The existing
+        // interaction aggregate must be present and current so the handler
+        // can authenticate the producer-owned bytes and bind them to this
+        // task/stage/version.  Keep the gap explicit when callers omit it.
+        errors.push(`OI ${id} core interaction proof is unavailable`);
+      }
+    }
+    terminal.push(record);
+  }
+  const direction = normalizeOutlineReview(directionReview);
+  let directionCurrent = false;
+  if (!direction) errors.push("direction review is missing current convergence_outline questions-only snapshot");
+  else {
+    const entries = direction.entries;
+    const ids = entries.map((entry) => entry?.oi_id ?? entry?.id);
+    const expectedIds = [...byId.keys()];
+    const allowedDirectionEntryFields = new Set(["oi_id", "id", "category", "source", "question", "status"]);
+    const sameIds = ids.length === expectedIds.length && expectedIds.every((id) => ids.filter((candidate) => candidate === id).length === 1);
+    if (direction.task_id !== (taskId ?? recordTaskId) || direction.outline_version !== outlineVersion) errors.push("direction convergence_outline task/version is stale or mismatched");
+    if (!sameIds) errors.push("direction convergence_outline does not cover every current OI exactly once");
+    for (const entry of entries) {
+      const entryId = entry?.oi_id ?? entry?.id ?? "unknown";
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        errors.push(`direction convergence_outline ${entryId} must be an object`);
+        continue;
+      }
+      const unknownFields = Object.keys(entry).filter((key) => !allowedDirectionEntryFields.has(key));
+      if (unknownFields.length > 0) errors.push(`direction convergence_outline ${entryId} contains unsupported fields: ${unknownFields.join(", ")}`);
+      const source = byId.get(entry?.oi_id ?? entry?.id);
+      if (source && (entry.category !== source.category || entry.source !== source.source || entry.question !== source.question)) errors.push(`direction convergence_outline ${entry?.oi_id ?? entry?.id ?? "unknown"} does not match the current OI question/source/category`);
+      if (entry?.status !== "open") errors.push(`direction convergence_outline ${entry?.oi_id ?? entry?.id ?? "unknown"} must expose status open`);
+      for (const forbidden of ["answer", "selected_disposition", "disposition", "evidence", "conclusion", "proposed_answer", "interaction_ref", "interaction_hash"]) if (Object.hasOwn(entry ?? {}, forbidden)) errors.push(`direction convergence_outline leaks ${forbidden}`);
+    }
+    const directionEntriesValid = entries.every((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const source = byId.get(entry.oi_id ?? entry.id);
+      return Object.keys(entry).every((key) => allowedDirectionEntryFields.has(key))
+        && entry.status === "open"
+        && source
+        && entry.category === source.category
+        && entry.source === source.source
+        && entry.question === source.question;
+    });
+    directionCurrent = sameIds
+      && direction.task_id === (taskId ?? recordTaskId)
+      && direction.outline_version === outlineVersion
+      && directionEntriesValid;
+  }
+  const structure = frameworkMap.size === DECISION_OUTLINE_FRAMEWORK_NODES.length && categoryMap.size === DECISION_OUTLINE_FIXED_CATEGORIES.length && byId.size > 0 && errors.every((error) => !/(framework node|fixed category|OI record|outline reference|OI .* category|OI .* source|OI .* question)/i.test(error));
+  const components = {
+    structure: structure ? "passed" : "missing",
+    direction_snapshot: directionCurrent ? "passed" : "missing",
+    no_open_items: openCount === 0 && byId.size > 0 ? "passed" : "missing",
+    terminal_fields: errors.every((error) => !/confirmed|deferred|not_applicable|status is invalid|impact_dimensions/i.test(error)) ? "passed" : "missing",
+    interaction_proof: coreProofCount === terminal.filter((record) => (record.impact_dimensions ?? []).some((item) => ["goal", "scope", "acceptance"].includes(item))).length ? "passed" : "missing",
+  };
+  const ok = Object.values(components).every((status) => status === "passed") && errors.length === 0;
+  return Object.freeze({
+    ok,
+    errors: Object.freeze([...new Set(errors)]),
+    facts: Object.freeze({ outline_closed: ok ? "passed" : "missing" }),
+    components: Object.freeze(components),
+    outline_version: outlineVersion,
+    task_id: recordTaskId,
+    oi_ids: Object.freeze([...byId.keys()]),
+    open_items: Object.freeze([...byId.values()].filter((record) => record.status === "open").map((record) => record.oi_id)),
+  });
+}
+
 function convergenceDimension(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (/^(?:目标|goal|target)$/.test(normalized)) return "goal";
@@ -2777,6 +3247,10 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   originalRequirement = "",
   requirementMessages = [],
   requirementCoverageOutputs = [],
+  taskId = null,
+  directionReview = null,
+  interactionAggregate = null,
+  requireOutline = false,
 } = {}) {
   const errors = [];
   const text = String(decisionLogMarkdown ?? "");
@@ -2788,6 +3262,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const riskBody = meaningfulSectionBody(text, /^(?:开放问题|风险|延期|未决|风险与延期交接|open questions|risks|deferred)$/i);
   const coreRequirementBody = meaningfulSectionBody(text, /^(?:核心需求|core requirement)$/i);
   const structuredConvergence = structuredConvergenceFacts(text);
+  const outline = analyzeDecisionOutline(text, { taskId, directionReview, interactionAggregate });
 
   const requirementCoverage = hasSection(/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/im)
     || /(?:R-001|原始需求|requirement).*(?:D-001|决定|decision)/i.test(text);
@@ -2898,8 +3373,8 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
     && requiredDimensionsPresent;
 
   return Object.freeze({
-    ok: errors.length === 0,
-    errors: Object.freeze(errors),
+    ok: errors.length === 0 && (!requireOutline || outline.ok),
+    errors: Object.freeze([...errors, ...(requireOutline ? outline.errors : [])]),
     facts: Object.freeze({
       requirement_coverage: completeRequirementCoverage ? "passed" : "missing",
       goal_achievement: goalAchievement ? "passed" : "missing",
@@ -2907,7 +3382,9 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
       acceptance_clarity: acceptanceClarity ? "passed" : "missing",
       solution_convergence: solutionConvergence ? "passed" : "missing",
       plain_language_card: plainLanguageCard ? "passed" : "missing",
+      outline_closed: outline.facts.outline_closed,
     }),
+    outline,
   });
 }
 
@@ -3635,10 +4112,24 @@ function inlinePaths(value) {
   return [...new Set([...String(value ?? "").matchAll(/`([^`\n]+)`/g)].map((match) => match[1]))];
 }
 
-function phaseChangePaths(filesBody) {
+function phasePaths(filesBody, includeReadOnlyConsumer = false) {
+  const pattern = includeReadOnlyConsumer
+    ? /\*\*(?:NEW|MODIFY|READ-ONLY CONSUMER)\*\*/i
+    : /\*\*(?:NEW|MODIFY)\*\*/i;
   return new Set(String(filesBody ?? "").split(/\r?\n/)
-    .filter((line) => /\*\*(?:NEW|MODIFY)\*\*/i.test(line))
+    .filter((line) => pattern.test(line))
     .flatMap((line) => inlinePaths(line)));
+}
+
+function phaseChangePaths(filesBody) {
+  // READ-ONLY CONSUMER is an owned phase input for task boundary validation,
+  // but it must not be promoted to a write boundary or global File Boundary
+  // requirement.
+  return phasePaths(filesBody, true);
+}
+
+function phaseWritePaths(filesBody) {
+  return phasePaths(filesBody, false);
 }
 
 function globalChangePaths(fileBoundaryBody) {
@@ -5158,7 +5649,11 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
         ? packet.requirement_coverage_outputs
         : [],
     });
-    for (const [dimension, value] of Object.entries(convergence.facts)) {
+    // `outline_closed` is owned by the make-decision completion subject. The
+    // historical stage-end analyzer contract retains the six pre-existing
+    // convergence dimensions and must not turn the new close subject into a
+    // second analyzer gate.
+    for (const [dimension, value] of Object.entries(convergence.facts).filter(([dimension]) => dimension !== "outline_closed")) {
       if (value !== "passed") {
         findings.push(stageAnalyzeFinding({
           type: "convergence_gap",
@@ -5456,6 +5951,16 @@ export function validatePlanTaskContract({
     if (task.fields.ID && task.fields.ID !== task.heading_id) errors.push(`task heading/ID mismatch: ${task.heading_id} != ${task.fields.ID}`);
     if (task.fields.gate_cmd && !hasExecutableCommand(task.fields.gate_cmd)) errors.push(`${task.heading_id} gate_cmd is not an executable command`);
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
+    if (tasksVersion === PLAN_TASK_V4 && /\bFR-TEST-001\b/.test(spec)) {
+      const profileDeclaration = `${task.fields["test tier / test method"] ?? ""} ${task.fields["runtime profile"] ?? ""}`;
+      const runtimeProfile = profileDeclaration.match(/\bruntime\s+profile\s*[=:：]\s*(inner|medium|large)\b/i)?.[1]?.toLowerCase();
+      if (!runtimeProfile) errors.push(`${task.heading_id} runtime profile must declare inner, medium, or large`);
+      else if (!/\b(?:ceiling|上限)\s*[=:：]\s*\d+\s*(?:ms|s|秒)\b/i.test(profileDeclaration)) errors.push(`${task.heading_id} runtime profile must declare a duration ceiling`);
+      const permissions = String(task.fields["runtime permissions"] ?? "");
+      for (const capability of ["network", "db", "filesystem", "subprocess", "environment"]) {
+        if (!new RegExp(`\\b${capability}\\s*=` , "i").test(permissions)) errors.push(`${task.heading_id} runtime permissions missing ${capability}`);
+      }
+    }
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
     const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
     const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)
@@ -5511,7 +6016,7 @@ export function validatePlanTaskContract({
         if (!allowed.has(file)) errors.push(`${task.id} file/boundary is outside ${task.phase} NEW/MODIFY: ${file}`);
       }
     }
-    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseChangePaths(row.fields.Files)]));
+    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseWritePaths(row.fields.Files)]));
     const globalUnion = globalChangePaths(findPlanSection("File Boundary")?.body);
     for (const file of phaseUnion) {
       if (!globalUnion.has(file)) errors.push(`global File Boundary is missing Phase NEW/MODIFY file: ${file}`);

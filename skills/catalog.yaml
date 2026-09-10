@@ -1,160 +1,306 @@
 schema_version: 2
-last_reviewed_at: "2026-07-14"
+last_reviewed_at: '2026-07-14'
 projects:
-  workflowhub: &workflowhub { github_url: "https://github.com/Hugh4424/workflowhub", commit: "local", commit_url: "https://github.com/Hugh4424/workflowhub", license: "project license", reviewed_at: "2026-07-14", review_outcome: accepted }
-  agenthub: &agenthub { github_url: "https://github.com/Hugh4424/AgentHub", commit: "258f5a2548fa8cc15325c6aa18dd107c1fc497b9", commit_url: "https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  superpowers: &superpowers { github_url: "https://github.com/obra/superpowers", commit: "d884ae04edebef577e82ff7c4e143debd0bbec99", commit_url: "https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  matt-skills: &matt { github_url: "https://github.com/mattpocock/skills", commit: "66898f60e8c744e269f8ce06c2b2b99ce7660d5f", commit_url: "https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  gstack: &gstack { github_url: "https://github.com/garrytan/gstack", commit: "7c9df1c568a9ea745508f679a329332b2c338063", commit_url: "https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  debate: &debate { github_url: "https://github.com/Hugh4424/debate", commit: "af121a1e24ae3af48f5e132d3de1342d16eccf31", commit_url: "https://github.com/Hugh4424/debate/commit/af121a1e24ae3af48f5e132d3de1342d16eccf31", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  anysearch: &anysearch { github_url: "https://github.com/anysearch-ai/anysearch-skill", commit: "db3d76e5597aec7261257be5322dd211c9d9bb87", commit_url: "https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87", license: "Apache-2.0", reviewed_at: "2026-07-14", review_outcome: accepted }
-  spec-kit: &speckit { github_url: "https://github.com/github/spec-kit", commit: "b7e67f55bf7a937aaa57dbe0a8198774e285de3a", commit_url: "https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-  deepseek-harness: &deepseek { github_url: "https://github.com/deepseek-ai/deepseek-harness", commit: "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", commit_url: "https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
-
+  workflowhub:
+    github_url: https://github.com/Hugh4424/workflowhub
+    commit: local
+    commit_url: https://github.com/Hugh4424/workflowhub
+    license: project license
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  agenthub:
+    github_url: https://github.com/Hugh4424/AgentHub
+    commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+    commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  superpowers:
+    github_url: https://github.com/obra/superpowers
+    commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+    commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  matt-skills:
+    github_url: https://github.com/mattpocock/skills
+    commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+    commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  gstack:
+    github_url: https://github.com/garrytan/gstack
+    commit: 7c9df1c568a9ea745508f679a329332b2c338063
+    commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  debate:
+    github_url: https://github.com/Hugh4424/debate
+    commit: af121a1e24ae3af48f5e132d3de1342d16eccf31
+    commit_url: https://github.com/Hugh4424/debate/commit/af121a1e24ae3af48f5e132d3de1342d16eccf31
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  anysearch:
+    github_url: https://github.com/anysearch-ai/anysearch-skill
+    commit: db3d76e5597aec7261257be5322dd211c9d9bb87
+    commit_url: https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87
+    license: Apache-2.0
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  spec-kit:
+    github_url: https://github.com/github/spec-kit
+    commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+    commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
+  deepseek-harness:
+    github_url: https://github.com/deepseek-ai/deepseek-harness
+    commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+    commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+    license: MIT
+    reviewed_at: '2026-07-14'
+    review_outcome: accepted
 skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: d5b88f1f5ac8638a201f4010ca6fa3c45c5785469a8ebb12494749e256f58370
     m16_contract: consumer-scan-proof.v1
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 每个 authoring stage 结束时产出轻量判断层复盘
     design_idea: 用当前会话记忆、lessons 与本 stage outcome 生成可追溯判断，不制造质量分数或推进门禁
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
+      - verify-code
     upstream: []
     local_changes: workflowhub 原生技能；由各 authoring stage 显式挂载；仅写当前 task 复盘与仓外 lessons，不建立第二控制面
-    dependency_closure: [skills/stage-reflection]
+    dependency_closure:
+      - skills/stage-reflection
     update_policy: 随 stage-reflection schema、validator 与五阶段挂载合同一并审查
+  - name: stage-handoff
+    path: skills/stage-handoff/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 5b0252d45de7389499a409efa584903796c66515a770b5cdc3d5959773b9f43f
+    last_reviewed_at: "2026-09-10"
+    status: native
+    metrics_enabled: false
+    purpose: 四个作者阶段 reflection 终态后的当前交接视图
+    design_idea: 复用 stage-end hook，以原子覆盖固定 handoff 路径并保留 stale/unavailable 边界
+    used_by_stages: [make-decision, build-spec, build-plan, build-code]
+    upstream: []
+    local_changes: workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面
+    dependency_closure: [skills/stage-handoff]
+    update_policy: 随 stage-handoff renderer、TaskHandle 原子写入和四阶段挂载合同一并审查
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 266d24d43ecc01b8a0aef9502ac79bb8e2b0fb3580b77361576f5bb23fea0bbf
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
     standalone: true
     used_by_stages: []
-    upstream: [{ <<: *anysearch, path: "SKILL.md", skill_url: "https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/anysearch-ai/anysearch-skill
+        commit: db3d76e5597aec7261257be5322dd211c9d9bb87
+        commit_url: https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87
+        license: Apache-2.0
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: SKILL.md
+        skill_url: https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/SKILL.md
     local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装
-    dependency_closure: [skills/anysearch]
+    dependency_closure:
+      - skills/anysearch
     update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 673a3eeaf00aa3f418d5311941e624e610305bea47069b591fc9da6fb0619c53
+    local_bundle_hash: 681d69665c859d23ca63b3ca65b3b078b3eebec57fa5cb5c6c13075c9b065969
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
     purpose: 生成下游唯一权威需求记录
     design_idea: 将已收敛输入固化为结构化 decision log
-    used_by_stages: [make-decision]
+    used_by_stages:
+      - make-decision
     upstream: []
     local_changes: workflowhub 原生实现；interaction aggregate 的唯一当前 consumer 是 make-decision detail-review/quality-fact contract，owner 是 make-decision，测试是 tests/stage-interaction-contract.test.mjs；consumer 被移除或替换且无其他引用时可删除该事实，不新增独立 runtime
-    dependency_closure: [skills/decision-log]
+    dependency_closure:
+      - skills/decision-log
     update_policy: 随 stage 合同变更审查
   - name: deep-research
     path: skills/deep-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: dffd2fb2b64f945b7915cdc2344c4dd0c1f9e8fbbbe934b4229c9eb37d90b3c5
+    local_bundle_hash: 644800f142afbcf923bbbc76abe9bc679630dbafbea7a245cb66099851b08460
     last_reviewed_at: "2026-09-06"
     status: native
     metrics_enabled: true
     purpose: 为 make-decision 提供可复核的深度调研输入
     design_idea: R0-R5 有界调研、原文证据、三角测量、content-addressed 报告与独立复核
-    used_by_stages: [make-decision]
+    used_by_stages:
+      - make-decision
     upstream: []
     local_changes: workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；无工具时保留不合格事实，不新增 gate
-    dependency_closure: [skills/deep-research]
+    dependency_closure:
+      - skills/deep-research
     update_policy: 随 make-decision 调研契约、research-report.v1 与工具路由变更审查
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: d57ce5c448669f1ad595c9b228fc2870d099f6765458f45256ce73b44bf3d67a
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 用领域模型和现有文档压力测试方案
     design_idea: 边追问边沉淀 CONTEXT 和 ADR
-    used_by_stages: [make-decision]
+    used_by_stages:
+      - make-decision
     upstream:
-      - { <<: *matt, path: "skills/engineering/grill-with-docs/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md" }
-      - { <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }
-      - { <<: *matt, path: "skills/productivity/grilling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md" }
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/grill-with-docs/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/domain-modeling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/productivity/grilling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md
     local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
-    dependency_closure: [skills/grill-with-docs]
+    dependency_closure:
+      - skills/grill-with-docs
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
   - name: intake-decision-review
     path: skills/intake-decision-review/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 4f211fb462932454bac880431dd7dd2a381fcbf8f93b0e85ebb55b03c6ee5ef5
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 对 intake direction 冻结材料执行四角度纯盲审
     design_idea: wh-review 唯一 provider owner；lens 不提问、不持有 transport
-    used_by_stages: [make-decision]
+    used_by_stages:
+      - make-decision
     upstream: []
     local_changes: 裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径
-    dependency_closure: [skills/intake-decision-review]
+    dependency_closure:
+      - skills/intake-decision-review
     update_policy: 随 wh-review 和 make-decision 合同变更审查
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: c36970ae6d0639d5d0cc33fb1858c63534fb40bb2bcb548b65de0b3fd20dc413
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 审查方案是否遵守四阶梯最小路径
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
-    used_by_stages: [make-decision, build-spec, build-plan, build-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
     upstream: []
     local_changes: workflowhub 原生 review-only lens；不参与 stage 生成
-    dependency_closure: [skills/simplicity-guard]
+    dependency_closure:
+      - skills/simplicity-guard
     update_policy: 随宪法复用条款变更审查
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: bcc0824b7a876fcd041a9150572eb7dea19a60d1fab895c487263754977f9e7a
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 对话式收敛方向、歧义、风险和范围
     design_idea: 一次一组独立问题，按影响重排，达到阈值即收敛
-    used_by_stages: [make-decision]
+    used_by_stages:
+      - make-decision
     upstream: []
     local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序
-    dependency_closure: [skills/talk-with-zhipeng]
+    dependency_closure:
+      - skills/talk-with-zhipeng
     update_policy: 随 make-decision 交互合同变更审查
+  - name: spec-prd
+    path: skills/spec-prd/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: a84d932e3e3b80119f7797cb89bcc47ad50bbaf91400b08852d2ac7a492effb9
+    last_reviewed_at: '2026-07-14'
+    status: native
+    metrics_enabled: true
+    purpose: build-prd 唯一正式 PRD 内容 owner
+    design_idea: 同一版本先产大纲/任务地图，再经真实核对展开单一 PRD 正文
+    standalone: true
+    used_by_stages: []
+    upstream: []
+    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实
+    dependency_closure:
+      - skills/spec-prd
+    update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 6c4c9896ac28de68b35a0e54f4555690d6c5d28ea141d4ea9d8658ab9cf1a157
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 规划前形成内存研究材料
     design_idea: 冻结输入、内存交接、不新增正式产物
-    used_by_stages: [build-spec, build-plan]
+    used_by_stages:
+      - build-spec
+      - build-plan
     upstream: []
     local_changes: workflowhub 原生实现
-    dependency_closure: [skills/spec-research]
+    dependency_closure:
+      - skills/spec-research
     update_policy: 随内存研究接口变更审查
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
     local_bundle_hash: 71c48bb2fa01f7ba933a4a6266316a75920903cec99ed724a9d63c09f309b08a
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     standalone: true
-    used_by_stages: [build-spec]
-    upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
+    used_by_stages:
+      - build-spec
+    upstream:
+      - github_url: https://github.com/github/spec-kit
+        commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: templates/commands/specify.md
+        skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md
     local_changes: 恢复为可搬运的内容合同和模板；编排仍由 build-spec 负责，不新增第二 runtime
     dependency_closure: []
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
@@ -162,14 +308,23 @@ skills:
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
     local_bundle_hash: 4120df40383e1929e283993fcd9d475e3343849532a5d19b8789120e73e2a188
-    last_reviewed_at: "2026-08-31"
+    last_reviewed_at: '2026-08-31'
     status: adapted
     metrics_enabled: true
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、独立问题成批、依赖问题拆批写回
     standalone: true
-    used_by_stages: [build-spec]
-    upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
+    used_by_stages:
+      - build-spec
+    upstream:
+      - github_url: https://github.com/github/spec-kit
+        commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: templates/commands/clarify.md
+        skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md
     local_changes: 保留可独立搬运的十维歧义扫描合同和批量问题卡；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
@@ -177,16 +332,31 @@ skills:
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
     local_bundle_hash: 7d5a216ce1f7b8f7e0a126a94d752e8fb055841f4f3fc0c51ce95485a03c4287
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages:
+      - build-plan
     upstream:
-      - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
-      - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
+      - github_url: https://github.com/github/spec-kit
+        commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: templates/commands/plan.md
+        skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/writing-plans/SKILL.md
+        skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
     local_changes: 恢复速读卡、技术锚点、reuse-extend-new、阶段交接、RED/GREEN、追溯映射和 F10 约束；不新增运行时状态或宿主交接字段；plan 字节幂等由 ArtifactDir.writeAtomic 和 core/__tests__/artifact-dir.test.mjs 负责，不恢复 retry_contract；若正式 writer 与该测试都移除时一并删除本说明
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
@@ -194,16 +364,31 @@ skills:
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
     local_bundle_hash: a1fdf660c924f10f50246ddd45a314c3a58b23288e0ac1899c8e0deba2a42164
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages:
+      - build-plan
     upstream:
-      - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
-      - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
+      - github_url: https://github.com/github/spec-kit
+        commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: templates/commands/tasks.md
+        skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/writing-plans/SKILL.md
+        skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
     local_changes: 恢复任务卡、阶段 Goal/Files/STOP/Done、RED/GREEN、最终聚合卡和双向追溯；状态仍只是 tasks.md 描述事实，不承载 runtime 状态机
     dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
@@ -211,41 +396,83 @@ skills:
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: debaf18c4794b0fa00472e4cd4d079b2ec17df3d456254b62fc5eed638c6c944
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 前四 stage 收尾唯一语义检查与质量事实契约 owner
     design_idea: report-only packet lens with existing atomic quality publication
-    used_by_stages: [make-decision, build-spec, build-plan, build-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
     upstream: []
     local_changes: workflowhub 原生 report-only validator/lens；spec-analyze 是前四个产物 stage 收尾唯一的 stage-end 语义检查与质量事实契约 owner，verify-code 改用 dsh-code-review；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除
-    dependency_closure: [skills/spec-analyze]
+    dependency_closure:
+      - skills/spec-analyze
     update_policy: 随 review packet schema 变更审查
   - name: dsh-code-review
     path: skills/dsh-code-review/SKILL.md
     local_version: 1.1.0
     local_bundle_hash: 7f19cda6dbf81b472c996781f29ff19c2038517267d1cd10c154d8585f842027
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: verify-code 当前实现的高质量代码审查 lens
     design_idea: correctness、lifecycle、security、consumer fit 和真实测试强度
     standalone: true
-    used_by_stages: [verify-code]
+    used_by_stages:
+      - verify-code
     upstream:
-      - { <<: *deepseek, path: ".agents/skills/dsh-code-review/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review" }
-      - { <<: *deepseek, path: ".agents/skills/dsh-find-simplifications/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-find-simplifications" }
-      - { <<: *deepseek, path: ".agents/skills/dsh-doc-standards/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-doc-standards" }
-      - { <<: *deepseek, path: ".agents/skills/dsh-prose-standard/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-prose-standard" }
-      - { <<: *deepseek, path: ".agents/skills/dsh-trim-cot-leakage/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage" }
+      - github_url: https://github.com/deepseek-ai/deepseek-harness
+        commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .agents/skills/dsh-code-review/SKILL.md
+        skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review
+      - github_url: https://github.com/deepseek-ai/deepseek-harness
+        commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .agents/skills/dsh-find-simplifications/SKILL.md
+        skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-find-simplifications
+      - github_url: https://github.com/deepseek-ai/deepseek-harness
+        commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .agents/skills/dsh-doc-standards/SKILL.md
+        skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-doc-standards
+      - github_url: https://github.com/deepseek-ai/deepseek-harness
+        commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .agents/skills/dsh-prose-standard/SKILL.md
+        skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-prose-standard
+      - github_url: https://github.com/deepseek-ai/deepseek-harness
+        commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .agents/skills/dsh-trim-cot-leakage/SKILL.md
+        skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage
     local_changes: 将代码审查、简化、文档、prose 和过程叙述检查合并进一次 dsh-code-review 调用；删除宿主绑定，不新增 dispatch/provider/receipt/control-plane；不检查材料、AC、receipt 或证据完整性
-    dependency_closure: [skills/dsh-code-review]
+    dependency_closure:
+      - skills/dsh-code-review
     update_policy: 上游代码审查规则变更时人工复核，不恢复材料门禁
   - name: stage-step-receipts
     path: skills/stage-step-receipts/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 22512da6779c471471905f54a7ae4479d43da596a61cecdec6cc757518bb37db
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: absorbed
     metrics_enabled: false
     standalone: true
@@ -260,7 +487,7 @@ skills:
     path: skills/audit-summary-carrier/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: c4e736fb8b55e3a0996caeead7368a77b2cbd31becc98af5eb4c70c47b513621
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: absorbed
     metrics_enabled: false
     standalone: true
@@ -275,7 +502,7 @@ skills:
     path: skills/requirement-lineage/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 92655a6403eb6e444ada2c785b685c2c7cb5aec3abf8b2106469d631df9425f2
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
     standalone: true
@@ -284,12 +511,13 @@ skills:
     used_by_stages: []
     upstream: []
     local_changes: make-decision audit P0 原生合同；由 canonical requirements artifacts 消费
-    dependency_closure: [skills/requirement-lineage]
+    dependency_closure:
+      - skills/requirement-lineage
     update_policy: 随 requirement ledger/coverage schema 变更审查
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 0697bc49b3e80745a65612eba89b06032b8965065df3c3c93599a0deab15761f
+    local_bundle_hash: b42ee2e6c7c775b2008e9bd3ea54995df612b73a098e43c6447aea22fc83a1ac
     last_reviewed_at: "2026-07-14"
     status: adapted
     metrics_enabled: false
@@ -305,7 +533,7 @@ skills:
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.3.0
     local_bundle_hash: e8ae578a075f6b8b483977838437cf8e5725aed38c536d65d9bb74662faad13a
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: false
     standalone: true
@@ -314,27 +542,34 @@ skills:
     used_by_stages: []
     upstream: []
     local_changes: 只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时
-    dependency_closure: [skills/workflowhub-multica-sync]
+    dependency_closure:
+      - skills/workflowhub-multica-sync
     update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 9910ed16ddc15a308823ea37d85e6ee2505212a12804ceeabb581b454e9c84fb
+    local_bundle_hash: 54b7b955aec0ccf227b7e673e68687c4705407c94146ce0339e793f2c433d159
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
     purpose: workflowhub 唯一异源审查调度层
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
+      - verify-code
     upstream: []
     local_changes: 只冻结材料并调用一次新的 3rd-review 公共 run；不发起 continuation/session 恢复，删除 scope_revision、本地协调锁、provider polling 和第二 timeout，保留路径安全与 broker 返回的原始 provenance
-    dependency_closure: [skills/wh-review]
+    dependency_closure:
+      - skills/wh-review
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: ae7448ebc599bc460c38f1615d459cf14eda6801fbaf015d3da432280e5647d4
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
@@ -343,88 +578,132 @@ skills:
     used_by_stages: []
     upstream: []
     local_changes: 薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge
-    dependency_closure: [skills/mini-task]
+    dependency_closure:
+      - skills/mini-task
     update_policy: 随 mini-task 四材料、审查和 task-close 合同人工比较
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: b571c3deb4109ef5b6a6e8b837b62200a5acb4592c0b946c0625e25175bb90bc
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 产品方向审查 lens
     design_idea: premise、scope、leverage、alternatives、delivery risk
-    used_by_stages: [make-decision, build-spec]
-    upstream: [{ <<: *gstack, path: "plan-ceo-review", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review" }]
+    used_by_stages:
+      - make-decision
+      - build-spec
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: plan-ceo-review
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review
     local_changes: 裁为 report-only lens；去 runtime/gbrain/telemetry
-    dependency_closure: [skills/plan-ceo-review]
+    dependency_closure:
+      - skills/plan-ceo-review
     update_policy: 人工吸收审查问题，不引入 gstack runtime
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 7be5ec4257737961a394c9351bdf7982474b5cd746cd00648f3ded396e21822a
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
     design_idea: 只在 UI scope 时审查设计风险
-    used_by_stages: [build-spec]
-    upstream: [{ <<: *gstack, path: "plan-design-review", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review" }]
+    used_by_stages:
+      - build-spec
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: plan-design-review
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review
     local_changes: 裁为 report-only lens；去浏览器 daemon 和宿主命令
-    dependency_closure: [skills/plan-design-review]
+    dependency_closure:
+      - skills/plan-design-review
     update_policy: 人工吸收 design checklist，不引入 gstack runtime
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: c6f2106125692adf36a17ce6845b5615b6d060728efe9dd68fb6f2d2147319e4
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
     design_idea: report-only engineering plan review
-    used_by_stages: [build-plan]
-    upstream: [{ <<: *gstack, path: "plan-eng-review", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review" }]
+    used_by_stages:
+      - build-plan
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: plan-eng-review
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review
     local_changes: 裁为 report-only lens；去 gstack 编排依赖
-    dependency_closure: [skills/plan-eng-review]
+    dependency_closure:
+      - skills/plan-eng-review
     update_policy: 人工吸收工程审查条款，不引入 gstack runtime
   - name: review
     path: skills/review/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: e87012fd585550d14f5078e8d97b3ccbab7889136e8ee95f450721a20d03155d
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
-    # Includes the existing wh-review lens dispatch in build-code and
-    # verify-code; this is an effective-consumer projection, not a new stage
-    # dependency.
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
-    upstream: [{ <<: *gstack, path: "review", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review" }]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
+      - verify-code
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: review
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
-    dependency_closure: [skills/review]
+    dependency_closure:
+      - skills/review
     update_policy: 人工比较 review checklist，只保留 lens 规则
   - name: resolving-merge-conflicts
     path: skills/resolving-merge-conflicts/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 5aa9176b84f89a3cf51520adfa735e679594ebf626f4f5d7af2b6c6fe4a5afe7
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
     used_by_stages: []
-    consumer: "core/task-close.mjs:1411 (merge conflict error path)"
+    consumer: core/task-close.mjs:1411 (merge conflict error path)
     upstream: []
     local_changes: WorkflowHub close 冲突恢复约束；唯一消费者=core/task-close.mjs:1411 合并冲突报错路径
-    dependency_closure: [skills/resolving-merge-conflicts]
+    dependency_closure:
+      - skills/resolving-merge-conflicts
     update_policy: 随 verify-code close 合同变更审查
   - name: test-strategy
     path: skills/test-strategy/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 46dc51676f159e20c95991868dd5365c7063c09e94bbf50d6825e5dabeaee629
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: absorbed
     metrics_enabled: false
     purpose: 从 AC、UI impact 和风险生成测试路由
@@ -432,8 +711,22 @@ skills:
     standalone: true
     used_by_stages: []
     upstream:
-      - { <<: *matt, path: "skills/engineering/tdd/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md" }
-      - { <<: *superpowers, path: "skills/test-driven-development/testing-anti-patterns.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md" }
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/tdd/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/test-driven-development/testing-anti-patterns.md
+        skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md
     local_changes: 已吸收到 build-code/verify-code 当前测试与 fresh-evidence 合同；保留 provenance，不保留独立 runtime skill
     dependency_closure: []
     update_policy: 人工比较路由和风险规则
@@ -441,14 +734,22 @@ skills:
     path: skills/debate/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 9e6d5290a7ebe2d2b164dcc6323d0e21167c18fa26a265be375caf63b70b0b0d
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
     purpose: 对方向级分歧执行可选对抗审查
     design_idea: 四队独立上下文对等陈述，judge 不参与倡议，最多两轮
     standalone: true
     used_by_stages: []
-    upstream: [{ <<: *debate, path: "SKILL.md", skill_url: "https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/debate
+        commit: af121a1e24ae3af48f5e132d3de1342d16eccf31
+        commit_url: https://github.com/Hugh4424/debate/commit/af121a1e24ae3af48f5e132d3de1342d16eccf31
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: SKILL.md
+        skill_url: https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md
     local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；local_bundle_hash 使用 resolver canonical file-closure hash，inventory 最后一列记录 manifest 文件自身 sha256
     dependency_closure: []
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
@@ -456,7 +757,7 @@ skills:
     path: skills/diagnosing-bugs/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 7f50397d98926dd5345f337f7e8cc2407cca061733fdc5821f32ae46c2e0db68
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: false
     purpose: 用可重复证据定位根因后单点修复
@@ -464,9 +765,30 @@ skills:
     standalone: true
     used_by_stages: []
     upstream:
-      - { <<: *matt, path: "skills/engineering/diagnosing-bugs", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs" }
-      - { <<: *superpowers, path: "skills/systematic-debugging", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging" }
-      - { <<: *gstack, path: "investigate", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate" }
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/diagnosing-bugs
+        skill_url: https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/systematic-debugging
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: investigate
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate
     local_changes: 保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描
     dependency_closure: []
     update_policy: 三方更新时比较诊断方法；禁止引入自动补丁循环
@@ -474,29 +796,48 @@ skills:
     path: skills/review-response/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 6e989caada28c4ebc20617474586efa62718a0c78f6e39e9a1c1cdc376aeeb05
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: absorbed
     metrics_enabled: false
     purpose: 严格消费 revise_required finding
     design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
     standalone: true
     used_by_stages: []
-    upstream: [{ <<: *superpowers, path: "skills/receiving-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/receiving-code-review
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review
     local_changes: 最小 disposition fact 已合并到 wh-review；删除独立 flow/resolution validator
-    dependency_closure: [skills/wh-review]
+    dependency_closure:
+      - skills/wh-review
     update_policy: 人工比较 finding 消费纪律，不引入宿主专属命令
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: d2ffa5d6f6db9a4d2a16052b8685cb1fdc6a3db32d38b9abab35a2fc1c5c65bb
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 为 build-plan 的每个 Phase/最终测试预判层级，并在 build-code 按真实改动重路由
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
     standalone: true
-    used_by_stages: [build-plan, build-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
+    used_by_stages:
+      - build-plan
+      - build-code
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/test-routing-advisor/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md
     local_changes: 保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判
     dependency_closure: []
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
@@ -504,14 +845,23 @@ skills:
     path: skills/testing-system-blueprint/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: c59ba3c2def665e78aec7fe5fe70effa1b6531877dd83b3a39c192e3308aec2f
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: build-plan 的 advisory 测试设计输入，不承担执行器或交付 gate
     design_idea: blueprint 先于执行器，覆盖行为、状态、错误、seam 和交付限制
     standalone: true
-    used_by_stages: [build-plan]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md" }]
+    used_by_stages:
+      - build-plan
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/testing-system-blueprint/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md
     local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面
     dependency_closure: []
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
@@ -519,14 +869,23 @@ skills:
     path: skills/backend-testing/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: aa1e90e5178bfe8db9aad6fecebc6e05b2add7406c0c7e08de434b07acc2dffc
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: build-code 对真实后端改动执行风险导向测试策略并保存报告
     design_idea: 真实接口、数据、错误、权限和并发边界优先
     standalone: true
-    used_by_stages: [build-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/backend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing/SKILL.md" }]
+    used_by_stages:
+      - build-code
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/backend-testing/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing/SKILL.md
     local_changes: 只保留测试方法和证据字段；失败是质量事实，不是推进 gate
     dependency_closure: []
     update_policy: 随后端测试和证据 schema 人工比较
@@ -534,14 +893,23 @@ skills:
     path: skills/frontend-testing/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: be95bfd74d7891c9ca44bd507d7754a81f9dc3dd5cfce55af0d61ee3a8d42e89
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: build-code 对真实前端改动执行状态、交互和 UI 测试策略
     design_idea: 真实用户状态覆盖，适用时接 isolated browser QA
     standalone: true
-    used_by_stages: [build-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/frontend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md" }]
+    used_by_stages:
+      - build-code
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/frontend-testing/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md
     local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用
     dependency_closure: []
     update_policy: 随前端测试和 browser 证据合同人工比较
@@ -549,14 +917,23 @@ skills:
     path: skills/fullstack-slice-testing/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 5a9ac25c2a9173bf72c907d0f80917ee1f6354ac4febe6b09e9e0ccdd0123d46
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: build-code 对真实跨边界改动执行最小真实链路策略
     design_idea: 从用户输入贯通服务、数据、返回和呈现的 slice
     standalone: true
-    used_by_stages: [build-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md" }]
+    used_by_stages:
+      - build-code
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md
     local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate
     dependency_closure: []
     update_policy: 随跨端 seam 和全链路证据合同人工比较
@@ -564,95 +941,121 @@ skills:
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
     used_by_stages: []
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    upstream:
+      - kind: user-provided-local-source
+        path: isolated-browser-qa
+        license: user-owned
+        snapshot_sha256: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
+        authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
     local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
-    dependency_closure: [skills/isolated-browser-qa]
+    dependency_closure:
+      - skills/isolated-browser-qa
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
-
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 99a3ef9e7f5ff7178266a4d4865a01e8ec47d38424da8c6488c5ee72d1df302b
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
     design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
     standalone: true
-    used_by_stages: [build-spec]
+    used_by_stages:
+      - build-spec
     upstream: []
     local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
-    dependency_closure: [skills/ui-project-init]
+    dependency_closure:
+      - skills/ui-project-init
     update_policy: 随 UI Contract 与新旧项目初始化事实变更人工审查
   - name: design-source-readiness
     path: skills/design-source-readiness/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 0817e2ab99557a5b7d9af47f21b8decf44f4d7f3991545fcfccb1b89d570f14e
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
-    used_by_stages: [build-spec]
+    used_by_stages:
+      - build-spec
     upstream: []
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
-    dependency_closure: [skills/design-source-readiness]
+    dependency_closure:
+      - skills/design-source-readiness
     update_policy: 随 Design.md Read Map 字段和 plan-design-review consumer 人工审查
   - name: frontend-prototype-render
     path: skills/frontend-prototype-render/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 6e8c4ecb64d9ceb51099469c212b80539e1c4d65c9acd8b465b5a4e0727a934b
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
     purpose: 为 build-spec UI 分支生成真实组件预览和截图证据
     design_idea: 真实组件输入、可运行本地渲染和用户授权降级
     standalone: true
-    used_by_stages: [build-spec]
+    used_by_stages:
+      - build-spec
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 build-spec，唯一 consumer 是 build-spec UI path；test=tests/contract/frontend-prototype-render-skill.test.mjs；不改产品源码；delete-condition build-spec UI consumer 迁移后
-    dependency_closure: [skills/frontend-prototype-render]
+    dependency_closure:
+      - skills/frontend-prototype-render
     update_policy: 随真实组件渲染命令、截图证据和 build-spec consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 2049ebfb27713db624d7bc87b6e654127191be8ee67ca5b4a61a83b8893bd479
-    last_reviewed_at: "2026-07-14"
+    last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
     purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图
     design_idea: reuse/modify/extend/add/remove 动作与真实 consumer 绑定
     standalone: true
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
     upstream:
       - github_url: https://github.com/vercel-labs/agent-skills
         commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
         commit_url: https://github.com/vercel-labs/agent-skills/commit/dd089a8c752c966dee8bf0f27cb625ba193ffd9e
         license: MIT
-        reviewed_at: "2026-08-22"
+        reviewed_at: '2026-08-22'
         review_outcome: accepted
         path: skills/react-best-practices/AGENTS.md
         skill_url: https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md
     local_changes: 公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后
-    dependency_closure: [skills/frontend-component-quality]
+    dependency_closure:
+      - skills/frontend-component-quality
     update_policy: 只比较固定 Vercel commit 的上游变化，人工升级并保留 LICENSE/UPSTREAM
-
 capability_decisions:
   - name: scope-triage
     status: absorbed
     purpose: 将需求拆成 scope verdict
     design_idea: in-scope/out-of-scope 与风险词分档内联到现有 stage
-    used_by_stages: [make-decision, build-spec]
-    local_path: "workflows/make-decision/SKILL.md; workflows/build-spec/SKILL.md"
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/scope-triage/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/scope-triage/SKILL.md" }]
+    used_by_stages:
+      - make-decision
+      - build-spec
+    local_path: workflows/make-decision/SKILL.md; workflows/build-spec/SKILL.md
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/scope-triage/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/scope-triage/SKILL.md
     local_changes: 语义已由 make-decision S0.5 和 build-spec 高危词浮现承接，不保留重复 runtime skill
     dependency_closure: []
     update_policy: 只比较分档规则，不恢复独立 skill
@@ -660,11 +1063,26 @@ capability_decisions:
     status: absorbed
     purpose: RED/GREEN 和测试反模式
     design_idea: 先见红、最小绿、fresh evidence
-    used_by_stages: [build-code]
-    local_path: "workflows/build-code/SKILL.md; core/capture.mjs; skills/test-strategy/SKILL.md"
+    used_by_stages:
+      - build-code
+    local_path: workflows/build-code/SKILL.md; core/capture.mjs; skills/test-strategy/SKILL.md
     upstream:
-      - { <<: *superpowers, path: "skills/test-driven-development", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development" }
-      - { <<: *matt, path: "skills/tdd", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/tdd" }
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/test-driven-development
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/tdd
+        skill_url: https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/tdd
     local_changes: 内联核心门禁，不复制第二套 TDD 编排器
     dependency_closure: []
     update_policy: 只吸收测试设计和 anti-pattern，不增加重复 TDD 回合
@@ -672,9 +1090,18 @@ capability_decisions:
     status: absorbed
     purpose: phase 独立执行
     design_idea: 独立上下文和结构化 PHASE_RESULT
-    used_by_stages: [build-code]
+    used_by_stages:
+      - build-code
     local_path: workflows/build-code/SKILL.md
-    upstream: [{ <<: *superpowers, path: "skills/subagent-driven-development", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/subagent-driven-development" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/subagent-driven-development
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/subagent-driven-development
     local_changes: 使用宿主 capability；不复制编排框架
     dependency_closure: []
     update_policy: watch；仅比较独立上下文纪律
@@ -682,9 +1109,18 @@ capability_decisions:
     status: absorbed
     purpose: 请求独立 code review
     design_idea: 审查必须异源、有 receipt；普通审查面只记录一次 advice，phase 按真实修复决定是否聚焦复审
-    used_by_stages: [build-code]
+    used_by_stages:
+      - build-code
     local_path: skills/wh-review
-    upstream: [{ <<: *superpowers, path: "skills/requesting-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/requesting-code-review" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/requesting-code-review
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/requesting-code-review
     local_changes: 由 wh-review V4 完整承接
     dependency_closure: []
     update_policy: rejected as runtime skill；禁止第二 review flow
@@ -692,9 +1128,18 @@ capability_decisions:
     status: absorbed
     purpose: 完成前 fresh verification
     design_idea: 声明完成必须绑定新鲜证据
-    used_by_stages: [verify-code]
+    used_by_stages:
+      - verify-code
     local_path: workflows/verify-code/SKILL.md
-    upstream: [{ <<: *superpowers, path: "skills/verification-before-completion", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/verification-before-completion" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/verification-before-completion
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/verification-before-completion
     local_changes: 由 freshness、AC coverage、L2/L3 和 close 合同承接
     dependency_closure: []
     update_policy: 只比较证据纪律
@@ -702,9 +1147,18 @@ capability_decisions:
     status: absorbed
     purpose: 开发分支收尾
     design_idea: 验证、人工 merge、worktree 清理
-    used_by_stages: [verify-code]
+    used_by_stages:
+      - verify-code
     local_path: workflows/verify-code/SKILL.md
-    upstream: [{ <<: *superpowers, path: "skills/finishing-a-development-branch", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/finishing-a-development-branch" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/finishing-a-development-branch
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/finishing-a-development-branch
     local_changes: 使用 workflowhub 生命周期，不复制上游交互流程
     dependency_closure: []
     update_policy: watch；避免生命周期冲突
@@ -712,9 +1166,18 @@ capability_decisions:
     status: absorbed
     purpose: 实现计划和任务粒度
     design_idea: right-sized tasks、明确 files/verify/stop
-    used_by_stages: [build-plan]
-    local_path: "skills/spec-plan; skills/spec-tasks"
-    upstream: [{ <<: *superpowers, path: "skills/writing-plans", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans" }]
+    used_by_stages:
+      - build-plan
+    local_path: skills/spec-plan; skills/spec-tasks
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/writing-plans
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans
     local_changes: 只吸收字段和质量规则，保持唯一计划格式
     dependency_closure: []
     update_policy: 比较 planning 规则；拒绝第二模板
@@ -722,9 +1185,22 @@ capability_decisions:
     status: absorbed
     purpose: 阶段 human brief
     design_idea: 用短摘要交接阶段结果
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
+      - verify-code
     local_path: workflows
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/stages", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/stages" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/workflows/vibecoding/stages
+        skill_url: https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/stages
     local_changes: 内联到各 stage，不保留 host skill
     dependency_closure: []
     update_policy: 随 stage 输出合同审查
@@ -732,9 +1208,22 @@ capability_decisions:
     status: absorbed
     purpose: 记录流程摩擦
     design_idea: 统一 [FRICTION] 事件进入 task execution record
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
+      - build-code
+      - verify-code
     local_path: workflows
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md
     local_changes: 去 BrainInbox/host journal 绑定；内联事件合同
     dependency_closure: []
     update_policy: 不恢复旧 skill；随 execution record schema 审查
@@ -743,8 +1232,16 @@ capability_decisions:
     purpose: 旧 intake 审查编排器
     design_idea: 多角度 intake review
     used_by_stages: []
-    local_path: "skills/intake-decision-review; skills/wh-review"
-    upstream: [{ <<: *agenthub, path: "deleted skill", skill_url: "https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9" }]
+    local_path: skills/intake-decision-review; skills/wh-review
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: deleted skill
+        skill_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
     local_changes: 上游已删除；陈旧引用清除
     dependency_closure: []
     update_policy: 不恢复；现有双组件是唯一承接点
@@ -754,7 +1251,15 @@ capability_decisions:
     design_idea: 按改动类型路由多套测试执行器
     used_by_stages: []
     local_path: skills/test-routing-advisor
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/skills
+        skill_url: https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills
     local_changes: 只保留纯路由 advisor
     dependency_closure: []
     update_policy: rejected；除非 workflowhub 出现真实执行器合同才重评
@@ -764,7 +1269,15 @@ capability_decisions:
     design_idea: 依赖宿主自动发现全局技能
     used_by_stages: []
     local_path: runtime/adapters/local-skill-resolver.mjs
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/contract.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/contract.md" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/workflows/vibecoding/contract.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/contract.md
     local_changes: 由 repo-relative manifest、bundle 和 resolved path payload 取代
     dependency_closure: []
     update_policy: permanently rejected；不得恢复宿主自动发现依赖
@@ -774,7 +1287,15 @@ capability_decisions:
     design_idea: 用宿主全局状态传递实现上下文切换
     used_by_stages: []
     local_path: workflows/build-code/SKILL.md
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/stages/apply.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/stages/apply.md" }]
+    upstream:
+      - github_url: https://github.com/Hugh4424/AgentHub
+        commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: packages/core/agenthub/workflows/vibecoding/stages/apply.md
+        skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/stages/apply.md
     local_changes: 保持 workflowhub 当前 phase 独立上下文和结构化 PHASE_RESULT，不恢复宿主 HOME handoff
     dependency_closure: []
     update_policy: rejected；只有明确跨会话产品合同后才重评
@@ -784,7 +1305,15 @@ capability_decisions:
     design_idea: 会话开始加载技能框架
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *superpowers, path: "skills/using-superpowers", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/using-superpowers" }]
+    upstream:
+      - github_url: https://github.com/obra/superpowers
+        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
+        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/using-superpowers
+        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/using-superpowers
     local_changes: 与 repo-relative 按需加载目标冲突
     dependency_closure: []
     update_policy: permanently rejected
@@ -794,7 +1323,15 @@ capability_decisions:
     design_idea: 完整宿主框架
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *gstack, path: ".", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063" }]
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: .
+        skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063
     local_changes: 仅吸收局部 review/QA 方法
     dependency_closure: []
     update_policy: permanently rejected；不得进入安装闭包
@@ -804,7 +1341,15 @@ capability_decisions:
     design_idea: 从代码和讨论提炼领域模型
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/domain-modeling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md
     local_changes: 部分思路已进入 grill-with-docs；暂无独立触发合同
     dependency_closure: []
     update_policy: 有 stage 触发、消费点和验证合同后再升级
@@ -814,7 +1359,15 @@ capability_decisions:
     design_idea: 用边界和依赖关系指导结构演进
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/engineering/codebase-design/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/codebase-design/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/codebase-design/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/codebase-design/SKILL.md
     local_changes: 未进入运行闭包
     dependency_closure: []
     update_policy: 有明确 stage 合同后再评估
@@ -822,9 +1375,18 @@ capability_decisions:
     status: absorbed
     purpose: 结构化技术研究
     design_idea: 先问题分解，再证据收集和结论
-    used_by_stages: [build-plan]
+    used_by_stages:
+      - build-plan
     local_path: skills/spec-research
-    upstream: [{ <<: *matt, path: "skills/engineering/research/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/research/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/research/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/research/SKILL.md
     local_changes: 吸收 primary-source、逐事实 citation 和推断分离纪律，不替换 workflowhub 原生产物合同
     dependency_closure: []
     update_policy: 人工比较来源纪律，不引入其宿主编排
@@ -832,9 +1394,20 @@ capability_decisions:
     status: absorbed
     purpose: Standards 与 Spec 双轴代码审查
     design_idea: 工程规范合规和需求实现完整性必须分别裁决
-    used_by_stages: [make-decision, build-spec, build-plan]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
     local_path: skills/review/SKILL.md
-    upstream: [{ <<: *matt, path: "skills/engineering/code-review/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/code-review/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/code-review/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/code-review/SKILL.md
     local_changes: 只吸收双轴 lens，保持 wh-review 唯一调度路径
     dependency_closure: []
     update_policy: 人工比较 review 维度，不复制执行编排
@@ -842,9 +1415,18 @@ capability_decisions:
     status: absorbed
     purpose: 显式任务阻塞边与 tracer bullet
     design_idea: 任务依赖不能只靠顺序暗示，纵向验证链必须可追踪
-    used_by_stages: [build-plan]
+    used_by_stages:
+      - build-plan
     local_path: skills/spec-tasks/SKILL.md
-    upstream: [{ <<: *matt, path: "skills/engineering/to-tickets/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/to-tickets/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/to-tickets/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/to-tickets/SKILL.md
     local_changes: 吸收 blocked_by 和 tracer bullet，不引入 issue tracker
     dependency_closure: []
     update_policy: 人工比较任务图规则
@@ -854,7 +1436,15 @@ capability_decisions:
     design_idea: 用可丢弃原型验证关键未知
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/engineering/prototype/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/prototype/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/prototype/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/prototype/SKILL.md
     local_changes: 当前五阶段没有独立触发和消费合同
     dependency_closure: []
     update_policy: 出现真实高不确定触发合同后再评估
@@ -864,7 +1454,15 @@ capability_decisions:
     design_idea: 从计划直接驱动实现循环
     used_by_stages: []
     local_path: workflows/build-code/SKILL.md
-    upstream: [{ <<: *matt, path: "skills/engineering/implement/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/implement/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/implement/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/implement/SKILL.md
     local_changes: 与 build-code 唯一 phase/TDD/review 生命周期重复
     dependency_closure: []
     update_policy: permanently rejected as runtime skill
@@ -874,7 +1472,15 @@ capability_decisions:
     design_idea: 安装宿主配置或未稳定技能集
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/engineering/setup-matt-pocock-skills/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/setup-matt-pocock-skills/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: skills/engineering/setup-matt-pocock-skills/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/setup-matt-pocock-skills/SKILL.md
     local_changes: 不安装上游框架，不迁入 deprecated/in-progress/personal skills
     dependency_closure: []
     update_policy: permanently rejected；只在稳定技能成为明确 stage 候选时单独重评
@@ -882,9 +1488,20 @@ capability_decisions:
     status: absorbed
     purpose: 审查证据可见性分类
     design_idea: 区分 DIFF-VERIFIABLE、CROSS-REPO、EXTERNAL-STATE、CONTENT-SHAPE
-    used_by_stages: [make-decision, build-spec, build-plan]
+    used_by_stages:
+      - make-decision
+      - build-spec
+      - build-plan
     local_path: skills/review/SKILL.md
-    upstream: [{ <<: *gstack, path: "review/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/review/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: review/SKILL.md
+        skill_url: https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/review/SKILL.md
     local_changes: 裁为 sealed-packet lens，不引入 gstack runtime
     dependency_closure: []
     update_policy: 人工比较 evidence taxonomy
@@ -892,9 +1509,18 @@ capability_decisions:
     status: absorbed
     purpose: 异步和跨边界计划的最小状态数据流
     design_idea: 状态所有者、转换、失败边和验证锚点显式化
-    used_by_stages: [build-plan]
+    used_by_stages:
+      - build-plan
     local_path: skills/spec-plan/SKILL.md
-    upstream: [{ <<: *gstack, path: "plan-eng-review/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: plan-eng-review/SKILL.md
+        skill_url: https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review/SKILL.md
     local_changes: 只要求最小图，不复制 plan 编排
     dependency_closure: []
     update_policy: 人工比较异步/跨边界规则
@@ -902,9 +1528,18 @@ capability_decisions:
     status: absorbed
     purpose: standalone distributable 发布前检查
     design_idea: clean build、入口、依赖、安装 smoke、撤回路径
-    used_by_stages: [verify-code]
+    used_by_stages:
+      - verify-code
     local_path: workflows/verify-code/SKILL.md
-    upstream: [{ <<: *gstack, path: "ship/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/ship/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: ship/SKILL.md
+        skill_url: https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/ship/SKILL.md
     local_changes: 只吸收检查条款，不自动发布
     dependency_closure: []
     update_policy: 人工比较 release checklist
@@ -914,7 +1549,15 @@ capability_decisions:
     design_idea: 发布后按信号观测并决定推进或回滚
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *gstack, path: "canary/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/canary/SKILL.md" }]
+    upstream:
+      - github_url: https://github.com/garrytan/gstack
+        commit: 7c9df1c568a9ea745508f679a329332b2c338063
+        commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
+        license: MIT
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: canary/SKILL.md
+        skill_url: https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/canary/SKILL.md
     local_changes: 当前五阶段没有 deploy-observe workflow
     dependency_closure: []
     update_policy: 未来独立 deploy-observe workflow 建立后重评

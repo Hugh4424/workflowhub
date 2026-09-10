@@ -505,10 +505,14 @@
       "source": "schemas/skill-bundle.schema.json",
       "destination": "runtime/schemas/skill-bundle.schema.json",
       "status": "move",
+      "owner": "workflowhub-build-prd P1 release integrity",
+      "consumer": "Skill Bundle release manifest schema and persisted portable workflow declarations",
+      "delete_condition": "remove portable_workflows schema support when release identity is replaced by an approved equivalent",
+      "content_change": "move-time record now includes portable_workflows release declaration support",
       "sha256_before": "babe04fde41840c70477752eab33f38fbf566b88e4a3e47c5fb3e496776bdd37",
-      "bytes": 2975,
+      "bytes_before": 2975,
       "sha256_after": "a87c78fec9aa937b5a924bff1ff1d77347dbe6971aea0af286d2feaca23cd2a4",
-      "content_change": "import/path-only"
+      "bytes_after": 3329
     },
     {
       "source": "schemas/skill-catalog.schema.json",
@@ -850,8 +854,8 @@
       "status": "move",
       "sha256_before": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
       "bytes": 3330,
-      "sha256_after": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
-      "content_change": "import/path-only"
+      "sha256_after": "8a204eec524610468d922ecb64881a49e6d997e144fc8b30c8c09eddc88c91ca",
+      "content_change": "import/path plus execution outcome semantic signature"
     },
     {
       "source": "core/publication.mjs",
@@ -946,8 +950,11 @@
     {
       "source": "core/__tests__/kernel.test.mjs",
       "destination": null,
-      "status": "keep-phase7",
-      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+      "status": "modified",
+      "owner": "workflowhub-build-prd P1 portable dispatch safety",
+      "consumer": "generic kernel regression oracle for portable discovery-only registry entries",
+      "delete_condition": "remove the added portable dispatch regression when the kind-aware dispatch boundary is retired",
+      "content_change": "assert portable resolution remains discoverable while generic dispatch rejects execution"
     },
     {
       "source": "core/__tests__/local-skill-resolver.test.mjs",
@@ -1204,8 +1211,8 @@
       "destination": "runtime/evidence/canonical-receipt-writer.mjs",
       "status": "moved-R007",
       "sha256_before": "5012f3a45ce60baa6b3c30d9a9cadbe2fea1ed7287a7dd0dd3ad3acba44d83cb",
-      "sha256_after": "2a09125ba69fa786d01794d1e38625fb1cddab90447de631ed943efdf6c5cabc",
-      "bytes": 30918,
+      "sha256_after": "5a2d43aad17f3f0698ab9317a1678bc5dce9daa4f4b6a9b0c7f37a8f19c8ee7e",
+      "bytes": 52300,
       "content_change": "import/path-only"
     },
     {
@@ -1217,8 +1224,11 @@
     {
       "source": "core/dispatch-component.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "modified",
+      "owner": "workflowhub-build-prd P1 portable dispatch safety",
+      "consumer": "generic component dispatcher guard for discovery-only portable_workflow registry entries",
+      "delete_condition": "remove when registry resolution has a reviewed kind-aware dispatch boundary",
+      "content_change": "reject portable_workflow Markdown discovery entries before Node execution"
     },
     {
       "source": "core/fact-indexes.mjs",
@@ -1352,16 +1362,16 @@
       "destination": "runtime/stage/stage-handlers.mjs",
       "status": "moved-T012",
       "sha256_before": "a828ccbbd72409cf0c914bdf0186afe2e969766ae162a8e552aeefe85f8ce33a",
-      "sha256_after": "af62070319d537012efc18435bfe7b78a19f365402c2fa547231cb5c2bbc4c15",
-      "content_change": "path-only move"
+      "sha256_after": "c9defe5fc63d2f17265241b20b0978fac6d180381d23b3b3bce5f871e8a8dc7d",
+      "content_change": "path move plus scoped research material binding"
     },
     {
       "source": "core/stage-runner.mjs",
       "destination": "runtime/stage/stage-runner.mjs",
       "status": "moved-T012",
       "sha256_before": "c11f82565b0997498897d1d2681fff1fe371785062abd14ffa302ba6349d92df",
-      "sha256_after": "d034e5f7950821f7fb60790f86a993163097abe0ae4eca156d899bd9db4721ff",
-      "content_change": "path-only move"
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499",
+      "content_change": "path move plus reflection provenance and failure persistence"
     },
     {
       "source": "core/stage-skill-invocation.mjs",
@@ -1380,7 +1390,7 @@
       "destination": "runtime/task/task-handle.mjs",
       "status": "moved-T012",
       "sha256_before": "e237055160096341ca899046fc73c40a16c12c929e1ff6f114edd36b122bac6a",
-      "sha256_after": "a166fd05bcec7aa0ecc2b04e9190d4323914de1ef229e2d54a551e391e4a6406",
+      "sha256_after": "ca442068f89244ce4e3abecacb131bc4a4e716478efe782c170c08f0850d0ff2",
       "content_change": "path-only move"
     },
     {
@@ -1396,8 +1406,8 @@
       "destination": "runtime/task/task-kernel-implementation.mjs",
       "status": "moved-T012",
       "sha256_before": "ee3aaba2b97690fc8f6a440138e48b10830d9edfe22d21bc115d4f75bc25c211",
-      "sha256_after": "796f60d7251b2befb5d221f97f5661e15d205db29eeee55f750d711461638cf1",
-      "content_change": "path-only move"
+      "sha256_after": "5a33faffb024f3269391c9c5abb9ba29dd809452634f12251bf521abae33585c",
+      "content_change": "path move plus scoped research revision helper"
     },
     {
       "source": "core/task-recovery.mjs",
@@ -1446,8 +1456,8 @@
       "destination": "tools/cli/stage-runtime.mjs",
       "status": "moved-T012",
       "sha256_before": "b2f8475cbe599bb32d314b58035387967e5742a5e2962d6eb4ee25a20a361f5b",
-      "sha256_after": "ebd3f6201fa5736c85d9979055170b0bc46496f035a3eb30aeec30ea19e62410",
-      "content_change": "path-only move"
+      "sha256_after": "6e465dce061d4b0aa31aeb103e335305c617b9065e84ebd78a23435467c3e6c9",
+      "content_change": "path move plus scoped research status and root-cause gap grouping"
     },
     {
       "source": "scripts/task-close.mjs",
@@ -2176,8 +2186,8 @@
       "owner": "stage-runner",
       "consumer": "T7 FR-LEFT-001/004",
       "content_change": "added assertWriteBoundary plus deferred stage reflection lifecycle across official publication boundary and failed-stage evidence",
-      "bytes": 106731,
-      "sha256_after": "097adb986a6b69045659a8367531db1da51c57f16de0fade5ea295ea0e0b4e64"
+      "bytes": 171346,
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
     },
     {
       "source": "tests/close/close-contract.test.mjs",
@@ -2238,8 +2248,8 @@
       "delete_condition": "remove when the stage-reflection skill and projection are retired",
       "content_change": "judgment-only stage reflection schema with quality-safe and merged lesson references, without quality scoring fields",
       "sha256_before": null,
-      "bytes": 5824,
-      "sha256_after": "a44e40ab55d45f8e056da1e7331a627ff3c93f7bcd3513b30f399f04c1103ba7"
+      "bytes": 6966,
+      "sha256_after": "a3f71e6bdecc4078fb14d894723fde18be0577491e6acf943003666faab287d2"
     },
     {
       "source": "runtime/schemas/stage-reflection.v2.json",
@@ -2250,8 +2260,8 @@
       "delete_condition": "remove when v2 stage-reflection records and their consumers are retired",
       "content_change": "independent v2 schema for six structured blocks, status matrix, identity, and source completeness",
       "sha256_before": null,
-      "bytes": 10003,
-      "sha256_after": "ccf472b02b9d29c344bd19d209c3ecb765d65663227da76ff7dcb856b8369639"
+      "bytes": 11130,
+      "sha256_after": "866d606d5515bd2101c3aabb3a261d45fe8b73f2f935fd06c569de18565379a7"
     },
     {
       "source": "skills/stage-reflection",
@@ -2308,8 +2318,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 43846,
-      "sha256_after": "7d0787140fde2ad5d6e04813c6522c5b622a641381a1e400a8cf94aecaa28df6"
+      "bytes": 44964,
+      "sha256_after": "985c989e7d8c44162a6e5565ce92c7db64f131dff2e00f0f3c80e083447e5aae"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2386,8 +2396,8 @@
       "consumer": "private reflect command, stage-reflection page and M16 projection; failure facts remain the durable merge/publication recovery signal",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "authenticated validate-lessons-publish reflection deep module with retryable lesson recovery and immutable failure facts",
-      "bytes": 26218,
-      "sha256_after": "f47b9f80aa33c0041c25dd8abdf503bf5985570dd325a5722696fdb047618e99"
+      "bytes": 43575,
+      "sha256_after": "80bc3f7ff2f0ab61413b23551fe66181842bd7b7508e760f30aab66393526ed4"
     },
     {
       "source": "runtime/stage/stage-runner.mjs",
@@ -2397,8 +2407,8 @@
       "consumer": "on-stage-end reflection scheduling and shared reflect transaction",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "route scheduled reflections through runStageReflection and preserve truthful not_scheduled availability facts",
-      "bytes": 124437,
-      "sha256_after": "ea0f0fa83816978347b570547489523e83eedb5de5b91b35f3f5404d7d494bcd"
+      "bytes": 171346,
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
     },
     {
       "source": "tools/cli/stage-runtime.mjs",
@@ -2408,8 +2418,8 @@
       "consumer": "run:reflect private action route",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "add private reflect command and route it through existing public run behavior",
-      "bytes": 43641,
-      "sha256_after": "fb55de913d3ad3f2a88433c0eb7a64ac27544b4ec0e28c7781880b667d1ab6d6"
+      "bytes": 51013,
+      "sha256_after": "6e465dce061d4b0aa31aeb103e335305c617b9065e84ebd78a23435467c3e6c9"
     },
     {
       "source": "tools/cli/import-historical-reflection.mjs",
@@ -2796,8 +2806,8 @@
       "consumer": "wh-review bundle closure hash",
       "delete_condition": "revert only when the T18 bundle metadata is removed",
       "content_change": "refresh wh-review local_bundle_hash after broker metadata, cross-project diff delivery, and file hash updates",
-      "bytes_after": 58475,
-      "sha256_after": "bbd9e4352b946de8c60c4fecdec8c8f6d90ee294e3ec923a025d6ae0cdc09600"
+      "bytes_after": 78230,
+      "sha256_after": "3b222a8a0c4cdb831eab920338d97211dc8581be58e9a5685ee05a649942887f"
     },
     {
       "source": "docs/cli-tool-mapping.md",
@@ -2886,6 +2896,297 @@
       "content_change": "repository fixture keeps twelve AC-to-anchor rows after runtime quality artifacts moved to the external task store",
       "bytes_after": 1191,
       "sha256_after": "1778a568e6084e98fb96e41c991b4b909164903d8d50fcb1431134e9fd1a9ef9"
+    },
+    {
+      "source": "tests/contract/acceptance-execution-producer.mjs",
+      "destination": "tests/contract/acceptance-execution-producer.mjs",
+      "status": "add",
+      "owner": "workflowhub-make-decision-hardening T006",
+      "consumer": "existing private acceptance service tier invoked by T008",
+      "delete_condition": "remove only after a reviewed package/runtime producer emits the same canonical AC rows through the retained service contract and the sole consumer is migrated",
+      "content_change": "test-owned narrow adapter converts one fixed package-local Vitest machine report into the existing canonical acceptance entries without task-store or latest-record selection"
+    },
+    {
+      "source": "tests/contract/acceptance-execution-producer.test.mjs",
+      "destination": "tests/contract/acceptance-execution-producer.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-make-decision-hardening T006",
+      "consumer": "acceptance-execution-producer contract test and T005/T006 producer failure oracle",
+      "delete_condition": "remove with the test-owned producer after its reviewed replacement retains equivalent success, mapping, malformed-report, timeout, cancellation, and no-shell coverage",
+      "content_change": "focused contract fixtures cover canonical Vitest report mapping and non-passing invalid, failed, timed-out, cancelled, and shell-literal cases"
+    },
+    {
+      "source": "runtime/stage/stage-handoff.mjs",
+      "destination": "runtime/stage/stage-handoff.mjs",
+      "status": "add",
+      "owner": "build-code T012 stage-handoff current-view publisher",
+      "consumer": "stage-runner#runStageEndReflection for four author stages",
+      "delete_condition": "remove when the four author-stage current handoff consumer is retired or replaced by an approved equivalent",
+      "content_change": "atomic current-only Markdown renderer and readback binding for stage handoff",
+      "sha256_after": "dc020d9a9520bf9b53c46d45d5503f1d822cc4b8c2c1bd477fec2041459a36eb"
+    },
+    {
+      "source": "skills/stage-handoff",
+      "destination": "skills/stage-handoff",
+      "status": "add",
+      "owner": "stage-handoff portable skill",
+      "consumer": "four author-stage end hooks and stage-handoff contract tests",
+      "delete_condition": "remove when all four author-stage handoff hooks and their consumer are retired",
+      "content_change": "portable current-only handoff contract with stale/unavailable and no-gate boundaries",
+      "sha256_after": "5b0252d45de7389499a409efa584903796c66515a770b5cdc3d5959773b9f43f"
+    },
+    {
+      "source": "workflows/build-prd",
+      "destination": "workflows/build-prd",
+      "status": "add",
+      "owner": "workflowhub-build-prd P1 T002",
+      "consumer": "portable workflow discovery and Skill Bundle release",
+      "delete_condition": "remove when the build-prd portable workflow has no registry/catalog/release consumer",
+      "content_change": "portable workflow three-file orchestration package kept outside canonical five formal stages"
+    },
+    {
+      "source": "config/workflowhub.yaml",
+      "destination": "config/workflowhub.yaml",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P1 T002",
+      "consumer": "static portable workflow registry discovery metadata",
+      "delete_condition": "remove the portable entry when build-prd has no registry consumer",
+      "content_change": "declare build-prd as portable_workflow without dispatching Markdown through the Node component dispatcher"
+    },
+    {
+      "source": "runtime/distribution/skill-bundle-release.mjs",
+      "destination": "runtime/distribution/skill-bundle-release.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P1 T002",
+      "consumer": "Skill Bundle release closure for formal and explicitly declared portable workflows",
+      "delete_condition": "remove portable collection when the portable workflow registry consumer is retired",
+      "content_change": "collect declared portable workflow three-tuples through the existing release builder"
+    },
+    {
+      "source": "tests/integration/distribution-closure.test.mjs",
+      "destination": "tests/integration/distribution-closure.test.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P1 T001/T002",
+      "consumer": "targeted portable discovery and release closure oracle",
+      "delete_condition": "remove when the portable workflow closure contract is replaced with retained equivalent coverage",
+      "content_change": "RED/GREEN coverage for build-prd portable identity, release files, and five-stage/four-material protection"
+    },
+    {
+      "source": "skills/spec-prd/SKILL.md",
+      "destination": "skills/spec-prd/SKILL.md",
+      "status": "add",
+      "owner": "spec-prd content owner",
+      "consumer": "build-prd portable workflow and explicit independent PRD callers",
+      "delete_condition": "remove when no current build-prd or independent caller consumes the single PRD writer",
+      "content_change": "portable single-writer content contract; implementation belongs to P2"
+    },
+    {
+      "source": "skills/spec-prd/skill-bundle.json",
+      "destination": "skills/spec-prd/skill-bundle.json",
+      "status": "add",
+      "owner": "spec-prd content owner",
+      "consumer": "Skill Bundle release dependency closure",
+      "delete_condition": "remove with the spec-prd content consumer and its bundle contract",
+      "content_change": "hash-bound spec-prd skill bundle"
+    },
+    {
+      "source": "skills/spec-prd/templates/prd-template.md",
+      "destination": "skills/spec-prd/templates/prd-template.md",
+      "status": "add",
+      "owner": "spec-prd content owner",
+      "consumer": "spec-prd writer and Skill Bundle release dependency closure",
+      "delete_condition": "remove when spec-prd no longer renders the single planning PRD template",
+      "content_change": "portable PRD template for navigation, task map, cards, handoff, and change facts"
+    },
+    {
+      "source": "skills/wh-review/contracts/build-prd.md",
+      "destination": "skills/wh-review/contracts/build-prd.md",
+      "status": "add",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "wh-review non-stage build_prd provider-fact review packet",
+      "delete_condition": "remove when build-prd has no complete-PRD review consumer",
+      "content_change": "dedicated one-review non-stage contract with bounded debate and report-only analysis/reflection",
+      "bytes_after": 3419,
+      "sha256_after": "b1221d3397fc224755ac9a9a05f3378a47fa9822cf6ebf03969e622dc02f749d"
+    },
+    {
+      "source": "tests/contract/build-prd-review-contract.test.mjs",
+      "destination": "tests/contract/build-prd-review-contract.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-build-prd P3 T005/T006",
+      "consumer": "targeted build-prd non-stage review contract RED/GREEN oracle",
+      "delete_condition": "remove only with retained equivalent coverage for the build_prd sibling boundary",
+      "content_change": "assert dedicated allowlist, route, semantic projection, one provider-fact request, partial/unavailable preservation, formal-stage identity rejection, canonical recorder/task-bound E2E rejection, and no canonical stage persistence",
+      "bytes_after": 14039,
+      "sha256_after": "23c303b5cece34078d001765c8b7137bdd16440e5fe3fcb01451800e97c1b1f4"
+    },
+    {
+      "source": "skills/wh-review/stage-skill-plan.json",
+      "destination": "skills/wh-review/stage-skill-plan.json",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "wh-review build_prd non-stage skill/profile dispatch",
+      "delete_condition": "remove non-stage profile when build-prd review consumer is retired",
+      "content_change": "register build_prd under non_stage without changing five formal stage plans",
+      "bytes_after": 2824,
+      "sha256_after": "62d5c97617c273a198fe066d75e793645bac0bc5003eb96cfeb89742800b8170"
+    },
+    {
+      "source": "skills/wh-review/manifest.json",
+      "destination": "skills/wh-review/manifest.json",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "wh-review contract discovery and bundle closure",
+      "delete_condition": "remove build-prd contract/profile registration when its consumer is retired",
+      "content_change": "declare the build-prd contract and non-stage report-only profile",
+      "bytes_after": 1871,
+      "sha256_after": "a29471a869042030af782b0c94febdef8d5cd83e30a24e44507d92fe27d7a5db"
+    },
+    {
+      "source": "skills/wh-review/skill-bundle.json",
+      "destination": "skills/wh-review/skill-bundle.json",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "wh-review skill closure and distribution bundle hash verification",
+      "delete_condition": "remove build-prd hash entries when the non-stage review consumer is retired",
+      "content_change": "add build-prd contract and refresh hashes for non-stage review assets",
+      "bytes_after": 4537,
+      "sha256_after": "24e815f54933048e8696c8987eeeb88963d9c9f0e241184492d2e68723741593"
+    },
+    {
+      "source": "runtime/review/stage-materials.json",
+      "destination": "runtime/review/stage-materials.json",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "build_prd review policy/material packet builder and semantic projection",
+      "delete_condition": "remove non-stage build_prd rule/surface when no review consumer remains",
+      "content_change": "add dedicated non-stage material rule and build-prd semantic surface while retaining five formal stages",
+      "bytes_after": 8789,
+      "sha256_after": "2a0c0723aea3e248c1b5948f7041ad2b1eadc69c9b1d27fa8f2873a18df77794"
+    },
+    {
+      "source": "runtime/review/schemas/stage-materials.schema.json",
+      "destination": "runtime/review/schemas/stage-materials.schema.json",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "schema validation for non-stage build_prd material rule",
+      "delete_condition": "remove non_stage/build-prd schema allowance when that review surface is retired",
+      "content_change": "authorized minimal schema extension for non-stage matrix/surface; formal stages remain unchanged",
+      "bytes_after": 7113,
+      "sha256_after": "94ffcddf1d50b72d00088a016bcf3c0192364038cd5525af0fa1e9d9a330f2a5"
+    },
+    {
+      "source": "runtime/review/review-policy.mjs",
+      "destination": "runtime/review/review-policy.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "build_prd non-stage material policy lookup",
+      "delete_condition": "remove build_prd policy branch when review consumer is retired",
+      "content_change": "resolve build_prd as non-stage policy without adding REVIEW_STAGES",
+      "bytes_after": 5012,
+      "sha256_after": "4e69db75e946fe2a1bcbc92bdd52b486019a7014450e0d364c9f2fa5ad16e955"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-materials.mjs",
+      "destination": "skills/wh-review/scripts/review-materials.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "build_prd review instruction and packet material builder",
+      "delete_condition": "remove build_prd packet branch when review consumer is retired",
+      "content_change": "select dedicated build-prd contract/surface/instructions and preserve forbidden build-plan materials",
+      "bytes_after": 128325,
+      "sha256_after": "84ba065621e3d5ce05e36208cf11fc2d1943b3c471feda95296cf2bf8191da64"
+    },
+    {
+      "source": "skills/wh-review/scripts/third-review-host-config.mjs",
+      "destination": "skills/wh-review/scripts/third-review-host-config.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "trusted non-stage build_prd route/profile selection",
+      "delete_condition": "remove non_stage route validation when build-prd review consumer is retired",
+      "content_change": "validate and resolve wh_review.non_stage.build_prd while keeping REVIEW_STAGES exactly five",
+      "bytes_after": 37812,
+      "sha256_after": "18176fdb5de16b454a389da9ae9ce120905bd9512729ad12bc4e1cb5b016b3ad"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-runner.mjs",
+      "destination": "skills/wh-review/scripts/review-runner.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 HIGH boundary",
+      "consumer": "report-only build_prd persistence guard and formal review finalization boundary",
+      "delete_condition": "remove only when build_prd gains an independently authorized non-canonical writer",
+      "content_change": "reject canonical attempt/result writes and verify-final reads for build_prd provider facts",
+      "bytes_after": 31902,
+      "sha256_after": "b5d99975fdf99e6a591a96096403e1d4267c2376b0a90664d93311a48b065826"
+    },
+    {
+      "source": "runtime/review/review-record-route.mjs",
+      "destination": "runtime/review/review-record-route.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 HIGH boundary",
+      "consumer": "canonical review recorder fail-closed report-only rejection",
+      "delete_condition": "remove only when build_prd persistence receives separately authorized schemas/routes",
+      "content_change": "reject build_prd before authenticated canonical attempt/result preparation or writes, including task-bound E2E unavailable/result routes",
+      "bytes_after": 64130,
+      "sha256_after": "aebf0c8ef08683676d04066ffd96d673da34ac66243f798a9ddf1c6e4ea108cd"
+    },
+    {
+      "source": "skills/wh-review/scripts/simple-review-runner.mjs",
+      "destination": "skills/wh-review/scripts/simple-review-runner.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 HIGH boundary",
+      "consumer": "non-stage sentinel identity validation before provider dispatch",
+      "delete_condition": "remove only when a separately authorized build_prd request identity contract replaces the sentinel",
+      "content_change": "block build_prd review_kind on formal stages or with review_track/review_scope",
+      "bytes_after": 48915,
+      "sha256_after": "70a0f311e95d93adb70e274cc7c97cd01064984717a45663c22f44adedcf1865"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-semantic-projection.mjs",
+      "destination": "skills/wh-review/scripts/review-semantic-projection.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P3 T006",
+      "consumer": "build-prd semantic identity/reuse comparison",
+      "delete_condition": "remove build-prd semantic surface when its review consumer is retired",
+      "content_change": "map build_prd to dedicated build-prd surface without formal stage identity",
+      "bytes_after": 5763,
+      "sha256_after": "97b8a62775421427d47155cee50a4677842a37e2385b61891856ab32183022fe"
+    },
+    {
+      "source": "core/task-close.mjs",
+      "destination": "core/task-close.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P4 T008",
+      "consumer": "existing task-close planning mode for decision-log/prd physical delivery planning",
+      "delete_condition": "remove planning mode when no build-prd planning material has a physical delivery consumer",
+      "content_change": "select planning material before four-material and verify reads; preserve attachment, material, authorization, archive, and per-action facts"
+    },
+    {
+      "source": "tools/cli/task-close.mjs",
+      "destination": "tools/cli/task-close.mjs",
+      "status": "modify",
+      "owner": "workflowhub-build-prd P4 T008",
+      "consumer": "task-close CLI planning mode and required attachment argument plumbing",
+      "delete_condition": "remove planning CLI arguments when the existing task-close consumer no longer accepts planning close",
+      "content_change": "add explicit planning mode and JSON required-attachments input without a second public close command"
+    },
+    {
+      "source": "tests/integration/build-prd-delivery.test.mjs",
+      "destination": "tests/integration/build-prd-delivery.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-build-prd P4 T007/T008",
+      "consumer": "targeted planning close material, attachment, authorization, archive readback, and ordinary/mini-task regression oracle",
+      "delete_condition": "remove only with retained equivalent planning-close integration coverage",
+      "content_change": "exercise planning close through the existing task-close entry points and preserve truthful incomplete/partial facts"
+    },
+    {
+      "source": "tests/acceptance/build-prd-current.mjs",
+      "destination": "tests/acceptance/build-prd-current.mjs",
+      "status": "add",
+      "owner": "workflowhub-build-prd T009",
+      "consumer": "private build-code acceptance runner for the current four-file aggregate",
+      "delete_condition": "remove when T009 uses an equivalent task-local producer of per-AC expected/actual JSON",
+      "content_change": "run the declared targeted Vitest aggregate with JSON reporting and emit one runtime-derived assertion entry per current AC"
     }
   ]
 }

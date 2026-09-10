@@ -137,4 +137,12 @@ describe("kernel scenario 7: shipped config — locate PASS, dispatch PASS (M2 c
     const result = await runKernel(shippedConfigPath, "demo");
     expect(result.component_id).toBe("noop");
   });
+
+  it("keeps portable build-prd discoverable but rejects generic executable dispatch", async () => {
+    const config = loadConfig(shippedConfigPath);
+    const entry = resolveComponent(config, "build-prd");
+    expect(entry).toMatchObject({ kind: "portable_workflow", path: "workflows/build-prd/SKILL.md" });
+    await expect(runKernel(shippedConfigPath, "build-prd"))
+      .rejects.toThrow(/portable_workflow.*discovery-only/);
+  });
 });

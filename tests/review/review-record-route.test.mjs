@@ -7,7 +7,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { recordSimpleReviewRequest as recordRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import {
+  recordSimpleReviewRequest as recordRequest,
+  recordSimpleReviewResult,
+  recordTaskBoundE2eReviewResult,
+  recordTaskBoundE2eReviewUnavailable,
+} from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
@@ -276,6 +281,74 @@ describe("review record route", () => {
 });
 
 describe("review flow task record", () => {
+  it("rejects build-prd request identity before an injected runner can persist a formal record", async () => {
+    const { task, kernel } = makeTask();
+    let dispatched = false;
+    await expect(recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { stage: "build-prd", reviewKind: "build_prd", materials: { prd: "report-only" } },
+      runRound: async () => {
+        dispatched = true;
+        return baseResult();
+      },
+    })).rejects.toThrow(/BUILD_PRD_REPORT_ONLY_NOT_PERSISTED/);
+    expect(dispatched).toBe(false);
+  });
+
+  it("rejects conflicting aliases before route resolution or persistence", async () => {
+    const { task, kernel } = makeTask();
+    let dispatched = false;
+    await expect(recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { stage: "build-code", review_kind: null, reviewKind: "build_prd", materials: { implementation: "conflict" } },
+      runRound: async () => {
+        dispatched = true;
+        return baseResult();
+      },
+    })).rejects.toThrow(/review_kind\/reviewKind disagree/);
+    expect(dispatched).toBe(false);
+    expect(() => recordSimpleReviewResult({ task, kernel, result: { ...baseResult(), review_kind: null, reviewKind: "build_prd" } })).toThrow(/review_kind\/reviewKind disagree/);
+    expect(() => recordTaskBoundE2eReviewUnavailable({ result: { ...baseResult(), review_kind: null, reviewKind: "build_prd" } })).toThrow(/review_kind\/reviewKind disagree/);
+    expect(() => recordTaskBoundE2eReviewResult({ result: { ...baseResult(), review_kind: null, reviewKind: "build_prd" } })).toThrow(/review_kind\/reviewKind disagree/);
+  });
+
+  it("rejects a runner result whose stage/track/kind identity does not match the request", async () => {
+    const { task, kernel } = makeTask();
+    await expect(recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { stage: "build-code", materials: { implementation: "identity-bound" } },
+      runRound: async (request) => ({
+        ...baseResult(),
+        stage: "verify-code",
+        material_id: createSimpleReviewPacket(request).material_id,
+      }),
+    })).rejects.toThrow(/stage\/track\/kind does not match/);
+  });
+
+  it.each([
+    [{ review_scope: "phase" }, { reviewScope: "integration" }],
+    [{ reviewScope: "integration" }, { review_scope: "phase" }],
+  ])("rejects result scope drift instead of overwriting the request (%o -> %o)", async (requestIdentity, resultIdentity) => {
+    const { task, kernel } = makeTask();
+    const requestScope = requestIdentity.review_scope ?? requestIdentity.reviewScope;
+    await expect(recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { stage: "build-code", ...requestIdentity,
+        ...(requestScope === "phase" ? { subject_kind: "phase", phase_id: "P-scope" } : {}),
+        materials: { implementation: "scope-bound" } },
+      runRound: async (request) => ({
+        ...baseResult(),
+        ...resultIdentity,
+        material_id: createSimpleReviewPacket(request).material_id,
+      }),
+    })).rejects.toThrow("review result review_scope does not match its request");
+    expect(task.listCanonicalReviewAttemptRefs()).toHaveLength(0);
+  });
+
   it("runs one authenticated request, records the result, and reuses the immutable refs without a second dispatch", async () => {
     const { task, kernel } = makeTask();
     let dispatches = 0;
@@ -424,7 +497,176 @@ function pairedResult({ redAvailable = true, blueAvailable = true, minimum = 1 }
   };
 }
 
+function phasePairedResult() {
+  const raw = pairedResult();
+  Object.assign(raw, { stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+  for (const member of Object.values(raw.role_results)) {
+    Object.assign(member, { stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+  }
+  return raw;
+}
+
 describe("T005 paired canonical role consumption", () => {
+  it.each([
+    ["review_kind", "reviewKind", null, "build_prd"],
+    ["review_track", "reviewTrack", "detail", "direction"],
+  ])("fails closed when a nested paired member has conflicting %s aliases", (snake, camel, snakeValue, camelValue) => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    Object.assign(raw.role_results.red, { [snake]: snakeValue, [camel]: camelValue });
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow(`review identity aliases ${snake}/${camel} disagree`);
+  });
+
+  it.each([
+    ["subject_kind", "phase", "worktree"],
+    ["phase_id", "P-outer", "P-member"],
+  ])("rejects paired member %s drift instead of letting outer identity overwrite it", (field, outerValue, memberValue) => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    raw[field] = outerValue;
+    raw.role_results.red[field] = memberValue;
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow(`paired review red ${field} identity mismatch`);
+  });
+
+  it("retains the strict paired member review_track requirement when the member omits it", () => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    delete raw.role_results.red.review_track;
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow("make-decision requires direction or detail review_track");
+  });
+
+  it("fails closed when a paired member carries conflicting review scope aliases", () => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    Object.assign(raw.role_results.red, { review_scope: "phase", reviewScope: "integration" });
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow("review identity aliases review_scope/reviewScope disagree");
+  });
+
+  it("rejects paired member scope drift instead of letting the outer scope overwrite it", () => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    Object.assign(raw, { stage: "build-code", review_track: null, review_scope: "phase" });
+    for (const member of Object.values(raw.role_results)) {
+      Object.assign(member, { stage: "build-code", review_track: null, review_scope: "integration" });
+    }
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow("paired review red material/stage identity mismatch");
+  });
+
+  it("rejects a paired member review scope that is illegal for its stage", () => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    raw.role_results.red.review_scope = "phase";
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow("make-decision does not use review_scope");
+  });
+
+  it("fills an outer missing review_scope from the two matching phase members", () => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    delete raw.review_scope;
+    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
+    for (const role of ["red", "blue"]) {
+      const attempt = JSON.parse(task.readRecord(recorded.role_results[role].attempt_ref));
+      expect(attempt).toMatchObject({ stage: "build-code", subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+      validateSchema("attempt", attempt);
+    }
+  });
+
+  it("infers and persists phase review_scope when every paired identity omits it", () => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    delete raw.review_scope;
+    for (const member of Object.values(raw.role_results)) delete member.review_scope;
+    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
+    for (const role of ["red", "blue"]) {
+      const refs = recorded.role_results[role];
+      const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+      const result = JSON.parse(task.readRecord(refs.result_ref));
+      expect(attempt).toMatchObject({ subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+      expect(result).toMatchObject({ subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+      validateSchema("attempt", attempt);
+      validateSchema("result", result);
+    }
+  });
+
+  it("keeps the integration default for a build-code worktree when every paired identity omits scope", () => {
+    const { task, kernel } = makeTask();
+    const raw = pairedResult();
+    Object.assign(raw, { stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null });
+    for (const member of Object.values(raw.role_results)) {
+      Object.assign(member, { stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null });
+    }
+    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
+    for (const role of ["red", "blue"]) {
+      const attempt = JSON.parse(task.readRecord(recorded.role_results[role].attempt_ref));
+      expect(attempt).toMatchObject({ subject_kind: "worktree", phase_id: null, review_scope: "integration" });
+      validateSchema("attempt", attempt);
+    }
+  });
+
+  it("does not infer over an explicitly null paired review_scope", () => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    Object.assign(raw, { review_scope: null });
+    for (const member of Object.values(raw.role_results)) Object.assign(member, { review_scope: null });
+    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
+    for (const role of ["red", "blue"]) {
+      const attempt = JSON.parse(task.readRecord(recorded.role_results[role].attempt_ref));
+      expect(attempt.review_scope).toBeNull();
+    }
+  });
+
+  it("still rejects an explicitly invalid integration scope for a phase tuple", () => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    Object.assign(raw, { review_scope: "integration" });
+    for (const member of Object.values(raw.role_results)) Object.assign(member, { review_scope: "integration" });
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw }))
+      .toThrow(/review identity tuple is invalid|phase subject requires/);
+  });
+
+  it("fills an outer missing subject_kind and phase_id from the two matching phase members", () => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    delete raw.subject_kind;
+    delete raw.phase_id;
+    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
+    for (const role of ["red", "blue"]) {
+      const result = JSON.parse(task.readRecord(recorded.role_results[role].result_ref));
+      expect(result).toMatchObject({ stage: "build-code", subject_kind: "phase", phase_id: "P-shared", review_scope: "phase" });
+      validateSchema("result", result);
+    }
+  });
+
+  it.each([
+    ["subject_kind", "phase", "worktree"],
+    ["phase_id", "P-red", "P-blue"],
+    ["review_scope", "phase", "integration"],
+  ])("rejects inconsistent red/blue %s before prepare", (field, redValue, blueValue) => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    delete raw[field];
+    raw.role_results.red[field] = redValue;
+    raw.role_results.blue[field] = blueValue;
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw })).toThrow(/paired review .*identity mismatch|review identity tuple is invalid/);
+  });
+
+  it.each([
+    { review_scope: "phase", subject_kind: "worktree", phase_id: null },
+    { review_scope: "integration", subject_kind: "phase", phase_id: "P-invalid" },
+  ])("rejects schema-invalid shared phase/integration tuple (%o)", (tuple) => {
+    const { task, kernel } = makeTask();
+    const raw = phasePairedResult();
+    Object.assign(raw, tuple);
+    for (const member of Object.values(raw.role_results)) Object.assign(member, tuple);
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw })).toThrow(/review identity tuple is invalid|phase subject requires/);
+  });
+
   it.each([[true, true], [true, false], [false, false]])("records independently authenticated roles red=%s blue=%s without flattening", (redAvailable, blueAvailable) => {
     const { task, kernel } = makeTask();
     const raw = pairedResult({ redAvailable, blueAvailable });
@@ -516,12 +758,38 @@ describe("T005 request reuse and phase metadata", () => {
 
   it("binds request phase metadata through the canonical attempt and result", async () => {
     const { task, kernel } = makeTask();
-    const request = { stage: "build-code", host_provider: "codex/luna", subject_kind: "phase", phase_id: "P2", review_scope: "phase", materials: { implementation: "phase bytes" } };
+    const request = { stage: "build-code", host_provider: "codex/luna", subject_kind: "phase", phase_id: "P2", reviewScope: "phase", materials: { implementation: "phase bytes" } };
     const recorded = await recordSimpleReviewRequest({ task, kernel, request, runRound: async () => ({ ...baseResult(), material_id: createSimpleReviewPacket(request).material_id }) });
     for (const ref of [recorded.attempt_ref, recorded.result_ref]) {
       expect(JSON.parse(task.readRecord(ref))).toMatchObject({ subject_kind: "phase", phase_id: "P2", review_scope: "phase" });
     }
     expect(task.readRecord(recorded.report_ref)).toContain("P2");
+  });
+
+  it("persists the canonical phase scope when a mini-task omits its default", async () => {
+    const { task, kernel } = makeTask();
+    const request = {
+      stage: "build-code", review_kind: "mini_task.design", subject_kind: "phase", phase_id: "P-mini",
+      host_provider: "codex/luna", materials: { implementation: "mini-task bytes" },
+    };
+    const recorded = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: async (input) => ({
+        ...baseResult(),
+        review_kind: "mini_task.design",
+        subject_kind: "phase",
+        phase_id: "P-mini",
+        material_id: createSimpleReviewPacket(input).material_id,
+      }),
+    });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({
+      review_kind: "mini_task.design", review_scope: "phase", subject_kind: "phase", phase_id: "P-mini",
+    });
+    expect(JSON.parse(task.readRecord(recorded.result_ref))).toMatchObject({
+      review_kind: "mini_task.design", review_scope: "phase", subject_kind: "phase", phase_id: "P-mini",
+    });
   });
 });
 
@@ -709,6 +977,221 @@ describe("T006 trusted review-round budget from actual task history", () => {
     expect(next.result_ref).not.toBeNull();
     expect(task.readRecord(next.report_ref)).toMatch(/budget_context/);
   });
+
+  it("allows one ordinary verify-code focused review after an authenticated code snapshot repair", async () => {
+    const { task, kernel, candidateWorkspace } = makeTask();
+    let calls = 0;
+    const runRound = async (input) => {
+      calls += 1;
+      return {
+        ...baseResult(),
+        stage: "verify-code",
+        findings: [],
+        provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })),
+        material_id: createSimpleReviewPacket(input).material_id,
+      };
+    };
+    const firstRequest = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "before repair" } };
+    await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair.mjs"), "export const repaired = true;\n");
+
+    const secondRequest = { ...firstRequest, materials: { implementation: "after repair" } };
+    const second = await recordSimpleReviewRequest({ task, kernel, request: secondRequest, runRound });
+    expect(calls).toBe(2);
+    expect(second.result_ref).not.toBeNull();
+    expect(task.readRecord(second.report_ref)).toMatch(/focused/);
+
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair-2.mjs"), "export const repairedAgain = true;\n");
+    const denied = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { ...firstRequest, materials: { implementation: "second repair" } },
+      runRound,
+    });
+    expect(calls).toBe(2);
+    expect(JSON.stringify(denied)).toMatch(/budget|exhausted|unavailable/i);
+  });
+});
+
+describe("T014 authenticated route-repair review budget", () => {
+  const route = (value) => () => ({ route_identity: value.repeat(64) });
+  const request = () => ({ stage: "build-code", host_provider: "codex/luna", materials: { implementation: "route repair fixture" } });
+  const providerFailure = (input) => {
+    const result = { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+    result.status = "unavailable";
+    result.outcome = "unavailable";
+    result.findings = [];
+    result.provider_results = result.provider_results.map((member) => ({
+      ...member,
+      status: "failed",
+      error: { code: "PROCESS_DEAD", message: "selected provider route failed" },
+      evidence_anchor_valid: [],
+    }));
+    result.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "all selected providers failed" };
+    return result;
+  };
+
+  it("permits exactly one same-revision retry after a canonical provider failure and changed host route identity", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      return calls === 1
+        ? providerFailure(received)
+        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+
+    const first = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    expect(JSON.parse(task.readRecord(first.attempt_ref)).provider_attempts).toMatchObject([{ status: "failed" }]);
+
+    const repaired = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(2);
+    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
+    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
+
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("c") });
+    expect(calls).toBe(2);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" }, review_budget: { counts: { route_repair: 1 } } });
+  });
+
+  it.each(["successful", "failed"])("ignores a %s old-revision attempt when repairing the latest current-revision provider failure", async (oldOutcome) => {
+    const { task, kernel, artifacts } = makeTask();
+    const oldInput = { ...request(), materials: { implementation: `old revision ${oldOutcome}` } };
+    const currentInput = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      if (received.materials.implementation === oldInput.materials.implementation) {
+        return oldOutcome === "failed"
+          ? providerFailure(received)
+          : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+      }
+      return calls === 2
+        ? providerFailure(received)
+        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+
+    await recordRequest({ task, kernel, request: oldInput, runRound, resolveRouteIdentity: route("c") });
+    artifacts.writeAtomic("spec.md", `# Current revision after old ${oldOutcome} review\n`);
+    const currentFailure = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("a") });
+    expect(task.readRecord(currentFailure.report_ref)).toContain('"kind": "focused"');
+
+    const repaired = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(3);
+    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
+    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
+  });
+
+  it.each([
+    ["zero provider attempts", (result) => ({ ...result, provider_results: [], error: { code: "REVIEW_STATUS_UNAVAILABLE", message: "status unavailable" } })],
+    ["protocol failure", (result) => ({ ...result, error: { code: "PROTOCOL_INCOMPATIBLE", message: "protocol mismatch" } })],
+    ["semantic output", (result) => ({ ...result, status: "available-with-failures", outcome: "partial", findings: baseResult().findings,
+      provider_results: baseResult().provider_results, error: { code: "REVIEW_QUORUM_INCOMPLETE", message: "partial result" } })],
+  ])("does not grant route-repair budget for %s", async (_name, mutate) => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const failed = providerFailure(received);
+      return calls === 1 ? mutate(failed) : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+  });
+
+  it("does not grant route-repair budget when the host route identity did not change", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const reused = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("a") });
+    expect(calls).toBe(1);
+    expect(reused.reused).toBe(true);
+    expect(reused.review_budget.ok).toBe(false);
+  });
+
+  it.each(["materials", "snapshot"])("does not treat a route change plus changed %s as route repair", async (changed) => {
+    const { task, kernel, candidateWorkspace } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    if (changed === "snapshot") writeFileSync(join(candidateWorkspace.worktreeRoot, "route-repair-code.mjs"), "export const changed = true;\n");
+    const nextRequest = changed === "materials" ? { ...input, materials: { implementation: "different review packet" } } : input;
+    const denied = await recordRequest({ task, kernel, request: nextRequest, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+    expect(denied.review_budget.route).not.toBe("route_repair_review");
+  });
+
+  it("starts a separate initial budget for a changed review subject instead of route repair", async () => {
+    const { task, kernel } = makeTask();
+    const input = { ...request(), subject: { component: "runtime/review" } };
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel,
+      request: { ...input, subject: { component: "runtime/evidence" } }, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(2);
+    expect(denied).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
+    expect(denied.review_budget.route).not.toBe("route_repair_review");
+  });
+
+  it("rejects a generic aggregate failure whose provider member has an excluded protocol error", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const failed = providerFailure(received);
+      failed.provider_results[0].error = { code: "PROTOCOL_INCOMPATIBLE", message: "member protocol mismatch" };
+      return failed;
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
+  });
+
+  it("rejects route repair when either failed member of a paired review has an excluded error", async () => {
+    const { task, kernel } = makeTask();
+    const input = { stage: "make-decision", review_track: "detail", host_provider: "codex/luna", materials: { decision: "paired route repair" } };
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const raw = pairedResult({ redAvailable: false, blueAvailable: false });
+      raw.material_id = createSimpleReviewPacket(received).material_id;
+      for (const role of ["red", "blue"]) raw.role_results[role].material_id = raw.material_id;
+      raw.role_results.blue.provider_results[0].error = { code: "REVIEW_MATERIAL_MISMATCH", message: "blue member material mismatch" };
+      raw.role_results.blue.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "generic paired failure" };
+      return raw;
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
+  });
+
+  it("keeps a canonical attempt without authenticated route identity ineligible", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    const failed = providerFailure(input);
+    recordSimpleReviewResult({ task, kernel, result: failed });
+    let calls = 0;
+    const denied = await recordRequest({ task, kernel, request: input,
+      runRound: async () => { calls += 1; return baseResult(); }, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(0);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+  });
 });
 
 describe("T006 paired budget counts", () => {
@@ -767,6 +1250,29 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(runner.calls).toBe(1);
     expect(next.result_ref).toBeTruthy();
     expect(task.readRecord(first.report_ref)).toContain("host route not configured");
+  });
+  it("does not consume a review round when material bounds stop dispatch before any provider attempt", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bounded review fixture" } };
+    let calls = 0;
+    const runRound = async (prepared) => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          status: "unavailable", stage: "build-code", review_track: null, review_kind: null,
+          material_id: createSimpleReviewPacket(prepared).material_id, runtime_id: null,
+          outcome: "unavailable", provider_results: [], findings: [],
+          error: { code: "REVIEW_INPUT_TOO_LARGE", message: "bounded provider material exceeded the transport limit" },
+        };
+      }
+      return { ...baseResult(), material_id: createSimpleReviewPacket(prepared).material_id };
+    };
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(first.dispatch_state).toBe("dispatched");
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(calls).toBe(2);
+    expect(second.result_ref).toBeTruthy();
+    expect(second.review_budget.counts.initial).toBe(0);
   });
   it("reuses original semantic refs across task-only revision changes for the same reviewed materials", async () => {
     const { task, kernel, artifacts } = makeTask();

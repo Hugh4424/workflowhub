@@ -79,7 +79,8 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 没有真实主题变化，不重复全文读取、测试、review 或 analyzer。材料、风险或有效 finding
 实际变化时，只重跑受影响的检查；build-code 的最终 aggregate 按计划在全部 phase 完成后
 运行一次。时间和 token 只作诊断，按 step、skill、读取、交互、provider wait、测试、review、
-返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate。
+返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate；review preflight 只记录
+当前请求的可观测事实，不改变 provider status 的运行时所有权。
 
 ### stage 结束
 
@@ -114,6 +115,13 @@ worktree cleanup 和 branch cleanup，并对每一步做物理读回。
 原始用户需求、仓库和运行环境事实、当前 worktree/依赖状态、宪法，以及当前已有的
 `decision-log.md`。后续 `spec.md`、`plan.md` 和 `tasks.md` 不能被提前假设为存在。
 
+进入研究前，主会话在同一份 `decision-log.md` 建立唯一 OI 大纲：以
+`background`、`problem`、`goal`、`solution`、`acceptance`、`extension` 六个需求框架节点
+为骨架，并逐项列出 `complete_user_flow`、`page_scope`、`data_state`、
+`success_failure_boundary`、`non_goals`、`deferred` 六类。每个节点/类别必须有 OI，或有
+`empty: true` 和具体理由；省略、重复、只写 `none` 或改名替代都算缺口。OI 是当前唯一
+权威，不新增材料或状态机。
+
 ### 标准步骤与最小结果
 
 1. `load-context`：读取 portable workflow、依赖和原始需求。
@@ -133,6 +141,12 @@ worktree cleanup 和 branch cleanup，并对每一步做物理读回。
 12. `stage-end-spec-analyze`：检查原始需求、决策语义、完整交互、最终确认、用户流程、前置
     材料和证据，并在本 stage 修复缺口；若修复改变方向，重新确认后再分析。
 13. `publish-decision`：交接已确认的 `decision-log.md` 和阶段事实。
+
+方向审查只看当前 OI 的 `convergence_outline` questions-only 投影（全部 ID、类别、问题/未知、
+来源和版本身份，展示状态统一为 `open`，不含答案或处置）；细节审查逐条对账当前 OI 的
+终态字段；`approve-decision` 在既有整体确认中按主题分组展示选项、后果和风险，并记录
+所选处置与现有交互凭证。三个消费者职责独立，审查仍是质量事实而非推进许可，也不增加
+新的正常确认点。
 
 ### 本阶段必须形成的内容
 

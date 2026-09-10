@@ -11,6 +11,7 @@ import { validateHumanConfirmation } from "../../runtime/evidence/canonical-evid
 import { runStageEndReflection } from "../../runtime/stage/stage-runner.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const repoRoot = resolve(join(import.meta.dirname, "../.."));
 const pageCli = join(repoRoot, "tools/cli/build-reflection-page.mjs");
@@ -67,8 +68,8 @@ function runnerFixture(taskId) {
   });
   const candidateWorkspace = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
-  for (const material of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
-    artifacts.writeAtomic(material, `# ${material}\n`);
+  for (const [material, content] of Object.entries(canonicalStageMaterials())) {
+    artifacts.writeAtomic(material, content);
   }
   const kernel = createTaskKernel(task, {
     candidateWorkspace,
@@ -86,12 +87,29 @@ function runnerFixture(taskId) {
     artifacts,
     storageRoot: root,
   };
-  return { root, task, kernel, context };
+  return { root, task, kernel, artifacts, candidateWorkspace, context };
 }
 
-function reflectionValue(taskId, stageStatus, overrides = {}) {
+function reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding, ...overrides } = {}) {
+  if (!stageOutcome) {
+    return {
+      schema_version: "stage-reflection.v1",
+      record_kind: "judgment",
+      task_id: taskId,
+      stage: "build-spec",
+      stage_status: stageStatus,
+      generated_at: "2026-08-30T12:00:00.000Z",
+      status: "ok",
+      error: null,
+      judgments: [],
+      interventions: [],
+      lessons_added: [],
+      ...overrides,
+    };
+  }
+  const outputHash = hash(JSON.stringify({ taskId, stageStatus, attempt: stageOutcome.value.attempt_id }));
   return {
-    schema_version: "stage-reflection.v1",
+    schema_version: "stage-reflection.v2",
     record_kind: "judgment",
     task_id: taskId,
     stage: "build-spec",
@@ -99,9 +117,30 @@ function reflectionValue(taskId, stageStatus, overrides = {}) {
     generated_at: "2026-08-30T12:00:00.000Z",
     status: "ok",
     error: null,
-    judgments: [],
+    judgments: [{
+      subject_id: "constructed-reflection",
+      subject_kind: "step",
+      classification: "simplify",
+      severity: "low",
+      reason: "构造性阶段反射已绑定当前 stage outcome。",
+      evidence_refs: [stageOutcome.ref],
+      confidence: "medium",
+      next_review_trigger: "下一次同类阶段完成时",
+    }],
     interventions: [],
     lessons_added: [],
+    identity: { ...currentBinding },
+    executor: {
+      source_id: "constructed-reflection-executor",
+      attempt_id: stageOutcome.value.attempt_id,
+      started_at: "2026-08-30T11:59:00.000Z",
+      completed_at: "2026-08-30T12:00:00.000Z",
+      output_hash: outputHash,
+    },
+    output_hash: outputHash,
+    ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
+    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    source_completeness: { compaction: false, truncation: false, visible_scope: "constructed stage outcome", unknown_reasons: [] },
     ...overrides,
   };
 }
@@ -202,14 +241,23 @@ function readProjectedData(path) {
 describe("stage-reflection constructed end-to-end contract", () => {
   it("writes completed and failed reflections, preserves raw lessons, and reads confirmation versions", async () => {
     const completed = runnerFixture("constructed-completed");
+    const completedOutcome = writeStageOutcomeFixture({
+      task: completed.task,
+      kernel: completed.kernel,
+      artifacts: completed.artifacts,
+      workspace: completed.candidateWorkspace,
+      stage: "build-spec",
+      attemptId: "attempt-constructed-completed",
+    });
     const completedResult = await runStageEndReflection(completed.context, {
       stageStatus: "completed",
+      stageOutcome: completedOutcome,
       now: "2026-08-30T12:00:00.000Z",
       generatedAt: "2026-08-30T12:00:00.000Z",
-      execute: async ({ taskId, stageStatus }) => reflectionValue(taskId, stageStatus),
+      execute: async ({ taskId, stageStatus, stageOutcome, currentBinding }) => reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding }),
     });
     expect(completedResult).toMatchObject({ status: "completed", step_status: "completed" });
-    expect(JSON.parse(completed.task.readRecord("quality/stage-reflection/build-spec.json"))).toMatchObject({
+    expect(JSON.parse(completed.task.readRecord(completedResult.ref))).toMatchObject({
       stage_status: "completed",
       status: "ok",
       lessons_added: [expect.stringMatching(/^lessons\/build-spec\.jsonl#[A-Za-z0-9][A-Za-z0-9._-]*$/)],
@@ -228,7 +276,7 @@ describe("stage-reflection constructed end-to-end contract", () => {
       execute: async () => { throw new Error("constructed reflection failure"); },
     });
     expect(failedResult).toMatchObject({ status: "failed", step_status: "failed" });
-    expect(JSON.parse(failed.task.readRecord("quality/stage-reflection/build-spec.json"))).toMatchObject({
+    expect(JSON.parse(failed.task.readRecord(failedResult.ref))).toMatchObject({
       stage_status: "failed",
       status: "failed",
       error: { summary: "constructed reflection failure" },

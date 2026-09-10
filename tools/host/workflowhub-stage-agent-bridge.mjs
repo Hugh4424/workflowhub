@@ -19,11 +19,15 @@ import { pathToFileURL } from "node:url";
 import {
   createWorkflowHubSessionRecorder,
   publishUnavailableStageAgentOutcome,
+  validateWorkerSummary,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
 import { authenticateCodeReviewRepairs } from "../../runtime/evidence/freshness.mjs";
+import { verifyWorkerBrief } from "../../runtime/task/material-workspace.mjs";
+import { buildHostRequirementAuthentication } from "../../runtime/evidence/host-session-transcript.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const REQUIREMENT_SOURCE_KINDS = new Set(["host-session"]);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -43,6 +47,208 @@ function requiredText(value, label) {
 function requiredTimestamp(value, label) {
   if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${label} must be a non-negative integer`);
   return value;
+}
+
+const COORDINATION_EVENT_TYPES = new Set(["dispatch", "terminal"]);
+const COORDINATION_ROLES = new Set(["main-session", "stage-coordinator", "worker"]);
+const MAIN_SESSION_HEAVY_OPERATIONS = new Set(["repository_scan", "test", "review_provider", "provider_review", "full_history_read"]);
+const COORDINATION_EVENT_KEYS = new Set([
+  "event_type", "worker_id", "producer_role", "operation", "read_only", "task_id", "stage", "usage_ref",
+  "brief_ref", "brief_hash", "summary_ref", "summary_hash",
+]);
+const COORDINATION_USAGE_KEYS = new Set([
+  "task_id", "session_id", "root_input_tokens", "worker_input_tokens", "event_type", "producer_role", "timestamp",
+]);
+
+function coordinationUnavailable(...errors) {
+  return Object.freeze({ ok: false, status: "unavailable", errors: Object.freeze(errors) });
+}
+
+function safeTokenCount(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function safeCoordinationRef(value) {
+  return typeof value === "string" && value.trim() !== "" && !value.startsWith("/")
+    && !value.includes("\\") && !value.split("/").some((part) => part === "" || part === "." || part === "..");
+}
+
+function coordinationUsageError(event, index, { taskId, sessionId }) {
+  const usage = event.usage_ref;
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return `COORDINATION_USAGE_UNAVAILABLE:${index}:usage_ref`;
+  const unknown = Object.keys(usage).filter((key) => !COORDINATION_USAGE_KEYS.has(key));
+  if (unknown.length) return `COORDINATION_USAGE_INVALID:${index}:${unknown.join(",")}`;
+  const required = ["task_id", "session_id", "event_type", "producer_role", "timestamp"];
+  if (required.some((key) => typeof usage[key] !== "string" || usage[key].trim() === "")) return `COORDINATION_USAGE_UNAVAILABLE:${index}:identity`;
+  if (usage.task_id !== taskId || usage.session_id !== sessionId) return `COORDINATION_USAGE_IDENTITY_MISMATCH:${index}`;
+  if (!safeTokenCount(usage.root_input_tokens) || !safeTokenCount(usage.worker_input_tokens)) return `COORDINATION_USAGE_UNAVAILABLE:${index}:tokens`;
+  if (usage.event_type !== event.event_type || usage.producer_role !== event.producer_role || Number.isNaN(Date.parse(usage.timestamp))) {
+    return `COORDINATION_USAGE_INVALID:${index}:binding`;
+  }
+  return null;
+}
+
+/** Validate bounded host lifecycle facts without inferring history or concurrency. */
+export function validateHostCoordinationEvents(events, {
+  taskId,
+  sessionId,
+  stage = null,
+  materialRevision = null,
+  snapshotTree = null,
+  briefs,
+  summaries,
+  read,
+  maxWorkers = 6,
+  maxReadConcurrency = 3,
+} = {}) {
+  if (!Array.isArray(events)) return coordinationUnavailable("COORDINATION_EVENTS_INVALID");
+  if (typeof taskId !== "string" || taskId.trim() === "" || typeof sessionId !== "string" || sessionId.trim() === "") {
+    return coordinationUnavailable("COORDINATION_IDENTITY_UNAVAILABLE");
+  }
+  const errors = [];
+  const currentMaterialRevision = typeof materialRevision === "string" && /^revision-[a-f0-9]{64}$/.test(materialRevision)
+    ? materialRevision.slice("revision-".length)
+    : materialRevision;
+  if (typeof currentMaterialRevision !== "string" || !/^[a-f0-9]{64}$/.test(currentMaterialRevision)
+      || typeof snapshotTree !== "string" || snapshotTree.trim() === "") {
+    errors.push("COORDINATION_CURRENT_IDENTITY_UNAVAILABLE");
+  }
+  if (!Array.isArray(briefs)) errors.push("COORDINATION_BRIEFS_INVALID");
+  if (!Array.isArray(summaries)) errors.push("COORDINATION_SUMMARIES_INVALID");
+  if (Array.isArray(briefs) && Array.isArray(summaries) && briefs.length !== summaries.length) {
+    errors.push("COORDINATION_BINDING_COUNT_MISMATCH");
+  }
+  const briefByHash = new Map();
+  for (const [index, brief] of (Array.isArray(briefs) ? briefs : []).entries()) {
+    if (brief?.task_id !== taskId || (stage !== null && brief?.stage !== stage)) {
+      errors.push(`COORDINATION_BRIEF_IDENTITY_MISMATCH:${index}`);
+    }
+    if (brief?.material_revision !== currentMaterialRevision) errors.push(`COORDINATION_BRIEF_STALE:${index}:material_revision`);
+    if (brief?.snapshot_tree !== snapshotTree) errors.push(`COORDINATION_BRIEF_STALE:${index}:snapshot_tree`);
+    const checked = verifyWorkerBrief(brief);
+    if (!checked.ok) {
+      errors.push(`COORDINATION_BRIEF_INVALID:${index}:${checked.errors.join(",")}`);
+      continue;
+    }
+    if (briefByHash.has(checked.brief_hash)) errors.push(`COORDINATION_BRIEF_DUPLICATE:${index}:${checked.brief_hash}`);
+    briefByHash.set(checked.brief_hash, { brief, index });
+  }
+  const summaryByRef = new Map();
+  const summaryHashes = new Set();
+  for (const [index, summary] of (Array.isArray(summaries) ? summaries : []).entries()) {
+    const checked = validateWorkerSummary(summary, { read });
+    if (!checked.ok) {
+      errors.push(`COORDINATION_SUMMARY_INVALID:${index}:${checked.errors.join(",")}`);
+      continue;
+    }
+    if (summaryByRef.has(checked.ref)) errors.push(`COORDINATION_SUMMARY_DUPLICATE:${index}:${checked.ref}`);
+    if (summaryHashes.has(checked.sha256)) errors.push(`COORDINATION_SUMMARY_HASH_DUPLICATE:${index}:${checked.sha256}`);
+    summaryByRef.set(checked.ref, summary);
+    summaryHashes.add(checked.sha256);
+  }
+  const active = new Set();
+  const readActive = new Set();
+  const workers = new Set();
+  const workerBindings = new Map();
+  const usedBriefRefs = new Set();
+  const usedBriefHashes = new Set();
+  const usedSummaryRefs = new Set();
+  const usedSummaryHashes = new Set();
+  const normalized = [];
+  let maxConcurrent = 0;
+  let maxRead = 0;
+  for (const [index, event] of events.entries()) {
+    if (!event || typeof event !== "object" || Array.isArray(event)) {
+      errors.push(`COORDINATION_EVENT_INVALID:${index}:shape`);
+      continue;
+    }
+    const unknown = Object.keys(event).filter((key) => !COORDINATION_EVENT_KEYS.has(key));
+    if (unknown.length) errors.push(`COORDINATION_EVENT_UNKNOWN_FIELD:${index}:${unknown.join(",")}`);
+    if (!COORDINATION_EVENT_TYPES.has(event.event_type)) errors.push(`COORDINATION_EVENT_INVALID:${index}:event_type`);
+    for (const key of ["worker_id", "producer_role", "operation", "task_id", "stage"]) {
+      if (typeof event[key] !== "string" || event[key].trim() === "") errors.push(`COORDINATION_EVENT_INVALID:${index}:${key}`);
+    }
+    if (!COORDINATION_ROLES.has(event.producer_role)) errors.push(`COORDINATION_PRODUCER_ROLE_INVALID:${index}`);
+    if (event.task_id !== taskId) errors.push(`COORDINATION_IDENTITY_MISMATCH:${index}:task_id`);
+    if (stage !== null && event.stage !== stage) errors.push(`COORDINATION_IDENTITY_MISMATCH:${index}:stage`);
+    if (typeof event.read_only !== "boolean") errors.push(`COORDINATION_EVENT_INVALID:${index}:read_only`);
+    const usageError = coordinationUsageError(event, index, { taskId, sessionId });
+    if (usageError) errors.push(usageError);
+    if (event.event_type === "status_poll" || event.event_type === "sleep_poll"
+        || /(?:^|_)(?:poll|sleep)(?:$|_)/i.test(event.operation ?? "")) {
+      errors.push(`POLLING_NOT_ALLOWED:${index}`);
+    }
+    if (event.producer_role === "main-session" && MAIN_SESSION_HEAVY_OPERATIONS.has(event.operation)) {
+      errors.push(`ROLE_BOUNDARY_VIOLATION:${index}:main-session:${event.operation}`);
+    }
+    if (event.event_type === "dispatch") {
+      if (!safeCoordinationRef(event.brief_ref)) errors.push(`COORDINATION_BRIEF_REF_MISSING:${index}`);
+      if (!briefByHash.has(event.brief_hash)) errors.push(`COORDINATION_BRIEF_HASH_MISMATCH:${index}`);
+      if (usedBriefRefs.has(event.brief_ref)) errors.push(`COORDINATION_BRIEF_REF_DUPLICATE:${index}:${event.brief_ref}`);
+      if (usedBriefHashes.has(event.brief_hash)) errors.push(`COORDINATION_BRIEF_HASH_DUPLICATE:${index}:${event.brief_hash}`);
+      if (event.summary_ref !== undefined || event.summary_hash !== undefined) errors.push(`COORDINATION_DISPATCH_SUMMARY_FORBIDDEN:${index}`);
+      if (workers.has(event.worker_id)) errors.push(`WORKER_DUPLICATE:${index}:${event.worker_id}`);
+      workers.add(event.worker_id);
+      if (workers.size > maxWorkers) errors.push(`WORKER_LIMIT_EXCEEDED:${index}:${workers.size}`);
+      active.add(event.worker_id);
+      if (event.read_only === true) readActive.add(event.worker_id);
+      workerBindings.set(event.worker_id, {
+        brief_ref: event.brief_ref,
+        brief_hash: event.brief_hash,
+        brief_index: briefByHash.get(event.brief_hash)?.index,
+      });
+      if (safeCoordinationRef(event.brief_ref)) usedBriefRefs.add(event.brief_ref);
+      if (briefByHash.has(event.brief_hash)) usedBriefHashes.add(event.brief_hash);
+    } else if (event.event_type === "terminal") {
+      if (!safeCoordinationRef(event.brief_ref)) errors.push(`COORDINATION_BRIEF_REF_MISSING:${index}`);
+      if (!briefByHash.has(event.brief_hash)) errors.push(`COORDINATION_BRIEF_HASH_MISMATCH:${index}`);
+      if (!safeCoordinationRef(event.summary_ref)) errors.push(`COORDINATION_SUMMARY_REF_MISSING:${index}`);
+      const summary = summaryByRef.get(event.summary_ref);
+      if (!summary || summary.sha256 !== event.summary_hash) errors.push(`COORDINATION_SUMMARY_HASH_MISMATCH:${index}`);
+      const dispatchBinding = workerBindings.get(event.worker_id);
+      if (!dispatchBinding || dispatchBinding.brief_ref !== event.brief_ref || dispatchBinding.brief_hash !== event.brief_hash) {
+        errors.push(`COORDINATION_WORKER_BINDING_MISMATCH:${index}:${event.worker_id}`);
+      }
+      const expectedSummary = Number.isSafeInteger(dispatchBinding?.brief_index)
+        ? summaries[dispatchBinding.brief_index]
+        : null;
+      if (!expectedSummary || expectedSummary.ref !== event.summary_ref || expectedSummary.sha256 !== event.summary_hash) {
+        errors.push(`COORDINATION_WORKER_SUMMARY_MISMATCH:${index}:${event.worker_id}`);
+      }
+      if (usedSummaryRefs.has(event.summary_ref)) errors.push(`COORDINATION_SUMMARY_REF_DUPLICATE:${index}:${event.summary_ref}`);
+      if (usedSummaryHashes.has(event.summary_hash)) errors.push(`COORDINATION_SUMMARY_HASH_DUPLICATE:${index}:${event.summary_hash}`);
+      if (!active.has(event.worker_id)) errors.push(`WORKER_TERMINAL_WITHOUT_DISPATCH:${index}:${event.worker_id}`);
+      active.delete(event.worker_id);
+      readActive.delete(event.worker_id);
+      if (safeCoordinationRef(event.summary_ref)) usedSummaryRefs.add(event.summary_ref);
+      if (summary && summary.sha256 === event.summary_hash) usedSummaryHashes.add(event.summary_hash);
+    }
+    maxConcurrent = Math.max(maxConcurrent, active.size);
+    maxRead = Math.max(maxRead, readActive.size);
+    if (maxConcurrent > maxWorkers) errors.push(`WORKER_CONCURRENCY_LIMIT:${index}:${maxConcurrent}`);
+    if (maxRead > maxReadConcurrency) errors.push(`WORKER_READ_CONCURRENCY_LIMIT:${index}:${maxRead}`);
+    normalized.push(Object.freeze({ ...event, usage_ref: event.usage_ref && Object.freeze({ ...event.usage_ref }) }));
+  }
+  if (active.size > 0) errors.push(`WORKER_TERMINAL_MISSING:${[...active].join(",")}`);
+  for (const hash of briefByHash.keys()) {
+    if (!usedBriefHashes.has(hash)) errors.push(`COORDINATION_BRIEF_ORPHAN:${hash}`);
+  }
+  for (const ref of summaryByRef.keys()) {
+    if (!usedSummaryRefs.has(ref)) errors.push(`COORDINATION_SUMMARY_ORPHAN:${ref}`);
+  }
+  if (errors.length) return coordinationUnavailable(...errors);
+  return Object.freeze({ ok: true, status: "recorded", task_id: taskId, session_id: sessionId, worker_count: workers.size, max_concurrent: maxConcurrent, read_concurrency: maxRead, events: Object.freeze(normalized) });
+}
+
+export function assertHostCoordinationEvents(events, options = {}) {
+  const result = validateHostCoordinationEvents(events, options);
+  if (!result.ok) {
+    const code = String(result.errors[0] ?? "COORDINATION_INVALID").split(":")[0];
+    const error = new Error(`${code}: ${result.errors.join("; ")}`);
+    error.code = code;
+    throw error;
+  }
+  return result;
 }
 
 function compareLifecycleEvents(a, b) {
@@ -188,6 +394,25 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
   if (!Array.isArray(session.events)) throw new TypeError("session.events must be an array");
   if (requiredText(session.task_id, "session.task_id") !== context.task.identity.taskId) throw new Error("session.task_id does not match the current WorkflowHub task");
   rejectStaleVerifyCodeReview({ context, stage, session });
+  let coordination = null;
+  if (session.coordination !== undefined) {
+    if (!session.coordination || typeof session.coordination !== "object" || Array.isArray(session.coordination)) {
+      throw new Error("BRIDGE_COORDINATION_INVALID: session.coordination must be an object");
+    }
+    const briefs = session.coordination.briefs;
+    const summaries = session.coordination.summaries;
+    const events = assertHostCoordinationEvents(session.coordination.events, {
+      taskId: context.task.identity.taskId,
+      sessionId: requiredText(session.session_id, "session.session_id"),
+      stage,
+      materialRevision: context.kernel.currentVNextMaterialRevision(),
+      snapshotTree: context.kernel.currentVNextSnapshot().tree,
+      briefs,
+      summaries,
+      read: context.task.readRecord,
+    });
+    coordination = { ...events, briefs, summaries };
+  }
   let clock = 0;
   const recorder = createWorkflowHubSessionRecorder({
     task: context.task,
@@ -222,6 +447,7 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
   }
   return recorder.finish({
     status: session.status,
+    ...(coordination === null ? {} : { coordination }),
     ...(stage === "verify-code" ? { code_review: session.code_review } : { spec_analyze: session.spec_analyze }),
   });
 }
@@ -231,7 +457,40 @@ export function publishCurrentWorkflowHubSession(args) {
   catch (error) { throw normalizeBridgeError(error); }
 }
 
-async function runBridge(input, { requirementAuthentication = null } = {}) {
+/**
+ * Optional host-authenticated requirement projection.
+ *
+ * The bridge stays host-agnostic: it accepts an explicit, opt-in transcript
+ * descriptor and delegates the whole host-session contract to the evidence
+ * module. Without the descriptor nothing changes. When the projection cannot
+ * be produced the result is `null`, so the missing fact stays visible instead
+ * of being replaced by caller-supplied content.
+ */
+function buildRequirementAuthentication({ descriptor, context, stage, sessionId, sourceId, sourceRef }) {
+  const kind = requiredText(descriptor?.kind, "session.source.kind");
+  if (!REQUIREMENT_SOURCE_KINDS.has(kind)) throw new Error(`session.source.kind is unsupported: ${kind}`);
+  const unknown = Object.keys(descriptor ?? {}).filter((key) => !new Set(["kind", "transcript_path"]).has(key));
+  if (unknown.length) throw new Error(`session.source contains unsupported fields: ${unknown.join(", ")}`);
+  // Presence is the opt-in boundary: an explicitly empty path means this
+  // descriptor selected no source and must not silently borrow ambient env.
+  // Only an omitted field may use the explicitly configured process fallback.
+  const transcriptPath = Object.hasOwn(descriptor, "transcript_path")
+    ? descriptor.transcript_path
+    : process.env.WORKFLOWHUB_HOST_TRANSCRIPT;
+  return buildHostRequirementAuthentication({
+    transcriptPath,
+    taskId: context.task.identity.taskId,
+    runId: typeof context.workflowRunId === "string" && context.workflowRunId.trim() !== ""
+      ? context.workflowRunId
+      : `host-run-${sessionId}`,
+    stage,
+    sessionId,
+    sourceId: requiredText(sourceId, "session.source_id"),
+    sourceRef: requiredText(sourceRef, "session.source_ref"),
+  });
+}
+
+async function runBridge(input) {
   const projectName = requiredText(input.project_name, "project_name");
   const taskId = requiredText(input.task_id, "task_id");
   const stage = requiredText(input.stage, "stage");
@@ -262,8 +521,37 @@ async function runBridge(input, { requirementAuthentication = null } = {}) {
   if (stage === "make-decision" && !context.candidateWorkspace) {
     context = prepareMakeDecisionWorkspace(context);
   }
+  const hasRequirementSource = hasSession && input.session.source !== undefined;
+  const requirementAuthentication = hasRequirementSource
+    ? buildRequirementAuthentication({
+        descriptor: input.session.source,
+        context,
+        stage,
+        sessionId: typeof input.session.session_id === "string" && input.session.session_id.trim() !== ""
+          ? input.session.session_id
+          : input.session.source_ref,
+        sourceId: input.session.source_id,
+        sourceRef: input.session.source_ref,
+      })
+    : null;
   const outcome = hasSession
-    ? publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication })
+    ? requirementAuthentication === null && hasRequirementSource
+      ? publishUnavailableStageAgentOutcome({
+          task: context.task,
+          kernel: context.kernel,
+          artifacts: context.artifacts,
+          workspace: context.workspace,
+          candidateWorkspace: context.candidateWorkspace,
+          stage,
+          attemptId,
+          workflowRunId: context.workflowRunId,
+          host: requiredText(input.session.host, "session.host"),
+          sourceId: requiredText(input.session.source_id, "session.source_id"),
+          sourceFamily: requiredText(input.session.source_family, "session.source_family"),
+          agentRunId: requiredText(input.agent_run_id, "agent_run_id"),
+          reason: "host-session requirement source is unavailable",
+        })
+      : publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication })
     : publishUnavailableStageAgentOutcome({
         task: context.task,
         kernel: context.kernel,
@@ -291,12 +579,8 @@ async function runBridge(input, { requirementAuthentication = null } = {}) {
   });
 }
 
-/**
- * Same-process launcher seam. Authenticated requirement results are opaque
- * capabilities and therefore cannot be accepted from the JSON stdin packet.
- */
-export async function main(input, dependencies) {
-  try { return await runBridge(input, dependencies); }
+export async function main(input) {
+  try { return await runBridge(input); }
   catch (error) { throw normalizeBridgeError(error); }
 }
 

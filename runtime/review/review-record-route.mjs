@@ -12,6 +12,7 @@ import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.m
 import { evaluateFactFreshness } from "../evidence/freshness.mjs";
 import { stageMaterialScopeRevision } from "../stage/completion-predicates.mjs";
 import { validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
+import { reviewIdentityFromInput } from "./review-policy.mjs";
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
@@ -87,13 +88,24 @@ function prepareExecutionReviewRequest(task, request, identity) {
   return { request: frozenRequest, executionContext };
 }
 
-function executionBindingForResult(task, result, identity, context) {
+function executionBindingForResult(task, result, identity, context, { allowHistoricalPreDispatchMaterialFailure = false } = {}) {
   if (context === null) return null;
   if (result.stage !== "verify-code") throw new Error("execution review context is restricted to verify-code");
   const frozen = readFrozenReviewMaterial({ task, ...context.frozen_material });
   if (frozen.provider_input_sha256 !== context.frozen_material.provider_input_sha256) throw new Error("frozen review original bytes hash mismatch");
   const request = JSON.parse(frozen.bytes.toString("utf8"));
-  if (createSimpleReviewPacket(request).material_id !== result.material_id) throw new Error("execution review result does not match the frozen provider bundle");
+  const materialIdMatches = createSimpleReviewPacket(request).material_id === result.material_id;
+  const preDispatchMaterialFailure = result.status === "unavailable"
+    && result.error?.code === "REVIEW_INPUT_TOO_LARGE"
+    && Array.isArray(result.provider_results) && result.provider_results.length === 0
+    && Array.isArray(result.findings) && result.findings.length === 0;
+  // This attempt predates the bounded verify-code projection. It failed before
+  // a provider bundle was dispatched, so its recorded material_id is a
+  // historical diagnostic, not a provider-result attestation. Keep the
+  // immutable attempt readable after the projection algorithm changes.
+  if (!materialIdMatches && !(allowHistoricalPreDispatchMaterialFailure && preDispatchMaterialFailure)) {
+    throw new Error("execution review result does not match the frozen provider bundle");
+  }
   const execution = readExecutionSource(task, request.reviewed_execution, identity, request.materials.runtime_current_materials);
   if (canonicalJson(context.reviewed_execution) !== canonicalJson({ ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor })
       || request.materials.runtime_execution.raw !== execution.aggregateRaw) throw new Error("frozen execution review binding mismatch");
@@ -121,7 +133,135 @@ function assertTaskHandle(task) {
   return task;
 }
 
-function createCanonicalRecord(task, relativePath, data) {
+function rejectBuildPrdCanonicalPersistence(result, label = "review result") {
+  const snake = result?.review_kind;
+  const camel = result?.reviewKind;
+  if (snake !== undefined && camel !== undefined && snake !== camel) {
+    throw new TypeError("review identity aliases review_kind/reviewKind disagree");
+  }
+  if (snake === "build_prd" || camel === "build_prd") {
+    throw new TypeError(`BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: ${label} cannot use canonical formal-stage attempt/result records`);
+  }
+}
+
+function normalizeReviewIdentity(input, label = "review") {
+  const identity = reviewIdentityFromInput(input);
+  const {
+    review_track: _reviewTrack,
+    reviewTrack: _reviewTrackAlias,
+    review_scope: _reviewScope,
+    reviewScope: _reviewScopeAlias,
+    review_kind: _reviewKind,
+    reviewKind: _reviewKindAlias,
+    ...rest
+  } = input;
+  return {
+    ...rest,
+    stage: identity.stage,
+    ...(Object.hasOwn(input, "review_track") || Object.hasOwn(input, "reviewTrack") ? { review_track: identity.reviewTrack } : {}),
+    ...(identity.reviewKind === "mini_task.design" || identity.reviewKind === "mini_task.implementation"
+      || Object.hasOwn(input, "review_scope") || Object.hasOwn(input, "reviewScope")
+      ? { review_scope: identity.reviewScope } : {}),
+    ...(Object.hasOwn(input, "review_kind") || Object.hasOwn(input, "reviewKind") ? { review_kind: identity.reviewKind } : {}),
+  };
+}
+
+function normalizeCanonicalReviewResult(result, label = "review result") {
+  rejectBuildPrdCanonicalPersistence(result, label);
+  return normalizeReviewIdentity(result, label);
+}
+
+function mergeRequestResultIdentity(request, result) {
+  for (const field of ["subject_kind", "phase_id", "review_scope"]) {
+    if (request[field] === undefined) continue;
+    if (Object.hasOwn(result, field) && result[field] !== request[field]) {
+      throw new TypeError(`review result ${field} does not match its request`);
+    }
+    if (!Object.hasOwn(result, field)) result = { ...result, [field]: request[field] };
+  }
+  return result;
+}
+
+const SHARED_REVIEW_TUPLE_FIELDS = ["subject_kind", "phase_id", "review_scope"];
+
+function defaultSharedReviewTuple(stage) {
+  return stage === "build-code"
+    ? { subject_kind: "worktree", phase_id: null, review_scope: "integration" }
+    : { subject_kind: "worktree", phase_id: null, review_scope: null };
+}
+
+function assertSharedReviewTuple(stage, tuple, label = "review") {
+  if (!["worktree", "phase"].includes(tuple.subject_kind)) throw new TypeError(`${label} subject_kind is invalid`);
+  if (tuple.phase_id !== null && (typeof tuple.phase_id !== "string" || !tuple.phase_id.trim())) {
+    throw new TypeError(`${label} phase_id is invalid`);
+  }
+  if (![null, "phase", "integration"].includes(tuple.review_scope)) throw new TypeError(`${label} review_scope is invalid`);
+  if (tuple.review_scope === "phase"
+      && (stage !== "build-code" || tuple.subject_kind !== "phase" || typeof tuple.phase_id !== "string" || !tuple.phase_id.trim())) {
+    throw new TypeError(`${label} review identity tuple is invalid for phase scope`);
+  }
+  if (tuple.review_scope === "integration"
+      && (stage !== "build-code" || tuple.subject_kind !== "worktree" || tuple.phase_id !== null)) {
+    throw new TypeError(`${label} review identity tuple is invalid for integration scope`);
+  }
+  if (tuple.subject_kind === "phase"
+      && (stage !== "build-code" || typeof tuple.phase_id !== "string" || !tuple.phase_id.trim())) {
+    throw new TypeError(`${label} phase subject requires a non-empty phase_id and build-code stage`);
+  }
+  if (tuple.subject_kind !== "phase" && tuple.phase_id !== null) {
+    throw new TypeError(`${label} non-phase subject requires phase_id null`);
+  }
+  if (stage !== "build-code" && tuple.review_scope !== null) {
+    throw new TypeError(`${label} does not use review_scope`);
+  }
+  return tuple;
+}
+
+function sharedTupleMismatch(role, field) {
+  if (field === "review_scope") return new TypeError(`paired review ${role} material/stage identity mismatch`);
+  return new TypeError(`paired review ${role} ${field} identity mismatch`);
+}
+
+function normalizePairedSharedIdentity(result, members) {
+  const sides = [
+    { label: "outer", value: result },
+    { label: "red", value: members.red },
+    { label: "blue", value: members.blue },
+  ];
+  const tuple = defaultSharedReviewTuple(result.stage);
+  let reviewScopeProvided = false;
+  for (const field of SHARED_REVIEW_TUPLE_FIELDS) {
+    const provided = sides.filter(({ value }) => value[field] !== undefined);
+    if (field === "review_scope") reviewScopeProvided = provided.length > 0;
+    for (let index = 1; index < provided.length; index += 1) {
+      if (provided[index].value[field] !== provided[0].value[field]) {
+        const role = provided[index].label === "outer" ? "outer" : provided[index].label;
+        throw sharedTupleMismatch(role, field);
+      }
+    }
+    if (provided.length) tuple[field] = provided[0].value[field];
+  }
+  if (!reviewScopeProvided) {
+    const hasPhaseSubject = tuple.subject_kind === "phase"
+      || (typeof tuple.phase_id === "string" && tuple.phase_id.trim() !== "");
+    tuple.review_scope = result.stage === "build-code"
+      ? (hasPhaseSubject ? "phase" : "integration")
+      : null;
+  }
+  assertSharedReviewTuple(result.stage, tuple, "paired review");
+  const completed = Object.fromEntries(sides.map(({ label, value }) => [label, { ...value, ...tuple }]));
+  return { result: completed.outer, members: { red: completed.red, blue: completed.blue } };
+}
+
+function createCanonicalRecord(task, relativePath, data, kernel = null) {
+  if (kernel && typeof kernel.publishCanonicalRecord === "function") {
+    try {
+      const current = task.readRecord(relativePath);
+      if (current !== data) throw new Error(`immutable review record conflict: ${relativePath}`);
+      return { idempotent: true };
+    } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    return kernel.publishCanonicalRecord(relativePath, data);
+  }
   try {
     const current = task.readRecord(relativePath);
     if (current !== data) throw new Error(`immutable review record conflict: ${relativePath}`);
@@ -191,6 +331,25 @@ function requestLockHash(request, materialId, routeIdentity) {
   return textHash(canonicalJson(stable));
 }
 
+function reviewSubjectHash(subject) {
+  return textHash(canonicalJson(subject ?? null));
+}
+
+function attemptSubjectHash(attempt) {
+  const value = attempt?.closure_manifest?.subject_sha256 ?? attempt?.subject_sha256;
+  return typeof value === "string" && SHA256_HEX.test(value) ? value : null;
+}
+
+function subjectMatchesAttempt(attempt, subject) {
+  const actual = attemptSubjectHash(attempt);
+  // Older canonical attempts predate the closure subject hash. They can only
+  // remain in the default null-subject namespace; a non-null subject cannot
+  // be proven equivalent and must stay fail-closed.
+  return actual === null
+    ? (subject === undefined || subject === null)
+    : actual === reviewSubjectHash(subject);
+}
+
 function findReusableReview({ history, request, identity, materialId, requestKey }) {
   for (const entry of history) {
     const attempt = entry.attempt;
@@ -200,6 +359,10 @@ function findReusableReview({ history, request, identity, materialId, requestKey
         || (attempt.phase_id ?? null) !== (request.phase_id ?? null)
         || (attempt.subject_kind ?? "worktree") !== (request.subject_kind ?? "worktree")
         || attempt.request_key !== requestKey) continue;
+    // A provider material-size rejection is a transport preflight fact, not a
+    // reusable review result. It must not consume the one-round allowance and
+    // must also remain retryable after the caller bounds the material.
+    if (isNonConsumingMaterialBoundFailure(attempt)) continue;
     const semantic = (entry.pairSummary?.semantic_status ?? entry.prepared.semantic_status) === "available";
     const sameSource = attempt.snapshot_tree === identity.tree && attempt.material_revision === identity.materialRevision;
     // Semantic refs retain their original source identity; freshness remains a
@@ -241,6 +404,41 @@ function reviewRequestError(error) {
   const code = typeof error?.code === "string" && error.code.trim() !== "" ? error.code : "REVIEW_EXECUTION_FAILED";
   const message = typeof error?.message === "string" && error.message.trim() !== "" ? error.message : "review request failed before a semantic result";
   return { code, message };
+}
+
+function reviewClosure(request, identity, materialId, requestKey, routeIdentity = null) {
+  return {
+    version: "wh-review-closure.v1",
+    request_key: requestKey,
+    source: identity.source,
+    material_scope: request.review_scope ?? request.reviewScope ?? null,
+    subject_kind: request.subject_kind ?? "worktree",
+    subject_sha256: textHash(canonicalJson(request.subject ?? null)),
+    snapshot_tree: identity.tree,
+    material_revision: identity.materialRevision,
+    material_id: materialId,
+    authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+    packet_sha256: materialId,
+    prompt_sha256: textHash(String(request.prompt ?? "")),
+    route_identity: routeIdentity,
+    policy_snapshot_hash: request.policy_snapshot_hash ?? null,
+  };
+}
+
+function routeRepairClosureIdentity(closure) {
+  if (!closure || closure.version !== "wh-review-closure.v1") return null;
+  const { request_key: _requestKey, route_identity: _routeIdentity, ...stable } = closure;
+  return textHash(canonicalJson(stable));
+}
+
+function closureMatches(closure, identity, materialId, request) {
+  if (!closure || closure.version !== "wh-review-closure.v1") return false;
+  const expected = reviewClosure(request, identity, materialId, closure.request_key, closure.route_identity);
+  return canonicalJson(closure) === canonicalJson(expected)
+    && closure.snapshot_tree === identity.tree
+    && closure.material_revision === identity.materialRevision
+    && closure.material_id === materialId
+    && closure.authenticated_evidence_sha256 === authenticatedEvidenceHash(request.authenticated_evidence);
 }
 
 function recordError(error, fallback) {
@@ -298,6 +496,8 @@ function normalizeIdentity(item, provider) {
 function providerAttemptRecord(item, runtimeId, outputRef = null) {
   const completed = item?.status === "completed" && item?.error === null;
   const status = completed ? "completed" : item?.status === "cancelled" ? "cancelled" : "failed";
+  const execution = item?.execution && typeof item.execution === "object" ? item.execution : {};
+  const retry = execution.retry ?? item?.retry ?? { count: 0, progress_events: 0 };
   return {
     provider: item.provider,
     status,
@@ -307,14 +507,15 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
     output_ref: outputRef,
     raw_output_ref: null,
     error: status === "completed" ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
+    ...(item?.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     execution: {
-      adapter: providerAdapter(item.provider),
-      model: item.identity?.model ?? "unknown",
-      effort: null,
-      thinking: null,
-      timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
-      usage: item.usage ?? null,
-      retry: { count: 0, progress_events: 0 },
+      adapter: execution.adapter ?? providerAdapter(item.provider),
+      model: Object.hasOwn(execution, "model") ? execution.model : (item.identity?.model ?? "unknown"),
+      effort: Object.hasOwn(execution, "effort") ? execution.effort : null,
+      thinking: Object.hasOwn(execution, "thinking") ? execution.thinking : null,
+      timing: execution.timing ?? item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
+      usage: execution.usage ?? item.usage ?? null,
+      retry: { count: retry.count ?? 0, progress_events: retry.progress_events ?? 0 },
       runtime_id: runtimeId ?? "unknown",
       session_file_path: null,
     },
@@ -362,7 +563,7 @@ function authenticateBudgetContext(context, identity, requestKey, result) {
   if (context === null) return null;
   if (!context || typeof context !== "object" || Array.isArray(context)
       || Object.keys(context).sort().join(",") !== "kind,material_revision,phase_id,route_identity,snapshot_tree"
-      || !["initial", "focused", "phase"].includes(context.kind)
+      || !["initial", "focused", "phase", "route_repair"].includes(context.kind)
       || context.material_revision !== identity.materialRevision || context.snapshot_tree !== identity.tree
       || !SHA256_HEX.test(context.route_identity ?? "") || !SHA256_HEX.test(requestKey ?? "")
       || context.phase_id !== (result?.phase_id ?? null)
@@ -418,21 +619,73 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
   if (report !== expected) throw new Error("old canonical report provenance is incomplete or changed");
   const kind = attempt.review_scope === "phase" ? "phase" : "initial";
   return { attempt, identity: { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source },
-    saved: { budget_context: null }, consumesRound: attempt.dispatch_state !== "blocked_before_dispatch",
+    saved: { budget_context: null }, consumesRound: reviewAttemptConsumesRound(attempt),
     prepared: { refs: { attempt_ref: ref, result_ref: resultRef, report_ref: attempt.report_ref },
       semantic_status: canonical ? "available" : "unavailable", coverage: canonical ? "satisfied" : "incomplete" },
     fact: { attempt_id: attempt.attempt_id, attempt_ref: ref, attempt_hash: textHash(raw), material_revision: attempt.material_revision,
-      kind, ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}), status: canonical ? "completed" : attempt.terminal_status } };
+      kind, ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}), status: canonical ? "completed" : attempt.terminal_status,
+      terminal_status: attempt.terminal_status, dispatch_state: attempt.dispatch_state,
+      route_identity: null, error_code: attempt.error?.code ?? null,
+      closure_identity: null,
+      has_semantic_output: Boolean(canonical),
+      provider_attempts: attempt.provider_attempts.map((item) => ({ status: item.status,
+        output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })), } };
 }
 
-function readCanonicalBudgetHistory(task) {
+function reviewAttemptConsumesRound(attempt) {
+  if (attempt.dispatch_state === "blocked_before_dispatch") return false;
+  // Older writers recorded a pre-dispatch material-size failure as
+  // "dispatched" even though no provider attempt existed. Do not exhaust the
+  // authenticated one-round allowance for a provider call that never ran.
+  return !isNonConsumingMaterialBoundFailure(attempt);
+}
+
+function isNonConsumingMaterialBoundFailure(attempt) {
+  return attempt?.terminal_status === "unavailable"
+    && attempt?.dispatch_state === "dispatched"
+    && attempt?.error?.code === "REVIEW_INPUT_TOO_LARGE"
+    && Array.isArray(attempt?.provider_attempts)
+    && attempt.provider_attempts.length === 0;
+}
+
+function readCanonicalBudgetHistory(task, scope = null) {
   if (typeof task.listCanonicalReviewAttemptRefs !== "function") throw new Error("canonical attempt inventory is unavailable");
   const refs = task.listCanonicalReviewAttemptRefs();
   if (!Array.isArray(refs) || new Set(refs).size !== refs.length) throw new Error("canonical attempt inventory is invalid");
+  const classifyScope = (attempt) => {
+    // A malformed historical record can still carry a trustworthy namespace
+    // discriminator.  Stage is part of the review budget key, so an explicit
+    // different stage is provably foreign even when the legacy record omitted
+    // task_id/material identity.  Do not let that unrelated debris block the
+    // current stage; same-stage records remain unknown/fail-closed below.
+    if (scope !== null && typeof attempt?.stage === "string" && attempt.stage !== scope.stage) return "foreign";
+    if (scope === null || !attempt || typeof attempt !== "object"
+        || attempt.task_id !== task.identity.taskId
+        || typeof attempt.stage !== "string"
+        || typeof attempt.snapshot_tree !== "string"
+        || typeof attempt.material_revision !== "string") return "unknown";
+    const required = [
+      [attempt.stage, scope.stage],
+      [attempt.review_track ?? null, scope.reviewTrack],
+      [attempt.review_kind ?? null, scope.reviewKind],
+      [attempt.subject_kind ?? "worktree", scope.subjectKind],
+      [attempt.review_scope ?? (attempt.stage === "build-code" ? "integration" : null), scope.reviewScope],
+    ];
+    if (required.some(([actual, expected]) => actual !== expected)) return "foreign";
+    const actualSubjectHash = attemptSubjectHash(attempt);
+    if (actualSubjectHash !== null && actualSubjectHash !== scope.subjectSha256) return "foreign";
+    if (actualSubjectHash === null && scope.subjectSha256 !== reviewSubjectHash(null)) return "unknown";
+    if ((attempt.phase_id ?? null) !== scope.phaseId
+        || attempt.snapshot_tree !== scope.snapshotTree
+        || attempt.material_revision !== scope.materialRevision) return "unknown";
+    return "current";
+  };
   const entries = refs.map((ref) => {
+    let parsedAttempt = null;
     try {
     const raw = task.readRecord(ref);
     const attempt = JSON.parse(raw);
+    parsedAttempt = attempt;
     if (attempt.task_id !== task.identity.taskId || typeof attempt.attempt_id !== "string"
         || ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`
         || !MATERIAL_REVISION.test(attempt.material_revision ?? "") || !GIT_OID.test(attempt.snapshot_tree ?? "")
@@ -443,22 +696,39 @@ function readCanonicalBudgetHistory(task) {
     const identity = { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source };
     const context = saved.budget_context ?? null;
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
-      { paired: Boolean(attempt.pair_id), budgetContext: context, executionContext: saved.execution_context ?? null });
+      { paired: Boolean(attempt.pair_id), budgetContext: context, executionContext: saved.execution_context ?? null,
+        allowHistoricalPreDispatchMaterialFailure: true, closureManifest: attempt.closure_manifest ?? null });
     if (prepared.refs.attempt_ref !== ref || prepared.refs.report_ref !== attempt.report_ref
         || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical budget report binding is invalid");
     for (const [recordRef, expected] of prepared.records) {
       if (task.readRecord(recordRef) !== expected) throw new Error("canonical budget evidence is incomplete or changed");
     }
     if (attempt.dispatch_state === "blocked_before_dispatch" && attempt.provider_attempts.length !== 0) throw new Error("blocked review contains provider attempts");
-    return { attempt, saved, prepared, identity, consumesRound: attempt.dispatch_state !== "blocked_before_dispatch", fact: {
+    return { attempt, saved, prepared, identity, consumesRound: reviewAttemptConsumesRound(attempt), fact: {
       attempt_id: attempt.attempt_id, attempt_ref: ref, attempt_hash: textHash(raw),
       material_revision: attempt.material_revision,
       kind: context?.kind ?? (attempt.review_scope === "phase" ? "phase" : "initial"),
       ...(attempt.phase_id ? { phase_id: attempt.phase_id } : {}),
       status: attempt.terminal_status === "semantic" ? "completed" : attempt.terminal_status,
+      terminal_status: attempt.terminal_status, dispatch_state: attempt.dispatch_state,
+      route_identity: context?.route_identity ?? null, error_code: attempt.error?.code ?? null,
+      closure_identity: routeRepairClosureIdentity(attempt.closure_manifest),
+      has_semantic_output: prepared.semantic_status === "available",
+      provider_attempts: attempt.provider_attempts.map((item) => ({ status: item.status,
+        output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })),
     } };
-    } catch (error) { error.review_attempt_ref = ref; throw error; }
-  });
+    } catch (error) {
+      // A damaged record from another stage in the same task is historical
+      // noise and must not consume or block this request. Any damaged record
+      // from the requested stage remains relevant history: an exact current
+      // record is an incomplete canonical fact, while an older/phase-mismatched
+      // record keeps the budget unknown because dispatch cannot be justified.
+      const classification = classifyScope(parsedAttempt);
+      if (classification === "foreign") return null;
+      if (classification === "current") error.review_attempt_ref = ref;
+      throw error;
+    }
+  }).filter(Boolean);
   const byRef = new Map(entries.map((entry) => [entry.fact.attempt_ref, entry]));
   const seenPairs = new Set();
   return entries.filter((entry) => {
@@ -492,6 +762,10 @@ function readCanonicalBudgetHistory(task) {
     seenPairs.add(pairRef);
     // A complete pair is one round even when both role attempts failed.
     entry.fact.status = members.every((member) => member.fact.status === "completed") ? "completed" : "unavailable";
+    entry.fact.terminal_status = entry.fact.status === "completed" ? "semantic" : "unavailable";
+    entry.fact.has_semantic_output = members.some((member) => member.fact.has_semantic_output);
+    entry.fact.provider_attempts = members.flatMap((member) => member.fact.provider_attempts);
+    entry.fact.error_code = entry.fact.has_semantic_output ? "REVIEW_QUORUM_INCOMPLETE" : "REVIEW_ALL_PROVIDERS_FAILED";
     return true;
     } catch (error) { error.review_attempt_ref = entry.fact.attempt_ref; throw error; }
   });
@@ -506,6 +780,8 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   const taskHandle = assertTaskHandle(task);
   if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("review request must be an object");
   if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");
+  rejectBuildPrdCanonicalPersistence(request, "review request");
+  request = normalizeReviewIdentity(request, "review request");
   for (const field of ["snapshot_tree", "material_revision", "task_id", "task_path", "project_name"]) {
     if (Object.hasOwn(request, field)) throw new TypeError(`review request identity field is host-owned: ${field}`);
   }
@@ -539,18 +815,38 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     }
   } catch (error) { routeError = reviewRequestError(error); }
   const requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
+  const closure = reviewClosure(request, before, materialId, requestKey, routeIdentity ?? null);
+  const currentClosureIdentity = routeRepairClosureIdentity(closure);
   // Serialize the shared round allowance across different request keys as well.
   const lockRef = "quality/reviews/request-locks/current-round.lock";
   const operation = async () => {
     let history;
-    try { history = readCanonicalBudgetHistory(taskHandle); }
+    try {
+      history = readCanonicalBudgetHistory(taskHandle, {
+        stage: request.stage,
+        snapshotTree: before.tree,
+        materialRevision: before.materialRevision,
+        phaseId: request.phase_id ?? null,
+        reviewTrack: request.review_track ?? request.reviewTrack ?? null,
+        reviewKind: request.review_kind ?? request.reviewKind ?? null,
+        subjectKind: request.subject_kind ?? "worktree",
+        reviewScope: request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null),
+        subjectSha256: reviewSubjectHash(request.subject),
+        materialId,
+      });
+    }
     catch (error) {
       if (error.review_attempt_ref) {
         let damaged;
         try { damaged = JSON.parse(taskHandle.readRecord(error.review_attempt_ref)); } catch { /* unavailable history stays unknown */ }
         if (damaged?.stage === request.stage && damaged?.snapshot_tree === before.tree
             && damaged?.material_revision === before.materialRevision
-            && (damaged?.phase_id ?? null) === (request.phase_id ?? null)) {
+            && (damaged?.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
+            && (damaged?.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
+            && (damaged?.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
+            && (damaged?.phase_id ?? null) === (request.phase_id ?? null)
+            && (damaged?.review_scope ?? (damaged?.stage === "build-code" ? "integration" : null)) === (request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null))
+            && subjectMatchesAttempt(damaged, request.subject)) {
           error.code = "REVIEW_RECORD_INCOMPLETE";
           error.attempt_ref = error.review_attempt_ref;
           throw error;
@@ -564,16 +860,33 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     const sameSubject = (prior) => prior.stage === request.stage
       && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
       && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
-      && (prior.phase_id ?? null) === (request.phase_id ?? null);
+      && (prior.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
+      && (prior.phase_id ?? null) === (request.phase_id ?? null)
+      && (prior.review_scope ?? (prior.stage === "build-code" ? "integration" : null)) === (request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null))
+      && subjectMatchesAttempt(prior, request.subject);
     const priorSubject = history.filter((entry) => entry.consumesRound && sameSubject(entry.attempt));
-    const changed = priorSubject.some((entry) => entry.attempt.material_revision !== before.materialRevision);
+    const materialChanged = priorSubject.some((entry) => entry.attempt.material_revision !== before.materialRevision);
+    // An ordinary verify-code review may be retried once after an authenticated
+    // implementation snapshot changed. Phase reviews remain scoped to their
+    // material revision: a code-only edit must not reset a phase allowance.
+    const codeSnapshotChanged = request.stage === "verify-code"
+      && priorSubject.some((entry) => entry.attempt.snapshot_tree !== before.tree);
+    const changed = materialChanged || codeSnapshotChanged;
+    const latestCurrent = priorSubject.filter((entry) => entry.attempt.material_revision === before.materialRevision).at(-1) ?? null;
+    const routeRepaired = routeIdentity && latestCurrent
+      && latestCurrent.fact.dispatch_state === "dispatched"
+      && latestCurrent.fact.route_identity && latestCurrent.fact.route_identity !== routeIdentity
+      && latestCurrent.fact.closure_identity === currentClosureIdentity;
     // A previously assigned focused round remains focused on the same revision.
     // Neither request bytes nor a code-only snapshot change reset its allowance.
     const kind = request.review_scope === "phase" ? "phase"
-      : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
-    const attempts = history.filter((entry) => entry.consumesRound).map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
+      : routeRepaired ? "route_repair"
+        : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
+    const attempts = priorSubject.map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
     const reviewBudget = validateReviewBudget({ material_revision: before.materialRevision,
-      attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id } });
+      attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id,
+        route_identity: routeIdentity, closure_identity: currentClosureIdentity,
+        repair_attempt_ref: routeRepaired ? latestCurrent.fact.attempt_ref : null } });
     if (reusable) return { status: "recorded", reused: true, dispatch_state: "reused", ...reusable, review_budget: reviewBudget };
     if (!reviewBudget.ok) return { status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch",
       error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED", message: `review round budget unavailable: ${reviewBudget.reason}` }, review_budget: reviewBudget };
@@ -587,6 +900,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           review_track: request.review_track ?? request.reviewTrack ?? null,
           review_kind: request.review_kind ?? request.reviewKind ?? null,
           material_id: materialId, provider_results: [], findings: [], runtime_id: null,
+          ...(request.authenticated_evidence === undefined ? {} : {
+            authenticated_evidence: request.authenticated_evidence,
+            authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+          }),
           dispatch_state: "blocked_before_dispatch",
           error: routeError,
         };
@@ -606,16 +923,25 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       };
     }
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review runner must return a result object");
-    for (const field of ["subject_kind", "phase_id", "review_scope"]) {
-      if (request[field] === undefined) continue;
-      if (result[field] !== undefined && result[field] !== request[field]) throw new TypeError(`review result ${field} does not match its request`);
-      result = { ...result, [field]: request[field] };
+    const normalizedResult = normalizeCanonicalReviewResult(result, "review request result");
+    if (normalizedResult.stage !== request.stage
+        || (normalizedResult.review_track ?? null) !== (request.review_track ?? request.reviewTrack ?? null)
+        || (normalizedResult.review_kind ?? null) !== (request.review_kind ?? request.reviewKind ?? null)) {
+      throw new TypeError("review result stage/track/kind does not match its request");
     }
+    result = normalizedResult;
+    result = mergeRequestResultIdentity(request, result);
+    result = normalizeCanonicalReviewResult(result, "review request result");
     const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-    if (after.tree !== before.tree || after.materialRevision !== before.materialRevision) {
-      const error = new Error("review source changed while dispatching; result was not recorded");
-      error.code = "REVIEW_SOURCE_DRIFT";
-      throw error;
+    const closureCurrent = closureMatches(closure, after, materialId, request);
+    if (!closureCurrent) {
+      result = {
+        ...result,
+        status: "unavailable",
+        outcome: "unavailable",
+        dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+        error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while dispatching; completed provider facts were retained without publishing a result" },
+      };
     }
     if (authenticatedMaterialId !== null && result.material_id !== materialId) {
       const error = new Error("review result material_id does not match the authenticated request material");
@@ -628,7 +954,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
       throw error;
     }
-    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey, budgetContext, executionContext });
+    const recordIdentity = closureCurrent ? after : before;
+    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey,
+      budgetContext: budgetContext ? { ...budgetContext, snapshot_tree: recordIdentity.tree, material_revision: recordIdentity.materialRevision } : null,
+      executionContext, closureManifest: closure, identityOverride: closureCurrent ? null : before });
     return {
       status: "recorded",
       reused: false,
@@ -660,7 +989,14 @@ function pairedReportRef(stage, taskId, identity, pairId, requestKey) {
   return reviewReportRef(stage, stableReviewId([taskId, identity.tree, identity.materialRevision, requestKey, pairId]));
 }
 
-function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired = false, budgetContext = null, executionContext = null } = {}) {
+function prepareSimpleReviewRecord(task, result, identity, requestKey, {
+  paired = false,
+  budgetContext = null,
+  executionContext = null,
+  allowHistoricalPreDispatchMaterialFailure = false,
+  closureManifest = null,
+} = {}) {
+  rejectBuildPrdCanonicalPersistence(result, "review result");
   const context = authenticateBudgetContext(budgetContext, identity, requestKey, result);
   if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review result must be an object");
   if (!["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status must be available or unavailable (including available-with-failures)");
@@ -712,9 +1048,9 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   }
   if (!Array.isArray(result.findings ?? [])) throw new TypeError("review findings must be an array");
   if ((result.findings ?? []).some((finding) => !completed.some((item) => item.provider === finding.provider))) throw new TypeError("review finding provider has no completed semantic output");
-  const e2eBinding = executionBindingForResult(task, result, identity, executionContext);
+  const e2eBinding = executionBindingForResult(task, result, identity, executionContext, { allowHistoricalPreDispatchMaterialFailure });
   const taskId = task.identity.taskId, stage = result.stage;
-  const attemptId = stableReviewId([taskId, identity, requestKey, result, ...(context ? [context] : []), ...(executionContext ? [executionContext] : [])]);
+  const attemptId = stableReviewId([taskId, identity, requestKey, result, ...(context ? [context] : []), ...(executionContext ? [executionContext] : []), ...(closureManifest ? [closureManifest] : [])]);
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
   const resultRef = `quality/reviews/results/${stage}-simple-${attemptId}.json`;
   const reportRef = reviewReportRef(stage, attemptId);
@@ -737,11 +1073,16 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   const allIdentified = result.provider_results.every((item) => item.identity?.provider === item.provider
     && item.identity?.adapter === providerAdapter(item.provider) && typeof item.identity?.source_id === "string" && item.identity.source_id.trim()
     && typeof item.identity?.config_id === "string" && item.identity.config_id.trim());
-  const covered = aggregation.status === "available" && allIdentified;
-  const semanticStatus = completed.length ? "available" : "unavailable";
+  const covered = result.status !== "unavailable" && aggregation.status === "available" && allIdentified;
+  const semanticStatus = result.status !== "unavailable" && completed.length ? "available" : "unavailable";
+  const sharedTuple = assertSharedReviewTuple(stage, {
+    subject_kind: result.subject_kind ?? "worktree",
+    phase_id: result.phase_id ?? null,
+    review_scope: result.review_scope !== undefined ? result.review_scope : (stage === "build-code" ? "integration" : null),
+  });
   const subject = {
-    subject_kind: result.subject_kind ?? "worktree", phase_id: result.phase_id ?? null,
-    review_scope: result.review_scope ?? (stage === "build-code" ? "integration" : null),
+    subject_kind: sharedTuple.subject_kind, phase_id: sharedTuple.phase_id,
+    review_scope: sharedTuple.review_scope,
     ...(paired ? { pair_id: result.pair_id, role: result.role } : {}),
   };
   const binding = {
@@ -755,6 +1096,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, ...binding,
     ...(requestKey ? { request_key: requestKey } : {}),
+    ...(closureManifest ? { closure_manifest: closureManifest } : {}),
     provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, outputRefs.get(item.provider) ?? null)),
     terminal_status: covered ? "semantic" : "unavailable",
     dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
@@ -778,31 +1120,44 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, { paired 
   return { records, refs, semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete" };
 }
 
-export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null }) {
+export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null, closureManifest = null, identityOverride = null }) {
+  result = normalizeCanonicalReviewResult(result, "review result");
   const handle = assertTaskHandle(task);
   if (executionContext !== null && !EXECUTION_CONTEXTS.has(executionContext)) throw new TypeError("execution binding requires the same authenticated public request");
   if (Object.hasOwn(result ?? {}, "e2e_binding")) throw new TypeError("result-only review cannot claim execution binding");
-  const identity = assertAuthenticatedReviewIdentity(handle, kernel);
+  const currentIdentity = assertAuthenticatedReviewIdentity(handle, kernel);
+  const identity = identityOverride ?? currentIdentity;
+  if (identityOverride !== null && (!closureManifest || closureManifest.snapshot_tree !== identity.tree
+      || closureManifest.material_revision !== identity.materialRevision)) {
+    throw new TypeError("historical review identity requires a matching closure manifest");
+  }
   if (!result || !["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status is invalid");
   if (["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"].some((key) => Object.hasOwn(result, key))) throw new TypeError("review result identity fields must come from the authenticated current context");
   if (!result?.role_results) {
-    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext });
-    for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw);
+    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext, closureManifest });
+    for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw, kernel);
     return prepared.refs;
   }
   if (typeof result.pair_id !== "string" || !result.pair_id.trim() || !SHA256_HEX.test(result.material_id ?? "")) throw new TypeError("paired review pair_id and material identity are required");
   if (!result.role_results || Array.isArray(result.role_results) || Object.keys(result.role_results).sort().join(",") !== "blue,red") throw new TypeError("paired review requires exactly red and blue roles");
+  let members = {
+    red: normalizeCanonicalReviewResult(result.role_results.red, "paired review red result"),
+    blue: normalizeCanonicalReviewResult(result.role_results.blue, "paired review blue result"),
+  };
+  ({ result, members } = normalizePairedSharedIdentity(result, members));
   const prepared = {};
   for (const role of ["red", "blue"]) {
-    const member = result.role_results[role];
+    const member = members[role];
     if (member?.role !== role || member.pair_id !== result.pair_id) throw new TypeError(`paired review ${role} role identity mismatch`);
     if (member.stage !== result.stage || (member.review_track ?? null) !== (result.review_track ?? null)
-        || (member.review_kind ?? null) !== (result.review_kind ?? null) || member.material_id !== result.material_id) throw new TypeError(`paired review ${role} material/stage identity mismatch`);
+        || (member.review_kind ?? null) !== (result.review_kind ?? null)
+        || (member.review_scope ?? null) !== (result.review_scope ?? null)
+        || member.material_id !== result.material_id) throw new TypeError(`paired review ${role} material/stage identity mismatch`);
     prepared[role] = prepareSimpleReviewRecord(handle, { ...member,
       ...(result.subject_kind === undefined ? {} : { subject_kind: result.subject_kind }),
       ...(result.phase_id === undefined ? {} : { phase_id: result.phase_id }),
       ...(result.review_scope === undefined ? {} : { review_scope: result.review_scope }),
-    }, identity, requestKey, { paired: true, budgetContext, executionContext });
+    }, identity, requestKey, { paired: true, budgetContext, executionContext, closureManifest });
   }
   const reportRef = pairedReportRef(result.stage, handle.identity.taskId, identity, result.pair_id, requestKey);
   const summary = {
@@ -813,17 +1168,20 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
   };
   // Validate both roles before any writes. Stable refs make a retry after a
   // partial filesystem write complete the same records without redispatch.
-  for (const entry of Object.values(prepared)) for (const [ref, raw] of entry.records) createCanonicalRecord(handle, ref, raw);
-  createCanonicalRecord(handle, reportRef, "# Paired review\n\nrequest_key: " + (requestKey ?? "none") + "\n\n```json\n" + JSON.stringify(summary, null, 2) + "\n```\n");
+  for (const entry of Object.values(prepared)) for (const [ref, raw] of entry.records) createCanonicalRecord(handle, ref, raw, kernel);
+  createCanonicalRecord(handle, reportRef, "# Paired review\n\nrequest_key: " + (requestKey ?? "none") + "\n\n```json\n" + JSON.stringify(summary, null, 2) + "\n```\n", kernel);
   return summary;
 }
 
 function taskBoundIdentity({ task, result, snapshot_tree: snapshotTree, material_revision: materialRevision }) {
+  result = normalizeCanonicalReviewResult(result, "task-bound review result");
+  const identity = reviewIdentityFromInput(result);
   const taskHandle = assertTaskHandle(task);
   if (!result || typeof result !== "object" || Array.isArray(result) || !new Set(["available", "unavailable"]).has(result.status)) throw new TypeError("task-bound review result is invalid");
-  if (result.stage !== "verify-code" || !SHA256_HEX.test(result.material_id ?? "") || !Array.isArray(result.provider_results)) throw new TypeError("task-bound verify-code result identity is invalid");
+  if (identity.stage !== "verify-code" || identity.reviewTrack !== null || identity.reviewKind !== null || identity.reviewScope !== null
+      || !SHA256_HEX.test(result.material_id ?? "") || !Array.isArray(result.provider_results)) throw new TypeError("task-bound verify-code result identity is invalid");
   if (!GIT_OID.test(snapshotTree ?? "") || !MATERIAL_REVISION.test(materialRevision ?? "")) throw new TypeError("task-bound review current identity is invalid");
-  return { taskHandle, taskId: taskHandle.identity.taskId, snapshotTree, materialRevision };
+  return { taskHandle, taskId: taskHandle.identity.taskId, snapshotTree, materialRevision, result: { ...result, review_track: null, review_kind: null, review_scope: null } };
 }
 
 function taskBoundSource(tree) {
@@ -844,17 +1202,20 @@ function taskBoundAttempt({ identity, result, attemptId, terminalStatus, error, 
 }
 
 export function recordTaskBoundE2eReviewUnavailable(input = {}) {
+  rejectBuildPrdCanonicalPersistence(input.result, "task-bound unavailable review");
   const identity = taskBoundIdentity(input);
+  const result = identity.result;
   const attemptId = randomUUID();
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
-  const attempt = taskBoundAttempt({ identity, result: input.result, attemptId, terminalStatus: "unavailable", error: input.result.error ?? { code: "E2E_REVIEWER_UNAVAILABLE", message: "task-bound review unavailable" }, providerAttempts: [] });
+  const attempt = taskBoundAttempt({ identity, result, attemptId, terminalStatus: "unavailable", error: result.error ?? { code: "E2E_REVIEWER_UNAVAILABLE", message: "task-bound review unavailable" }, providerAttempts: [] });
   identity.taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
   return Object.freeze({ attempt_ref: attemptRef, result_ref: null });
 }
 
 export function recordTaskBoundE2eReviewResult(input = {}) {
-  const { binding, result } = input;
+  const { binding } = input;
   const identity = taskBoundIdentity({ ...input, snapshot_tree: binding?.snapshot_tree, material_revision: binding?.material_revision });
+  const result = identity.result;
   if (!binding || typeof binding !== "object" || Array.isArray(binding)) throw new TypeError("task-bound review binding is required");
   const frozen = binding.frozen_material;
   const execution = binding.reviewed_execution;

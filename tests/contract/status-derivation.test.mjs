@@ -117,6 +117,28 @@ function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
 }
 
 describe("status is derived from current quality facts", () => {
+  it("discloses unavailable research without turning it into an actionable completion gap", () => {
+    const groups = deriveStatusGroups({
+      stage: "make-decision",
+      quality: { missing: [], predicates: {} },
+      productRelease: { reasons: [] },
+      observations: [{
+        fact: {
+          ref: "quality/evidence/research/" + "a".repeat(64) + ".json",
+          value: {
+            subject: "research",
+            status: "unavailable",
+            recorded_at: "2026-09-10T00:00:00.000Z",
+          },
+        },
+        authenticated: true,
+        freshness: { status: "current" },
+      }],
+    });
+    expect(groups.actionable_now).not.toContain("research");
+    expect(groups.external_unavailable).toContain("research:unavailable");
+  });
+
   it("P3 T007 exposes an actual failed current execution predicate without hiding it behind a completed outcome", () => {
     const observations = facts("build-code", { risk_tests_fresh: { status: "failed" } });
     const completion = deriveStageCompletion("build-code", observations, { requireStageOutcome: true, stageOutcomeStatus: "completed" });

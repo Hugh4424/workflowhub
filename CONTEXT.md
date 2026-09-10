@@ -37,6 +37,11 @@
 **stage-reflection**：
 每个正式 stage 结束时由主会话运行的复盘判断层机制，记录当前 stage 的保留、优化、简化、合并、移除候选、补充或待证据判断；新版执行闭环=主会话产出判断 JSON→私有 reflect 命令完成机器校验/合并/发布；状态含 ok/degraded/failed/unavailable（无人执行）/not_scheduled（未触发）。它对应 ADR 0021/0023，不是新的 stage、事实源或质量 gate。
 
+**stage-handoff**：
+四个作者 stage 在 reflection 终态后生成的当前交接视图。它固定写入
+`quality/evidence/handoff/<stage>.md`，只保留四份材料与正式原件的指针、状态、边界和
+下一步；每次成功原子覆盖并读回校验，不保留历史版本，不是质量事实、发布结论或推进门。
+
 **复盘执行闭环（reflect）**：
 stage 末由主会话触发、机器完成 raw 前奏校验、validate、lessons 合并与固定路径 immutable 发布的私有 CLI 命令；会话只产出判断内容，机器不生成判断。对应 ADR 0023。
 
@@ -109,7 +114,7 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 
 **规范决策日志（canonical decision-log）**：
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
-vNext 的当前文件位于认证 worktree 根目录 `decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
+vNext 的当前文件位于认证 worktree 的 `specs/<task-id>/decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
 
 **显式任务身份（explicit task identity）**：
 公共入口使用成对的 `--project` 与 `--task`，或从已认证 task worktree 取得当前身份。宿主桥接还必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`；旧 session/env、cwd 猜测和 transcript 扫描不构成身份来源。
@@ -176,6 +181,30 @@ make-decision 开始时选择并持续回填的结构骨架；按 spec §5 FR-DL
 **决策链（decision chain）**：
 从需求/question、事实约束、选项到 decision、consumer 和 acceptance 的可追溯文本链；按 spec §5 FR-DLOG-002 以模块、D-ID 和 derived_from 表达，不新增 decision-entry.v1 字段。
 
+## 规划支线术语（已选设计／待实现）
+
+以下记录本次已获整体内容批准的方向，实施与机器正式收尾未完成；不表示现行 F7、正式发布或 close 已支持规划支线，普通开发五阶段与四材料规则不变（见 ADR 0025）。
+
+**build-prd**：
+承接 make-decision 已收敛需求的独立规划支线薄编排，负责规划交接而非第六个正式阶段、build-spec 模式或自动开发。
+
+**spec-prd**：
+拥有单份 PRD 内容与模板的可独立调用技能，分大纲／地图与细节成稿两步，二者之间先真实核对地图并完成适用的设计确认。
+
+**规划确认**：
+build-prd 所属的地图核对、适用 UI 的高保真设计分组确认及最终 PRD 确认，绑定实际展示版本且不包含 Git 授权。
+
+**规划完成**：
+独立支线真实完成规划交付、适用质量工作与交接并获最终确认，不等于开发完成、产品发布或物理交付完成。
+
+**可维护归档 PRD**：
+作为子任务来源而非第五份开发材料的规划交付物，是已选的窄归档维护例外：小修直接做，实质承诺变化由维护主会话澄清并取得真实用户确认，在 PRD 变更说明记录此次确认、前后承诺、来源版本与影响，不强制新任务，旧母决定、确认版本、审查、测试及物理交付事实不改。
+
+**规划完整物理交付**：
+本次交付的真实材料与必要接力附件存在、可访问且版本对应的完整交付，不等于重做视觉审查或通读背景研究，缺附件须报材料缺口，过去规划完成与实际 Git 动作事实分别保留。
+
+关系：新任务接纳当前 PRD 来源；在途任务仍按已接纳来源与自己的四材料工作，新稿不自动覆盖在途范围，实质修订只重核受影响内容；未归档母任务的承诺变化仍由当前 make-decision 写决定。
+
 ## 历史恢复记录（仅审计）
 
 旧版本曾使用 recovery generation、stage recovery run/source、recovery gate、phase
@@ -186,7 +215,7 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 的测试、AC 和审查事实；旧 hash、阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
-认证 worktree 根目录中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
+认证 worktree 的 `specs/<task-id>/` 中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
 变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **consumer/evidence matrix**：
@@ -346,3 +375,23 @@ Grill 按上游 round/frontier 协议运行：一批只放互相独立的问题�
 
 **spec-analyze profile 扩展**：
 stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `build-spec` 比对 spec 与上游 decision-log 的方向一致性和 Clarify 记录。`verify-code` 不经过此 lens，而使用 `dsh-code-review`。
+
+## 收敛大纲与收口闭环（2026-09-09，已选设计·尚未实现）
+
+**收敛大纲（convergence outline）**：
+`make-decision` 开始时建立的「本次必须收敛什么」清单。骨架＝需求框架节点（背景/问题/目标/方案/验收/扩展）＋固定六类兜底（完整用户流程 / 页面范围 / 数据状态 / 成功失败边界 / 非目标 / 延期）；条目编号 `OI-xxx`；与需求框架节点是**同一份记录**，不新增第二套状态机。唯一权威来源：`workflows/make-decision/SKILL.md`。
+
+**大纲条目状态（outline item status）**：
+`open` / `confirmed` / `deferred` / `not_applicable`。各状态必填字段的唯一权威表见 `workflows/make-decision/SKILL.md`；`deferred` 必须带 owner、触发条件、范围边界、影响、后续验收；`not_applicable` 必须带理由与反例边界；缺项保持 `open`。
+
+**命名未知（named unknown）**：
+大纲条目的一种合法来源。必须写清「不知道什么 + 所属类别 + 来源 + 为什么现在不知道」四件事；缺任一项不算合法未知。用于覆盖「原始需求里根本没有的东西」。
+
+**questions-only 快照（方向审查输入）**：
+从大纲投影出的、只含类别/未知/来源/`open` 的材料，禁止出现决策编号、处置与拟议答案；它是 `make-decision/direction` 的必需材料字段 `convergence_outline`。唯一权威来源：`runtime/review/stage-materials.json` 与 `skills/wh-review/contracts/make-decision.md`。大纲变更后旧方向审查结果作废。
+
+**outline_closed（大纲闭环完成事实）**：
+`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「四材料可读即可继续」的推进边界。唯一权威来源：`runtime/stage/completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
+
+**用户未收敛项分组确认**：
+收口前，未收敛项按主题分组、一组一组提交用户确认；影响目标/范围/验收的条目必须单独成组并逐项列出。该确认**并入 `make-decision` 既有的 approve-decision 确认**，不新增第五处正常确认点（宪法 F7）。

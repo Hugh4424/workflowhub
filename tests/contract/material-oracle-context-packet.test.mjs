@@ -23,7 +23,10 @@ describe("Phase 2 material and oracle contracts", () => {
   });
 
   it("consumes the current D-xxx risk references and reasoned N/A roles as one contract", () => {
-    const root = join(process.cwd(), "specs", "workflowhub-review-flow-repair-20260906");
+    // The source task was retired into the read-only archive.  This contract
+    // still exercises that historical material as a fixture; it must not
+    // recreate the retired task under the current-material root.
+    const root = join(process.cwd(), "specs", "archive", "workflowhub-review-flow-repair-20260906");
     const decisionLog = readFileSync(join(root, "decision-log.md"), "utf8");
     const spec = readFileSync(join(root, "spec.md"), "utf8");
     const plan = readFileSync(join(root, "plan.md"), "utf8");
@@ -34,7 +37,7 @@ describe("Phase 2 material and oracle contracts", () => {
   });
 
   it("does not treat a decision token mentioned in prose as a declared decision", () => {
-    const root = join(process.cwd(), "specs", "workflowhub-review-flow-repair-20260906");
+    const root = join(process.cwd(), "specs", "archive", "workflowhub-review-flow-repair-20260906");
     const decisionLog = readFileSync(join(root, "decision-log.md"), "utf8") + "\n正文说明 D-999 只是待排查编号。\n";
     const spec = readFileSync(join(root, "spec.md"), "utf8");
     const plan = readFileSync(join(root, "plan.md"), "utf8");

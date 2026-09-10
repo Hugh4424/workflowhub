@@ -10,6 +10,14 @@
   "judgments": [],
   "interventions": [],
   "lessons_added": [],
+  "executor": {
+    "source_id": "fixture/reflection-executor",
+    "attempt_id": "attempt-001",
+    "started_at": "2026-08-30T00:00:01.000Z",
+    "completed_at": "2026-08-30T00:00:02.000Z",
+    "output_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "output_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "what_helped": { "state": "unknown", "unknown_reason": "not captured", "items": [] },
   "what_to_improve": { "state": "none_observed", "items": [] },
   "blockers": { "state": "none_observed", "items": [] },

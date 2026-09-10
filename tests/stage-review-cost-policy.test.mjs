@@ -71,6 +71,18 @@ describe("non-code review policy", () => {
     }
   });
 
+  it("RED: keeps OI consumers advisory and does not add a second authority or confirmation gate", () => {
+    const workflow = readStage("make-decision");
+    const review = readFileSync(new URL("../skills/wh-review/contracts/make-decision.md", import.meta.url), "utf8");
+    expect(workflow).toMatch(/one current OI|唯一.*OI/i);
+    expect(workflow).toMatch(/direction[\s\S]{0,500}questions-only/);
+    expect(workflow).toMatch(/detail[\s\S]{0,700}(?:each OI|逐.*OI|terminal|终态)/i);
+    expect(workflow).toMatch(/`approve-decision`[\s\S]{0,180}(?:existing|既有)/i);
+    expect(workflow).toMatch(/not[\s\S]{0,80}fifth material|不[\s\S]{0,80}第五份材料/i);
+    expect(review).toMatch(/advisory quality facts|quality facts|质量事实/i);
+    expect(review).not.toMatch(/review.*permission|审查.*推进资格/i);
+  });
+
   it("does not require snapshot, replacement, or continuation controls in review materials", () => {
     const matrix = JSON.parse(readFileSync(new URL("../runtime/review/stage-materials.json", import.meta.url), "utf8"));
     const serialized = JSON.stringify(matrix).toLowerCase();

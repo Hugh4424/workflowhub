@@ -1,5 +1,96 @@
 import { describe, expect, it } from "vitest";
-import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+import { createHash } from "node:crypto";
+import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+
+const digest = (value) => createHash("sha256").update(value).digest("hex");
+const outcomeRef = (stage, suffix) => `quality/evidence/stage-outcomes/${stage}/${suffix}.json`;
+
+function boundOutcomeObservation({ stage = "build-code", suffix = "a".repeat(64), taskId = "task", snapshot = "tree", material = "revision" } = {}) {
+  const outcomeValue = {
+    schema_version: "workflowhub-stage-outcomes.v1",
+    task_id: taskId,
+    stage,
+    run_id: `vnext-${digest(`${taskId}\0${stage}`).slice(0, 32)}`,
+    snapshot_tree: snapshot,
+    material_revision: material,
+    retry_id: suffix,
+    status: "completed",
+  };
+  const outcomeRaw = `${JSON.stringify(outcomeValue)}\n`;
+  const stageOutcomeHash = digest(outcomeRaw);
+  const stageOutcome = outcomeRef(stage, stageOutcomeHash);
+  const stageQualityValue = {
+    schema_version: "stage-quality-evidence.v1",
+    task_id: taskId,
+    stage,
+    subject: "acceptance_execution",
+    status: "passed",
+    snapshot_tree: snapshot,
+    material_revision: material,
+    subject_fact: {
+      status: "passed",
+      execution_binding: { stage_outcome_ref: stageOutcome, stage_outcome_hash: stageOutcomeHash },
+    },
+  };
+  const stageQualityRaw = `${JSON.stringify(stageQualityValue)}\n`;
+  const stageQualityRef = `quality/evidence/stage-quality/${stage}/acceptance_execution-${digest(stageQualityRaw)}.json`;
+  const acceptanceValue = {
+    schema_version: "acceptance-evidence.v1",
+    acceptance_criterion_id: "acceptance_execution",
+    result: "pass",
+    snapshot_tree: snapshot,
+    freshness: { status: "current", snapshot_tree: snapshot, material_revision: material },
+    refs: [{ ref: stageQualityRef, sha256: digest(stageQualityRaw) }],
+  };
+  const acceptanceRaw = `${JSON.stringify(acceptanceValue)}\n`;
+  const acceptanceRef = `quality/evidence/acceptance/${stage}/acceptance_execution-${digest(acceptanceRaw)}.json`;
+  const fact = {
+    task_id: taskId,
+    stage,
+    snapshot_tree: snapshot,
+    material_revision: material,
+    kind: "acceptance_criterion",
+    subject: "acceptance_execution",
+    status: "passed",
+    evidence: [{ ref: acceptanceRef, sha256: digest(acceptanceRaw), evidence_type: "acceptance_evidence" }],
+  };
+  return {
+    stageOutcome,
+    stageOutcomeHash,
+    records: new Map([[acceptanceRef, acceptanceRaw], [stageQualityRef, stageQualityRaw], [stageOutcome, outcomeRaw]]),
+    observation: { fact: { ref: `quality/facts/${suffix}.json`, value: fact }, authenticated: true, freshness: { status: "current" } },
+  };
+}
+
+function boundVerifyCodeReviewOutcome({ suffix = null, taskId = "task", snapshot = "tree", material = "revision", reviewRef = "quality/reviews/results/verify-code.json", reviewHash = digest("review") } = {}) {
+  const outcomeValue = {
+    schema_version: "workflowhub-stage-outcomes.v1",
+    task_id: taskId,
+    stage: "verify-code",
+    snapshot_tree: snapshot,
+    material_revision: material,
+    code_review: { quality_review_ref: reviewRef, quality_review_hash: reviewHash },
+  };
+  const outcomeRaw = `${JSON.stringify(outcomeValue)}\n`;
+  const outcomeHash = digest(outcomeRaw);
+  const stageOutcome = outcomeRef("verify-code", suffix ?? outcomeHash);
+  const reviewFact = {
+    task_id: taskId,
+    stage: "verify-code",
+    snapshot_tree: snapshot,
+    material_revision: material,
+    kind: "review",
+    subject: "code_review",
+    status: "recorded",
+    evidence: [{ ref: reviewRef, sha256: reviewHash, evidence_type: "review_result" }],
+  };
+  return {
+    stageOutcome,
+    stageOutcomeHash: outcomeHash,
+    records: new Map([[stageOutcome, outcomeRaw]]),
+    observation: { fact: { ref: `quality/facts/${outcomeHash}.json`, value: reviewFact }, authenticated: true, freshness: { status: "current" } },
+  };
+}
 
 function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
@@ -85,10 +176,17 @@ describe("five-stage completion predicates derive only from quality facts", () =
     });
     for (const subject of Object.keys(STAGE_PREDICATES[stage])) {
       const legacyUiApplicability = stage === "make-decision" && subject === "ui_applicability";
+      const currentOutline = stage === "make-decision" && subject === "outline_closed";
       it(legacyUiApplicability
         ? "make-decision keeps pre-ui-applicability historical observations readable"
+        : currentOutline
+          ? "make-decision remains incomplete when the current outline fact is missing"
         : `${stage} remains incomplete without ${subject}`, () => {
-        const facts = observations(stage).filter((entry) => entry.fact.value.subject !== subject);
+        const facts = currentOutline
+          ? observations(stage).map((entry) => entry.fact.value.subject === subject
+            ? { ...entry, fact: { ...entry.fact, value: { ...entry.fact.value, status: "missing" } } }
+            : entry)
+          : observations(stage).filter((entry) => entry.fact.value.subject !== subject);
         if (legacyUiApplicability) {
           expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "completed", missing: [] });
         } else {
@@ -310,5 +408,36 @@ describe("five-stage completion predicates derive only from quality facts", () =
       required_materials: ["decision-log.md"],
       missing_materials: [],
     });
+  });
+
+  it("selects the sole authenticated current stage-outcome binding and preserves divergent bindings as conflict", () => {
+    const first = boundOutcomeObservation({ suffix: "a".repeat(64) });
+    const records = new Map(first.records);
+    const selected = deriveStageOutcomeStatuses({
+      task_id: "task",
+      read: (ref) => records.get(ref),
+      stage_outcome_refs: { "build-code": [first.stageOutcome, outcomeRef("build-code", "c".repeat(64))] },
+      snapshot_tree: "tree",
+      material_revision: "revision",
+      material_scope_revisions: {},
+      quality_fact_observations: [first.observation],
+      authenticate: () => ({ status: "completed", value: { status: "completed" } }),
+    });
+    expect(selected["build-code"]).toBe("completed");
+
+    const firstConflict = boundOutcomeObservation({ suffix: "a".repeat(64) });
+    const secondConflict = boundOutcomeObservation({ suffix: "b".repeat(64) });
+    const conflictRecords = new Map([...firstConflict.records, ...secondConflict.records]);
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: "task",
+      read: (ref) => conflictRecords.get(ref),
+      stage_outcome_refs: { "build-code": [firstConflict.stageOutcome, secondConflict.stageOutcome] },
+      snapshot_tree: "tree",
+      material_revision: "revision",
+      material_scope_revisions: {},
+      quality_fact_observations: [firstConflict.observation, secondConflict.observation],
+      authenticate: () => ({ status: "completed", value: { status: "completed" } }),
+    });
+    expect(statuses["build-code"]).toBe("conflict");
   });
 });

@@ -2,12 +2,19 @@ import { spawn } from "node:child_process";
 
 /**
  * dispatchComponent — FR-CORE-002 / FR-CORE-004
- * Spawn `node <entry.path>`, collect stdout, parse JSON.
+ * Spawn `node <entry.path>` for executable entries, collect stdout, parse JSON.
+ * Discovery-only portable_workflow entries are rejected before spawning.
  * @param {{ component_id: string, path: string }} entry - Registry entry.
  * @returns {Promise<object>} Parsed JSON output from the component.
  * @throws {Error} On non-zero exit code or invalid JSON output.
  */
 export function dispatchComponent(entry) {
+  const isPortableBuildPrd = entry?.kind === "portable_workflow"
+    || entry?.workflow === "build-prd"
+    || entry?.path === "workflows/build-prd/SKILL.md";
+  if (isPortableBuildPrd) {
+    return Promise.reject(new Error(`Component "${entry?.component_id ?? "build-prd"}" is a portable_workflow discovery-only entry and cannot be dispatched`));
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entry.path], { stdio: ["ignore", "pipe", "inherit"] });
 

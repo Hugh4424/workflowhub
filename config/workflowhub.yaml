@@ -1,7 +1,8 @@
 # workflowhub global config (M2 microkernel).
-# registry is the only required key: it maps a workflow identifier to a black-box
-# component (component_id + locator). The kernel uses it to resolve and dispatch
-# components without knowing their internals (FR-CFG-001, decision 8).
+# registry is the only required key: it maps workflow identifiers to either
+# executable components or discovery-only portable workflow packages. The kernel
+# dispatches executable components; portable_workflow entries are discovered and
+# packaged but are rejected by the generic Node dispatcher (FR-CFG-001, decision 8).
 registry:
   - component_id: noop
     workflow: demo
@@ -12,6 +13,10 @@ registry:
   - component_id: build-spec
     workflow: vibecoding
     path: workflows/build-spec/SKILL.md
+  - component_id: build-prd
+    workflow: build-prd
+    kind: portable_workflow
+    path: workflows/build-prd/SKILL.md
   - component_id: build-plan
     workflow: vibecoding
     path: workflows/build-plan/SKILL.md

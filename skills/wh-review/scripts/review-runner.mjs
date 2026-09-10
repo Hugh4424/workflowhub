@@ -12,6 +12,7 @@ import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt,
 import { buildSemanticProjection } from "./review-semantic-projection.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
+import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
 // Providers run from a writable wrapper directory; sealed review material is
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 // Keep the provider on the bounded, provider-visible view. The canonical
@@ -132,6 +133,24 @@ function minimumReviewersForPolicy(policy, stage, reviewTrack, reviewScope = nul
   return policy?.source === "wh_review.v2"
     ? policy.minimum_heterologous
     : minimumReviewersFor(stage, reviewTrack, reviewScope);
+}
+
+function assertFinalReviewIdentity(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("result and current source are required");
+  let identity;
+  try {
+    identity = reviewIdentityFromInput(result);
+  } catch (error) {
+    const reviewKind = result.review_kind ?? result.reviewKind;
+    if (reviewKind === "build_prd") {
+      throw new TypeError("BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: build-prd findings are report-only and cannot be finalized as a formal result");
+    }
+    throw error;
+  }
+  if (identity.reviewKind === "build_prd") {
+    throw new TypeError("BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: build-prd findings are report-only and cannot be finalized as a formal result");
+  }
+  return identity;
 }
 
 // Reuse is still a public helper for callers that already own canonical
@@ -354,7 +373,27 @@ function undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, 
     ? { version: "wh-review-material-preflight.v1", stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint, material_revision: materialRevision }
     : { version: "wh-review-undispatched-unavailable.v1", kind, stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint, material_revision: materialRevision });
 }
-async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack, reviewKind = null, subject, source, policy, diagnostic, materialFingerprint = null, materialRevision = null }) {
+function assertRunnerReviewIdentity(input, label = "review") {
+  let identity;
+  try {
+    identity = reviewIdentityFromInput(input);
+  } catch (error) {
+    if ((input?.review_kind ?? input?.reviewKind) === "build_prd") {
+      throw new TypeError(`BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: ${label} cannot use canonical formal-stage records`);
+    }
+    throw error;
+  }
+  if (identity.reviewKind === "build_prd") {
+    throw new TypeError(`BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: ${label} cannot use canonical formal-stage records`);
+  }
+  return identity;
+}
+
+async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack = undefined, reviewKind = undefined, reviewScope = undefined, review_track = undefined, review_kind = undefined, review_scope = undefined, subject, source, policy, diagnostic, materialFingerprint = null, materialRevision = null }) {
+  const identity = assertRunnerReviewIdentity({ stage, reviewTrack, reviewKind, reviewScope, review_track, review_kind, review_scope }, "unavailable review facts");
+  stage = identity.stage;
+  reviewTrack = identity.reviewTrack;
+  reviewKind = identity.reviewKind;
   const materialId = undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint, materialRevision });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
@@ -383,7 +422,11 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
     reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
   };
 }
-export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, workspace, candidateWorkspace, materialRevision = null, captureSource = captureSourceDefault } = {}) {
+export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = undefined, reviewKind = undefined, reviewScope = undefined, review_track = undefined, review_kind = undefined, review_scope = undefined, workspace, candidateWorkspace, materialRevision = null, captureSource = captureSourceDefault } = {}) {
+  const identity = assertRunnerReviewIdentity({ stage, reviewTrack, reviewKind, reviewScope, review_track, review_kind, review_scope }, "missing-route unavailable review");
+  stage = identity.stage;
+  reviewTrack = identity.reviewTrack;
+  reviewKind = identity.reviewKind;
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage)) throw new TypeError("missing-route unavailable review inputs are required");
   const diagnostic = { code: "REVIEW_ROUTE_UNAVAILABLE", message: `workflowhub host wh_review route is unavailable for ${stage}${reviewTrack ? `.${reviewTrack}` : ""}` };
@@ -402,7 +445,9 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
 }
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */
 export function verifyFinalSubject({ result, current, integrationSubject = null, taskId = null } = {}) {
-  if (!result || typeof result !== "object" || !current || typeof current !== "object") throw new TypeError("result and current source are required");
+  const identity = assertFinalReviewIdentity(result);
+  result = { ...result, stage: identity.stage, review_track: identity.reviewTrack, review_scope: identity.reviewScope, review_kind: identity.reviewKind };
+  if (!current || typeof current !== "object") throw new TypeError("result and current source are required");
   const isIntegration = result.stage === "build-code" && result.review_scope === "integration" && integrationSubject !== null;
   // Writing executor facts into the task card does not change the reviewed
   // implementation. This narrow exception applies to every final review
@@ -438,6 +483,8 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
   if (typeof resultRef !== "string" || !resultRef.startsWith("quality/reviews/results/")) throw new Error("RESULT_REF_INVALID: canonical result ref required");
   let result;
   try { result = JSON.parse(taskHandle.readRecord(resultRef)); } catch { throw new Error("RESULT_REF_INVALID: result does not exist or is invalid"); }
+  const identity = assertFinalReviewIdentity(result);
+  result = { ...result, stage: identity.stage, review_track: identity.reviewTrack, review_scope: identity.reviewScope, review_kind: identity.reviewKind };
   validateSchema("result", result);
   if (result.subject_kind === "phase") { const error = new Error("PHASE_RESULT_NOT_FINAL: phase review results are quality facts, not verify-final results"); error.code = "PHASE_RESULT_NOT_FINAL"; throw error; }
   if (result.stage === "build-code" && result.review_scope !== "integration") { const error = new Error("INTEGRATION_RESULT_REQUIRED: build-code final review must be integration scope"); error.code = "INTEGRATION_RESULT_REQUIRED"; throw error; }

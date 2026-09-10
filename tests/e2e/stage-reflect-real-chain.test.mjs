@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -23,6 +24,10 @@ afterEach(() => {
 
 function git(repo, args) {
   return execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+}
+
+function hash(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function writeInput(root, name, value) {
@@ -82,7 +87,8 @@ async function createTask(root, project, taskId, { writeMaterials = true, inputs
 }
 
 function reflectionExecutor({ confirmationRef, mode, context }) {
-  return async ({ taskId, stage, stageStatus, stageOutcome }) => {
+  return async ({ taskId, stage, stageStatus, stageOutcome, currentBinding }) => {
+    const outputHash = hash(JSON.stringify({ taskId, stage, stageStatus, mode, attempt: stageOutcome.value.attempt_id }));
     return {
       schema_version: "stage-reflection.v2",
       record_kind: "judgment",
@@ -115,6 +121,14 @@ function reflectionExecutor({ confirmationRef, mode, context }) {
       ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
       status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
       source_completeness: { compaction: false, truncation: false, visible_scope: "fixture stage outcome", unknown_reasons: [] },
+      executor: {
+        source_id: "chain-test-reflection-executor",
+        attempt_id: stageOutcome.value.attempt_id,
+        started_at: "2026-08-30T11:59:00.000Z",
+        completed_at: "2026-08-30T12:00:00.000Z",
+        output_hash: outputHash,
+      },
+      output_hash: outputHash,
     };
   };
 }

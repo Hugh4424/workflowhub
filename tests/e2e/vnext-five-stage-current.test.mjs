@@ -12,7 +12,7 @@ import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs
 import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { completeCanonicalStageMaterials, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
@@ -27,6 +27,7 @@ const completeConvergenceFacts = () => Object.fromEntries([
   "acceptance_clarity",
   "solution_convergence",
   "plain_language_card",
+  "outline_closed",
 ].map((subject) => [subject, { status: "passed", evidence_refs: [], detail: `fixture ${subject}` }]));
 const completeDecisionLog = `# public decision
 
@@ -60,6 +61,109 @@ D-001：保持当前范围并完成当前夹具。
 ## 风险与延期交接
 当前夹具风险已记录。
 
+## 唯一 OI 大纲（current authority）
+### Framework nodes
+| node_id | framework_node | oi_ids | empty | reason |
+| --- | --- | --- | --- | --- |
+| N-background | background | OI-001 | false |  |
+| N-problem | problem | OI-002 | false |  |
+| N-goal | goal | OI-003 | false |  |
+| N-solution | solution | OI-004 | false |  |
+| N-acceptance | acceptance | OI-005 | false |  |
+| N-extension | extension | OI-006 | false |  |
+
+### Fixed categories
+| category | oi_ids | empty | reason |
+| --- | --- | --- | --- |
+| complete_user_flow | OI-001 | false |  |
+| page_scope | OI-002 | false |  |
+| data_state | OI-003 | false |  |
+| success_failure_boundary | OI-004 | false |  |
+| non_goals | OI-005 | false |  |
+| deferred | OI-006 | false |  |
+
+\`\`\`yaml
+ois:
+  - oi_id: OI-001
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: complete_user_flow
+    source: R-FIXTURE-2
+    question: 当前流程的关键入口是什么？
+    status: confirmed
+    selected_disposition: 复用当前入口
+    evidence: F-FIXTURE-1
+    acceptance: 入口可达
+    counterexample: 入口不存在
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - oi_id: OI-002
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: page_scope
+    source: R-FIXTURE-5
+    question: 当前范围到哪里为止？
+    status: confirmed
+    selected_disposition: 只覆盖当前夹具
+    evidence: F-FIXTURE-2
+    acceptance: 范围可验证
+    counterexample: 范围外变更
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - oi_id: OI-003
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: data_state
+    source: R-FIXTURE-3
+    question: 数据状态如何变化？
+    status: confirmed
+    selected_disposition: 沿用现有状态
+    evidence: F-FIXTURE-3
+    acceptance: 状态可观察
+    counterexample: 状态丢失
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - oi_id: OI-004
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: success_failure_boundary
+    source: R-FIXTURE-4
+    question: 成功和失败边界是什么？
+    status: confirmed
+    selected_disposition: 保留现有错误边界
+    evidence: F-FIXTURE-4
+    acceptance: 失败可见
+    counterexample: 错误被吞掉
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - oi_id: OI-005
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: non_goals
+    source: R-FIXTURE-5
+    question: 哪些内容明确不做？
+    status: confirmed
+    selected_disposition: 不扩展范围
+    evidence: F-FIXTURE-5
+    acceptance: 范围不扩张
+    counterexample: 新增产品方向
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - oi_id: OI-006
+    task_id: public-make-decision-no-audit
+    outline_version: v1
+    category: deferred
+    source: R-FIXTURE-5
+    question: 哪些内容延期？
+    status: confirmed
+    selected_disposition: 暂无延期
+    evidence: F-FIXTURE-6
+    acceptance: 延期状态可检查
+    counterexample: 延期无边界
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+\`\`\`
+
 ## 收敛检查
 | 维度 | 用户答案 | 事实 | 可执行验收 |
 | --- | --- | --- | --- |
@@ -80,6 +184,24 @@ D-001：保持当前范围并完成当前夹具。
 }
 \`\`\`
 `;
+
+function currentDirectionSemanticFields(taskId) {
+  const entries = [
+    ["OI-001", "complete_user_flow", "R-FIXTURE-2", "当前流程的关键入口是什么？"],
+    ["OI-002", "page_scope", "R-FIXTURE-5", "当前范围到哪里为止？"],
+    ["OI-003", "data_state", "R-FIXTURE-3", "数据状态如何变化？"],
+    ["OI-004", "success_failure_boundary", "R-FIXTURE-4", "成功和失败边界是什么？"],
+    ["OI-005", "non_goals", "R-FIXTURE-5", "哪些内容明确不做？"],
+    ["OI-006", "deferred", "R-FIXTURE-5", "哪些内容延期？"],
+  ].map(([oi_id, category, source, question]) => ({ oi_id, category, source, question, status: "open" }));
+  return {
+    convergence_outline: {
+      task_id: taskId,
+      outline_version: "v1",
+      entries,
+    },
+  };
+}
 const HISTORICAL_REGRESSION_CASES = Object.freeze([
   Object.freeze({
     id: "T01",
@@ -762,7 +884,13 @@ describe("current vNext five-stage runtime", () => {
     const state = fixture("public-make-decision-no-audit");
     state.artifacts.writeAtomic("decision-log.md", completeDecisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-    const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
+    const direction = writeFormalReviewFixture({
+      task: state.task,
+      stage: "make-decision",
+      snapshotTree: snapshot.tree,
+      reviewTrack: "direction",
+      semanticFields: currentDirectionSemanticFields(state.task.identity.taskId),
+    });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
     const stageOutcome = stageOutcomeReceipt(state, "make-decision");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
@@ -1014,6 +1142,17 @@ describe("current vNext five-stage runtime", () => {
       materialRevision,
     });
     writeFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"), "repaired\n");
+    const repairCheck = createCanonicalReceiptWriter({
+      task: state.task,
+      workspace: openCurrentTaskWorkspace(state.task),
+      stage: "verify-code",
+      component: "verify-code-test-capture",
+    }).captureTests({
+      command: "node -e \"const fs=require('node:fs');if(fs.readFileSync('src/app.txt','utf8') !== 'repaired\\n') process.exit(1)\"",
+      receiptRef: "quality/tests/review-repair.json",
+      outputRef: "quality/tests/output/review-repair.output",
+    });
+    const reviewValue = JSON.parse(state.task.readRecord(review.resultRef));
     const outcome = writeStageOutcomeFixture({
       task: state.task,
       kernel: state.kernel,
@@ -1022,24 +1161,26 @@ describe("current vNext five-stage runtime", () => {
       stage: "verify-code",
       attemptId: "attempt-review-repair-resolution",
       qualityReview: { ref: review.resultRef, sha256: sha256(state.task.readRecord(review.resultRef)) },
+      codeReviewResult: {
+        status: "findings",
+        findings: reviewValue.findings,
+        repairs: reviewValue.findings.map(({ id }) => ({
+          finding_id: id,
+          status: "fixed",
+          reason: "the current source contains the repair and its affected check passed",
+          source_refs: [{ path: "src/app.txt", sha256: sha256(readFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"))) }],
+          check_refs: [{ ref: repairCheck.receipt_ref, sha256: repairCheck.receipt_hash }],
+        })),
+        summary: "fixture current implementation repair is authenticated by the stage outcome",
+        focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],
+      },
     });
-    const reviewValue = JSON.parse(state.task.readRecord(review.resultRef));
-    const resolvedOutcome = structuredClone(outcome.value);
-    resolvedOutcome.code_review.result = {
-      ...resolvedOutcome.code_review.result,
-      status: "findings",
-      findings: reviewValue.findings,
-      repairs: reviewValue.findings.map(({ id }) => ({ finding_id: id, status: "fixed" })),
-    };
-    const outcomeRaw = `${JSON.stringify(resolvedOutcome, null, 2)}\n`;
-    const outcomeRef = `quality/evidence/stage-outcomes/verify-code/${sha256(outcomeRaw)}.json`;
-    state.kernel.publishCanonicalRecord(outcomeRef, outcomeRaw);
     const run = async (kernel) => runOfficialStage("verify-code", {
       ...context("verify-code", state),
       kernel,
       workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"),
     }, {
-      receipts: { stage_outcomes: outcomeRef, quality_review: review.resultRef },
+      receipts: { stage_outcomes: outcome.ref },
     });
     const first = await run(state.kernel);
     const firstFact = first.quality_fact_refs
@@ -1151,9 +1292,25 @@ describe("current vNext five-stage runtime", () => {
     let verifyQualityReview = null;
     for (const stage of stages) {
       if (stage === "build-code") writeFileSync(join(state.candidate.worktreeRoot, "src/app.txt"), "implemented\n");
+      // The current projector only accepts a stage outcome after a quality
+      // fact authenticates its exact ref/hash.  Seed that producer-owned
+      // envelope before publication so this fixture exercises the same
+      // binding path as the public route instead of relying on array order.
+      if (stage === "verify-code") {
+        const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+        const materialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
+        verifyQualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree, materialRevision });
+      }
+      const currentOutcome = stageOutcomeReceipt(state, stage, {
+        attemptId: `attempt-${stage}-current-five-stage`,
+        ...(stage === "verify-code" ? { qualityReview: { ref: verifyQualityReview.resultRef } } : {}),
+      });
       const result = await runStage(stage, context(stage, state), async () => {
         const currentEvidence = evidence(state, stage, { confirm: stage !== "verify-code" });
         const facts = { ...currentEvidence.facts, source: "current-five-stage-test", stage };
+        if (stage === "verify-code") {
+          facts.completion_subjects.acceptance_criteria.evidence_refs = [{ ref: currentOutcome.ref, sha256: currentOutcome.sha256 }];
+        }
         if (stage === "make-decision") {
           Object.assign(facts.completion_subjects, completeConvergenceFacts());
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
@@ -1171,8 +1328,7 @@ describe("current vNext five-stage runtime", () => {
         if (stage === "verify-code") {
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
           const materialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
-          const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree, materialRevision });
-          verifyQualityReview = qualityReview;
+          const qualityReview = verifyQualityReview;
           const reviewFact = (ref, reviewScope) => ({
             status: "recorded", result_ref: ref, result_hash: sha256(state.task.readRecord(ref)),
             snapshot_tree: snapshot.tree, subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
@@ -1185,14 +1341,15 @@ describe("current vNext five-stage runtime", () => {
         return {
           ...currentEvidence,
           facts,
+          stage_outcome_ref: currentOutcome.ref,
+          stage_outcome_hash: currentOutcome.sha256,
+          stage_outcome_status: currentOutcome.value.status,
+          step_outcomes: currentOutcome.value.step_outcomes,
+          skill_outcomes: currentOutcome.value.skill_outcomes,
           ...(stage === "verify-code" ? {} : { spec_analyze: { result: { status: "consistent" } } }),
         };
       });
       statuses[stage] = result.status;
-      const currentOutcome = stageOutcomeReceipt(state, stage, {
-        attemptId: `attempt-${stage}-current-five-stage`,
-        ...(stage === "verify-code" ? { qualityReview: { ref: verifyQualityReview.resultRef } } : {}),
-      });
       const projection = publicStatus(state, stage);
       expect(projection, JSON.stringify({ stage, projection })).toMatchObject({ work_status: "ready", quality_status: "completed" });
       expect(projection).not.toHaveProperty("status");

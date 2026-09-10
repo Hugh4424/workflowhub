@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "dsh",
+    "subject_kind": "phase",
+    "phase_id": "P2",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "workflowhub-make-decision-hardening frozen spec: P2 OI author and three consumers; covered ACs AC-OUTLINE-001, AC-OUTLINE-002, AC-SNAPSHOT-001, AC-REVIEW-002, AC-STATE-002.",
+      "acceptance_criteria": "ORACLE-OI-CONTRACT: one current OI authority covers six framework nodes and six fixed categories; direction is questions-only; direction/detail/approve-decision duties stay distinct.",
+      "test_evidence": "Focused P2 contract command: 5 files, 74 tests, exit 0. Static/contract only; runtime OI identity and provider per-OI proof remain outside this phase."
+    }
+  }
+}

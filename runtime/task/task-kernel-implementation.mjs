@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import factsContract from "../../contracts/facts-subschema.json" with { type: "json" };
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { listCanonicalConfirmationRefs, withStoreLock } from "./task-store.mjs";
+import { listCanonicalConfirmationRefs, readTaskIndex, replaceTaskIndex, withStoreLock } from "./task-store.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
-import { deriveStageCompletion, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, stageMaterialScopeRevision, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import {
   buildRiskAcceptance,
   canonicalReviewFindings,
@@ -16,8 +17,10 @@ import {
   isActionableSeriousFinding,
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
-import { validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
+import { activeAcceptanceCriterionIds, validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
 import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
+import { publishResearchReport } from "../evidence/research-report.mjs";
+import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 export { createQualityFact } from "../evidence/quality-fact.mjs";
 export { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 export { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
@@ -123,6 +126,9 @@ function validateTests(value, label) {
   text(tests.command, `${label}.command`);
   if (!Number.isInteger(tests.exit_code)) throw new TypeError(`${label}.exit_code must be integer`);
   for (const key of ["command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "output_ref", "output_hash"]) text(tests[key], `${label}.${key}`);
+  if (tests.runtime_profile !== undefined && (typeof tests.runtime_profile !== "object" || Array.isArray(tests.runtime_profile))) throw new TypeError(`${label}.runtime_profile must be an object`);
+  if (tests.runtime_profile_status !== undefined && !["ready", "unavailable", "incomplete"].includes(tests.runtime_profile_status)) throw new Error(`${label}.runtime_profile_status is invalid`);
+  if (tests.runtime_profile_authenticated !== undefined && typeof tests.runtime_profile_authenticated !== "boolean") throw new TypeError(`${label}.runtime_profile_authenticated must be boolean`);
   return tests;
 }
 function validateReview(value, label) {
@@ -518,13 +524,28 @@ export function buildTaskKernel(taskHandle, {
 } = {}, authority) {
   const task = authority.assertTaskHandle(taskHandle);
   const createRecord = authority.createKernelRecordFor(task);
+  const writeVerifySummary = authority.createVerifySummaryWriterFor(task);
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const activeWorkspace = () => candidate ?? workspace;
+  const authenticatedOperationContexts = new AsyncLocalStorage();
   const artifactDir = () => artifacts === undefined
     ? ArtifactDir.open(activeWorkspace().worktreeRoot, task)
     : assertArtifactDir(artifacts);
-  const currentContext = () => {
+  const currentMaterialScopeRevision = (stage) => {
+    const dir = artifactDir();
+    const values = Object.fromEntries((STAGE_FACT_MATERIALS[stage] ?? []).map((file) => {
+      try { return [file, dir.read(file)]; }
+      catch (error) {
+        if (error?.code === "ENOENT") return [file, null];
+        throw error;
+      }
+    }));
+    return stageMaterialScopeRevision(stage, values);
+  };
+  const currentContext = ({ fresh = false } = {}) => {
     if (task.manifest.record_model !== "vnext-single-write") throw new Error("vNext writer requires a vnext-single-write task");
+    const authenticatedOperationContext = authenticatedOperationContexts.getStore();
+    if (!fresh && authenticatedOperationContext !== undefined) return authenticatedOperationContext;
     const active = activeWorkspace();
     if (!active) throw new Error("vNext current material context requires an authenticated Workspace");
     const dir = artifactDir();
@@ -544,7 +565,7 @@ export function buildTaskKernel(taskHandle, {
       material_digest: materialDigest,
       source: "current-four-materials",
     };
-    return { revision, snapshot: captureExecutionSnapshot(active.worktreeRoot, task.identity.taskId) };
+    return Object.freeze({ revision: Object.freeze(revision), snapshot: Object.freeze(captureExecutionSnapshot(active.worktreeRoot, task.identity.taskId)) });
   };
   const readInput = (slot) => {
     const input = task.manifest.inputs?.[slot];
@@ -555,7 +576,7 @@ export function buildTaskKernel(taskHandle, {
     }
     return structuredClone(input);
   };
-  const currentVNextSnapshot = () => currentContext().snapshot;
+  const currentVNextSnapshot = (options = {}) => currentContext(options).snapshot;
   const createImmutable = (relativePath, raw) => {
     try { createRecord(relativePath, raw); }
     catch (error) {
@@ -671,15 +692,26 @@ export function buildTaskKernel(taskHandle, {
     task,
     readInput,
     currentVNextSnapshot,
-    currentVNextContext() {
-      const context = currentContext();
+    currentVNextContext(options = {}) {
+      const context = currentContext(options);
       return Object.freeze({
         snapshot: context.snapshot,
         materialRevision: context.revision.revision_id,
       });
     },
-    currentVNextMaterialRevision() {
-      return currentContext().revision.revision_id;
+    currentVNextMaterialRevision(options = {}) {
+      return currentContext(options).revision.revision_id;
+    },
+    currentVNextMaterialScopeRevision(stage) {
+      return currentMaterialScopeRevision(stage);
+    },
+    async withAuthenticatedOperation(operation) {
+      if (typeof operation !== "function") throw new TypeError("authenticated operation callback is required");
+      const authenticatedOperationContext = currentContext({ fresh: true });
+      return authenticatedOperationContexts.run(
+        authenticatedOperationContext,
+        () => operation(authenticatedOperationContext),
+      );
     },
     deriveStageWorkflowRunId(stage) {
       return `vnext-${hash(`${task.identity.taskId}\0${stageName(stage)}`).slice(0, 32)}`;
@@ -706,6 +738,94 @@ export function buildTaskKernel(taskHandle, {
         throw new Error("canonical record namespace required");
       }
       return createImmutable(relativePath, raw);
+    },
+    publishVerifySummary(summary = {}, options = {}) {
+      object(summary, "verify summary");
+      object(options, "verify summary options");
+      rejectUnknown(summary, new Set(["status", "criteria", "missing"]), "verify summary");
+      rejectUnknown(options, new Set(["created_at", "testHooks", "indexTestHooks"]), "verify summary options");
+      if (!Array.isArray(summary.criteria) || summary.criteria.length === 0) {
+        throw new TypeError("verify summary criteria are required");
+      }
+      if (!Array.isArray(summary.missing ?? []) || (summary.missing ?? []).some((item) => typeof item !== "string" || item.trim() === "")) {
+        throw new TypeError("verify summary missing must be an array of non-empty strings");
+      }
+      const { revision, snapshot } = currentContext({ fresh: true });
+      const criteria = validateVerifyLeaves(summary.criteria, { sourceDigest: snapshot.source_digest });
+      const expectedIds = [...activeAcceptanceCriterionIds(artifactDir().read("spec.md"))].sort();
+      const actualIds = criteria.map((criterion) => criterion.acceptance_criterion_id).sort();
+      if (expectedIds.length === 0 || expectedIds.length !== actualIds.length
+          || expectedIds.some((id, index) => id !== actualIds[index])) {
+        throw new Error("verify summary criteria do not match the current spec acceptance criteria");
+      }
+      for (const criterion of criteria) {
+        for (const evidence of [criterion.acceptance_leaf, ...criterion.nested_evidence]) {
+          const raw = task.readRecord(evidence.ref);
+          if (hash(raw) !== evidence.sha256) throw new Error(`verify summary evidence hash mismatch: ${evidence.ref}`);
+        }
+      }
+      const derivedStatus = criteria.some((criterion) => criterion.status === "failed")
+        ? "failed"
+        : criteria.every((criterion) => criterion.status === "passed") && (summary.missing ?? []).length === 0
+          ? "passed"
+          : "incomplete";
+      if (summary.status !== undefined && summary.status !== derivedStatus) {
+        throw new Error("verify summary status does not match its criteria and missing items");
+      }
+      const taskRaw = task.readRecord("task.json");
+      const logicalValue = {
+        schema_version: "quality-verify.v1",
+        task_id: task.identity.taskId,
+        stage: "verify-code",
+        ac_id: "verify-summary",
+        status: derivedStatus,
+        method: "quality-summary",
+        evidence_ref: "task.json",
+        evidence_hash: hash(taskRaw),
+        material_digest: revision.material_digest,
+        source_digest: snapshot.source_digest,
+        snapshot_tree: snapshot.tree,
+        material_revision: revision.revision_id,
+        criteria,
+        missing: [...(summary.missing ?? [])],
+      };
+      return withStoreLock(task.taskPath, () => {
+        let prior = null;
+        try { prior = JSON.parse(task.readRecord("quality/verify.json")); } catch { /* replaced below */ }
+        const { created_at: _priorCreatedAt, ...priorLogical } = prior ?? {};
+        const sameLogical = prior !== null && aggregateJson(priorLogical) === aggregateJson(logicalValue);
+        const value = { ...logicalValue, created_at: sameLogical ? prior.created_at : (options.created_at ?? now()) };
+        if (!Number.isFinite(Date.parse(value.created_at))) throw new TypeError("verify summary created_at is invalid");
+        const raw = `${JSON.stringify(value, null, 2)}\n`;
+        const verifyHash = hash(raw);
+        const oldIndex = readTaskIndex(task.taskPath);
+        const indexAlreadyCurrent = oldIndex.quality.verify?.ref === "quality/verify.json"
+          && oldIndex.quality.verify?.sha256 === verifyHash;
+        if (!sameLogical || hash(task.readRecord("quality/verify.json")) !== verifyHash) {
+          writeVerifySummary(raw, { testHooks: options.testHooks });
+        }
+        const readback = task.readRecord("quality/verify.json");
+        if (readback !== raw || hash(readback) !== verifyHash) throw new Error("verify summary readback mismatch");
+        if (!indexAlreadyCurrent) {
+          const nextIndex = structuredClone(oldIndex);
+          nextIndex.quality.verify = {
+            ref: "quality/verify.json", sha256: verifyHash, schema: value.schema_version, task_id: task.identity.taskId,
+            logical_ref: "quality/verify.json", content_hash: verifyHash, version: "v1", related_task_id: task.identity.taskId,
+            external_raw_ref: "task.json", external_governance_archive_ref: null,
+          };
+          replaceTaskIndex(task.taskPath, nextIndex, { testHooks: options.indexTestHooks });
+        }
+        const finalIndex = readTaskIndex(task.taskPath);
+        if (finalIndex.quality.verify?.sha256 !== verifyHash || finalIndex.quality.verify?.ref !== "quality/verify.json") {
+          throw new Error("verify summary index readback mismatch");
+        }
+        return Object.freeze({
+          ref: "quality/verify.json",
+          sha256: verifyHash,
+          value: Object.freeze(value),
+          status: sameLogical && indexAlreadyCurrent ? "idempotent" : sameLogical ? "recovered" : "published",
+        });
+      });
     },
     publishVNextQualityFact(stage, input = {}, options = {}) {
       const name = stageName(stage);
@@ -968,7 +1088,21 @@ export function buildTaskKernel(taskHandle, {
     },
     prepareMakeDecisionInteractionPublication: prepareInteractionPublication,
     completeMakeDecisionInteractionPublication: completeInteractionPublication,
-    completeMakeDecisionResearch: unsupported("make-decision research publication"),
+    completeMakeDecisionResearch(input = {}) {
+      object(input, "make-decision research publication input");
+      const report = input.report ?? (input.raw === undefined ? input : null);
+      const { snapshot } = currentContext();
+      return publishResearchReport({
+        publish: (relativePath, raw) => createImmutable(relativePath, raw),
+        report,
+        ...(input.raw === undefined ? {} : { raw: input.raw }),
+        taskId: task.identity.taskId,
+        stage: input.stage ?? "make-decision",
+        snapshotTree: snapshot.tree,
+        materialScopeRevision: currentMaterialScopeRevision("make-decision"),
+        recordedAt: now(),
+      });
+    },
     completeMakeDecisionReceipt: unsupported("make-decision receipt completion"),
     completeBuildSpecResultPublication: unsupported("build-spec result publication"),
     publishBuildSpecCompletionAudit: unsupported("build-spec completion audit"),

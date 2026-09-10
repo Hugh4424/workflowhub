@@ -12,6 +12,7 @@ import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMateria
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateBrowserQaEvidence, validateReviewAttemptObservation, validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
+import { readResearchReport, deriveResearchStatus } from "../evidence/research-report.mjs";
 import { buildStageInputPacket, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
   validateAcceptanceDesignMinimum,
@@ -45,7 +46,7 @@ import {
   validateMaterialOracleContract,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
-import { STAGE_MATERIALS, separateAttemptFindingFacts } from "./completion-predicates.mjs";
+import { STAGE_FACT_MATERIALS, STAGE_MATERIALS, separateAttemptFindingFacts, stageMaterialScopeRevision } from "./completion-predicates.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -107,6 +108,19 @@ function captureWorkerSnapshot(worker) {
   return null;
 }
 
+function currentResearchMaterialScopeRevision(worker, stage = worker.stage) {
+  if (typeof worker.currentMaterialScopeRevision === "function") {
+    return worker.currentMaterialScopeRevision(stage);
+  }
+  if (typeof worker.readArtifact === "function") {
+    const files = STAGE_FACT_MATERIALS[stage] ?? STAGE_FACT_MATERIALS["make-decision"];
+    return stageMaterialScopeRevision(stage, Object.fromEntries(files.map((file) => [file, worker.readArtifact(file)])));
+  }
+  // Keep old test-only workers readable; the authenticated official worker
+  // always exposes the scoped reader above.
+  return worker.currentMaterialRevision;
+}
+
 function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
   const supplied = input?.decision_freeze;
   const bindingErrors = [];
@@ -151,7 +165,7 @@ const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "quality/evidence/", spec: "quality/evidence/", plan: "quality/evidence/", tasks: "quality/evidence/",
   interaction: "quality/evidence/interactions/",
-  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", clarify: "quality/evidence/interactions/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
+  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/evidence/research/", grill: "quality/tests/", clarify: "quality/evidence/interactions/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
   audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/", ui_qa: "quality/evidence/browser-qa/",
@@ -330,6 +344,7 @@ function validReceiptRef(name, ref) {
   if (name === "confirmation") return /^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "stage_reflection") return STAGE_REFLECTION_REF.test(ref);
   if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "research") return /^quality\/evidence\/research\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);
@@ -705,6 +720,9 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
   if (item.value.command_hash !== hashText(item.value.command)) throw new Error(`${name}.command_hash does not match command`);
   if (item.value.source_digest !== undefined && !SHA256.test(item.value.source_digest)) throw new Error(`${name}.source_digest must be sha256`);
   if (!/^quality\/tests\/output\//.test(item.value.output_ref) || item.value.output_ref.includes("..")) throw new Error(`${name}.output_ref must use canonical test-output namespace`);
+  if (item.value.runtime_profile !== undefined && (typeof item.value.runtime_profile !== "object" || Array.isArray(item.value.runtime_profile))) throw new TypeError(`${name}.runtime_profile must be an object`);
+  if (item.value.runtime_profile_status !== undefined && !["ready", "unavailable", "incomplete"].includes(item.value.runtime_profile_status)) throw new Error(`${name}.runtime_profile_status is invalid`);
+  if (item.value.runtime_profile_authenticated !== undefined && typeof item.value.runtime_profile_authenticated !== "boolean") throw new TypeError(`${name}.runtime_profile_authenticated must be boolean`);
   return {
     facts: {
       command: item.value.command,
@@ -721,9 +739,24 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
       receipt_hash: item.evidence.sha256,
       output_ref: item.value.output_ref,
       output_hash: item.value.output_hash,
+      ...(item.value.runtime_profile === undefined ? {} : { runtime_profile: item.value.runtime_profile }),
+      ...(item.value.runtime_profile_status === undefined ? {} : { runtime_profile_status: item.value.runtime_profile_status }),
+      ...(item.value.runtime_profile_authenticated === undefined ? {} : { runtime_profile_authenticated: item.value.runtime_profile_authenticated }),
+      ...(item.value.capability_proof === undefined ? {} : { capability_proof: item.value.capability_proof }),
+      ...(item.value.behavior_fingerprint === undefined ? {} : { behavior_fingerprint: item.value.behavior_fingerprint }),
+      ...(item.value.behavior_fingerprint_status === undefined ? {} : { behavior_fingerprint_status: item.value.behavior_fingerprint_status }),
+      ...(item.value.duration_ms === undefined ? {} : { duration_ms: item.value.duration_ms }),
     },
     evidence: item.evidence,
   };
+}
+function researchFacts(worker, invocation, producerStage = worker.stage) {
+  recordConsumerInvocation(worker, "stage-handlers#researchFacts");
+  const refs = object(invocation.receipts, "receipts");
+  const ref = text(refs.research, "research report ref");
+  if (!/^quality\/evidence\/research\/[a-f0-9]{64}\.json$/.test(ref)) throw new Error("research report ref is outside its canonical namespace");
+  const item = readResearchReport({ task: { readRecord: (value) => worker.readEvidence(value).bytes }, ref, taskId: worker.identity.taskId, stage: producerStage, snapshotTree: captureWorkerSnapshot(worker).tree, materialScopeRevision: currentResearchMaterialScopeRevision(worker, producerStage) });
+  return { facts: { research_status: item.value.status, research_report_ref: item.ref, research_report_hash: item.sha256, research_disclosure: deriveResearchStatus([item]) }, evidence: { ref: item.ref, sha256: item.sha256 } };
 }
 
 function clarifyFacts(worker, invocation) {
@@ -1558,22 +1591,27 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       } : {}),
     };
   });
-  const proofOwners = [];
   const coveredItems = items.filter((item) => item.status === "covered");
+  const overlapPeers = new Map();
+  for (const item of coveredItems) {
+    const peers = coveredItems
+      .filter((other) => other !== item && [item.implementation_anchor, item.verification_anchor].some((left) =>
+        [other.implementation_anchor, other.verification_anchor].some((right) => anchorsOverlap(left, right))))
+      .map((other) => other.acceptance_criterion_id)
+      .sort();
+    if (peers.length > 0) overlapPeers.set(item.acceptance_criterion_id, peers);
+  }
   const normalizedItems = items.map((item) => {
     if (item.status !== "covered") return item;
     const semanticWarnings = acceptanceSemanticWarnings(item, coveredItems);
-    for (const anchor of [item.implementation_anchor, item.verification_anchor]) {
-      const previous = proofOwners.find(({ anchor: previousAnchor, criterionId }) => criterionId !== item.acceptance_criterion_id && anchorsOverlap(previousAnchor, anchor));
-      if (previous !== undefined) {
-        return {
-          acceptance_criterion_id: item.acceptance_criterion_id,
-          status: "unknown",
-          evidence_refs: [],
-          semantic_gap: `covered claim overlaps proving anchor with ${previous.criterionId}`,
-        };
-      }
-      proofOwners.push({ anchor, criterionId: item.acceptance_criterion_id });
+    const peers = overlapPeers.get(item.acceptance_criterion_id);
+    if (peers) {
+      return {
+        acceptance_criterion_id: item.acceptance_criterion_id,
+        status: "unknown",
+        evidence_refs: [],
+        semantic_gap: `covered claim overlaps proving anchor with ${peers.join(", ")}`,
+      };
     }
     if (semanticWarnings.length > 0) {
       return {
@@ -1862,6 +1900,10 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     "REVIEW_BROKER_EXIT_NONZERO",
     "REVIEW_EXECUTION_TIMEOUT",
     "REVIEW_CANCELLED",
+    // Managed start can succeed while the broker has not emitted a terminal
+    // group event yet. That is a real dispatched transport fact, not a
+    // provider-specific failure requiring fabricated provider attempts.
+    "REVIEW_STATUS_UNAVAILABLE",
     "REVIEW_NO_SEMANTIC_RESULT",
     "REVIEW_PROVIDER_OUTPUT_INVALID",
     "PROTOCOL_INCOMPATIBLE",
@@ -3246,7 +3288,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   let item = currentOnly ? null : receipt(worker, input, "decision");
   const direction = safeReviewFacts(worker, input, "direction_review", "direction");
   const detail = safeReviewFacts(worker, input, "detail_review", "detail");
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
   const dispositions = findingDispositions([direction, detail], input);
@@ -3303,7 +3345,16 @@ HANDLERS.set("make-decision", async (worker, input) => {
     originalRequirement: worker.authenticatedRequirementContext?.originalRequirement ?? "",
     requirementMessages: worker.authenticatedRequirementContext?.requirementMessages ?? [],
     requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
+    taskId: worker.identity.taskId,
+    directionReview: direction.value ?? direction,
+    interactionAggregate: interaction,
+    // The record-model boundary, not a marker string in user-authored
+    // Markdown, decides whether this is a current task.  Current vNext
+    // tasks must publish the outline subject even when it is missing; legacy
+    // records remain readable without fabricating a new predicate.
+    requireOutline: currentOnly,
   });
+  const hasCurrentOutline = currentOnly;
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
@@ -3336,6 +3387,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
         acceptance_clarity: subjectFact(convergence.facts.acceptance_clarity, [specEvidence], convergence.facts.acceptance_clarity === "passed" ? "decision-log acceptance criteria are present" : convergence.errors.find((e) => e.includes("acceptance")) ?? "decision-log acceptance clarity section missing"),
         solution_convergence: subjectFact(convergence.facts.solution_convergence, [specEvidence], convergence.facts.solution_convergence === "passed" ? "decision-log shows a converged solution" : convergence.errors.find((e) => e.includes("converged solution")) ?? "decision-log solution convergence section missing"),
         plain_language_card: subjectFact(convergence.facts.plain_language_card, [specEvidence], convergence.facts.plain_language_card === "passed" ? "decision-log end card is in plain language" : convergence.errors.find((e) => e.includes("end card")) ?? "decision-log plain-language end card missing"),
+        ...(hasCurrentOutline ? { outline_closed: subjectFact(
+          convergence.facts.outline_closed,
+          [specEvidence, ...(direction.evidence ? [direction.evidence] : []), ...(interaction?.evidence ? [interaction.evidence] : [])],
+          convergence.facts.outline_closed === "passed"
+            ? "current OI outline satisfies all five close conjuncts"
+            : convergence.outline.errors[0] ?? "current OI outline is not closed",
+          { outline_components: convergence.outline.components },
+        ) } : {}),
       },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
@@ -3353,7 +3412,11 @@ HANDLERS.set("make-decision", async (worker, input) => {
     ],
     // Direction/detail review is advisory. Preserve its evidence and status,
     // but do not make transport failure a make-decision completion blocker.
-    missing_items: [...new Set([...dispositions.missing_items, ...uiApplicability.missing_items])],
+    missing_items: [...new Set([
+      ...dispositions.missing_items,
+      ...uiApplicability.missing_items,
+      ...(hasCurrentOutline ? convergence.outline.errors.map((error) => `outline_closed: ${error}`) : []),
+    ])],
   }, {
     worker,
     artifacts: [
@@ -3377,7 +3440,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   }
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const clarify = input.receipts?.clarify === undefined ? null : clarifyFacts(worker, input);
   const ui = buildSpecUiFacts(worker, input);
   const review = safeReviewFacts(worker, input);
@@ -3499,7 +3562,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
   });
   if (!materialOracle.ok) missingItems.push(...materialOracle.errors.map((error) => `material/oracle contract incomplete: ${error}`));
   missingItems.push(...stageInputPacket.missing_items);
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const componentQuality = componentQualityConsumerFacts(worker, input);
   missingItems.push(...componentQuality.missing_items);
   const evidenceRefs = [];
@@ -3713,6 +3776,9 @@ HANDLERS.set("build-code", async (worker, input) => {
   try { reviewBinding = bindFinalReview(worker, input, review, tests.facts.snapshot_tree, { stage: "build-code" }); }
   catch (error) { missingItems.push(`build-code review binding unavailable: ${error.message}`); }
   if (tests.facts.exit_code !== 0) missingItems.push("build-code final tests are not passing; quality warning only");
+  if (tests.facts.runtime_profile !== undefined && (tests.facts.runtime_profile_status !== "ready" || tests.facts.runtime_profile_authenticated !== true)) {
+    missingItems.push("build-code runtime profile unavailable; test quality remains unavailable");
+  }
   const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
   const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
     ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree, { implementation_ref: impl.ref, green_ref: tests.ref })
@@ -3748,6 +3814,16 @@ HANDLERS.set("build-code", async (worker, input) => {
       ...(uiQa ? { ui_qa: uiQa.facts } : {}),
       completion_subjects: {
         acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
+        ...(acceptanceExecution.requires_execution ? {
+          acceptance_execution: subjectFact(
+            acceptanceExecution.status === "executed" ? "passed" : "missing",
+            acceptanceExecution.evidence_refs,
+            acceptanceExecution.status === "executed"
+              ? "all declared acceptance scenarios executed with canonical evidence"
+              : `declared acceptance execution is ${acceptanceExecution.status}`,
+            { execution_items: acceptanceExecution.items },
+          ),
+        } : {}),
       },
       ...(audit?.facts ?? {}),
     },
@@ -3763,7 +3839,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     businessFacts: {
       content: "present",
       code: "complete",
-      tests: tests.facts.exit_code === 0 ? "passed" : "failed",
+      tests: tests.facts.exit_code === 0 && (tests.facts.runtime_profile === undefined || (tests.facts.runtime_profile_status === "ready" && tests.facts.runtime_profile_authenticated === true)) ? "passed" : (tests.facts.exit_code === 0 ? "unavailable" : "failed"),
       // An empty or unavailable coverage object must never become green via
       // Array.prototype.every([]).  Coverage is a quality fact, not a default
       // success value.
