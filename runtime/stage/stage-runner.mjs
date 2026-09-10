@@ -1121,7 +1121,9 @@ export async function runStageEndReflection(context, {
         stageOutcome: handoffStageOutcome,
         stageReflection: reflectionResultValue,
         materials,
-        nextAction: `继续读取当前 ${stage} 四份材料并处理仍未完成项`,
+        // The next action is derived from the stage chain and the stage status
+        // inside the handoff renderer; a hardcoded "continue the current stage"
+        // was wrong for every completed stage.
       });
     } catch (error) {
       handoff = stageHandoffFailure({
