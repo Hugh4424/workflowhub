@@ -1576,6 +1576,35 @@ describe("vNext official stage completion", () => {
     })).rejects.toThrow(/no quality receipts|stage-runtime/i);
   });
 
+  it("publishes an unavailable incomplete outcome when an explicit host requirement source cannot be read", async () => {
+    const state = fixture("bridge-requirement-source-unavailable");
+    const request = p3SessionRequest(state, "make-decision", {
+      attemptId: "attempt-requirement-source-unavailable",
+      agentRunId: "agent-requirement-source-unavailable",
+      sessionId: "session-requirement-source-unavailable",
+    });
+    request.session.source = {
+      kind: "host-session",
+      transcript_path: join(state.root, "missing", "host-session.jsonl"),
+    };
+    const result = await workflowHubBridgeMain(request);
+    expect(result).toMatchObject({
+      stage: "make-decision",
+      outcome_status: "unavailable",
+    });
+    const outcome = JSON.parse(state.task.readRecord(result.outcome_ref));
+    expect(outcome.status).toBe("unavailable");
+    expect(outcome.producer).toMatchObject({
+      source_id: request.session.source_id,
+      source_family: request.session.source_family,
+    });
+    const official = await runOfficialStage("make-decision", contextFor("make-decision", state), {
+      attempt_id: request.attempt_id,
+      receipts: { stage_outcomes: result.outcome_ref },
+    });
+    expect(official).toMatchObject({ stage_outcome_status: "unavailable", quality_status: "incomplete" });
+  });
+
   it("binds the bridge result identity to the task loaded from task_path", async () => {
     const state = fixture("bridge-task-identity");
     await expect(workflowHubBridgeMain({
@@ -1849,6 +1878,50 @@ describe("vNext official stage completion", () => {
       },
       evidence_refs: [{ ref, sha256: sha256(raw) }],
     })).toThrow(/status is not bound to the canonical receipt exit_code/);
+  });
+
+  it("accepts a canonical test receipt nested under the task's quality/tests namespace", () => {
+    const state = fixture("nested-test-receipt");
+    const snapshot = state.candidate.captureSnapshot();
+    const receipt = {
+      schema_version: "workflowhub-receipt.v1",
+      task_id: state.task.identity.taskId,
+      stage: "build-code",
+      producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+      command: "true",
+      command_hash: sha256("true"),
+      exit_code: 0,
+      snapshot_head: snapshot.head,
+      snapshot_tree: snapshot.tree,
+      snapshot_commit: snapshot.commit,
+      started_at: "2026-08-02T00:00:00.000Z",
+      completed_at: "2026-08-02T00:00:01.000Z",
+      output_ref: "quality/tests/output/nested-test-receipt.output",
+      output_hash: sha256("ok\n"),
+    };
+    const raw = `${JSON.stringify(receipt, null, 2)}\n`;
+    const ref = "quality/tests/build-code/nested-test-receipt.json";
+    state.kernel.publishCanonicalRecord(ref, raw);
+    state.kernel.publishCanonicalRecord(receipt.output_ref, "ok\n");
+    expect(() => verifyOfficialEvidence(contextFor("build-code", state), {
+      facts: {
+        tests: {
+          status: "passed",
+          command: receipt.command,
+          command_hash: receipt.command_hash,
+          snapshot_head: receipt.snapshot_head,
+          snapshot_tree: receipt.snapshot_tree,
+          snapshot_commit: receipt.snapshot_commit,
+          started_at: receipt.started_at,
+          completed_at: receipt.completed_at,
+          receipt_ref: ref,
+          receipt_hash: sha256(raw),
+          output_ref: receipt.output_ref,
+          output_hash: receipt.output_hash,
+        },
+      },
+      evidence_refs: [{ ref, sha256: sha256(raw) }],
+    })).not.toThrow();
   });
 
   it("rejects an exit-zero test fact when its runtime profile is unavailable", async () => {

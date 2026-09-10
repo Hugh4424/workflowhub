@@ -11,9 +11,11 @@ const stageSkills = Object.freeze({
     "talk-with-zhipeng",
     "grill-with-docs",
     "decision-log",
+    "deep-research",
     "wh-review",
     "spec-analyze",
     "stage-reflection",
+    "stage-handoff",
   ],
   "build-spec": [
     "spec-research",
@@ -28,6 +30,7 @@ const stageSkills = Object.freeze({
     "wh-review",
     "spec-analyze",
     "stage-reflection",
+    "stage-handoff",
   ],
   "build-plan": [
     "spec-research",
@@ -41,6 +44,7 @@ const stageSkills = Object.freeze({
     "spec-analyze",
     "wh-review",
     "stage-reflection",
+    "stage-handoff",
   ],
   "build-code": [
     "test-routing-advisor",
@@ -51,6 +55,7 @@ const stageSkills = Object.freeze({
     "wh-review",
     "spec-analyze",
     "stage-reflection",
+    "stage-handoff",
   ],
   "verify-code": ["dsh-code-review", "frontend-component-quality", "wh-review", "stage-reflection"],
 });

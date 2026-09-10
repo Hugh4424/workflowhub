@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openTask } from "../../runtime/task/task-handle.mjs";
+import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
+import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../../runtime/evidence/write-boundary-preflight.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
@@ -36,8 +38,15 @@ function required(values, name) {
   return values[name];
 }
 
+function taskPath(values, project, taskId) {
+  if (values["task-path"] !== undefined) return required(values, "task-path");
+  return deriveTaskPath(resolveStorageRoot(), project, taskId);
+}
+
 function context(values, { workspaceRequired = true } = {}) {
-  const task = openTask(required(values, "task-path"), required(values, "project"), required(values, "task"));
+  const project = required(values, "project");
+  const taskId = required(values, "task");
+  const task = openTask(taskPath(values, project, taskId), project, taskId);
   const unboundKernel = createTaskKernel(task);
   if (!workspaceRequired) return { task, workspace: null, kernel: unboundKernel };
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
@@ -77,13 +86,13 @@ function optionalJsonArray(values, name) {
 function usage() {
   return [
     "Usage:",
-    "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=... [--mode=planning] [--required-attachments=JSON]",
-    "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout [--reply-text=...] [--step-slug=...] (reply and step required unless timeout)",
-    "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
-    "  task-close.mjs manual-close --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
-    "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
-    "  task-close.mjs status --task-path=... --project=... --task=... [--plan-hash=...]",
-    "  task-close.mjs close --task-path=... --project=... --task=... --reply-text=... --step-slug=... [--mode=planning] [--required-attachments=JSON] [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
+    "  task-close.mjs prepare [--task-path=...] --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=... [--mode=planning] [--required-attachments=JSON]",
+    "  task-close.mjs confirm [--task-path=...] --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout [--reply-text=...] [--step-slug=...] (reply and step required unless timeout)",
+    "  task-close.mjs execute [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs manual-close [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs complete [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs status [--task-path=...] --project=... --task=... [--plan-hash=...]",
+    "  task-close.mjs close [--task-path=...] --project=... --task=... --reply-text=... --step-slug=... [--mode=planning] [--required-attachments=JSON] [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
   ].join("\n");
 }
 

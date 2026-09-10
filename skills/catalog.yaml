@@ -127,8 +127,8 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 673a3eeaf00aa3f418d5311941e624e610305bea47069b591fc9da6fb0619c53
-    last_reviewed_at: '2026-07-14'
+    local_bundle_hash: 681d69665c859d23ca63b3ca65b3b078b3eebec57fa5cb5c6c13075c9b065969
+    last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
     purpose: 生成下游唯一权威需求记录
@@ -548,8 +548,8 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: eb55495d6a19dd41e158bf973343ddb92fa3ad3ee14b74610f28403419d81e7c
-    last_reviewed_at: '2026-07-14'
+    local_bundle_hash: 54b7b955aec0ccf227b7e673e68687c4705407c94146ce0339e793f2c433d159
+    last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
     purpose: workflowhub 唯一异源审查调度层

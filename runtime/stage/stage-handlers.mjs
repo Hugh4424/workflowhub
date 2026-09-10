@@ -3345,7 +3345,16 @@ HANDLERS.set("make-decision", async (worker, input) => {
     originalRequirement: worker.authenticatedRequirementContext?.originalRequirement ?? "",
     requirementMessages: worker.authenticatedRequirementContext?.requirementMessages ?? [],
     requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
+    taskId: worker.identity.taskId,
+    directionReview: direction.value ?? direction,
+    interactionAggregate: interaction,
+    // The record-model boundary, not a marker string in user-authored
+    // Markdown, decides whether this is a current task.  Current vNext
+    // tasks must publish the outline subject even when it is missing; legacy
+    // records remain readable without fabricating a new predicate.
+    requireOutline: currentOnly,
   });
+  const hasCurrentOutline = currentOnly;
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
@@ -3378,6 +3387,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
         acceptance_clarity: subjectFact(convergence.facts.acceptance_clarity, [specEvidence], convergence.facts.acceptance_clarity === "passed" ? "decision-log acceptance criteria are present" : convergence.errors.find((e) => e.includes("acceptance")) ?? "decision-log acceptance clarity section missing"),
         solution_convergence: subjectFact(convergence.facts.solution_convergence, [specEvidence], convergence.facts.solution_convergence === "passed" ? "decision-log shows a converged solution" : convergence.errors.find((e) => e.includes("converged solution")) ?? "decision-log solution convergence section missing"),
         plain_language_card: subjectFact(convergence.facts.plain_language_card, [specEvidence], convergence.facts.plain_language_card === "passed" ? "decision-log end card is in plain language" : convergence.errors.find((e) => e.includes("end card")) ?? "decision-log plain-language end card missing"),
+        ...(hasCurrentOutline ? { outline_closed: subjectFact(
+          convergence.facts.outline_closed,
+          [specEvidence, ...(direction.evidence ? [direction.evidence] : []), ...(interaction?.evidence ? [interaction.evidence] : [])],
+          convergence.facts.outline_closed === "passed"
+            ? "current OI outline satisfies all five close conjuncts"
+            : convergence.outline.errors[0] ?? "current OI outline is not closed",
+          { outline_components: convergence.outline.components },
+        ) } : {}),
       },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
@@ -3395,7 +3412,11 @@ HANDLERS.set("make-decision", async (worker, input) => {
     ],
     // Direction/detail review is advisory. Preserve its evidence and status,
     // but do not make transport failure a make-decision completion blocker.
-    missing_items: [...new Set([...dispositions.missing_items, ...uiApplicability.missing_items])],
+    missing_items: [...new Set([
+      ...dispositions.missing_items,
+      ...uiApplicability.missing_items,
+      ...(hasCurrentOutline ? convergence.outline.errors.map((error) => `outline_closed: ${error}`) : []),
+    ])],
   }, {
     worker,
     artifacts: [

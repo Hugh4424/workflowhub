@@ -40,6 +40,18 @@ const parseRuntimeArray = (name) => {
 };
 
 describe("spec and plan content artifact closure", () => {
+  it("RED: keeps the current OI authority inside decision-log and synchronizes its bundle", () => {
+    const skill = read("skills/decision-log/SKILL.md");
+    const template = read("skills/decision-log/templates/decision-log-template.md");
+    const workflow = read("workflows/make-decision/SKILL.md");
+    expect(`${skill}\n${template}`).toMatch(/one current OI|唯一.*OI/i);
+    expect(`${skill}\n${template}`).toMatch(/questions-only/);
+    expect(workflow).toMatch(/`approve-decision`[\s\S]{0,180}(?:existing|既有)/i);
+    const bundle = validateSkillBundle(root, "skills/decision-log/skill-bundle.json", "skills/decision-log/SKILL.md");
+    const catalog = yaml.load(read("skills/catalog.yaml"));
+    expect(catalog.skills.find((entry) => entry.name === "decision-log").local_bundle_hash).toBe(bundle.bundleHash);
+  });
+
   it("puts the decision-log source index into the derived build-plan packet", () => {
     const matrix = JSON.parse(read("runtime/review/stage-materials.json"));
     expect(matrix.stages["build-plan"].generated).toContain("planning_artifacts");

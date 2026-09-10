@@ -2081,7 +2081,13 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   }
   const predicateEntries = [
     ...Object.entries(STAGE_PREDICATES[ctx.stage])
-      .filter(([subject]) => subject !== "stage_end_spec_analyze")
+      .filter(([subject]) => subject !== "stage_end_spec_analyze"
+        // `outline_closed` is mandatory for current vNext make-decision
+        // tasks.  Only legacy records may omit this post-migration subject;
+        // a Markdown marker is not an authority boundary.
+        && !(ctx.stage === "make-decision" && subject === "outline_closed"
+          && ctx.manifest?.record_model !== "vnext-single-write"
+          && !result.facts?.completion_subjects?.outline_closed))
       .map(([subject, kind]) => ({ subject, kind, gating: true })),
     ...(ctx.stage === "build-spec" && result.facts?.completion_subjects?.ui_design
       ? [{ subject: "ui_design", kind: "acceptance_criterion", gating: true }]
@@ -2267,6 +2273,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   const completion = deriveStageCompletion(ctx.stage, observations, {
     requireStageOutcome,
     stageOutcomeStatus: result.stage_outcome_status,
+    requireOutline: ctx.stage === "make-decision" && ctx.manifest?.record_model === "vnext-single-write",
   });
   for (const binding of result.skill_consumer_bindings ?? []) {
     if (binding.status === "incomplete") {
@@ -2794,7 +2801,7 @@ export function verifyOfficialEvidence(ctx, result) {
   }
   if (hasAnyTestBinding) {
     if (typeof tests.receipt_ref !== "string"
-        || !/^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(tests.receipt_ref)
+        || !/^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.json$/.test(tests.receipt_ref)
         || !/^[a-f0-9]{64}$/.test(tests.receipt_hash ?? "")) {
       throw new Error("test receipt_ref/receipt_hash binding is invalid");
     }

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "dsh",
+    "subject_kind": "phase",
+    "phase_id": "P1",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "workflowhub-make-decision-hardening frozen spec: P1 authenticated host-session requirement source; covered ACs AC-SOURCE-001, AC-SOURCE-002 and supporting AC-GOV-001.",
+      "acceptance_criteria": "",
+      "test_evidence": "Focused P1 bridge and DSH contract command: 2 files, 21 tests, exit 0."
+    }
+  }
+}

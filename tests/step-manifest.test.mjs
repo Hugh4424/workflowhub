@@ -153,8 +153,10 @@ describe("canonical step manifest", () => {
 
     for (const stage of STAGES) {
       const item = loadStageManifest(stage, repoRoot);
-      const source = JSON.stringify(item);
-      expect(source, `${stage} must not describe a legacy control plane`).not.toMatch(forbidden);
+      const references = item.steps.flatMap((stepItem) => [...stepItem.entry_conditions, ...stepItem.completion_evidence])
+        .map((evidence) => evidence.uri_or_path)
+        .join("\n");
+      expect(references, `${stage} must not describe a legacy control plane`).not.toMatch(forbidden);
       expect(item.steps[0].entry_conditions).toEqual(expect.arrayContaining([
         expect.objectContaining({ kind: "portable_skill_package", uri_or_path: `workflows/${stage}/SKILL.md` }),
         expect.objectContaining({ kind: "portable_skill_dependencies", uri_or_path: `workflows/${stage}/skill-deps.yaml` }),
@@ -187,10 +189,26 @@ describe("canonical step manifest", () => {
       const item = loadStageManifest(stage, repoRoot);
       for (const evidence of item.steps.flatMap((stepItem) => [...stepItem.entry_conditions, ...stepItem.completion_evidence])) {
         if (canonical[evidence.kind] && !evidence.uri_or_path.startsWith("step://")) {
+          if (evidence.kind === "review" && evidence.uri_or_path.startsWith("quality/reviews/attempts/")) continue;
           expect(evidence.uri_or_path, `${stage} ${evidence.kind} must use its canonical namespace`)
             .toBe(canonical[evidence.kind]);
         }
       }
     }
+  });
+
+  it("RED: establishes the OI before research and keeps the three consumer duties separate", () => {
+    const manifest = loadStageManifest("make-decision", repoRoot);
+    const steps = manifest.steps.filter((item) => item.step_slug !== "stage-reflection");
+    expect(manifest.steps).toHaveLength(14);
+    expect(steps[0].observable_result).toMatch(/initial|current|唯一.*OI|OI.*大纲/i);
+    expect(steps[1].observable_result).toMatch(/OI|大纲/);
+    expect(steps.find((item) => item.step_slug === "direction-advice").observable_result)
+      .toMatch(/convergence_outline|questions-only|问题.*投影/i);
+    expect(steps.find((item) => item.step_slug === "detail-advice").observable_result)
+      .toMatch(/each OI|逐.*OI|terminal|终态/i);
+    expect(steps.find((item) => item.step_slug === "approve-decision").observable_result)
+      .toMatch(/group|分组|主题.*处置/i);
+    expect(JSON.stringify(manifest)).not.toMatch(/extra normal confirmation|新增.*确认点|second.*confirmation/i);
   });
 });

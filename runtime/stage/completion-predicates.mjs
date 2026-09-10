@@ -76,6 +76,7 @@ export const STAGE_PREDICATES = Object.freeze({
     acceptance_clarity: "acceptance_criterion",
     solution_convergence: "acceptance_criterion",
     plain_language_card: "acceptance_criterion",
+    outline_closed: "acceptance_criterion",
     stage_end_spec_analyze: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
@@ -239,9 +240,23 @@ function selectLatestAcceptanceCandidates(candidates) {
     : { status: "conflict", candidates };
 }
 
-export function deriveStageCompletion(stage, observations = [], { requireStageOutcome = false, stageOutcomeStatus = null } = {}) {
+export function deriveStageCompletion(stage, observations = [], {
+  requireStageOutcome = false,
+  stageOutcomeStatus = null,
+  // vNext current tasks opt into the outline contract explicitly at the
+  // caller boundary.  Leaving this unset keeps immutable legacy projections
+  // readable while avoiding a marker-string bypass for current tasks.
+  requireOutline = null,
+} = {}) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
+  const outlineObserved = observations.some((observation) => {
+    const fact = observation?.fact?.value ?? observation?.fact;
+    return fact?.stage === stage
+      && fact.kind === "acceptance_criterion"
+      && fact.subject === "outline_closed";
+  });
+  const outlineRequired = stage === "make-decision" && (requireOutline === true || (requireOutline === null && outlineObserved));
   const requirements = {
     ...STAGE_PREDICATES[stage],
     // UI applicability is a new conditional subject. Current make-decision
@@ -253,6 +268,12 @@ export function deriveStageCompletion(stage, observations = [], { requireStageOu
         && fact.kind === "acceptance_criterion"
         && fact.subject === "ui_applicability";
     }) ? { ui_applicability: undefined } : {}),
+    // Pre-outline historical tasks have no `outline_closed` fact at all. Do
+    // not reinterpret those immutable records as a failed current attempt;
+    // once the current OI authority is present the handler always publishes
+    // the subject and it becomes a mandatory predicate, including a current
+    // missing fact with an explicit stage-quality-missing evidence leaf.
+    ...(stage === "make-decision" && !outlineRequired ? { outline_closed: undefined } : {}),
     // UI design is conditional. The official build-spec handler reads the
     // current decision-log UI fact and only publishes this subject for that
     // logged UI branch; quality facts do not duplicate applicability data.
@@ -277,6 +298,7 @@ export function deriveStageCompletion(stage, observations = [], { requireStageOu
     }) ? { e2e_acceptance: "acceptance_criterion" } : {}),
   };
   if (requirements.ui_applicability === undefined) delete requirements.ui_applicability;
+  if (requirements.outline_closed === undefined) delete requirements.outline_closed;
   const satisfied = new Map();
   const conflicts = new Set();
   const candidates = new Map();
@@ -308,7 +330,8 @@ export function deriveStageCompletion(stage, observations = [], { requireStageOu
     }
   }
   const missing = Object.keys(requirements).filter((subject) => !satisfied.has(subject));
-  const stageOutcomeMissing = requireStageOutcome && stageOutcomeStatus !== "completed";
+  const stageOutcomeMissing = requireStageOutcome && !["completed", "conflict"].includes(stageOutcomeStatus);
+  const stageOutcomeConflict = requireStageOutcome && stageOutcomeStatus === "conflict";
   if (stageOutcomeMissing) missing.push("stage_outcome");
   const predicates = Object.fromEntries(Object.keys(requirements).map((subject) => [
     subject, Object.freeze({
@@ -320,16 +343,17 @@ export function deriveStageCompletion(stage, observations = [], { requireStageOu
   if (requireStageOutcome) {
     predicates.stage_outcome = Object.freeze({
       kind: "stage_outcome",
-      status: stageOutcomeMissing ? "missing" : "satisfied",
+      status: stageOutcomeConflict ? "conflict" : stageOutcomeMissing ? "missing" : "satisfied",
       fact_ref: null,
     });
   }
   const result = Object.freeze({
     stage,
-    status: missing.length === 0 ? "completed" : "in_progress",
+    status: missing.length === 0 && conflicts.size === 0 && !stageOutcomeConflict ? "completed" : "in_progress",
     predicates: Object.freeze(predicates),
     fact_refs: Object.freeze([...satisfied.values()].map((entry) => entry.fact.ref).sort()),
     missing: Object.freeze(missing),
+    ...(stageOutcomeConflict ? { conflicts: Object.freeze(["stage_outcome"]) } : {}),
   });
   DERIVED.add(result);
   return result;
@@ -463,6 +487,116 @@ function productIdentity(value, label, expected, reasons) {
   if (expected === null) return identity;
   for (const field of fields) if (expected[field] !== identity[field]) productReason(reasons, `${label}_identity_conflict:${field}`);
   return expected;
+}
+
+function canonicalStageOutcomeRef(ref) {
+  return typeof ref === "string" && /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
+}
+
+/**
+ * Resolve stage-outcome refs through the already authenticated current
+ * quality-fact chain.  A quality fact is not allowed to point at an outcome
+ * merely by caller input: acceptance facts use their stage-quality evidence
+ * chain, while verify-code's existing code_review fact binds the nested
+ * dsh-review ref/hash carried by the outcome.  This is read-only and creates
+ * no additional ledger.
+ */
+export function deriveFactBoundStageOutcomeRefs({
+  observations = [],
+  read,
+  stage_outcome_refs: stageOutcomeRefs = {},
+  task_id: taskId,
+  snapshot_tree: snapshotTree,
+  material_revision: materialRevision,
+} = {}) {
+  if (!Array.isArray(observations)) throw new TypeError("quality fact observations must be an array");
+  if (typeof read !== "function") throw new TypeError("quality fact chain reader is required");
+  const allowed = new Map(Object.entries(stageOutcomeRefs).map(([stage, refs]) => [stage, new Set(Array.isArray(refs) ? refs : [])]));
+  const bound = new Map([...allowed.keys()].map((stage) => [stage, new Map()]));
+  const invalid = new Set();
+  const add = (stage, ref, hash) => {
+    if (!allowed.has(stage) || !canonicalStageOutcomeRef(ref) || !allowed.get(stage).has(ref) || !SHA256.test(hash ?? "")) return;
+    const prior = bound.get(stage).get(ref);
+    if (prior !== undefined && prior !== hash) invalid.add(stage);
+    bound.get(stage).set(ref, hash);
+  };
+  const readJson = (ref, hash) => {
+    const raw = read(ref);
+    if (hash && sha256(raw) !== hash) throw new Error("quality evidence hash mismatch");
+    return { raw, value: JSON.parse(raw) };
+  };
+  const bindVerifyCodeReviewOutcome = (fact, evidenceEntries) => {
+    if (fact.stage !== "verify-code" || fact.kind !== "review" || fact.subject !== "code_review") return;
+    for (const evidence of evidenceEntries) {
+      if (evidence?.evidence_type !== "review_result"
+          || typeof evidence.ref !== "string"
+          || !SHA256.test(evidence.sha256 ?? "")) continue;
+      for (const ref of allowed.get("verify-code") ?? []) {
+        try {
+          const { raw, value } = readJson(ref);
+          const refHash = ref.slice(ref.lastIndexOf("/") + 1, -5);
+          if (sha256(raw) !== refHash
+              || value?.task_id !== taskId
+              || value?.stage !== "verify-code"
+              || value?.snapshot_tree !== snapshotTree
+              || value?.material_revision !== materialRevision) continue;
+          const nestedReview = value.code_review ?? value.value?.code_review;
+          if (nestedReview?.quality_review_ref === evidence.ref
+              && nestedReview?.quality_review_hash === evidence.sha256) {
+            add("verify-code", ref, refHash);
+          }
+        } catch {
+          // The full outcome authenticator remains the final integrity
+          // boundary; malformed candidates simply cannot establish a bind.
+        }
+      }
+    }
+  };
+  for (const observation of observations) {
+    if (observation?.authenticated !== true || observation?.freshness?.status !== "current") continue;
+    const fact = observation.fact?.value ?? observation.fact;
+    if (!fact || fact.task_id !== taskId || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) continue;
+    const evidenceEntries = Array.isArray(fact.evidence) ? fact.evidence : [];
+    bindVerifyCodeReviewOutcome(fact, evidenceEntries);
+    for (const evidence of evidenceEntries) {
+      if (evidence?.evidence_type !== "acceptance_evidence" || typeof evidence.ref !== "string" || !SHA256.test(evidence.sha256 ?? "")) continue;
+      try {
+        const wrapper = readJson(evidence.ref, evidence.sha256).value;
+        if (wrapper?.schema_version !== "acceptance-evidence.v1" || wrapper.snapshot_tree !== snapshotTree || wrapper.freshness?.status !== "current" || wrapper.freshness.snapshot_tree !== snapshotTree || wrapper.freshness.material_revision !== materialRevision) continue;
+        const stageQualityRefs = Array.isArray(wrapper.refs) ? wrapper.refs : [];
+        for (const stageQuality of stageQualityRefs) {
+          if (typeof stageQuality?.ref !== "string" || !SHA256.test(stageQuality.sha256 ?? "") || !/^quality\/evidence\/stage-quality\//.test(stageQuality.ref)) continue;
+          const stageQualityValue = readJson(stageQuality.ref, stageQuality.sha256).value;
+          const stage = stageQualityValue?.stage;
+          if (!allowed.has(stage) || stageQualityValue.schema_version !== "stage-quality-evidence.v1"
+              || stageQualityValue.task_id !== taskId || stageQualityValue.snapshot_tree !== snapshotTree
+              || stageQualityValue.material_revision !== materialRevision) continue;
+          const candidates = [];
+          const subjectFact = stageQualityValue.subject_fact;
+          for (const entry of subjectFact?.evidence_refs ?? []) candidates.push(entry);
+          const executionBinding = subjectFact?.execution_binding;
+          if (executionBinding) candidates.push({ ref: executionBinding.stage_outcome_ref, sha256: executionBinding.stage_outcome_hash });
+          for (const entry of candidates) add(stage, entry?.ref, entry?.sha256 ?? entry?.hash);
+        }
+      } catch {
+        // A malformed chain is not a current binding. Keep it unavailable;
+        // the full outcome authenticator remains the final integrity boundary.
+      }
+    }
+  }
+  const selected = {};
+  const conflicts = {};
+  for (const [stage, refs] of allowed.entries()) {
+    const entries = [...(bound.get(stage)?.entries() ?? [])];
+    if (invalid.has(stage) || entries.length > 1) {
+      selected[stage] = [];
+      conflicts[stage] = true;
+    } else {
+      selected[stage] = entries.map(([ref]) => ref);
+      conflicts[stage] = false;
+    }
+  }
+  return Object.freeze({ refs: Object.freeze(selected), conflicts: Object.freeze(conflicts) });
 }
 
 function executionSemanticSignature(value) {
@@ -614,18 +748,98 @@ export function deriveStageOutcomeStatuses({
   material_scope_revisions: materialScopeRevisions = {},
   snapshot_root: snapshotRoot = null,
   authenticate,
+  quality_fact_observations: qualityFactObservationsAlias,
+  qualityFactObservations: directQualityFactObservations,
 } = {}) {
-  const execution = deriveExecutionOutcomes({
-    task_id: taskId,
-    read,
-    stage_outcome_refs: stageOutcomeRefs,
-    snapshot_tree: snapshotTree,
-    material_revision: materialRevision,
-    material_scope_revisions: materialScopeRevisions,
-    snapshot_root: snapshotRoot,
-    authenticate,
-  });
-  return Object.freeze(Object.fromEntries(Object.entries(execution).map(([stage, value]) => [stage, value.status])));
+  if (typeof read !== "function") throw new TypeError("stage-outcome reader is required");
+  if (typeof authenticate !== "function") throw new TypeError("stage-outcome authenticator is required");
+  let projectedRefs = stageOutcomeRefs;
+  let factBindingConflicts = {};
+  const qualityFactObservations = qualityFactObservationsAlias ?? directQualityFactObservations;
+  if (qualityFactObservations !== undefined) {
+    const bound = deriveFactBoundStageOutcomeRefs({
+      observations: qualityFactObservations ?? [],
+      read,
+      stage_outcome_refs: stageOutcomeRefs,
+      task_id: taskId,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
+    });
+    projectedRefs = bound.refs;
+    factBindingConflicts = bound.conflicts;
+    // No quality-fact binding means no current outcome selection.  Immutable
+    // retry siblings remain readable, but a sole unbound ref is not promoted
+    // by array cardinality, mtime, hash order, or caller choice.
+  }
+  return Object.freeze(Object.fromEntries(STAGES.map((stage) => {
+    if (factBindingConflicts[stage]) return [stage, "conflict"];
+    const refs = Array.isArray(projectedRefs[stage]) ? projectedRefs[stage] : [];
+    const candidates = [];
+    let invalidCurrent = false;
+    const currentRunId = `vnext-${sha256(`${taskId}\0${stage}`).slice(0, 32)}`;
+    for (const ref of refs) {
+      if (typeof ref !== "string" || !new RegExp(`^quality/evidence/stage-outcomes/${stage}/[a-f0-9]{64}\\.json$`).test(ref)) continue;
+      let raw;
+      let value;
+      try {
+        raw = read(ref);
+        value = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const refHash = ref.slice(ref.lastIndexOf("/") + 1, -5);
+      const sameTaskStage = value?.task_id === taskId && value?.stage === stage;
+      const currentRun = sameTaskStage && value?.run_id === currentRunId;
+      const currentSnapshot = sameTaskStage && isStageSnapshotCurrent(stage, value?.snapshot_tree, snapshotTree, {
+        snapshotRoot,
+        taskId,
+      });
+      const hasCurrentScopeRevision = Object.prototype.hasOwnProperty.call(materialScopeRevisions, stage)
+        && materialScopeRevisions[stage] !== undefined;
+      const hasCurrentMaterialRevision = materialRevision !== undefined && materialRevision !== null;
+      const currentMaterial = sameTaskStage
+        && (hasCurrentScopeRevision
+          ? value?.material_scope_revision === materialScopeRevisions[stage]
+          : hasCurrentMaterialRevision
+            ? value?.material_revision === materialRevision
+            : true);
+      if (sha256(raw) !== refHash) {
+        // A content-addressed ref that declares the current run but whose
+        // bytes no longer match is a current integrity failure only when the
+        // envelope also claims the current snapshot. A deterministic
+        // workflow run id is reused across retries, so an older valid
+        // snapshot from that run is historical, not a second current
+        // candidate. Foreign or historical siblings remain non-authoritative
+        // and are ignored.
+        if (currentRun && currentSnapshot && currentMaterial) invalidCurrent = true;
+        continue;
+      }
+      // The stage run id is deterministic for the task/stage, while each
+      // retry gets a new immutable envelope. Select only the envelope bound
+      // to both the derived run and a stage-current worktree snapshot; otherwise
+      // a previous retry would make status report stage_outcome missing even
+      // though the latest authenticated outcome exists.
+      if (!sameTaskStage || !currentRun || !currentSnapshot || !currentMaterial) continue;
+      try {
+        // The callback is the single full authentication boundary.  This
+        // projector must never turn a shallow JSON shape check into close or
+        // release authority. A null result means the authenticator classified
+        // the ref as foreign/stale; an exception means the current candidate
+        // was malformed and must remain incomplete.
+        const authenticated = authenticate({ stage, ref, raw, value });
+        if (authenticated === null || authenticated === undefined) continue;
+        const normalized = authenticated.value ?? authenticated;
+        if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) throw new Error("authenticated stage outcome is not an object");
+        candidates.push(normalized.status === "completed" ? "completed" : normalized.status ?? "incomplete");
+      } catch {
+        invalidCurrent = true;
+      }
+    }
+    if (invalidCurrent) return [stage, "incomplete"];
+    if (candidates.filter((status) => status === "completed").length > 1) return [stage, "conflict"];
+    if (candidates.includes("completed")) return [stage, "completed"];
+    return [stage, candidates[0] ?? "unavailable"];
+  })));
 }
 
 /**
@@ -814,6 +1028,7 @@ export function deriveCurrentProductRelease({
   expected_acceptance_ids: expectedAcceptanceIds = [],
   evaluate_freshness: evaluateFreshness = null,
   stage_outcome_statuses: stageOutcomeStatuses = null,
+  require_outline: requireOutline = null,
 } = {}) {
   if (typeof read !== "function") throw new TypeError("product-release quality fact reader is required");
   const stageObservations = new Map(STAGES.map((stage) => [stage, []]));
@@ -887,6 +1102,7 @@ export function deriveCurrentProductRelease({
     const completion = deriveStageCompletion(stage, observations, {
       requireStageOutcome: stageOutcomeStatuses !== null,
       stageOutcomeStatus: stageOutcomeStatuses?.[stage] ?? "unavailable",
+      requireOutline: stage === "make-decision" ? requireOutline : null,
     });
     const first = observations.find(({ fact }) => completion.fact_refs.includes(fact.ref));
     return {

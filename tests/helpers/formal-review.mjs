@@ -11,7 +11,7 @@ function canonicalJson(value) {
 }
 
 /** Write a complete create-only wh-review attempt/provider/result chain for tests. */
-export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", findingSeverity = "major", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain, materialRevision = null } = {}) {
+export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", findingSeverity = "major", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain, materialRevision = null, semanticFields = null } = {}) {
   const attemptId = randomUUID();
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
   const reviewRoot = task.manifest.record_model === "vnext-single-write" ? "quality/reviews" : "reviews";
@@ -55,6 +55,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
     source, snapshot_tree: snapshotTree, material_id: materialId, ...(materialRevision ? { material_revision: materialRevision } : {}), attempt_ref: attemptRef, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
+    ...(semanticFields && typeof semanticFields === "object" && !Array.isArray(semanticFields) ? { semantic_fields: semanticFields } : {}),
     provider_results: [{ provider, output: providerOutput }],
     findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   });

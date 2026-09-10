@@ -288,7 +288,35 @@ function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot
     { read, workspaceRoot, taskId },
   );
 }
-function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials }) {
+function collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage = null }) {
+  const observations = [];
+  for (const ref of context.task.listCanonicalQualityFactRefs()) {
+    let value;
+    let raw;
+    try {
+      raw = context.task.readRecord(ref);
+      value = JSON.parse(raw);
+    } catch { continue; }
+    if (value?.task_id !== context.task.identity.taskId || (stage !== null && value?.stage !== stage)) continue;
+    const freshness = currentSnapshot
+      ? evaluateFreshnessWithReuse({
+          fact: { ...value, ref },
+          factRaw: raw,
+          factSha256: sha256(raw),
+          currentSnapshot,
+          materialRevision,
+          materials,
+          read: readQualityEvidence(context.task),
+          workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          taskId: context.task.identity.taskId,
+        })
+      : { status: "unknown", authenticated: false };
+    observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
+  }
+  return observations;
+}
+
+function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials, qualityFactObservations = [] }) {
   const stageOutcomeRefs = Object.fromEntries(WORKFLOW_STAGES.map((stage) => [
     stage,
     context.task.listCanonicalStageOutcomeRefs(stage),
@@ -301,6 +329,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     material_revision: materialRevision,
     material_scope_revisions: stageMaterialScopeRevisions(materials),
     snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+    quality_fact_observations: qualityFactObservations,
     authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
   });
   return deriveCurrentProductRelease({
@@ -314,6 +343,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
     evaluate_freshness: evaluateFactFreshness,
     stage_outcome_statuses: stageOutcomeStatuses,
+    require_outline: context.manifest?.record_model === "vnext-single-write",
   });
 }
 
@@ -468,6 +498,23 @@ function parseArgs(argv) {
   return { command, values };
 }
 
+function readTaskBoundInput(context, inputPath) {
+  try {
+    return JSON.parse(readFileSync(inputPath, "utf8"));
+  } catch (error) {
+    // Quality inputs are written to the authenticated external task store,
+    // while the launcher runs from the dedicated worktree.  Resolve only an
+    // explicit canonical quality ref after the normal filesystem read fails;
+    // never scan for the latest record or accept an arbitrary external path.
+    if (error?.code !== "ENOENT"
+        || typeof inputPath !== "string"
+        || !/^quality\/(?:tests|evidence)\//.test(inputPath)
+        || inputPath.includes("..")) throw error;
+    const raw = context.task.readRecord(inputPath);
+    return JSON.parse(raw);
+  }
+}
+
 function preflightDiagnostic(error) {
   if (error?.diagnostic && typeof error.diagnostic.path === "string") return error.diagnostic;
   return {
@@ -615,7 +662,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   // worktree.  Host session state is intentionally not consulted here.
   const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect", "confirm"]).has(command)
       && values.input !== undefined
-    ? JSON.parse(readFileSync(values.input, "utf8"))
+    ? readTaskBoundInput(context, values.input)
     : undefined;
   if (values.stage === "make-decision" && command !== "status") {
     context = prepareMakeDecisionWorkspace(context);
@@ -648,30 +695,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       });
       materialRevision = materialRevisionFromValues(materialValues);
     }
-    const observations = [];
-    for (const ref of context.task.listCanonicalQualityFactRefs()) {
-      let value;
-      let raw;
-      try {
-        raw = context.task.readRecord(ref);
-        value = JSON.parse(raw);
-      } catch { continue; }
-      if (value?.task_id !== context.task.identity.taskId || value?.stage !== values.stage) continue;
-      const freshness = current
-        ? evaluateFreshnessWithReuse({
-            fact: { ...value, ref },
-            factRaw: raw,
-            factSha256: sha256(raw),
-            currentSnapshot: current,
-            materialRevision,
-            materials,
-            read: readQualityEvidence(context.task),
-            workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-            taskId: context.task.identity.taskId,
-          })
-        : { status: "unknown", authenticated: false };
-      observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
-    }
+    const observations = collectCurrentQualityFactObservations({ context, currentSnapshot: current, materialRevision, materials, stage: values.stage });
+    const allQualityFactObservations = current
+      ? collectCurrentQualityFactObservations({ context, currentSnapshot: current, materialRevision, materials })
+      : [];
     const researchStage = ["make-decision", "build-spec", "build-plan"].includes(values.stage);
     const researchReports = current && researchStage
       ? listCurrentResearchReports({
@@ -701,6 +728,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           material_revision: materialRevision,
           material_scope_revisions: stageMaterialScopeRevisions(materials),
           snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          quality_fact_observations: allQualityFactObservations,
           authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
         })
       : null;
@@ -719,10 +747,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const quality = deriveStageCompletion(values.stage, observations, {
       requireStageOutcome: stageOutcomeStatuses !== null,
       stageOutcomeStatus: stageOutcomeStatuses?.[values.stage] ?? "unavailable",
+      requireOutline: values.stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
     });
     const progression = deriveStageProgress(values.stage, observations, materials);
     const productRelease = current
-      ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials })
+      ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials, qualityFactObservations: allQualityFactObservations })
       : deriveProductRelease({
         stage_completions: [],
         acceptance_results: [],
@@ -824,6 +853,34 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       }
       return preparedBundle;
     };
+    const runTaskBoundIntegrationReview = async (request) => {
+      const bundle = prepareBundle(request);
+      const result = await runSimpleReview(request, { buildBundle: () => bundle });
+      // The broker may echo a packet identity that does not match the
+      // authenticated task-bound material bundle. Preserve that transport
+      // failure as an unavailable review fact so the recorder can retain the
+      // attempt; never let a mismatched provider identity become a review
+      // result or make the route fail before recording provenance.
+      if (result?.material_id !== bundle.materialId) {
+        if (result?.status === "unavailable") {
+          return {
+            ...result,
+            material_id: bundle.materialId,
+          };
+        }
+        return {
+          ...result,
+          status: "unavailable",
+          outcome: "unavailable",
+          material_id: bundle.materialId,
+          error: {
+            code: "REVIEW_MATERIAL_MISMATCH",
+            message: "review broker result material_id does not match the authenticated task-bound material",
+          },
+        };
+      }
+      return result;
+    };
     let refs;
     try {
       refs = hasRequest
@@ -834,7 +891,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           runRound: typeof services.runReviewRound === "function"
             ? services.runReviewRound
             : useTaskBoundIntegrationBundle
-              ? (request) => runSimpleReview(request, { buildBundle: () => prepareBundle(request) })
+              ? runTaskBoundIntegrationReview
               : runSimpleReview,
           materialIdForRequest: typeof services.materialIdForRequest === "function"
             ? services.materialIdForRequest

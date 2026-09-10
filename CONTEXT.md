@@ -375,3 +375,23 @@ Grill 按上游 round/frontier 协议运行：一批只放互相独立的问题�
 
 **spec-analyze profile 扩展**：
 stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `build-spec` 比对 spec 与上游 decision-log 的方向一致性和 Clarify 记录。`verify-code` 不经过此 lens，而使用 `dsh-code-review`。
+
+## 收敛大纲与收口闭环（2026-09-09，已选设计·尚未实现）
+
+**收敛大纲（convergence outline）**：
+`make-decision` 开始时建立的「本次必须收敛什么」清单。骨架＝需求框架节点（背景/问题/目标/方案/验收/扩展）＋固定六类兜底（完整用户流程 / 页面范围 / 数据状态 / 成功失败边界 / 非目标 / 延期）；条目编号 `OI-xxx`；与需求框架节点是**同一份记录**，不新增第二套状态机。唯一权威来源：`workflows/make-decision/SKILL.md`。
+
+**大纲条目状态（outline item status）**：
+`open` / `confirmed` / `deferred` / `not_applicable`。各状态必填字段的唯一权威表见 `workflows/make-decision/SKILL.md`；`deferred` 必须带 owner、触发条件、范围边界、影响、后续验收；`not_applicable` 必须带理由与反例边界；缺项保持 `open`。
+
+**命名未知（named unknown）**：
+大纲条目的一种合法来源。必须写清「不知道什么 + 所属类别 + 来源 + 为什么现在不知道」四件事；缺任一项不算合法未知。用于覆盖「原始需求里根本没有的东西」。
+
+**questions-only 快照（方向审查输入）**：
+从大纲投影出的、只含类别/未知/来源/`open` 的材料，禁止出现决策编号、处置与拟议答案；它是 `make-decision/direction` 的必需材料字段 `convergence_outline`。唯一权威来源：`runtime/review/stage-materials.json` 与 `skills/wh-review/contracts/make-decision.md`。大纲变更后旧方向审查结果作废。
+
+**outline_closed（大纲闭环完成事实）**：
+`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「四材料可读即可继续」的推进边界。唯一权威来源：`runtime/stage/completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
+
+**用户未收敛项分组确认**：
+收口前，未收敛项按主题分组、一组一组提交用户确认；影响目标/范围/验收的条目必须单独成组并逐项列出。该确认**并入 `make-decision` 既有的 approve-decision 确认**，不新增第五处正常确认点（宪法 F7）。

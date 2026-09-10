@@ -69,6 +69,12 @@ const FOCUS = Object.freeze({
   "mini_task.implementation": "Check implementation correctness, user result, tests, and scope boundaries.",
 });
 
+// The simple runner is the public review execution seam used by stage-runtime
+// for non-integration requests.  Keep the make-decision contract as a real
+// input to the generated provider instructions instead of relying on a
+// duplicated focus sentence that can drift from the governed contract.
+const MAKE_DECISION_CONTRACT = readFileSync(new URL("../contracts/make-decision.md", import.meta.url), "utf8");
+
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 
 function stableValue(value) {
@@ -201,9 +207,17 @@ function instructions(input) {
     return canonicalReviewInstructionsFor("build-prd", null, false, null, "build_prd");
   }
   const name = surface(input);
+  const contract = input.stage === "make-decision"
+    ? [
+      "Read and apply the governed make-decision review contract below; it is part of this review's instruction source.",
+      "The provider protocol is findings-only: findings:[] is not checked_no_gap, completion, approval, or proof that every OI was covered. Do not invent checked_no_gap or a verdict.",
+      MAKE_DECISION_CONTRACT,
+    ]
+    : [];
   return [
     `Review surface: ${name}.`,
     FOCUS[name] ?? "Review the supplied current-stage material for concrete delivery risks.",
+    ...contract,
     "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.",
     "Report only concrete findings that could change delivery. Merge duplicate root causes. Findings may be empty, but empty findings do not mean completion or approval.",
   ].join("\n");

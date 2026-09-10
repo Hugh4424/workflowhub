@@ -37,6 +37,41 @@ and, when evidence is still missing, the declarative marker
 `evidence_status: pending` plus `evidence_owner` and `next_review_trigger`.
 Never turn a pending marker into a confirmed fact by omission.
 
+### One current OI authority
+
+Before research or Talk expands the log, create exactly one current OI outline
+inside this `decision-log.md`. The outline is the only authority for open
+questions and their disposition; it is not a second ledger, material, store,
+or runtime state machine. The selected `functional` framework always has these
+six nodes: `background`, `problem`, `goal`, `solution`, `acceptance`, and
+`extension`. The outline also enumerates these fixed fallback categories:
+`complete_user_flow`, `page_scope`, `data_state`, `success_failure_boundary`,
+`non_goals`, and `deferred`.
+
+Every node and category must point to one or more OI IDs, or explicitly carry
+`empty: true` with a concrete, non-placeholder `reason` explaining why it is
+empty now. A bare `none`, an omitted row, a duplicate authority, or a category
+renamed to hide the gap is invalid. A legal OI record keeps the exact fields
+`task_id`, `outline_version`, `oi_id`, `category`, `source`, `question`, and
+`status`; status is one of `open`, `confirmed`, `deferred`, or
+`not_applicable`. Terminal records additionally keep
+`selected_disposition`, `impact_dimensions`, and
+`requires_user_decision`. User-facing grouping keeps
+`visible_group_id` or `batch_id`, and core confirmation proof keeps
+`interaction_ref` plus `interaction_hash`.
+
+The direction reviewer consumes only the current `convergence_outline`
+questions-only projection: all current IDs, categories, questions/known
+unknowns, sources, task and outline identity are retained, the displayed
+status is `open`, and terminal answers, dispositions, conclusions, evidence,
+and proposed solutions are removed. The detail reviewer consumes the current
+OI terminal records and checks each OI; it cannot substitute for direction
+coverage. Existing `approve-decision` consumes the grouped plain-language
+options and writes the selected disposition and proof into the existing
+interaction aggregate. These are three responsibilities over one OI source,
+not three authorities and not an extra confirmation point. A changed
+`outline_version` invalidates older consumer results.
+
 ### Decision chain and module grouping
 
 Organize the Decisions section by the framework's solution or裁决 modules,
