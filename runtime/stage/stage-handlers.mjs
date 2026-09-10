@@ -12,6 +12,7 @@ import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMateria
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateBrowserQaEvidence, validateReviewAttemptObservation, validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
+import { readResearchReport, deriveResearchStatus } from "../evidence/research-report.mjs";
 import { buildStageInputPacket, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
   validateAcceptanceDesignMinimum,
@@ -45,7 +46,7 @@ import {
   validateMaterialOracleContract,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
-import { STAGE_MATERIALS, separateAttemptFindingFacts } from "./completion-predicates.mjs";
+import { STAGE_FACT_MATERIALS, STAGE_MATERIALS, separateAttemptFindingFacts, stageMaterialScopeRevision } from "./completion-predicates.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -107,6 +108,19 @@ function captureWorkerSnapshot(worker) {
   return null;
 }
 
+function currentResearchMaterialScopeRevision(worker, stage = worker.stage) {
+  if (typeof worker.currentMaterialScopeRevision === "function") {
+    return worker.currentMaterialScopeRevision(stage);
+  }
+  if (typeof worker.readArtifact === "function") {
+    const files = STAGE_FACT_MATERIALS[stage] ?? STAGE_FACT_MATERIALS["make-decision"];
+    return stageMaterialScopeRevision(stage, Object.fromEntries(files.map((file) => [file, worker.readArtifact(file)])));
+  }
+  // Keep old test-only workers readable; the authenticated official worker
+  // always exposes the scoped reader above.
+  return worker.currentMaterialRevision;
+}
+
 function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
   const supplied = input?.decision_freeze;
   const bindingErrors = [];
@@ -151,7 +165,7 @@ const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "quality/evidence/", spec: "quality/evidence/", plan: "quality/evidence/", tasks: "quality/evidence/",
   interaction: "quality/evidence/interactions/",
-  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", clarify: "quality/evidence/interactions/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
+  decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/evidence/research/", grill: "quality/tests/", clarify: "quality/evidence/interactions/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
   audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/", ui_qa: "quality/evidence/browser-qa/",
@@ -330,6 +344,7 @@ function validReceiptRef(name, ref) {
   if (name === "confirmation") return /^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "stage_reflection") return STAGE_REFLECTION_REF.test(ref);
   if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "research") return /^quality\/evidence\/research\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);
@@ -734,6 +749,14 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
     },
     evidence: item.evidence,
   };
+}
+function researchFacts(worker, invocation, producerStage = worker.stage) {
+  recordConsumerInvocation(worker, "stage-handlers#researchFacts");
+  const refs = object(invocation.receipts, "receipts");
+  const ref = text(refs.research, "research report ref");
+  if (!/^quality\/evidence\/research\/[a-f0-9]{64}\.json$/.test(ref)) throw new Error("research report ref is outside its canonical namespace");
+  const item = readResearchReport({ task: { readRecord: (value) => worker.readEvidence(value).bytes }, ref, taskId: worker.identity.taskId, stage: producerStage, snapshotTree: captureWorkerSnapshot(worker).tree, materialScopeRevision: currentResearchMaterialScopeRevision(worker, producerStage) });
+  return { facts: { research_status: item.value.status, research_report_ref: item.ref, research_report_hash: item.sha256, research_disclosure: deriveResearchStatus([item]) }, evidence: { ref: item.ref, sha256: item.sha256 } };
 }
 
 function clarifyFacts(worker, invocation) {
@@ -1568,22 +1591,27 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       } : {}),
     };
   });
-  const proofOwners = [];
   const coveredItems = items.filter((item) => item.status === "covered");
+  const overlapPeers = new Map();
+  for (const item of coveredItems) {
+    const peers = coveredItems
+      .filter((other) => other !== item && [item.implementation_anchor, item.verification_anchor].some((left) =>
+        [other.implementation_anchor, other.verification_anchor].some((right) => anchorsOverlap(left, right))))
+      .map((other) => other.acceptance_criterion_id)
+      .sort();
+    if (peers.length > 0) overlapPeers.set(item.acceptance_criterion_id, peers);
+  }
   const normalizedItems = items.map((item) => {
     if (item.status !== "covered") return item;
     const semanticWarnings = acceptanceSemanticWarnings(item, coveredItems);
-    for (const anchor of [item.implementation_anchor, item.verification_anchor]) {
-      const previous = proofOwners.find(({ anchor: previousAnchor, criterionId }) => criterionId !== item.acceptance_criterion_id && anchorsOverlap(previousAnchor, anchor));
-      if (previous !== undefined) {
-        return {
-          acceptance_criterion_id: item.acceptance_criterion_id,
-          status: "unknown",
-          evidence_refs: [],
-          semantic_gap: `covered claim overlaps proving anchor with ${previous.criterionId}`,
-        };
-      }
-      proofOwners.push({ anchor, criterionId: item.acceptance_criterion_id });
+    const peers = overlapPeers.get(item.acceptance_criterion_id);
+    if (peers) {
+      return {
+        acceptance_criterion_id: item.acceptance_criterion_id,
+        status: "unknown",
+        evidence_refs: [],
+        semantic_gap: `covered claim overlaps proving anchor with ${peers.join(", ")}`,
+      };
     }
     if (semanticWarnings.length > 0) {
       return {
@@ -3260,7 +3288,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   let item = currentOnly ? null : receipt(worker, input, "decision");
   const direction = safeReviewFacts(worker, input, "direction_review", "direction");
   const detail = safeReviewFacts(worker, input, "detail_review", "detail");
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
   const dispositions = findingDispositions([direction, detail], input);
@@ -3412,7 +3440,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   }
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const clarify = input.receipts?.clarify === undefined ? null : clarifyFacts(worker, input);
   const ui = buildSpecUiFacts(worker, input);
   const review = safeReviewFacts(worker, input);
@@ -3534,7 +3562,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
   });
   if (!materialOracle.ok) missingItems.push(...materialOracle.errors.map((error) => `material/oracle contract incomplete: ${error}`));
   missingItems.push(...stageInputPacket.missing_items);
-  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const componentQuality = componentQualityConsumerFacts(worker, input);
   missingItems.push(...componentQuality.missing_items);
   const evidenceRefs = [];
@@ -3786,6 +3814,16 @@ HANDLERS.set("build-code", async (worker, input) => {
       ...(uiQa ? { ui_qa: uiQa.facts } : {}),
       completion_subjects: {
         acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
+        ...(acceptanceExecution.requires_execution ? {
+          acceptance_execution: subjectFact(
+            acceptanceExecution.status === "executed" ? "passed" : "missing",
+            acceptanceExecution.evidence_refs,
+            acceptanceExecution.status === "executed"
+              ? "all declared acceptance scenarios executed with canonical evidence"
+              : `declared acceptance execution is ${acceptanceExecution.status}`,
+            { execution_items: acceptanceExecution.items },
+          ),
+        } : {}),
       },
       ...(audit?.facts ?? {}),
     },

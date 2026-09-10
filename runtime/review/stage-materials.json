@@ -45,6 +45,22 @@
       "contract": "contracts/mini-task-implementation.md",
       "problem_order": ["spec_conformance", "correctness", "necessity", "user_result", "scope_boundary"],
       "semantic_fields": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "change_map"]
+    },
+    "build-prd": {
+      "contract": "contracts/build-prd.md",
+      "problem_order": ["prd_coverage", "task_ownership", "handoff", "design_facts", "acceptance", "necessity"],
+      "semantic_fields": ["decision_log", "prd", "task_map", "map_confirmation", "design_facts", "quality_facts", "source_facts", "confirmation_facts", "delivery_facts", "analysis_facts", "reflection_facts"]
+    }
+  },
+  "non_stage": {
+    "build_prd": {
+      "source_bundle": "none",
+      "required": ["decision_log", "prd", "task_map", "design_facts", "quality_facts", "review_instructions"],
+      "optional": ["map_confirmation", "source_facts", "confirmation_facts", "delivery_facts", "analysis_facts", "reflection_facts"],
+      "generated": ["review_instructions"],
+      "forbidden": ["approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "plan", "tasks", "changes_diff", "changed_files", "test_evidence", "ac_trace"],
+      "minimum_reviewers": 1,
+      "v2_required_maps": []
     }
   },
   "stages": {

@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research-report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "stage",
+    "snapshot_tree",
+    "material_scope_revision",
+    "status",
+    "question",
+    "decision_axis",
+    "tool_usage",
+    "open_items",
+    "review",
+    "fallback"
+  ],
+  "properties": {
+    "schema_version": { "const": "research-report.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan"] },
+    "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "material_scope_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+    "recorded_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "skipped", "unavailable"] },
+    "question": { "type": "string", "minLength": 1 },
+    "questions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/question" }
+    },
+    "decision_axis": { "type": "string", "minLength": 1 },
+    "tool_usage": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/toolUsage" }
+    },
+    "open_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/openItem" }
+    },
+    "review": { "$ref": "#/$defs/review" },
+    "fallback": { "$ref": "#/$defs/fallback" },
+    "rounds": { "type": "integer", "minimum": 0 },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "triangulation": { "$ref": "#/$defs/triangulation" },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "saturation": { "$ref": "#/$defs/saturation" },
+    "reason": { "type": "string", "minLength": 1 },
+    "non_impact_basis": { "type": "string", "minLength": 1 },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "error_class": { "type": "string", "minLength": 1 },
+    "pending_questions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "completed" } } },
+      "then": {
+        "required": ["rounds", "sources", "evidence", "triangulation", "coverage", "saturation"]
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "skipped" } } },
+      "then": { "required": ["reason", "non_impact_basis", "evidence_refs"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "unavailable" } } },
+      "then": { "required": ["error_class", "reason", "pending_questions"] }
+    }
+  ],
+  "$defs": {
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "text"],
+      "properties": {
+        "question_id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    },
+    "toolUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool"],
+      "properties": {
+        "tool": { "type": "string", "minLength": 1 },
+        "question_id": { "type": "string", "minLength": 1 },
+        "queries": { "type": "array", "items": { "type": "string" } },
+        "route": { "type": "string", "minLength": 1 },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["ok", "usage_error", "auth_error", "http_error", "timeout", "tls_unreachable", "quota"] },
+        "elapsed_ms": { "type": "integer", "minimum": 0 },
+        "http_status": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "error_code": { "type": ["string", "null"] },
+        "message": { "type": ["string", "null"] },
+        "attempts": { "type": "array", "items": { "$ref": "#/$defs/toolAttempt" } }
+      }
+    },
+    "toolAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "attempt", "status", "elapsed_ms", "http_status", "error_code", "message"],
+      "properties": {
+        "route": { "type": "string", "minLength": 1 },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "status": { "enum": ["ok", "usage_error", "auth_error", "http_error", "timeout", "tls_unreachable", "quota"] },
+        "elapsed_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
+        "http_status": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "error_code": { "type": ["string", "null"] },
+        "message": { "type": ["string", "null"] }
+      }
+    },
+    "openItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "code", "reason", "next_action"],
+      "properties": {
+        "question_id": { "type": "string", "minLength": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "next_action": { "type": "string", "minLength": 1 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_ref"],
+      "properties": {
+        "status": { "enum": ["pending", "completed", "unavailable"] },
+        "evidence_ref": { "type": ["string", "null"] },
+        "findings": { "type": "array" }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_status", "requested_route", "used_routes"],
+      "properties": {
+        "approval_status": { "enum": ["not_requested", "awaiting_user_approval", "approved", "declined"] },
+        "requested_route": { "type": ["string", "null"] },
+        "used_routes": { "type": "array", "items": { "type": "string" } },
+        "approval_ref": { "type": ["string", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url_or_ref", "source_tier", "read_original"],
+      "properties": {
+        "url_or_ref": { "type": "string", "minLength": 1 },
+        "source_tier": { "enum": ["primary", "secondary", "inferred"] },
+        "read_original": { "const": true },
+        "locator": { "type": ["string", "null"] }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "source_ref", "locator", "confidence"],
+      "properties": {
+        "claim": { "type": "string", "minLength": 1 },
+        "source_ref": { "type": "string", "minLength": 1 },
+        "locator": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "read_original": { "const": true }
+      }
+    },
+    "triangulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "conflicts"],
+      "properties": {
+        "status": { "enum": ["confirmed", "supported", "disputed", "unresolved"] },
+        "conflicts": { "type": "array" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimensions", "first_party_ratio"],
+      "properties": {
+        "dimensions": { "type": "array", "items": { "type": "string" } },
+        "first_party_ratio": { "type": ["number", "string", "null"] },
+        "required_questions": { "type": "array", "items": { "type": "string" } },
+        "covered_questions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "saturation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "enum": ["saturated", "timeboxed", "not_saturated"] },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

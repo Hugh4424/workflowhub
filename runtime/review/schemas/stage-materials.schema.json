@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review stage material matrix",
   "type": "object",
-  "required": ["version", "surfaces", "stages", "mini_task"],
+  "required": ["version", "surfaces", "stages", "mini_task", "non_stage"],
   "properties": {
     "version": { "const": "wh-review-stage-materials.v2" },
     "surfaces": {
       "type": "object",
-      "required": ["make-decision/direction", "make-decision/detail", "build-spec", "build-plan", "build-code/phase", "build-code/integration", "verify-code", "mini-task/design", "mini-task/implementation"],
+      "required": ["make-decision/direction", "make-decision/detail", "build-spec", "build-plan", "build-code/phase", "build-code/integration", "verify-code", "mini-task/design", "mini-task/implementation", "build-prd"],
       "properties": {
         "make-decision/direction": { "$ref": "#/$defs/surface" },
         "make-decision/detail": { "$ref": "#/$defs/surface" },
@@ -17,7 +17,8 @@
         "build-code/integration": { "$ref": "#/$defs/surface" },
         "verify-code": { "$ref": "#/$defs/surface" },
         "mini-task/design": { "$ref": "#/$defs/surface" },
-        "mini-task/implementation": { "$ref": "#/$defs/surface" }
+        "mini-task/implementation": { "$ref": "#/$defs/surface" },
+        "build-prd": { "$ref": "#/$defs/surface" }
       },
       "additionalProperties": false
     },
@@ -45,6 +46,14 @@
         "build-plan": { "$ref": "#/$defs/buildPlanRule" },
         "build-code": { "$ref": "#/$defs/buildCodeProfiles" },
         "verify-code": { "$ref": "#/$defs/rule" }
+      },
+      "additionalProperties": false
+    },
+    "non_stage": {
+      "type": "object",
+      "required": ["build_prd"],
+      "properties": {
+        "build_prd": { "$ref": "#/$defs/rule" }
       },
       "additionalProperties": false
     },

@@ -236,6 +236,9 @@ export function publishQualityFact(taskRoot, kind, value, options = {}) {
 }
 
 export function publishVerifySummary(taskRoot, summary, options = {}) {
+  if (isCanonicalWorkflowHubTaskRoot(taskRoot)) {
+    throw new Error("current verify summary requires the stage-runtime/TaskKernel canonical writer");
+  }
   if (!summary || typeof summary !== "object" || Array.isArray(summary) || typeof summary.status !== "string") throw new TypeError("verify summary is invalid");
   const identityOverrides = Object.keys(summary).filter((key) => VERIFY_SUMMARY_IDENTITY_FIELDS.has(key));
   if (identityOverrides.length) {

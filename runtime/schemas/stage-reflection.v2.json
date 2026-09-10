@@ -42,6 +42,8 @@
     "availability_fact": { "$ref": "#/$defs/availability_fact" },
     "status_matrix": { "anyOf": [{ "$ref": "#/$defs/status_matrix" }, { "type": "null" }] },
     "identity": { "$ref": "#/$defs/identity" },
+    "executor": { "$ref": "#/$defs/executor" },
+    "output_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "source_completeness": { "anyOf": [{ "$ref": "#/$defs/source_completeness" }, { "type": "null" }] },
     "what_helped": { "$ref": "#/$defs/structured_block" },
     "what_to_improve": { "$ref": "#/$defs/structured_block" },
@@ -54,6 +56,10 @@
     {
       "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
       "then": { "properties": { "error": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["ok", "degraded", "failed"] } }, "required": ["status"] },
+      "then": { "required": ["executor", "output_hash"] }
     },
     {
       "if": { "properties": { "status": { "enum": ["ok", "degraded"] } }, "required": ["status"] },
@@ -153,6 +159,23 @@
         "attempt": { "type": ["string", "null"] },
         "snapshot_tree": { "type": ["string", "null"] },
         "material_revision": { "type": ["string", "null"] }
+      }
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "attempt_id", "started_at", "completed_at", "output_hash"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "source_family": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "executor_id": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "agent_run_id": { "type": "string", "minLength": 1 },
+        "attempt_id": { "type": "string", "minLength": 1 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "output_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },
     "source_completeness": {

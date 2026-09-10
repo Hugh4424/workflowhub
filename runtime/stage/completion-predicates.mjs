@@ -599,6 +599,139 @@ export function deriveFactBoundStageOutcomeRefs({
   return Object.freeze({ refs: Object.freeze(selected), conflicts: Object.freeze(conflicts) });
 }
 
+function executionSemanticSignature(value) {
+  const stepOutcomes = (Array.isArray(value?.step_outcomes) ? value.step_outcomes : [])
+    .map((entry) => ({
+      step_id: entry?.step_id ?? null,
+      step_slug: entry?.step_slug ?? null,
+      status: entry?.status ?? null,
+    }))
+    .sort((left, right) => `${left.step_id}\0${left.step_slug}`.localeCompare(`${right.step_id}\0${right.step_slug}`));
+  const skillOutcomes = (Array.isArray(value?.skill_outcomes) ? value.skill_outcomes : [])
+    .map((entry) => ({
+      skill_id: entry?.skill_id ?? null,
+      status: entry?.status ?? null,
+      trigger: entry?.trigger ?? null,
+      executed: entry?.executed ?? null,
+    }))
+    .sort((left, right) => String(left.skill_id).localeCompare(String(right.skill_id)));
+  return JSON.stringify({
+    task_id: value?.task_id ?? null,
+    stage: value?.stage ?? null,
+    run_id: value?.run_id ?? null,
+    snapshot_tree: value?.snapshot_tree ?? null,
+    material_revision: value?.material_revision ?? null,
+    material_scope_revision: value?.material_scope_revision ?? null,
+    steps_manifest_hash: value?.steps_manifest_hash ?? null,
+    skills_manifest_hash: value?.skills_manifest_hash ?? null,
+    status: value?.status ?? null,
+    step_outcomes: stepOutcomes,
+    skill_outcomes: skillOutcomes,
+  });
+}
+
+/**
+ * Project current authenticated stage outcomes by semantic content. Retry
+ * identity, producer/session, timing, cost and evidence refs are deliberately
+ * excluded from the comparison signature. Result summaries, prose,
+ * analyzer/review details, coordination text and evidence refs belong to
+ * quality consumers, not execution identity. This is a read-only projection
+ * and never becomes a completion predicate by itself.
+ */
+export function deriveExecutionOutcomes({
+  task_id: taskId,
+  read,
+  stage_outcome_refs: stageOutcomeRefs = {},
+  snapshot_tree: snapshotTree,
+  material_revision: materialRevision,
+  material_scope_revisions: materialScopeRevisions = {},
+  snapshot_root: snapshotRoot = null,
+  authenticate,
+} = {}) {
+  if (typeof read !== "function") throw new TypeError("stage-outcome reader is required");
+  if (typeof authenticate !== "function") throw new TypeError("stage-outcome authenticator is required");
+  return Object.freeze(Object.fromEntries(STAGES.map((stage) => {
+    const refs = Array.isArray(stageOutcomeRefs[stage]) ? stageOutcomeRefs[stage] : [];
+    const current = [];
+    const seenAttempts = new Map();
+    let replayConflict = false;
+    let invalidCurrent = false;
+    const invalidRefs = [];
+    const currentRunId = `vnext-${sha256(`${taskId}\0${stage}`).slice(0, 32)}`;
+    for (const ref of refs) {
+      if (typeof ref !== "string" || !new RegExp(`^quality/evidence/stage-outcomes/${stage}/[a-f0-9]{64}\\.json$`).test(ref)) continue;
+      let raw;
+      let value;
+      try {
+        raw = read(ref);
+        value = JSON.parse(raw);
+      } catch {
+        invalidCurrent = true;
+        invalidRefs.push(ref);
+        continue;
+      }
+      const refHash = ref.slice(ref.lastIndexOf("/") + 1, -5);
+      const sameTaskStage = value?.task_id === taskId && value?.stage === stage;
+      const currentRun = sameTaskStage && value?.run_id === currentRunId;
+      const currentSnapshot = sameTaskStage && isStageSnapshotCurrent(stage, value?.snapshot_tree, snapshotTree, {
+        snapshotRoot,
+        taskId,
+      });
+      const hasCurrentScopeRevision = Object.prototype.hasOwnProperty.call(materialScopeRevisions, stage)
+        && materialScopeRevisions[stage] !== undefined;
+      const hasCurrentMaterialRevision = materialRevision !== undefined && materialRevision !== null;
+      const currentMaterial = sameTaskStage
+        && (hasCurrentScopeRevision
+          ? value?.material_scope_revision === materialScopeRevisions[stage]
+          : hasCurrentMaterialRevision
+            ? value?.material_revision === materialRevision
+            : true);
+      if (sha256(raw) !== refHash) {
+        if (currentRun && currentSnapshot && currentMaterial) {
+          invalidCurrent = true;
+          invalidRefs.push(ref);
+        }
+        continue;
+      }
+      if (!sameTaskStage || !currentRun || !currentSnapshot || !currentMaterial) continue;
+      try {
+        const authenticated = authenticate({ stage, ref, raw, value });
+        if (authenticated === null || authenticated === undefined) continue;
+        const normalized = authenticated.value ?? authenticated;
+        if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) throw new Error("authenticated stage outcome is not an object");
+        if (typeof normalized.attempt_id === "string" && normalized.attempt_id.trim() !== "") {
+          const rawHash = sha256(raw);
+          const previous = seenAttempts.get(normalized.attempt_id);
+          if (previous !== undefined && previous !== rawHash) replayConflict = true;
+          seenAttempts.set(normalized.attempt_id, rawHash);
+        }
+        current.push({ ref, value: normalized, signature: executionSemanticSignature(normalized) });
+      } catch {
+        invalidCurrent = true;
+        invalidRefs.push(ref);
+      }
+    }
+    const refsForOutput = [...new Set([...current.map(({ ref }) => ref), ...invalidRefs])].sort();
+    const completed = current.filter(({ value }) => value.status === "completed");
+    const completedSignatures = new Set(completed.map(({ signature }) => signature));
+    const base = {
+      blocking: false,
+      attempt_count: current.length,
+      completed_attempt_count: completed.length,
+      refs: refsForOutput,
+    };
+    if (invalidCurrent) return [stage, Object.freeze({ ...base, status: "failed", diagnostic: { kind: "conflict", code: "execution_outcome_integrity_failed", reason: "current authenticated outcome bytes or binding are invalid", refs: refsForOutput } })];
+    if (replayConflict) return [stage, Object.freeze({ ...base, status: "failed", diagnostic: { kind: "conflict", code: "execution_replay_conflict", reason: "one attempt id is bound to different immutable outcome bytes", refs: refsForOutput } })];
+    if (completedSignatures.size > 1) {
+      return [stage, Object.freeze({ ...base, status: "failed", diagnostic: { kind: "ambiguous", code: "execution_outcome_ambiguous", reason: "current completed outcomes have different semantic signatures", refs: refsForOutput } })];
+    }
+    if (completed.length > 0) return [stage, Object.freeze({ ...base, status: "completed" })];
+    if (current.some(({ value }) => value.status === "failed")) return [stage, Object.freeze({ ...base, status: "failed" })];
+    if (current.some(({ value }) => value.status === "incomplete")) return [stage, Object.freeze({ ...base, status: "incomplete" })];
+    return [stage, Object.freeze({ ...base, status: "unavailable" })];
+  })));
+}
+
 /**
  * Project the current authenticated stage-outcome envelope without creating
  * another persisted ledger.  A stage outcome is current when its content
@@ -661,6 +794,15 @@ export function deriveStageOutcomeStatuses({
         snapshotRoot,
         taskId,
       });
+      const hasCurrentScopeRevision = Object.prototype.hasOwnProperty.call(materialScopeRevisions, stage)
+        && materialScopeRevisions[stage] !== undefined;
+      const hasCurrentMaterialRevision = materialRevision !== undefined && materialRevision !== null;
+      const currentMaterial = sameTaskStage
+        && (hasCurrentScopeRevision
+          ? value?.material_scope_revision === materialScopeRevisions[stage]
+          : hasCurrentMaterialRevision
+            ? value?.material_revision === materialRevision
+            : true);
       if (sha256(raw) !== refHash) {
         // A content-addressed ref that declares the current run but whose
         // bytes no longer match is a current integrity failure only when the
@@ -669,7 +811,7 @@ export function deriveStageOutcomeStatuses({
         // snapshot from that run is historical, not a second current
         // candidate. Foreign or historical siblings remain non-authoritative
         // and are ignored.
-        if (currentRun && currentSnapshot) invalidCurrent = true;
+        if (currentRun && currentSnapshot && currentMaterial) invalidCurrent = true;
         continue;
       }
       // The stage run id is deterministic for the task/stage, while each
@@ -677,7 +819,7 @@ export function deriveStageOutcomeStatuses({
       // to both the derived run and a stage-current worktree snapshot; otherwise
       // a previous retry would make status report stage_outcome missing even
       // though the latest authenticated outcome exists.
-      if (!sameTaskStage || !currentRun || !currentSnapshot) continue;
+      if (!sameTaskStage || !currentRun || !currentSnapshot || !currentMaterial) continue;
       try {
         // The callback is the single full authentication boundary.  This
         // projector must never turn a shallow JSON shape check into close or

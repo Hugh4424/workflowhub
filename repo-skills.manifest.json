@@ -116,6 +116,16 @@
       "metrics_enabled": true
     },
     {
+      "id": "spec-prd",
+      "path": "skills/spec-prd/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实",
+      "owner_stage": [],
+      "metrics_enabled": true
+    },
+    {
       "id": "spec-research",
       "path": "skills/spec-research/SKILL.md",
       "version": "1.0.0",

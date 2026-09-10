@@ -38,3 +38,23 @@ test("compactVerifyCodeMaterials projects an oversized implementation diff and r
   expect(result.materials["implementation-index"].delivery.full_diff_sha256).toBe(result.diff.full_diff_sha256);
   expect(Buffer.byteLength(result.materials["implementation-diff.patch"], "utf8")).toBeLessThanOrEqual(180 * 1024);
 });
+
+test("compactVerifyCodeMaterials bounds nested current materials alongside execution evidence", () => {
+  const full = section("runtime/review.mjs", 200 * 1024);
+  const current = Object.fromEntries([
+    ["decision-log.md", "d".repeat(40 * 1024)],
+    ["spec.md", "s".repeat(40 * 1024)],
+    ["plan.md", "p".repeat(40 * 1024)],
+    ["tasks.md", "t".repeat(40 * 1024)],
+  ]);
+  const result = compactVerifyCodeMaterials({
+    runtime_implementation_diff: full,
+    runtime_current_materials: current,
+    runtime_execution_records: [{ raw: "r".repeat(32 * 1024) }],
+    runtime_execution_outputs: [{ text: "o".repeat(32 * 1024) }],
+  });
+  const bytes = Object.values(result.materials).reduce((sum, value) => sum + Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8"), 0);
+  expect(bytes).toBeLessThanOrEqual(300 * 1024);
+  expect(result.materials.runtime_current_materials["decision-log.md"]).toContain("full_sha256=");
+  expect(result.materials.runtime_current_materials["tasks.md"]).toContain("full_sha256=");
+});

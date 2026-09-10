@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import matrix from "../../../runtime/review/stage-materials.json" with { type: "json" };
+import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
 
 export const SEMANTIC_PROJECTION_VERSION = "wh-review-semantic-projection.v1";
 
@@ -19,6 +20,7 @@ function canonical(value) {
 }
 
 function surfaceName({ stage, review_track = null, review_scope = null, review_kind = null } = {}) {
+  if (review_kind === "build_prd") return "build-prd";
   if (review_kind === "mini_task.design" || review_kind === "mini_task.implementation") return `mini-task/${review_kind.split(".")[1]}`;
   if (stage === "make-decision") return `${stage}/${review_track ?? ""}`;
   if (stage === "build-code") return `${stage}/${review_scope ?? "phase"}`;
@@ -72,8 +74,11 @@ export function semanticFieldsFor(surface) {
   return [...SURFACE_FIELDS[surface]];
 }
 
-export function buildSemanticProjection({ stage, review_track = null, review_scope = null, review_kind = null, contract_id, contract_hash, input = {}, materials = {}, subject = {}, extra = {} } = {}) {
-  const surface = surfaceName({ stage, review_track, review_scope, review_kind });
+export function buildSemanticProjection(options = {}) {
+  const identity = reviewIdentityFromInput(options);
+  const { stage, reviewTrack, reviewScope, reviewKind } = identity;
+  const { contract_id, contract_hash, input = {}, materials = {}, subject = {}, extra = {} } = options;
+  const surface = surfaceName({ stage, review_track: reviewTrack, review_scope: reviewScope, review_kind: reviewKind });
   const fields = semanticFieldsFor(surface);
   if (typeof contract_id !== "string" || contract_id.trim() === "") throw new TypeError("contract_id is required");
   if (typeof contract_hash !== "string" || contract_hash.trim() === "") throw new TypeError("contract_hash is required");

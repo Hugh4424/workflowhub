@@ -14,6 +14,7 @@ import { authenticateCurrentBuildCodeStageOutcome, runOfficialStage, runStage } 
 import { STAGE_PREDICATES, stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
 import { projectAcceptanceExecutionData } from "../../runtime/stage/stage-content-contracts.mjs";
 import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs";
+import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
@@ -61,7 +62,7 @@ function evidence(suffix) {
   return [{ ref: `quality/evidence/browser-qa/${suffix.repeat(64)}.json`, sha256: suffix.repeat(64) }];
 }
 
-function officialBrowserFixture({ prepare } = {}) {
+function officialBrowserFixture({ prepare, acceptanceData, recordModel = "vnext-single-write" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-browser-acceptance-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -77,7 +78,7 @@ function officialBrowserFixture({ prepare } = {}) {
     storageRoot: root,
     manifest: {
       schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "browser-acceptance",
-      created_at: "2026-08-30T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+      created_at: "2026-08-30T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: recordModel,
     },
   });
   const candidate = prepareTaskWorkspace(task);
@@ -95,7 +96,7 @@ function officialBrowserFixture({ prepare } = {}) {
 - **acceptance_role**：acceptance
 - **e2e_scope**：ui
 - **AC**：AC-EXE-001
-- **acceptance_data**：\`[{"source":"qa/browser","sample":"real-page","scenario":"save settings","tier":"browser"}]\`
+- **acceptance_data**：\`${JSON.stringify(acceptanceData ?? [{ source: "qa/browser", sample: "real-page", scenario: "save settings", tier: "browser" }])}\`
 `);
   prepare?.({ root, task, candidate, artifacts });
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
@@ -320,35 +321,44 @@ function e2eAcceptanceSubjectFact(state, result) {
   return JSON.parse(state.task.readRecord(acceptance.refs[0].ref)).subject_fact;
 }
 
-async function runOfficialBrowserAcceptance({ mutateStored, mutatePayload, publish = true } = {}) {
-  const state = officialBrowserFixture();
+async function runOfficialBrowserAcceptance({
+  mutateStored,
+  mutatePayload,
+  publish = true,
+  state = officialBrowserFixture(),
+  attemptId = "build-code-attempt",
+} = {}) {
   const trace = { calls: 0 };
-  const result = await runOfficialStage("build-code", state.context, { attempt_id: "build-code-attempt", receipts: {} }, {
+  const result = await runOfficialStage("build-code", state.context, { attempt_id: attemptId, receipts: {} }, {
     ...(publish ? {
       runControlledUiQa: async (input) => {
         trace.calls += 1;
-        const initial = publishBrowserAttachments({
-          task: state.task,
-          kernel: state.context.kernel,
-          payload: browserPayload(input),
-        });
-        const stored = mutateStored ? mutateStored(initial, input) : initial;
-        const raw = `${JSON.stringify(stored)}\n`;
-        const sha256 = createHash("sha256").update(raw).digest("hex");
-        const ref = `quality/evidence/browser-qa/${sha256}.json`;
-        state.context.kernel.publishCanonicalRecord(ref, raw);
-        const initialPayload = { ...stored, evidence_ref: ref, evidence_hash: sha256 };
-        const payload = mutatePayload ? mutatePayload(initialPayload, input) : initialPayload;
-        return {
-          invocation_id: input.invocation_id,
-          payload,
-          evidence_ref: ref,
-          evidence_hash: sha256,
-        };
+        return publishControlledBrowserResult(state, input, { mutateStored, mutatePayload });
       },
     } : {}),
   });
   return { state, trace, result };
+}
+
+function publishControlledBrowserResult(state, input, { mutateStored, mutatePayload } = {}) {
+  const initial = publishBrowserAttachments({
+    task: state.task,
+    kernel: state.context.kernel,
+    payload: browserPayload(input),
+  });
+  const stored = mutateStored ? mutateStored(initial, input) : initial;
+  const raw = `${JSON.stringify(stored)}\n`;
+  const sha256 = createHash("sha256").update(raw).digest("hex");
+  const ref = `quality/evidence/browser-qa/${sha256}.json`;
+  state.context.kernel.publishCanonicalRecord(ref, raw);
+  const initialPayload = { ...stored, evidence_ref: ref, evidence_hash: sha256 };
+  const payload = mutatePayload ? mutatePayload(initialPayload, input) : initialPayload;
+  return {
+    invocation_id: input.invocation_id,
+    payload,
+    evidence_ref: ref,
+    evidence_hash: sha256,
+  };
 }
 
 describe("acceptance execution tiers", () => {
@@ -479,7 +489,8 @@ describe("acceptance execution tiers", () => {
     });
   });
 
-  it.each([
+  it("keeps browser acceptance unavailable for every payload-binding mutation", async () => {
+    const cases = [
     ["omits the callback scenario", { mutatePayload: (payload) => {
       const { acceptance_scenario: _scenario, ...withoutScenario } = payload;
       return withoutScenario;
@@ -548,14 +559,32 @@ describe("acceptance execution tiers", () => {
       ...stored,
       screenshots: [{ ...stored.screenshots[0], hash: "e".repeat(64) }],
     }) }],
-    ["has a test-output attachment hash mismatch", { mutateStored: (stored) => ({
-      ...stored,
-      test: { ...stored.test, output_hash: "e".repeat(64) },
-    }) }],
-    ["has no controlled QA adapter", { publish: false }],
-  ])("keeps browser acceptance unavailable when it %s", async (_caseName, options) => {
-    const { state, trace, result } = await runOfficialBrowserAcceptance(options);
-    expect(trace.calls).toBe(options.publish === false ? 0 : 1);
+      ["has a test-output attachment hash mismatch", { mutateStored: (stored) => ({
+        ...stored,
+        test: { ...stored.test, output_hash: "e".repeat(64) },
+      }) }],
+    ];
+    const scenarioOptions = new Map(cases.map(([caseName, options]) => [caseName, options]));
+    const state = officialBrowserFixture({
+      acceptanceData: cases.map(([caseName]) => ({ source: "qa/browser", sample: "real-page", scenario: caseName, tier: "browser" })),
+    });
+    let calls = 0;
+    const result = await runOfficialStage("build-code", state.context, { attempt_id: "build-code-mutation-table", receipts: {} }, {
+      runControlledUiQa: async (input) => {
+        calls += 1;
+        return publishControlledBrowserResult(state, input, scenarioOptions.get(input.acceptance_scenario.scenario));
+      },
+    });
+    expect(calls).toBe(cases.length);
+    expect(acceptanceExecutionSubjectFact(state, result)).toMatchObject({
+      status: "missing",
+      execution_items: cases.map(() => expect.objectContaining({ tier: "browser", status: "unavailable", evidence_refs: [] })),
+    });
+  });
+
+  it("keeps browser acceptance unavailable without a controlled QA adapter", async () => {
+    const { state, trace, result } = await runOfficialBrowserAcceptance({ publish: false });
+    expect(trace.calls).toBe(0);
     expect(acceptanceExecutionSubjectFact(state, result)).toMatchObject({
       status: "missing",
       execution_items: [expect.objectContaining({ tier: "browser", status: "unavailable", evidence_refs: [] })],
@@ -615,16 +644,17 @@ function p9Actor(state, { missing = false, tamper = false } = {}) {
   return { ref, sha256: p9Hash(raw), value };
 }
 
-function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride } = {}) {
+function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, mutateMaterialDuringExecution = false, recordModel = "vnext-single-write" } = {}) {
   let output, execution, marker;
-  const state = officialBrowserFixture({ prepare: ({ root, candidate, artifacts }) => {
+  const state = officialBrowserFixture({ recordModel, prepare: ({ root, candidate, artifacts }) => {
     marker = join(root, "observations");
     mkdirSync(marker);
     const runtimeScript = join(candidate.worktreeRoot, "acceptance-command.mjs");
     const serviceModule = join(candidate.worktreeRoot, "acceptance-service.mjs");
     output = raw ?? JSON.stringify({ entries: rows, status: "pass", result: "pass" });
-    const program = `import { writeFileSync } from 'node:fs';
+    const program = `import { appendFileSync, writeFileSync } from 'node:fs';
 writeFileSync(${JSON.stringify(join(marker, "started.json"))}, JSON.stringify({pid:process.pid,cwd:process.cwd(),argv:process.argv.slice(2)}));
+${mutateMaterialDuringExecution ? `appendFileSync(${JSON.stringify(join(candidate.worktreeRoot, "tasks.md"))}, '\\n<!-- post-command material mutation -->\\n');` : ""}
 process.stdout.write(${rawBytes ? `Buffer.from(${JSON.stringify(Buffer.from(rawBytes).toString("hex"))},'hex')` : JSON.stringify(output)});
 process.stderr.write('P9 actual stderr\\n');
 process.exitCode=${exitCode};\n`;
@@ -748,6 +778,33 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(JSON.stringify(records)).not.toContain('"run_id":"p9-attempt-A"');
   });
 
+  it("rejects the cached pre-command identity when execution changes a build-code material", async () => {
+    const state = p9Fixture({ mutateMaterialDuringExecution: true });
+    const before = state.context.kernel.currentVNextContext({ fresh: true });
+
+    const result = await p9Execute(state);
+
+    const after = state.context.kernel.currentVNextContext({ fresh: true });
+    expect(after.materialRevision).not.toBe(before.materialRevision);
+    expect(after.snapshot.tree).not.toBe(before.snapshot.tree);
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({
+      status: "missing",
+      execution_items: [{
+        status: "failed",
+        reason: "acceptance source or materials changed during execution",
+      }],
+    });
+    const records = aggregate.execution_items[0].evidence_refs.map(({ ref }) => JSON.parse(state.task.readRecord(ref)));
+    expect(records).toHaveLength(2);
+    expect(records.every(({ material_revision, snapshot_tree, subject_fact }) => (
+      material_revision === before.materialRevision
+      && snapshot_tree === before.snapshot.tree
+      && subject_fact.status === "missing"
+      && subject_fact.detail === "acceptance source or materials changed during execution"
+    ))).toBe(true);
+  });
+
   it("executes a real service module with one loopback request and releases its port", async () => {
     const state = p9Fixture({ tier: "service" });
     const result = await p9Execute(state);
@@ -760,6 +817,42 @@ describe("P3 T009 real command and service acceptance", () => {
     const cleanup = JSON.parse(readFileSync(join(state.marker, "service-cleanup.json"), "utf8"));
     expect(cleanup.closed).toBe(true);
     await p9PortIsFree(cleanup.port);
+  });
+
+  it("publishes the acceptance execution aggregate for the implementation/tests receipt branch", async () => {
+    const state = p9Fixture();
+    const implementation = writeOfficialComponentReceipt({
+      task: state.task,
+      workspace: state.context.workspace,
+      stage: "build-code",
+      component: "implementation",
+      payload: {},
+    });
+    const tests = createCanonicalReceiptWriter({
+      task: state.task,
+      workspace: state.context.workspace,
+      stage: "build-code",
+      component: "build-code-test-capture",
+    }).captureTests({
+      command: "true",
+      receiptRef: "quality/tests/normal-acceptance-execution.json",
+      outputRef: "quality/tests/output/normal-acceptance-execution.output",
+    });
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: "p9-attempt-A",
+      receipts: {
+        implementation: implementation.ref,
+        tests: tests.receipt_ref,
+        stage_outcomes: state.outcome.ref,
+      },
+    });
+
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    expect(result.quality_fact_refs.some((ref) => {
+      const fact = JSON.parse(state.task.readRecord(ref));
+      return fact.kind === "acceptance_criterion" && fact.subject === "acceptance_execution" && fact.status === "passed";
+    })).toBe(true);
   });
 
   it.each([
@@ -874,10 +967,11 @@ function p9ConfigureReview(state, { sameSource = false, mixedSources = false, on
 }
 
 async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
+  const { resultMutation = null, ...requestExtra } = extra;
   const request = {
     stage: "verify-code", host_provider: "codex/host",
     materials: { implementation: "inspect actual local acceptance service implementation", tests: "two JSON oracle assertions" },
-    ...(reviewedExecution ? { reviewed_execution: reviewedExecution } : {}), ...extra,
+    ...(reviewedExecution ? { reviewed_execution: reviewedExecution } : {}), ...requestExtra,
   };
   const input = join(state.root, "ordinary-review-input.json");
   writeFileSync(input, JSON.stringify({ request }));
@@ -888,7 +982,7 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
     services: { runReviewRound: async (prepared) => {
       trace.rounds += 1;
       trace.requestMaterials.push(structuredClone(prepared.materials));
-      return runSimpleReview(prepared, { client: { async runGroup(input) {
+      const result = await runSimpleReview(prepared, { client: { async runGroup(input) {
         trace.dispatches += 1;
         const manifest = JSON.parse(readFileSync(join(input.materials.bundleRoot, "manifest.json"), "utf8"));
         const bytes = Object.fromEntries(manifest.files.map(({ path }) => [path, readFileSync(join(input.materials.bundleRoot, path), "utf8")]));
@@ -906,6 +1000,7 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
           }),
         };
       } } });
+      return typeof resultMutation === "function" ? resultMutation(result) : result;
     } },
   }));
 }
@@ -965,6 +1060,26 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(trace.rounds, JSON.stringify(diagnostic)).toBe(0);
     expect(diagnostic?.error?.message ?? diagnostic?.error ?? "", "rejection must concern execution authentication, not CLI or provider configuration").toMatch(/reviewed_execution|acceptance_execution|quality\/facts|execution.*(?:auth|ref|binding)|(?:auth|ref|binding).*execution/i);
     expect(trace.dispatches).toBe(0);
+    expect(state.task.listCanonicalReviewResultRefs()).toHaveLength(0);
+  });
+
+  it("rejects a pre-dispatch-shaped result whose material id is not the frozen provider bundle", async () => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const trace = p9ConfigureReview(state);
+    const execution = await p9Execute(state);
+    const input = p9ExecutionInput(state, execution);
+    await expect(p9PublicReview(state, trace, input, {
+      resultMutation: (result) => ({
+        ...result,
+        status: "unavailable",
+        material_id: "f".repeat(64),
+        provider_results: [],
+        findings: [],
+        error: { code: "REVIEW_INPUT_TOO_LARGE", message: "forged pre-dispatch shape" },
+      }),
+    })).rejects.toThrow(/material_id does not match the authenticated request material|execution review result does not match the frozen provider bundle/);
+    expect(trace.rounds).toBe(1);
+    expect(trace.dispatches).toBe(1);
     expect(state.task.listCanonicalReviewResultRefs()).toHaveLength(0);
   });
 
@@ -1117,5 +1232,5 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const input = p9ExecutionInput(state, second);
     expect(input.ref).toMatch(/acceptance_execution-/);
     expect(JSON.parse(readFileSync(join(state.marker, "service-data.json"), "utf8")).count).toBe(1);
-  });
+  }, 60_000);
 });

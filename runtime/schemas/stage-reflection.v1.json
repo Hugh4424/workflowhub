@@ -25,6 +25,8 @@
     "stage_status": { "enum": ["completed", "failed"] },
     "generated_at": { "type": "string", "format": "date-time" },
     "status": { "enum": ["ok", "degraded", "failed", "unavailable", "not_scheduled"] },
+    "identity": { "$ref": "#/$defs/identity" },
+    "source": { "$ref": "#/$defs/source" },
     "error": {
       "anyOf": [
         { "type": "null" },
@@ -63,6 +65,28 @@
     }
   ],
   "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "worktree", "branch", "attempt", "snapshot_tree", "material_revision"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "worktree": { "type": ["string", "null"], "minLength": 1 },
+        "branch": { "type": ["string", "null"], "minLength": 1 },
+        "attempt": { "type": ["string", "null"], "minLength": 1 },
+        "snapshot_tree": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40,64}$" },
+        "material_revision": { "type": ["string", "null"], "pattern": "^revision-[a-f0-9]{64}$" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "sha256"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^quality/evidence/stage-outcomes/(?:make-decision|build-spec|build-plan|build-code|verify-code)/[a-f0-9]{64}\\.json$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "safe_ref": {
       "type": "string",
       "minLength": 1,
