@@ -1014,6 +1014,9 @@ describe("current vNext five-stage runtime", () => {
       materialRevision,
     });
     writeFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"), "repaired\n");
+    const repairCheck = evidence(state, "verify-code").evidence_refs
+      .find(({ ref }) => ref.startsWith("quality/tests/") && ref.endsWith(".json"));
+    const reviewValue = JSON.parse(state.task.readRecord(review.resultRef));
     const outcome = writeStageOutcomeFixture({
       task: state.task,
       kernel: state.kernel,
@@ -1022,24 +1025,26 @@ describe("current vNext five-stage runtime", () => {
       stage: "verify-code",
       attemptId: "attempt-review-repair-resolution",
       qualityReview: { ref: review.resultRef, sha256: sha256(state.task.readRecord(review.resultRef)) },
+      codeReviewResult: {
+        status: "findings",
+        findings: reviewValue.findings,
+        repairs: reviewValue.findings.map(({ id }) => ({
+          finding_id: id,
+          status: "fixed",
+          reason: "the current source contains the repair and its affected check passed",
+          source_refs: [{ path: "src/app.txt", sha256: sha256(readFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"))) }],
+          check_refs: [repairCheck],
+        })),
+        summary: "fixture current implementation repair is authenticated by the stage outcome",
+        focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],
+      },
     });
-    const reviewValue = JSON.parse(state.task.readRecord(review.resultRef));
-    const resolvedOutcome = structuredClone(outcome.value);
-    resolvedOutcome.code_review.result = {
-      ...resolvedOutcome.code_review.result,
-      status: "findings",
-      findings: reviewValue.findings,
-      repairs: reviewValue.findings.map(({ id }) => ({ finding_id: id, status: "fixed" })),
-    };
-    const outcomeRaw = `${JSON.stringify(resolvedOutcome, null, 2)}\n`;
-    const outcomeRef = `quality/evidence/stage-outcomes/verify-code/${sha256(outcomeRaw)}.json`;
-    state.kernel.publishCanonicalRecord(outcomeRef, outcomeRaw);
     const run = async (kernel) => runOfficialStage("verify-code", {
       ...context("verify-code", state),
       kernel,
       workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"),
     }, {
-      receipts: { stage_outcomes: outcomeRef, quality_review: review.resultRef },
+      receipts: { stage_outcomes: outcome.ref },
     });
     const first = await run(state.kernel);
     const firstFact = first.quality_fact_refs

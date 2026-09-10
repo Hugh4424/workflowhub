@@ -14,7 +14,11 @@ import { providerAdapter } from "../../../runtime/review/canonical-review-result
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 
-const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 60 * 60 * 1000;
+// Managed review ownership lives in 3rd-review. WorkflowHub must keep polling
+// while the broker reports a live session; a default wall-clock deadline would
+// cancel healthy long-running providers. A finite value remains an explicit
+// test/operator override.
+const DEFAULT_MANAGED_TERMINAL_WAIT_MS = null;
 const DEFAULT_MANAGED_STATUS_POLL_MS = 1000;
 
 function redactHostPaths(value) {
@@ -414,33 +418,26 @@ function buildBundle(attachmentRoot, input) {
 async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials }, dependencies) {
   const maxWaitMs = dependencies.managedTerminalWaitMs ?? DEFAULT_MANAGED_TERMINAL_WAIT_MS;
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
-  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0) throw new TypeError("managedTerminalWaitMs must be a non-negative safe integer");
+  if (maxWaitMs !== null && (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0)) {
+    throw new TypeError("managedTerminalWaitMs must be null or a non-negative safe integer");
+  }
   if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
   const startedAt = Date.now();
   let current = lifecycle;
-  let cancelRequested = false;
   const context = { requestId, hostProvider, providers, materials, runtimeId: lifecycle.runtime_id };
-  try {
-    while (current.state !== "terminal") {
-      current = await client.statusManaged(context);
-      if (current.state === "terminal") return current;
-      if (Date.now() - startedAt >= maxWaitMs) {
-        cancelRequested = true;
-        const cancelled = await client.cancelManaged(context);
-        if (cancelled?.state === "terminal") return cancelled;
-        const error = new Error("managed review did not reach a terminal state within the bounded wait");
-        error.code = "REVIEW_STATUS_UNAVAILABLE";
-        throw error;
-      }
-      if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
+  while (current.state !== "terminal") {
+    current = await client.statusManaged(context);
+    if (current.state === "terminal") return current;
+    if (maxWaitMs !== null && Date.now() - startedAt >= maxWaitMs) {
+      const cancelled = await client.cancelManaged(context);
+      if (cancelled?.state === "terminal") return cancelled;
+      const error = new Error("managed review did not reach a terminal state within the bounded wait");
+      error.code = "REVIEW_STATUS_UNAVAILABLE";
+      throw error;
     }
-    return current;
-  } catch (error) {
-    if (!cancelRequested && current?.state !== "terminal" && typeof client.cancelManaged === "function") {
-      try { await client.cancelManaged(context); } catch { /* preserve the status failure */ }
-    }
-    throw error;
+    if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
+  return current;
 }
 
 function materialIdForInput(input) {

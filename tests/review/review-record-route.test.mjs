@@ -1132,7 +1132,7 @@ describe("T014 authenticated route-repair review budget", () => {
     expect(denied.review_budget.route).not.toBe("route_repair_review");
   });
 
-  it("does not treat a route change plus changed review subject as route repair", async () => {
+  it("starts a separate initial budget for a changed review subject instead of route repair", async () => {
     const { task, kernel } = makeTask();
     const input = { ...request(), subject: { component: "runtime/review" } };
     let calls = 0;
@@ -1140,9 +1140,9 @@ describe("T014 authenticated route-repair review budget", () => {
     await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
     const denied = await recordRequest({ task, kernel,
       request: { ...input, subject: { component: "runtime/evidence" } }, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(1);
-    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+    expect(calls).toBe(2);
+    expect(denied).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
+    expect(denied.review_budget.route).not.toBe("route_repair_review");
   });
 
   it("rejects a generic aggregate failure whose provider member has an excluded protocol error", async () => {

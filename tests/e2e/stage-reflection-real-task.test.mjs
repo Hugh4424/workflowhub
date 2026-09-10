@@ -18,8 +18,8 @@ import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { completeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const repoRoot = resolve(join(import.meta.dirname, "../.."));
-const stageSchema = JSON.parse(readFileSync(join(repoRoot, "runtime/schemas/stage-reflection.v1.json"), "utf8"));
-const validateReflectionSchema = new Ajv({ allErrors: true, strict: false }).compile(stageSchema);
+const stageSchemas = Object.fromEntries(["v1", "v2"].map((version) => [version, JSON.parse(readFileSync(join(repoRoot, `runtime/schemas/stage-reflection.${version}.json`), "utf8"))]));
+const reflectionValidators = Object.fromEntries(Object.entries(stageSchemas).map(([version, schema]) => [version, new Ajv({ allErrors: true, strict: false }).compile(schema)]));
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const roots = [];
@@ -77,10 +77,10 @@ function withIsolatedEnvironment(root, callback) {
 }
 
 function reflectionExecutorFactory({ confirmationRef }) {
-  return async ({ taskId, stage, stageStatus }) => {
+  return async ({ taskId, stage, stageStatus, stageOutcome, currentBinding }) => {
     if (stage === "verify-code") throw new Error("real task reflection executor intentionally failed");
     return {
-      schema_version: "stage-reflection.v1",
+      schema_version: "stage-reflection.v2",
       record_kind: "judgment",
       task_id: taskId,
       stage,
@@ -94,7 +94,7 @@ function reflectionExecutorFactory({ confirmationRef }) {
         classification: "optimize",
         severity: "medium",
         reason: "真实 task 通过正式入口记录阶段末复盘。",
-        evidence_refs: [],
+        evidence_refs: [stageOutcome.ref],
         confidence: "low",
         next_review_trigger: "下一次真实 task 复盘时",
       }],
@@ -106,6 +106,21 @@ function reflectionExecutorFactory({ confirmationRef }) {
         confidence: "high",
       }] : [],
       lessons_added: [],
+      identity: currentBinding,
+      executor: {
+        kind: "fixture-reflection-executor",
+        source_family: "fixture",
+        source_id: `fixture/reflection/${stage}`,
+        agent_run_id: `fixture-reflection-${stage}`,
+        attempt_id: currentBinding.attempt,
+        started_at: "2026-08-30T00:00:00.000Z",
+        completed_at: "2026-08-30T00:00:01.000Z",
+        output_hash: sha256(`${taskId}:${stage}:${currentBinding.attempt}:reflection`),
+      },
+      output_hash: sha256(`${taskId}:${stage}:${currentBinding.attempt}:reflection`),
+      ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
+      status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+      source_completeness: { compaction: false, truncation: false, visible_scope: "official real task fixture", unknown_reasons: [] },
     };
   };
 }
@@ -373,10 +388,18 @@ describe("stage-reflection real official task path", () => {
       expect(results[4].stage_reflection).toMatchObject({ status: "failed", reflection_status: "failed", persisted: true });
 
       const taskRoot = bootstrapped.task_path;
-      const reflectionValues = Object.fromEntries(stages.map((stage) => {
-        const path = join(taskRoot, "quality", "stage-reflection", `${stage}.json`);
+      const reflectionValues = Object.fromEntries(stages.map((stage, index) => {
+        const reflectionRef = results[index].stage_reflection.ref;
+        if (results[index].stage_reflection.status === "failed") {
+          expect(reflectionRef).toMatch(new RegExp(`^quality/stage-reflection/${stage}/[a-f0-9]{64}\\.json$`));
+        } else {
+          expect(reflectionRef).toMatch(new RegExp(`^quality/stage-reflection/${stage}/[a-f0-9]{64}\\.json$`));
+        }
+        const path = join(taskRoot, reflectionRef);
         expect(existsSync(path)).toBe(true);
         const value = JSON.parse(readFileSync(path, "utf8"));
+        const validateReflectionSchema = reflectionValidators[value.schema_version?.slice(-2)];
+        expect(validateReflectionSchema, `unsupported reflection schema ${value.schema_version}`).toBeDefined();
         expect(validateReflectionSchema(value), validateReflectionSchema.errors?.map((error) => JSON.stringify(error)).join("; ")).toBe(true);
         expect(value).toMatchObject({ task_id: "official-real-task", stage });
         return [stage, value];

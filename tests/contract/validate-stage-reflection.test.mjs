@@ -314,6 +314,15 @@ describe("validate-stage-reflection", () => {
     expect(validate(value), JSON.stringify(validate.errors)).toBe(true);
   });
 
+  it("requires executor provenance for every executed v2 status", () => {
+    const validate = compile(v2SchemaPath);
+    const value = loadJson(join(fixtureRoot, "v2-valid.json"));
+    delete value.executor;
+    delete value.output_hash;
+    expect(validate(value)).toBe(false);
+    expect(validate.errors?.some((error) => error.keyword === "required")).toBe(true);
+  });
+
   it("annotates v2 records that omit the required fact trio", () => {
     const validate = compile(v2SchemaPath);
     const value = loadJson(join(fixtureRoot, "v2-invalid-missing-trio.json"));

@@ -47,7 +47,10 @@ version: 1.0.0
 
 报告写入当前任务质量证据区，不写仓库源码。使用内容寻址文件名：
 `quality/evidence/research/<sha256>.json`，文件名中的 sha256 必须等于报告原始 JSON
-字节的 SHA-256；写入后回读并校验 hash。
+字节的 SHA-256；写入后回读并校验 hash。生产接线把完整报告作为 make-decision
+`stage-runtime run --action=execute` 输入的 `research_report` 字段提交；runtime 通过现有
+canonical writer 发布后，只把返回的 ref 交给 stage handler，调用方不得自己写 ref 或同时提交
+`receipts.research`。
 
 报告至少包含：
 
@@ -63,7 +66,7 @@ version: 1.0.0
   "open_items": [],
   "coverage": {"dimensions":[],"first_party_ratio":null},
   "saturation": {"status":"saturated|timeboxed|not_saturated","reason":"..."},
-  "tool_usage": [{"tool":"anysearch|web_fetch|subagent|glob|grep|read|git|ast-grep|none","queries":[]}],
+  "tool_usage": [{"tool":"anysearch|web_fetch|subagent|glob|grep|read|git|ast-grep|none","question_id":"Q-1","queries":[],"attempts":[]}],
   "review": {"status":"pending|completed|unavailable","evidence_ref":null},
   "skip": null
 }
@@ -79,6 +82,10 @@ version: 1.0.0
 建议和 findings，不给产品方向 verdict。复核不可用时报告
 `review.status: unavailable` 及错误类别；这不阻断 Talk，但也不能宣称研究已被独立
 复核通过。
+
+## 受控降级状态
+
+首选路由失败时只记录一次 `awaiting_user_approval`，不自动调用兜底。用户明确批准后状态为 `approved`，且必须同时记录 `web_search` 与 `web_fetch` provenance；用户拒绝为 `declined`。`awaiting_user_approval` 和 `declined` 都生成 `unavailable`，后续成功必须写新 `completed` 原件，不能覆盖旧事实。
 
 ## 跳过、降级和停止
 

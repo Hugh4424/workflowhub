@@ -11,6 +11,7 @@ const FORMAL_CONSUMERS = new Set([
   "stage-handlers#interactionAggregateFacts",
   "stage-handlers#clarifyFacts",
   "stage-handlers#testFacts",
+  "stage-handlers#researchFacts",
   "stage-handlers#officialStageHandler(\"make-decision\")",
   "stage-handlers#officialStageHandler(\"build-spec\")",
   "stage-handlers#officialStageHandler(\"build-plan\")",
