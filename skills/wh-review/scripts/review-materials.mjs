@@ -491,7 +491,7 @@ function validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps }
   const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
     || (typeof source.sourceRoot === "string"
       && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
-  if (!snapshotCurrent || receipt.exit_code !== 0) {
+  if (!snapshotCurrent || receipt.exit_code !== 0 || (receipt.runtime_profile !== undefined && (receipt.runtime_profile_status !== "ready" || receipt.runtime_profile_authenticated !== true))) {
     throw new Error("MATERIAL_INCOMPLETE: build-code test evidence is not a passing current-snapshot fact");
   }
 }
@@ -535,7 +535,7 @@ function validateIntegrationFreshTests({ task, source, materials }) {
   const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
     || (typeof source.sourceRoot === "string"
       && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
-  if (!snapshotCurrent || receipt.exit_code !== 0) {
+  if (!snapshotCurrent || receipt.exit_code !== 0 || (receipt.runtime_profile !== undefined && (receipt.runtime_profile_status !== "ready" || receipt.runtime_profile_authenticated !== true))) {
     throw new Error("MATERIAL_INCOMPLETE: integration requires a fresh passing test receipt for the frozen final snapshot");
   }
 }

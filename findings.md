@@ -1,38 +1,46 @@
 # Findings
 
-## Authority
-- The current authoritative materials are the four files under `specs/workflowhub-build-prd/`: decision log, spec, plan, tasks.
-- `tasks.md` marks T001, T002, T004, T005, T006 completed; T003, T007, T008, T009 pending. This is internally inconsistent because T004 depends on T003 and P1/P3 facts are historical/incomplete.
-- `plan.md` still says all tasks are pending and contains stale plan hashes in task cards. Preserve historical facts; do not silently rewrite authored material.
-- Build-code status is ready/in-progress but is not a task-card reader or gate.
+## Established make-decision facts
+- Scope: S1 + full S2 + per-AC material-only tolerance.
+- Deferred: S3–S7 with owner/trigger/minimum artifact/acceptance.
+- UI: non_ui.
+- Core principles: read parallel/write serial; main session interaction/dispatch/integration/adjudication only; worker cap 3/hard 6; worker result ≤500 chars + ref + hash.
+- Test runtime profile: inner ≤60s no network/DB/filesystem/child process; medium ≤300s localhost only; large CI only. Orthogonal to test tier.
+- Review S1: pre-dispatch token/context/health rejection ≤5s and zero provider calls; broker start/status recovery; material-vs-non-material drift; error classification; seam packet handling; ADR 0025 amends only two conflicts.
+- per-AC tolerance: tolerate material_revision only; never snapshot_tree, evidence hash, or AC result changes.
 
-## Scope findings
-- Intended post-P1–P3 next card is T007 RED in P4, test-only boundary `tests/integration/build-prd-delivery.test.mjs`, with fullstack/fullstack-slice-testing route because scenarios cross CLI/core/filesystem/Git close seams.
-- T004 actual implementation included `workflows/build-prd/steps.json`, omitted from its declared boundary.
-- T006 actual implementation includes runtime review schemas/guards, wh-review runner/recorder/helper tests, beyond its declared file list. These require truthful task-fact scope correction or explicit same-task scope note before a clean handoff.
-- P4 production implementation is not yet authorized as safe: planning close must not become a second close, formal-stage carrier, fifth material, or auth bypass. Await feasibility audit.
+## Build-spec / build-plan facts
+- Authenticated materials are under `specs/workflowhub-execution-acceleration-20260909/`; direct validators and focused material tests passed at those stages.
+- Build-spec quality remains honestly incomplete because decision-freeze reader expects `host_evidence.source_ref|confirmation_ref`, while canonical approval proof stores `host_evidence.ref`.
+- Build-plan quality remains honestly incomplete for the same freeze compatibility fact plus advisory projections.
+- Authored plan/task gate text contains the stale path `tests/contract/official-component-receipts.test.mjs`; actual file is `tests/official-component-receipts.test.mjs`. Do not rewrite authored materials during build-code; execute the real path and record the discrepancy.
 
-## Metadata
-- Refreshed P3 hashes and bundle/catalog resolver metadata after final simple-review-runner scope binding.
-- `docs/architecture/move-map.json` is valid JSON and targeted P3 registrations match current bytes/hashes.
-- `skills/catalog.yaml` current hash is `3b222a8a0c4cdb831eab920338d97211dc8581be58e9a5685ee05a649942887f`; current wh-review bundle raw hash is `24e815f54933048e8696c8987eeeb88963d9c9f0e241184492d2e68723741593`; canonical resolver hash is `1044da534aeba43e291eb2362dffc9aea398929ddafdc11172d606849e2525be`.
+## P1 findings and repairs
+- P1 RED initially exposed that `run-checks.mjs` ignored profiled argv/evidence options and ran aggregate checkers. The existing aggregate checker has five unrelated baseline path-classification failures; profiled mode now executes explicit argv without shell concatenation.
+- Runtime profile contract now validates inner/medium/large limits, orthogonal tier, permissions, capability proof shape, requested/decision matching, proof refs/hashes for passed proofs, behavior fingerprint shape/equality, and large CI declaration. Unknown/unproven capability remains `unavailable`, never ready/pass.
+- Canonical test receipts now carry optional runtime profile, capability proof, behavior fingerprint, duration, runtime_profile_status, and runtime_profile_authenticated. Reuse compares profile/proof/fingerprint. Stage handler facts透传 these fields; stage runner binds receipt↔facts and treats profile-unavailable receipts as unavailable for quality status. Old receipts without profiles remain compatible.
+- `run-checks` evidence is create-only under `quality/tests`, includes target argv, duration, explicit `quality_status: unavailable`, `runtime_profile_status: unavailable`, `runtime_profile_authenticated: false`, capability proof status unavailable, and null behavior fingerprints rather than self-asserted equality. Target exit code is preserved independently.
+- A wrapper exit 0 therefore means only the target command passed; it does not mean AC-TEST-001 passed. Capability enforcement is not available in this executor and must remain unavailable.
 
-## Test facts
-- Targeted closure/provenance/P3 contract command: 35/35 passed.
-- Material/helper targeted command: 85/85 passed.
-- `node tools/cli/repo-skills-manifest.mjs --check`: passed.
-- `git diff --check`: passed.
-- Known warning: AJV ignores unknown `date` format.
+## P1 current evidence
+- Focused contract suite: `tests/contract/test-runtime-profile.test.mjs`, `tests/stage-plan-task-contract-v3.test.mjs`, `tests/official-component-receipts.test.mjs`: 86/86 passed.
+- Profiled GREEN gate executed with the real receipt path and exit 0. Evidence: `quality/tests/p1-profile.json`; target passed, quality_status unavailable, capability proof unavailable, behavior fingerprint unavailable. This is truthful incomplete quality, not AC-TEST-001 pass.
+- Independent P1 re-review initially found three blocking risks: self-asserted fingerprints, hard-coded feature tier, and unavailable proof being confused with pass. Repairs: fingerprints are explicitly unavailable/null; wrapper no longer invents test tier; status/authentication are explicit and downstream pass consumers reject unavailable.
+- Remaining P1 review concern to verify: full stage/freshness/close/review consumers beyond stage-runner may still map profile-unavailable exit 0 to pass. Stage handler/runner seam is repaired; broader consumers need targeted audit/tests before P1 closure.
 
-## Unavailable/incomplete
-- `quality/tests/P1-portable.json`, `quality/tests/P2-spec-prd.json`, `quality/tests/P3-review.json`, and P4 receipts are absent from the target worktree.
-- Real provider, external host, browser/UI, and physical delivery actions have not been performed.
-- `target-test-command` and `wh-review-provider` diagnostic commands are unavailable.
-- Broad phase-0 governance check has unrelated stale retention/inventory failures; do not claim global governance cleanliness.
+## P3-P6 and verify-code facts
+- P3 RED remains immutable at `quality/tests/p3-review.json`. The corrected six-file GREEN gate is `quality/tests/p3-review-green-4.json`: exit 0, 6 files/150 tests; profile status remains `target_passed_profile_unavailable`.
+- Architecture review found one valid lifecycle error-classification bug at `skills/wh-review/scripts/review-provider-client.mjs:354`: plain-text managed stderr leaked `SyntaxError` when stdout was not JSON. The managed stderr parse now follows the typed public-run path; affected client/lifecycle tests pass 51/51 and the full P3 gate passes.
+- The single verify-code heterologous review attempt `quality/reviews/attempts/2c276658-e4bb-5d98-a273-de38dbb169ea/attempt.json` is canonical `unavailable`; providers emitted RATE_LIMITED/CANCELLED/ATTACHMENT_DELIVERY_UNSUPPORTED terminal facts after the non-terminal route had no callback. No second review dispatch was made.
+- The unavailable verify-code Stage Agent outcome is recorded at `quality/evidence/stage-outcomes/verify-code/7936f1c7b91ee85f9db389168df9f29fb33cb420995c5078a68847b9bb4c09ca.json`. Current verify-code predicates remain missing because the dsh code-review result and stage reflection executor are unavailable.
+- P4/P5 behavior gates remain 22/22 with repaired archive/read-only-consumer bindings. P6 remains business `incomplete`: no user-selected real task or authenticated host usage/replay ref. Build-code and verify-code are not complete; no close/commit/push/merge/archive/cleanup.
 
-## New independent P3 audit findings (2026-09-09)
-- The rehydration camel-only packet bypass was fixed in `skills/wh-review/scripts/simple-review-runner.mjs`, but tests and bundle metadata were not yet rerun after that edit.
-- Independent review then found four remaining identity-boundary gaps: malformed `build-prd` sentinel can reach `review-runner` finalization; canonical simple recorder and task-bound recorder accept arbitrary/nonformal `review_kind` values and alias conflicts; shared `assertReviewIdentity` accepts arbitrary non-null kinds; `reviewRuleFor("build_prd")` remains an underscore pseudo-stage escape hatch.
-- These are same-task P3 repairs, not permission to add a formal stage or persistence surface. They must be RED/GREEN tested at public helper/recorder/finalization boundaries, then bundle hashes refreshed.
-- The prescribed T007 command was probed read-only and exited 1 because `tests/integration/build-prd-delivery.test.mjs` is absent; this is setup/missing-file, not target RED. Existing TaskKernel authorization context blocks safe P4 implementation under the current boundary.
-- P4 remains scope-blocked by TaskKernel authorization context; no P4 test/implementation is authorized yet.
+## Build-code execution facts
+- Current worktree: `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-execution-acceleration-20260909`; branch `task/workflowhub/workflowhub-execution-acceleration-20260909`.
+- Main session is sole writer; read-heavy P1 audits were delegated. No commit/push/merge/close performed.
+
+## P2 governance facts
+- RED: governance contract initially failed 2/3 assertions because ADR 0025 did not exist and the approved ADR 0007 wording was not represented in the test; no governance production edit preceded RED.
+- GREEN: created `docs/adr/0025-review-dispatch-preflight-boundaries.md`; modified only the approved packet-plan/preflight sentence in ADR 0007 and no-unified-budget sentence in `docs/standard-workflow.md`; preserved runtime-owned public status polling and non-gate semantics.
+- P2 targeted contract: 3/3 passed. Profile evidence `quality/tests/p2-governance.json` is target_passed_profile_unavailable with quality_status unavailable because run-checks capability proof is declaration-only.
+- Independent P2 review is pending; no P3 work has started.

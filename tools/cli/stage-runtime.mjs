@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -36,6 +36,9 @@ import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { validateProjectName, validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
+import { buildReviewMaterials } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -195,6 +198,50 @@ export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
     ...(input.summary === undefined ? {} : { summary: input.summary }),
     snapshot_tree: snapshotTree,
   });
+}
+
+function isIntegrationReviewRequest(request) {
+  return request?.stage === "build-code"
+    && (request.review_scope ?? request.reviewScope ?? null) === "integration";
+}
+
+/** Build the provider-visible integration packet from the authenticated task workspace. */
+export function prepareTaskBoundIntegrationReviewBundle(context, request, {
+  loadConfig = loadTrustedThirdReviewConfig,
+  captureSource = captureReviewSource,
+  buildMaterials = buildReviewMaterials,
+} = {}) {
+  if (!isIntegrationReviewRequest(request)) throw new TypeError("task-bound integration review request required");
+  const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
+    requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
+  const source = captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
+    includeDiff: true, taskId: context.task.identity.taskId });
+  try {
+    const built = buildMaterials({
+      reviewDataRoot: trusted.attachmentRoot,
+      attachmentRoot: trusted.attachmentRoot,
+      source,
+      task: context.task,
+      taskId: context.task.identity.taskId,
+      stage: request.stage,
+      phaseId: request.phase_id ?? null,
+      reviewTrack: request.review_track ?? request.reviewTrack ?? null,
+      reviewScope: "integration",
+      reviewKind: request.review_kind ?? request.reviewKind ?? null,
+      materials: request.materials,
+    });
+    let disposed = false;
+    return Object.freeze({
+      ...built,
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        rmSync(built.bundleRoot, { recursive: true, force: true });
+      },
+    });
+  } finally {
+    source.dispose?.();
+  }
 }
 
 function readQualityEvidence(task) {
@@ -671,21 +718,42 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const hasRequest = Object.prototype.hasOwnProperty.call(input, "request");
     const hasResult = Object.prototype.hasOwnProperty.call(input, "result");
     if (hasRequest === hasResult) throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
-    const refs = hasRequest
-      ? await recordSimpleReviewRequest({
-        task: context.task,
-        kernel: context.kernel,
-        request: input.request,
-        runRound: typeof services.runReviewRound === "function" ? services.runReviewRound : runSimpleReview,
-        materialIdForRequest: typeof services.materialIdForRequest === "function"
-          ? services.materialIdForRequest
-          : (request) => createSimpleReviewPacket(request).material_id,
-      })
-      : recordSimpleReviewResult({
-        task: context.task,
-        result: input.result,
-        kernel: context.kernel,
-      });
+    let preparedBundle = null;
+    const useTaskBoundIntegrationBundle = hasRequest
+      && typeof services.runReviewRound !== "function"
+      && isIntegrationReviewRequest(input.request);
+    const prepareBundle = (request) => {
+      if (preparedBundle === null) {
+        preparedBundle = prepareTaskBoundIntegrationReviewBundle(context, request, services.reviewBundleDependencies);
+      }
+      return preparedBundle;
+    };
+    let refs;
+    try {
+      refs = hasRequest
+        ? await recordSimpleReviewRequest({
+          task: context.task,
+          kernel: context.kernel,
+          request: input.request,
+          runRound: typeof services.runReviewRound === "function"
+            ? services.runReviewRound
+            : useTaskBoundIntegrationBundle
+              ? (request) => runSimpleReview(request, { buildBundle: () => prepareBundle(request) })
+              : runSimpleReview,
+          materialIdForRequest: typeof services.materialIdForRequest === "function"
+            ? services.materialIdForRequest
+            : useTaskBoundIntegrationBundle
+              ? (request) => prepareBundle(request).materialId
+              : (request) => createSimpleReviewPacket(request).material_id,
+        })
+        : recordSimpleReviewResult({
+          task: context.task,
+          result: input.result,
+          kernel: context.kernel,
+        });
+    } finally {
+      preparedBundle?.dispose();
+    }
     return { status: "recorded", ...refs };
   }
   if (command === "reflect") {

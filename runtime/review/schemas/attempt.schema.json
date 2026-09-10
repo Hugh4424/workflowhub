@@ -149,6 +149,36 @@
     },
     "policy_snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "request_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "closure_manifest": {
+      "type": "object",
+      "required": ["version", "request_key", "source", "material_scope", "snapshot_tree", "material_revision", "material_id", "authenticated_evidence_sha256", "packet_sha256", "prompt_sha256", "route_identity", "policy_snapshot_hash"],
+      "properties": {
+        "version": { "const": "wh-review-closure.v1" },
+        "request_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "source": {
+          "type": "object", "required": ["target_commit", "base_commit", "base_tree", "captured_head"],
+          "properties": {
+            "target_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+            "base_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+            "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+            "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
+          },
+          "additionalProperties": false
+        },
+        "material_scope": { "type": ["string", "null"] },
+        "subject_kind": { "enum": ["worktree", "phase"] },
+        "subject_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+        "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "authenticated_evidence_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "packet_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "prompt_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "route_identity": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "policy_snapshot_hash": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
         "dispatch_state": { "enum": ["dispatched", "blocked_before_dispatch", "reused"] },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
     "coverage": {

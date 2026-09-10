@@ -1190,7 +1190,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT", "BROKER_EXIT_NONZERO"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
+  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT", "BROKER_EXIT_NONZERO", "REVIEW_STATUS_UNAVAILABLE"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-group-timeout/attempt.json";
     const values = {
       [attemptRef]: {

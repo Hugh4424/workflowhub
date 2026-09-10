@@ -27,9 +27,13 @@
  *   to return exit 1 without running the real script. Used only by tests.
  */
 
+import { createHash } from "node:crypto";
+import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { validateTestRuntimeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // tools/cli/ -> repository root; run child checkers from the project root so
@@ -73,6 +77,99 @@ function runChecker(checkerName, checkerArgs) {
 // ---------------------------------------------------------------------------
 // Aggregate mode (default)
 // ---------------------------------------------------------------------------
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function parseProfileArgs(args) {
+  const separator = args.indexOf("--");
+  if (separator < 0) return null;
+  const options = args.slice(0, separator);
+  const target = args.slice(separator + 1);
+  const profileArg = options.find((arg) => arg.startsWith("--runtime-profile="));
+  const evidenceArg = options.find((arg) => arg.startsWith("--evidence-path="));
+  if (!profileArg || !evidenceArg || target.length === 0) throw new Error("runtime profile mode requires --runtime-profile, --evidence-path, and a target argv after --");
+  const runtimeProfile = profileArg.slice("--runtime-profile=".length);
+  const evidencePath = evidenceArg.slice("--evidence-path=".length);
+  if (!evidencePath) throw new Error("runtime profile evidence path is required");
+  if (!new Set(["inner", "medium", "large"]).has(runtimeProfile)) throw new Error("runtime profile must be inner, medium, or large");
+  const resolvedEvidencePath = isAbsolute(evidencePath) ? evidencePath : resolve(repoRoot, evidencePath);
+  const qualityRoot = resolve(repoRoot, "quality", "tests");
+  if (resolvedEvidencePath !== qualityRoot && !resolvedEvidencePath.startsWith(`${qualityRoot}/`)) {
+    throw new Error("runtime profile evidence path must be under quality/tests");
+  }
+  return { runtimeProfile, evidencePath: resolvedEvidencePath, target };
+}
+
+function profileForExecutor(runtimeProfile, target) {
+  const permissions = runtimeProfile === "inner"
+    ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny", environment: "local_ci" }
+    : runtimeProfile === "medium"
+      ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" }
+      : { network: "ci_only", db: "ci_only", filesystem: "ci_only", subprocess: "ci_only", environment: "ci_only" };
+  const ceiling_ms = runtimeProfile === "large" ? 900_000 : { inner: 60_000, medium: 300_000 }[runtimeProfile];
+  const observations = Object.entries(permissions).map(([capability, decision]) => ({
+    capability, requested: decision, decision: "unknown", observed: false,
+    mechanism: "run-checks-profile-declaration-only", proof_ref: null, proof_hash: null,
+  }));
+  return {
+    runtime_profile: runtimeProfile,
+    ceiling_ms,
+    permissions,
+    executor_id: "run-checks",
+    capability_proof: { status: "unavailable", executor_id: "run-checks", observations },
+    behavior_fingerprint: {
+      before: { selection_hash: null, assertion_hash: null },
+      after: { selection_hash: null, assertion_hash: null },
+    },
+  };
+}
+
+function runProfiledCommand({ runtimeProfile, evidencePath, target }) {
+  const profile = profileForExecutor(runtimeProfile, target);
+  const valid = validateTestRuntimeProfile(profile, { declarationOnly: true });
+  if (valid.errors.length > 0) throw new Error(`runtime profile declaration is ${valid.status}: ${valid.errors.join("; ")}`);
+  if (runtimeProfile === "large" && process.env.CI !== "true") throw new Error("large runtime profile requires CI=true");
+  const started = Date.now();
+  const result = spawnSync(target[0], target.slice(1), {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: "pipe",
+    timeout: profile.ceiling_ms,
+    maxBuffer: 50 * 1024 * 1024,
+  });
+  const duration_ms = Date.now() - started;
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const exit_code = result.error?.code === "ETIMEDOUT" ? 124 : (result.status ?? 1);
+  const evidence = {
+    schema_version: "workflowhub-test-profile.v1",
+    status: result.status === 0 ? "target_passed_profile_unavailable" : "target_failed_profile_unavailable",
+    quality_status: "unavailable",
+    runtime_profile: runtimeProfile,
+    executor_id: "run-checks",
+    target: { argv: target },
+    duration_ms,
+    exit_code,
+    capability_proof: profile.capability_proof,
+    behavior_fingerprint: profile.behavior_fingerprint,
+    behavior_fingerprint_status: "unavailable",
+    runtime_profile_status: "unavailable",
+    runtime_profile_authenticated: false,
+    output_hash: sha256(`${result.stdout ?? ""}\n${result.stderr ?? ""}`),
+  };
+  mkdirSync(resolve(evidencePath, ".."), { recursive: true });
+  const temporaryPath = `${evidencePath}.tmp-${process.pid}`;
+  if (existsSync(evidencePath)) {
+    const existing = readFileSync(evidencePath, "utf8");
+    if (existing !== `${JSON.stringify(evidence, null, 2)}\n`) throw new Error("runtime profile evidence ref is already occupied with different content");
+  } else {
+    writeFileSync(temporaryPath, `${JSON.stringify(evidence, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+    try { linkSync(temporaryPath, evidencePath); } finally { unlinkSync(temporaryPath); }
+  }
+  return exit_code;
+}
 
 function runAggregate() {
   const failures = [];
@@ -194,6 +291,13 @@ if (isMain) {
   const args = process.argv.slice(2);
   if (args.includes("--self-test")) {
     runSelfTest();
+  } else if (args.includes("--runtime-profile") || args.some((arg) => arg.startsWith("--runtime-profile="))) {
+    try {
+      process.exit(runProfiledCommand(parseProfileArgs(args)));
+    } catch (error) {
+      console.error(`[run-checks] runtime profile failed: ${error.message}`);
+      process.exit(1);
+    }
   } else {
     runAggregate();
   }

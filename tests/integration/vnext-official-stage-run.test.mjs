@@ -1851,6 +1851,63 @@ describe("vNext official stage completion", () => {
     })).toThrow(/status is not bound to the canonical receipt exit_code/);
   });
 
+  it("rejects an exit-zero test fact when its runtime profile is unavailable", async () => {
+    const state = fixture("unavailable-runtime-profile");
+    const receipt = {
+      schema_version: "workflowhub-receipt.v1",
+      task_id: state.task.identity.taskId,
+      stage: "build-code",
+      producer: { stage: "build-code", component: "tests", version: "1.0.0" },
+      command: "true",
+      command_hash: sha256("true"),
+      exit_code: 0,
+      snapshot_head: state.candidate.baselineCommit,
+      snapshot_tree: state.candidate.captureSnapshot().tree,
+      snapshot_commit: state.candidate.baselineCommit,
+      started_at: "2026-08-02T00:00:00.000Z",
+      completed_at: "2026-08-02T00:00:01.000Z",
+      output_ref: "quality/tests/output/unavailable-profile.output",
+      output_hash: sha256("ok\\n"),
+      runtime_profile: {
+        runtime_profile: "medium", ceiling_ms: 300000,
+        permissions: { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" },
+        executor_id: "run-checks",
+        capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] },
+        behavior_fingerprint: { before: { selection_hash: null, assertion_hash: null }, after: { selection_hash: null, assertion_hash: null } },
+      },
+      runtime_profile_status: "unavailable",
+      runtime_profile_authenticated: false,
+      capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] },
+      behavior_fingerprint: { before: { selection_hash: null, assertion_hash: null }, after: { selection_hash: null, assertion_hash: null } },
+      behavior_fingerprint_status: "unavailable",
+      duration_ms: 1000,
+    };
+    const raw = `${JSON.stringify(receipt, null, 2)}\\n`;
+    const ref = "quality/tests/unavailable-profile.json";
+    state.kernel.publishCanonicalRecord(ref, raw);
+    state.kernel.publishCanonicalRecord(receipt.output_ref, "ok\\n");
+    const result = await runStage("build-code", contextFor("build-code", state), async () => ({
+      facts: {
+        tests: {
+          receipt_ref: ref,
+          receipt_hash: sha256(raw),
+          runtime_profile: receipt.runtime_profile,
+          runtime_profile_status: receipt.runtime_profile_status,
+          runtime_profile_authenticated: receipt.runtime_profile_authenticated,
+          capability_proof: receipt.capability_proof,
+          behavior_fingerprint: receipt.behavior_fingerprint,
+          behavior_fingerprint_status: receipt.behavior_fingerprint_status,
+          status: "passed",
+        },
+        source: "unavailable-profile-test",
+      },
+      evidence_refs: [{ ref, sha256: sha256(raw) }],
+    }));
+    const facts = result.quality_fact_refs.map((item) => JSON.parse(state.task.readRecord(item)));
+    expect(facts.find((item) => item.kind === "test")).toMatchObject({ status: "unavailable" });
+    expect(result).toMatchObject({ quality_status: "incomplete" });
+  });
+
   it("authenticates output bytes even for a failed receipt", async () => {
     const state = fixture("failed-receipt-output-binding");
     const receipt = {

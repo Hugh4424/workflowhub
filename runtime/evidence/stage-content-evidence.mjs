@@ -251,7 +251,7 @@ export function validateBrowserQaEvidence(value) {
   return Object.freeze(value);
 }
 
-const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "narrow_diff", "phase"]);
+const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "narrow_diff", "phase", "route_repair"]);
 const REVIEW_ATTEMPT_STATUSES = new Set(["completed", "executed", "failed", "unavailable"]);
 const SNAPSHOT = /^[a-f0-9]{40}$/i;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
@@ -271,6 +271,37 @@ function reviewBudgetResult({ ok, reason = null, route = null, budget_scope = "m
     counts: Object.freeze({ ...counts }),
     errors: Object.freeze([...errors]),
   });
+}
+
+const ROUTE_REPAIR_EXCLUDED_ERRORS = new Set([
+  "ROUTE_UNAVAILABLE", "MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "REVIEW_INPUT_TOO_LARGE",
+  "PROTOCOL_INCOMPATIBLE", "REVIEW_BROKER_START_FAILED", "REVIEW_STATUS_UNAVAILABLE",
+  "REVIEW_RUNTIME_EXPIRED", "REVIEW_RUNTIME_MISSING", "REVIEW_SOURCE_DRIFT",
+  "REVIEW_MATERIAL_MISMATCH", "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH",
+  "REVIEW_CANCELLED", "REVIEW_EXECUTION_TIMEOUT",
+]);
+
+function validateRouteRepairAttempt(attempt, request) {
+  if (!attempt) return "route_repair_attempt_missing";
+  if (attempt.dispatch_state !== "dispatched") return "route_repair_not_dispatched";
+  if (!new Set(["failed", "unavailable"]).has(attempt.status)
+      || !new Set(["failed", "unavailable"]).has(attempt.terminal_status)) return "route_repair_not_terminal_failure";
+  if (!HASH.test(attempt.route_identity ?? "") || !HASH.test(request.route_identity ?? "")) return "route_repair_identity_invalid";
+  if (attempt.route_identity === request.route_identity) return "route_repair_identity_unchanged";
+  if (!HASH.test(attempt.closure_identity ?? "") || !HASH.test(request.closure_identity ?? "")
+      || attempt.closure_identity !== request.closure_identity) return "route_repair_source_changed";
+  if (attempt.has_semantic_output !== false) return "route_repair_semantic_output_present";
+  if (typeof attempt.error_code !== "string" || !attempt.error_code.trim()
+      || ROUTE_REPAIR_EXCLUDED_ERRORS.has(attempt.error_code)) return "route_repair_failure_ineligible";
+  if (!Array.isArray(attempt.provider_attempts) || attempt.provider_attempts.length === 0) return "route_repair_provider_attempts_missing";
+  if (attempt.provider_attempts.some((member) => !member || !new Set(["failed", "cancelled"]).has(member.status)
+      || member.output_ref !== null || typeof member.error_code !== "string" || !member.error_code.trim())) {
+    return "route_repair_provider_failure_unverified";
+  }
+  if (attempt.provider_attempts.some((member) => ROUTE_REPAIR_EXCLUDED_ERRORS.has(member.error_code))) {
+    return "route_repair_provider_failure_ineligible";
+  }
+  return null;
 }
 
 /**
@@ -317,6 +348,7 @@ export function validateReviewBudget({ material_revision, attempts = [], canonic
     focused: currentAttempts.filter((attempt) => attempt?.kind === "focused").length,
     narrow_diff: currentAttempts.filter((attempt) => attempt?.kind === "narrow_diff").length,
     phase: currentAttempts.filter((attempt) => attempt?.kind === "phase" && attempt?.phase_id === request?.phase_id).length,
+    route_repair: currentAttempts.filter((attempt) => attempt?.kind === "route_repair").length,
   };
   if (errors.length) return reviewBudgetResult({ ok: false, reason: "budget_input_invalid", budget_scope: kind === "phase" ? "phase" : "material", counts, errors });
   if (kind === "phase") {
@@ -346,6 +378,22 @@ export function validateReviewBudget({ material_revision, attempts = [], canonic
     if (pathError) return reviewBudgetResult({ ok: false, reason: pathError, route: "ask_user", counts });
     if (counts.narrow_diff > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
     return reviewBudgetResult({ ok: true, route: "narrow_diff_reconciled", counts });
+  }
+  if (kind === "route_repair") {
+    if (canonicalAttempts === null) {
+      return reviewBudgetResult({ ok: false, reason: "route_repair_canonical_history_required", counts,
+        errors: ["route_repair_canonical_history_required"] });
+    }
+    if (counts.route_repair > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    const prior = currentAttempts.find((attempt) => attempt.attempt_ref === request.repair_attempt_ref);
+    const canonical = canonicalAttempts.find((attempt) => attempt?.attempt_ref === request.repair_attempt_ref);
+    if (!prior || !canonical || canonicalJson(prior) !== canonicalJson(canonical)) {
+      return reviewBudgetResult({ ok: false, reason: "route_repair_attempt_not_canonical", counts,
+        errors: ["route_repair_attempt_not_canonical"] });
+    }
+    const reason = validateRouteRepairAttempt(prior, request);
+    if (reason) return reviewBudgetResult({ ok: false, reason, route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "route_repair_review", counts });
   }
   return reviewBudgetResult({ ok: false, reason: "review_kind_invalid", counts, errors: ["review_kind_invalid"] });
 }

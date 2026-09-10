@@ -41,6 +41,166 @@ function result(errors, extras = {}) {
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), ...extras });
 }
 
+export const TEST_RUNTIME_PROFILE_NAMES = Object.freeze(["inner", "medium", "large"]);
+export const TEST_RUNTIME_PROFILE_LIMITS_MS = Object.freeze({
+  inner: 60_000,
+  medium: 300_000,
+  large: null,
+});
+const TEST_RUNTIME_CAPABILITIES = Object.freeze(["network", "db", "filesystem", "subprocess", "environment"]);
+const TEST_RUNTIME_PERMISSION_POLICIES = Object.freeze({
+  network: new Set(["deny", "localhost_only", "ci_only"]),
+  db: new Set(["deny", "localhost_only", "ci_only"]),
+  filesystem: new Set(["deny", "worktree_temp_only", "ci_only"]),
+  subprocess: new Set(["deny", "explicit_only", "ci_only"]),
+  environment: new Set(["local_ci", "ci_only"]),
+});
+const TEST_TIERS = new Set(["simple", "feature", "fullstack"]);
+const CAPABILITY_PROOF_STATUSES = new Set(["passed", "unavailable"]);
+const CAPABILITY_PROOF_DECISIONS = new Set([
+  "deny", "localhost_only", "worktree_temp_only", "explicit_only", "ci_only", "local_ci", "allow", "unknown",
+]);
+
+function isHash(value) {
+  return typeof value === "string" && HASH.test(value);
+}
+
+function validateCapabilityProof(value, errors, { requireProof, permissions = undefined }) {
+  if (value === undefined) {
+    if (requireProof) errors.push("capability proof is required");
+    return "unavailable";
+  }
+  if (!object(value)) {
+    errors.push("capability proof must be an object");
+    return "unavailable";
+  }
+  if (!CAPABILITY_PROOF_STATUSES.has(value.status)) {
+    errors.push("capability proof status must be passed or unavailable");
+    return "unknown";
+  }
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") {
+    errors.push("capability proof executor_id is required");
+  }
+  if (!Array.isArray(value.observations)) {
+    errors.push("capability proof observations must be an array");
+    return value.status;
+  }
+  const seen = new Set();
+  for (const observation of value.observations) {
+    if (!object(observation) || !TEST_RUNTIME_CAPABILITIES.includes(observation.capability)) {
+      errors.push("capability proof observation capability is invalid");
+      continue;
+    }
+    if (seen.has(observation.capability)) errors.push(`duplicate capability proof: ${observation.capability}`);
+    seen.add(observation.capability);
+    if (!CAPABILITY_PROOF_DECISIONS.has(observation.decision)) {
+      errors.push(`capability proof decision is invalid for ${observation.capability}`);
+      continue;
+    }
+    if (value.status === "passed") {
+      if (permissions?.[observation.capability] !== undefined
+          && (observation.requested !== permissions[observation.capability]
+            || observation.decision !== permissions[observation.capability])) {
+        errors.push(`capability proof decision does not match ${observation.capability} permission`);
+      }
+      if (typeof observation.requested !== "string" || observation.requested.trim() === "") {
+        errors.push(`capability proof requested policy is required for ${observation.capability}`);
+      }
+      if (typeof observation.mechanism !== "string" || observation.mechanism.trim() === "") {
+        errors.push(`capability proof mechanism is required for ${observation.capability}`);
+      }
+      if (typeof observation.proof_ref !== "string" || observation.proof_ref.trim() === "" || !isHash(observation.proof_hash)) {
+        errors.push(`capability proof ref/hash is required for ${observation.capability}`);
+      }
+      if (observation.observed !== true) errors.push(`capability proof observation is not authenticated for ${observation.capability}`);
+    }
+  }
+  if (value.status === "passed" && seen.size !== TEST_RUNTIME_CAPABILITIES.length) {
+    errors.push("capability proof must cover every runtime capability");
+  }
+  if (value.status === "passed") {
+    for (const observation of value.observations) {
+      if (observation.decision === "unknown" || observation.decision === "allow") {
+        errors.push(`capability proof ${observation.capability} is not a constrained decision`);
+      }
+    }
+  }
+  return value.status;
+}
+
+/**
+ * Validate the test runtime profile independently from the test tier.
+ * This is a descriptive contract: the executor must attach capability proof;
+ * an unavailable proof is preserved as unavailable and is never a pass.
+ */
+export function validateTestRuntimeProfile(value, { requireProof = false, allowUnavailable = false, declarationOnly = false } = {}) {
+  const errors = [];
+  if (!object(value)) return result(["test runtime profile must be an object"], { status: "incomplete" });
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(value.runtime_profile)) errors.push("runtime profile must be inner, medium, or large");
+  if (value.test_tier !== undefined && !TEST_TIERS.has(value.test_tier)) errors.push("test tier is invalid");
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") errors.push("runtime profile executor_id is required");
+  const profile = value.runtime_profile;
+  const ceiling = value.ceiling_ms;
+  if (!Number.isSafeInteger(ceiling) || ceiling < 1) errors.push("runtime profile ceiling_ms must be a positive integer");
+  else if (TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== null && TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== undefined && ceiling > TEST_RUNTIME_PROFILE_LIMITS_MS[profile]) {
+    errors.push(`${profile} runtime profile ceiling exceeds ${TEST_RUNTIME_PROFILE_LIMITS_MS[profile]}ms`);
+  }
+  if (profile === "large" && value.permissions?.environment !== "ci_only") {
+    errors.push("large runtime profile requires CI-only environment");
+  }
+  if (profile === "large" && !declarationOnly && value.capability_proof?.status === "passed" && value.permissions?.environment !== "ci_only") {
+    errors.push("large runtime profile proof requires CI-only environment");
+  }
+  if (!object(value.permissions)) {
+    errors.push("runtime profile permissions are required");
+  } else {
+    for (const capability of TEST_RUNTIME_CAPABILITIES) {
+      const policy = value.permissions[capability];
+      if (!TEST_RUNTIME_PERMISSION_POLICIES[capability].has(policy)) {
+        errors.push(`${capability} permission policy is invalid`);
+      }
+    }
+    const expected = profile === "inner"
+      ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny" }
+      : profile === "medium"
+        ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" }
+        : null;
+    for (const [capability, policy] of Object.entries(expected ?? {})) {
+      if (value.permissions[capability] !== policy) errors.push(`${profile} ${capability} permission must be ${policy}`);
+    }
+    if (profile === "large" && value.permissions.environment !== "ci_only") errors.push("large environment permission must be ci_only");
+    if (profile === "large" && Object.values(value.permissions).some((policy) => policy === "unknown")) errors.push("large unknown permission is denied");
+    if (profile === "medium" && value.permissions.environment !== "local_ci" && value.permissions.environment !== "ci_only") errors.push("medium environment must be local_ci or ci_only");
+    if (profile === "inner" && value.permissions.environment !== "local_ci") errors.push("inner environment permission must be local_ci");
+  }
+  if (value.behavior_fingerprint !== undefined) {
+    const fingerprint = value.behavior_fingerprint;
+    for (const side of ["before", "after"]) {
+      if (!object(fingerprint?.[side])) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      } else if (!(fingerprint[side].selection_hash === null && fingerprint[side].assertion_hash === null)
+          && (!isHash(fingerprint[side].selection_hash) || !isHash(fingerprint[side].assertion_hash))) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      }
+    }
+    if (isHash(fingerprint?.before?.selection_hash) && isHash(fingerprint?.after?.selection_hash)
+        && fingerprint.before.selection_hash !== fingerprint.after.selection_hash) errors.push("behavior selection fingerprint must remain equal");
+    if (isHash(fingerprint?.before?.assertion_hash) && isHash(fingerprint?.after?.assertion_hash)
+        && fingerprint.before.assertion_hash !== fingerprint.after.assertion_hash) errors.push("behavior assertion fingerprint must remain equal");
+  } else if (requireProof) {
+    errors.push("behavior fingerprint is required");
+  }
+  const proofStatus = validateCapabilityProof(value.capability_proof, errors, { requireProof, permissions: value.permissions });
+  if (proofStatus === "passed" && value.capability_proof.executor_id !== value.executor_id) errors.push("capability proof executor_id must match runtime profile executor_id");
+  if (proofStatus === "unknown") errors.push("capability proof is unavailable");
+  if (errors.length > 0) return result(errors, { status: proofStatus === "unavailable" || proofStatus === "unknown" ? "unavailable" : "incomplete" });
+  if (proofStatus === "unavailable") {
+    if (!allowUnavailable && !declarationOnly) return result(["capability proof is unavailable"], { status: "unavailable" });
+    return result([], { ok: false, status: "unavailable", profile: value.runtime_profile });
+  }
+  return result([], { status: "ready", profile: value.runtime_profile });
+}
+
 function schemaErrors(validate) {
   return (validate.errors ?? []).map((error) => {
     const missing = error.params?.missingProperty;
@@ -3635,10 +3795,24 @@ function inlinePaths(value) {
   return [...new Set([...String(value ?? "").matchAll(/`([^`\n]+)`/g)].map((match) => match[1]))];
 }
 
-function phaseChangePaths(filesBody) {
+function phasePaths(filesBody, includeReadOnlyConsumer = false) {
+  const pattern = includeReadOnlyConsumer
+    ? /\*\*(?:NEW|MODIFY|READ-ONLY CONSUMER)\*\*/i
+    : /\*\*(?:NEW|MODIFY)\*\*/i;
   return new Set(String(filesBody ?? "").split(/\r?\n/)
-    .filter((line) => /\*\*(?:NEW|MODIFY)\*\*/i.test(line))
+    .filter((line) => pattern.test(line))
     .flatMap((line) => inlinePaths(line)));
+}
+
+function phaseChangePaths(filesBody) {
+  // READ-ONLY CONSUMER is an owned phase input for task boundary validation,
+  // but it must not be promoted to a write boundary or global File Boundary
+  // requirement.
+  return phasePaths(filesBody, true);
+}
+
+function phaseWritePaths(filesBody) {
+  return phasePaths(filesBody, false);
 }
 
 function globalChangePaths(fileBoundaryBody) {
@@ -5456,6 +5630,16 @@ export function validatePlanTaskContract({
     if (task.fields.ID && task.fields.ID !== task.heading_id) errors.push(`task heading/ID mismatch: ${task.heading_id} != ${task.fields.ID}`);
     if (task.fields.gate_cmd && !hasExecutableCommand(task.fields.gate_cmd)) errors.push(`${task.heading_id} gate_cmd is not an executable command`);
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
+    if (tasksVersion === PLAN_TASK_V4 && /\bFR-TEST-001\b/.test(spec)) {
+      const profileDeclaration = `${task.fields["test tier / test method"] ?? ""} ${task.fields["runtime profile"] ?? ""}`;
+      const runtimeProfile = profileDeclaration.match(/\bruntime\s+profile\s*[=:：]\s*(inner|medium|large)\b/i)?.[1]?.toLowerCase();
+      if (!runtimeProfile) errors.push(`${task.heading_id} runtime profile must declare inner, medium, or large`);
+      else if (!/\b(?:ceiling|上限)\s*[=:：]\s*\d+\s*(?:ms|s|秒)\b/i.test(profileDeclaration)) errors.push(`${task.heading_id} runtime profile must declare a duration ceiling`);
+      const permissions = String(task.fields["runtime permissions"] ?? "");
+      for (const capability of ["network", "db", "filesystem", "subprocess", "environment"]) {
+        if (!new RegExp(`\\b${capability}\\s*=` , "i").test(permissions)) errors.push(`${task.heading_id} runtime permissions missing ${capability}`);
+      }
+    }
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
     const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
     const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)
@@ -5511,7 +5695,7 @@ export function validatePlanTaskContract({
         if (!allowed.has(file)) errors.push(`${task.id} file/boundary is outside ${task.phase} NEW/MODIFY: ${file}`);
       }
     }
-    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseChangePaths(row.fields.Files)]));
+    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseWritePaths(row.fields.Files)]));
     const globalUnion = globalChangePaths(findPlanSection("File Boundary")?.body);
     for (const file of phaseUnion) {
       if (!globalUnion.has(file)) errors.push(`global File Boundary is missing Phase NEW/MODIFY file: ${file}`);

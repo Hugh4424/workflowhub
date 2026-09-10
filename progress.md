@@ -1,15 +1,61 @@
 # Progress
 
-## 2026-09-09 — resumed implementation
-- Confirmed target worktree and authenticated build-code workspace.
-- Completed P3 metadata refresh after final runner scope binding; fixed and revalidated move-map JSON.
-- Ran P3 closure/provenance/contract tests: 35/35 passed.
-- Ran focused material/route regressions: 85/85 passed.
-- Confirmed manifest and diff checks pass.
-- Started authority reconciliation; no T007 test or production implementation has been run yet.
-- Authority reconciliation found T003 pending with no RED receipt; T004/T006 dependent implementation facts cannot retroactively prove it. Execution zones now record the discrepancy, current plan hash, and P4 scope blocker without claiming pass.
-- Independent P3 audit found additional finalization/recorder/helper identity gaps; a same-task repair is pending before any build-code handoff.
-- P4 feasibility audit confirmed planning close is blocked by TaskKernel's four-material authorization context; no P4 implementation or RED is claimed.
-- Read-only official build-code status was queried after P3 hardening: `work_status=ready`, but `quality_status=in_progress`; risk tests, AC facts, stage-end spec-analyze, finding dispositions, integration review, and stage outcome are all missing. This is readiness projection only, not permission or completion.
-- Current focused P3 worker verification reported green before the latest recorder/finalizer repair workers: simple runner 42/42, review runner 19/19, recorder 50/50, CLI 29/29, semantic projection 7/7, materials 40/40, build-prd contract 7/7; syntax and diff checks passed. Source edits remain non-quiescent, so provenance is not refreshed and build-code has not started.
-- Literal next incomplete card remains T003 pending: no authenticated RED receipt, and T003 is test-only. Do not backfill the receipt or skip to T007; T006 same-task P3 repairs remain open.
+## 2026-09-09
+- Resumed after make-decision completion.
+- Verified authenticated worktree and branch.
+- Loaded full build-spec/build-plan workflow packages, steps, and skill dependencies.
+- Created persistent planning files.
+
+## Current
+Build-code implementation is stopped before close in the authenticated worktree/branch. P1-P3 targeted behavior is green with unavailable capability/review quality facts. P4 paired gate and P5 repaired paired gate now run 22/22 with their current archive/read-only-consumer bindings; formal phase review and profile capability proof remain unavailable. P6 fail-closed harness passes the official large target (1/1, `CI=true`) but reports `status=incomplete` because no user-selected real task or authenticated host usage ref was supplied. An incomplete verify-code audit was continued: one architecture finding was fixed and the affected P3 gate is now 150/150; the one heterologous review attempt remains unavailable with provider lifecycle cancellation facts. Official build-code and verify-code projections remain incomplete; close/commit/push/merge/archive/cleanup are unexecuted.
+
+## Latest recheck — 2026-09-09
+- Published current unavailable build-code Stage Agent outcome `quality/evidence/stage-outcomes/build-code/b9339ff221e1c733513ee587635d6bbf9bdcd9b4007c5ee1ab2936f0012d0f96.json` for snapshot `07df20832bcd62ac8f25be06f3e5a58b843fe625` and material revision `revision-20603dac3ba10418ed3f51a160776d08df5bddf4ca052793e265d8aa75769ddd`.
+- Official build-code run consumed the current implementation receipt, P6 test receipt, current integration-review attempt `d903883f-4380-57ff-a960-f2f81460e43a`, and the current Stage Agent outcome. Exit 0; projection remains `status=in_progress`, `quality_status=incomplete`. The run satisfied fresh tests and local acceptance execution in its result, while the status projection still reports acceptance freshness, stage-end spec-analyze, finding dispositions, and stage outcome missing; integration review is explicitly `unavailable`.
+- Published current unavailable verify-code Stage Agent outcome `quality/evidence/stage-outcomes/verify-code/7f75a2cbfb1275aa974c2e1fab6ada07d7d12911ec8f1c0386d9a425e70b9e46.json`. Official verify-code run exit 0 and remains incomplete: `code_review` is missing, Stage Agent and reflection are unavailable; no review pass was claimed.
+- Final affected regression after the audit fix: 3 files / 60 tests passed. `git diff --check` passes. Temporary input files were removed; no commit, push, merge, archive, cleanup, or close was performed.
+
+## Build-spec observations
+- Runtime readiness is `ready`; no prior `spec.md` exists.
+- Loaded canonical `spec-content.v3` template and strict validator headings/ID rules.
+- Decision-log D-001..D-010 provides explicit scope and behavior contracts; conditional UI path is non_ui.
+- Source-index agent completed: `/tmp/wh-accel/build-spec-source-index.md` (`236c82ca…`); no direction ambiguity, but 15 concrete contract questions require build-spec specification.
+- Contract-research and publication-recipe agents are still running; a separate packet-local draft agent is drafting `/tmp/wh-accel/spec-draft.md` without worktree writes.
+- Loaded build-plan `plan-task.v4` plan/tasks templates early so the spec does not smuggle engineering commands or code anchors downstream.
+- Completed build-spec steps 1–5: research executed, clarify trigger=false/open=0, spec drafted and officially persisted, simplicity narrowed to existing controls only.
+- Direct current-spec validators all pass. `tests/spec-content-profile.test.mjs` passed 21/21. A combined focused command also exposed 2 unrelated ENOENT fixture failures because archived `workflowhub-review-flow-repair-20260906` is absent from this worktree; recorded without work-around.
+- Build-spec steps 7–9 are explicitly non_ui/N/A based on PFACT-006 and decision-log UI applicability.
+- Canonical review first blocked before dispatch because build-spec forbids review_track; immutable attempt `6792831c…` preserved. Correct retry omitted the field and produced canonical result `build-spec-simple-05e1defe…` with 10 major findings.
+- Repaired all canonical/local findings in spec: lifecycle/ownership matrix, typed errors, atomic closure checks, worker enforcement and hash semantics, exact metric windows, profile permission matrix, full AC mutation matrix, clean-empty-findings semantics, ADR 0025 exact two-clause wording, and existing-container reuse map.
+- Focused canonical repair review found 11 residual majors; a disposition verifier independently confirmed 6 unresolved issues. Final repair added atomic start recovery, distinct expired/missing/drift errors, producer-role enforcement, capability proof requirement, precise provenance tolerance, lifecycle table-driven AC, real-task-only rerun, and removed duplicate OPEN. Current spec is 532 lines and all direct validators pass.
+- Build-spec closure delegation timed out without publication, so main session completed the official route. Authenticated outcome: `quality/evidence/stage-outcomes/build-spec/575edb11...json`; analyzer `consistent`, 20/25 covered + 5 deferred, all 15 step rows present. Reflection: `quality/stage-reflection/build-spec/96d88ac2...json`, degraded with real lessons.
+- Public build-spec completion predicates all satisfied, but quality remains honestly `incomplete`: decision-freeze reader expects `host_evidence.source_ref|confirmation_ref`, while the current canonical make-decision approval proof stores `host_evidence.ref`. No runtime edit was made during build-spec; build-plan must add a first RED/GREEN compatibility card.
+- Build-plan contract report completed; engineering investigator returned exact code anchors. An attempted delegated draft again exceeded the bounded pass and was stopped before writing; main session remained the sole material writer.
+- Authored `plan.md`/`tasks.md` v4 and iterated through direct validators plus canonical reviews. Major repairs: removed unrelated freeze bug from spec AC ownership; split governance/profile/review/coord/fresh/delivery into six seams; made RED test-only; added capability-proof executor consumer; added real-task bindings/usage schema; added broker terminal/member-harvest rollback; synchronized governance owners, commands, evidence paths, decision/spec/plan hashes and task dependencies.
+- Current plan/task validators both pass. Focused plan contract tests pass 42/42. Latest frozen plan/tasks were published through official draft route.
+- User approved final material revision after a deletion-proof-only amendment and independent narrow PASS review.
+- Authenticated build-plan outcome published: `quality/evidence/stage-outcomes/build-plan/8db0cf7f82cbf2ab6f4ba57e83ca00b90c471d2723dffb4052f02959c43e0b60.json`; spec-analyze consistent (20/25 covered, 5 deferred).
+- Stage reflection command completed with degraded reflection (compaction/truncation and telemetry unavailable are explicit); lesson `lessons/build-plan.jsonl#reflection-439e3fce2219e632f64ac966bac1c939`.
+- Final official build-plan evaluation: status=completed, completion=completed, missing=[]; quality_status=incomplete remains truthful due known decision-freeze ref/source_ref incompatibility plus advisory semantic-review/disposition projections. No build-code action executed.
+- New user request authorizes build-code followed by verify-code, stopping before close. Correct branch/worktree verified; no production changes existed at entry. Build-code official readiness is `ready`, with expected quality facts missing until execution.
+- Build-code workflow requires 16 steps, per-phase RED/GREEN and review, real targeted tests, authenticated outcome, final reflection; verify-code requires 12 steps and one architect/repair/independent-review/repair cycle.
+
+## P1 build-code progress
+- RED fact: legacy `run-checks.mjs` ignored `--runtime-profile`, `--evidence-path`, and explicit target argv; aggregate mode exposed five unrelated baseline `check-task-record-paths` failures. No RED evidence was written by the legacy path.
+- GREEN implementation: added explicit argv profile executor; runtime profile validator; canonical receipt profile/proof/fingerprint/duration fields; profile/proof/fingerprint reuse identity; create-only `quality/tests` evidence; stage handler fact passthrough; stage-runner receipt/fact binding and unavailable-is-not-pass status.
+- Targeted tests: 86/86 passed across `tests/official-component-receipts.test.mjs`, `tests/stage-plan-task-contract-v3.test.mjs`, and `tests/contract/test-runtime-profile.test.mjs`; syntax/diff checks passed.
+- Authenticated profiled gate: exit 0 using actual receipt path `tests/official-component-receipts.test.mjs`; `quality/tests/p1-profile.json` records target_passed_profile_unavailable, quality_status unavailable, capability proof unavailable, null behavior fingerprint, duration 38.7s.
+- Independent review disposition: self-asserted fingerprints and invented tier fixed; unavailable capability remains explicit and cannot satisfy pass. Stage handler/runner now carries profile fields, publishes `unavailable` rather than normalizing to `missing`, and rejects profile-unavailable exit-zero facts as quality pass. Freshness, close, AC-summary, review-material, and review-CLI consumers now reject unavailable profile as passing evidence.
+- Final independent P1 review PASS: no blocking/high findings. P1 execution-status blocks record completed facts; quality remains incomplete/unavailable for capability enforcement and semantic behavior fingerprint. P2 is now active; no close/commit/push/merge performed.
+
+## P2 governance progress
+- RED governance contract: 2 failures (ADR 0025 missing; ADR 0007 approved wording assertion absent).
+- GREEN: added ADR 0025 and exact approved clarifications only in ADR 0007 and standard-workflow; targeted governance contract 3/3 passed; evidence `quality/tests/p2-governance.json` explicitly quality_status unavailable.
+- P2 independent review remains pending in the task materials, but P3 targeted implementation has since completed.
+
+## P3-P5 build-code progress
+- P3 T007 RED is preserved in `quality/tests/p3-review.json`; the corrected six-file T008 gate passes 150/150 in `quality/tests/p3-review-green-4.json`. Managed lifecycle, preflight, deterministic recovery seam, drift attempt persistence, and typed plain-text stderr failure classification are implemented; runtime profile and formal review quality remain unavailable.
+- P4 T009 RED is preserved in `quality/tests/p4-coord.json`; the repaired contract now reads the archived historical fixture explicitly and the paired gate passes 22/22 in `quality/tests/p4-coord-plan-repaired-20260909.json`. The archive remains read-only historical input, not current material; formal P4 review and capability proof remain unavailable.
+- P5 T011 RED is preserved in `quality/tests/p5-fresh.json`; material-only revision tolerance is implemented in `evaluateFactFreshness`. The repaired plan/task gate uses the actual read-only consumer `tests/integration/verify-freshness-selection.test.mjs` and passes 22/22 in `quality/tests/p5-fresh-plan-repaired-20260909.json`; formal P5 review and capability proof remain unavailable.
+- P6 T013 now has `tests/acceptance/workflow-execution-real-task.test.mjs` as a fail-closed harness. `quality/tests/final-current-snapshot-repaired-20260909.json` records large target exit=0 and 1/1 test passed, but `quality_status=unavailable`, `status=incomplete`, and all real-task bindings are missing. Keep AC-COORD-001/004 and AC-DELIVERY-001 incomplete; fixture-only evidence is prohibited.
+- Build-code stage-end review/reflection/outcome and required current predicates remain unavailable/incomplete rather than fabricated. Verify-code was run only as an incomplete audit: the final affected review-client/lifecycle check passed 3 files/60 tests, but the current code-review predicate remains missing because the dsh review result was unreadable and the single heterologous attempt was unavailable; the unavailable stage-agent outcome is recorded at `quality/evidence/stage-outcomes/verify-code/7936f1c7b91ee85f9db389168df9f29fb33cb420995c5078a68847b9bb4c09ca.json`. The current real-task/host-usage binding is still absent, so build-code cannot close. Close/commit/push/merge/archive/cleanup remain unexecuted.

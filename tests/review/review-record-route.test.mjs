@@ -1013,6 +1013,187 @@ describe("T006 trusted review-round budget from actual task history", () => {
   });
 });
 
+describe("T014 authenticated route-repair review budget", () => {
+  const route = (value) => () => ({ route_identity: value.repeat(64) });
+  const request = () => ({ stage: "build-code", host_provider: "codex/luna", materials: { implementation: "route repair fixture" } });
+  const providerFailure = (input) => {
+    const result = { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+    result.status = "unavailable";
+    result.outcome = "unavailable";
+    result.findings = [];
+    result.provider_results = result.provider_results.map((member) => ({
+      ...member,
+      status: "failed",
+      error: { code: "PROCESS_DEAD", message: "selected provider route failed" },
+      evidence_anchor_valid: [],
+    }));
+    result.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "all selected providers failed" };
+    return result;
+  };
+
+  it("permits exactly one same-revision retry after a canonical provider failure and changed host route identity", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      return calls === 1
+        ? providerFailure(received)
+        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+
+    const first = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    expect(JSON.parse(task.readRecord(first.attempt_ref)).provider_attempts).toMatchObject([{ status: "failed" }]);
+
+    const repaired = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(2);
+    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
+    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
+
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("c") });
+    expect(calls).toBe(2);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" }, review_budget: { counts: { route_repair: 1 } } });
+  });
+
+  it.each(["successful", "failed"])("ignores a %s old-revision attempt when repairing the latest current-revision provider failure", async (oldOutcome) => {
+    const { task, kernel, artifacts } = makeTask();
+    const oldInput = { ...request(), materials: { implementation: `old revision ${oldOutcome}` } };
+    const currentInput = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      if (received.materials.implementation === oldInput.materials.implementation) {
+        return oldOutcome === "failed"
+          ? providerFailure(received)
+          : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+      }
+      return calls === 2
+        ? providerFailure(received)
+        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+
+    await recordRequest({ task, kernel, request: oldInput, runRound, resolveRouteIdentity: route("c") });
+    artifacts.writeAtomic("spec.md", `# Current revision after old ${oldOutcome} review\n`);
+    const currentFailure = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("a") });
+    expect(task.readRecord(currentFailure.report_ref)).toContain('"kind": "focused"');
+
+    const repaired = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(3);
+    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
+    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
+  });
+
+  it.each([
+    ["zero provider attempts", (result) => ({ ...result, provider_results: [], error: { code: "REVIEW_STATUS_UNAVAILABLE", message: "status unavailable" } })],
+    ["protocol failure", (result) => ({ ...result, error: { code: "PROTOCOL_INCOMPATIBLE", message: "protocol mismatch" } })],
+    ["semantic output", (result) => ({ ...result, status: "available-with-failures", outcome: "partial", findings: baseResult().findings,
+      provider_results: baseResult().provider_results, error: { code: "REVIEW_QUORUM_INCOMPLETE", message: "partial result" } })],
+  ])("does not grant route-repair budget for %s", async (_name, mutate) => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const failed = providerFailure(received);
+      return calls === 1 ? mutate(failed) : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+  });
+
+  it("does not grant route-repair budget when the host route identity did not change", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const reused = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("a") });
+    expect(calls).toBe(1);
+    expect(reused.reused).toBe(true);
+    expect(reused.review_budget.ok).toBe(false);
+  });
+
+  it.each(["materials", "snapshot"])("does not treat a route change plus changed %s as route repair", async (changed) => {
+    const { task, kernel, candidateWorkspace } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    if (changed === "snapshot") writeFileSync(join(candidateWorkspace.worktreeRoot, "route-repair-code.mjs"), "export const changed = true;\n");
+    const nextRequest = changed === "materials" ? { ...input, materials: { implementation: "different review packet" } } : input;
+    const denied = await recordRequest({ task, kernel, request: nextRequest, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+    expect(denied.review_budget.route).not.toBe("route_repair_review");
+  });
+
+  it("does not treat a route change plus changed review subject as route repair", async () => {
+    const { task, kernel } = makeTask();
+    const input = { ...request(), subject: { component: "runtime/review" } };
+    let calls = 0;
+    const runRound = async (received) => { calls += 1; return providerFailure(received); };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel,
+      request: { ...input, subject: { component: "runtime/evidence" } }, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+  });
+
+  it("rejects a generic aggregate failure whose provider member has an excluded protocol error", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const failed = providerFailure(received);
+      failed.provider_results[0].error = { code: "PROTOCOL_INCOMPATIBLE", message: "member protocol mismatch" };
+      return failed;
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
+  });
+
+  it("rejects route repair when either failed member of a paired review has an excluded error", async () => {
+    const { task, kernel } = makeTask();
+    const input = { stage: "make-decision", review_track: "detail", host_provider: "codex/luna", materials: { decision: "paired route repair" } };
+    let calls = 0;
+    const runRound = async (received) => {
+      calls += 1;
+      const raw = pairedResult({ redAvailable: false, blueAvailable: false });
+      raw.material_id = createSimpleReviewPacket(received).material_id;
+      for (const role of ["red", "blue"]) raw.role_results[role].material_id = raw.material_id;
+      raw.role_results.blue.provider_results[0].error = { code: "REVIEW_MATERIAL_MISMATCH", message: "blue member material mismatch" };
+      raw.role_results.blue.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "generic paired failure" };
+      return raw;
+    };
+    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(1);
+    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
+  });
+
+  it("keeps a canonical attempt without authenticated route identity ineligible", async () => {
+    const { task, kernel } = makeTask();
+    const input = request();
+    const failed = providerFailure(input);
+    recordSimpleReviewResult({ task, kernel, result: failed });
+    let calls = 0;
+    const denied = await recordRequest({ task, kernel, request: input,
+      runRound: async () => { calls += 1; return baseResult(); }, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(0);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+  });
+});
+
 describe("T006 paired budget counts", () => {
   it("counts the two role attempts as one initial round when refusing an unproven retry", async () => {
     const { task, kernel } = makeTask();

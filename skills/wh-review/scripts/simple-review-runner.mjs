@@ -14,6 +14,9 @@ import { providerAdapter } from "../../../runtime/review/canonical-review-result
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 
+const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 60 * 60 * 1000;
+const DEFAULT_MANAGED_STATUS_POLL_MS = 1000;
+
 function redactHostPaths(value) {
   if (typeof value !== "string") return value;
   let redacted = "";
@@ -63,6 +66,27 @@ const FOCUS = Object.freeze({
 });
 
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+  return value;
+}
+
+function managedRequestId(input, { materialId, hostProvider, providers, providerIdentities, reviewMode, prompt }) {
+  const subject = {
+    stage: input.stage,
+    review_track: input.review_track ?? input.reviewTrack ?? null,
+    review_kind: input.review_kind ?? input.reviewKind ?? null,
+    review_scope: input.review_scope ?? input.reviewScope ?? null,
+    subject_kind: input.subject_kind ?? null,
+    phase_id: input.phase_id ?? null,
+    pair_id: input.pair_id ?? input.pairId ?? null,
+    role: input.role ?? null,
+  };
+  const identity = stableValue({ material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, review_mode: reviewMode, prompt, subject });
+  return "wh-review-" + hash(JSON.stringify(identity));
+}
 
 function providerSelectionShape(selection) {
   const providers = Array.isArray(selection) ? [...selection] : selection?.providers;
@@ -387,6 +411,38 @@ function buildBundle(attachmentRoot, input) {
   };
 }
 
+async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials }, dependencies) {
+  const maxWaitMs = dependencies.managedTerminalWaitMs ?? DEFAULT_MANAGED_TERMINAL_WAIT_MS;
+  const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
+  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0) throw new TypeError("managedTerminalWaitMs must be a non-negative safe integer");
+  if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
+  const startedAt = Date.now();
+  let current = lifecycle;
+  let cancelRequested = false;
+  const context = { requestId, hostProvider, providers, materials, runtimeId: lifecycle.runtime_id };
+  try {
+    while (current.state !== "terminal") {
+      current = await client.statusManaged(context);
+      if (current.state === "terminal") return current;
+      if (Date.now() - startedAt >= maxWaitMs) {
+        cancelRequested = true;
+        const cancelled = await client.cancelManaged(context);
+        if (cancelled?.state === "terminal") return cancelled;
+        const error = new Error("managed review did not reach a terminal state within the bounded wait");
+        error.code = "REVIEW_STATUS_UNAVAILABLE";
+        throw error;
+      }
+      if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    return current;
+  } catch (error) {
+    if (!cancelRequested && current?.state !== "terminal" && typeof client.cancelManaged === "function") {
+      try { await client.cancelManaged(context); } catch { /* preserve the status failure */ }
+    }
+    throw error;
+  }
+}
+
 function materialIdForInput(input) {
   // Mirror buildBundle exactly: the provider-visible identity is computed over
   // host-path-redacted values, never over raw caller bytes.
@@ -697,6 +753,8 @@ function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
     error: item.error === null || item.error === undefined ? null : normalizeProviderError(item.error, { preserveCode: true }),
     timing: item.timing,
     usage: item.usage,
+    ...(item.execution ? { execution: item.execution } : {}),
+    ...(item.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
   };
 }
@@ -740,6 +798,30 @@ function unavailableReason(providers) {
   const error = providers.find((item) => item?.error && typeof item.error === "object")?.error;
   return error ? normalizeProviderError(error)
     : { code: "REVIEW_NO_SEMANTIC_RESULT", message: "no provider produced a semantic review result" };
+}
+
+function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
+  const group = lifecycle?.group;
+  if (!group || !Array.isArray(group.providers)) throw Object.assign(new Error("managed lifecycle did not return a terminal provider group"), { code: "PROTOCOL_INCOMPATIBLE" });
+  const materialId = group.material_id ?? group.materialId ?? lifecycle.material_id ?? lifecycle.materialId;
+  return {
+    runtimeId: group.runtime_id,
+    outcome: group.outcome,
+    round: group.round,
+    selectedTier: group.selected_tier,
+    ...(materialId === undefined ? {} : { material_id: materialId }),
+    providers: group.providers.map((item) => ({
+      ...item,
+      provider: item.provider,
+      // Managed V2 intentionally omits source identity. Only the trusted
+      // route selection may supply it; never copy identity-like fields from
+      // the broker member or invent a fallback identity.
+      identity: selectedIdentities?.[item.provider]
+        ? { provider: item.provider, ...selectedIdentities[item.provider] }
+        : null,
+      ...(pair ? pairFields(pair) : {}),
+    })),
+  };
 }
 
 async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
@@ -794,7 +876,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       const projection = compactVerifyCodeMaterials(canonicalInput.materials);
       reviewInput = projection.diff === null ? canonicalInput : { ...canonicalInput, materials: projection.materials };
     } catch (error) {
-      return unavailableResult(canonicalInput, normalizeProviderError(error), pair);
+      return blockedPreflight(canonicalInput, "REVIEW_INPUT_TOO_LARGE", error?.message ?? "verify-code provider input exceeds the bounded budget", preflightDiagnostic({
+        field: "provider_input",
+        expected: "within the bounded provider input budget",
+        actual: "oversized",
+        nextAction: "shrink the review closure and retry",
+      }), pair);
     }
   }
 
@@ -852,7 +939,13 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   const selectedSet = new Set(selectedProviders);
   let bundle;
   try {
-    bundle = buildBundle(trusted.attachmentRoot, reviewInput);
+    bundle = typeof dependencies.buildBundle === "function"
+      ? dependencies.buildBundle(trusted.attachmentRoot, reviewInput)
+      : buildBundle(trusted.attachmentRoot, reviewInput);
+    if (!bundle || typeof bundle !== "object" || typeof bundle.materialId !== "string"
+        || typeof bundle.bundleRoot !== "string" || typeof bundle.dispose !== "function") {
+      throw new TypeError("prepared review bundle is invalid");
+    }
   } catch (error) {
     return unavailableResult(reviewInput, normalizeProviderError(error), pair, {
       provider_selection: {
@@ -863,25 +956,65 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   }
   try {
     const client = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
+    const hostProvider = input.host_provider ?? input.hostProvider;
+    const prompt = promptForPair(pair);
     let group;
-    try {
-      group = await client.runGroup({
-        hostProvider: input.host_provider ?? input.hostProvider,
+    if (typeof client.startManaged === "function") {
+      const requestId = managedRequestId(input, {
+        materialId: bundle.materialId,
+        hostProvider,
         providers: selectedProviders,
-        materials: bundle,
-        prompt: promptForPair(pair),
+        providerIdentities: selectedIdentities,
         reviewMode: route.mode,
-        strictProtocol: false,
-        ...pairFields(pair),
+        prompt,
       });
-    } catch (error) {
-      return unavailableResult(canonicalInput, normalizeProviderError(error), pair, {
-        minimum_heterologous: route.minimum_heterologous,
-        provider_selection: {
-          providers: [...selectedProviders],
-          provider_identities: selectedIdentities,
-        },
-      });
+      let lifecycle = null;
+      try {
+        lifecycle = await client.startManaged({
+          requestId, hostProvider, providers: selectedProviders, materials: bundle, prompt,
+          reviewMode: route.mode,
+          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+        });
+        if (lifecycle.state !== "terminal") {
+          const consumeTerminal = dependencies.onManagedTerminal
+            ?? ((value) => waitForManagedTerminal(value, dependencies));
+          const terminal = await consumeTerminal({
+            lifecycle, client, requestId, hostProvider, providers: selectedProviders,
+            materials: bundle, prompt, reviewMode: route.mode,
+          });
+          lifecycle = terminal?.state ? terminal : { ...lifecycle, state: "terminal", group: terminal };
+        }
+        if (lifecycle?.state !== "terminal") throw Object.assign(new Error("managed review terminal event is invalid"), { code: "PROTOCOL_INCOMPATIBLE" });
+        group = normalizeManagedGroup(lifecycle, selectedIdentities, pair);
+      } catch (error) {
+        return unavailableResult(input, normalizeProviderError(error), pair, {
+          dispatch_state: lifecycle ? "dispatched" : "blocked_before_dispatch",
+          request_id: requestId,
+          runtime_id: lifecycle?.runtime_id ?? null,
+          minimum_heterologous: route.minimum_heterologous,
+          provider_selection: { providers: [...selectedProviders], provider_identities: selectedIdentities },
+        });
+      }
+    } else {
+      try {
+        group = await client.runGroup({
+          hostProvider,
+          providers: selectedProviders,
+          materials: bundle,
+          prompt,
+          reviewMode: route.mode,
+          strictProtocol: false,
+          ...pairFields(pair),
+        });
+      } catch (error) {
+        return unavailableResult(input, normalizeProviderError(error), pair, {
+          minimum_heterologous: route.minimum_heterologous,
+          provider_selection: {
+            providers: [...selectedProviders],
+            provider_identities: selectedIdentities,
+          },
+        });
+      }
     }
     const brokerMaterialIds = ["material_id", "materialId"]
       .filter((key) => Object.prototype.hasOwnProperty.call(group ?? {}, key))
@@ -891,7 +1024,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         code: "REVIEW_MATERIAL_IDENTITY_MISMATCH",
         message: "broker material identity does not match the submitted review bundle",
       }, pair, {
-        runtime_id: group?.runtimeId ?? null,
+        runtime_id: group?.runtimeId ?? group?.runtime_id ?? null,
         outcome: group?.outcome ?? "unavailable",
         minimum_heterologous: route.minimum_heterologous,
         provider_selection: {

@@ -123,6 +123,9 @@ function validateTests(value, label) {
   text(tests.command, `${label}.command`);
   if (!Number.isInteger(tests.exit_code)) throw new TypeError(`${label}.exit_code must be integer`);
   for (const key of ["command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "output_ref", "output_hash"]) text(tests[key], `${label}.${key}`);
+  if (tests.runtime_profile !== undefined && (typeof tests.runtime_profile !== "object" || Array.isArray(tests.runtime_profile))) throw new TypeError(`${label}.runtime_profile must be an object`);
+  if (tests.runtime_profile_status !== undefined && !["ready", "unavailable", "incomplete"].includes(tests.runtime_profile_status)) throw new Error(`${label}.runtime_profile_status is invalid`);
+  if (tests.runtime_profile_authenticated !== undefined && typeof tests.runtime_profile_authenticated !== "boolean") throw new TypeError(`${label}.runtime_profile_authenticated must be boolean`);
   return tests;
 }
 function validateReview(value, label) {

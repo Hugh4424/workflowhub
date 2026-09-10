@@ -32,7 +32,8 @@ state/session 文件。
 - Integration packet 禁止 `changes.diff`、历史 Phase diff、cumulative diff、raw log、
   完整项目与重复 `integration_map`；它仅有 coverage、seam、AC trace、fresh test summary
   及选中的最终快照片段。`packet-plan` 是材料选择/排除的遥测，不设 byte、token、时间、
-  输出量或文件数上限，也不参与放行判断。
+  输出量或文件数上限，也不参与放行判断；preflight 只记录当前请求的可观测身份、材料和
+  route 事实，不新增预算 gate。
 - seam 只能来自 canonical trace 的已认证语义关系和最终快照 anchor。当前最小 Phase trace
   只证明路径和证据绑定；它不能证明 producer/consumer、schema、状态、错误/取消或跨 Phase
   测试关系。因此当前派生 seam 必须是带 `TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS` 的 `unknown`，
