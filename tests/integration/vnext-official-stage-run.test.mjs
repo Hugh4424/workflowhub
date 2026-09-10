@@ -1499,13 +1499,15 @@ describe("vNext official stage completion", () => {
       runId: state.kernel.deriveStageWorkflowRunId("make-decision"),
       sessionId: "session-bridge",
     });
-    const published = publishCurrentWorkflowHubSession({
-      context: contextFor("make-decision", state),
-      input: request,
-      stage: "make-decision",
-      attemptId: "attempt-external-host-bridge",
-      requirementAuthentication,
-    });
+    const bridgeResult = await workflowHubBridgeMain(request, { requirementAuthentication });
+    const published = {
+      ref: bridgeResult.outcome_ref,
+      sha256: bridgeResult.outcome_sha256,
+      value: JSON.parse(state.task.readRecord(bridgeResult.outcome_ref)),
+    };
+    expect(published.value.spec_analyze.packet.authenticated_requirement_messages)
+      .toEqual(requirementAuthentication.messages);
+    expect(published.value.spec_analyze.result).toMatchObject({ ok: true, status: "consistent" });
     expect(published.value.step_outcomes[0].cost).toMatchObject({
       status: "unavailable", duration_ms: null, tokens: null,
     });

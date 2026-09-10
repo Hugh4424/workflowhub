@@ -231,7 +231,7 @@ export function publishCurrentWorkflowHubSession(args) {
   catch (error) { throw normalizeBridgeError(error); }
 }
 
-async function runBridge(input) {
+async function runBridge(input, { requirementAuthentication = null } = {}) {
   const projectName = requiredText(input.project_name, "project_name");
   const taskId = requiredText(input.task_id, "task_id");
   const stage = requiredText(input.stage, "stage");
@@ -263,7 +263,7 @@ async function runBridge(input) {
     context = prepareMakeDecisionWorkspace(context);
   }
   const outcome = hasSession
-    ? publishCurrentWorkflowHubSession({ context, input, stage, attemptId })
+    ? publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication })
     : publishUnavailableStageAgentOutcome({
         task: context.task,
         kernel: context.kernel,
@@ -291,8 +291,12 @@ async function runBridge(input) {
   });
 }
 
-export async function main(input) {
-  try { return await runBridge(input); }
+/**
+ * Same-process launcher seam. Authenticated requirement results are opaque
+ * capabilities and therefore cannot be accepted from the JSON stdin packet.
+ */
+export async function main(input, dependencies) {
+  try { return await runBridge(input, dependencies); }
   catch (error) { throw normalizeBridgeError(error); }
 }
 
