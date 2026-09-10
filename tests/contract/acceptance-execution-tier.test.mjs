@@ -14,6 +14,7 @@ import { authenticateCurrentBuildCodeStageOutcome, runOfficialStage, runStage } 
 import { STAGE_PREDICATES, stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
 import { projectAcceptanceExecutionData } from "../../runtime/stage/stage-content-contracts.mjs";
 import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs";
+import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
@@ -61,7 +62,7 @@ function evidence(suffix) {
   return [{ ref: `quality/evidence/browser-qa/${suffix.repeat(64)}.json`, sha256: suffix.repeat(64) }];
 }
 
-function officialBrowserFixture({ prepare } = {}) {
+function officialBrowserFixture({ prepare, recordModel = "vnext-single-write" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-browser-acceptance-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -77,7 +78,7 @@ function officialBrowserFixture({ prepare } = {}) {
     storageRoot: root,
     manifest: {
       schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "browser-acceptance",
-      created_at: "2026-08-30T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+      created_at: "2026-08-30T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: recordModel,
     },
   });
   const candidate = prepareTaskWorkspace(task);
@@ -615,9 +616,9 @@ function p9Actor(state, { missing = false, tamper = false } = {}) {
   return { ref, sha256: p9Hash(raw), value };
 }
 
-function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride } = {}) {
+function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, recordModel = "vnext-single-write" } = {}) {
   let output, execution, marker;
-  const state = officialBrowserFixture({ prepare: ({ root, candidate, artifacts }) => {
+  const state = officialBrowserFixture({ recordModel, prepare: ({ root, candidate, artifacts }) => {
     marker = join(root, "observations");
     mkdirSync(marker);
     const runtimeScript = join(candidate.worktreeRoot, "acceptance-command.mjs");
@@ -762,6 +763,42 @@ describe("P3 T009 real command and service acceptance", () => {
     await p9PortIsFree(cleanup.port);
   });
 
+  it("publishes the acceptance execution aggregate for the implementation/tests receipt branch", async () => {
+    const state = p9Fixture();
+    const implementation = writeOfficialComponentReceipt({
+      task: state.task,
+      workspace: state.context.workspace,
+      stage: "build-code",
+      component: "implementation",
+      payload: {},
+    });
+    const tests = createCanonicalReceiptWriter({
+      task: state.task,
+      workspace: state.context.workspace,
+      stage: "build-code",
+      component: "build-code-test-capture",
+    }).captureTests({
+      command: "true",
+      receiptRef: "quality/tests/normal-acceptance-execution.json",
+      outputRef: "quality/tests/output/normal-acceptance-execution.output",
+    });
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: "p9-attempt-A",
+      receipts: {
+        implementation: implementation.ref,
+        tests: tests.receipt_ref,
+        stage_outcomes: state.outcome.ref,
+      },
+    });
+
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    expect(result.quality_fact_refs.some((ref) => {
+      const fact = JSON.parse(state.task.readRecord(ref));
+      return fact.kind === "acceptance_criterion" && fact.subject === "acceptance_execution" && fact.status === "passed";
+    })).toBe(true);
+  });
+
   it.each([
     ["array order", () => { const rows = p9Rows(); rows[0].assertions[0] = { id: "strict-array", expected: [1, 2], actual: [2, 1] }; return { rows }; }, "failed"],
     ["strict JSON type", () => { const rows = p9Rows(); rows[0].assertions[0] = { id: "strict-type", expected: 7, actual: "7" }; return { rows }; }, "failed"],
@@ -874,10 +911,11 @@ function p9ConfigureReview(state, { sameSource = false, mixedSources = false, on
 }
 
 async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
+  const { resultMutation = null, ...requestExtra } = extra;
   const request = {
     stage: "verify-code", host_provider: "codex/host",
     materials: { implementation: "inspect actual local acceptance service implementation", tests: "two JSON oracle assertions" },
-    ...(reviewedExecution ? { reviewed_execution: reviewedExecution } : {}), ...extra,
+    ...(reviewedExecution ? { reviewed_execution: reviewedExecution } : {}), ...requestExtra,
   };
   const input = join(state.root, "ordinary-review-input.json");
   writeFileSync(input, JSON.stringify({ request }));
@@ -888,7 +926,7 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
     services: { runReviewRound: async (prepared) => {
       trace.rounds += 1;
       trace.requestMaterials.push(structuredClone(prepared.materials));
-      return runSimpleReview(prepared, { client: { async runGroup(input) {
+      const result = await runSimpleReview(prepared, { client: { async runGroup(input) {
         trace.dispatches += 1;
         const manifest = JSON.parse(readFileSync(join(input.materials.bundleRoot, "manifest.json"), "utf8"));
         const bytes = Object.fromEntries(manifest.files.map(({ path }) => [path, readFileSync(join(input.materials.bundleRoot, path), "utf8")]));
@@ -906,6 +944,7 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
           }),
         };
       } } });
+      return typeof resultMutation === "function" ? resultMutation(result) : result;
     } },
   }));
 }
@@ -965,6 +1004,26 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(trace.rounds, JSON.stringify(diagnostic)).toBe(0);
     expect(diagnostic?.error?.message ?? diagnostic?.error ?? "", "rejection must concern execution authentication, not CLI or provider configuration").toMatch(/reviewed_execution|acceptance_execution|quality\/facts|execution.*(?:auth|ref|binding)|(?:auth|ref|binding).*execution/i);
     expect(trace.dispatches).toBe(0);
+    expect(state.task.listCanonicalReviewResultRefs()).toHaveLength(0);
+  });
+
+  it("rejects a pre-dispatch-shaped result whose material id is not the frozen provider bundle", async () => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const trace = p9ConfigureReview(state);
+    const execution = await p9Execute(state);
+    const input = p9ExecutionInput(state, execution);
+    await expect(p9PublicReview(state, trace, input, {
+      resultMutation: (result) => ({
+        ...result,
+        status: "unavailable",
+        material_id: "f".repeat(64),
+        provider_results: [],
+        findings: [],
+        error: { code: "REVIEW_INPUT_TOO_LARGE", message: "forged pre-dispatch shape" },
+      }),
+    })).rejects.toThrow(/material_id does not match the authenticated request material|execution review result does not match the frozen provider bundle/);
+    expect(trace.rounds).toBe(1);
+    expect(trace.dispatches).toBe(1);
     expect(state.task.listCanonicalReviewResultRefs()).toHaveLength(0);
   });
 
@@ -1117,5 +1176,5 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const input = p9ExecutionInput(state, second);
     expect(input.ref).toMatch(/acceptance_execution-/);
     expect(JSON.parse(readFileSync(join(state.marker, "service-data.json"), "utf8")).count).toBe(1);
-  });
+  }, 60_000);
 });

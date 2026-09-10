@@ -94,6 +94,32 @@ describe("current review material and capture contracts", () => {
     })).toThrow("MATERIAL_INCOMPLETE: missing or empty changed_files, implementation_assessment, test_context, open_risks, review_instructions");
   });
 
+  it("normalizes identity aliases and rejects inherited material keys", () => {
+    const { root, task } = taskFixture();
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: sourceForPlanFixture,
+      task,
+      taskId: "review-materials-contract",
+      stage: "build-code",
+      reviewScope: "phase",
+      review_scope: "integration",
+      materials: {},
+    })).toThrow(/review identity aliases review_scope\/reviewScope disagree/);
+
+    const inherited = Object.create({ changed_files: "inherited" });
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: sourceForPlanFixture,
+      task,
+      taskId: "review-materials-contract",
+      stage: "verify-code",
+      materials: inherited,
+    })).toThrow(/materials must be a plain object|materials.*array/i);
+  });
+
   it("redacts local host paths only in the provider-derived view", () => {
     const source = { approved_direction: "See /Users/Hugh/Downloads/report.md and /tmp/private.json", refs: ["repo/spec.md"] };
     expect(redactProviderHostPaths(source)).toEqual({
