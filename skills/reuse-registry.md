@@ -33,6 +33,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 | spec-plan | 外部改造适配 | speckit-plan/SKILL.md + obra/superpowers | 唯一 plan 格式 |
 | spec-tasks | 外部改造适配 | speckit-tasks/SKILL.md + obra/superpowers | phase 六段映射 |
 | spec-analyze | 外部改造适配 | speckit-analyze/SKILL.md historical idea | 现为 native lens |
+| spec-prd | 自研 | none | build-prd 唯一正式 PRD 内容 owner；独立调用保持同版两步输出，不伪造平台事实 |
 | spec-research | 自研 | none | workflowhub 原生 |
 | talk-with-zhipeng | 外部改造适配 | AgentHub historical import | 现为 workflowhub native |
 | grill-with-docs | 外部改造适配 | mattpocock/skills | 吸收 grilling/domain-modeling |
@@ -49,7 +50,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 
 ## 仓内运行技能
 
-共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，wh-review
+共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，portable workflow 也通过同一声明式依赖闭包加载，wh-review
 把适用的普通 review lens 放进同一 frozen packet，不重复建立 planning advisory 的事实或
 控制面；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 

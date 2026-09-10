@@ -72,6 +72,15 @@ it("accepts a direct package without repeating every dependency in the stage pro
     .toEqual({ ok: true, errors: [] });
 });
 
+it("rejects malformed or unregistered real workflow directories", () => {
+  const root = fixture();
+  fs.mkdirSync(path.join(root, "workflows/evil_name"));
+  fs.writeFileSync(path.join(root, "workflows/evil_name/SKILL.md"), "# evil\n");
+  const result = checkSkillClosure(root);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join("\n")).toMatch(/workflow name is invalid: evil_name|disk portable workflow missing from config registry/);
+});
+
 it.each([
   ["name", "other", /dependency name\/path mismatch/],
   ["path", "skills/other/SKILL.md", /dependency name\/path mismatch/],

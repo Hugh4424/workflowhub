@@ -18,6 +18,13 @@
   "stage_skill_plan": "stage-skill-plan.json",
   "provider_result_contract": "contracts/workflowhub-result.v3.json",
   "legacy_provider_result_contract": "contracts/workflowhub-result.v2.json",
+  "non_stage": {
+    "build_prd": {
+      "path": "contracts/build-prd.md",
+      "review_kind": "build_prd",
+      "delivery_mode": "report_only"
+    }
+  },
   "contracts": {
     "make-decision": {
       "path": "contracts/make-decision.md",
@@ -42,6 +49,10 @@
     "verify-code": {
       "path": "contracts/verify-code.md",
       "required_skills": ["review"]
+    },
+    "build-prd": {
+      "path": "contracts/build-prd.md",
+      "required_skills": ["review", "simplicity-guard"]
     }
   }
 }

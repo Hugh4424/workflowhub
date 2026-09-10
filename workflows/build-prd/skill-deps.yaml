@@ -1,0 +1,6 @@
+stage: build-prd
+skills:
+  - { name: spec-prd, path: skills/spec-prd/SKILL.md, execution: independent, trigger: prd_outline_or_detail, bundle: skills/spec-prd/skill-bundle.json, owner: portable_workflow, consumer: { target: "build-prd#orchestrate", inputs: ["decision", "required_sources", "map_confirmation", "design_facts"], identity: ["task_id", "stage", "material_revision", "snapshot_tree"], result: "prd_draft_or_body" } }
+runtime_capabilities:
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
+external_capabilities: []

@@ -77,3 +77,22 @@ test("projection ignores execution-status writeback but keeps task-material chan
   semanticChange.materials.draft_tasks = semanticChange.materials.draft_tasks.replace("实现成功路径", "实现重试路径");
   expect(api.buildSemanticProjection(base).semantic_hash).not.toBe(api.buildSemanticProjection(semanticChange).semantic_hash);
 });
+
+test("semantic projection normalizes equivalent snake and camel review identity aliases", async () => {
+  const api = await projectionApi();
+  expect(api).toBeTruthy();
+  const shared = { contract_id: "mini-task-design", contract_hash: "legacy-contract-hash", materials: { raw_requirement: "small change" } };
+  const snake = api.buildSemanticProjection({ ...shared, stage: "build-code", review_scope: "phase", review_kind: "mini_task.design" });
+  const camel = api.buildSemanticProjection({ ...shared, stage: "build-code", reviewScope: "phase", reviewKind: "mini_task.design" });
+  expect(camel.surface).toBe("mini-task/design");
+  expect(camel.fields).toEqual(snake.fields);
+  expect(camel.semantic_hash).toBe(snake.semantic_hash);
+});
+
+test("semantic projection rejects conflicting aliases and mini-task kinds on the wrong stage", async () => {
+  const api = await projectionApi();
+  expect(api).toBeTruthy();
+  const shared = { contract_id: "legacy-contract", contract_hash: "legacy-contract-hash", materials: {} };
+  expect(() => api.buildSemanticProjection({ ...shared, stage: "build-code", review_scope: "phase", reviewScope: "integration" })).toThrow(/review identity aliases review_scope\/reviewScope disagree/);
+  expect(() => api.buildSemanticProjection({ ...shared, stage: "verify-code", reviewKind: "mini_task.design" })).toThrow(/mini_task\.design review kind requires stage build-code/);
+});

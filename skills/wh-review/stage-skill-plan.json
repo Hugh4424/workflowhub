@@ -55,6 +55,17 @@
       "delivery_mode": "file_only"
     }
   },
+  "non_stage": {
+    "build_prd": {
+      "review_kind": "build_prd",
+      "logical_skill_id": "wh-review/build-prd",
+      "required_skills": ["review", "simplicity-guard"],
+      "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
+      "delivery_mode": "report_only"
+    }
+  },
   "mini_task": {
     "design": {
       "review_kind": "mini_task.design",

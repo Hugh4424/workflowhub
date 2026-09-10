@@ -114,7 +114,7 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 
 **规范决策日志（canonical decision-log）**：
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
-vNext 的当前文件位于认证 worktree 根目录 `decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
+vNext 的当前文件位于认证 worktree 的 `specs/<task-id>/decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
 
 **显式任务身份（explicit task identity）**：
 公共入口使用成对的 `--project` 与 `--task`，或从已认证 task worktree 取得当前身份。宿主桥接还必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`；旧 session/env、cwd 猜测和 transcript 扫描不构成身份来源。
@@ -181,6 +181,30 @@ make-decision 开始时选择并持续回填的结构骨架；按 spec §5 FR-DL
 **决策链（decision chain）**：
 从需求/question、事实约束、选项到 decision、consumer 和 acceptance 的可追溯文本链；按 spec §5 FR-DLOG-002 以模块、D-ID 和 derived_from 表达，不新增 decision-entry.v1 字段。
 
+## 规划支线术语（已选设计／待实现）
+
+以下记录本次已获整体内容批准的方向，实施与机器正式收尾未完成；不表示现行 F7、正式发布或 close 已支持规划支线，普通开发五阶段与四材料规则不变（见 ADR 0025）。
+
+**build-prd**：
+承接 make-decision 已收敛需求的独立规划支线薄编排，负责规划交接而非第六个正式阶段、build-spec 模式或自动开发。
+
+**spec-prd**：
+拥有单份 PRD 内容与模板的可独立调用技能，分大纲／地图与细节成稿两步，二者之间先真实核对地图并完成适用的设计确认。
+
+**规划确认**：
+build-prd 所属的地图核对、适用 UI 的高保真设计分组确认及最终 PRD 确认，绑定实际展示版本且不包含 Git 授权。
+
+**规划完成**：
+独立支线真实完成规划交付、适用质量工作与交接并获最终确认，不等于开发完成、产品发布或物理交付完成。
+
+**可维护归档 PRD**：
+作为子任务来源而非第五份开发材料的规划交付物，是已选的窄归档维护例外：小修直接做，实质承诺变化由维护主会话澄清并取得真实用户确认，在 PRD 变更说明记录此次确认、前后承诺、来源版本与影响，不强制新任务，旧母决定、确认版本、审查、测试及物理交付事实不改。
+
+**规划完整物理交付**：
+本次交付的真实材料与必要接力附件存在、可访问且版本对应的完整交付，不等于重做视觉审查或通读背景研究，缺附件须报材料缺口，过去规划完成与实际 Git 动作事实分别保留。
+
+关系：新任务接纳当前 PRD 来源；在途任务仍按已接纳来源与自己的四材料工作，新稿不自动覆盖在途范围，实质修订只重核受影响内容；未归档母任务的承诺变化仍由当前 make-decision 写决定。
+
 ## 历史恢复记录（仅审计）
 
 旧版本曾使用 recovery generation、stage recovery run/source、recovery gate、phase
@@ -191,7 +215,7 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 的测试、AC 和审查事实；旧 hash、阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
-认证 worktree 根目录中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
+认证 worktree 的 `specs/<task-id>/` 中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
 变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **consumer/evidence matrix**：

@@ -12,7 +12,7 @@
 - [ ] **F4 质量靠异源审查与人，finding 不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
 - [ ] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。→ [CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
 - [ ] **F6 统一外置执行记录** — 判据：正式写入是否认证当次干净已提交内容，且未把 runner 永久绑定任务或把旧身份记录当准入 gate。→ [CONSTITUTION.md#f6-统一外置执行记录](CONSTITUTION.md#f6-统一外置执行记录)
-- [ ] **F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；`ui_applicability=ui` 时 build-spec 是否展示原型并取得第四处限定确认（UI 设计确认事实须含 `display_before_reply` 与 `human_approved`）；非 UI/build-code 是否不新增日常确认；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
+- [ ] **F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；`ui_applicability=ui` 时 build-spec 是否展示原型并取得第四处限定确认（UI 设计确认事实须含 `display_before_reply` 与 `human_approved`）；规划对象是否由 build-prd/spec-prd 先展示并真实核对任务地图，再按适用性（`non_ui` 或 UI）复用同一设计版本绑定；第二次内容调用后的最终确认（展示稿）是否绑定 decision/source/map/PRD 同版且拒绝/未答/错版保持 draft；非 UI/build-code 是否不新增日常确认、不新增 gate 或第三次内容调用；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
 - [ ] **F8 简单优先** — 判据：正常工具升级是否由每次调用认证解决，未继续复制 runner 或追加 replacement 链。→ [CONSTITUTION.md#f8-简单优先](CONSTITUTION.md#f8-简单优先)
 - [ ] **F9 可证伪不假绿** — 判据：推进资格、publication 真实性和完成判据是否分别证伪，dirty 内容是否拒绝伪装成 HEAD，缺质量工作是否保持进行中。→ [CONSTITUTION.md#f9-可证伪不假绿](CONSTITUTION.md#f9-可证伪不假绿)
 - [ ] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建** — 判据：自动化(CI/校验/机器基建)是否真实收益大于长期维护成本、不为"机器可校验"本身预堆基建、能实跑的优先实跑。→ [CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建](CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建)
@@ -43,6 +43,8 @@
 **治理同步记录（2026-08-03）**：本轮只同步执行边界和交接材料，未新增、改写、拆分或合并宪法条款；条目数和逐条映射保持不变。
 
 **治理同步记录（2026-08-25）**：新增 F11“正常执行优先、控制面受限”；F1-F10、Q1-Q3、S1-S8 原编号保持不变；条目数由 21 增至 22。
+
+**治理同步记录（2026-09-09）**：在既有 F7 内补充 build-prd/spec-prd 最终展示稿确认的同版绑定与 post-second-call 边界；拒绝、未答、错版保持 draft，不新增第三次内容调用、formal stage、non-UI 日常确认或 gate；条目数仍为 22，未新增条款。
 
 **治理同步记录（2026-08-30）**：F7 修订为三处正常确认加第四处限定确认（UI 设计确认）：仅 `ui_applicability=ui` 由 build-spec 展示原型后取得 `display_before_reply` 与 `human_approved` 确认事实；非 UI 和 build-code 不增加日常确认。条目数仍为 22，未新增条款。
 

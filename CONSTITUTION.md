@@ -1,6 +1,6 @@
 # Workflowhub 设计宪法
 
-Version: 1.7.0
+Version: 1.8.0
 
 > 本文件是 workflowhub 的设计宪法，是所有里程碑设计与实现的对照基准。
 > 分三组：框架原则（F）、质量原则（Q）、技能原则（S），共 22 条。
@@ -53,7 +53,7 @@ Version: 1.7.0
 
 ### F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权
 
-- **定义**：正常业务确认仍只保留 make-decision、build-plan、verify-code 三处，用于确认各自的方向、计划和验证结论；它们不是 build-code/verify-code 的进入许可证，也不得引发新任务或 reset。第四处限定确认是 UI 设计确认：仅当 `ui_applicability=ui` 时，build-spec 展示高保真原型后必须取得用户确认，才可把该原型作为进入 build-plan 的 UI 设计事实；owner 是 build-spec，非 UI 不触发，build-code 不增加日常确认。commit、push、merge、archive、cleanup 等不可逆操作仍需独立授权，不能被阶段确认顺带授权。
+- **定义**：正常业务确认仍只保留 make-decision、build-plan、verify-code 三处，用于确认各自的方向、计划和验证结论；它们不是 build-code/verify-code 的进入许可证，也不得引发新任务或 reset。第四处限定确认是 UI 设计确认：仅当 `ui_applicability=ui` 时，build-spec 展示高保真原型后必须取得用户确认，才可把该原型作为进入 build-plan 的 UI 设计事实；owner 是 build-spec，非 UI 不触发，build-code 不增加日常确认。对于 build-prd 规划对象，spec-prd 先完成地图展示与真实核对，并绑定 `真实展示版本`，再复用同一条件 UI 链绑定设计版本；第二次内容调用后的最终确认（展示稿）必须绑定 decision/source/map/PRD 同版事实，拒绝、未答或错版保持草稿；这是规划内容顺序与事实绑定，不新增 gate、第三次内容调用或日常确认。commit、push、merge、archive、cleanup 等不可逆操作仍需独立授权，不能被阶段确认顺带授权。
 - **最佳实践解释**：允许先在同一任务继续补充或修复，同时保持方向、计划、UI 设计和验证结论由人确认；“可继续工作”“阶段已确认”“可执行不可逆操作”是三个不同命题。
 - **正例**：四材料齐全即可开始修复；UI 任务先展示高保真原型并取得用户确认，再把该确认写入 build-spec 的 UI 设计事实；非 UI 任务不增加确认；合并前再单独取得授权。
 - **反例**：缺旧 confirmation 就拒绝编码；把非 UI 任务拉入设计确认；自动确认 UI 原型或 verify-code；或用阶段确认直接授权 merge/cleanup。
@@ -187,13 +187,15 @@ Version: 1.7.0
 - **条目变更须同步**：任何对宪法条目的新增/改写/拆分/合并，必须同步更新——① 版本号；② 修订记录；③ 旧条目到新条目的映射；④ 检查清单条目数（须始终等于宪法条目数）。
 - **变更须可追溯**：变更须能追溯回需求权威源或新的批准记录。
 
-Version: 1.7.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-08-30
+Version: 1.8.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-09-09
 
 **修订记录**：
 
 - 2026-08-03（治理同步）：本次只同步执行规则、术语和人工交接材料，不新增、改写、拆分或合并宪法条款；Version 保持 1.5.0，checklist 仍为 21 条。
 
-**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；仅 F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。
+**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。1.7.0 → 1.8.0 仍保留 22 条宪法条目和原编号；F7 补充 build-prd/spec-prd 第二次内容调用后的最终展示稿同版确认、拒绝/未答/错版保持草稿，且不新增第三次内容调用、formal stage 或 non-UI 日常确认。
+
+- 1.8.0（2026-09-09）：在既有 F7 内明确 build-prd/spec-prd 的最终展示稿确认必须位于第二次内容调用之后，绑定 decision/source/map/PRD 同版事实；拒绝、未答、错版保持草稿，不新增第三次内容调用、formal stage 或 non-UI 日常确认。条目数仍为 22。来源：build-prd P2 独立复核修复。
 
 - 1.7.0（2026-08-30）：修订 F7，保留 make-decision/build-plan/verify-code 三处正常确认，并为 `ui_applicability=ui` 增加 build-spec 高保真原型展示后的第四处限定确认（UI 设计确认）；非 UI 不触发，build-code 不新增日常确认，不可逆授权保持独立。条目数仍为 22。来源：UI 型需求交付契约任务的用户复核决定 D5。
 
