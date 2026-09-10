@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/dsh-transcript.test.mjs tests/contract/dsh-requirement-source.test.mjs tests/contract/stage-runtime-preflight.test.mjs tests/contract/integration-review-subject.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/verify-code-current-focused.json",
+  "output_ref": "quality/tests/output/verify-code-current-focused.output"
+}

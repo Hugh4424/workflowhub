@@ -17,7 +17,66 @@
 | N-001 | 背景 / 问题 | open | pending |  |  |
 | N-002 | 目标 / 论断 | open | pending |  |  |
 | N-003 | 方案 / 证据 / 裁决 | open | pending |  |  |
-| N-004 | 验收 / 扩展 | open | pending |  |  |
+ | N-004 | 验收 / 扩展 | open | pending |  |  |
+
+### 唯一 OI 大纲（current authority）
+
+大纲只存在于本份 `decision-log.md`；不得另建需求账本、状态机或第五份材料。
+在调研前先建立下表，之后只在这里回填 OI。每个 framework node 和固定类别
+必须有 OI 引用，或明确写 `empty: true` 与具体理由；不能省略、重复、用类别
+改名掩盖缺口，也不能只写 `none`。
+
+#### Framework nodes
+
+| node_id | framework_node | oi_ids | empty | reason |
+| --- | --- | --- | --- | --- |
+| N-background | background |  | false |  |
+| N-problem | problem |  | false |  |
+| N-goal | goal |  | false |  |
+| N-solution | solution |  | false |  |
+| N-acceptance | acceptance |  | false |  |
+| N-extension | extension |  | false |  |
+
+#### Fixed categories
+
+| category | oi_ids | empty | reason |
+| --- | --- | --- | --- |
+| complete_user_flow |  | false |  |
+| page_scope |  | false |  |
+| data_state |  | false |  |
+| success_failure_boundary |  | false |  |
+| non_goals |  | false |  |
+| deferred |  | false |  |
+
+#### OI records and consumers
+
+每个 OI 是一个可独立处置的收敛项，字段如下；`status` 只能是
+`open|confirmed|deferred|not_applicable`。终态才填写终态字段，核心确认项还要
+绑定分组和现有交互凭证：
+
+```yaml
+task_id: <current task>
+outline_version: <current version>
+oi_id: OI-001
+category: complete_user_flow
+source: R-001 / fact-ref
+question: <one plain-language unknown>
+status: open
+selected_disposition: <only for terminal status>
+impact_dimensions: [goal|scope|acceptance|ordinary_detail]
+requires_user_decision: true|false
+visible_group_id: <existing approve-decision group>
+batch_id: <optional alias for the same visible group>
+interaction_ref: <existing interaction aggregate or round ref>
+interaction_hash: <sha256 of that exact interaction bytes>
+```
+
+方向审查只消费当前 `convergence_outline` questions-only 投影（保留全部 OI
+ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状态统一为
+`open`，遮蔽答案、处置、依据、结论和拟议方案）。细节审查逐条消费当前 OI
+终态字段；既有 `approve-decision` 在同一次整体确认中按主题展示
+`visible_group_id|batch_id`、选项、后果和风险，并记录所选处置与交互凭证。三者
+职责不可互相替代，也不增加新的正常确认点。
 
 ## 目标
 

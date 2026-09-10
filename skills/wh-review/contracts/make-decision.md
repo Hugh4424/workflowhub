@@ -23,16 +23,27 @@ semantic hash 判断“还是不是同一份”。同一次执行不为追求空
 结果必须绑定当前材料与冻结快照；direction 只有在 Round 2 完成后才能记录，detail 只有在
 Round 3、完整 grill 和 decision draft 完成后才能记录，不能互相替代或跳过中间步骤。
 
+两个 track 都引用同一份当前 OI authority。每个 OI/consumer 记录至少绑定
+`task_id`、`outline_version` 和 `oi_id`；当前版本变化、缺 ID、类别替代、遗漏条目或旧
+版本都保留为 `incomplete`。direction、detail、approve-decision 的职责分别是方向完整性、
+终态逐条对账、以及既有整体确认中的分组处置；任何一个消费者都不能替代另一个，也不能把
+质量事实变成推进许可。Direction and detail cannot substitute for each other; both remain
+advisory quality facts, not permission to continue work.
+
 ## direction
 
 必需材料只有：
 
 - 原始用户需求。
 - 已知客观事实、硬约束和明确的非目标。
+- 当前 `convergence_outline` questions-only 投影：包含当前全部 OI ID、固定类别、原始
+  问题/未知、来源、`task_id` 和 `outline_version`；为防止答案锚定，展示状态统一为 `open`。
 
 禁止交付：
 
 - 拟定方案、推荐方案或方案比较结论。
+- OI 的答案、`selected_disposition`、依据、结论、终态字段、确认分组或
+  `interaction_ref`/`interaction_hash`（这些属于 detail/approve-decision 消费者）。
 - decision log、detail 审查结果或已批准方向。
 - spec、plan、实现 diff、代码或测试结果。
 
@@ -61,6 +72,9 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 - 每轮是否有可见的开始队列、逐题处理、回答后重排和有事实依据的结束结论；每次只处理一个决策轴。
 - 每项关键决定是否记录精确来源、事实与约束、选择理由、影响范围、后果风险、被拒方案、未决项及 supersedes 关系。
 - grill 结果是否记录 CONTEXT changed/no-change、ADR created/not-needed 的三项判断、冲突处理、文件引用和四项退出检查。
+- 当前 OI 的每个终态是否逐条保留 `oi_id`、`outline_version`、状态专属字段、影响维度和
+  分组/交互绑定；不得用总体结论、summary-only 文本或 direction 的 questions-only 投影
+  冒充 detail 对账。
 - 方案是否忠实于批准方向，关键前提和边界是否完整，验收是否可判断，是否未经确认扩大范围。
 
 先查交付风险，再查记录形式：需求有没有丢、用户流程能不能走通、状态和失败边界是否
@@ -81,6 +95,10 @@ detail 的公开调用只提交任务身份、`review_track=detail` 和三项材
 调用方提交时必须在 provider 前点名 `forbidden`；三项材料分别按 `missing`、`empty`、`type`
 诊断。`approved_direction` 必须逐字匹配当前 Workspace 的 `decision-log.md`，并带当前
 material revision；不匹配时报告 `identity`/`freshness`，不得静默替换成摘要或旧结果。
+其中的当前 OI 终态记录必须逐条绑定 `task_id`、`outline_version`、`oi_id`、
+`selected_disposition`、`impact_dimensions` 和 `requires_user_decision`；分组确认的
+`visible_group_id|batch_id` 与 `interaction_ref`/`interaction_hash` 只作为既有
+`approve-decision` 证明被消费，不得被 direction 投影泄露或由 detail 代填。
 
 `context_map` 和 `evidence_map` 只是可选优化。提供时，map-level state 必须是
 `complete|unknown`，并包含简短 summary 和逐项 entries；每个 entry 包含 id、subject、
@@ -93,6 +111,8 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 ## 输出
 
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+
+由于该 provider protocol 只有 findings-only 输出，`findings: []` 只能表示本次提交材料中没有报告可交付风险，不能编码 `checked_no_gap`、逐条 OI 覆盖或阶段完成。runner 必须把本合同作为真实审查指令交付给 provider；没有独立认证的逐条覆盖事实时，不得把空 findings 推导为 `checked_no_gap` 或通过。
 
 findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
 通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings 自动发起后续复审；

@@ -26,6 +26,9 @@ import {
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 
+const repoRoot = new URL("../..", import.meta.url).pathname;
+const readRepo = (relativePath) => readFileSync(join(repoRoot, relativePath), "utf8");
+
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const sourceForPlanFixture = {
@@ -67,6 +70,21 @@ afterEach(() => {
 });
 
 describe("current review material and capture contracts", () => {
+  it("RED: binds direction to current questions-only OI and detail to terminal OI duties", () => {
+    const matrix = JSON.parse(readRepo("runtime/review/stage-materials.json"));
+    const direction = matrix.stages["make-decision"].tracks.direction;
+    const detail = matrix.surfaces["make-decision/detail"];
+    const contract = readRepo("skills/wh-review/contracts/make-decision.md");
+    expect(direction.required).toContain("convergence_outline");
+    expect(matrix.surfaces["make-decision/direction"].semantic_fields).toContain("convergence_outline");
+    expect(detail.semantic_fields).toEqual(expect.arrayContaining(["oi_terminal_records", "confirmation_groups"]));
+    expect(contract).toMatch(/direction[\s\S]{0,700}questions-only/);
+    expect(contract).toMatch(/direction[\s\S]{0,1200}(?:answer|答案)[\s\S]{0,160}(?:forbidden|禁止|leak|泄露)/i);
+    expect(contract).toMatch(/detail[\s\S]{0,1200}(?:terminal|终态)[\s\S]{0,500}(?:each OI|逐.*OI)/i);
+    expect(contract).toMatch(/task_id[\s\S]{0,1000}outline_version[\s\S]{0,1000}oi_id/i);
+    expect(contract).toMatch(/direction[\s\S]*detail[\s\S]*cannot.*substitut|方向[\s\S]*细节[\s\S]*不可.*替代/i);
+  });
+
   it("RED: gives paired make-decision roles distinct prompts and adds the build-spec acceptance lens", () => {
     const red = reviewInstructionsFor("make-decision", "direction", false, null, null, "full", "red");
     const blue = reviewInstructionsFor("make-decision", "direction", false, null, null, "full", "blue");

@@ -22,6 +22,25 @@ research, Grill, and the decision log. `build-spec` is the only owner of
 Clarify; make-decision must not run a second Clarify. Downstream stages consume
 the result; they do not replay these activities or infer missing decisions.
 
+Before research starts, this stage creates exactly one current OI outline in
+the same `decision-log.md`. Its functional skeleton is the six nodes
+`background|problem|goal|solution|acceptance|extension` plus the fixed
+categories `complete_user_flow|page_scope|data_state|success_failure_boundary|non_goals|deferred`.
+Each row has an OI reference or `empty: true` with a concrete reason; omitted,
+bare-none, duplicate, or substituted rows are gaps. The OI record is the one
+source for question, source, status and terminal disposition. It is not a
+fifth material or a second state machine.
+
+The three existing consumers remain separate: direction advice receives the
+current `convergence_outline` questions-only projection (IDs, categories,
+questions/unknowns and sources only, with displayed status `open`); detail
+advice checks current terminal fields one OI at a time; `approve-decision`
+shows grouped plain-language options and records the selected disposition and
+existing interaction proof. A projection never leaks an answer or replaces
+the OI, and a new `outline_version` invalidates old consumer facts. Grouping
+stays inside the existing overall confirmation; no extra normal confirmation
+or review gate is introduced.
+
 ## UI applicability (conditional fact, not a new stage)
 
 When a task may touch a page or frontend, make-decision records one
@@ -118,7 +137,8 @@ decision and questions to the user.
 
 ## Procedure
 
-1. Replay the original requirement. Separate confirmed facts, assumptions,
+1. Replay the original requirement and create the unique current OI outline
+   before research. Separate confirmed facts, assumptions,
    direction-changing ambiguity, non-goals, and deferred work. Completion:
    every part of the original requirement is represented or explicitly marked
    unresolved. Record the requirement-to-decision coverage matrix so that every
@@ -157,7 +177,8 @@ decision and questions to the user.
    uses the existing make-decision writer to append one update to the same
    `decision-log.md` ref/hash. The update records the step outcome, the actual
    user reply or `no_new_requirement`, and the current/deferred/non-goal/open
-   disposition. A write failure stays incomplete with its error; it is never
+   disposition. Talk and research may add or revise OI rows, but they must
+   update the current outline version rather than create a second list. A write failure stays incomplete with its error; it is never
    replaced by a final aggregate claim or a second log.
 3. The Talk flow uses steps 3, 4, 5, and 7: Talk round 1, proportionate
    research input, Talk round 2, then Talk round 3 after direction advice.

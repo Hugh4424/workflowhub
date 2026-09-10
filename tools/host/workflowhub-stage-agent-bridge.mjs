@@ -24,8 +24,10 @@ import {
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
 import { authenticateCodeReviewRepairs } from "../../runtime/evidence/freshness.mjs";
 import { verifyWorkerBrief } from "../../runtime/task/material-workspace.mjs";
+import { buildHostRequirementAuthentication } from "../../runtime/evidence/host-session-transcript.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const REQUIREMENT_SOURCE_KINDS = new Set(["host-session"]);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -455,6 +457,39 @@ export function publishCurrentWorkflowHubSession(args) {
   catch (error) { throw normalizeBridgeError(error); }
 }
 
+/**
+ * Optional host-authenticated requirement projection.
+ *
+ * The bridge stays host-agnostic: it accepts an explicit, opt-in transcript
+ * descriptor and delegates the whole host-session contract to the evidence
+ * module. Without the descriptor nothing changes. When the projection cannot
+ * be produced the result is `null`, so the missing fact stays visible instead
+ * of being replaced by caller-supplied content.
+ */
+function buildRequirementAuthentication({ descriptor, context, stage, sessionId, sourceId, sourceRef }) {
+  const kind = requiredText(descriptor?.kind, "session.source.kind");
+  if (!REQUIREMENT_SOURCE_KINDS.has(kind)) throw new Error(`session.source.kind is unsupported: ${kind}`);
+  const unknown = Object.keys(descriptor ?? {}).filter((key) => !new Set(["kind", "transcript_path"]).has(key));
+  if (unknown.length) throw new Error(`session.source contains unsupported fields: ${unknown.join(", ")}`);
+  // Presence is the opt-in boundary: an explicitly empty path means this
+  // descriptor selected no source and must not silently borrow ambient env.
+  // Only an omitted field may use the explicitly configured process fallback.
+  const transcriptPath = Object.hasOwn(descriptor, "transcript_path")
+    ? descriptor.transcript_path
+    : process.env.WORKFLOWHUB_HOST_TRANSCRIPT;
+  return buildHostRequirementAuthentication({
+    transcriptPath,
+    taskId: context.task.identity.taskId,
+    runId: typeof context.workflowRunId === "string" && context.workflowRunId.trim() !== ""
+      ? context.workflowRunId
+      : `host-run-${sessionId}`,
+    stage,
+    sessionId,
+    sourceId: requiredText(sourceId, "session.source_id"),
+    sourceRef: requiredText(sourceRef, "session.source_ref"),
+  });
+}
+
 async function runBridge(input) {
   const projectName = requiredText(input.project_name, "project_name");
   const taskId = requiredText(input.task_id, "task_id");
@@ -486,8 +521,37 @@ async function runBridge(input) {
   if (stage === "make-decision" && !context.candidateWorkspace) {
     context = prepareMakeDecisionWorkspace(context);
   }
+  const hasRequirementSource = hasSession && input.session.source !== undefined;
+  const requirementAuthentication = hasRequirementSource
+    ? buildRequirementAuthentication({
+        descriptor: input.session.source,
+        context,
+        stage,
+        sessionId: typeof input.session.session_id === "string" && input.session.session_id.trim() !== ""
+          ? input.session.session_id
+          : input.session.source_ref,
+        sourceId: input.session.source_id,
+        sourceRef: input.session.source_ref,
+      })
+    : null;
   const outcome = hasSession
-    ? publishCurrentWorkflowHubSession({ context, input, stage, attemptId })
+    ? requirementAuthentication === null && hasRequirementSource
+      ? publishUnavailableStageAgentOutcome({
+          task: context.task,
+          kernel: context.kernel,
+          artifacts: context.artifacts,
+          workspace: context.workspace,
+          candidateWorkspace: context.candidateWorkspace,
+          stage,
+          attemptId,
+          workflowRunId: context.workflowRunId,
+          host: requiredText(input.session.host, "session.host"),
+          sourceId: requiredText(input.session.source_id, "session.source_id"),
+          sourceFamily: requiredText(input.session.source_family, "session.source_family"),
+          agentRunId: requiredText(input.agent_run_id, "agent_run_id"),
+          reason: "host-session requirement source is unavailable",
+        })
+      : publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication })
     : publishUnavailableStageAgentOutcome({
         task: context.task,
         kernel: context.kernel,

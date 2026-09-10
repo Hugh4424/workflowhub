@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import { assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { validateCanonicalImplementationReceipt, validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
+import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { isExecutionRecordOnlyMaterialDelta } from "../../runtime/task/git-worktree-snapshot.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
@@ -358,7 +359,12 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   const materials = currentMaterials(safeTask, artifacts);
   const base_commit = git(sourceRoot, ["rev-parse", "HEAD"], "current snapshot");
   const base_tree = git(sourceRoot, ["rev-parse", "HEAD^{tree}"], "current snapshot");
-  const acceptanceIds = ids(materials.texts["spec.md"]);
+  // The source/mapping prose may mention upstream aliases (for example
+  // AC-08) that are intentionally mapped to the current task's criteria.
+  // Integration review must consume the same authoritative acceptance section
+  // as the stage completion/acceptance readers, not every AC-shaped token in
+  // the document.
+  const acceptanceIds = activeAcceptanceCriterionIds(materials.texts["spec.md"]);
   if (acceptanceIds.length === 0) incomplete("current spec declares no acceptance criteria");
   const tasks = completedTasks(safeTask, materials.texts["tasks.md"]);
   const covered = new Map();

@@ -44,6 +44,21 @@ function fixture() {
   return { root, home, cwd, sessionId, transcript, taskPath, taskId: "task-dsh-source" };
 }
 
+function zstdFrameWithEightByteContentSize(value) {
+  const compressed = zstdCompressSync(Buffer.from(value, "utf8"));
+  const contentSize = Buffer.alloc(8);
+  contentSize.writeBigUInt64LE(BigInt(Buffer.byteLength(value, "utf8")));
+  // Node emits a single-segment frame with the one-byte FCS form for this
+  // fixture. Rebuild only the descriptor/FCS field to exercise the valid
+  // eight-byte form without introducing another compressor dependency.
+  return Buffer.concat([
+    compressed.subarray(0, 4),
+    Buffer.from([(compressed[4] & 0x3f) | 0xc0]),
+    contentSize,
+    compressed.subarray(6),
+  ]);
+}
+
 describe("dsh transcript zstd frame handling", () => {
   it("decompresses concatenated frames, not just the first one", () => {
     const one = zstdCompressSync(Buffer.from('{"a":1}\n'));
@@ -61,6 +76,40 @@ describe("dsh transcript zstd frame handling", () => {
     const frame = zstdCompressSync(Buffer.from("payload\n"));
     expect(decompressZstdFrames(Buffer.concat([skippable, frame])).toString("utf8")).toBe("payload\n");
     expect(() => decompressZstdFrames(Buffer.from([0x28, 0xb5]))).toThrow(/truncated|invalid/);
+  });
+
+  it("rejects a skippable frame whose declared payload exceeds the input", () => {
+    const truncated = Buffer.alloc(8);
+    truncated.writeUInt32LE(0x184d2a50, 0);
+    truncated.writeUInt32LE(4, 4);
+
+    expect(() => decompressZstdFrames(truncated)).toThrow(/truncated zstd skippable frame payload/);
+  });
+
+  it("reads the eight-byte frame content size form", () => {
+    const frame = zstdFrameWithEightByteContentSize("payload\n");
+
+    expect(decompressZstdFrames(frame).toString("utf8")).toBe("payload\n");
+  });
+
+  it("ignores the zstd unused descriptor bit", () => {
+    const frame = zstdCompressSync(Buffer.from("payload\n"));
+    frame[4] |= 0x10;
+
+    expect(decompressZstdFrames(frame).toString("utf8")).toBe("payload\n");
+  });
+
+  it("rejects truncated checksums and checksum mismatches", () => {
+    // Produced with `zstd --check -q -c` for the UTF-8 payload "payload\\n".
+    const frame = Buffer.from("28b52ffd04584100007061796c6f61640ad750ac9d", "hex");
+    expect(decompressZstdFrames(frame).toString("utf8")).toBe("payload\n");
+
+    const truncated = frame.subarray(0, frame.length - 1);
+    expect(() => decompressZstdFrames(truncated)).toThrow(/truncated|checksum|corrupt/i);
+
+    const mismatched = Buffer.from(frame);
+    mismatched[mismatched.length - 1] ^= 0xff;
+    expect(() => decompressZstdFrames(mismatched)).toThrow(/checksum|corrupt|invalid/i);
   });
 });
 

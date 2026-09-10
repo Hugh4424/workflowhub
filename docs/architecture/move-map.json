@@ -2886,6 +2886,24 @@
       "content_change": "repository fixture keeps twelve AC-to-anchor rows after runtime quality artifacts moved to the external task store",
       "bytes_after": 1191,
       "sha256_after": "1778a568e6084e98fb96e41c991b4b909164903d8d50fcb1431134e9fd1a9ef9"
+    },
+    {
+      "source": "tests/contract/acceptance-execution-producer.mjs",
+      "destination": "tests/contract/acceptance-execution-producer.mjs",
+      "status": "add",
+      "owner": "workflowhub-make-decision-hardening T006",
+      "consumer": "existing private acceptance service tier invoked by T008",
+      "delete_condition": "remove only after a reviewed package/runtime producer emits the same canonical AC rows through the retained service contract and the sole consumer is migrated",
+      "content_change": "test-owned narrow adapter converts one fixed package-local Vitest machine report into the existing canonical acceptance entries without task-store or latest-record selection"
+    },
+    {
+      "source": "tests/contract/acceptance-execution-producer.test.mjs",
+      "destination": "tests/contract/acceptance-execution-producer.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-make-decision-hardening T006",
+      "consumer": "acceptance-execution-producer contract test and T005/T006 producer failure oracle",
+      "delete_condition": "remove with the test-owned producer after its reviewed replacement retains equivalent success, mapping, malformed-report, timeout, cancellation, and no-shell coverage",
+      "content_change": "focused contract fixtures cover canonical Vitest report mapping and non-passing invalid, failed, timed-out, cancelled, and shell-literal cases"
     }
   ]
 }

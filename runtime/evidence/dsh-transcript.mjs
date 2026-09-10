@@ -26,21 +26,35 @@ function frameLength(buffer, offset) {
   const magic = buffer.readUInt32LE(offset);
   if ((magic & SKIPPABLE_MAGIC_MASK) === SKIPPABLE_MAGIC) {
     if (offset + 8 > buffer.length) throw new Error("truncated zstd skippable frame");
-    return 8 + buffer.readUInt32LE(offset + 4);
+    const payloadLength = buffer.readUInt32LE(offset + 4);
+    if (payloadLength > buffer.length - offset - 8) {
+      throw new Error("truncated zstd skippable frame payload");
+    }
+    return 8 + payloadLength;
   }
   if (magic !== ZSTD_MAGIC) throw new Error(`invalid zstd frame magic at offset ${offset}`);
   let cursor = offset + 4;
   if (cursor >= buffer.length) throw new Error("truncated zstd frame header");
   const descriptor = buffer.readUInt8(cursor);
   cursor += 1;
+  // Bit 3 is reserved and must be rejected; bit 4 is the format's unused
+  // bit and is explicitly ignored by decoders.
+  if ((descriptor & 0x08) !== 0) throw new Error("reserved zstd frame descriptor bits");
   const fcsFlag = descriptor >> 6;
   const singleSegment = (descriptor & 0x20) !== 0;
   const checksumFlag = (descriptor & 0x04) !== 0;
   const didFlag = descriptor & 0x03;
-  if (!singleSegment) cursor += 1; // Window_Descriptor
-  cursor += [0, 1, 2, 4][didFlag];
-  cursor += fcsFlag === 0 ? (singleSegment ? 1 : 0) : [0, 1, 2, 4][fcsFlag];
-  if (cursor > buffer.length) throw new Error("truncated zstd frame header fields");
+  const windowDescriptorSize = singleSegment ? 0 : 1;
+  const dictionaryIdSize = [0, 1, 2, 4][didFlag];
+  // FCS_flag 3 is the eight-byte form. The old four-entry table used the
+  // flag value as a byte count and consequently parsed those FCS bytes as a
+  // block header.
+  const frameContentSize = fcsFlag === 0
+    ? (singleSegment ? 1 : 0)
+    : [0, 2, 4, 8][fcsFlag];
+  const headerFieldsSize = windowDescriptorSize + dictionaryIdSize + frameContentSize;
+  if (headerFieldsSize > buffer.length - cursor) throw new Error("truncated zstd frame header fields");
+  cursor += headerFieldsSize;
   while (true) {
     if (cursor + 3 > buffer.length) throw new Error("truncated zstd block header");
     const blockHeader = buffer.readUIntLE(cursor, 3);
@@ -53,7 +67,10 @@ function frameLength(buffer, offset) {
     if (cursor > buffer.length) throw new Error("truncated zstd block payload");
     if (lastBlock) break;
   }
-  if (checksumFlag) cursor += 4;
+  if (checksumFlag) {
+    if (4 > buffer.length - cursor) throw new Error("truncated zstd frame checksum");
+    cursor += 4;
+  }
   return cursor - offset;
 }
 

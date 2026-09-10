@@ -65,4 +65,34 @@ describe("decision-log minimum content contract", () => {
     expect(skill).toMatch(/actual[\s\S]{0,20}user reply or `no_new_requirement`/);
     expect(skill).toMatch(/write failure stays incomplete/);
   });
+
+  it("RED: requires one OI authority with framework/category coverage and terminal proof fields", () => {
+    const skill = read("skills/decision-log/SKILL.md");
+    const template = read("skills/decision-log/templates/decision-log-template.md");
+    const workflow = read("workflows/make-decision/SKILL.md");
+    const contract = `${skill}\n${template}\n${workflow}`;
+
+    for (const node of ["background", "problem", "goal", "solution", "acceptance", "extension"]) {
+      expect(contract, `framework node ${node}`).toContain(node);
+    }
+    for (const category of [
+      "complete_user_flow", "page_scope", "data_state",
+      "success_failure_boundary", "non_goals", "deferred",
+    ]) {
+      expect(contract, `fixed category ${category}`).toContain(category);
+    }
+    for (const field of [
+      "task_id", "outline_version", "oi_id", "category", "source",
+      "question", "status", "selected_disposition", "impact_dimensions",
+      "requires_user_decision", "visible_group_id", "batch_id",
+      "interaction_ref", "interaction_hash",
+    ]) {
+      expect(contract, `OI field ${field}`).toContain(field);
+    }
+    expect(contract).toMatch(/one current OI|唯一 OI|唯一权威.*OI/i);
+    expect(contract).toMatch(/empty\s*:\s*true/);
+    expect(contract).toMatch(/non-placeholder|非占位|不能只写.*none|bare.*none/i);
+    expect(contract).toMatch(/questions-only/);
+    expect(contract).toMatch(/direction[\s\S]{0,500}detail[\s\S]{0,500}approve-decision/i);
+  });
 });

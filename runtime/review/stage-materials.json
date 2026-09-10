@@ -4,12 +4,12 @@
     "make-decision/direction": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["problem", "constraints", "failure_consequence", "smaller_reversible_option"],
-      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow", "ui_applicability", "project_inventory", "planned_or_changed_frontend_fact"]
+      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow", "convergence_outline", "ui_applicability", "project_inventory", "planned_or_changed_frontend_fact"]
     },
     "make-decision/detail": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["scope", "user_flow", "states", "acceptance", "risk", "simplicity"],
-      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "ui_applicability", "ui_contract"]
+      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "oi_terminal_records", "confirmation_groups", "ui_applicability", "ui_contract"]
     },
     "build-spec": {
       "contract": "contracts/build-spec.md",
@@ -52,7 +52,7 @@
       "tracks": {
         "direction": {
           "source_bundle": "none",
-          "required": ["raw_requirement", "objective_facts", "review_instructions"],
+          "required": ["raw_requirement", "objective_facts", "convergence_outline", "review_instructions"],
           "optional": ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction", "direction_flow"],
           "generated": ["review_instructions"],
           "forbidden": ["proposed_solution", "decision_log", "spec", "plan", "changes_diff", "changed_files"],

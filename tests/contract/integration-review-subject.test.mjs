@@ -189,6 +189,23 @@ describe("integration review subject current-material boundary", () => {
     expect(subject.ac_trace.acceptance_ids).toEqual(expect.arrayContaining(["AC-001", "AC-SOURCE-001", "AC-E2E-001"]));
   });
 
+  it("uses only the formal acceptance section when source prose names an upstream alias", () => {
+    const f = fixture();
+    f.artifacts.read = (name) => name === "spec.md"
+      ? "# spec\n\n来源包含上游 AC-08（本规格映射为 AC-SOURCE-001）。\n\n## 11. 验收标准\n\n- [ ] **AC-SOURCE-001**：宿主需求消息机械筛选\n- [ ] **AC-SOURCE-002**：宿主来源失败保持不可用\n"
+      : ({
+        "decision-log.md": "# decision\n", "plan.md": "# plan\n", "tasks.md": "# tasks\n",
+      }[name]);
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+    expect(subject.ac_trace.acceptance_ids).toEqual(["AC-SOURCE-001", "AC-SOURCE-002"]);
+  });
+
   it("anchors ordinary project source directories outside WorkflowHub", () => {
     const f = fixture();
     mkdirSync(join(f.root, "paperbuilder"), { recursive: true });

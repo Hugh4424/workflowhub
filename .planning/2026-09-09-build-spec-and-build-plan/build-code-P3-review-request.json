@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "dsh",
+    "subject_kind": "phase",
+    "phase_id": "P3",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "workflowhub-make-decision-hardening frozen spec: P3 five-conjunct outline_closed and fact-bound current outcome selection; covered ACs AC-STATE-001, AC-PROOF-001, AC-CLOSE-001, AC-CLOSE-002, AC-REVISION-001, AC-REPAIR-001, AC-FLOW-001, AC-GOV-001.",
+      "acceptance_criteria": "ORACLE-P3-HARDENING: one current authenticated fact binding selects its exact completed outcome; divergent bindings remain explicit conflict; missing manual/acceptance evidence stays incomplete.",
+      "test_evidence": "Focused P3 contract/runtime-profile subset: 4 files, 88 tests, exit 0; selected e2e/integration repair and currentness scenarios passed; exact seven-file aggregate was interrupted with exit 130."
+    }
+  }
+}

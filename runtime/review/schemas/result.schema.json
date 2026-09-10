@@ -36,6 +36,11 @@
       },
       "additionalProperties": false
     },
+    "semantic_fields": {
+      "type": "object",
+      "description": "Optional provider-owned semantic projections. Individual stage contracts validate the fields they consume.",
+      "additionalProperties": true
+    },
     "attempt_ref": { "type": "string", "minLength": 1 },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
     "reuse": {
