@@ -14,6 +14,7 @@ function boundOutcomeObservation({ stage = "build-code", suffix = "a".repeat(64)
     snapshot_tree: snapshot,
     material_revision: material,
     retry_id: suffix,
+    attempt_id: suffix,
     status: "completed",
   };
   const outcomeRaw = `${JSON.stringify(outcomeValue)}\n`;
@@ -439,5 +440,24 @@ describe("five-stage completion predicates derive only from quality facts", () =
       authenticate: () => ({ status: "completed", value: { status: "completed" } }),
     });
     expect(statuses["build-code"]).toBe("conflict");
+  });
+
+  it("requires a current quality-fact binding for a new completed attempt after an incomplete outcome", () => {
+    const current = boundOutcomeObservation({ stage: "build-plan", suffix: "new-execution-attempt" });
+    const records = new Map(current.records);
+    const priorRaw = `${JSON.stringify({
+      ...JSON.parse(records.get(current.stageOutcome)), attempt_id: "old-execution-attempt", status: "incomplete",
+    })}\n`;
+    const priorRef = outcomeRef("build-plan", digest(priorRaw));
+    records.set(priorRef, priorRaw);
+    const input = {
+      task_id: "task", read: (ref) => records.get(ref),
+      stage_outcome_refs: { "build-plan": [priorRef, current.stageOutcome] },
+      snapshot_tree: "tree", material_revision: "revision",
+      authenticate: ({ value }) => value,
+    };
+    expect(deriveStageOutcomeStatuses({ ...input, quality_fact_observations: [] })["build-plan"]).toBe("unavailable");
+    expect(deriveStageOutcomeStatuses({ ...input, quality_fact_observations: [current.observation] })["build-plan"]).toBe("completed");
+    expect(records.get(priorRef)).toBe(priorRaw);
   });
 });

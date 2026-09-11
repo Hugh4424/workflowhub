@@ -11,6 +11,7 @@ import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/ta
 import { runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { renderStageHandoff, publishStageHandoff, SECTION_TITLES } from "../../runtime/stage/stage-handoff.mjs";
 import { publishStageReflectionExecutionFailure, validateStageReflectionSibling } from "../../runtime/stage/stage-reflect.mjs";
+import { createWorkflowHubSessionRecorder } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
@@ -98,11 +99,82 @@ function judgmentFor(state, overrides = {}) {
   };
 }
 
+function recordPreOutcomeSession(state, { attemptId = "session-before-handoff", omit = [] } = {}) {
+  const recorder = createWorkflowHubSessionRecorder({
+    ...state.context,
+    attemptId,
+    host: "fixture-host", sourceId: "fixture/session", sourceFamily: "fixture",
+    agentRunId: attemptId, sessionId: attemptId, sourceRef: `fixture:${attemptId}`,
+  });
+  for (const row of state.source.value.step_outcomes) {
+    if (row.step_slug === "stage-reflection" || omit.includes(row.step_slug)) continue;
+    recorder.startStep(row.step_slug)({ status: "completed", result_summary: `fixture completed ${row.step_slug}` });
+  }
+  for (const row of state.source.value.skill_outcomes) {
+    if (["stage-reflection", "stage-handoff", ...omit].includes(row.skill_id)) continue;
+    recorder.startSkill(row.skill_id)({
+      status: "completed", trigger: true, executed: true, version: "fixture-1.0.0",
+      result_summary: `fixture completed ${row.skill_id}`,
+    });
+  }
+  const analyzer = state.source.value.spec_analyze;
+  return {
+    recorder,
+    spec_analyze: {
+      packet: analyzer.packet,
+      evidence_subjects: Object.fromEntries(Object.keys(analyzer.evidence_bindings).map((ref) => [
+        ref, { subject_kind: "step", subject_id: analyzer.step_slug },
+      ])),
+    },
+  };
+}
+
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
 describe("stage-handoff current view contract", () => {
+  it.each([undefined, "completed"])("publishes the session outcome before handoff without claiming the hook executed (status=%s)", (status) => {
+    const state = fixture("handoff-pre-outcome", "build-plan");
+    const { recorder, spec_analyze } = recordPreOutcomeSession(state);
+    const result = recorder.finish({ status, spec_analyze });
+    expect(result.value.status).toBe("completed");
+    expect(result.value.skill_outcomes.find((row) => row.skill_id === "stage-handoff")).toMatchObject({
+      status: "unavailable", trigger: false, executed: false, reason: "session_lifecycle_event_unavailable",
+    });
+    expect(authenticateStageOutcomeForProjection(state.context, "build-plan", result.ref).value.status).toBe("completed");
+    expect(existsSync(join(state.task.taskPath, "quality/evidence/handoff/build-plan.md"))).toBe(false);
+  });
+
+  it.each(["read-current-materials", "wh-review"])("does not waive missing pre-outcome work: %s", (missing) => {
+    const state = fixture(`handoff-missing-${missing}`, "build-plan");
+    const { recorder, spec_analyze } = recordPreOutcomeSession(state, { omit: [missing] });
+    expect(() => recorder.finish({ status: "completed", spec_analyze })).toThrow(/non-terminal step\/skill rows/);
+    expect(recorder.finish({ spec_analyze }).value.status).toBe("incomplete");
+  });
+
+  it.each([false, true])("reports the actual post-outcome handoff result without rewriting the session (writeFailure=%s)", async (writeFailure) => {
+    const state = fixture("handoff-post-outcome", "build-plan");
+    const { recorder, spec_analyze } = recordPreOutcomeSession(state);
+    const outcome = recorder.finish({ status: "completed", spec_analyze });
+    const source = authenticateStageOutcomeForProjection(state.context, "build-plan", outcome.ref);
+    const raw = state.task.readRecord(outcome.ref);
+    const handoffPath = join(state.task.taskPath, "quality/evidence/handoff/build-plan.md");
+    if (writeFailure) mkdirSync(handoffPath, { recursive: true });
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed", stageOutcome: source,
+      judgment: judgmentFor({ ...state, source }), now: NOW,
+    });
+    expect(result.status).toBe("completed");
+    expect(result.stage_handoff).toMatchObject(writeFailure
+      ? { status: "unavailable", current: false }
+      : { status: "published", current: true });
+    if (writeFailure) expect(result.stage_handoff.error).toContain("record must be a regular file:");
+    else expect(readFileSync(handoffPath, "utf8")).toContain(outcome.ref);
+    expect(state.task.readRecord(outcome.ref)).toBe(raw);
+    expect(JSON.parse(raw).skill_outcomes.find((row) => row.skill_id === "stage-handoff").executed).toBe(false);
+  });
+
   it("renders the fixed banner and all thirteen ordered sections", () => {
     const raw = renderStageHandoff({
       taskId: "task-1", stage: "build-spec", snapshotTree: "tree-1",
