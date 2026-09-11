@@ -598,6 +598,28 @@ describe("stage-handoff current view contract", () => {
     expect(JSON.parse(state.task.readRecord(result.ref)).executor.source_id).toBe("fixture/session-memory");
   });
 
+  it("publishes the current handoff when a later stage material does not exist yet", async () => {
+    const state = fixture("handoff-missing-future-material");
+    const materialDir = join(state.candidateWorkspace.worktreeRoot, "specs", state.context.identity.taskId);
+    // build-spec ends before build-plan authors these two materials. The
+    // handoff must render the readable subset instead of failing the whole
+    // projection on a material that belongs to a later stage.
+    rmSync(join(materialDir, "plan.md"), { force: true });
+    rmSync(join(materialDir, "tasks.md"), { force: true });
+    const source = sourceForAttempt(state, "attempt-missing-later-materials");
+    const judgment = judgmentFor({ ...state, source });
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed", judgment, stageOutcome: source, now: NOW,
+    });
+    expect(result.stage_handoff).toMatchObject({
+      status: "published", current: true, ref: "quality/evidence/handoff/build-spec.md",
+    });
+    const rendered = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
+    expect(rendered).toContain("## 13. 可自行判断与必须问用户的边界");
+    expect(rendered).toContain("- `decision-log.md`");
+    expect(rendered).toContain("当前夹具验证四材料与阶段末分析。");
+  });
+
   it("does not accept a sibling with a foreign attempt or output hash", async () => {
     const state = fixture("handoff-invalid-sibling");
     const judgment = judgmentFor(state, {

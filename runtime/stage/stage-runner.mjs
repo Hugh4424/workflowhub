@@ -1116,7 +1116,18 @@ export async function runStageEndReflection(context, {
     try {
       const snapshot = ctx.kernel.currentVNextSnapshot();
       const materials = ctx.artifacts && typeof ctx.artifacts.read === "function"
-        ? Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, ctx.artifacts.read(name)]))
+        ? Object.fromEntries(CURRENT_MATERIAL_FILES.flatMap((name) => {
+          try { return [[name, ctx.artifacts.read(name)]]; }
+          catch (error) {
+            // A stage that ends before build-plan legitimately has no plan.md or
+            // tasks.md yet, and the handoff renderer already treats an absent
+            // material as unknown. Only that missing-future-material case is
+            // omitted from the handoff material set; permission, I/O and other
+            // failures stay directly diagnosable instead of disabling handoff.
+            if (error?.code === "ENOENT") return [];
+            throw error;
+          }
+        }))
         : null;
       const materialScopeRevision = handoffStageOutcome?.value?.material_scope_revision
         ?? ctx.kernel.currentVNextMaterialRevision();
