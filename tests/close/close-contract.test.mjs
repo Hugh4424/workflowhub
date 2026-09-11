@@ -574,15 +574,23 @@ describe("planning-hardening unarchived planning close", () => {
     expect(git(state.repo, ["show", "-s", "--format=%P", archiveCommit])).toBe(archivePlan.plan.delivery.target_baseline);
     // After main's execution-acceleration baseline (b6049afa) a failed step record is
     // immutable audit history: the successful retry re-executes and reaches the declared
-    // physical state, but no second state is written at the same record path. The retry
-    // succeeded physically (archive commit above) while the record still reports the
-    // original failure. Known limitation: the step record never carries a completion
-    // marker after a recovered failure; track it before anything gates on
-    // status === "completed" for a retried close step.
+    // physical state, but no second state is written at the same record path. Recovery is
+    // therefore recorded in a companion `.completed.json` sidecar (review finding
+    // F-c213b3773792) so a successful retry stays distinguishable from a live failure.
     const archiveStepRecord = JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/archive-spec.json`));
     expect(archiveStepRecord.status).toBe("failed");
     expect(archiveStepRecord.completion_mode).toBeUndefined();
     expect(archiveStepRecord.failure.message).toMatch(/commit/);
+    const archiveRecovery = JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/archive-spec.completed.json`));
+    expect(archiveRecovery).toMatchObject({
+      schema_version: "task-close-operation.v1",
+      task_id: state.taskId,
+      plan_hash: archivePlan.plan_hash,
+      step_id: "archive-spec",
+      operation: "archive-spec",
+      status: "completed",
+      completion_mode: "executed",
+    });
     expect(git(state.repo, ["rev-parse", "refs/remotes/origin/main"])).toBe(archiveCommit);
   });
 

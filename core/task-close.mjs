@@ -3284,6 +3284,10 @@ export async function executeClosePlan(options = {}) {
     for (const step of plan.steps) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
+      // Companion record for a step that failed once and later recovered.  The
+      // failed record is immutable audit history; this sidecar carries the
+      // recovered success so a retry is distinguishable from a live failure.
+      const completionPath = `${base}/steps/${step.step_id}.completed.json`;
       for (const operation of requiredCloseAuthorizations(plan, task, step)) {
         if (consumedOperations.has(operation)) continue;
         kernel.consumeIrreversibleAuthorization({
@@ -3303,10 +3307,19 @@ export async function executeClosePlan(options = {}) {
           // A failed step is immutable audit history.  Recovery follows the
           // same plan and current physical probe; it never overwrites the
           // failure with a second state at the same record path.
-          if (before.satisfied) continue;
+          if (before.satisfied) {
+            // The failure record stays intact, so record the recovered success
+            // next to it.  Without this companion record a successful retry is
+            // indistinguishable from a step that is still failed, and
+            // downstream consumers cannot recognise recovery (review finding
+            // F-c213b3773792).
+            createOrVerify(task, completionPath, completedRecord(task, planHash, step, before, "reconciled", now), `close step ${step.step_id} recovery`);
+            continue;
+          }
           await executor.execute(step, before);
           const after = await probeSatisfied(executor, step, "post-failure-execution");
           if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
+          createOrVerify(task, completionPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id} recovery`);
           continue;
         }
         if (prior.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
