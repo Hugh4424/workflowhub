@@ -80,6 +80,24 @@ describe("execution outcome semantic projection", () => {
     expect(result[stage]).toMatchObject({ status: "failed", diagnostic: { code: "execution_replay_conflict" } });
   });
 
+  it("accepts a new completed attempt while preserving the earlier incomplete attempt", () => {
+    const source = input([
+      outcome("before-handoff-fix", { status: "incomplete", skill_outcomes: [{ skill_id: "stage-handoff", status: "unavailable", executed: false }] }),
+      outcome("after-handoff-fix", { skill_outcomes: [{ skill_id: "stage-handoff", status: "unavailable", executed: false }] }),
+    ]);
+    const refs = source.stage_outcome_refs[stage];
+    const originalBytes = refs.map(source.read);
+    expect(completion.deriveExecutionOutcomes(source)[stage]).toMatchObject({
+      status: "completed", attempt_count: 2, completed_attempt_count: 1,
+      refs: [...refs].sort(),
+    });
+    expect(refs.map(source.read)).toEqual(originalBytes);
+    expect(completion.deriveExecutionOutcomes(input([
+      outcome("same-attempt", { status: "incomplete" }),
+      outcome("same-attempt"),
+    ]))[stage]).toMatchObject({ status: "failed", diagnostic: { code: "execution_replay_conflict" } });
+  });
+
   it("keeps no outcome unavailable and outside quality missing semantics", () => {
     expect(typeof completion.deriveExecutionOutcomes).toBe("function");
     if (typeof completion.deriveExecutionOutcomes !== "function") return;

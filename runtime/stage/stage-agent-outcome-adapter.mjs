@@ -1026,7 +1026,9 @@ export function createWorkflowHubSessionRecorder({
         .filter((entry) => entry.on_stage_end === true && entry.blocking === false)
         .map((entry) => entry.step_slug));
       const nonBlocking = (entry) => entry.step_slug === undefined
-        ? entry.skill_id === "stage-reflection"
+        // These hooks consume the published outcome; their pending rows cannot
+        // be prerequisites for it. Preserve the actual lifecycle status below.
+        ? ["stage-reflection", "stage-handoff"].includes(entry.skill_id)
         : nonBlockingStepSlugs.has(entry.step_slug);
       const terminal = (entry) => ["completed", "skipped", "not_applicable"].includes(entry.status)
         || (nonBlocking(entry) && ["incomplete", "unavailable"].includes(entry.status));
