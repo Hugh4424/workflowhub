@@ -401,10 +401,10 @@ describe("resolved code review through the real bridge and status consumers", ()
   });
 });
 
-function p3ApprovedDecision(state) {
+function p3ApprovedDecision(state, { decisionId = "D-FIXTURE-1" } = {}) {
   const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
   for (const [name, bytes] of Object.entries(completeCanonicalStageMaterials())) artifacts.writeAtomic(name, bytes);
-  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n### M6\n- decision_id: D-FIXTURE-1\n- freeze packet covers 用户流程、数据状态、成败边界、非目标。\n`);
+  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n### M6\n${decisionId === null ? "" : `- decision_id: ${decisionId}\n`}- freeze packet covers 用户流程、数据状态、成败边界、非目标。\n`);
   const confirmation = state.kernel.publishHumanConfirmation("make-decision", {
     decision: "accepted", subject_ref: artifacts.reference("decision-log.md"),
     reply_text: "fixture user approves the current decision scope", step_slug: "approve-decision",
@@ -661,6 +661,49 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
     });
     expect(sha256(state.task.readRecord(forged.ref))).toBe(forged.sha256);
     expect(() => authenticateStageOutcomeForProjection(p3Context(state, "build-code"), "build-code", forged.ref)).toThrow(/binding|hash/i);
+  });
+
+  it.each(["approved scope", "stale scope", "missing scope", "no sources", "existing ID"])("decision-scope identity through the real build-plan handler: %s", async (scenario) => {
+    const state = fixture(`p3-decision-scope-id-${scenario.replaceAll(" ", "-")}`);
+    const approved = p3ApprovedDecision(state, { decisionId: scenario === "existing ID" ? "D-FIXTURE-1" : null });
+    const confirmationBefore = state.task.readRecord(approved.confirmation.ref);
+    const factBefore = state.task.readRecord(approved.confirmation.quality_fact_ref);
+    if (scenario === "stale scope") {
+      approved.artifacts.writeAtomic("decision-log.md", `${approved.artifacts.read("decision-log.md")}\nDirection changed after approval.\n`);
+    } else if (scenario === "missing scope") {
+      const fact = { ...approved.approvedFact };
+      delete fact.material_scope_revision;
+      const digest = qualityFactDigest(fact);
+      fact.fact_id = `quality-${digest}`;
+      const ref = `quality/facts/${digest}.json`;
+      state.kernel.publishCanonicalRecord(ref, `${JSON.stringify(fact, null, 2)}\n`);
+      approved.input.quality_fact_ref = ref;
+    }
+    const decisionBefore = approved.artifacts.read("decision-log.md");
+    const result = await runOfficialStage("build-plan", p3Context(state, "build-plan"), {
+      decision_freeze: scenario === "no sources" ? {} : approved.input,
+    });
+    const warnings = p3FreezeWarnings(result);
+    if (scenario === "approved scope" || scenario === "existing ID") {
+      expect(warnings).toEqual([]);
+    } else {
+      expect(result.quality_status).toBe("incomplete");
+      if (scenario === "stale scope") {
+        expect(warnings).toContain("decision freeze: approval binding is not for the current decision scope revision");
+      } else if (scenario === "missing scope") {
+        expect(warnings).toEqual(expect.arrayContaining([
+          expect.stringMatching(/decision freeze sources unavailable:.*(?:material_scope_revision|scope revision|decision scope)/),
+        ]));
+      } else {
+        expect(warnings).toContain("decision freeze: freeze approval is not accepted by all three sources");
+      }
+    }
+    // The public result does not expose the resolved runtime decision_id.
+    // This boundary proves accepted behavior and preservation of the material ID.
+    if (scenario === "existing ID") expect(decisionBefore).toContain("- decision_id: D-FIXTURE-1");
+    expect(approved.artifacts.read("decision-log.md")).toBe(decisionBefore);
+    expect(state.task.readRecord(approved.confirmation.ref)).toBe(confirmationBefore);
+    expect(state.task.readRecord(approved.confirmation.quality_fact_ref)).toBe(factBefore);
   });
 
   it.each(["build-spec", "build-plan"])("consumes the approved fact scope and real approval step after downstream material edits in %s", async (stage) => {

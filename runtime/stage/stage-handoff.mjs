@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
+import yaml from "js-yaml";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
@@ -353,17 +354,53 @@ function compareAttempts(left, right) {
   return a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]);
 }
 
-function currentHandoffOutcome(task, raw, stage) {
-  if (typeof raw !== "string") return null;
-  const match = new RegExp(`quality/evidence/stage-outcomes/${stage}/([a-f0-9]{64})\\.json#\\1`).exec(raw);
-  if (!match) return null;
-  const ref = `quality/evidence/stage-outcomes/${stage}/${match[1]}.json`;
-  try {
-    const value = JSON.parse(task.readRecord(ref));
-    return value?.attempt_id ? { ref, value } : null;
-  } catch {
-    return null;
+function currentHandoffOutcome(task, raw, stage, runId) {
+  // Only an absent projection is an initial publication. Broken existing
+  // sources must not silently disable the current-writer guard.
+  if (raw === null) return null;
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(raw);
+  if (!frontmatter) fail("stage handoff current frontmatter is missing");
+  let header;
+  try { header = yaml.load(frontmatter[1], { schema: yaml.JSON_SCHEMA }); }
+  catch (error) { fail(`stage handoff current frontmatter is invalid: ${error.message}`); }
+  if (header?.schema !== SCHEMA || header.task !== task.identity.taskId || header.stage !== stage
+      || typeof header.snapshot_tree !== "string" || header.snapshot_tree.trim() === ""
+      || !/^revision-[a-f0-9]{64}$/.test(header.material_scope_revision ?? "")
+      || !Array.isArray(header.source_refs)) {
+    fail("stage handoff current frontmatter identity or source_refs is invalid");
   }
+  let sources;
+  try { sources = normalizeSources(header.source_refs); }
+  catch (error) { fail(`stage handoff current source_refs is invalid: ${error.message}`); }
+  const matches = [];
+  for (const source of sources) {
+    if (!source.ref.startsWith("quality/evidence/stage-outcomes/")) continue;
+    const match = STAGE_OUTCOME_REF.exec(source.ref);
+    if (!match || match[2] !== source.sha256) fail("stage handoff current outcome source ref/hash is invalid");
+    let sourceRaw;
+    try { sourceRaw = task.readRecord(source.ref); }
+    catch (error) { fail(`stage handoff current outcome source is unreadable: ${error.message}`); }
+    if (sha256(sourceRaw) !== source.sha256) fail("stage handoff current outcome source hash mismatch");
+    let value;
+    try { value = JSON.parse(sourceRaw); }
+    catch (error) { fail(`stage handoff current outcome source is invalid JSON: ${error.message}`); }
+    if (value?.schema_version !== "workflowhub-stage-outcomes.v1"
+        || typeof value.attempt_id !== "string" || value.attempt_id.trim() === ""
+        || typeof value.producer?.source_id !== "string" || value.producer.source_id.trim() === ""
+        || typeof value.producer?.agent_run_id !== "string" || value.producer.agent_run_id.trim() === ""
+        || value.task_id !== header.task || value.stage !== match[1]) {
+      fail("stage handoff current outcome source identity or producer is invalid");
+    }
+    // Historical context is allowed, but neither its position in the document
+    // nor its attempt spelling can identify the current projection.
+    if (value.stage === stage && value.run_id === runId
+        && value.snapshot_tree === header.snapshot_tree
+        && value.material_scope_revision === header.material_scope_revision) {
+      matches.push({ ref: source.ref, value });
+    }
+  }
+  if (matches.length !== 1) fail("stage handoff current outcome source must uniquely match the frontmatter identity");
+  return matches[0];
 }
 
 export function publishStageHandoff({
@@ -512,6 +549,9 @@ export function publishStageHandoff({
     // check and overwrite a newer current handoff after it has advanced.
     const lockedSnapshot = kernel.currentVNextSnapshot();
     if (lockedSnapshot.tree !== snapshotTree) fail("stage handoff snapshot changed before current write");
+    if (kernel.currentVNextMaterialScopeRevision(stage) !== materialScopeRevision) {
+      fail("stage handoff material scope is not current");
+    }
     if (materials && artifacts) materialSourceRefs(materials, artifacts);
     const lockedOutcomeRaw = task.readRecord(stageOutcome.ref);
     if (sha256(lockedOutcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source changed before current write");
@@ -526,8 +566,13 @@ export function publishStageHandoff({
     }
     let existingRaw = null;
     try { existingRaw = task.readRecord(ref); } catch (error) { if (error?.code !== "ENOENT") throw error; }
-    const existingOutcome = currentHandoffOutcome(task, existingRaw, stage);
-    if (existingOutcome && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
+    const existingOutcome = currentHandoffOutcome(task, existingRaw, stage, lockedOutcome.run_id);
+    // The authenticated current view is stale when either materials or the
+    // implementation snapshot changed. Opaque attempts need no invented order.
+    const existingIsStale = existingOutcome
+      && (existingOutcome.value.material_scope_revision !== materialScopeRevision
+        || existingOutcome.value.snapshot_tree !== lockedSnapshot.tree);
+    if (existingOutcome && !existingIsStale && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
       const ordering = compareAttempts(outcomeValue.attempt_id, existingOutcome.value.attempt_id);
       // A retry id is not an ordering authority.  If chronology cannot be
       // authenticated, preserve the already-current projection instead of
