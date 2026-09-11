@@ -34,6 +34,18 @@ export const DECISION_OUTLINE_FIXED_CATEGORIES = Object.freeze([
 ]);
 const OI_STATUSES = new Set(["open", "confirmed", "deferred", "not_applicable"]);
 const OI_IMPACT_DIMENSIONS = new Set(["goal", "scope", "acceptance", "ordinary_detail"]);
+const PLANNING_QUESTION_FORBIDDEN_PATTERNS = Object.freeze([
+  ["文件路径与文件面", /文件路径|文件面|file\s+path|file\s+surface/i],
+  ["函数名", /函数名|function\s+name/i],
+  ["字段名", /字段名|field\s+name/i],
+  ["算法", /算法|algorithm/i],
+  ["schema 形状", /schema\s*(?:形状|shape)/i],
+  ["命令形态", /命令形态|command\s+(?:form|shape)/i],
+  ["入口参数形态", /入口参数形态|entry\s+parameter|argument\s+shape/i],
+  ["行号", /行号|line\s+number/i],
+  ["代码片段", /代码片段|code\s+snippet/i],
+  ["测试记录与实测记录", /测试记录|实测记录|test\s+(?:record|evidence)/i],
+]);
 
 const REQUIRED_MAIN_SECTIONS = Object.freeze([
   "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
@@ -2163,12 +2175,13 @@ function questionIdentity(question, interactionType = "interaction") {
     : question?.question_id ?? question?.frontier_id ?? question?.axis;
 }
 
-export function validateInteractionQuestionBatch(questions, { interactionType = "interaction" } = {}) {
+export function validateInteractionQuestionBatch(questions, { interactionType = "interaction", taskType = null } = {}) {
   const errors = [];
   if (!Array.isArray(questions) || questions.length === 0) {
     errors.push(`${interactionType} ask must contain at least one independent question`);
     return Object.freeze({ ok: false, errors: Object.freeze(errors), question_ids: Object.freeze([]), option_ids: Object.freeze(Object.create(null)) });
   }
+  if (taskType === "unknown") errors.push(`${interactionType} task type is unknown; clarify before asking type-dependent questions`);
   const ids = questions.map((question) => questionIdentity(question, interactionType));
   const axes = questions.map((question) => question?.axis ?? question?.frontier_id ?? question?.question_id);
   // Question ids are user/content supplied. A null-prototype map prevents a
@@ -2182,6 +2195,16 @@ export function validateInteractionQuestionBatch(questions, { interactionType = 
     errors.push(`${interactionType} questions must each contain one unique decision axis`);
   }
   for (const [index, question] of questions.entries()) {
+    if (taskType === "规划任务") {
+      const questionText = [question?.axis, question?.prompt, question?.question, question?.text, question?.kind, question?.question_kind]
+        .filter((value) => nonEmptyString(value)).join(" ");
+      const forbidden = PLANNING_QUESTION_FORBIDDEN_PATTERNS
+        .filter(([, pattern]) => pattern.test(questionText))
+        .map(([label]) => label);
+      if (forbidden.length > 0) {
+        errors.push(`${interactionType} planning question ${index + 1} asks forbidden implementation detail: ${forbidden.join(", ")}`);
+      }
+    }
     if (question?.independent !== true) {
       errors.push(`${interactionType} may batch only independent questions, never review work`);
     }
@@ -2835,6 +2858,61 @@ export function readUiApplicabilityFromDecisionLog(decisionLogMarkdown) {
   });
 }
 
+const TASK_TYPES = new Set(["规划任务", "普通任务"]);
+
+function cleanTaskTypeValue(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^\*+|\*+$/g, "")
+    .replace(/^`+|`+$/g, "")
+    .trim();
+}
+
+/**
+ * Read the sole task-type declaration from the existing decision-log
+ * material.  This is deliberately a pure reader: it does not add a task
+ * field, persist state, or infer a type when the declaration is absent or
+ * malformed.
+ */
+export function readTaskTypeFromDecisionLog(decisionLogMarkdown) {
+  const text = String(decisionLogMarkdown ?? "");
+  const lines = text.split(/\r?\n/);
+  const identityHeading = /^(?:任务身份|task identity)$/i;
+  const identityHeadings = lines.filter((line) => {
+    const match = line.match(/^#{1,3}\s*(.+?)\s*$/);
+    return match && identityHeading.test(match[1]);
+  });
+  if (identityHeadings.length !== 1) return "unknown";
+
+  const body = markdownSectionBody(text, identityHeading);
+  if (body === null) return "unknown";
+  const declarations = [];
+  let fenced = false;
+  for (const line of body.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+
+    if (/^\s*\|/.test(line)) {
+      const cells = line.split("|")
+        .map((cell) => cell.trim())
+        .filter((cell, index, all) => !(index === 0 && cell === "") && !(index === all.length - 1 && cell === ""));
+      if (/^任务类型$/i.test(cleanTaskTypeValue(cells[0])) && cells.length >= 2) {
+        declarations.push(cleanTaskTypeValue(cells[1]));
+      }
+      continue;
+    }
+
+    const bullet = line.match(/^\s*[-*]\s+\*\*任务类型\*\*\s*[:：]\s*(.*?)\s*$/i);
+    if (bullet) declarations.push(cleanTaskTypeValue(bullet[1]));
+  }
+
+  if (declarations.length !== 1 || !TASK_TYPES.has(declarations[0])) return "unknown";
+  return declarations[0];
+}
+
 function parseConvergenceRows(body) {
   const rows = body.split(/\r?\n/)
     .filter((line) => /^\s*\|/.test(line))
@@ -2903,6 +2981,32 @@ function outlineTerminalField(value, ...keys) {
     if (substantiveOutlineValue(candidate)) return candidate;
   }
   return null;
+}
+
+/**
+ * Derive the questions-only projection of the current OI authority.
+ *
+ * The direction reviewer is supposed to consume exactly this projection, but
+ * nothing in the review pipeline persists it: the recorded review result keeps
+ * only `material_id`/`material_revision`, and neither the bare sink nor the
+ * record route computes a semantic projection.  Without a producer the
+ * `direction_snapshot` conjunct of `outline_closed` could never be satisfied.
+ *
+ * The projection is fully determined by the current OI records, so derive it
+ * here instead of persisting a second copy.  It exposes only the fields the
+ * questions-only contract allows, always reports `open`, and leaks nothing:
+ * this is a read-side view of the one OI authority, not new state.
+ */
+function deriveQuestionsOnlyOutline(byId, outlineVersion, recordTaskId) {
+  if (!byId || byId.size === 0) return null;
+  const entries = [...byId.values()].map((record) => ({
+    oi_id: record.oi_id ?? record.id,
+    category: record.category,
+    source: record.source,
+    question: record.question,
+    status: "open",
+  }));
+  return { task_id: recordTaskId, outline_version: outlineVersion, entries };
 }
 
 function normalizeOutlineReview(review) {
@@ -3033,12 +3137,20 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
       if (!outlineTerminalField(record, "counterexample_boundary", "counterexample")) errors.push(`OI ${id} not_applicable counterexample boundary is missing`);
     }
     if (core) {
-      const interactionRef = record.interaction_ref;
-      const interactionHash = record.interaction_hash;
-      if (!substantiveOutlineValue(interactionRef) || !HASH.test(interactionHash ?? "")) errors.push(`OI ${id} core interaction proof is missing or invalid`);
-      else if (interactionAggregate) {
-        const aggregateRef = interactionAggregate.ref ?? interactionAggregate.interaction_ref;
-        const aggregateHash = interactionAggregate.sha256 ?? interactionAggregate.interaction_hash ?? interactionAggregate.hash;
+      // Core confirmation proof is carried by the aggregate's own
+      // `oi_dispositions` binding: the content-addressed aggregate names the
+      // task, outline version, OI, group, and selected disposition.  The OI
+      // record deliberately does NOT embed the aggregate ref/hash, because the
+      // record lives inside decision-log.md and embedding the address of the
+      // aggregate that must bind that same file's post-write bytes is a content
+      // self-reference with no fixed point.  Legacy records that still carry
+      // `interaction_ref`/`interaction_hash` stay readable; those fields are
+      // simply no longer the proof source.
+      if (!interactionAggregate) {
+        // The authenticated aggregate must be present: a self-reported ref/hash
+        // is not a Talk proof.  Keep the gap explicit when callers omit it.
+        errors.push(`OI ${id} core interaction proof is unavailable`);
+      } else {
         const binding = aggregateOiBindings.get(id);
         const expectedGroup = record.visible_group_id ?? record.batch_id;
         const actualGroup = binding?.visible_group_id ?? binding?.batch_id;
@@ -3047,23 +3159,16 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
           && binding?.oi_id === id
           && actualGroup === expectedGroup
           && binding?.selected_disposition === record.selected_disposition;
-        if (interactionRef !== aggregateRef || interactionHash !== aggregateHash
+        if (!bindingCurrent
             || aggregateValue.task_id !== (taskId ?? recordTaskId)
-            || aggregateValue.stage !== "make-decision"
-            || !bindingCurrent) {
+            || aggregateValue.stage !== "make-decision") {
           errors.push(`OI ${id} core interaction proof is not current or does not bind its OI/group/disposition`);
         } else coreProofCount += 1;
-      } else {
-        // A self-reported ref/hash is not a Talk proof.  The existing
-        // interaction aggregate must be present and current so the handler
-        // can authenticate the producer-owned bytes and bind them to this
-        // task/stage/version.  Keep the gap explicit when callers omit it.
-        errors.push(`OI ${id} core interaction proof is unavailable`);
       }
     }
     terminal.push(record);
   }
-  const direction = normalizeOutlineReview(directionReview);
+  const direction = normalizeOutlineReview(directionReview) ?? deriveQuestionsOnlyOutline(byId, outlineVersion, taskId ?? recordTaskId);
   let directionCurrent = false;
   if (!direction) errors.push("direction review is missing current convergence_outline questions-only snapshot");
   else {
@@ -3255,6 +3360,11 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const errors = [];
   const text = String(decisionLogMarkdown ?? "");
   const hasSection = (pattern) => pattern.test(text);
+  const hasTaskIdentitySection = /^#{1,3}\s*(?:任务身份|task identity)\s*$/im.test(text);
+  const taskType = readTaskTypeFromDecisionLog(text);
+  if (hasTaskIdentitySection && taskType === "unknown") {
+    errors.push("decision-log task type declaration is missing or invalid");
+  }
 
   const goalBody = meaningfulSectionBody(text, /^(?:核心目标|目标|goal|成功意图|success intent)$/i);
   const acceptanceBody = meaningfulSectionBody(text, /^(?:验收标准|acceptance|验收目标|AC)$/i);

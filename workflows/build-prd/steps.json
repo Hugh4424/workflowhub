@@ -84,7 +84,7 @@
       "completion_evidence": [
         { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
       ],
-      "observable_result": "Source, confirmation, review, analysis, reflection, delivery, and unavailable facts are reported separately; the handoff does not claim external host invocation or physical delivery without supplied evidence.",
+      "observable_result": "The existing reportFactsAndHandoff→readReflectionForReport save/read seam publishes one non-empty task/workflow-bound payload by raw-byte SHA and reports the validated readback; source, confirmation, review, analysis, reflection, delivery, and unavailable facts stay separate, and the handoff does not claim external host invocation or physical delivery without supplied evidence.",
       "depends_on": [5]
     }
   ]

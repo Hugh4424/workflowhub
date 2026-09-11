@@ -16,6 +16,20 @@ The main document and every accepted omission use the same
 Return the content to the parent, which records it through TaskHandle/TaskKernel.
 Missing load-bearing reasoning is reported rather than invented.
 
+## Task identity declaration
+
+The current `decision-log.md` carries the task type in its existing material
+under one `## 任务身份` section. Before the first formal requirement question,
+the parent records exactly one `任务类型` declaration with the controlled value
+`规划任务` or `普通任务`, then reads it back with
+`readTaskTypeFromDecisionLog(markdown)`. Missing, duplicate, conflicting, or
+unknown declarations return `unknown`; no caller may infer a type from a
+request, path, hash, or old record. A type change invalidates consumption of
+old-type questions and artifacts until they are explicitly re-treated under
+the new type; the current decision keeps the old question reference, reason,
+and new content location. This is a material convention, not a new schema,
+field, state machine, or control plane.
+
 ## Minimum content contract
 
 ### Requirement framework presets
@@ -56,9 +70,16 @@ renamed to hide the gap is invalid. A legal OI record keeps the exact fields
 `status`; status is one of `open`, `confirmed`, `deferred`, or
 `not_applicable`. Terminal records additionally keep
 `selected_disposition`, `impact_dimensions`, and
-`requires_user_decision`. User-facing grouping keeps
-`visible_group_id` or `batch_id`, and core confirmation proof keeps
-`interaction_ref` plus `interaction_hash`.
+`requires_user_decision`. User-facing grouping keeps `visible_group_id` or
+`batch_id`. Core confirmation proof flows **one way**: the content-addressed
+interaction aggregate's `oi_dispositions` binds each core OI's `task_id`,
+`outline_version`, `oi_id`, visible group, and `selected_disposition`. The OI
+record deliberately does **not** embed the aggregate's ref/hash: the record
+lives inside `decision-log.md`, so embedding the address of the aggregate that
+must bind that same file's post-write bytes is a content self-reference with no
+fixed point. Legacy records that still carry `interaction_ref` /
+`interaction_hash` remain readable; those fields are simply no longer the
+proof source.
 
 The direction reviewer consumes only the current `convergence_outline`
 questions-only projection: all current IDs, categories, questions/known

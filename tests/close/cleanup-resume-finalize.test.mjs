@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -159,5 +159,64 @@ describe("close resume and finalize (T5)", () => {
     expect(finalized.physical_state.merge).toBe(true);
     expect(finalized.physical_state.archive).toBe(true);
     expect(finalized.physical_state.push).toBe(true);
+
+    const retried = await completeDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmed.ref,
+      now: () => "2026-08-31T00:00:00.000Z",
+    });
+
+    expect(retried).toEqual(finalized);
+  });
+
+  it("does not consume close authorizations before a physical-state failure", async () => {
+    const state = baseFixture();
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery, allowMiniTaskFocused: true });
+    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed", replyText: "用户确认继续关闭。", stepSlug: "confirm-close-plan" });
+    authorizeAll(state, confirmed.confirmation.human_confirmation_ref);
+    const executors = createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan });
+
+    await expect(completeDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmed.ref,
+    })).rejects.toThrow(/delivery close is incomplete/);
+
+    const consumedRoot = join(state.task.taskPath, "quality", "authorizations", "consumed");
+    expect(existsSync(consumedRoot) ? readdirSync(consumedRoot) : []).toEqual([]);
+
+    const executed = await executeClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmed.ref,
+      executors,
+    });
+
+    expect(executed.status).toBe("completed");
+  });
+
+  it("returns an existing completion without requiring unused authorizations", async () => {
+    const state = baseFixture();
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery, allowMiniTaskFocused: true });
+    const confirmed = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed", replyText: "用户确认继续关闭。", stepSlug: "confirm-close-plan" });
+    const completed = {
+      schema_version: "task-close-completed.v1",
+      task_id: state.task.identity.taskId,
+      plan_hash: prepared.plan_hash,
+      status: "completed",
+      completed_at: "2026-08-31T00:00:00.000Z",
+    };
+    state.task.createRecordAtomic("operations/close/completed.json", `${JSON.stringify(completed)}\n`);
+
+    await expect(completeDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmed.ref,
+    })).resolves.toEqual(completed);
   });
 });

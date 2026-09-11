@@ -283,3 +283,46 @@ describe('ORACLE-P2-SPEC-PRD', () => {
     }
   });
 });
+
+describe('planning-hardening PRD handoff contracts', () => {
+  it('planning-hardening AC-PRD-001 keeps a complete journey and per-requirement ownership', () => {
+    const text = `${skill()}\n${template()}`;
+    expectEvery(text, [
+      '完整用户旅程',
+      '需求覆盖',
+      '责任卡',
+      '明确排除理由',
+      '目标',
+      '边界',
+      '验收',
+      '依赖',
+    ], 'planning PRD direction contract');
+  });
+
+  it('planning-hardening AC-CHILD-001/002 keeps child work read-only and records boundary drift', () => {
+    const text = `${skill()}\n${artifact(buildPrdSkillPath)}\n${artifact(buildPrdStepsPath)}`;
+    expectEvery(text, [
+      '子任务',
+      '最小读取集',
+      '母任务',
+      '兄弟',
+      '只读',
+      '不触发母任务close',
+      '不移动',
+      '不删除',
+      '边界偏离',
+      '实际偏离',
+      '原因',
+    ], 'child handoff contract');
+  });
+
+  it('planning-hardening AC-CONTRACT-001 preserves all 16 existing task-card fields', () => {
+    const text = template();
+    expectEvery(text, [
+      '结果与 consumer', '范围', '流程/状态', 'FR', 'AC', 'oracle',
+      '准备依赖', '实现依赖', '验收依赖', '合并依赖',
+      '共享资源冲突与集成责任', '来源/设计', '局部风险', '可后置技术项',
+      '最小读取集', '五阶段开工说明',
+    ], '16-field task card contract');
+  });
+});

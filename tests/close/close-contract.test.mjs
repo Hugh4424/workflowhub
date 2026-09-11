@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -16,6 +18,7 @@ import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+const TASK_CLOSE_CLI = fileURLToPath(new URL("../../tools/cli/task-close.mjs", import.meta.url));
 
 let fixtureCounter = 0;
 
@@ -24,18 +27,73 @@ function git(cwd, args, options = {}) {
   catch (error) { if (options.allowFailure) return ""; throw error; }
 }
 
-function writeMaterials(worktreeRoot, taskId) {
+function runTaskCloseCli(state, args, options = {}) {
+  return execFileSync(process.execPath, [TASK_CLOSE_CLI, ...args], {
+    cwd: state.repo,
+    encoding: "utf8",
+    ...options,
+  });
+}
+
+function committedMaterialHash(state, file) {
+  const bytes = execFileSync("git", ["show", `main:specs/${state.taskId}/${file}`], { cwd: state.repo, encoding: null });
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function committedBlobHash(state, ref) {
+  const bytes = execFileSync("git", ["show", `main:${ref}`], { cwd: state.repo, encoding: null });
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function planningDeclaration(state, replyText) {
+  return {
+    task_id: state.taskId,
+    workflow: "build-prd",
+    material_refs: [
+      { ref: "decision-log.md", sha256: committedMaterialHash(state, "decision-log.md") },
+      { ref: "prd.md", sha256: committedMaterialHash(state, "prd.md") },
+      ...(state.requiredAttachments ?? []).map((attachment) => ({ ref: attachment.path, sha256: committedBlobHash(state, attachment.path) })),
+    ],
+    reply_text: replyText,
+    step_results: [
+      { step_slug: "load-parent-decision", status: "recorded" },
+      { step_slug: "report-facts-and-handoff", status: "recorded" },
+    ],
+    reflection_facts: [{ conclusion: "规划步骤已完成并由用户明确下令归档。", cited_steps: ["report-facts-and-handoff"] }],
+  };
+}
+
+function publishPlanningDeclaration(state, replyText) {
+  const raw = `${JSON.stringify(planningDeclaration(state, replyText), null, 2)}\n`;
+  const ref = `quality/evidence/portable-workflow-outcomes/build-prd/${createHash("sha256").update(raw).digest("hex")}.json`;
+  state.kernel.publishCanonicalRecord(ref, raw);
+  return ref;
+}
+
+function writeMaterials(worktreeRoot, taskId, taskType = null, requiredAttachments = []) {
   const specSource = `specs/${taskId}`;
   const specDir = join(worktreeRoot, specSource);
   mkdirSync(specDir, { recursive: true });
-  writeFileSync(join(specDir, "decision-log.md"), "# Decision log\n\n真实需求已登记。\n");
+  writeFileSync(join(specDir, "decision-log.md"), [
+    "# Decision log",
+    "",
+    ...(taskType ? ["## 任务身份", `- **任务类型**：${taskType}`, ""] : []),
+    "真实需求已登记。",
+    "",
+  ].join("\n"));
+  if (taskType) writeFileSync(join(specDir, "prd.md"), `# Planning PRD\n\n- **必要附件与版本**：${JSON.stringify(requiredAttachments.map(({ path, sha256 }) => ({ path, sha256 })))}\n`);
+  for (const attachment of requiredAttachments) {
+    const attachmentFile = join(worktreeRoot, attachment.path);
+    mkdirSync(dirname(attachmentFile), { recursive: true });
+    writeFileSync(attachmentFile, attachment.content ?? "");
+  }
   writeFileSync(join(specDir, "spec.md"), "# Specification\n\n## 9. 验收标准\n- [ ] **AC-001**：正常 close 只记录物理事实。\n");
   writeFileSync(join(specDir, "plan.md"), "# Plan\n\n复用现有 close executor。\n");
   writeFileSync(join(specDir, "tasks.md"), "# Tasks\n\n#### T001\n- **ID**：T001\n");
   return specSource;
 }
 
-function baseFixture({ existing = false } = {}) {
+function baseFixture({ existing = false, taskType = null, requiredAttachments } = {}) {
   fixtureCounter += 1;
   const taskId = `close-contract-${fixtureCounter}`;
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-close-contract-")));
@@ -89,8 +147,9 @@ function baseFixture({ existing = false } = {}) {
   // First prepare gives us the worktree; second prepare after commit captures the new baseline.
   const tempCandidate = prepareTaskWorkspace(task);
   const worktreeRoot = tempCandidate.worktreeRoot;
-  const specSource = writeMaterials(worktreeRoot, taskId);
-  git(worktreeRoot, ["add", "--", specSource]);
+  const attachments = requiredAttachments ?? [];
+  const specSource = writeMaterials(worktreeRoot, taskId, taskType, attachments);
+  git(worktreeRoot, ["add", "--", specSource, ...attachments.map((attachment) => attachment.path)]);
   git(worktreeRoot, ["commit", "-m", "task materials"]);
   const taskCommit = git(worktreeRoot, ["rev-parse", "HEAD"]);
   const candidate = prepareTaskWorkspace(task);
@@ -104,13 +163,68 @@ function baseFixture({ existing = false } = {}) {
     spec_source_path: specSource,
     spec_archive_path: `specs/archive/${taskId}`,
   };
-  return { task, kernel, candidate, worktreeRoot, repo, delivery, existing, taskId };
+  return { task, kernel, candidate, worktreeRoot, repo, bare, delivery, existing, taskId, requiredAttachments: taskType ? attachments : undefined };
 }
 
-function authorizeBatch(state, confirmationRef) {
-  for (const operation of ["commit", "merge", "archive", "push", "cleanup"]) {
+function authorizeBatch(state, confirmationRef, operations = ["commit", "merge", "archive", "push", "cleanup"]) {
+  for (const operation of operations) {
     state.kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmationRef });
   }
+}
+
+function authorizePlanningOperation({ state, kernel, plan, confirmation, operation }) {
+  const value = {
+    schema_version: "irreversible-authorization.v1",
+    task_id: state.taskId,
+    operation,
+    subject_ref: confirmation.confirmation.human_confirmation_ref,
+    subject_hash: confirmation.confirmation.human_confirmation_hash,
+    material_revision: plan.delivery.planning.material_revision,
+    snapshot_tree: plan.delivery.planning.snapshot_tree,
+    authorized_at: "2026-09-11T00:00:00.000Z",
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  kernel.publishCanonicalRecord(`quality/authorizations/${createHash("sha256").update(raw).digest("hex")}.json`, raw);
+}
+
+function authorizePostArchive(state, plan, confirmation, kernel = state.kernel) {
+  for (const operation of ["archive", "commit", "push"]) {
+    authorizePlanningOperation({ state, kernel, plan, confirmation, operation });
+  }
+}
+
+function consumedAuthorizations(state) {
+  const root = join(state.task.taskPath, "quality", "authorizations", "consumed");
+  return readdirSync(root).map((name) => JSON.parse(readFileSync(join(root, name), "utf8")));
+}
+
+async function postArchiveSetup() {
+  const state = baseFixture({ taskType: "规划任务" });
+  const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+  await closeDelivery({
+    task: state.task,
+    kernel: state.kernel,
+    delivery: state.delivery,
+    replyText: "确认四动作交付，材料保留原位。",
+    stepSlug: "confirm-planning-close",
+  });
+  const declarationRef = publishPlanningDeclaration(state, "清单已全部完成，现在明确下令归档。");
+  const archivePlan = prepareDeliveryClosePlan({
+    task: state.task,
+    kernel: state.kernel,
+    priorPlanHash: initial.plan_hash,
+    archiveDeclarationRef: declarationRef,
+  });
+  const kernel = createTaskKernel(state.task);
+  const confirmation = confirmClosePlan({
+    task: state.task,
+    kernel,
+    plan: archivePlan.plan,
+    outcome: "confirmed",
+    replyText: "确认执行展示的归档和提交。",
+    stepSlug: "confirm-planning-archive",
+  });
+  return { state, initial, archivePlan, declarationRef, kernel, confirmation };
 }
 
 const EXPECTED_ACTIONS = ["commit-delivery", "merge-task-branch", "archive-spec", "push-target-branch", "cleanup"];
@@ -239,3 +353,337 @@ describe("close contract (T0-RED)", () => {
 function fixture() {
   return baseFixture({ existing: false });
 }
+
+describe("planning-hardening unarchived planning close", () => {
+  it("prepares a declared planning task with four actions and no archive step", () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+
+    expect(prepared.plan.steps.map((step) => step.step_id)).toEqual([
+      "commit-delivery", "merge-task-branch", "push-target-branch", "cleanup",
+    ]);
+    expect(prepared.plan.delivery.close_mode).toBe("ordinary");
+    expect(prepared.plan.delivery.planning).toBeDefined();
+  });
+
+  it("keeps explicit legacy planning mode on the existing five-action route", () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const prepared = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      closeMode: "planning",
+      delivery: state.delivery,
+    });
+    expect(prepared.plan.steps.map((step) => step.step_id)).toEqual(EXPECTED_ACTIONS);
+  });
+
+  it("prepares a two-action archive plan from a saved declaration after initial cleanup", async () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    const initialResult = await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认四动作交付，材料保留原位。",
+      stepSlug: "confirm-planning-close",
+    });
+    expect(initialResult.status).not.toBe("completed");
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
+
+    const declarationRef = publishPlanningDeclaration(state, "清单已全部完成，现在明确下令归档。");
+
+    const archivePlan = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      priorPlanHash: initial.plan_hash,
+      archiveDeclarationRef: declarationRef,
+    });
+    expect(archivePlan.plan.steps.map((step) => step.step_id)).toEqual(["archive-spec", "push-target-branch"]);
+    expect(archivePlan.plan.delivery.spec_source_path).toBe(`specs/${state.taskId}`);
+    expect(archivePlan.plan.delivery.spec_archive_path).toBe(`specs/archive/${state.taskId}`);
+  });
+
+  it("rebinds post-cleanup archive to the current pushed target after main advances", async () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认四动作交付，材料保留原位。",
+      stepSlug: "confirm-planning-close",
+    });
+    const initialTarget = git(state.repo, ["rev-parse", "refs/heads/main"]);
+    writeFileSync(join(state.repo, `after-close-${state.taskId}.md`), "主仓后续无关提交。\n");
+    git(state.repo, ["add", "--", `after-close-${state.taskId}.md`]);
+    git(state.repo, ["commit", "-m", "advance target after planning cleanup"]);
+    git(state.repo, ["push", "-q", "origin", "main"]);
+    const currentTarget = git(state.repo, ["rev-parse", "refs/heads/main"]);
+    const declarationRef = publishPlanningDeclaration(state, "清单已全部完成，现在明确下令归档。");
+
+    const archivePlan = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      priorPlanHash: initial.plan_hash,
+      archiveDeclarationRef: declarationRef,
+    });
+
+    expect(currentTarget).not.toBe(initialTarget);
+    expect(archivePlan.plan.delivery.target_baseline).toBe(currentTarget);
+    expect(archivePlan.plan.delivery.remote_target_baseline).toBe(currentTarget);
+    expect(archivePlan.plan.delivery.task_commit).toBe(currentTarget);
+  });
+
+  it("accepts the real nested handoff declaration with attachment refs", async () => {
+    const content = "依赖版本固定为 v1。\n";
+    const attachment = {
+      path: "attachments/version.md",
+      content,
+      sha256: createHash("sha256").update(content).digest("hex"),
+    };
+    const state = baseFixture({ taskType: "规划任务", requiredAttachments: [attachment] });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认四动作交付，材料保留原位。",
+      stepSlug: "confirm-planning-close",
+    });
+    const declarationRef = publishPlanningDeclaration(state, "清单已全部完成，现在明确下令归档。");
+
+    const archivePlan = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      priorPlanHash: initial.plan_hash,
+      archiveDeclarationRef: declarationRef,
+    });
+
+    expect(archivePlan.plan.delivery.planning.attachments).toEqual([expect.objectContaining({
+      path: attachment.path,
+      sha256: attachment.sha256,
+      status: "available",
+    })]);
+    expect(archivePlan.plan.delivery.planning.materials[declarationRef]).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("does not move source materials when archive authorization is missing", async () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认四动作交付，材料保留原位。",
+      stepSlug: "confirm-planning-close",
+    });
+    const declarationRef = publishPlanningDeclaration(state, "现在明确下令归档。");
+    const archivePlan = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, priorPlanHash: initial.plan_hash, archiveDeclarationRef: declarationRef });
+    const postKernel = createTaskKernel(state.task);
+    const confirmation = confirmClosePlan({ task: state.task, kernel: postKernel, plan: archivePlan.plan, outcome: "confirmed", replyText: "确认执行归档和提交。", stepSlug: "confirm-planning-archive" });
+    const authorization = {
+      schema_version: "irreversible-authorization.v1",
+      task_id: state.taskId,
+      operation: "push",
+      subject_ref: confirmation.confirmation.human_confirmation_ref,
+      subject_hash: confirmation.confirmation.human_confirmation_hash,
+      material_revision: archivePlan.plan.delivery.planning.material_revision,
+      snapshot_tree: archivePlan.plan.delivery.planning.snapshot_tree,
+      authorized_at: "2026-09-11T00:00:00.000Z",
+    };
+    const authorizationRaw = `${JSON.stringify(authorization, null, 2)}\n`;
+    postKernel.publishCanonicalRecord(`quality/authorizations/${createHash("sha256").update(authorizationRaw).digest("hex")}.json`, authorizationRaw);
+
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel: postKernel,
+      plan: archivePlan.plan,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: postKernel, plan: archivePlan.plan }),
+    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED|archive/i);
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
+
+    const archiveAuthorization = { ...authorization, operation: "archive" };
+    const archiveAuthorizationRaw = `${JSON.stringify(archiveAuthorization, null, 2)}\n`;
+    postKernel.publishCanonicalRecord(`quality/authorizations/${createHash("sha256").update(archiveAuthorizationRaw).digest("hex")}.json`, archiveAuthorizationRaw);
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel: postKernel,
+      plan: archivePlan.plan,
+      archiveDeclarationRef: declarationRef,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: postKernel, plan: archivePlan.plan }),
+    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED|commit/i);
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
+  });
+
+  it("rejects post-cleanup archive arguments when an ordinary close is already completed", async () => {
+    const state = baseFixture();
+    await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认完成普通收尾。",
+      stepSlug: "confirm-close-plan",
+    });
+
+    await expect(closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      priorPlanHash: "a".repeat(64),
+      archiveDeclarationRef: `quality/evidence/portable-workflow-outcomes/build-prd/${"b".repeat(64)}.json`,
+      replyText: "再次明确归档。",
+      stepSlug: "confirm-planning-archive",
+    })).rejects.toThrow("post-cleanup archive cannot follow a normal close completion");
+  });
+
+  it("retries a staged archive rename after commit failure without repeating the move", async () => {
+    const { state, archivePlan, declarationRef, kernel, confirmation } = await postArchiveSetup();
+    authorizePostArchive(state, archivePlan.plan, confirmation, kernel);
+    const hookRoot = join(dirname(state.repo), "archive-hooks");
+    mkdirSync(hookRoot);
+    writeFileSync(join(hookRoot, "pre-commit"), "#!/bin/sh\nexit 1\n");
+    chmodSync(join(hookRoot, "pre-commit"), 0o755);
+    git(state.repo, ["config", "core.hooksPath", hookRoot]);
+
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel,
+      plan: archivePlan.plan,
+      archiveDeclarationRef: declarationRef,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel, plan: archivePlan.plan }),
+    })).rejects.toThrow(/commit/);
+
+    expect(existsSync(join(state.repo, `specs/${state.taskId}`))).toBe(false);
+    expect(existsSync(join(state.repo, `specs/archive/${state.taskId}`))).toBe(true);
+    expect(git(state.repo, ["diff", "--cached", "--name-status", "--find-renames=100%"]).split(/\s+/)).toContain("R100");
+
+    git(state.repo, ["config", "--unset", "core.hooksPath"]);
+    const retry = await executeClosePlan({
+      task: state.task,
+      kernel,
+      plan: archivePlan.plan,
+      archiveDeclarationRef: declarationRef,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel, plan: archivePlan.plan }),
+    });
+
+    expect(retry).toMatchObject({ status: "delivered", completion_record: null });
+    const archiveCommit = git(state.repo, ["rev-parse", "refs/heads/main"]);
+    expect(git(state.repo, ["show", "-s", "--format=%P", archiveCommit])).toBe(archivePlan.plan.delivery.target_baseline);
+    // After main's execution-acceleration baseline (b6049afa) a failed step record is
+    // immutable audit history: the successful retry re-executes and reaches the declared
+    // physical state, but no second state is written at the same record path. Recovery is
+    // therefore recorded in a companion `.completed.json` sidecar (review finding
+    // F-c213b3773792) so a successful retry stays distinguishable from a live failure.
+    const archiveStepRecord = JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/archive-spec.json`));
+    expect(archiveStepRecord.status).toBe("failed");
+    expect(archiveStepRecord.completion_mode).toBeUndefined();
+    expect(archiveStepRecord.failure.message).toMatch(/commit/);
+    const archiveRecovery = JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/archive-spec.completed.json`));
+    expect(archiveRecovery).toMatchObject({
+      schema_version: "task-close-operation.v1",
+      task_id: state.taskId,
+      plan_hash: archivePlan.plan_hash,
+      step_id: "archive-spec",
+      operation: "archive-spec",
+      status: "completed",
+      completion_mode: "executed",
+    });
+    expect(git(state.repo, ["rev-parse", "refs/remotes/origin/main"])).toBe(archiveCommit);
+  });
+
+  it("confirms a post-cleanup archive plan through the CLI without reopening its worktree", async () => {
+    const { state, archivePlan } = await postArchiveSetup();
+    const output = runTaskCloseCli(state, [
+      "confirm",
+      `--task-path=${state.task.taskPath}`,
+      "--project=WorkflowHub",
+      `--task=${state.taskId}`,
+      `--plan-hash=${archivePlan.plan_hash}`,
+      "--decision=confirmed",
+      "--reply-text=确认执行展示的归档和提交。",
+      "--step-slug=confirm-planning-archive",
+    ]);
+    expect(JSON.parse(output)).toMatchObject({ ref: expect.stringContaining(`operations/close/confirmations/${archivePlan.plan_hash}/`) });
+    expect(existsSync(state.worktreeRoot)).toBe(false);
+  });
+
+  it("rejects extra initial-close parameters on the post-cleanup archive CLI route", async () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    const declarationRef = `quality/evidence/portable-workflow-outcomes/build-prd/${"b".repeat(64)}.json`;
+
+    expect(() => runTaskCloseCli(state, [
+      "prepare",
+      `--task-path=${state.task.taskPath}`,
+      "--project=WorkflowHub",
+      `--task=${state.taskId}`,
+      `--archive=${declarationRef}`,
+      `--plan-hash=${initial.plan_hash}`,
+      "--mode=planning",
+    ])).toThrow(/post-cleanup archive does not accept: --mode/);
+  });
+
+  it("executes the authorized two-action archive plan without recreating the task worktree", async () => {
+    const state = baseFixture({ taskType: "规划任务" });
+    const initial = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "确认四动作交付，材料保留原位。",
+      stepSlug: "confirm-planning-close",
+    });
+
+    const declarationRef = publishPlanningDeclaration(state, "清单已结束，现在明确同意归档。");
+
+    const archivePlan = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      priorPlanHash: initial.plan_hash,
+      archiveDeclarationRef: declarationRef,
+    });
+    const postKernel = createTaskKernel(state.task);
+    const confirmation = confirmClosePlan({
+      task: state.task,
+      kernel: postKernel,
+      plan: archivePlan.plan,
+      outcome: "confirmed",
+      replyText: "确认执行展示的归档和提交。",
+      stepSlug: "confirm-planning-archive",
+    });
+    for (const operation of ["archive", "commit", "push"]) {
+      const authorization = {
+        schema_version: "irreversible-authorization.v1",
+        task_id: state.taskId,
+        operation,
+        subject_ref: confirmation.confirmation.human_confirmation_ref,
+        subject_hash: confirmation.confirmation.human_confirmation_hash,
+        material_revision: archivePlan.plan.delivery.planning.material_revision,
+        snapshot_tree: archivePlan.plan.delivery.planning.snapshot_tree,
+        authorized_at: "2026-09-11T00:00:00.000Z",
+      };
+      const authorizationRaw = `${JSON.stringify(authorization, null, 2)}\n`;
+      postKernel.publishCanonicalRecord(`quality/authorizations/${createHash("sha256").update(authorizationRaw).digest("hex")}.json`, authorizationRaw);
+    }
+
+    const result = await executeClosePlan({
+      task: state.task,
+      kernel: postKernel,
+      plan: archivePlan.plan,
+      archiveDeclarationRef: declarationRef,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: postKernel, plan: archivePlan.plan }),
+    });
+
+    expect(result).toMatchObject({ status: "delivered", completion_record: null });
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
+    expect(() => git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toThrow();
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/archive/${state.taskId}/decision-log.md`])).toBe("");
+    expect(git(state.repo, ["rev-parse", "refs/remotes/origin/main"])).toBe(git(state.repo, ["rev-parse", "refs/heads/main"]));
+    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/archive-spec.json`)).status).toBe("completed");
+    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${archivePlan.plan_hash}/steps/push-target-branch.json`)).status).toBe("completed");
+  });
+});

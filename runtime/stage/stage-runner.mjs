@@ -477,6 +477,41 @@ function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, sna
   return Object.freeze({ materials: Object.freeze({ ...bindings }), evidence: Object.freeze(normalizedEvidence) });
 }
 
+function validateUnavailableAnalyzerShape(analyzer, profile, manifest, stage) {
+  const packet = outcomeObject(analyzer.packet, `${stage} unavailable spec_analyze.packet`);
+  if (!Array.isArray(packet.original_requirements)
+      || !Array.isArray(packet.coverage)
+      || !Array.isArray(packet.current_stage_repairs)) {
+    throw outcomeError(`${stage} unavailable spec_analyze.packet arrays are invalid`);
+  }
+  outcomeText(packet.work_summary, `${stage} unavailable spec_analyze.packet.work_summary`);
+  const subjects = outcomeObject(analyzer.evidence_subjects, `${stage} unavailable spec_analyze.evidence_subjects`);
+  const declaredSubjects = new Set([
+    ...manifest.steps.map((step) => `step:${step.step_slug}`),
+    ...manifest.skills.map((skill) => `skill:${skill.name}`),
+  ]);
+  for (const logicalRef of profile.required_evidence) {
+    const subject = outcomeObject(subjects[logicalRef], `${stage} unavailable spec_analyze.evidence_subjects.${logicalRef}`);
+    const subjectKind = outcomeText(subject.subject_kind, `${stage} unavailable ${logicalRef}.subject_kind`);
+    const subjectId = outcomeText(subject.subject_id, `${stage} unavailable ${logicalRef}.subject_id`);
+    if (!declaredSubjects.has(`${subjectKind}:${subjectId}`)) {
+      throw outcomeError(`${stage} unavailable spec_analyze evidence subject ${logicalRef} is not declared by the stage manifest`);
+    }
+  }
+  if (profile.required_materials.includes("implementation")) {
+    outcomeText(analyzer.implementation_material, `${stage} unavailable spec_analyze.implementation_material`);
+    const implementationSubject = outcomeObject(
+      analyzer.implementation_evidence_subject,
+      `${stage} unavailable spec_analyze.implementation_evidence_subject`,
+    );
+    const subjectKind = outcomeText(implementationSubject.subject_kind, `${stage} unavailable implementation subject_kind`);
+    const subjectId = outcomeText(implementationSubject.subject_id, `${stage} unavailable implementation subject_id`);
+    if (!declaredSubjects.has(`${subjectKind}:${subjectId}`)) {
+      throw outcomeError(`${stage} unavailable spec_analyze implementation subject is not declared by the stage manifest`);
+    }
+  }
+}
+
 function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialRevision, materials, manifest, skillManifest) {
   const analyzer = outcomeObject(record.spec_analyze, "stage outcome spec_analyze");
   if (analyzer.schema_version !== "workflowhub-spec-analyze-stage-outcome.v1") {
@@ -511,7 +546,19 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
     },
   });
   const profileDefinition = STAGE_SPEC_ANALYZE_PROFILES[stage];
-  validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage);
+  const hasMaterialBindings = Object.hasOwn(analyzer, "material_bindings");
+  const hasEvidenceBindings = Object.hasOwn(analyzer, "evidence_bindings");
+  if (hasMaterialBindings !== hasEvidenceBindings) {
+    throw outcomeError(`${stage} spec_analyze material/evidence bindings must be supplied together`);
+  }
+  if (hasMaterialBindings) {
+    validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage);
+  } else {
+    if (record.status !== "unavailable" || analysis.status !== "material_incomplete") {
+      throw outcomeError(`${stage} spec_analyze is missing authenticated material/evidence bindings`);
+    }
+    validateUnavailableAnalyzerShape(analyzer, profileDefinition, manifest, stage);
+  }
   const supplied = outcomeObject(analyzer.result, "stage outcome spec_analyze.result");
   for (const key of ["status", "errors", "findings", "summary", "facts"]) {
     if (!sameJson(supplied[key], analysis[key])) throw outcomeError(`stage outcome spec_analyze.result.${key} does not match the semantic validator`);
