@@ -1041,8 +1041,21 @@ function inspectPlanningAttachments(worktreeRoot, sourcePath, archivePath, requi
   });
 }
 
+/**
+ * Repository-relative planning material paths.  Derived through the single
+ * `artifactReference` authority in core/artifact-dir.mjs so this module never
+ * builds a literal specification-directory path of its own.
+ */
+function planningSourcePath(task) {
+  return artifactReference(task.identity.taskId, "decision-log.md").replace(/\/[^/]+$/, "");
+}
+
+function planningArchiveRoot(task) {
+  return planningSourcePath(task).replace(/^specs\//, "specs/archive/");
+}
+
 function planningMaterialContext({ task, worktreeRoot, snapshot, sourcePath, archivePath, requiredAttachments }) {
-  const expectedSource = `specs/${task.identity.taskId}`;
+  const expectedSource = planningSourcePath(task);
   if (sourcePath !== expectedSource) {
     throw new Error(`PLANNING_MATERIAL_INCOMPLETE: planning source must be ${expectedSource}`);
   }
@@ -1099,8 +1112,8 @@ function planningMaterialValuesAtCommit(root, commit, sourcePath) {
 }
 
 function planningMaterialContextFromCommit({ task, root, commit, sourcePath, archivePath, requiredAttachments, declaration }) {
-  if (sourcePath !== `specs/${task.identity.taskId}`) {
-    throw new Error(`PLANNING_MATERIAL_INCOMPLETE: planning source must be specs/${task.identity.taskId}`);
+  if (sourcePath !== planningSourcePath(task)) {
+    throw new Error(`PLANNING_MATERIAL_INCOMPLETE: planning source must be ${planningSourcePath(task)}`);
   }
   const values = planningMaterialValuesAtCommit(root, commit, sourcePath);
   const prdRaw = values.find(([file]) => file === "prd.md")[1].toString("utf8");
@@ -2041,7 +2054,7 @@ function validateDeliveryPlan(plan, task, kernel) {
     if (!Array.isArray(delivery.quality_gaps)) throw new TypeError("planning close quality_gaps must be an array");
     const planning = plain(delivery.planning, "planning close material");
     if (planning.source_path !== delivery.spec_source_path
-        || planning.source_path !== `specs/${task.identity.taskId}`
+        || planning.source_path !== planningSourcePath(task)
         || !Array.isArray(planning.material_files)
         || planning.material_files.join(",") !== PLANNING_MATERIAL_FILES.join(",")
         || !/^revision-[a-f0-9]{64}$/.test(planning.material_revision ?? "")
@@ -2419,8 +2432,8 @@ function preparePostCleanupArchivePlan({ task, kernel, priorPlanHash, archiveDec
   const remoteTargetBaseline = remoteOid(root, priorPlan.delivery.remote, targetBranch);
   if (remoteTargetBaseline !== targetBaseline) throw new Error("post-cleanup archive requires the target branch pushed and current");
   if (sourceWorktreeStatus(root) !== "") throw new Error("post-cleanup archive target repository has uncommitted source changes");
-  const sourcePath = `specs/${task.identity.taskId}`;
-  const archivePath = `specs/archive/${task.identity.taskId}`;
+  const sourcePath = planningSourcePath(task);
+  const archivePath = planningArchiveRoot(task);
   if (treeEntry(root, targetBaseline, sourcePath)?.type !== "tree") throw new Error("post-cleanup archive source materials are unavailable on target");
   if (treeEntry(root, targetBaseline, archivePath) !== null) throw new Error("post-cleanup archive target already exists");
 
