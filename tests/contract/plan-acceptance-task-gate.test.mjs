@@ -241,6 +241,21 @@ describe("plan acceptance-task delivery contract", () => {
     )).ok).toBe(false);
   });
 
+  it("normalizes inline-code scalar delivery fields before validating and projecting acceptance", () => {
+    const inlineCodeScalars = validTasks
+      .replaceAll("- **ui_scope**：ui", "- **ui_scope**：`ui`")
+      .replaceAll("- **acceptance_role**：implementation", "- **acceptance_role**：`implementation`")
+      .replace("- **acceptance_role**：acceptance", "- **acceptance_role**：`acceptance`")
+      .replace("- **e2e_scope**：ui", "- **e2e_scope**：`ui`");
+
+    expect(validate(inlineCodeScalars)).toMatchObject({ ok: true, errors: [] });
+    expect(projectAcceptanceExecutionData(inlineCodeScalars, { decisionLog, spec })).toMatchObject({
+      status: "ready",
+      eligible_for_pass: true,
+      scenarios: [{ task_id: "T003", ui_scope: "ui", e2e_scope: "ui" }],
+    });
+  });
+
   it("requires every UI/fullstack implementation card to bind a design authority and UI contract", () => {
     expect(validate(validTasks)).toMatchObject({ ok: true, errors: [] });
     expect(validate(validTasks.replace(uiImplementationRefs, JSON.stringify([

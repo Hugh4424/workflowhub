@@ -126,6 +126,56 @@ function managedWire(state, { requestId = managedRequestId, runtimeId = managedR
   return { exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" };
 }
 
+// workflowhub-result.v3 managed group/member shape, copied from the broker's
+// authoritative projection (3rd-review lib/workflowhub-result-v3.mjs).
+function managedV3Member(overrides = {}) {
+  return {
+    attempts: [{
+      attempt_id: "managed-v3-attempt-1", completed_at_ms: 20, duration_ms: 10, error: null,
+      kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 10, status: "completed",
+    }],
+    continuable: false,
+    deadline_ms: null,
+    error: null,
+    identity: { adapter: "review", config_id: "review-config", model: "review-model", provider: managedProvider, source_id: "review/source" },
+    material: { contract_hash: "unavailable", contract_id: "unavailable", material_id: materialId, semantic_hash: "unavailable" },
+    output: JSON.stringify({ findings: [] }),
+    provenance: { raw_output_sha256: null, raw_stderr_sha256: null, runtime_id: managedRuntime },
+    recovery: { fresh_execution_retry_count: 0, provider_internal_retry_count: 0, same_session_repair_count: 0 },
+    result_protocol: "workflowhub-result.v3",
+    session_id: "session-managed",
+    status: "completed",
+    timing: { completed_at_ms: 20, duration_ms: 10, started_at_ms: 10 },
+    usage: null,
+    ...overrides,
+  };
+}
+
+function managedV3Group({ outcome = "completed", members = [managedV3Member()], overrides = {} } = {}) {
+  return {
+    host_provider: "codex",
+    material_id: materialId,
+    outcome,
+    providers: members,
+    round: 1,
+    runtime_id: managedRuntime,
+    selected_tier: null,
+    version: "workflowhub-result.v3",
+    ...overrides,
+  };
+}
+
+function managedV3Wire(group) {
+  return {
+    exitCode: 0,
+    stdout: `${JSON.stringify({
+      version: "workflowhub-run.v1", request_id: managedRequestId, runtime_id: managedRuntime,
+      state: "terminal", material_id: materialId, group,
+    })}\n`,
+    stderr: "",
+  };
+}
+
 function completedProviderResult() {
   return {
     provider: managedProvider,
@@ -381,7 +431,12 @@ describe("managed review lifecycle boundary", () => {
     expect(calls).toEqual(["start", "status"]);
   });
 
-  it("cancels a managed runtime that exceeds the production terminal wait", async () => {
+  it("stops waiting at the production terminal wait without cancelling the broker", async () => {
+    // Option B (user decision 2026-09-11): the bounded wait stops WAITING, not
+    // the work. 3rd-review's v4 policy forbids elapsed-time termination of an
+    // active provider, and D-030③ forbids WorkflowHub inventing its own stall
+    // verdict, so the caller records a truthful fact and leaves the broker
+    // running. cancelManaged must therefore NEVER be reached on this path.
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-timeout-")));
     roots.push(attachmentRoot);
     const calls = [];
@@ -390,13 +445,7 @@ describe("managed review lifecycle boundary", () => {
     const client = {
       async startManaged(value) { calls.push("start"); return running(value); },
       async statusManaged(value) { calls.push("status"); return running(value); },
-      async cancelManaged(value) {
-        calls.push("cancel");
-        return { ...running(value), state: "terminal", group: managedGroup("cancelled", managedMember({
-          status: "cancelled", continuable: false, error: { code: "CANCELLED", message: "bounded wait elapsed" },
-          unavailable_diagnostics: { code: "CANCELLED", message: "bounded wait elapsed" }, output: null,
-        })) };
-      },
+      async cancelManaged() { calls.push("cancel"); throw new Error("caller-side wall-clock termination is forbidden"); },
     };
     const result = await runSimpleReview({
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
@@ -411,8 +460,9 @@ describe("managed review lifecycle boundary", () => {
       managedStatusPollMs: 0,
     });
 
-    expect(result).toMatchObject({ status: "unavailable", runtime_id: managedRuntime, outcome: "cancelled" });
-    expect(calls).toEqual(["start", "status", "cancel"]);
+    expect(result).toMatchObject({ status: "unavailable", runtime_id: managedRuntime,
+      error: { code: "REVIEW_WAIT_EXCEEDED" } });
+    expect(calls).toEqual(["start", "status"]);
   });
 
   it("uses the managed V2 start/status/cancel public seam with exact envelopes", async () => {
@@ -457,7 +507,10 @@ describe("managed review lifecycle boundary", () => {
       requestId: managedRequestId,
       request: {
         version: 4,
-        required_result_protocol: "workflowhub-result.v2",
+        // Option 1 (2026-09-11), both halves: 3rd-review accepts v3 for managed
+        // sessions and this caller moved to v3 + negotiated delivery so an
+        // embedded-only provider (codex) is no longer excluded before dispatch.
+        required_result_protocol: "workflowhub-result.v3",
         host_provider: "codex",
         provider_allowlist: [managedProvider],
         deadline_ms: null,
@@ -540,6 +593,144 @@ describe("managed review lifecycle boundary", () => {
   it("rejects a non-broker partial managed group instead of widening workflowhub-result.v2", async () => {
     const client = new ReviewProviderClient({ invoke: async () => managedWire("terminal", { outcome: "partial" }) });
     await expect(client.startManaged(managedContext())).rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+  });
+
+  it("accepts a managed workflowhub-result.v3 terminal group and preserves its binding", async () => {
+    const client = new ReviewProviderClient({ invoke: async () => managedV3Wire(managedV3Group()) });
+    const result = await client.startManaged(managedContext());
+    expect(result).toMatchObject({
+      state: "terminal",
+      material_id: materialId,
+      group: {
+        version: "workflowhub-result.v3",
+        outcome: "completed",
+        material_id: materialId,
+        runtime_id: managedRuntime,
+        round: 1,
+        providers: [{
+          provider: managedProvider,
+          status: "completed",
+          result_protocol: "workflowhub-result.v3",
+          identity: { provider: managedProvider, adapter: "review", source_id: "review/source", config_id: "review-config" },
+          material: { material_id: materialId },
+          provenance: { runtime_id: managedRuntime },
+          output: JSON.stringify({ findings: [] }),
+        }],
+      },
+    });
+  });
+
+  it("accepts the v3 partial outcome that the v2 managed outcome set does not have", async () => {
+    const failed = managedV3Member({
+      attempts: [{ attempt_id: "managed-v3-attempt-1", completed_at_ms: 20, duration_ms: 10, error: { code: "PROCESS_DEAD", message: "provider died" }, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 10, status: "failed" }],
+      error: { code: "PROCESS_DEAD", message: "provider died" },
+      output: null,
+      status: "failed",
+    });
+    const second = "review/second";
+    const client = new ReviewProviderClient({ invoke: async () => managedV3Wire(managedV3Group({
+      outcome: "partial",
+      members: [managedV3Member(), { ...failed, identity: { ...failed.identity, provider: second, config_id: "second-config", source_id: "review/second-source" } }],
+    })) });
+    const result = await client.startManaged(managedContext({ providers: [managedProvider, second] }));
+    expect(result).toMatchObject({ state: "terminal", group: { outcome: "partial", providers: [{ status: "completed" }, { provider: second, status: "failed" }] } });
+    // The v2-only outcomes remain invalid for a v3 group.
+    for (const outcome of ["stalled", "unverifiable", "invalid_output"]) {
+      const invalid = new ReviewProviderClient({ invoke: async () => managedV3Wire(managedV3Group({ outcome })) });
+      await expect(invalid.startManaged(managedContext())).rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+    }
+  });
+
+  it("rejects malformed managed workflowhub-result.v3 groups", async () => {
+    const cases = [
+      ["extra group field", managedV3Group({ overrides: { extra_fact: 1 } })],
+      ["unsupported group version", { ...managedV3Group(), version: 3 }],
+      ["host provider mismatch", managedV3Group({ overrides: { host_provider: "claude/other" } })],
+      ["material binding mismatch", managedV3Group({ overrides: { material_id: "other-material" } })],
+      ["runtime binding mismatch", managedV3Group({ overrides: { runtime_id: "other-runtime" } })],
+      ["v2-only outcome", managedV3Group({ outcome: "stalled" })],
+      ["round below one", managedV3Group({ overrides: { round: 0 } })],
+      ["invalid selected tier", managedV3Group({ overrides: { selected_tier: -1 } })],
+      ["member extra field", managedV3Group({ members: [managedV3Member({ private_path: "/private/member.json" })] })],
+      ["member missing field", managedV3Group({ members: [Object.fromEntries(Object.entries(managedV3Member()).filter(([key]) => key !== "recovery"))] })],
+      ["member provider outside the selection", managedV3Group({ members: [managedV3Member({ identity: { ...managedV3Member().identity, provider: "review/unselected" } })] })],
+      ["member material binding mismatch", managedV3Group({ members: [managedV3Member({ material: { ...managedV3Member().material, material_id: "other-material" } })] })],
+      ["member runtime binding mismatch", managedV3Group({ members: [managedV3Member({ provenance: { ...managedV3Member().provenance, runtime_id: "other-runtime" } })] })],
+      ["completed member carrying an error", managedV3Group({ members: [managedV3Member({ error: { code: "PROCESS_DEAD", message: "dead" } })] })],
+      ["mixed-version member", managedV3Group({ members: [{ ...managedV3Member(), result_protocol: "workflowhub-result.v2" }] })],
+      ["member identity carrying a private path", managedV3Group({ members: [managedV3Member({ identity: { ...managedV3Member().identity, source_id: "/private/source" } })] })],
+      ["omitted configured provider", managedV3Group()],
+    ];
+    for (const [label, group] of cases) {
+      const providers = label === "omitted configured provider" ? [managedProvider, "review/second"] : [managedProvider];
+      const client = new ReviewProviderClient({ invoke: async () => managedV3Wire(group) });
+      await expect(client.startManaged(managedContext({ providers })), label).rejects.toMatchObject({
+        code: expect.stringMatching(/PROTOCOL_INCOMPATIBLE|PUBLIC_RESULT_INVALID/),
+      });
+    }
+  });
+
+  it("consumes a managed workflowhub-result.v3 group through the runner without degrading provider identity", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-v3-runner-")));
+    roots.push(attachmentRoot);
+    const runtimeV3 = "runtime-managed-v3";
+    const calls = [];
+    let requestId = null;
+    let bundleId = null;
+    const wireFor = (state) => ({
+      exitCode: 0,
+      stdout: `${JSON.stringify({
+        version: "workflowhub-run.v1", request_id: requestId, runtime_id: runtimeV3, state, material_id: bundleId,
+        ...(state === "terminal" ? {
+          group: {
+            host_provider: "codex",
+            material_id: bundleId,
+            outcome: "completed",
+            providers: [managedV3Member({
+              material: { contract_hash: "unavailable", contract_id: "unavailable", material_id: bundleId, semantic_hash: "unavailable" },
+              provenance: { raw_output_sha256: null, raw_stderr_sha256: null, runtime_id: runtimeV3 },
+            })],
+            round: 1,
+            runtime_id: runtimeV3,
+            selected_tier: null,
+            version: "workflowhub-result.v3",
+          },
+        } : {}),
+      })}\n`,
+      stderr: "",
+    });
+    const client = new ReviewProviderClient({
+      invoke: async (value) => {
+        calls.push(value.command);
+        if (value.command === "start") { requestId = value.requestId; bundleId = value.attachments.bundle_id; return wireFor("running"); }
+        return wireFor("terminal");
+      },
+    });
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed v3 runner bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+
+    expect(calls).toEqual(["start", "status"]);
+    expect(result.status).toBe("available");
+    expect(result).toMatchObject({ outcome: "completed", runtime_id: runtimeV3 });
+    expect(result.provider_results).toHaveLength(1);
+    expect(result.provider_results[0]).toMatchObject({ provider: managedProvider, status: "completed" });
+    // The broker's v3 identity (including source_id/config_id) must reach the
+    // runner so its trusted-selection binding can verify it; a v2-style
+    // selection lookup would have degraded this member instead.
+    expect(result.provider_results[0].identity).toMatchObject({
+      provider: managedProvider, adapter: "review", source_id: "review/source", config_id: "review-config",
+    });
+    expect(result.provider_results[0].identity_degraded).toBeUndefined();
+    expect(result.provider_results[0].error).toBeNull();
   });
 
   it("blocks oversized verify-code input before any provider dispatch", async () => {

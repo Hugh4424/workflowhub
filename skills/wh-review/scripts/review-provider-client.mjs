@@ -120,6 +120,11 @@ const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
 const managedOutcomes = new Set(["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"]);
+// workflowhub-result.v3 has its own terminal outcome set (3rd-review
+// lib/workflowhub-result-v3.mjs `outcomes`). It is not a superset of the v2 set:
+// v3 replaces the v2-only stalled/unverifiable/invalid_output outcomes with
+// `partial`. Version 4 groups keep using managedOutcomes above, unchanged.
+const managedV3Outcomes = new Set(["completed", "partial", "unavailable", "cancelled"]);
 
 function validateV3Error(value, label) {
   if (value === null) return null;
@@ -355,7 +360,47 @@ function validateManagedMember(value, provider, runtimeId, materialId) {
   });
 }
 
+// A managed operation publishes the group its request protocol produced, so a
+// workflowhub-result.v3 terminal group must be validated with the v3 field set.
+// v3 is not a superset of v2: the group gains `material_id` and every member
+// replaces the flat v2 member shape with identity/material/provenance/recovery/
+// attempts. Running the v2 exact-key check first rejected every real v3 group
+// with "unsupported fields" after the provider had already been dispatched.
+// Only the field sets differ here; every managed binding check is preserved.
+function validateManagedV3Group(value, { hostProvider, providers, runtimeId, materialId }) {
+  exactKeys(value, v3GroupFields, "3rd-review managed v3 group");
+  if (value.host_provider !== hostProvider || value.runtime_id !== runtimeId || value.material_id !== materialId
+      || !managedV3Outcomes.has(value.outcome)
+      || !Number.isSafeInteger(value.round) || value.round < 1
+      || !(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0))
+      || !Array.isArray(value.providers) || value.providers.length !== providers.size) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed v3 group is invalid");
+  // host_provider and material_id are equality-bound to caller-supplied values
+  // above; only the broker-chosen runtime identity can carry an unchecked path.
+  validateV3String(value.runtime_id, "managed v3 group runtime_id", { publicMetadata: true });
+  const seen = new Set();
+  const members = value.providers.map((member) => {
+    const provider = member?.identity?.provider;
+    if (!providers.has(provider) || seen.has(provider)) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed v3 group provider selection is invalid");
+    seen.add(provider);
+    // Managed binding stays explicit here (and keeps the managed path's
+    // PROTOCOL_INCOMPATIBLE classification) instead of relying on the shared
+    // public-v3 binding branch, which reports MATERIAL_INCOMPLETE.
+    if (member?.material?.material_id !== materialId || member?.provenance?.runtime_id !== runtimeId) {
+      throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed v3 member is bound to a different material/runtime");
+    }
+    // v3 member shape, status/error consistency, provider selection, and
+    // material_id/runtime_id binding are the shared public-v3 checks. Contract
+    // identity is deliberately not bound: 3rd-review publishes `unavailable`
+    // contract sentinels on managed failure members, exactly as the v2 managed
+    // member omitted contract identity entirely.
+    return validateV3Member(member, providers, materialId, runtimeId);
+  });
+  if (seen.size !== providers.size) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed v3 group omitted a configured provider");
+  return Object.freeze({ ...value, providers: Object.freeze(members) });
+}
+
 function validateManagedGroup(value, { hostProvider, providers, runtimeId, materialId }) {
+  if (value?.version === protocol) return validateManagedV3Group(value, { hostProvider, providers, runtimeId, materialId });
   exactKeys(value, managedGroupFields, "3rd-review managed group");
   if (value.version !== 4 || value.host_provider !== hostProvider || value.runtime_id !== runtimeId || !managedOutcomes.has(value.outcome)
       || !Number.isSafeInteger(value.round) || value.round < 0 || !(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0))
@@ -471,7 +516,14 @@ export class ReviewProviderClient {
     const request = {
       version: 4,
       host_provider: hostProvider,
-      required_result_protocol: "workflowhub-result.v2",
+      // Option 1 (user decision 2026-09-11), both halves landed: 3rd-review now
+      // accepts v3 for managed sessions and this caller uses the same protocol +
+      // negotiated delivery as runGroup. Before this, an embedded-only provider
+      // (codex declares attachment_delivery ["always_embed"]) was structurally
+      // excluded from every managed review: it failed closed with
+      // ATTACHMENT_DELIVERY_UNSUPPORTED before dispatch (observed:
+      // started_at_ms null, duration_ms null).
+      required_result_protocol: protocol,
       provider_allowlist: [...providers],
       prompt,
       deadline_ms: null,
@@ -484,7 +536,7 @@ export class ReviewProviderClient {
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
     const wire = await this.invoke({
       command: "start", requestId, request, attachments,
-      attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only",
+      attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "negotiated",
     });
     return parseManagedEnvelope(wire, {
       command: "start", requestId, runtimeId: null, materialId: materials.materialId,

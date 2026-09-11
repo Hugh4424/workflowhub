@@ -6603,7 +6603,7 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionL
     const concreteText = (value) => typeof value === "string"
       && value.trim() !== ""
       && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
-    const acceptanceRows = rows.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "acceptance");
+    const acceptanceRows = rows.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "acceptance");
     if (acceptanceRows.length === 0) errors.push("delivery contract requires an explicit acceptance_role=acceptance task");
     const finalAcceptance = acceptanceRows.at(-1);
     if (finalAcceptance && finalAcceptance.order !== rows.length - 1) {
@@ -6650,8 +6650,8 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionL
         errors.push(`${finalAcceptance.id} ${error}`);
       }
     }
-    const uiRows = rows.filter((row) => ["ui", "fullstack"].includes(String(row.fields.ui_scope ?? "").trim()));
-    const uiImplementationRows = uiRows.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "implementation");
+    const uiRows = rows.filter((row) => ["ui", "fullstack"].includes(taskFieldText(row.fields.ui_scope).toLowerCase()));
+    const uiImplementationRows = uiRows.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "implementation");
     if (uiRows.length > 0 && uiImplementationRows.length === 0) {
       errors.push("UI delivery contract requires a separate ui_scope=ui|fullstack implementation task");
     }
@@ -6691,7 +6691,7 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
   const requiresTypedE2e = templateVersion === "plan-task.v4";
   const concrete = (value) => typeof value === "string" && value.trim() !== ""
     && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
-  const acceptanceRows = declared.filter((row) => String(row.fields.acceptance_role ?? "").trim() === "acceptance");
+  const acceptanceRows = declared.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "acceptance");
   if (acceptanceRows.length === 0) errors.push("delivery contract has no acceptance_role=acceptance task");
   const finalAcceptance = acceptanceRows.at(-1);
   for (const row of rows.filter((row) => e2eFields.some((field) => hasField(row, field)))) {
@@ -6756,7 +6756,7 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
       scenarios.push(Object.freeze({
         task_id: row.heading_id,
         acceptance_criterion_ids: Object.freeze(identifiers(row.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)),
-        ui_scope: String(row.fields.ui_scope ?? "").trim(),
+        ui_scope: taskFieldText(row.fields.ui_scope),
         ...(e2e.scope === null ? {} : { e2e_scope: e2e.scope }),
         ...(e2e.decisionRefs.length === 0 ? {} : { e2e_decision_refs: Object.freeze([...e2e.decisionRefs]) }),
         ...(e2e.riskDecisionRef === null ? {} : { e2e_risk_decision_ref: e2e.riskDecisionRef }),

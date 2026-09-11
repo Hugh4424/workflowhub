@@ -9,16 +9,32 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
-import { redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor } from "./review-materials.mjs";
+import { redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor,
+  REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 
 // Managed review ownership lives in 3rd-review. WorkflowHub must keep polling
-// while the broker reports a live session; a default wall-clock deadline would
-// cancel healthy long-running providers. A finite value remains an explicit
-// test/operator override.
-const DEFAULT_MANAGED_TERMINAL_WAIT_MS = null;
+// while the broker reports a live session.
+//
+// Bounded caller-side wait (user decision 2026-09-11, option B):
+// 3rd-review's v4 policy forbids *any* elapsed-time termination of an active
+// provider (lib/config.mjs:35/:47/:68 reject idle_timeout_ms, max_duration_ms,
+// deadline_ms; lib/health-runner.mjs:54 keeps PROCESS_STALLED diagnostic-only;
+// five tests enforce that). So a silent provider can legitimately never reach a
+// terminal state. Waiting forever is therefore not a bug fix — it is the
+// designed consequence.
+//
+// This bound stops *waiting*, NOT the work: the broker is deliberately NOT
+// cancelled, its operation keeps its own runtime (each review creates a fresh
+// runtime via `createdRuntime = !continuing`), OPERATION_ACTIVE is runtime
+// scoped, and orphans are reaped by `cleanup(root, ttl_hours)`. The caller
+// records a truthful `REVIEW_WAIT_EXCEEDED` -> "stalled" fact instead.
+//
+// It is a total wait bound, NOT a stall detector: D-030③ forbids WorkflowHub
+// from inventing its own wall-clock stall verdict.
+const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 1_200_000;
 const DEFAULT_MANAGED_STATUS_POLL_MS = 1000;
 
 function redactHostPaths(value) {
@@ -409,9 +425,9 @@ function buildBundle(attachmentRoot, input) {
   }
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   const deliveryBytes = entries.reduce((total, entry) => total + entry.bytes, 0) + manifest.length;
-  if (deliveryBytes > 330 * 1024) {
+  if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
     rmSync(bundleRoot, { recursive: true, force: true });
-    throw Object.assign(new Error("MATERIAL_TOO_LARGE: review bundle exceeds the 330 KiB provider delivery budget"), { code: "MATERIAL_TOO_LARGE" });
+    throw Object.assign(new Error(`MATERIAL_TOO_LARGE: review bundle exceeds the ${Math.round(REVIEW_PACKET_MAX_DELIVERY_BYTES / 1024)} KiB provider delivery budget`), { code: "MATERIAL_TOO_LARGE" });
   }
   write("manifest.json", manifest);
   // Keep the bundle identity identical to the frozen packet identity. The
@@ -443,10 +459,11 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
     current = await client.statusManaged(context);
     if (current.state === "terminal") return current;
     if (maxWaitMs !== null && Date.now() - startedAt >= maxWaitMs) {
-      const cancelled = await client.cancelManaged(context);
-      if (cancelled?.state === "terminal") return cancelled;
-      const error = new Error("managed review did not reach a terminal state within the bounded wait");
-      error.code = "REVIEW_STATUS_UNAVAILABLE";
+      // Stop WAITING, not the work: do not call cancelManaged here. 3rd-review
+      // owns provider lifetime; killing it would be exactly the caller-side
+      // wall-clock termination that D-030③ forbids. Record the fact instead.
+      const error = new Error(`managed review did not reach a terminal state within ${maxWaitMs} ms; the broker was NOT cancelled and may still complete`);
+      error.code = "REVIEW_WAIT_EXCEEDED";
       throw error;
     }
     if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -821,17 +838,27 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
     round: group.round,
     selectedTier: group.selected_tier,
     ...(materialId === undefined ? {} : { material_id: materialId }),
-    providers: group.providers.map((item) => ({
-      ...item,
-      provider: item.provider,
-      // Managed V2 intentionally omits source identity. Only the trusted
-      // route selection may supply it; never copy identity-like fields from
-      // the broker member or invent a fallback identity.
-      identity: selectedIdentities?.[item.provider]
-        ? { provider: item.provider, adapter: providerAdapter(item.provider), ...selectedIdentities[item.provider] }
-        : null,
-      ...(pair ? pairFields(pair) : {}),
-    })),
+    providers: group.providers.map((item) => {
+      // Managed v2 omits source identity: only the trusted route selection may
+      // supply it, and no identity-like field may be copied from the broker
+      // member. A workflowhub-result.v3 member carries its own broker identity
+      // (provider/adapter/source_id/config_id); the shared provider loop below
+      // binds that identity to the trusted selection, so it must survive here
+      // instead of being replaced by a selection lookup keyed on a field v3
+      // members do not have. Provider is derived the same way the loop derives
+      // it, so a v3 member is never degraded to PROVIDER_IDENTITY_INVALID.
+      const provider = item?.provider ?? item?.identity?.provider ?? null;
+      const brokerV3Identity = item?.result_protocol === "workflowhub-result.v3"
+        && item?.identity && typeof item.identity === "object" ? item.identity : null;
+      return {
+        ...item,
+        provider,
+        identity: brokerV3Identity ?? (selectedIdentities?.[provider]
+          ? { provider, ...selectedIdentities[provider] }
+          : null),
+        ...(pair ? pairFields(pair) : {}),
+      };
+    }),
   };
 }
 
