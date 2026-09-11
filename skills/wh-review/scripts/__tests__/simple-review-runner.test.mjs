@@ -873,6 +873,30 @@ describe("simple material-only review", () => {
     });
   });
 
+  it("adds the trusted adapter when managed lifecycle normalizes selected identity", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-identity-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: { async startManaged() {
+        return { state: "terminal", group: { runtime_id: "runtime-managed-identity", outcome: "completed", providers: [{
+          provider: "model-a", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null,
+        }] } };
+      } },
+    });
+    expect(result).toMatchObject({
+      status: "available",
+      provider_results: [{
+        provider: "model-a",
+        identity: { provider: "model-a", adapter: "model-a", source_id: "trusted-source", config_id: "trusted-config" },
+      }],
+    });
+  });
+
 });
 
 describe("review flow static preflight", () => {

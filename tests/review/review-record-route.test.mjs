@@ -1366,6 +1366,23 @@ describe("T006 degraded failed provider provenance", () => {
     raw.provider_results[1] = { ...raw.provider_results[1], status: "completed", error: null, evidence_anchor_valid: [] };
     expect(() => recordSimpleReviewResult({ task, kernel, result: raw })).toThrow(/source identity.*mismatch/i);
   });
+  it("records a completed lifecycle member with a broker error as a failed fact", () => {
+    const { task, kernel } = makeTask();
+    const raw = addDegraded(baseResult());
+    raw.provider_results[1] = {
+      ...raw.provider_results[1],
+      status: "completed",
+      identity: null,
+      error: { code: "EVIDENCE_ANCHOR_INVALID", message: "finding did not anchor" },
+      evidence_anchor_valid: [],
+    };
+    const refs = recordSimpleReviewResult({ task, kernel, result: raw });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.provider_attempts[1].status).toBe("failed");
+    expect(Object.hasOwn(attempt.provider_attempts[1], "identity")).toBe(false);
+    expect(attempt.provider_attempts[1].error.code).toBe("EVIDENCE_ANCHOR_INVALID");
+  });
   it("retains paired failed roles even when degraded identities are unavailable", () => {
     const { task, kernel } = makeTask();
     const raw = pairedResult({ redAvailable: false, blueAvailable: false });
@@ -1377,7 +1394,8 @@ describe("T006 degraded failed provider provenance", () => {
     expect(refs.semantic_status).toBe("unavailable");
     for (const role of ["red", "blue"]) {
       const attempt = JSON.parse(task.readRecord(refs.role_results[role].attempt_ref));
-      expect(attempt.provider_attempts[1].identity).toBeNull();
+      validateSchema("attempt", attempt);
+      expect(Object.hasOwn(attempt.provider_attempts[1], "identity")).toBe(false);
       expect(attempt.provider_attempts[1].error.code).toBe("PROVIDER_HEALTH_FAILED");
       expect(refs.role_results[role].result_ref).toBeNull();
     }

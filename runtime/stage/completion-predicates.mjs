@@ -201,7 +201,15 @@ export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, sub
 // order, so it is deliberately never used as a tie-breaker.
 function selectLatestTerminalObservation(observations) {
   if (observations.length === 0) return { status: "missing", observation: null };
-  if (observations.length === 1) return { status: "selected", observation: observations[0] };
+  if (observations.length === 1) {
+    const fact = observations[0].fact?.value ?? observations[0].fact;
+    // Keep the legacy single-observation shape readable.  Once a timestamp
+    // is supplied, however, it must be parseable; an explicit bad time is not
+    // a current fact.
+    if (!Object.prototype.hasOwnProperty.call(fact ?? {}, "recorded_at")) {
+      return { status: "selected", observation: observations[0] };
+    }
+  }
 
   const ranked = observations.map((observation) => ({
     observation,
@@ -225,13 +233,21 @@ function selectLatestTerminalObservation(observations) {
 // conflict. Facts without a recorded_at remain ambiguous and are deliberately
 // left as-is so legacy duplicate inputs still fail closed.
 function selectLatestAcceptanceCandidates(candidates) {
-  if (candidates.length <= 1) return { status: "selected", candidates };
   const ranked = candidates.map((candidate) => ({
     candidate,
     recordedAt: Date.parse(candidate?.value?.recorded_at ?? ""),
   }));
+  if (ranked.length === 0) return { status: "selected", candidates };
+  if (ranked.length === 1 && !Object.prototype.hasOwnProperty.call(ranked[0].candidate?.value ?? {}, "recorded_at")) {
+    return { status: "selected", candidates };
+  }
   if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) {
-    return { status: "conflict", candidates };
+    // A single explicit bad timestamp is simply not a current candidate. Two
+    // or more unorderable candidates are a visible conflict: choosing by
+    // filename or insertion order would silently pick a winner.
+    return ranked.length === 1
+      ? { status: "invalid", candidates: [] }
+      : { status: "conflict", candidates };
   }
   const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
   const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt).map(({ candidate }) => candidate);
@@ -525,6 +541,34 @@ export function deriveFactBoundStageOutcomeRefs({
     if (hash && sha256(raw) !== hash) throw new Error("quality evidence hash mismatch");
     return { raw, value: JSON.parse(raw) };
   };
+  // Quality facts are append-only history.  Keep the outcome binding on the
+  // same latest-terminal selection used by stage completion; otherwise a
+  // retry that writes the same predicate leaves both immutable bindings in
+  // the current chain and creates a false stage-outcome conflict.  An
+  // unorderable group is retained in full so the final projection stays
+  // fail-closed instead of choosing by content-hash order.
+  const observationGroups = new Map();
+  for (const observation of observations) {
+    if (observation?.authenticated !== true || observation?.freshness?.status !== "current") continue;
+    const fact = observation.fact?.value ?? observation.fact;
+    if (!fact || fact.task_id !== taskId || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) continue;
+    const key = JSON.stringify([fact.stage ?? null, fact.subject ?? null]);
+    const group = observationGroups.get(key) ?? [];
+    group.push(observation);
+    observationGroups.set(key, group);
+  }
+  const selectedObservations = [];
+  const observationSelectionConflicts = new Set();
+  for (const group of observationGroups.values()) {
+    const selection = selectLatestTerminalObservation(group);
+    if (selection.status === "conflict") {
+      const fact = group[0]?.fact?.value ?? group[0]?.fact;
+      if (fact?.stage) observationSelectionConflicts.add(fact.stage);
+      selectedObservations.push(...group);
+    } else if (selection.observation) {
+      selectedObservations.push(selection.observation);
+    }
+  }
   const bindVerifyCodeReviewOutcome = (fact, evidenceEntries) => {
     if (fact.stage !== "verify-code" || fact.kind !== "review" || fact.subject !== "code_review") return;
     for (const evidence of evidenceEntries) {
@@ -552,10 +596,8 @@ export function deriveFactBoundStageOutcomeRefs({
       }
     }
   };
-  for (const observation of observations) {
-    if (observation?.authenticated !== true || observation?.freshness?.status !== "current") continue;
+  for (const observation of selectedObservations) {
     const fact = observation.fact?.value ?? observation.fact;
-    if (!fact || fact.task_id !== taskId || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) continue;
     const evidenceEntries = Array.isArray(fact.evidence) ? fact.evidence : [];
     bindVerifyCodeReviewOutcome(fact, evidenceEntries);
     for (const evidence of evidenceEntries) {
@@ -588,7 +630,7 @@ export function deriveFactBoundStageOutcomeRefs({
   const conflicts = {};
   for (const [stage, refs] of allowed.entries()) {
     const entries = [...(bound.get(stage)?.entries() ?? [])];
-    if (invalid.has(stage) || entries.length > 1) {
+    if (observationSelectionConflicts.has(stage) || invalid.has(stage) || entries.length > 1) {
       selected[stage] = [];
       conflicts[stage] = true;
     } else {
@@ -1169,12 +1211,44 @@ export function deriveCurrentProductRelease({
         });
         acceptanceCandidates.set(id, candidates);
       }
+    } else if (verifyIdentityCurrent) {
+      // A current canonical summary that is failed or incomplete is still
+      // authoritative negative evidence.  A passed summary whose evidence is
+      // malformed is instead blocked as missing.  In both cases, do not let
+      // an otherwise passing stage leaf become a release result merely
+      // because the summary was rejected by the authentication checks.
+      const verifyHash = sha256(verifyRaw);
+      for (const id of expectedAcceptanceIds) {
+        if (typeof id !== "string" || !/^AC-[A-Za-z0-9_-]+$/.test(id)) continue;
+        const candidates = acceptanceCandidates.get(id) ?? [];
+        candidates.push({
+          source: verify.status === "passed" ? "verify-summary-blocked" : "verify-summary-invalid",
+          value: {
+            acceptance_criterion_id: id,
+            result: verify.status === "passed" ? "unknown" : "failed",
+            status: verify.status === "passed" ? "unknown" : "failed",
+            current: true,
+            task_id: taskId,
+            material_revision: materialRevision,
+            snapshot_tree: snapshotTree,
+            ref: verifyRef,
+            hash: verifyHash,
+            reason: "current verify summary is not authenticated",
+          },
+          ref: verifyRef,
+          hash: verifyHash,
+        });
+        acceptanceCandidates.set(id, candidates);
+      }
     }
   } catch {
     // Missing or malformed verify summary remains represented by the missing
     // expected AC reasons below; no guessed product result is created.
   }
   const acceptanceResults = [...acceptanceCandidates.values()].flatMap((candidates) => {
+    const invalidVerifyCandidates = candidates.filter(({ source }) => source === "verify-summary-invalid");
+    if (invalidVerifyCandidates.length > 0) return invalidVerifyCandidates;
+    if (candidates.some(({ source }) => source === "verify-summary-blocked")) return [];
     const verifyCandidates = candidates.filter(({ source }) => source === "verify-summary");
     const stageSelection = selectLatestAcceptanceCandidates(candidates.filter(({ source }) => source === "stage-fact"));
     const stageCandidates = stageSelection.candidates;

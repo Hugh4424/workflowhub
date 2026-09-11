@@ -251,7 +251,7 @@ export function validateBrowserQaEvidence(value) {
   return Object.freeze(value);
 }
 
-const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "narrow_diff", "phase", "route_repair"]);
+const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "phase", "route_repair"]);
 const REVIEW_ATTEMPT_STATUSES = new Set(["completed", "executed", "failed", "unavailable"]);
 const SNAPSHOT = /^[a-f0-9]{40}$/i;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
@@ -346,7 +346,6 @@ export function validateReviewBudget({ material_revision, attempts = [], canonic
   const counts = {
     initial: currentAttempts.filter((attempt) => attempt?.kind === "initial").length,
     focused: currentAttempts.filter((attempt) => attempt?.kind === "focused").length,
-    narrow_diff: currentAttempts.filter((attempt) => attempt?.kind === "narrow_diff").length,
     phase: currentAttempts.filter((attempt) => attempt?.kind === "phase" && attempt?.phase_id === request?.phase_id).length,
     route_repair: currentAttempts.filter((attempt) => attempt?.kind === "route_repair").length,
   };
@@ -364,20 +363,8 @@ export function validateReviewBudget({ material_revision, attempts = [], canonic
   }
   if (kind === "focused") {
     if (request.changed !== true) return reviewBudgetResult({ ok: false, reason: "no_material_change_for_focused_review", route: "ask_user", counts });
-    if (counts.focused > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "narrow_diff", counts });
+    if (counts.focused > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
     return reviewBudgetResult({ ok: true, route: "focused_review", counts });
-  }
-  if (kind === "narrow_diff") {
-    const changedPaths = Array.isArray(request.changed_paths) ? request.changed_paths : [];
-    const allowedPaths = new Set(Array.isArray(request.allowed_paths) ? request.allowed_paths : []);
-    const pathError = changedPaths.length === 0
-      ? "narrow_diff_paths_missing"
-      : changedPaths.some((path) => typeof path !== "string" || path.trim() === "" || path.startsWith("/") || path.split("/").includes(".."))
-        ? "narrow_diff_path_invalid"
-        : changedPaths.some((path) => !allowedPaths.has(path)) ? "narrow_diff_out_of_scope" : null;
-    if (pathError) return reviewBudgetResult({ ok: false, reason: pathError, route: "ask_user", counts });
-    if (counts.narrow_diff > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
-    return reviewBudgetResult({ ok: true, route: "narrow_diff_reconciled", counts });
   }
   if (kind === "route_repair") {
     if (canonicalAttempts === null) {
