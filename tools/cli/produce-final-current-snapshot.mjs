@@ -106,10 +106,20 @@ export function writeFinalSnapshot(path, value) {
   return { ref: path, sha256: sha256(bytes) };
 }
 
+// `--acceptance-output` selects the canonical acceptance document on stdout.
+// It is a bare flag, so it is matched before the `--key=value` loop.  Holding
+// the declaration's acceptance args in the producer's own option namespace
+// keeps the executable scenario bound to the producer (T013 acceptance_data)
+// without introducing a second command or an unexpanded shell placeholder.
+const ACCEPTANCE_OUTPUT_FLAG = "--acceptance-output";
+
 function parseArgs(args, cwd = process.cwd()) {
   const allowed = new Set(["--task-id", "--spec", "--plan", "--tasks", "--task-dir", "--output", "--source-root"]);
   const values = {};
+  const acceptanceOutput = args.filter((arg) => arg === ACCEPTANCE_OUTPUT_FLAG).length;
+  if (acceptanceOutput > 1) throw new Error(`duplicate final snapshot option: ${ACCEPTANCE_OUTPUT_FLAG}`);
   for (const arg of args) {
+    if (arg === ACCEPTANCE_OUTPUT_FLAG) continue;
     const match = /^(--[^=]+)=(.*)$/.exec(arg);
     if (!match || !allowed.has(match[1]) || values[match[1]] !== undefined) {
       throw new Error(`unknown or duplicate final snapshot option: ${arg}`);
@@ -126,6 +136,7 @@ function parseArgs(args, cwd = process.cwd()) {
     taskDir: pathFromArg(values["--task-dir"], "--task-dir", cwd),
     outputPath: pathFromArg(values["--output"], "--output", cwd),
     sourceRoot: values["--source-root"] === undefined ? cwd : pathFromArg(values["--source-root"], "--source-root", cwd),
+    acceptanceOutput: acceptanceOutput === 1,
   });
 }
 
@@ -901,6 +912,22 @@ export function main(args = process.argv.slice(2)) {
   try {
     const options = parseArgs(args);
     const result = produceFinalCurrentSnapshot(options);
+    if (options.acceptanceOutput === true) {
+      // The declared acceptance scenario runs as bare argv with no shell, so it
+      // cannot post-process the summary.  Emit the canonical acceptance
+      // document the runtime validator reads instead: one entry per active AC,
+      // each carrying this snapshot's own assertion and its real status.
+      const entries = (result.assertions ?? []).map((assertion) => ({
+        acceptance_criterion_id: assertion.ac_id,
+        assertions: [{
+          id: assertion.oracle_id,
+          expected: "passed",
+          actual: assertion.status,
+        }],
+      }));
+      process.stdout.write(`${JSON.stringify({ entries })}\n`);
+      return result;
+    }
     process.stdout.write(`${JSON.stringify({ output: result.output.ref, sha256: result.output.sha256, aggregate_status: result.aggregate_status })}\n`);
     return result;
   } catch (error) {

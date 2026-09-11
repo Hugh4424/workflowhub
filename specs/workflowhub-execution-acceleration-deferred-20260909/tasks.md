@@ -163,15 +163,23 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：completed
-- **actual_changes**：`tools/cli/measure-test-runtime-profile.mjs` capture runner；未改动 profile source
-- **executed_commands**：`node tools/cli/measure-test-runtime-profile.mjs --profile-json="$PROFILE_JSON" --inner-manifest="$INNER_MANIFEST" --medium-manifest="$MEDIUM_MANIFEST" --runs=5 --output="$TASK_DIR/quality/evidence/performance-profile/S3.json"`；exit 1，`MEASUREMENT_FAILED`（profile JSON `ENOENT`）
-- **evidence_refs**：`[{"ref":"quality/evidence/performance-profile/S3.json","kind":"performance_capture","sha256":"74cf9c52bd40744eff4a323645ce69ac119cab0b401e57a352967f09b52f659f"}]`
-- **covered_ac**：AC-GOV-001、AC-S3-02..13（capture incomplete；没有五轮通过声明）
+- [ ] **任务完成**
+- **status**：incomplete
+- **actual_changes**：`tools/cli/measure-test-runtime-profile.mjs` capture runner；未改动 profile source。补充固定输入：profile JSON（`worker_ceiling=2`，阈值从 `TEST_RUNTIME_PROFILE_LIMITS_MS` 读取）与 inner/medium member manifests，仍不新增画像来源。
+- **executed_commands**：
+  1. `node tools/cli/measure-test-runtime-profile.mjs --profile-json="$PROFILE_JSON" --inner-manifest="$INNER_MANIFEST" --medium-manifest="$MEDIUM_MANIFEST" --runs=5 --output="$TASK_DIR/quality/evidence/performance-profile/S3.json"`；exit 1，`MEASUREMENT_FAILED`（profile JSON `ENOENT`）——缺失输入时的 fail-closed 事实，原样保留。
+  2. `node tools/cli/measure-test-runtime-profile.mjs --profile-json=/tmp/workflowhub-s3-profile.json --inner-manifest=/tmp/workflowhub-s3-inner-manifest.json --medium-manifest=/tmp/workflowhub-s3-medium-manifest.json --runs=5 --output="$TASK_DIR/quality/evidence/performance-profile/S3-run-20260911-p1.json"`；exit 1，`status=incomplete/result=incomplete`（真实五轮已执行；能力观测未认证，见下）
+- **evidence_refs**：`[{"ref":"quality/evidence/performance-profile/S3.json","kind":"performance_capture","sha256":"74cf9c52bd40744eff4a323645ce69ac119cab0b401e57a352967f09b52f659f"},{"ref":"quality/evidence/performance-profile/S3-run-20260911-p1.json","kind":"performance_capture","sha256":"4c4a9c9a02e1d3938a4aaafbd503b3cb549958ccf4a45bc33bb2a095ec22fe38"}]`
+- **实测值（FR-S3-06/07/08，五次独立进程，首轮 cold 且计入统计）**：
+  - inner 单文件 max：`test-runtime-profile` 3869ms、`runtime-profile-consumer-readback` 2314ms、`skill-contract` 474ms（阈值 60000ms；三项均 pass）
+  - inner 集合 samples `[3614,3710,3741,3719,3688]`，max=p95=3741ms ≤60000ms；实际 worker 2/2，`overlap_observed=true`（FR-S3-13 成立）
+  - medium 集合 samples `[2526,2445,2262,2395,2343]`，max=p95=2526ms ≤300000ms；实际 worker 2/2
+  - 每个 member 均有 PID、start/end、exit 0、signal null、`cleanup=completed` 与 raw stdout/stderr ref+sha256
+- **未认证项（不得改写为通过，AC-S3-07 / FR-S3-12）**：`capability_observations.inner/medium` 均为 `status=unavailable`，reason=`profile JSON did not provide an observed capability count`。全仓不存在 runtime capability observation 的生产者，唯一能写 `capability_proof` 的 `tools/cli/run-checks.mjs:128` 硬编码 `status:"unavailable"`，且 `tests/contract/acceptance-execution-inner.test.mjs:67` 断言其必须保持 `unavailable`。因此整体 `status/result` 依契约保持 `incomplete`，不宣称性能通过。
+- **covered_ac**：AC-GOV-001、AC-S3-02..13（capture 字段完整、阈值实测达标；能力认证缺失故事实为 incomplete，没有五轮通过声明）
 - **review_fact**：P1 Phase review canonical fact `quality/reviews/attempts/ecd61bc0-40e4-53b6-ad8b-c6807d7b67dc/attempt.json`，`terminal_status=unavailable`
-- **completed_at**：2026-09-11T04:44:20+08:00
-- **执行事实**：runner 按五轮协议实际执行并在缺失 profile 输入时 fail-closed，写出 `status=incomplete/result=incomplete`；没有复用旧 capture，也没有把缺输入当作性能通过。
+- **completed_at**：2026-09-11T04:44:20+08:00（原始失败事实）；2026-09-11T15:40+08:00（五轮复跑）
+- **执行事实**：runner 按五轮协议实际执行；第一次因缺 profile 输入 fail-closed，第二次补齐固定输入后真实跑完五轮并记录原始样本、cold 标记、worker/overlap 与 raw hash。两次均未复用旧 capture（FR-S3-11），也未把 incomplete 改写成通过（FR-S3-12）。
 
 #### T003 — REVIEW：一次独立 S3 Phase review
 
