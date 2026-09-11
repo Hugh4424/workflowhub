@@ -1,9 +1,10 @@
 # 决策记录 · workflowhub-build-prd-workflow-hardening-20260911
 
-## 0. 任务身份
+## 任务身份
 
 | 项 | 值 |
 | --- | --- |
+| 任务类型 | 普通任务 |
 | project | workflowhub |
 | task_id | workflowhub-build-prd-workflow-hardening-20260911 |
 | stage | make-decision |
