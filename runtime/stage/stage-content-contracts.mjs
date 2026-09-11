@@ -6835,12 +6835,26 @@ const V2_AC = ACCEPTANCE_CRITERION_ID;
 
 export function activeAcceptanceCriterionIds(spec) {
   const text = String(spec ?? "");
-  const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/mi);
-  const body = heading
-    ? text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0]
-    : text;
+  // A spec may legitimately carry more than one section titled 验收标准: the
+  // document's own summary card and the detailed acceptance list.  Matching
+  // only the first heading silently narrowed the authoritative AC set to the
+  // summary card, so collect every such section.  Sections are found by
+  // heading rather than by number, because the summary card can sit before the
+  // numbered body.
+  const headingPattern = /^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/gmi;
+  const sections = [];
+  for (const match of text.matchAll(headingPattern)) {
+    sections.push(text.slice(match.index + match[0].length).split(/^##\s+/m, 1)[0]);
+  }
+  const body = sections.length > 0 ? sections.join("\n") : text;
   const listEntries = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*([^\n]*)/gm)];
   const listIds = listEntries
+    .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
+    .filter(Boolean);
+  // Acceptance criteria may also be declared as their own heading
+  // (`#### AC-S3-01 <title>`).  Heading declarations carry no status suffix,
+  // so the deferred markers below only apply to the list/table forms.
+  const headingEntries = [...body.matchAll(/^#{1,6}\s+([^\n]*)$/gm)]
     .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
     .filter(Boolean);
   const tableEntries = [];
@@ -6861,7 +6875,7 @@ export function activeAcceptanceCriterionIds(spec) {
     }
   }
   const tableIds = tableEntries.map(({ id }) => id);
-  const headingIds = [...listIds, ...tableIds];
+  const headingIds = [...listIds, ...headingEntries, ...tableIds];
   const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
   const explicitMetadata = /^\s*(?:[[(（]\s*(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）]|(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s—–:：,，;；.。-]))/i;
   const deferredIds = new Set(listEntries.flatMap(([, label, suffix]) => {
