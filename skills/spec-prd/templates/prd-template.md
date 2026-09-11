@@ -55,6 +55,8 @@ Map confirmation revision: {{map_confirmation_revision}}
 
 ### 任务卡字段（每张卡必须完整填写）
 
+以下是固定保留的 **16 个既有字段**；不得因卡片数量或实现层次删改字段名。
+
 - **结果与 consumer**：{{result_and_consumer}}
 - **范围**：{{card_scope}}
 - **流程/状态**：{{flow_and_states}}

@@ -8,6 +8,13 @@ import { stageReflectionPublication } from "../../tools/cli/stage-runtime.mjs";
 const root = resolve(import.meta.dirname, "../..");
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 
+const DISCLOSURE_FIXTURE = Object.freeze([
+  { step_slug: "not-started", status: "未启动", output: "未声明", criterion: "未检查" },
+  { step_slug: "skipped", status: "跳过", output: "未声明", criterion: "不适用原因" },
+  { step_slug: "missing-output", status: "已执行但产物缺失", output: "缺失", criterion: "已声明" },
+  { step_slug: "missing-criterion", status: "产物存在而完成判据缺失", output: "存在", criterion: "缺失" },
+]);
+
 function read(relative) {
   return readFileSync(resolve(root, relative), "utf8");
 }
@@ -110,6 +117,31 @@ describe("stage-reflection workflow wiring", () => {
       } else {
         expect(dependency).toBeUndefined();
       }
+    }
+  });
+
+  it("planning-hardening AC-CHECK-001 requires per-manifest status disclosure with separate output and completion facts", () => {
+    const statuses = DISCLOSURE_FIXTURE.map((entry) => entry.status);
+    expect(new Set(statuses)).toEqual(new Set([
+      "未启动",
+      "跳过",
+      "已执行但产物缺失",
+      "产物存在而完成判据缺失",
+    ]));
+
+    for (const stage of stages) {
+      const workflow = read(`workflows/${stage}/SKILL.md`);
+      expect(workflow, `${stage} must name the manifest`).toMatch(/steps\.json|steps manifest/i);
+      expect(workflow, `${stage} must disclose every declared step`).toMatch(/逐项/);
+      expect(workflow, `${stage} must separate output existence from completion`).toMatch(/产物(?:是否)?存在性|产物存在/);
+      expect(workflow, `${stage} must name the completion criterion`).toMatch(/完成判据/);
+      expect(workflow, `${stage} must preserve not-started facts`).toMatch(/未启动|not_started/);
+      expect(workflow, `${stage} must preserve skipped facts`).toMatch(/跳过|skipped/);
+      expect(workflow, `${stage} must preserve missing-output facts`).toMatch(/产物缺失/);
+      expect(workflow, `${stage} must preserve missing-criterion facts`).toMatch(/完成判据缺失/);
+      expect(workflow, `${stage} must keep executor absence unavailable`).toMatch(/executor_absent[\s\S]{0,120}(?:不可用|unavailable)|(?:不可用|unavailable)[\s\S]{0,120}executor_absent/i);
+      expect(workflow, `${stage} must disclose a missing outcome`).toMatch(/无 outcome|没有 outcome|outcome 缺失/i);
+      expect(workflow, `${stage} must keep unavailable distinct from skipped`).toMatch(/不可用[\s\S]{0,120}跳过|跳过[\s\S]{0,120}不可用/i);
     }
   });
 });

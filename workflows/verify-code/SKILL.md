@@ -17,6 +17,14 @@ owner；环境不可用只记录 attempt。错配只让正式完成事实保持 
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
+`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
+“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
+
 ## 阶段末复盘（必须执行）
 
 阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须显式引用本阶段唯一真实 `quality/evidence/stage-outcomes/<stage>/<sha256>.json`；writer 重读并完整认证来源，核对 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree，run/executor 来自认证 outcome。缺来源、executor 或 judgment 保持 `unavailable`，保留实际错误，不借用旧复盘。

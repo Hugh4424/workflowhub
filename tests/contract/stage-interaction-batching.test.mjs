@@ -179,3 +179,82 @@ describe("batched interaction contract", () => {
     expect(buildSpec).not.toMatch(/asks one material specification question|one material spec ambiguity at a time/i);
   });
 });
+
+describe("planning-hardening question boundary", () => {
+  it("planning-hardening AC-ASK-001/002/003 and AC-PRD-001 document type-first branching and the six direction slots", () => {
+    const makeDecision = read("workflows/make-decision/SKILL.md");
+    const decisionLog = read("skills/decision-log/SKILL.md");
+    const template = read("skills/decision-log/templates/decision-log-template.md");
+    const typeIndex = makeDecision.search(/任务类型/);
+    const questionIndex = makeDecision.search(/Ask only questions whose answers could change direction/i);
+    expect(typeIndex).toBeGreaterThanOrEqual(0);
+    expect(questionIndex).toBeGreaterThan(typeIndex);
+    expect(makeDecision).toMatch(/readTaskTypeFromDecisionLog/);
+    expect(makeDecision).toMatch(/规划任务/);
+    expect(makeDecision).toMatch(/普通任务/);
+    expect(makeDecision).toMatch(/unknown/);
+    expect(makeDecision).toMatch(/澄清/);
+
+    for (const slot of [
+      "complete_user_flow",
+      "page_scope",
+      "data_state",
+      "success_failure_boundary",
+      "non_goals",
+      "deferred",
+    ]) {
+      expect(makeDecision, `missing direction slot: ${slot}`).toMatch(new RegExp(slot));
+    }
+
+    for (const forbiddenClass of [
+      "文件路径与文件面",
+      "函数名",
+      "字段名",
+      "算法",
+      "schema 形状",
+      "命令形态",
+      "入口参数形态",
+      "行号",
+      "代码片段",
+      "测试记录与实测记录",
+    ]) {
+      expect(makeDecision, `missing D-004 class: ${forbiddenClass}`).toMatch(new RegExp(forbiddenClass));
+    }
+
+    expect(makeDecision).toMatch(/普通任务[\s\S]{0,500}(?:照旧|实现细节|可以继续)/);
+    expect(makeDecision).toMatch(/For `规划任务`, ask only questions that can change the direction/i);
+    for (const document of [decisionLog, template]) {
+      expect(document).toMatch(/任务身份/);
+      expect(document).toMatch(/任务类型/);
+      expect(document).toMatch(/规划任务/);
+      expect(document).toMatch(/普通任务/);
+    }
+  });
+
+  it("planning-hardening AC-ASK-003 keeps each option understandable with meaning, consequence, and risk", () => {
+    const result = contracts.validateInteractionQuestionBatch([question("规划范围", 1)], { interactionType: "Talk" });
+    expect(result).toMatchObject({ ok: true });
+    for (const option of question("规划范围", 1).options) {
+      expect(option.meaning).toBeTruthy();
+      expect(option.consequence).toBeTruthy();
+      expect(option.risk).toBeTruthy();
+    }
+  });
+
+  it("planning-hardening AC-ASK-001/002 rejects implementation-detail axes only for planning tasks", () => {
+    const implementationDetail = question("文件路径", 1);
+    implementationDetail.prompt = "应该使用哪个文件路径、函数名、命令参数和代码片段？";
+    const planning = contracts.validateInteractionQuestionBatch([implementationDetail], {
+      interactionType: "Talk",
+      taskType: "规划任务",
+    });
+    expect(planning.ok).toBe(false);
+    expect(planning.errors.join("; ")).toMatch(/规划|实现|细节|implementation|detail/i);
+
+    const ordinary = contracts.validateInteractionQuestionBatch([implementationDetail], {
+      interactionType: "Talk",
+      taskType: "普通任务",
+    });
+    expect(ordinary.ok).toBe(true);
+  });
+});

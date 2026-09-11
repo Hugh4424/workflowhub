@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeDecisionConvergence } from "../../runtime/stage/stage-content-contracts.mjs";
+import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
+
+const { analyzeDecisionConvergence } = contracts;
 
 const OUTLINE_HASH = "a".repeat(64);
 
@@ -21,7 +23,7 @@ function outlineLog({
     ["success_failure_boundary", "OI-004"], ["non_goals", "OI-005"], ["deferred", "OI-006"],
   ];
   const oiRecords = records ?? [
-    { oi_id: "OI-001", task_id: "task-1", outline_version: "v1", category: "complete_user_flow", source: "R-001", question: "目标流程的关键入口是什么？", status: "confirmed", selected_disposition: "复用当前入口", evidence: "F-001", acceptance: "入口可达", counterexample: "入口不存在", impact_dimensions: ["goal"], requires_user_decision: true, visible_group_id: "group-goal", interaction_ref: "interaction-1", interaction_hash: OUTLINE_HASH },
+    { oi_id: "OI-001", task_id: "task-1", outline_version: "v1", category: "complete_user_flow", source: "R-001", question: "目标流程的关键入口是什么？", status: "confirmed", selected_disposition: "复用当前入口", evidence: "F-001", acceptance: "入口可达", counterexample: "入口不存在", impact_dimensions: ["goal"], requires_user_decision: true, visible_group_id: "group-goal" },
     { oi_id: "OI-002", task_id: "task-1", outline_version: "v1", category: "page_scope", source: "R-002", question: "页面范围到哪里为止？", status: "confirmed", selected_disposition: "限定当前页面", evidence: "F-002", acceptance: "边界可验证", counterexample: "跨页需求", impact_dimensions: ["ordinary_detail"], requires_user_decision: false },
     { oi_id: "OI-003", task_id: "task-1", outline_version: "v1", category: "data_state", source: "R-003", question: "数据状态如何变化？", status: "confirmed", selected_disposition: "沿用现有状态", evidence: "F-003", acceptance: "状态可观察", counterexample: "状态丢失", impact_dimensions: ["ordinary_detail"], requires_user_decision: false },
     { oi_id: "OI-004", task_id: "task-1", outline_version: "v1", category: "success_failure_boundary", source: "R-004", question: "成功和失败边界是什么？", status: "confirmed", selected_disposition: "保留现有错误边界", evidence: "F-004", acceptance: "边界可验证", counterexample: "错误被吞掉", impact_dimensions: ["ordinary_detail"], requires_user_decision: false },
@@ -53,7 +55,12 @@ function outlineLog({
     `    impact_dimensions: [${record.impact_dimensions.join(", ")}]`,
     `    requires_user_decision: ${record.requires_user_decision}`,
     ...(record.visible_group_id ? [`    visible_group_id: ${record.visible_group_id}`] : []),
-    ...(record.interaction_ref ? [`    interaction_ref: ${record.interaction_ref}`, `    interaction_hash: ${record.interaction_hash}`] : []),
+    // Core-OI proof direction: the aggregate's own oi_dispositions binds the
+    // OI, so the record must NOT embed this aggregate's ref/hash.  Embedding
+    // it makes decision-log.md's bytes depend on the address of the aggregate
+    // that binds those same bytes (no fixed point).  Honour an explicit
+    // legacy override so the readability of old records stays covered.
+    ...(record.legacy_interaction_ref ? [`    interaction_ref: ${record.legacy_interaction_ref}`, `    interaction_hash: ${record.legacy_interaction_hash}`] : []),
   ].join("\n")), "```"].join("\n");
   const entries = directionEntries ?? oiRecords.map((record) => JSON.stringify({
     oi_id: record.oi_id,
@@ -326,5 +333,92 @@ describe("make-decision OI outline close", () => {
     });
     expect(result).toMatchObject({ ok: false, facts: { outline_closed: "missing" }, outline: { components: { interaction_proof: "missing" } } });
     expect(result.errors.join("; ")).toMatch(/does not bind its OI\/group\/disposition/);
+  });
+
+  it("expects no interaction ref/hash inside the OI record itself", () => {
+    // Contract regression (D-024): core-OI proof MUST flow one way, from the
+    // content-addressed aggregate's oi_dispositions to the OI.  If the record
+    // also embedded the aggregate's ref/hash, decision-log.md's bytes would
+    // depend on the address of the aggregate that must bind those same bytes,
+    // which has no fixed point — the OI could never be closed.
+    const fixture = outlineLog();
+    expect(fixture.markdown).not.toMatch(/interaction_ref|interaction_hash/);
+    const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
+      taskId: "task-1",
+      directionReview: fixture.direction,
+      interactionAggregate: fixture.interaction,
+      requireOutline: true,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      facts: { outline_closed: "passed" },
+      outline: { components: { interaction_proof: "passed" } },
+    });
+    expect(result.errors.join("; ")).not.toMatch(/core interaction proof is missing or invalid/);
+  });
+
+  it("still reads a legacy OI record that carries interaction ref/hash", () => {
+    const fixture = outlineLog({
+      records: [{
+        oi_id: "OI-001", task_id: "task-1", outline_version: "v1", category: "complete_user_flow",
+        source: "R-001", question: "目标流程的关键入口是什么？", status: "confirmed",
+        selected_disposition: "复用当前入口", evidence: "F-001", acceptance: "入口可达",
+        counterexample: "入口不存在", impact_dimensions: ["goal"], requires_user_decision: true,
+        visible_group_id: "group-goal",
+        legacy_interaction_ref: "interaction-1", legacy_interaction_hash: OUTLINE_HASH,
+      }],
+      frameworkRows: [["background", "OI-001"], ["problem", "OI-001"], ["goal", "OI-001"], ["solution", "OI-001"], ["acceptance", "OI-001"], ["extension", "OI-001"]],
+      categoryRows: [["complete_user_flow", "OI-001"], ["page_scope", "OI-001"], ["data_state", "OI-001"], ["success_failure_boundary", "OI-001"], ["non_goals", "OI-001"], ["deferred", "OI-001"]],
+    });
+
+    expect(fixture.markdown).toMatch(/interaction_ref: interaction-1/);
+    const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
+      taskId: "task-1",
+      directionReview: fixture.direction,
+      interactionAggregate: fixture.interaction,
+      requireOutline: true,
+    });
+    // The legacy fields are retained reading material, not the proof source.
+    expect(result).toMatchObject({ ok: true, facts: { outline_closed: "passed" } });
+  });
+});
+
+function taskIdentityLog(declarations, { outsideIdentity = "" } = {}) {
+  const rows = declarations.map((value) => `| 任务类型 | ${value} |`).join("\n");
+  return [
+    "# 当前决策",
+    "## 任务身份",
+    "| 标签 | 值 |",
+    "| --- | --- |",
+    rows,
+    outsideIdentity,
+  ].filter(Boolean).join("\n");
+}
+
+describe("planning-hardening task type declaration", () => {
+  it("planning-hardening AC-TYPE-001 accepts exactly one controlled declaration in the task identity section", () => {
+    expect(typeof contracts.readTaskTypeFromDecisionLog).toBe("function");
+    const readTaskType = contracts.readTaskTypeFromDecisionLog;
+    expect(readTaskType(taskIdentityLog(["规划任务"]))).toBe("规划任务");
+    expect(readTaskType([
+      "# 当前决策",
+      "## 任务身份",
+      "- **任务类型**：普通任务",
+    ].join("\n"))).toBe("普通任务");
+  });
+
+  it("planning-hardening AC-TYPE-001 fails closed for missing, duplicate, conflicting, unknown, or out-of-section declarations", () => {
+    expect(typeof contracts.readTaskTypeFromDecisionLog).toBe("function");
+    const readTaskType = contracts.readTaskTypeFromDecisionLog;
+    const cases = [
+      ["missing", taskIdentityLog([])],
+      ["duplicate same value", taskIdentityLog(["规划任务", "规划任务"])],
+      ["conflicting values", taskIdentityLog(["规划任务", "普通任务"])],
+      ["unknown value", taskIdentityLog(["调研任务"])],
+      ["outside identity section", taskIdentityLog([], { outsideIdentity: "## 目标\n- **任务类型**：规划任务" })],
+    ];
+    for (const [label, markdown] of cases) {
+      expect(readTaskType(markdown), label).toBe("unknown");
+    }
   });
 });

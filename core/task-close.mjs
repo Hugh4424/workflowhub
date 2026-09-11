@@ -20,7 +20,7 @@ import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/t
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
 import { deriveCurrentProductRelease, deriveStageOutcomeStatuses, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
 import { authenticateStageOutcomeForProjection } from "../runtime/stage/stage-runner.mjs";
-import { activeAcceptanceCriterionIds } from "../runtime/stage/stage-content-contracts.mjs";
+import { activeAcceptanceCriterionIds, readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
@@ -46,6 +46,39 @@ const PHYSICAL_DELIVERY_STATE_KEYS = Object.freeze([
 ]);
 const PLANNING_MATERIAL_FILES = Object.freeze(["decision-log.md", "prd.md"]);
 const CLOSE_MODES = Object.freeze(new Set(["ordinary", "mini-task", "planning", "manual-risk-close"]));
+const LEGACY_DELIVERY_STEPS = Object.freeze([
+  ["commit-delivery", "commit-delivery"],
+  ["merge-task-branch", "merge-task-branch"],
+  ["archive-spec", "archive-spec"],
+  ["push-target-branch", "push-target-branch"],
+  ["cleanup", "cleanup"],
+]);
+const UNARCHIVED_PLANNING_STEPS = Object.freeze([
+  ["commit-delivery", "commit-delivery"],
+  ["merge-task-branch", "merge-task-branch"],
+  ["push-target-branch", "push-target-branch"],
+  ["cleanup", "cleanup"],
+]);
+const POST_CLEANUP_ARCHIVE_STEPS = Object.freeze([
+  ["archive-spec", "archive-spec"],
+  ["push-target-branch", "push-target-branch"],
+]);
+const PLANNING_DECLARATION_REF = /^quality\/evidence\/portable-workflow-outcomes\/build-prd\/[a-f0-9]{64}\.json$/;
+const BUILD_PRD_STEP_SLUGS = Object.freeze([
+  "load-parent-decision",
+  "draft-outline-and-task-map",
+  "confirm-map-and-conditional-design",
+  "expand-single-prd",
+  "confirm-final-displayed-draft",
+  "report-facts-and-handoff",
+]);
+const BUILD_PRD_STEP_STATUSES = Object.freeze(new Set([
+  "completed",
+  "skipped",
+  "not_applicable",
+  "incomplete",
+  "unavailable",
+]));
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -71,9 +104,11 @@ function canonical(value, label = "close plan") {
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 
-function physicalDeliveryMissing(state) {
+function physicalDeliveryMissing(state, { requireArchive = true } = {}) {
   const facts = state?.facts ?? state;
-  return PHYSICAL_DELIVERY_FACTS.filter((name) => facts?.[name] !== true);
+  return PHYSICAL_DELIVERY_FACTS
+    .filter((name) => requireArchive || name !== "archive")
+    .filter((name) => facts?.[name] !== true);
 }
 
 function physicalStateForRecord(state) {
@@ -1053,12 +1088,89 @@ function planningMaterialContext({ task, worktreeRoot, snapshot, sourcePath, arc
   });
 }
 
-function isPlanningDelivery(plan) {
-  return plan?.delivery?.close_mode === "planning";
+function planningMaterialValuesAtCommit(root, commit, sourcePath) {
+  const values = [];
+  for (const file of PLANNING_MATERIAL_FILES) {
+    const bytes = gitBlobBytes(root, commit, `${sourcePath}/${file}`);
+    if (bytes === null) throw new Error(`PLANNING_MATERIAL_INCOMPLETE: ${file} is unavailable from ${commit}`);
+    values.push([file, bytes]);
+  }
+  return values;
 }
 
-function assertPlanningPlanExecutable(delivery) {
-  if (!isPlanningDelivery({ delivery })) return;
+function planningMaterialContextFromCommit({ task, root, commit, sourcePath, archivePath, requiredAttachments, declaration }) {
+  if (sourcePath !== `specs/${task.identity.taskId}`) {
+    throw new Error(`PLANNING_MATERIAL_INCOMPLETE: planning source must be specs/${task.identity.taskId}`);
+  }
+  const values = planningMaterialValuesAtCommit(root, commit, sourcePath);
+  const prdRaw = values.find(([file]) => file === "prd.md")[1].toString("utf8");
+  const declaredAttachments = declaredPlanningAttachments(prdRaw);
+  const suppliedAttachments = requiredAttachments === undefined
+    ? declaredAttachments
+    : normalizePlanningAttachments(requiredAttachments);
+  if (!planningAttachmentsEqual(declaredAttachments, suppliedAttachments)) {
+    throw new Error("PLANNING_MATERIAL_INCOMPLETE: required_attachments do not exactly match prd.md 必要附件与版本");
+  }
+  const materialRevision = materialRevisionFromValues(values);
+  const materials = Object.fromEntries(values.map(([file, raw]) => [file, sha256(raw)]));
+  if (declaration) materials[declaration.ref] = declaration.sha256;
+  const attachmentState = inspectPlanningAttachments(root, sourcePath, archivePath, declaredAttachments);
+  const planning = Object.freeze({
+    source_path: sourcePath,
+    material_files: PLANNING_MATERIAL_FILES,
+    materials: Object.freeze(materials),
+    material_revision: materialRevision,
+    snapshot_tree: gitTreeOid(root, commit),
+    snapshot_commit: commit,
+    required_attachments: Object.freeze(declaredAttachments.map((item) => ({ ...item }))),
+    attachments: attachmentState.attachments,
+    attachment_status: attachmentState.status,
+    attachment_gaps: attachmentState.gaps,
+    status: attachmentState.status === "complete" ? "complete" : "incomplete",
+  });
+  return Object.freeze({
+    planning,
+    materialRevision,
+    materialStatus: attachmentState.status,
+    qualityGaps: attachmentState.gaps.map((gap) => `planning attachment: ${gap}`),
+  });
+}
+
+function stepListMatches(steps, expected) {
+  return Array.isArray(steps)
+    && steps.length === expected.length
+    && steps.every((step, index) => step?.step_id === expected[index][0] && step?.operation === expected[index][1]);
+}
+
+function taskTypeForDelivery(delivery) {
+  if (!delivery || typeof delivery.target_repo_root !== "string"
+      || typeof delivery.task_commit !== "string" || typeof delivery.spec_source_path !== "string") return "unknown";
+  const bytes = gitBlobBytes(delivery.target_repo_root, delivery.task_commit, `${delivery.spec_source_path}/decision-log.md`);
+  return bytes === null ? "unknown" : readTaskTypeFromDecisionLog(bytes.toString("utf8"));
+}
+
+function isDeclaredPlanningDelivery(plan, task) {
+  const delivery = plan?.delivery;
+  return delivery?.close_mode === "ordinary"
+    && delivery.planning !== undefined
+    && taskTypeForDelivery(delivery) === "规划任务"
+    && task?.identity?.taskId !== undefined;
+}
+
+function isPlanningDelivery(plan, task) {
+  return plan?.delivery?.close_mode === "planning" || isDeclaredPlanningDelivery(plan, task);
+}
+
+function isUnarchivedPlanningPlan(plan, task) {
+  return isDeclaredPlanningDelivery(plan, task) && stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS);
+}
+
+function isPostCleanupArchivePlan(plan, task) {
+  return isDeclaredPlanningDelivery(plan, task) && stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS);
+}
+
+function assertPlanningPlanExecutable(delivery, task, plan) {
+  if (!isPlanningDelivery({ delivery }, task)) return;
   if (delivery.material_status !== "complete"
       || delivery.planning?.status !== "complete"
       || delivery.planning?.attachment_status !== "complete") {
@@ -1067,6 +1179,10 @@ function assertPlanningPlanExecutable(delivery) {
       ...(Array.isArray(delivery.planning?.attachment_gaps) ? delivery.planning.attachment_gaps : []),
     ];
     throw new Error(`planning close cannot execute with incomplete material/attachments${gaps.length ? `: ${[...new Set(gaps)].join("; ")}` : ""}`);
+  }
+  if (plan && !isPostCleanupArchivePlan(plan, task) && !isUnarchivedPlanningPlan(plan, task)
+      && delivery.close_mode !== "planning") {
+    throw new Error("declared planning close plan has an unsupported action set");
   }
 }
 
@@ -1289,7 +1405,7 @@ export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, o
   const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
   const human = outcome === "timeout"
     ? null
-    : isPlanningDelivery(plan)
+    : isPlanningDelivery(plan, task)
       ? publishPlanningHumanConfirmation({
         task,
         kernel,
@@ -1366,6 +1482,8 @@ export async function closeDelivery({
   specArchivePath,
   closeMode,
   requiredAttachments,
+  archiveDeclarationRef,
+  priorPlanHash,
   replyText,
   stepSlug,
   now = () => new Date().toISOString(),
@@ -1374,15 +1492,19 @@ export async function closeDelivery({
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   if (typeof now !== "function") throw new TypeError("close now must be a function");
+  const postCleanupArchive = archiveDeclarationRef !== undefined || priorPlanHash !== undefined;
   const existing = readOptional(task, "operations/close/completed.json");
   if (existing !== undefined) {
+    if (postCleanupArchive) throw new Error("post-cleanup archive cannot follow a normal close completion");
     const value = JSON.parse(existing);
     if (value?.schema_version !== "task-close-completed.v1" || value.task_id !== task.identity.taskId || value.status !== "completed") {
       throw new Error("close completion record is invalid");
     }
     return Object.freeze(value);
   }
-  const requested = delivery ?? deriveCurrentDeliveryInput(task, kernel, {
+  const requested = postCleanupArchive
+    ? undefined
+    : delivery ?? deriveCurrentDeliveryInput(task, kernel, {
     remote,
     targetBranch,
     specSourcePath,
@@ -1396,13 +1518,15 @@ export async function closeDelivery({
     delivery: requested,
     closeMode,
     requiredAttachments,
+    archiveDeclarationRef,
+    priorPlanHash,
     // Close is the single physical-delivery path. Quality gaps are recorded as
-    // facts but never block the five actions.
+    // facts but never block the governed physical actions.
   });
   const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", replyText, stepSlug, now });
-  const operations = new Set(DELIVERY_STEPS.map(([, operation]) => DELIVERY_AUTHORIZATIONS[operation]));
+  const operations = new Set(prepared.plan.steps.flatMap((step) => requiredCloseAuthorizations(prepared.plan, task, step)));
   for (const operation of operations) {
-    if (prepared.plan.delivery.close_mode === "planning") {
+    if (isPlanningDelivery(prepared.plan, task)) {
       publishPlanningIrreversibleAuthorization({
         task,
         kernel,
@@ -1422,10 +1546,12 @@ export async function closeDelivery({
     kernel,
     plan: prepared.plan,
     closeConfirmationRef: confirmed.ref,
+    ...(archiveDeclarationRef === undefined ? {} : { archiveDeclarationRef }),
     executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan: prepared.plan }),
     deferCompletionRecord: true,
     now,
   });
+  if (isDeclaredPlanningDelivery(prepared.plan, task)) return Object.freeze(executed);
   const completion = {
     schema_version: "task-close-completed.v1",
     task_id: task.identity.taskId,
@@ -1590,20 +1716,49 @@ function exactDirectoryRenames(raw, source, archive) {
   return true;
 }
 
+function plannedArchiveRenameIsComplete(root, delivery, staged) {
+  if (!exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) return false;
+  const expectedResult = gitResult(root, ["ls-tree", "-r", "-z", "--name-only", delivery.task_commit, "--", delivery.spec_source_path]);
+  if (!expectedResult.ok) return false;
+  const expected = expectedResult.stdout.split("\0").filter(Boolean);
+  const fields = staged.split("\0").filter(Boolean);
+  const moved = [];
+  for (let index = 0; index < fields.length; index += 3) moved.push(fields[index + 1]);
+  if (expected.length !== moved.length || new Set(expected).size !== expected.length || new Set(moved).size !== moved.length) return false;
+  const expectedSet = new Set(expected);
+  if (moved.some((path) => !expectedSet.has(path))) return false;
+  if (unstagedSourcePaths(root).length > 0) return false;
+  const untracked = gitResult(root, ["ls-files", "--others", "--exclude-standard", "-z"]).stdout
+    .split("\0")
+    .filter(Boolean)
+    .filter((path) => !EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix)));
+  return untracked.length === 0;
+}
+
+function archiveRenameRecoveryState(delivery) {
+  const root = delivery.target_repo_root;
+  const source = join(root, delivery.spec_source_path);
+  const archive = join(root, delivery.spec_archive_path);
+  if (existsSync(source) || !existsSync(archive)) return false;
+  const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+  return plannedArchiveRenameIsComplete(root, delivery, staged);
+}
+
 function archiveFacts(root, ref, delivery) {
   const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
-  if (!ref) return { commit: null, tree_preserved: false, only_renames: false };
+  if (!ref) return { commit: null, parent_oid: null, tree_preserved: false, only_renames: false };
   const log = gitResult(root, ["log", "-1", "--format=%H", ref, "--", delivery.spec_archive_path]);
   const commit = log.ok && /^[a-f0-9]{40}$/i.test(log.stdout) ? log.stdout.toLowerCase() : null;
-  if (!commit) return { commit: null, tree_preserved: false, only_renames: false };
+  if (!commit) return { commit: null, parent_oid: null, tree_preserved: false, only_renames: false };
   const parent = gitResult(root, ["rev-parse", `${commit}^`]);
-  const parentContainsTask = parent.ok && contains(delivery.task_commit, parent.stdout.toLowerCase());
+  const parentOid = parent.ok ? parent.stdout.toLowerCase() : null;
+  const parentContainsTask = parentOid !== null && contains(delivery.task_commit, parentOid);
   const source = treeEntry(root, delivery.task_commit, delivery.spec_source_path);
   const archive = treeEntry(root, commit, delivery.spec_archive_path);
   const treePreserved = parentContainsTask && source?.type === "tree" && archive?.type === "tree" && source.oid === archive.oid;
   const diff = gitResult(root, ["diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", "-z", `${commit}^`, commit]);
   const onlyRenames = treePreserved && diff.ok && exactDirectoryRenames(diff.stdout, delivery.spec_source_path, delivery.spec_archive_path);
-  return { commit, tree_preserved: treePreserved, only_renames: onlyRenames };
+  return { commit, parent_oid: parentOid, tree_preserved: treePreserved, only_renames: onlyRenames };
 }
 
 function gitBlobBytes(root, commit, path) {
@@ -1613,6 +1768,12 @@ function gitBlobBytes(root, commit, path) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   return result.status === 0 ? Buffer.from(result.stdout ?? "") : null;
+}
+
+function gitTreeOid(root, commit) {
+  const result = gitResult(root, ["rev-parse", `${commit}^{tree}`]);
+  if (!result.ok || !/^[a-f0-9]{40}$/i.test(result.stdout)) throw new Error(`Git tree is unavailable for ${commit}`);
+  return result.stdout.toLowerCase();
 }
 
 function inspectPlanningArchive(root, delivery, targetRef) {
@@ -1651,11 +1812,156 @@ function inspectPlanningArchive(root, delivery, targetRef) {
   });
 }
 
-function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true } = {}) {
+function inspectPlanningSource(root, delivery, targetRef) {
+  if (!targetRef) return Object.freeze({ status: "incomplete", gaps: Object.freeze(["planning source target is unavailable"]), materials: Object.freeze({}), attachments: Object.freeze([]) });
+  const planning = delivery.planning;
+  const materialGaps = [];
+  const materials = {};
+  for (const file of PLANNING_MATERIAL_FILES) {
+    const bytes = gitBlobBytes(root, targetRef, `${delivery.spec_source_path}/${file}`);
+    const observed = bytes === null ? null : sha256(bytes);
+    materials[file] = observed;
+    if (observed !== planning.materials[file]) {
+      materialGaps.push(`${file}: source hash ${observed ?? "missing"} does not match planned ${planning.materials[file]}`);
+    }
+  }
+  const attachments = (planning.attachments ?? []).map((expected) => {
+    const bytes = gitBlobBytes(root, targetRef, expected.path);
+    const observed = bytes === null ? null : sha256(bytes);
+    return Object.freeze({
+      path: expected.path,
+      archive_path: expected.archive_path,
+      sha256: expected.sha256,
+      status: observed === expected.sha256 ? "available" : observed === null ? "missing" : "hash_mismatch",
+      ...(observed === null || observed === expected.sha256 ? {} : { observed_sha256: observed }),
+    });
+  });
+  const attachmentGaps = attachments
+    .filter((attachment) => attachment.status !== "available")
+    .map((attachment) => `${attachment.path}: source ${attachment.status}`);
+  const gaps = [...materialGaps, ...attachmentGaps];
+  return Object.freeze({
+    status: gaps.length === 0 ? "complete" : "incomplete",
+    gaps: Object.freeze(gaps),
+    materials: Object.freeze(materials),
+    attachments: Object.freeze(attachments),
+  });
+}
+
+function declarationRefs(materials) {
+  return Object.keys(materials ?? {}).filter((ref) => PLANNING_DECLARATION_REF.test(ref));
+}
+
+function planningDeclarationMaterialExpectations(materialIdentity) {
+  const expected = new Map(PLANNING_MATERIAL_FILES.map((file) => [file, materialIdentity?.materials?.[file]]));
+  for (const attachment of materialIdentity?.attachments ?? []) {
+    if (!attachment || typeof attachment.path !== "string" || !HASH.test(attachment.sha256 ?? "")) {
+      throw new Error("planning close attachment identity is invalid");
+    }
+    if (expected.has(attachment.path)) throw new Error("planning close attachment ref conflicts with a material ref");
+    expected.set(attachment.path, attachment.sha256.toLowerCase());
+  }
+  return expected;
+}
+
+function planningDeclarationMaterialKey(ref, materialIdentity) {
+  if (PLANNING_MATERIAL_FILES.includes(ref)) return ref;
+  const sourcePath = materialIdentity?.source_path;
+  for (const file of PLANNING_MATERIAL_FILES) {
+    if (typeof sourcePath === "string" && ref === `${sourcePath}/${file}`) return file;
+  }
+  return (materialIdentity?.attachments ?? []).some((attachment) => attachment?.path === ref) ? ref : null;
+}
+
+function validatePlanningDeclarationWorkflowFacts(value) {
+  if (value.step_results.length === 0 || value.step_results.some((item) => !item || typeof item !== "object" || Array.isArray(item)
+      || typeof item.step_slug !== "string" || item.step_slug.trim() === ""
+      || typeof item.status !== "string" || item.status.trim() === "")) {
+    throw new Error("planning archive declaration step_results are invalid or empty");
+  }
+  const stepSlugs = new Set(value.step_results.map((item) => item.step_slug));
+  if (value.reflection_facts.length === 0 || value.reflection_facts.some((item) => !item || typeof item !== "object" || Array.isArray(item)
+      || typeof item.conclusion !== "string" || item.conclusion.trim() === ""
+      || !Array.isArray(item.cited_steps) || item.cited_steps.length === 0
+      || item.cited_steps.some((step) => typeof step !== "string" || step.trim() === "" || !stepSlugs.has(step)))) {
+    throw new Error("planning archive declaration reflection_facts are invalid or empty");
+  }
+}
+
+function readPlanningDeclaration({ task, declarationRef, materialIdentity }) {
+  if (!PLANNING_DECLARATION_REF.test(declarationRef ?? "")) {
+    throw new Error("planning archive declaration ref is invalid");
+  }
+  const raw = task.readRecord(declarationRef);
+  const expectedHash = declarationRef.match(/\/([a-f0-9]{64})\.json$/i)?.[1];
+  const observedHash = sha256(raw);
+  if (!expectedHash || observedHash !== expectedHash) throw new Error("planning archive declaration hash mismatch");
+  let value;
+  try { value = JSON.parse(raw); } catch { throw new Error("planning archive declaration is not canonical JSON"); }
+  const allowedFields = new Set(["task_id", "workflow", "material_refs", "reply_text", "step_results", "reflection_facts"]);
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).length !== allowedFields.size
+      || Object.keys(value).some((key) => !allowedFields.has(key))
+      || value.task_id !== task.identity.taskId
+      || value.workflow !== "build-prd"
+      || typeof value.reply_text !== "string" || value.reply_text.trim() === ""
+      || !Array.isArray(value.material_refs)
+      || !Array.isArray(value.step_results)
+      || !Array.isArray(value.reflection_facts)) {
+    throw new Error("planning archive declaration is not bound to the current build-prd task");
+  }
+  if (`${JSON.stringify(value, null, 2)}\n` !== raw) throw new Error("planning archive declaration is not canonical JSON");
+  validatePlanningDeclarationWorkflowFacts(value);
+  const expected = planningDeclarationMaterialExpectations(materialIdentity);
+  const refs = new Map();
+  for (const [index, item] of value.material_refs.entries()) {
+    if (!item || typeof item !== "object" || typeof item.ref !== "string" || !HASH.test(item.sha256 ?? "")) {
+      throw new Error(`planning archive declaration material_refs[${index}] is invalid`);
+    }
+    const key = planningDeclarationMaterialKey(item.ref, materialIdentity);
+    if (key === null || refs.has(key)) {
+      throw new Error("planning archive declaration material_refs must bind the current decision, PRD, and attachments");
+    }
+    refs.set(key, item.sha256.toLowerCase());
+  }
+  if (refs.size !== expected.size || [...expected].some(([ref, hash]) => refs.get(ref) !== hash)) {
+    throw new Error("planning archive declaration materials do not match the current main materials");
+  }
+  return Object.freeze({ ref: declarationRef, sha256: observedHash, raw, value: Object.freeze(value) });
+}
+
+function validateArchiveDeclarationArgument(plan, task, archiveDeclarationRef) {
+  const postCleanupArchive = isPostCleanupArchivePlan(plan, task);
+  if (!postCleanupArchive) {
+    if (archiveDeclarationRef !== undefined) {
+      throw new Error("archiveDeclarationRef is only valid for a post-cleanup archive plan");
+    }
+    return;
+  }
+  if (typeof archiveDeclarationRef !== "string" || archiveDeclarationRef === "") {
+    throw new TypeError("post-cleanup archive execution requires archiveDeclarationRef");
+  }
+  const refs = declarationRefs(plan.delivery?.planning?.materials);
+  if (refs.length !== 1 || refs[0] !== archiveDeclarationRef) {
+    throw new Error("archiveDeclarationRef does not match the prepared post-cleanup archive plan");
+  }
+  readPlanningDeclaration({
+    task,
+    declarationRef: archiveDeclarationRef,
+    materialIdentity: plan.delivery.planning,
+  });
+}
+
+function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true, allowPlannedArchiveRename = false } = {}) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
   const dirtySource = sourceWorktreeStatus(root);
-  if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
+  if (dirtySource !== "") {
+    const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+    if (!allowPlannedArchiveRename || !plannedArchiveRenameIsComplete(root, delivery, staged)) {
+      throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
+    }
+  }
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (expectedLocal !== null && branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
   if (checkRemote && remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
@@ -1696,7 +2002,11 @@ function validateDeliveryPlan(plan, task, kernel) {
   if (delivery.task_branch === delivery.target_branch) throw new Error("task branch and target branch must differ");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(delivery.remote)) throw new TypeError("delivery remote must be an explicit remote name");
   const closeMode = normalizeCloseMode(delivery.close_mode);
-  if (closeMode === "planning") {
+  const declaredPlanning = closeMode === "ordinary"
+    && delivery.planning !== undefined
+    && taskTypeForDelivery(delivery) === "规划任务";
+  const planningDelivery = closeMode === "planning" || declaredPlanning;
+  if (planningDelivery) {
     if (delivery.risk_close !== undefined) throw new Error("planning close cannot be combined with manual risk close");
     if (delivery.material_status !== "complete" && delivery.material_status !== "incomplete") {
       throw new TypeError("planning close material_status must be complete or incomplete");
@@ -1717,6 +2027,23 @@ function validateDeliveryPlan(plan, task, kernel) {
     if (!planning.materials || typeof planning.materials !== "object" || Array.isArray(planning.materials)
         || PLANNING_MATERIAL_FILES.some((file) => !HASH.test(planning.materials[file] ?? ""))) {
       throw new Error("planning close material hashes are invalid");
+    }
+    const declarationMaterialRefs = declarationRefs(planning.materials);
+    if (closeMode === "planning" && declarationMaterialRefs.length > 0) {
+      throw new Error("legacy planning close must not carry a post-cleanup archive declaration");
+    }
+    if (declaredPlanning && stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS) && declarationMaterialRefs.length > 0) {
+      throw new Error("initial planning close must not carry a post-cleanup archive declaration");
+    }
+    if (declaredPlanning && stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS)) {
+      if (declarationMaterialRefs.length !== 1) throw new Error("post-cleanup archive plan must bind exactly one declaration");
+      readPlanningDeclaration({
+        task,
+        declarationRef: declarationMaterialRefs[0],
+        materialIdentity: planning,
+      });
+    } else if (declaredPlanning && !stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS)) {
+      throw new Error("declared planning close plan must contain exactly the four initial actions or two archive actions");
     }
     const expectedAttachments = normalizePlanningAttachments(planning.required_attachments);
     const prdBytes = gitBlobBytes(delivery.target_repo_root, delivery.task_commit, `${delivery.spec_source_path}/prd.md`);
@@ -1743,6 +2070,12 @@ function validateDeliveryPlan(plan, task, kernel) {
   } else if (delivery.planning !== undefined || delivery.material_status !== undefined
       || delivery.development_status !== undefined || delivery.quality_status === "not_run") {
     throw new Error("planning close fields are only valid with close_mode=planning");
+  }
+  const expectedSteps = planningDelivery
+    ? (closeMode === "planning" ? LEGACY_DELIVERY_STEPS : stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS) ? POST_CLEANUP_ARCHIVE_STEPS : UNARCHIVED_PLANNING_STEPS)
+    : LEGACY_DELIVERY_STEPS;
+  if (!stepListMatches(plan.steps, expectedSteps)) {
+    throw new Error(`delivery close plan has an invalid action set for ${planningDelivery ? "planning" : closeMode} close`);
   }
   return delivery;
 }
@@ -1845,13 +2178,7 @@ function publishPlanningIrreversibleAuthorization({ task, kernel, plan, operatio
   return Object.freeze({ ref: record.ref, hash: record.sha256, value: Object.freeze(value) });
 }
 
-const DELIVERY_STEPS = Object.freeze([
-  ["commit-delivery", "commit-delivery"],
-  ["merge-task-branch", "merge-task-branch"],
-  ["archive-spec", "archive-spec"],
-  ["push-target-branch", "push-target-branch"],
-  ["cleanup", "cleanup"],
-]);
+const DELIVERY_STEPS = LEGACY_DELIVERY_STEPS;
 
 const DELIVERY_AUTHORIZATIONS = Object.freeze({
   "commit-delivery": "commit",
@@ -1861,6 +2188,281 @@ const DELIVERY_AUTHORIZATIONS = Object.freeze({
   "cleanup": "cleanup",
 });
 
+function requiredCloseAuthorizations(plan, task, step) {
+  const operation = DELIVERY_AUTHORIZATIONS[step.operation];
+  if (typeof operation !== "string") throw new Error(`close step ${step.step_id} has no irreversible authorization mapping`);
+  if (isPostCleanupArchivePlan(plan, task) && step.operation === "archive-spec") return ["archive", "commit"];
+  return [operation];
+}
+
+function readPreparedClosePlan(task, planHash, label) {
+  if (!HASH.test(planHash ?? "")) throw new TypeError(`${label} must be a SHA-256 hash`);
+  const ref = `operations/close/plans/${planHash}/plan.json`;
+  const raw = task.readRecord(ref);
+  let record;
+  try { record = JSON.parse(raw); } catch { throw new Error(`${label} record is not canonical JSON`); }
+  if (!record || record.schema_version !== "task-close-plan-record.v1"
+      || record.task_id !== task.identity.taskId
+      || record.plan_hash !== planHash
+      || closePlanHash(record.plan) !== planHash) {
+    throw new Error(`${label} record is invalid`);
+  }
+  return record.plan;
+}
+
+function preparedPlanningStepPhysicalState(task, plan, step) {
+  const delivery = plan.delivery;
+  const root = delivery.target_repo_root;
+  const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
+  if (step.operation === "commit-delivery") {
+    const taskTip = branchOid(root, delivery.task_branch);
+    const targetTip = branchOid(root, delivery.target_branch);
+    const referenced = contains(delivery.task_commit, taskTip) || contains(delivery.task_commit, targetTip);
+    const staged = existsSync(delivery.worktree_root)
+      ? gitResult(delivery.worktree_root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout
+      : "";
+    const advanced = !existsSync(delivery.worktree_root)
+      || (contains(delivery.task_commit, git(delivery.worktree_root, ["rev-parse", "HEAD"]))
+        && (sourceWorktreeStatus(delivery.worktree_root) === ""
+          || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
+    return { satisfied: referenced && advanced, task_commit: delivery.task_commit };
+  }
+  const mergeState = () => {
+    const target = branchOid(root, delivery.target_branch);
+    if (!target) return { satisfied: false, target_oid: null, task_tip: null, archive_commit: null, planned_merge_oid: null, resolved: false };
+    const list = gitResult(root, ["rev-list", "--first-parent", target]).stdout.split(/\s+/).filter(Boolean);
+    for (const commit of list) {
+      const parents = gitResult(root, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(" ").slice(1);
+      if (parents.length === 2 && parents[0] === delivery.target_baseline && contains(delivery.task_commit, parents[1])) {
+        return { satisfied: true, target_oid: target, task_tip: parents[1], archive_commit: null, planned_merge_oid: commit, resolved: false };
+      }
+    }
+    return { satisfied: false, target_oid: target, task_tip: null, archive_commit: null, planned_merge_oid: null, resolved: false };
+  };
+  if (step.operation === "merge-task-branch") return mergeState();
+  if (step.operation === "push-target-branch") {
+    const merged = mergeState();
+    const remote = remoteOid(root, delivery.remote, delivery.target_branch);
+    return { satisfied: merged.satisfied && remote === merged.target_oid, target_oid: merged.target_oid, remote_oid: remote };
+  }
+  if (step.operation === "cleanup") {
+    const existingWorkspace = task.manifest.workspace_mode === "existing";
+    if (existingWorkspace) {
+      return {
+        satisfied: true,
+        worktree_cleanup: { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: resolve(delivery.worktree_root) },
+        branch_cleanup: { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task branch and directory are preserved", task_branch: delivery.task_branch },
+      };
+    }
+    const worktreeRoot = resolve(delivery.worktree_root);
+    const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => resolve(line.slice(9)));
+    const pathExists = existsSync(worktreeRoot);
+    const registered = listedWorktrees.includes(worktreeRoot);
+    if (pathExists !== registered) throw new Error("task worktree path/registration mismatch during prior close probe");
+    const worktreeObservation = { satisfied: !pathExists && !registered, worktree_root: worktreeRoot };
+    const branchObservation = { satisfied: branchOid(root, delivery.task_branch) === null, task_branch: delivery.task_branch };
+    return {
+      satisfied: worktreeObservation.satisfied && branchObservation.satisfied,
+      worktree_cleanup: worktreeObservation,
+      branch_cleanup: branchObservation,
+    };
+  }
+  throw new Error(`unsupported prior planning close operation: ${step.operation}`);
+}
+
+function preparedStepIsCompleted(task, planHash, stepId, plan) {
+  const raw = task.readRecord(`operations/close/plans/${planHash}/steps/${stepId}.json`);
+  let record;
+  try { record = JSON.parse(raw); } catch { throw new Error(`prior close step ${stepId} is not canonical JSON`); }
+  const step = plan?.steps?.find((candidate) => candidate?.step_id === stepId);
+  if (record?.schema_version !== "task-close-operation.v1"
+      || record.task_id !== task.identity.taskId
+      || record.plan_hash !== planHash
+      || record.step_id !== stepId
+      || !step
+      || record.operation !== step.operation
+      || record.action !== stepId
+      || record.status !== "completed"
+      || record.evidence?.kind !== "close_step_execution"
+      || record.evidence?.source !== `operations/close/plans/${planHash}/steps/${stepId}.json`) {
+    throw new Error(`prior close step ${stepId} is not completed`);
+  }
+  const physical = preparedPlanningStepPhysicalState(task, plan, step);
+  if (!physical.satisfied) throw new Error(`prior close step ${stepId} physical state is stale`);
+  let physicalHash;
+  try { physicalHash = sha256(canonical(record.physical_state, `prior close step ${stepId} physical state`)); }
+  catch { throw new Error(`prior close step ${stepId} physical state is invalid`); }
+  if (record.physical_state_hash !== physicalHash) {
+    throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
+  }
+  if (canonical(record.physical_state) !== canonical(physical)) {
+    throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
+  }
+  return record;
+}
+
+function preparedStepIsCompletedAfterTargetAdvance(task, planHash, stepId, plan) {
+  const raw = task.readRecord(`operations/close/plans/${planHash}/steps/${stepId}.json`);
+  let record;
+  try { record = JSON.parse(raw); } catch { throw new Error(`prior close step ${stepId} is not canonical JSON`); }
+  const step = plan?.steps?.find((candidate) => candidate?.step_id === stepId);
+  if (record?.schema_version !== "task-close-operation.v1"
+      || record.task_id !== task.identity.taskId
+      || record.plan_hash !== planHash
+      || record.step_id !== stepId
+      || !step
+      || record.operation !== step.operation
+      || record.action !== stepId
+      || record.status !== "completed"
+      || record.evidence?.kind !== "close_step_execution"
+      || record.evidence?.source !== `operations/close/plans/${planHash}/steps/${stepId}.json`) {
+    throw new Error(`prior close step ${stepId} is not completed`);
+  }
+  let physicalHash;
+  try { physicalHash = sha256(canonical(record.physical_state, `prior close step ${stepId} physical state`)); }
+  catch { throw new Error(`prior close step ${stepId} physical state is invalid`); }
+  if (record.physical_state_hash !== physicalHash) throw new Error(`prior close step ${stepId} physical state does not match its immutable hash`);
+  const physical = preparedPlanningStepPhysicalState(task, plan, step);
+  if (!physical.satisfied) throw new Error(`prior close step ${stepId} physical state is stale`);
+  if (canonical(record.physical_state) === canonical(physical)) return record;
+
+  const delivery = plan.delivery;
+  const root = delivery.target_repo_root;
+  const contains = (ancestor, descendant) => Boolean(descendant)
+    && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
+  const recorded = record.physical_state;
+  const currentTarget = branchOid(root, delivery.target_branch);
+  if (!currentTarget) throw new Error(`prior close step ${stepId} physical state is stale`);
+  if (step.operation === "merge-task-branch") {
+    const mergeOid = recorded?.planned_merge_oid;
+    const taskTip = recorded?.task_tip;
+    const parents = typeof mergeOid === "string"
+      ? gitResult(root, ["rev-list", "--parents", "-n", "1", mergeOid]).stdout.split(" ").slice(1)
+      : [];
+    if (recorded?.satisfied !== true
+        || recorded.target_oid !== mergeOid
+        || !/^[a-f0-9]{40}$/i.test(taskTip ?? "")
+        || parents.length !== 2
+        || parents[0] !== delivery.target_baseline
+        || !contains(delivery.task_commit, parents[1])
+        || !contains(mergeOid, currentTarget)) {
+      throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
+    }
+    return record;
+  }
+  if (step.operation === "push-target-branch") {
+    const pushedTarget = recorded?.target_oid;
+    const pushedRemote = recorded?.remote_oid;
+    const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
+    if (recorded?.satisfied !== true
+        || !/^[a-f0-9]{40}$/i.test(pushedTarget ?? "")
+        || pushedTarget !== pushedRemote
+        || !/^[a-f0-9]{40}$/i.test(pushedRemote ?? "")
+        || !contains(pushedTarget, currentTarget)
+        || !contains(pushedRemote, remoteTarget)) {
+      throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
+    }
+    return record;
+  }
+  throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
+}
+
+function preparePostCleanupArchivePlan({ task, kernel, priorPlanHash, archiveDeclarationRef }) {
+  if (archiveDeclarationRef === undefined || priorPlanHash === undefined) {
+    throw new TypeError("post-cleanup archive requires archiveDeclarationRef and priorPlanHash");
+  }
+  const priorPlan = readPreparedClosePlan(task, priorPlanHash, "prior close plan");
+  validateDeliveryPlan(priorPlan, task, kernel);
+  if (!isUnarchivedPlanningPlan(priorPlan, task)) {
+    throw new Error("post-cleanup archive requires a completed four-action planning close plan");
+  }
+  for (const [stepId] of UNARCHIVED_PLANNING_STEPS) preparedStepIsCompletedAfterTargetAdvance(task, priorPlanHash, stepId, priorPlan);
+  if (readOptional(task, "operations/close/completed.json") !== undefined) {
+    throw new Error("post-cleanup archive cannot follow a normal close completion");
+  }
+
+  const root = task.manifest.target_repo_root;
+  const targetBranch = priorPlan.delivery.target_branch;
+  const targetBaseline = branchOid(root, targetBranch);
+  if (!targetBaseline) throw new Error("post-cleanup archive target branch does not exist");
+  if (git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== targetBranch) {
+    throw new Error("post-cleanup archive requires the target branch checked out");
+  }
+  const remoteTargetBaseline = remoteOid(root, priorPlan.delivery.remote, targetBranch);
+  if (remoteTargetBaseline !== targetBaseline) throw new Error("post-cleanup archive requires the target branch pushed and current");
+  if (sourceWorktreeStatus(root) !== "") throw new Error("post-cleanup archive target repository has uncommitted source changes");
+  const sourcePath = `specs/${task.identity.taskId}`;
+  const archivePath = `specs/archive/${task.identity.taskId}`;
+  if (treeEntry(root, targetBaseline, sourcePath)?.type !== "tree") throw new Error("post-cleanup archive source materials are unavailable on target");
+  if (treeEntry(root, targetBaseline, archivePath) !== null) throw new Error("post-cleanup archive target already exists");
+
+  const baseContext = planningMaterialContextFromCommit({
+    task,
+    root,
+    commit: targetBaseline,
+    sourcePath,
+    archivePath,
+  });
+  if (taskTypeForDelivery({
+    target_repo_root: root,
+    task_commit: targetBaseline,
+    spec_source_path: sourcePath,
+  }) !== "规划任务") {
+    throw new Error("post-cleanup archive is only valid for a declared planning task");
+  }
+  const declaration = readPlanningDeclaration({
+    task,
+    declarationRef: archiveDeclarationRef,
+    materialIdentity: baseContext.planning,
+  });
+  const planningContext = planningMaterialContextFromCommit({
+    task,
+    root,
+    commit: targetBaseline,
+    sourcePath,
+    archivePath,
+    declaration,
+  });
+  const worktreeRoot = resolve(dirname(root), `${basename(root)}-${task.identity.taskId}`);
+  const plan = {
+    schema_version: "task-close-plan.v1",
+    task_id: task.identity.taskId,
+    delivery: {
+      target_repo_root: root,
+      worktree_root: worktreeRoot,
+      task_branch: priorPlan.delivery.task_branch,
+      target_branch: targetBranch,
+      remote: priorPlan.delivery.remote,
+      task_commit: targetBaseline,
+      spec_source_path: sourcePath,
+      spec_archive_path: archivePath,
+      target_baseline: targetBaseline,
+      remote_target_baseline: remoteTargetBaseline,
+      merge_strategy: "--no-ff --no-edit",
+      close_mode: "ordinary",
+      planning: structuredClone(planningContext.planning),
+      material_status: planningContext.materialStatus,
+      development_status: "not_executed",
+      quality_status: "not_run",
+      quality_gaps: [...new Set(planningContext.qualityGaps)],
+    },
+    steps: POST_CLEANUP_ARCHIVE_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
+  };
+  validateDeliveryPlan(plan, task, kernel);
+  targetPreflight(plan.delivery);
+  const planHash = closePlanHash(plan);
+  createOrVerify(task, `operations/close/plans/${planHash}/plan.json`, {
+    schema_version: "task-close-plan-record.v1",
+    task_id: task.identity.taskId,
+    plan_hash: planHash,
+    plan: structuredClone(plan),
+  }, "post-cleanup archive plan");
+  return Object.freeze({ plan: Object.freeze(plan), plan_hash: planHash });
+}
+
 /** Freeze the concrete close actions before asking for their independent authorization. */
 export function prepareDeliveryClosePlan({
   task: taskHandle,
@@ -1869,10 +2471,18 @@ export function prepareDeliveryClosePlan({
   allowMiniTaskFocused = false,
   closeMode,
   requiredAttachments,
+  archiveDeclarationRef,
+  priorPlanHash,
 } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
+  if (archiveDeclarationRef !== undefined || priorPlanHash !== undefined) {
+    if (requested !== undefined || closeMode !== undefined || requiredAttachments !== undefined || allowMiniTaskFocused) {
+      throw new Error("post-cleanup archive arguments cannot be combined with an initial close delivery");
+    }
+    return preparePostCleanupArchivePlan({ task, kernel, priorPlanHash, archiveDeclarationRef });
+  }
   const input = plain(requested, "delivery close input");
   const riskClose = input.risk_close === undefined ? undefined : validateRiskClose(input.risk_close);
   const selectedCloseMode = normalizeCloseMode(
@@ -1895,6 +2505,14 @@ export function prepareDeliveryClosePlan({
   const currentSnapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
   const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
   if (deliverySnapshotCommit === currentSnapshot.commit) materializeGitSnapshot(root, currentSnapshot);
+  let taskType = "unknown";
+  try {
+    taskType = readTaskTypeFromDecisionLog(ArtifactDir.open(worktree, task).read("decision-log.md").toString("utf8"));
+  } catch {
+    // The ordinary close path will report the missing current material through
+    // its existing quality/material checks. Do not infer a type from absence.
+  }
+  const declaredPlanningTask = selectedCloseMode !== "planning" && taskType === "规划任务";
   const sourcePath = repositoryPath(input.spec_source_path, "delivery spec_source_path");
   const archivePath = repositoryPath(input.spec_archive_path, "delivery spec_archive_path");
   const requestedPlanningAttachments = requiredAttachments ?? input.required_attachments ?? input.planning?.required_attachments;
@@ -1909,7 +2527,7 @@ export function prepareDeliveryClosePlan({
   let acceptedVerify;
   let productRelease = null;
   let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
-  if (selectedCloseMode === "planning") {
+  if (selectedCloseMode === "planning" || declaredPlanningTask) {
     planningContext = planningMaterialContext({
       task,
       worktreeRoot: worktree,
@@ -2040,7 +2658,8 @@ export function prepareDeliveryClosePlan({
       ...(planningContext ? {} : { quality_status: qualityReasons.length === 0 ? "observed" : "incomplete" }),
       quality_gaps: [...new Set(qualityReasons)],
     },
-    steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
+    steps: (declaredPlanningTask ? UNARCHIVED_PLANNING_STEPS : DELIVERY_STEPS)
+      .map(([step_id, operation]) => ({ step_id, operation })),
   };
   const delivery = validateDeliveryPlan(plan, task, kernel);
   targetPreflight(delivery);
@@ -2068,7 +2687,11 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   let acceptedVerify;
   let verifyError;
   const planningMode = delivery.close_mode === "planning";
-  if (!planningMode) {
+  const declaredPlanning = isDeclaredPlanningDelivery(plan, task);
+  const unarchivedPlanning = declaredPlanning && stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS);
+  const archivePlan = declaredPlanning && stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS);
+  const planningDelivery = planningMode || declaredPlanning;
+  if (!planningDelivery) {
     try {
       acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? {
         snapshotTree: taskSnapshotTree.stdout,
@@ -2080,7 +2703,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
       verifyError = error;
     }
   }
-  const verifyFreshness = planningMode
+  const verifyFreshness = planningDelivery
     ? { current: false, reason: "planning close does not execute verify-code or product-release checks" }
     : acceptedVerify
       ? verifyFactsFreshForClose(
@@ -2099,11 +2722,22 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const sourcePathAbsent = localTarget.ok && !gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_source_path}`]).ok;
   const archive = archiveFacts(root, localTarget.ok ? delivery.target_branch : null, delivery);
   const archiveCommitIncluded = archive.commit !== null && gitResult(root, ["merge-base", "--is-ancestor", archive.commit, localTarget.stdout]).ok;
-  const planningArchive = planningMode
+  const archiveScopePreserved = archivePlan
+    ? archive.commit !== null
+      && archive.commit === localTarget.stdout.toLowerCase()
+      && archive.parent_oid === delivery.target_baseline
+    : unarchivedPlanning
+      ? true
+      : archiveCommitIncluded;
+  const planningMaterial = planningMode || archivePlan
     ? inspectPlanningArchive(root, delivery, localTarget.ok ? delivery.target_branch : null)
-    : null;
+    : unarchivedPlanning
+      ? inspectPlanningSource(root, delivery, localTarget.ok ? delivery.target_branch : null)
+      : null;
   const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
-  const pushed = merged && localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
+  const pushed = merged && localTarget.ok && archiveScopePreserved
+    && /^[a-f0-9]{40}$/.test(remoteTarget ?? "")
+    && remoteTarget === localTarget.stdout.toLowerCase();
   const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
   const existingWorkspace = task.manifest.workspace_mode === "existing";
   const worktreeCleanup = existingWorkspace ? true : (!existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root)));
@@ -2117,7 +2751,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     : (worktreeCleanup && branchCleanup ? { removed: true } : { incomplete: true });
   const facts = {
     delivery_committed: merged,
-    archive: archivePathExists && sourcePathAbsent && archiveCommitIncluded && archive.tree_preserved && archive.only_renames,
+    archive: archivePathExists && sourcePathAbsent && archiveScopePreserved && archive.tree_preserved && archive.only_renames,
     archive_commit: archive.commit,
     archive_blob_preserved: archive.tree_preserved,
     archive_only_rename: archive.only_renames,
@@ -2133,7 +2767,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   };
   facts.verify_facts_fresh = verifyFreshness.current;
   if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
-  if (planningMode) {
+  if (planningDelivery) {
     facts.verify_facts_fresh = false;
     delete facts.verify_facts_fresh_reason;
   }
@@ -2145,29 +2779,29 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     ["worktree_cleanup", facts.worktree_cleanup],
     ["formal_cleanup_safe", facts.formal_cleanup_safe],
     ["branch_cleanup", facts.branch_cleanup],
-    ...(planningMode ? [["planning_material", planningArchive?.status === "complete" && delivery.material_status === "complete"]] : [["verify_facts_fresh", verifyFreshness.current]]),
+    ...(planningDelivery ? [["planning_material", planningMaterial?.status === "complete" && delivery.material_status === "complete"]] : [["verify_facts_fresh", verifyFreshness.current]]),
   ].filter(([, done]) => !done).map(([name]) => name);
-  const physicalMissing = physicalDeliveryMissing(facts);
+  const physicalMissing = physicalDeliveryMissing(facts, { requireArchive: !unarchivedPlanning });
   return Object.freeze({
     schema_version: "task-close-delivery-state.v1",
     status: missing.length === 0 ? "ready" : "incomplete",
     physical_status: physicalMissing.length === 0 ? "ready" : "incomplete",
     close_mode: delivery.close_mode,
-    ...(planningMode ? {
+    ...(planningDelivery ? {
       planning_status: delivery.planning.status,
       material_status: delivery.material_status,
       development_status: "not_executed",
       quality_status: "not_run",
       quality_gaps: Object.freeze([...new Set([
         ...(delivery.quality_gaps ?? []),
-        ...(planningArchive?.gaps ?? []),
+        ...(planningMaterial?.gaps ?? []),
       ])]),
       planning: Object.freeze({
         ...structuredClone(delivery.planning),
-        archived_status: planningArchive?.status ?? "incomplete",
-        archived_materials: planningArchive?.materials ?? {},
-        archived_attachments: planningArchive?.attachments ?? [],
-        archived_gaps: planningArchive?.gaps ?? [],
+        archived_status: unarchivedPlanning ? "not_required" : planningMaterial?.status ?? "incomplete",
+        archived_materials: planningMaterial?.materials ?? {},
+        archived_attachments: planningMaterial?.attachments ?? [],
+        archived_gaps: planningMaterial?.gaps ?? [],
       }),
     } : {}),
     missing: Object.freeze(missing),
@@ -2182,7 +2816,10 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   if (delivery.risk_close !== undefined) throw new Error("risk close plans must be recorded through recordManualDeliveryClose");
-  assertPlanningPlanExecutable(delivery);
+  if (isDeclaredPlanningDelivery(plan, task)) {
+    throw new Error("declared planning close does not write operations/close/completed.json");
+  }
+  assertPlanningPlanExecutable(delivery, task, plan);
   const planHash = closePlanHash(plan);
   const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
   if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
@@ -2190,6 +2827,17 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
   if (typeof now !== "function") throw new TypeError("close now must be a function");
   return task.withRecordLock("locks/close.execution.lock", async () => {
+    const existing = readOptional(task, "operations/close/completed.json");
+    if (existing !== undefined) {
+      const completed = JSON.parse(existing);
+      if (completed.schema_version !== "task-close-completed.v1" || completed.task_id !== task.identity.taskId || completed.plan_hash !== planHash || completed.status !== "completed") throw new Error("task close completed by a conflicting or invalid plan");
+      return Object.freeze(completed);
+    }
+    const state = inspectDeliveryCloseState({ task, kernel, plan });
+    if (state.physical_missing.length > 0) throw new Error(`delivery close is incomplete: ${state.physical_missing.join(", ")}`);
+    if (isPlanningDelivery(plan, task) && state.missing.includes("planning_material")) {
+      throw new Error("planning close is incomplete: archived planning material does not match its bound revision");
+    }
     const consumedOperations = new Set();
     for (const step of plan.steps) {
       const operation = DELIVERY_AUTHORIZATIONS[step.operation];
@@ -2201,17 +2849,6 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
         step_id: step.step_id,
       });
       consumedOperations.add(operation);
-    }
-    const existing = readOptional(task, "operations/close/completed.json");
-    if (existing !== undefined) {
-      const completed = JSON.parse(existing);
-      if (completed.schema_version !== "task-close-completed.v1" || completed.task_id !== task.identity.taskId || completed.plan_hash !== planHash || completed.status !== "completed") throw new Error("task close completed by a conflicting or invalid plan");
-      return Object.freeze(completed);
-    }
-    const state = inspectDeliveryCloseState({ task, kernel, plan });
-    if (state.physical_missing.length > 0) throw new Error(`delivery close is incomplete: ${state.physical_missing.join(", ")}`);
-    if (delivery.close_mode === "planning" && state.missing.includes("planning_material")) {
-      throw new Error("planning close is incomplete: archived planning material does not match its bound revision");
     }
     const completion = {
       schema_version: "task-close-completed.v1",
@@ -2271,9 +2908,14 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
-  if (plan.steps.length !== DELIVERY_STEPS.length || plan.steps.some((step, index) => step.step_id !== DELIVERY_STEPS[index][0] || step.operation !== DELIVERY_STEPS[index][1])) {
-    throw new Error("delivery close plan must contain exactly the fixed five steps in order commit→merge→archive→push→cleanup");
+  const supported = stepListMatches(plan.steps, LEGACY_DELIVERY_STEPS)
+    || stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS)
+    || stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS);
+  if (!supported) {
+    throw new Error("delivery close plan must contain one of the authenticated five-step, four-step, or two-step action sets");
   }
+  const unarchivedPlanning = isUnarchivedPlanningPlan(plan, task);
+  const postCleanupArchive = isPostCleanupArchivePlan(plan, task);
   const root = delivery.target_repo_root;
   const worktree = delivery.worktree_root;
   const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
@@ -2293,7 +2935,15 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   };
   const archived = () => {
     const value = findArchive();
-    return { satisfied: value.commit !== null && value.tree_preserved && value.only_renames, archive_commit: value.commit, tree_oid: treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid ?? null };
+    const target = postCleanupArchive ? branchOid(root, delivery.target_branch) : null;
+    const scopePreserved = !postCleanupArchive
+      || (value.commit !== null && value.commit === target && value.parent_oid === delivery.target_baseline);
+    return {
+      satisfied: value.commit !== null && value.tree_preserved && value.only_renames && scopePreserved,
+      archive_commit: value.commit,
+      tree_oid: treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid ?? null,
+      ...(postCleanupArchive ? { parent_oid: value.parent_oid, target_oid: target } : {}),
+    };
   };
   const mergeState = () => {
     const target = branchOid(root, delivery.target_branch);
@@ -2339,29 +2989,52 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         },
         verify: async (value) => value.satisfied && value.task_commit === delivery.task_commit,
       };
-      if (step.operation === "archive-spec") return {
-        probe: archived,
-        execute: async () => {
-          targetPreflight(delivery, null, { checkRemote: false });
-          if (!mergeState().satisfied) throw new Error("target branch is not merged before archive");
-          const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
-          if (existsSync(join(root, delivery.spec_source_path))) {
-            if (sourceWorktreeStatus(root) !== "") throw new Error("target source worktree changed before spec archive");
-            createArchiveParent(root, delivery.spec_archive_path);
-            git(root, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
-          } else if (!existsSync(join(root, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
-            throw new Error("partial spec archive does not match the planned directory move");
-          }
-          // Quality/evidence files are execution sidecars and are deliberately
-          // outside the published source snapshot. Check only source bytes so
-          // a live evidence write cannot block the exact spec-directory move.
-          if (unstagedSourcePaths(root).length > 0) throw new Error("spec archive contains unstaged source changes");
-          const moves = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
-          if (!exactDirectoryRenames(moves, delivery.spec_source_path, delivery.spec_archive_path)) throw new Error("spec archive is not an exact directory move");
-          git(root, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
-        },
-        verify: async (value) => value.satisfied && value.tree_oid === treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid,
-      };
+      if (step.operation === "archive-spec") {
+        if (postCleanupArchive) return {
+          probe: archived,
+          execute: async () => {
+            targetPreflight(delivery, delivery.target_baseline, {
+              allowPlannedArchiveRename: archiveRenameRecoveryState(delivery),
+            });
+            const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+            if (existsSync(join(root, delivery.spec_source_path))) {
+              if (sourceWorktreeStatus(root) !== "") throw new Error("target source worktree changed before spec archive");
+              createArchiveParent(root, delivery.spec_archive_path);
+              git(root, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
+            } else if (!existsSync(join(root, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
+              throw new Error("partial spec archive does not match the planned directory move");
+            }
+            if (unstagedSourcePaths(root).length > 0) throw new Error("spec archive contains unstaged source changes");
+            const moves = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+            if (!exactDirectoryRenames(moves, delivery.spec_source_path, delivery.spec_archive_path)) throw new Error("spec archive is not an exact directory move");
+            git(root, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
+          },
+          verify: async (value) => value.satisfied && value.tree_oid === treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid,
+        };
+        return {
+          probe: archived,
+          execute: async () => {
+            targetPreflight(delivery, null, { checkRemote: false });
+            if (!mergeState().satisfied) throw new Error("target branch is not merged before archive");
+            const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+            if (existsSync(join(root, delivery.spec_source_path))) {
+              if (sourceWorktreeStatus(root) !== "") throw new Error("target source worktree changed before spec archive");
+              createArchiveParent(root, delivery.spec_archive_path);
+              git(root, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
+            } else if (!existsSync(join(root, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
+              throw new Error("partial spec archive does not match the planned directory move");
+            }
+            // Quality/evidence files are execution sidecars and are deliberately
+            // outside the published source snapshot. Check only source bytes so
+            // a live evidence write cannot block the exact spec-directory move.
+            if (unstagedSourcePaths(root).length > 0) throw new Error("spec archive contains unstaged source changes");
+            const moves = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+            if (!exactDirectoryRenames(moves, delivery.spec_source_path, delivery.spec_archive_path)) throw new Error("spec archive is not an exact directory move");
+            git(root, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
+          },
+          verify: async (value) => value.satisfied && value.tree_oid === treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid,
+        };
+      }
       if (step.operation === "merge-task-branch") return {
         probe: mergeState,
         execute: async () => {
@@ -2377,16 +3050,41 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         },
         verify: async (value) => value.satisfied && value.target_oid !== null,
       };
-      if (step.operation === "push-target-branch") return {
-        probe: () => { const merged = mergeState(); const remote = remoteOid(root, delivery.remote, delivery.target_branch); return { satisfied: merged.satisfied && remote === merged.target_oid, target_oid: merged.target_oid, remote_oid: remote }; },
-        execute: async () => {
-          targetPreflight(delivery, null);
-          const merged = mergeState();
-          if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
-          git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
-        },
-        verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
-      };
+      if (step.operation === "push-target-branch") {
+        if (postCleanupArchive) {
+          const archivePublished = () => {
+            const target = branchOid(root, delivery.target_branch);
+            const remote = remoteOid(root, delivery.remote, delivery.target_branch);
+            const archive = archiveFacts(root, target ? delivery.target_branch : null, delivery);
+            const exactArchive = archive.commit !== null
+              && archive.commit === target
+              && archive.parent_oid === delivery.target_baseline;
+            return { satisfied: exactArchive && archive.tree_preserved && archive.only_renames && remote === target, target_oid: target, remote_oid: remote, archive_commit: archive.commit, parent_oid: archive.parent_oid };
+          };
+          return {
+            probe: archivePublished,
+            execute: async () => {
+              const archive = archiveFacts(root, delivery.target_branch, delivery);
+              if (archive.commit === null || archive.parent_oid !== delivery.target_baseline || archive.commit !== branchOid(root, delivery.target_branch)) {
+                throw new Error("target branch is not the exact prepared archive commit");
+              }
+              targetPreflight(delivery, archive.commit);
+              git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
+            },
+            verify: async (value) => value.satisfied && value.target_oid === value.remote_oid && typeof value.archive_commit === "string",
+          };
+        }
+        return {
+          probe: () => { const merged = mergeState(); const remote = remoteOid(root, delivery.remote, delivery.target_branch); return { satisfied: merged.satisfied && remote === merged.target_oid, target_oid: merged.target_oid, remote_oid: remote }; },
+          execute: async () => {
+            targetPreflight(delivery, null);
+            const merged = mergeState();
+            if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
+            git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
+          },
+          verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
+        };
+      }
       if (step.operation === "cleanup") {
         const existingWorkspace = task.manifest.workspace_mode === "existing";
         const branchRemover = {
@@ -2479,6 +3177,7 @@ export async function executeClosePlan(options = {}) {
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   const plan = validatePlan(options.plan, task);
   const delivery = plan.delivery ? validateDeliveryPlan(plan, task, kernel) : null;
+  validateArchiveDeclarationArgument(plan, task, options.archiveDeclarationRef);
   const manualRiskClose = plan.delivery?.risk_close !== undefined;
   if (manualRiskClose !== (options.manualRiskClose === true)) {
     throw new Error(manualRiskClose
@@ -2507,7 +3206,7 @@ export async function executeClosePlan(options = {}) {
   }
   const confirmation = closeConfirmation(task, planHash, confirmationRef);
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
-  assertPlanningPlanExecutable(delivery);
+  assertPlanningPlanExecutable(delivery, task, plan);
   const executors = options.executors;
   // Validate every executable boundary before creating a record or performing a
   // physical probe. A malformed later step must have zero side effects.
@@ -2546,8 +3245,8 @@ export async function executeClosePlan(options = {}) {
     for (const step of plan.steps) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
-      const operation = DELIVERY_AUTHORIZATIONS[step.operation];
-      if (!consumedOperations.has(operation)) {
+      for (const operation of requiredCloseAuthorizations(plan, task, step)) {
+        if (consumedOperations.has(operation)) continue;
         kernel.consumeIrreversibleAuthorization({
           operation,
           confirmation_ref: confirmation.human_confirmation_ref,
@@ -2578,7 +3277,7 @@ export async function executeClosePlan(options = {}) {
     if (deliveryState) {
       const missing = deliveryState.physical_missing;
       if (missing.length > 0) throw new Error(`delivery close is incomplete: ${missing.join(", ")}`);
-      if (delivery?.close_mode === "planning" && deliveryState.missing.includes("planning_material")) {
+      if (isPlanningDelivery(plan, task) && deliveryState.missing.includes("planning_material")) {
         throw new Error("planning close is incomplete: archived planning material does not match its bound revision");
       }
     }
@@ -2587,6 +3286,20 @@ export async function executeClosePlan(options = {}) {
       return Object.freeze({
         status: "delivered_with_risk",
         close_mode: "manual-risk-close",
+        physical_state: deliveryState ? physicalStateForRecord(deliveryState) : {},
+      });
+    }
+    if (isDeclaredPlanningDelivery(plan, task)) {
+      if (acceptedCompletion) throw new Error("declared planning close conflicts with a normal completion record");
+      return Object.freeze({
+        status: "delivered",
+        close_mode: "planning",
+        plan_hash: planHash,
+        planning_status: delivery.planning.status,
+        material_status: delivery.material_status,
+        development_status: "not_executed",
+        quality_status: "not_run",
+        completion_record: null,
         physical_state: deliveryState ? physicalStateForRecord(deliveryState) : {},
       });
     }

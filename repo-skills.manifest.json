@@ -19,6 +19,21 @@
       "metrics_enabled": true
     },
     {
+      "id": "stage-handoff",
+      "path": "skills/stage-handoff/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code"
+      ],
+      "metrics_enabled": false
+    },
+    {
       "id": "anysearch",
       "path": "skills/anysearch/SKILL.md",
       "version": "1.0.0",

@@ -25,7 +25,7 @@ function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
-function fixture({ attachment = true } = {}) {
+function fixture({ attachment = true, taskType = null, implementationMaterials = false } = {}) {
   counter += 1;
   const taskId = `build-prd-delivery-${counter}`;
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-build-prd-delivery-")));
@@ -58,7 +58,13 @@ function fixture({ attachment = true } = {}) {
   const first = prepareTaskWorkspace(task);
   const source = `specs/${taskId}`;
   mkdirSync(join(first.worktreeRoot, source), { recursive: true });
-  writeFileSync(join(first.worktreeRoot, source, "decision-log.md"), "# Confirmed decision\n\nBuild the product plan.\n");
+  writeFileSync(join(first.worktreeRoot, source, "decision-log.md"), [
+    "# Confirmed decision",
+    "",
+    ...(taskType ? ["## 任务身份", `- **任务类型**：${taskType}`, ""] : []),
+    "Build the product plan.",
+    "",
+  ].join("\n"));
   const attachmentPath = "attachments/required.md";
   const attachmentRaw = "required planning attachment\n";
   const requiredAttachments = [{ path: attachmentPath, sha256: sha256(attachmentRaw) }];
@@ -71,6 +77,11 @@ function fixture({ attachment = true } = {}) {
     `- **必要附件与版本**：${JSON.stringify(requiredAttachments)}`,
     "",
   ].join("\n"));
+  if (implementationMaterials) {
+    writeFileSync(join(first.worktreeRoot, source, "spec.md"), "# Specification\n\n当前实现材料。\n");
+    writeFileSync(join(first.worktreeRoot, source, "plan.md"), "# Plan\n\n当前实现计划。\n");
+    writeFileSync(join(first.worktreeRoot, source, "tasks.md"), "# Tasks\n\n当前执行清单。\n");
+  }
   if (attachment) {
     mkdirSync(join(first.worktreeRoot, "attachments"), { recursive: true });
     writeFileSync(join(first.worktreeRoot, attachmentPath), attachmentRaw);
@@ -88,11 +99,11 @@ function fixture({ attachment = true } = {}) {
     spec_source_path: source,
     spec_archive_path: `specs/archive/${taskId}`,
   };
-  return { task, kernel, candidate, repo, taskId, delivery, requiredAttachments };
+  return { task, kernel, candidate, repo, bare, taskId, delivery, requiredAttachments };
 }
 
-function authorizePlanning(state, confirmationRef, confirmationHash) {
-  for (const operation of ["commit", "merge", "archive", "push", "cleanup"]) {
+function authorizePlanning(state, confirmationRef, confirmationHash, operations = ["commit", "merge", "archive", "push", "cleanup"]) {
+  for (const operation of operations) {
     const value = {
       schema_version: "irreversible-authorization.v1",
       task_id: state.task.identity.taskId,
@@ -284,6 +295,97 @@ describe("build-prd planning delivery close", () => {
     expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).status).toBe("completed");
     expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/archive-spec.json`)).status).toBe("completed");
     expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/push-target-branch.json`)).toThrow();
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
+  });
+});
+
+describe("planning-hardening unarchived planning close", () => {
+  it("uses four default actions for a declared planning task and leaves materials at the source path", async () => {
+    const state = fixture({ taskType: "规划任务" });
+    const result = await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: { ...state.delivery, required_attachments: state.requiredAttachments },
+      replyText: "确认规划任务完成四动作交付，但暂不归档。",
+      stepSlug: "confirm-planning-close",
+      now: () => "2026-09-11T00:00:00.000Z",
+    });
+
+    expect(result.status).not.toBe("completed");
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/prd.md`])).toBe("");
+    expect(() => git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/archive/${state.taskId}/decision-log.md`])).toThrow();
+  });
+
+  it("keeps ordinary close and explicit legacy planning mode at five actions", () => {
+    const ordinary = fixture({ implementationMaterials: true });
+    const ordinaryPlan = prepareDeliveryClosePlan({ task: ordinary.task, kernel: ordinary.kernel, delivery: ordinary.delivery });
+    expect(ordinaryPlan.plan.steps.map((step) => step.step_id)).toEqual([
+      "commit-delivery", "merge-task-branch", "archive-spec", "push-target-branch", "cleanup",
+    ]);
+
+    const legacy = fixture();
+    const legacyPlan = prepareDeliveryClosePlan({
+      task: legacy.task,
+      kernel: legacy.kernel,
+      closeMode: "planning",
+      delivery: { ...legacy.delivery, required_attachments: legacy.requiredAttachments },
+    });
+    expect(legacyPlan.plan.steps.map((step) => step.step_id)).toEqual([
+      "commit-delivery", "merge-task-branch", "archive-spec", "push-target-branch", "cleanup",
+    ]);
+  });
+
+  it("does not archive or write completion when the four-action push fails", async () => {
+    const state = fixture({ taskType: "规划任务" });
+    const prepared = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: { ...state.delivery, required_attachments: state.requiredAttachments },
+    });
+    state.prepared = prepared;
+    const confirmation = confirmClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      outcome: "confirmed",
+      replyText: "确认规划任务四动作交付。",
+      stepSlug: "confirm-planning-close",
+    });
+    authorizePlanning(
+      state,
+      confirmation.confirmation.human_confirmation_ref,
+      confirmation.confirmation.human_confirmation_hash,
+      ["commit", "merge", "push", "cleanup"],
+    );
+    execFileSync("git", ["remote", "set-url", "origin", join(state.repo, "missing-origin.git")], { cwd: state.repo });
+
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
+    })).rejects.toThrow(/git ls-remote failed|remote|push/i);
+
+    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/commit-delivery.json`)).status).toBe("completed");
+    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).status).toBe("completed");
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/archive-spec.json`)).toThrow();
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
+    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
+
+    const mergeOid = git(state.repo, ["rev-parse", "refs/heads/main"]);
+    execFileSync("git", ["remote", "set-url", "origin", state.bare], { cwd: state.repo });
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
+    })).resolves.toMatchObject({ status: "delivered", completion_record: null });
+    expect(git(state.repo, ["rev-parse", "refs/heads/main"])).toBe(mergeOid);
+    expect(git(state.repo, ["rev-parse", "refs/remotes/origin/main"])).toBe(mergeOid);
     expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
   });
 });

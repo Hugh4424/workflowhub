@@ -3187,6 +3187,24 @@
       "consumer": "private build-code acceptance runner for the current four-file aggregate",
       "delete_condition": "remove when T009 uses an equivalent task-local producer of per-AC expected/actual JSON",
       "content_change": "run the declared targeted Vitest aggregate with JSON reporting and emit one runtime-derived assertion entry per current AC"
+    },
+    {
+      "source": "docs/adr/0027-planning-task-question-boundary.md",
+      "destination": "docs/adr/0027-planning-task-question-boundary.md",
+      "status": "add",
+      "owner": "WorkflowHub architecture governance",
+      "consumer": "make-decision task-type question routing and future stage authors",
+      "delete_condition": "remove when an approved replacement decision supersedes the task-type-specific question boundary",
+      "content_change": "proposed architecture decision for planning-task versus ordinary-task question scope"
+    },
+    {
+      "source": "tests/fixtures/planning-workflow-hardening-acceptance.mjs",
+      "destination": "tests/fixtures/planning-workflow-hardening-acceptance.mjs",
+      "status": "add",
+      "owner": "workflowhub-build-prd T011",
+      "consumer": "T012 final build-code acceptance aggregation via existing acceptance_data command executor",
+      "delete_condition": "remove when an approved native executor emits the same bounded per-AC JSON and preserves the nine-file, raw-output, and unavailable semantics",
+      "content_change": "test-only Vitest JSON reporter adapter with explicit selector mapping, cross-pair AC-CLOSE-002 coverage, raw child output, and D029 qualitative unavailable facts"
     }
   ]
 }

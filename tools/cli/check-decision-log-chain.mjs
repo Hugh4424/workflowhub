@@ -39,7 +39,7 @@ function decisionSections(markdown) {
       continue;
     }
     if (!inFence) {
-      const match = /^###\s+(D-\d+)\b[^\n]*$/.exec(line);
+      const match = /^#{3,4}\s+(D-\d+)\b[^\n]*$/.exec(line);
       if (match) sections.push({ decision_id: match[1], heading_start: offset, body_start: offset + line.length + 1 });
     }
     offset += line.length + 1;
@@ -64,6 +64,15 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
   const sections = decisionSections(markdown);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = [];
+
+  if (sections.length === 0) {
+    warnings.push(warning(
+      "no_decision_entries",
+      "unknown",
+      "decision_entries",
+      "no decision entries were recognized; chain coverage is unavailable",
+    ));
+  }
 
   for (const { decision_id, body } of sections) {
     const values = Object.fromEntries(CHAIN_FIELDS.map((field) => {
