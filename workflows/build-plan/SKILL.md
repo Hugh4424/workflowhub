@@ -32,6 +32,14 @@ continues without guessing.
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
+`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
+“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
+
 ## 阶段末复盘（必须执行）
 
 阶段结束时，当前主会话先按 `stage-reflection` 技能产出 `stage-reflection.v2` judgment JSON，再调用实际的公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用唯一的当前 `quality/evidence/stage-outcomes/build-plan/<sha256>.json`；`identity` 的 task、真实 worktree/branch、attempt、material_revision 与 snapshot_tree 必须匹配该认证原件。executor/run 从真实 outcome 派生。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。

@@ -35,6 +35,10 @@ an error, not a reason to merge versions.
    - Return a draft **大纲** and a **结果导向任务地图**. Organize cards by
      independently verifiable user result, not by technical layer, fixed card
      count, or copied historical wave.
+   - For a planning task, first check the **完整用户旅程** at the direction
+     level. Every confirmed requirement must have **需求覆盖** in a responsible
+     card or an explicitly approved exclusion with **明确排除理由**; a short map
+     or a technical inventory is not complete journey coverage.
    - Attach every confirmed requirement to a responsible card, an acceptance
      oracle, or an explicitly approved exclusion. Record each card's real
      `consumer`, `oracle`, `owner`, shared definitions, and four dependency
@@ -128,6 +132,16 @@ final confirmation, `写盘`, `发布`, `归档`, provider success, host invocat
 Git result, or `物理授权`.
 
 ## Detail-card and handoff contract
+
+### Child-task handoff
+
+When a card is handed to a **子任务**, the child consumes only its **最小读取集**:
+the card, the shared definitions it names, and its own material. The **母任务**
+ and **兄弟** cards, records, and workspaces are **只读** context; the child must
+not write them, **不触发母任务close**, **不移动**, or **不删除** files. The child
+records any **边界偏离** in its own material with the original boundary, the
+**实际偏离**, and the **原因**. A byte-preserving read or a structural handoff
+does not prove the child's complete semantic acceptance.
 
 Every card is a result-oriented unit and declares:
 

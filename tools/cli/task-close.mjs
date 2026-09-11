@@ -48,12 +48,36 @@ function taskPath(values, project, taskId) {
   return deriveTaskPath(resolveStorageRoot(), project, taskId);
 }
 
-function context(values, { workspaceRequired = true } = {}) {
+function isPostCleanupArchivePlanRecord(task, planHash) {
+  if (!/^[a-f0-9]{64}$/.test(planHash ?? "")) return false;
+  try {
+    const record = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
+    const steps = record?.plan?.steps;
+    return record?.schema_version === "task-close-plan-record.v1"
+      && record.task_id === task.identity.taskId
+      && record.plan_hash === planHash
+      && record.plan?.delivery?.close_mode === "ordinary"
+      && record.plan?.delivery?.planning !== undefined
+      && Array.isArray(steps)
+      && steps.length === 2
+      && steps[0]?.step_id === "archive-spec"
+      && steps[0]?.operation === "archive-spec"
+      && steps[1]?.step_id === "push-target-branch"
+      && steps[1]?.operation === "push-target-branch";
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
+    throw error;
+  }
+}
+
+function context(values, { workspaceRequired = true, postConfirmation = false } = {}) {
   const project = required(values, "project");
   const taskId = required(values, "task");
   const task = openTask(taskPath(values, project, taskId), project, taskId);
   const unboundKernel = createTaskKernel(task);
-  if (!workspaceRequired) return { task, workspace: null, kernel: unboundKernel };
+  const effectiveWorkspaceRequired = workspaceRequired
+    && !(postConfirmation && isPostCleanupArchivePlanRecord(task, values["plan-hash"]));
+  if (!effectiveWorkspaceRequired) return { task, workspace: null, kernel: unboundKernel };
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
   const workspace = openCurrentTaskWorkspace(task);
   return { task, workspace, kernel: createTaskKernel(task, { workspace }) };
@@ -86,6 +110,28 @@ function optionalJsonArray(values, name) {
   catch { throw new TypeError(`--${name} must be JSON`); }
   if (!Array.isArray(value)) throw new TypeError(`--${name} must be a JSON array`);
   return value;
+}
+
+function postCleanupArchiveInput(values, command) {
+  const archive = values.archive;
+  const priorPlanHash = values["plan-hash"];
+  if (archive === undefined && priorPlanHash === undefined) return null;
+  if (archive === undefined || priorPlanHash === undefined) {
+    throw new TypeError(`${command} post-cleanup archive requires both --archive and --plan-hash`);
+  }
+  const allowed = command === "prepare"
+    ? new Set(["task-path", "project", "task", "archive", "plan-hash"])
+    : new Set(["task-path", "project", "task", "archive", "plan-hash", "reply-text", "step-slug"]);
+  const extra = Object.keys(values).filter((key) => !allowed.has(key));
+  if (extra.length > 0) throw new TypeError(`${command} post-cleanup archive does not accept: ${extra.map((key) => `--${key}`).join(", ")}`);
+  return { archiveDeclarationRef: required(values, "archive"), priorPlanHash: required(values, "plan-hash") };
+}
+
+function resultSourceRef(result, fallback) {
+  if (result?.status === "delivered" && /^[a-f0-9]{64}$/.test(result.plan_hash ?? "")) {
+    return `operations/close/plans/${result.plan_hash}/plan.json`;
+  }
+  return fallback;
 }
 
 function readCurrentStatusMaterials(artifacts) {
@@ -163,21 +209,28 @@ function usage() {
   return [
     "Usage:",
     "  task-close.mjs prepare [--task-path=...] --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=... [--mode=planning] [--required-attachments=JSON]",
+    "  task-close.mjs prepare [--task-path=...] --project=... --task=... --archive=<declaration-ref> --plan-hash=<initial-four-action-plan-hash>",
     "  task-close.mjs confirm [--task-path=...] --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout [--reply-text=...] [--step-slug=...] (reply and step required unless timeout)",
-    "  task-close.mjs execute [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs execute [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=... [--archive=<declaration-ref>]",
     "  task-close.mjs manual-close [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete [--task-path=...] --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status [--task-path=...] --project=... --task=... [--plan-hash=...]",
     "  task-close.mjs close [--task-path=...] --project=... --task=... --reply-text=... --step-slug=... [--mode=planning] [--required-attachments=JSON] [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
+    "  task-close.mjs close [--task-path=...] --project=... --task=... --archive=<declaration-ref> --plan-hash=<initial-four-action-plan-hash> --reply-text=... --step-slug=...",
   ].join("\n");
 }
 
 async function main() {
   const { command, values } = args(process.argv.slice(2));
   if (!new Set(["prepare", "confirm", "execute", "manual-close", "complete", "status", "close"]).has(command)) throw new TypeError(usage());
+  const postArchive = command === "prepare" || command === "close"
+    ? postCleanupArchiveInput(values, command)
+    : null;
   // A retry after governed worktree removal must be able to reconcile the
   // remaining branch-cleanup step without reopening the deleted Workspace.
-  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "complete", "execute", "manual-close"]).has(command) });
+  const workspaceRequired = !new Set(["status", "complete", "execute", "manual-close"]).has(command)
+    && postArchive === null;
+  const { task, workspace, kernel } = context(values, { workspaceRequired, postConfirmation: command === "confirm" });
   const boundary = command === "status" ? null : authenticateWriteBoundary({
     task,
     stage: "verify-code",
@@ -195,6 +248,16 @@ async function main() {
     return result;
   };
   if (command === "close") {
+    if (postArchive) {
+      const result = await closeDelivery({
+        task,
+        kernel,
+        ...postArchive,
+        replyText: required(values, "reply-text"),
+        stepSlug: required(values, "step-slug"),
+      });
+      return finish(result, resultSourceRef(result, `operations/close/plans/${postArchive.priorPlanHash}/plan.json`));
+    }
     const requiredAttachments = optionalJsonArray(values, "required-attachments");
     const result = await closeDelivery({
       task,
@@ -208,13 +271,17 @@ async function main() {
       replyText: required(values, "reply-text"),
       stepSlug: required(values, "step-slug"),
     });
-    return finish(result, "operations/close/completed.json");
+    return finish(result, resultSourceRef(result, "operations/close/completed.json"));
   }
   if (command === "status" && values["plan-hash"] === undefined) {
     const completion = optionalCompletion(task);
     return statusWithoutPlan(task, completion);
   }
   if (command === "prepare") {
+    if (postArchive) {
+      const result = prepareDeliveryClosePlan({ task, kernel, ...postArchive });
+      return finish(result, `operations/close/plans/${result.plan_hash}/plan.json`);
+    }
     const riskClose = optionalRiskClose(values);
     const requiredAttachments = optionalJsonArray(values, "required-attachments");
     const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
@@ -245,10 +312,17 @@ async function main() {
   }
   if (command === "execute") {
     if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plans must use manual-close");
-    const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
+    const result = await executeClosePlan({
+      task,
+      kernel,
+      plan,
+      ...(values.archive === undefined ? {} : { archiveDeclarationRef: required(values, "archive") }),
+      closeConfirmationRef: required(values, "confirmation-ref"),
+      executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }),
+    });
     const sourceRef = result.status === "completed"
       ? "operations/close/completed.json"
-      : required(values, "confirmation-ref");
+      : resultSourceRef(result, required(values, "confirmation-ref"));
     return finish(result, sourceRef);
   }
   if (command === "manual-close") {

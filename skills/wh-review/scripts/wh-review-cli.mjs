@@ -225,7 +225,7 @@ function normalizeBareRecoveryResult(request, requestIdentity, result) {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new TypeError("review recovery result must be an object");
   }
-  if (!new Set(["available", "unavailable"]).has(result.status)) {
+  if (!new Set(["available", "available-with-failures", "unavailable"]).has(result.status)) {
     throw new TypeError("review recovery result status is invalid");
   }
   const authContext = bareSinkAuthContext(request);

@@ -1,5 +1,14 @@
 # Decision Log
 
+## 任务身份
+
+在首次正式需求提问前填写一次；固定标签只能出现一条。
+
+- **任务类型**：<规划任务|普通任务>
+
+`规划任务`只问方向层问题；`普通任务`保持既有提问与产物粒度。缺失、重复、冲突或其他值由
+`readTaskTypeFromDecisionLog(markdown)` 返回 `unknown`，不得猜测。
+
 ## 原始需求
 
 | source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
@@ -67,8 +76,9 @@ impact_dimensions: [goal|scope|acceptance|ordinary_detail]
 requires_user_decision: true|false
 visible_group_id: <existing approve-decision group>
 batch_id: <optional alias for the same visible group>
-interaction_ref: <existing interaction aggregate or round ref>
-interaction_hash: <sha256 of that exact interaction bytes>
+# 核心 OI 的确认凭证不写在这里：由 interaction aggregate 的 oi_dispositions
+# 单向绑回本 OI（task_id / outline_version / oi_id / 可见分组 / 所选处置）。
+# 旧记录里若已有 interaction_ref / interaction_hash，仍可读，但已不是凭证来源。
 ```
 
 方向审查只消费当前 `convergence_outline` questions-only 投影（保留全部 OI

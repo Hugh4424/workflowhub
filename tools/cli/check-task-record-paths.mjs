@@ -125,6 +125,10 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["skills/wh-review/scripts/simple-review-runner.mjs", "private review packet temp authority"],
   ["core/runtime-mode.mjs", "global runtime cutover authority"],
   ["runtime/distribution/runner-release.mjs", "deterministic runner distribution builder"],
+  ["runtime/distribution/skill-bundle-release.mjs", "deterministic skill-bundle distribution builder"],
+  ["skills/wh-review/scripts/third-review-host-config.mjs", "private review packet/config temporary files"],
+  ["skills/wh-review/scripts/wh-review-cli.mjs", "task-bound review packet staging"],
+  ["scripts/__tests__/smoke-local-skill-dispatch.test.mjs", "explicit local package smoke fixture"],
   ["tools/cli/run-wh-review-audit-e2e.mjs", "explicit fake-broker test fixture"],
   ["tools/cli/run-wh-review-provider-smoke.mjs", "explicit provider smoke fixture"],
   ["tools/cli/smoke-local-skill-dispatch.mjs", "explicit local package verification fixture"],
@@ -151,7 +155,11 @@ const FORBIDDEN_PATTERNS = [
   [/\bworktree\.json\b/, "legacy standalone worktree identity"],
   [/\bprocess\.cwd\s*\(/, "cwd identity discovery"],
   [/git\s+(?:config\s+--get\s+remote\.|remote\b)/i, "Git remote identity discovery"],
-  [/\b(?:storageRoot|taskPath)\b/, "caller-supplied storage/task path capability"],
+  // Reading the authenticated handle's own capability field (`task.taskPath`,
+  // `{ storageRoot }` binding) is the sanctioned way to consume the TaskContext
+  // contract; only a caller-supplied value is forbidden, so a property access
+  // is not a violation.
+  [/(?:^|[^.\w])(?:storageRoot|taskPath)\b/, "caller-supplied storage/task path capability"],
 ];
 
 function walk(path, output = []) {
@@ -266,7 +274,10 @@ function checkUniqueSpecsPathDerivation() {
       const rel = relative(repoRoot, file).replaceAll("\\", "/");
       if (allowed.has(rel) || FIXTURE_ALLOWLIST.has(rel)) continue;
       const content = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-      if (/\b(?:join|resolve)\s*\([^;\n]*(?:"specs"|'specs'|`specs`)|`specs\//.test(content)) failures.push(`${rel}: literal specs path derivation is only legal in core/artifact-dir.mjs`);
+      // `specs/<placeholder>` in skill prose names the write target; only a real
+      // derivation (a `specs/...` template or a join/resolve seeded with the
+      // literal) is a violation, so a documentation placeholder is not.
+      if (/\b(?:join|resolve)\s*\(\s*(?:"specs"|'specs'|`specs`)|`specs\/[^<{]/.test(content)) failures.push(`${rel}: literal specs path derivation is only legal in core/artifact-dir.mjs`);
     }
   }
   return failures;
@@ -293,7 +304,10 @@ function checkGlobalIdentityDiscovery() {
   const patterns = [
     [/\bprocess\.cwd\s*\(/, "cwd identity discovery"],
     [/\bWORKFLOWHUB_TASK_TRACKING_ROOT\b/, "unsupported task tracking environment variable"],
-    [/\bWORKFLOWHUB_TASK_DIR\b/, "stage/component must not read the storage-root environment"],
+    // Only an actual run-time read is forbidden. A fixture or launcher that
+    // *populates* the variable (object key, `fixture.env.X` assertion) is not
+    // consuming the storage-root environment.
+    [/\bprocess\.env(?:\.WORKFLOWHUB_TASK_DIR\b|\[\s*["']WORKFLOWHUB_TASK_DIR["']\s*\])|(?:^|[^.\w])WORKFLOWHUB_TASK_DIR(?!\s*:|[\w])/, "stage/component must not read the storage-root environment"],
     [/git\s+(?:config\s+--get\s+remote\.|remote\b)/i, "Git remote identity discovery"],
   ];
   for (const root of ["core", "runtime", "scripts", "workflows", "skills", "metrics"]) {

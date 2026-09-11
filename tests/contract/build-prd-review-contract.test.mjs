@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -10,6 +11,7 @@ import { resolveTrustedReviewRoute } from "../../skills/wh-review/scripts/third-
 import { buildSemanticProjection, compareSemanticProjection } from "../../skills/wh-review/scripts/review-semantic-projection.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { recordSimpleReviewResult, recordTaskBoundE2eReviewResult, recordTaskBoundE2eReviewUnavailable } from "../../runtime/review/review-record-route.mjs";
+import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 
 const root = join(import.meta.dirname, "..", "..");
 const tempRoots = [];
@@ -48,6 +50,60 @@ function selection() {
     providers: ["kimi"],
     provider_identities: { kimi: { source_id: "source-kimi", config_id: "config-kimi" } },
   };
+}
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function makeReflectionTask() {
+  const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-build-prd-reflection-")));
+  tempRoots.push(storageRoot);
+  const task = createTask({
+    storageRoot,
+    manifest: {
+      schema_version: "1.0.0",
+      project_name: "BuildPrd",
+      task_id: "reflection-contract",
+      created_at: "2026-09-11T00:00:00.000Z",
+      target_repo_root: storageRoot,
+      issue_ids: [],
+      inputs: {},
+    },
+  });
+  return { task, kernel: createTaskKernel(task) };
+}
+
+// This fixture executes the existing TaskKernel publish/read seam named by the
+// build-prd report-and-handoff contract. It is deliberately not a new writer.
+function executeDeclaredHandoff({ task, kernel, payload, publish = kernel.publishCanonicalRecord.bind(kernel), read = task.readRecord.bind(task) }) {
+  const required = ["task_id", "workflow", "material_refs", "reply_text", "step_results", "reflection_facts"];
+  if (!payload || typeof payload !== "object" || required.some((key) => payload[key] === undefined)) {
+    return { status: "unavailable", reason: "handoff payload is incomplete" };
+  }
+  if (payload.task_id !== task.identity.taskId) return { status: "unavailable", reason: "handoff task identity mismatch" };
+  if (typeof payload.reply_text !== "string" || payload.reply_text.trim() === "") {
+    return { status: "unavailable", reason: "handoff reply_text is empty" };
+  }
+  if (!Array.isArray(payload.material_refs) || !Array.isArray(payload.step_results) || !Array.isArray(payload.reflection_facts)) {
+    return { status: "unavailable", reason: "handoff arrays are missing" };
+  }
+  const raw = `${JSON.stringify(payload, null, 2)}\n`;
+  const digest = sha256(raw);
+  const ref = `quality/evidence/portable-workflow-outcomes/build-prd/${digest}.json`;
+  try {
+    publish(ref, raw);
+  } catch (error) {
+    return { status: "unavailable", reason: `write failed: ${error.message}` };
+  }
+  let readback;
+  try {
+    readback = read(ref);
+  } catch (error) {
+    return { status: "unavailable", reason: `read failed: ${error.message}` };
+  }
+  if (readback !== raw || sha256(readback) !== digest) {
+    return { status: "unavailable", reason: "handoff readback hash mismatch" };
+  }
+  return { status: "recorded", ref, sha256: digest, payload: JSON.parse(readback) };
 }
 
 afterEach(() => {
@@ -254,5 +310,57 @@ describe("build-prd non-stage wh-review contract", () => {
     ]));
     expect(partial).not.toHaveProperty("attempt_ref");
     expect(partial).not.toHaveProperty("result_ref");
+  });
+});
+
+describe("planning-hardening portable reflection contracts", () => {
+  it("planning-hardening AC-REFLECT-001/AC-META-001 declares one save-read handoff with bound payload fields", () => {
+    const workflow = readFileSync(join(root, "workflows/build-prd/SKILL.md"), "utf8");
+    expect(workflow).toContain("report-facts-and-handoff");
+    expect(workflow).toContain("reportFactsAndHandoff");
+    expect(workflow).toContain("readReflectionForReport");
+    expect(workflow).toContain("publishCanonicalRecord");
+    expect(workflow).toContain("raw");
+    expect(workflow).toContain("SHA");
+    expect(workflow).toContain("task_id");
+    expect(workflow).toContain("workflow");
+    expect(workflow).toContain("material_refs");
+    expect(workflow).toContain("reply_text");
+    expect(workflow).toContain("step_results");
+    expect(workflow).toContain("reflection_facts");
+    expect(workflow).toContain("仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts");
+
+    const { task, kernel } = makeReflectionTask();
+    const payload = {
+      task_id: task.identity.taskId,
+      workflow: "build-prd",
+      material_refs: [{ ref: "decision-log.md", sha256: "d".repeat(64) }],
+      reply_text: "用户确认当前方向层 PRD 草稿。",
+      step_results: [{ step_slug: "report-facts-and-handoff", status: "recorded" }],
+      reflection_facts: [{ fact: "复盘结论来自已读回的步骤结果。" }],
+    };
+    const result = executeDeclaredHandoff({ task, kernel, payload });
+    expect(result.status).toBe("recorded");
+    expect(result.payload).toEqual(payload);
+    expect(result.ref).toBe(`quality/evidence/portable-workflow-outcomes/build-prd/${result.sha256}.json`);
+
+    for (const invalid of [
+      { ...payload, reply_text: "" },
+      { ...payload, task_id: "other-task" },
+      { ...payload, material_refs: undefined },
+    ]) {
+      expect(executeDeclaredHandoff({ task, kernel, payload: invalid }).status).toBe("unavailable");
+    }
+    expect(executeDeclaredHandoff({ task, kernel, payload, publish: () => { throw new Error("write unavailable"); } })).toMatchObject({ status: "unavailable" });
+    expect(executeDeclaredHandoff({ task, kernel, payload, publish: () => undefined, read: () => { throw new Error("read unavailable"); } })).toMatchObject({ status: "unavailable" });
+    expect(executeDeclaredHandoff({ task, kernel, payload, publish: () => undefined, read: () => "tampered\n" })).toMatchObject({ status: "unavailable" });
+  });
+
+  it("planning-hardening AC-CHECK-001/AC-CLOSE-002 keeps portable reflection separate from formal stage and close approval", () => {
+    const text = `${readFileSync(join(root, "workflows/build-prd/SKILL.md"), "utf8")}\n${readFileSync(join(root, "workflows/build-prd/steps.json"), "utf8")}`;
+    expect(text).toMatch(/不是正式stage|not a formal stage/);
+    expect(text).toMatch(/不.*(?:stage-reflection|正式stage).*(?:复盘|reflection)|reflection.*(?:not|不).*(?:formal stage|正式stage)/i);
+    expect(text).toMatch(/不.*(?:close|操作确认|approval)/i);
+    expect(text).toMatch(/不增加第三次.*内容调用|not.*third content call/i);
   });
 });

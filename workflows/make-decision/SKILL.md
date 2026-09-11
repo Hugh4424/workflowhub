@@ -22,6 +22,40 @@ research, Grill, and the decision log. `build-spec` is the only owner of
 Clarify; make-decision must not run a second Clarify. Downstream stages consume
 the result; they do not replay these activities or infer missing decisions.
 
+## Task type before questions
+
+At the beginning of this stage, before the first formal requirement question,
+create the current `decision-log.md` task identity section and record exactly
+one declaration using the fixed label `任务类型` and one of the controlled
+values `规划任务` or `普通任务`. Read it back with the existing pure reader
+`readTaskTypeFromDecisionLog(markdown)` before selecting the question boundary.
+Missing, duplicate, conflicting, or unknown declarations remain `unknown` and
+must be reported to the user for clarification（必须向用户澄清）. Only the type-dependent
+question/content branch pauses; preparation that does not depend on the type
+may continue. Do not infer a type from the request, a file name, a previous
+record, or a hash.
+
+For `规划任务`, ask only questions that can change the direction: user-visible
+behavior and result, task-type scope, workflow, completion/failure conditions,
+invariants, constraints, non-goals, and deferrals. The single authoritative
+D-004 forbidden list for planning questions is: 文件路径与文件面、函数名、
+字段名、算法、schema 形状、命令形态、入口参数形态、行号、代码片段、
+测试记录与实测记录. Keep the six direction slots
+`complete_user_flow|page_scope|data_state|success_failure_boundary|non_goals|deferred`
+visible; each slot needs the user's answer or `empty` with a concrete reason.
+`普通任务` keeps the existing question and artifact depth，可以继续追问实现细节，
+including questions about implementation details when their answers can change
+the implementation.
+Every user-visible option still states its plain-language meaning, direct
+consequence, and main risk for both types.
+
+If the user changes the declaration mid-stage, stop consuming questions and
+artifacts produced under the old type until each one is explicitly re-treated
+under the new type. The current decision must retain the old question
+reference, the reason for re-treatment, and the location of the new content;
+changing only a hash is not re-treatment. Do not create a new schema, control
+plane, type state, or record binding for this behavior.
+
 Before research starts, this stage creates exactly one current OI outline in
 the same `decision-log.md`. Its functional skeleton is the six nodes
 `background|problem|goal|solution|acceptance|extension` plus the fixed
@@ -67,6 +101,14 @@ new stage, public command, fifth material, independent state machine, or gate.
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
+`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
+“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
