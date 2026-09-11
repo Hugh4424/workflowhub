@@ -170,7 +170,10 @@ function writeBareReviewSink(request, result, routeIdentity = null) {
   const key = bareSinkKey(request);
   const { root, ref } = bareSinkLocation(request);
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const record = bareSinkRecord(request, result, key, routeIdentity);
+  // The bare CLI is a diagnostic sink, never a formal writer.  Reassert the
+  // boundary at the sink call so a broker/result field cannot upgrade the
+  // returned or persisted record to canonical/current authority.
+  const record = bareSinkRecord(request, { ...result, authoritative: false }, key, routeIdentity);
   const bytes = `${JSON.stringify(record)}\n`;
   if (existsSync(ref)) {
     const existing = readFileSync(ref, "utf8");

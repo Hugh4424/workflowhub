@@ -18,7 +18,7 @@ const roots = [];
 const NOW = "2026-09-10T00:00:00.000Z";
 const HASH = "a".repeat(64);
 
-function fixture(taskId, stage = "build-spec") {
+function fixture(taskId, stage = "build-spec", attemptId = `${stage}-attempt`) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-handoff-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -46,7 +46,7 @@ function fixture(taskId, stage = "build-spec") {
     stage, task, kernel, identity: task.identity, manifest: task.manifest,
     workflowRunId: kernel.deriveStageWorkflowRunId(stage), candidateWorkspace, workspace, artifacts, storageRoot: root,
   };
-  const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace: candidateWorkspace, stage, attemptId: `${stage}-attempt` });
+  const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace: candidateWorkspace, stage, attemptId });
   const source = authenticateStageOutcomeForProjection(context, stage, outcome.ref);
   return { root, task, kernel, artifacts, candidateWorkspace, context, outcome, source };
 }
@@ -129,6 +129,22 @@ function recordPreOutcomeSession(state, { attemptId = "session-before-handoff", 
   };
 }
 
+function sourceForAttempt(state, attemptId) {
+  const outcome = writeStageOutcomeFixture({
+    task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+    workspace: state.candidateWorkspace, stage: state.context.stage, attemptId,
+  });
+  return authenticateStageOutcomeForProjection(state.context, state.context.stage, outcome.ref);
+}
+
+function handoffInputFor(state, source) {
+  return {
+    task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+    stage: state.context.stage, reflectionStatus: "unavailable", stageOutcome: source,
+    snapshotTree: source.value.snapshot_tree, materialScopeRevision: source.value.material_scope_revision,
+  };
+}
+
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
@@ -183,6 +199,17 @@ describe("stage-handoff current view contract", () => {
     });
     expect(raw).toContain("非权威 current handoff，只以四材料和正式质量原件为准");
     expect([...raw.matchAll(/^## (\d+)\. (.+)$/gm)].map((match) => match[2])).toEqual(SECTION_TITLES);
+  });
+
+  it("renders explicit unknowns when an outcome omits optional identity fields", () => {
+    const raw = renderStageHandoff({
+      taskId: "task-1", stage: "build-spec", snapshotTree: "tree-1",
+      materialScopeRevision: "revision-1", reflectionStatus: "completed",
+      stageOutcomeValue: { step_outcomes: [], skill_outcomes: [] },
+      nextAction: "继续读取当前材料",
+    });
+    expect(raw).toContain("- stage outcome: `unknown`（attempt `unknown`）");
+    expect(raw).not.toContain("undefined");
   });
 
   it("publishes by atomic overwrite, reads back current identity, and returns an absolute path", () => {
@@ -245,6 +272,169 @@ describe("stage-handoff current view contract", () => {
     expect(() => publishStageHandoff({ ...common, stageOutcome: older, nextAction: "较旧 retry" }))
       .toThrow(/older than the current handoff outcome/);
     expect(state.task.readRecord(current.ref)).toContain("较新 retry");
+  });
+
+  it("replaces a stale handoff across material revisions without ordering opaque attempts", () => {
+    const state = fixture("handoff-current-material", "build-plan", "attempt-build-plan-20260911-01");
+    const common = {
+      task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+      stage: "build-plan", reflectionStatus: "unavailable",
+    };
+    const oldSource = state.source;
+    const oldOutcomeRaw = state.task.readRecord(oldSource.ref);
+    const oldHandoff = publishStageHandoff({
+      ...common, stageOutcome: oldSource,
+      snapshotTree: oldSource.value.snapshot_tree,
+      materialScopeRevision: oldSource.value.material_scope_revision,
+      nextAction: "old material handoff",
+    });
+    state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nCurrent D033 material revision.\n`);
+    const outcome = writeStageOutcomeFixture({
+      ...common, workspace: state.candidateWorkspace, attemptId: "attempt-build-plan-20260911-d033",
+    });
+    const source = authenticateStageOutcomeForProjection(state.context, "build-plan", outcome.ref);
+    expect(source.value.material_scope_revision).not.toBe(oldSource.value.material_scope_revision);
+    const current = publishStageHandoff({
+      ...common, stageOutcome: source,
+      snapshotTree: source.value.snapshot_tree,
+      materialScopeRevision: source.value.material_scope_revision,
+      nextAction: "current material handoff",
+    });
+    expect(current).toMatchObject({ status: "published", current: true, ref: oldHandoff.ref });
+    const raw = state.task.readRecord(current.ref);
+    expect(raw).toContain(source.ref);
+    expect(raw).toContain("current material handoff");
+    expect(raw).not.toContain("old material handoff");
+    expect(state.task.readRecord(oldSource.ref)).toBe(oldOutcomeRaw);
+    expect(() => publishStageHandoff({
+      ...common, stageOutcome: oldSource,
+      snapshotTree: oldSource.value.snapshot_tree,
+      materialScopeRevision: oldSource.value.material_scope_revision,
+      nextAction: "late old material writer",
+    })).toThrow(/snapshot is not current|material scope is not current/);
+    expect(state.task.readRecord(current.ref)).toBe(raw);
+  });
+
+  it("does not treat a historical reference as the current handoff material identity", () => {
+    const state = fixture("handoff-historical-reference", "build-plan", "attempt-build-plan-20260911-01");
+    const common = {
+      task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+      stage: "build-plan", reflectionStatus: "unavailable",
+    };
+    state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nCurrent D033 material revision.\n`);
+    const currentOutcome = writeStageOutcomeFixture({
+      ...common, workspace: state.candidateWorkspace, attemptId: "attempt-build-plan-20260911-d033",
+    });
+    const currentSource = authenticateStageOutcomeForProjection(state.context, "build-plan", currentOutcome.ref);
+    const input = {
+      ...common, snapshotTree: currentSource.value.snapshot_tree,
+      materialScopeRevision: currentSource.value.material_scope_revision,
+    };
+    const current = publishStageHandoff({
+      ...input, stageOutcome: currentSource, sourceRefs: [{ ref: state.source.ref, sha256: state.source.sha256 }],
+      nextAction: "keep current projection with historical context",
+    });
+    const original = state.task.readRecord(current.ref);
+    // Pin the actual rendered setup: the historical ref must be the first
+    // ref#hash, while the projection itself is bound to the current scope.
+    const oldRefPosition = original.indexOf(`${state.source.ref}#${state.source.sha256}`);
+    const currentRefPosition = original.indexOf(`${currentSource.ref}#${currentSource.sha256}`);
+    expect(oldRefPosition).toBeGreaterThanOrEqual(0);
+    expect(currentRefPosition).toBeGreaterThan(oldRefPosition);
+    expect(original).toContain(`material_scope_revision: "${currentSource.value.material_scope_revision}"`);
+    expect(currentSource.value.material_scope_revision).not.toBe(state.source.value.material_scope_revision);
+    const ambiguousOutcome = writeStageOutcomeFixture({
+      ...common, workspace: state.candidateWorkspace, attemptId: "attempt-build-plan-20260911-opaque",
+    });
+    const ambiguousSource = authenticateStageOutcomeForProjection(state.context, "build-plan", ambiguousOutcome.ref);
+    expect(() => publishStageHandoff({ ...input, stageOutcome: ambiguousSource, nextAction: "unordered writer" }))
+      .toThrow(/authenticated ordering/);
+    expect(state.task.readRecord(current.ref)).toBe(original);
+  });
+
+  it("review finding: compares numeric writers with the projection outcome, not its first historical reference", () => {
+    const state = fixture("handoff-numeric-reference", "build-plan", "attempt-1");
+    state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nCurrent plan revision.\n`);
+    const currentSource = sourceForAttempt(state, "attempt-9");
+    const olderSource = sourceForAttempt(state, "attempt-2");
+    const current = publishStageHandoff({
+      ...handoffInputFor(state, currentSource),
+      sourceRefs: [{ ref: state.source.ref, sha256: state.source.sha256 }],
+    });
+    const original = state.task.readRecord(current.ref);
+    const historicalPosition = original.indexOf(`${state.source.ref}#${state.source.sha256}`);
+    expect(historicalPosition).toBeGreaterThanOrEqual(0);
+    expect(original.indexOf(`${currentSource.ref}#${currentSource.sha256}`)).toBeGreaterThan(historicalPosition);
+    expect(() => publishStageHandoff(handoffInputFor(state, olderSource))).toThrow(/older than the current handoff outcome/);
+    expect(state.task.readRecord(current.ref)).toBe(original);
+  });
+
+  it.each(["material", "snapshot"])("review finding: replaces a stale projection containing historical context after a %s change", (change) => {
+    const state = fixture(`handoff-stale-reference-${change}`, "build-plan", "historical-opaque");
+    state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nIntermediate plan revision.\n`);
+    const intermediate = sourceForAttempt(state, "intermediate-opaque");
+    const intermediateRaw = state.task.readRecord(intermediate.ref);
+    const handoff = publishStageHandoff({
+      ...handoffInputFor(state, intermediate),
+      sourceRefs: [{ ref: state.source.ref, sha256: state.source.sha256 }],
+    });
+    const oldRaw = state.task.readRecord(handoff.ref);
+    const historicalPosition = oldRaw.indexOf(`${state.source.ref}#${state.source.sha256}`);
+    expect(historicalPosition).toBeGreaterThanOrEqual(0);
+    expect(oldRaw.indexOf(`${intermediate.ref}#${intermediate.sha256}`)).toBeGreaterThan(historicalPosition);
+    if (change === "material") state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nNew current revision.\n`);
+    else writeFileSync(join(state.candidateWorkspace.worktreeRoot, "README.md"), "changed implementation snapshot\n");
+    const candidate = sourceForAttempt(state, "current-opaque");
+    expect(candidate.value.snapshot_tree).not.toBe(intermediate.value.snapshot_tree);
+    if (change === "snapshot") expect(candidate.value.material_scope_revision).toBe(intermediate.value.material_scope_revision);
+    else expect(candidate.value.material_scope_revision).not.toBe(intermediate.value.material_scope_revision);
+    expect(publishStageHandoff(handoffInputFor(state, candidate))).toMatchObject({
+      status: "published", current: true, ref: handoff.ref,
+    });
+    expect(state.task.readRecord(handoff.ref)).toContain(candidate.ref);
+    expect(state.task.readRecord(intermediate.ref)).toBe(intermediateRaw);
+  });
+
+  it.each(["malformed", "unreadable", "unmatched", "ambiguous"])("review source authentication: preserves the existing view when its source is %s", (failure) => {
+    const state = fixture(`handoff-source-${failure}`, "build-plan", "attempt-9");
+    const handoff = publishStageHandoff(handoffInputFor(state, state.source));
+    const alternate = sourceForAttempt(state, "attempt-8");
+    const original = state.task.readRecord(handoff.ref);
+    let invalid = original;
+    if (failure === "malformed") invalid = original.replace("source_refs: [", "source_refs: invalid [");
+    if (failure === "unreadable") invalid = original.replace(/^source_refs: .*$/m, `source_refs: ${JSON.stringify([
+      { ref: `quality/evidence/stage-outcomes/build-plan/${"f".repeat(64)}.json`, sha256: "f".repeat(64) },
+    ])}`);
+    if (failure === "unmatched") invalid = original.replace(/^snapshot_tree: .*$/m, `snapshot_tree: "${"f".repeat(40)}"`);
+    if (failure === "ambiguous") invalid = original.replace(/^source_refs: .*$/m, `source_refs: ${JSON.stringify([
+      { ref: state.source.ref, sha256: state.source.sha256 },
+      { ref: alternate.ref, sha256: alternate.sha256 },
+    ])}`);
+    state.task.writeRecordAtomic(handoff.ref, invalid);
+    // An otherwise valid newer numeric writer must not bypass a broken or
+    // ambiguous current projection. Body refs remain valid but are not authority.
+    const candidate = sourceForAttempt(state, "attempt-10");
+    expect(() => publishStageHandoff(handoffInputFor(state, candidate))).toThrow(/stage handoff current/);
+    expect(state.task.readRecord(handoff.ref)).toBe(invalid);
+  });
+
+  it("rejects a stale material writer even when the operation cached its earlier snapshot", async () => {
+    const state = fixture("handoff-cached-material", "build-plan", "attempt-build-plan-20260911-01");
+    const input = {
+      task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+      stage: "build-plan", reflectionStatus: "unavailable", stageOutcome: state.source,
+      snapshotTree: state.source.value.snapshot_tree,
+      materialScopeRevision: state.source.value.material_scope_revision,
+      nextAction: "original handoff",
+    };
+    const handoff = publishStageHandoff(input);
+    const original = state.task.readRecord(handoff.ref);
+    await state.kernel.withAuthenticatedOperation(async () => {
+      state.artifacts.writeAtomic("plan.md", `${state.artifacts.read("plan.md")}\nNew current material.\n`);
+      expect(() => publishStageHandoff({ ...input, nextAction: "late cached writer" }))
+        .toThrow(/material scope is not current/);
+    });
+    expect(state.task.readRecord(handoff.ref)).toBe(original);
   });
 
   it("does not infer chronology from opaque retry ids", () => {

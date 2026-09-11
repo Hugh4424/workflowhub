@@ -82,3 +82,16 @@ A separate full review is appropriate only when a separately planned frozen Phas
 materially different review subject is intentionally created. The existing serious-finding
 risk-pause boundary remains unchanged. This is not a relaxation of code or test quality, and it
 does not make review material, audit availability, or provider health a development gate.
+
+## Amendment — plan slicing and formal budget ownership (2026-09-11)
+
+ADR 0028 adds the implementation boundary for two facts that this ADR intentionally leaves
+separate. Plan/task slicing is an advisory projection from the current four materials; its
+three signals, exact explanation marker, and `within_budget`/`explained_overage`/
+`unexplained_overage` state never become a review-material gate. Formal review dispatch remains
+owned by `recordSimpleReviewRequest` and its canonical history → budget validation → reuse →
+dispatch → immutable writer chain. A result-only import may only reuse an already authenticated
+immutable attempt/result/report chain; missing or mismatched provenance is
+`authoritative:false`. The bare `wh-review` sink is diagnostic and non-authoritative. This
+amendment does not change the phase/integration material contract, introduce a second budget
+owner, or permit WorkflowHub to read broker-private session/raw files.

@@ -1614,6 +1614,31 @@ function completedRecord(task, planHash, step, observation, mode, now) {
   };
 }
 
+function failedRecord(task, planHash, step, observation, error, now) {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  return {
+    schema_version: "task-close-operation.v1",
+    task_id: task.identity.taskId,
+    plan_hash: planHash,
+    step_id: step.step_id,
+    operation: step.operation,
+    action: step.step_id,
+    status: "failed",
+    physical_state: structuredClone(observation),
+    failure: {
+      name: failure.name,
+      message: failure.message,
+      ...(failure.code === undefined ? {} : { code: String(failure.code) }),
+    },
+    evidence: {
+      kind: "close_step_failure",
+      source: `operations/close/plans/${planHash}/steps/${step.step_id}.json`,
+      snapshot_tree: observation.snapshot_tree ?? null,
+    },
+    failed_at: now(),
+  };
+}
+
 function git(cwd, args, { allowFailure = false } = {}) {
   const result = execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", allowFailure ? "ignore" : "pipe"] });
   return String(result).trim();
@@ -2749,6 +2774,13 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const cleanupFact = existingWorkspace
     ? { skipped: true, reason: "authenticated existing Workspace is not task-owned; worktree directory and branch are preserved" }
     : (worktreeCleanup && branchCleanup ? { removed: true } : { incomplete: true });
+  const stepRecords = plan.steps.map((step) => {
+    const raw = readOptional(task, `operations/close/plans/${closePlanHash(plan)}/steps/${step.step_id}.json`);
+    if (raw === undefined) return null;
+    return JSON.parse(raw);
+  }).filter(Boolean);
+  const completedRaw = readOptional(task, "operations/close/completed.json");
+  const completed = completedRaw === undefined ? null : JSON.parse(completedRaw);
   const facts = {
     delivery_committed: merged,
     archive: archivePathExists && sourcePathAbsent && archiveScopePreserved && archive.tree_preserved && archive.only_renames,
@@ -2784,6 +2816,11 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const physicalMissing = physicalDeliveryMissing(facts, { requireArchive: !unarchivedPlanning });
   return Object.freeze({
     schema_version: "task-close-delivery-state.v1",
+    task_id: task.identity.taskId,
+    plan_hash: closePlanHash(plan),
+    // Include the authenticated plan in readback so a consumer can bind the
+    // immutable step/completion records without reconstructing a selector.
+    plan: Object.freeze({ ...structuredClone(plan), plan_hash: closePlanHash(plan) }),
     status: missing.length === 0 ? "ready" : "incomplete",
     physical_status: physicalMissing.length === 0 ? "ready" : "incomplete",
     close_mode: delivery.close_mode,
@@ -2806,6 +2843,8 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     } : {}),
     missing: Object.freeze(missing),
     physical_missing: Object.freeze(physicalMissing),
+    step_records: Object.freeze(stepRecords.map((record) => structuredClone(record))),
+    completed: completed === null ? null : structuredClone(completed),
     facts: Object.freeze(facts),
   });
 }
@@ -3259,7 +3298,18 @@ export async function executeClosePlan(options = {}) {
       const before = await probeSatisfied(executor, step, priorRaw === undefined ? "initial" : "reconcile");
       if (priorRaw !== undefined) {
         const prior = JSON.parse(priorRaw);
-        if (prior.plan_hash !== planHash || prior.step_id !== step.step_id || prior.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
+        if (prior.plan_hash !== planHash || prior.step_id !== step.step_id) throw new Error(`close step ${step.step_id} record conflicts with plan`);
+        if (prior.status === "failed") {
+          // A failed step is immutable audit history.  Recovery follows the
+          // same plan and current physical probe; it never overwrites the
+          // failure with a second state at the same record path.
+          if (before.satisfied) continue;
+          await executor.execute(step, before);
+          const after = await probeSatisfied(executor, step, "post-failure-execution");
+          if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
+          continue;
+        }
+        if (prior.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
         if (!before.satisfied) throw new Error(`close step ${step.step_id} completed record conflicts with physical state`);
         continue;
       }
@@ -3267,9 +3317,17 @@ export async function executeClosePlan(options = {}) {
         createOrVerify(task, recordPath, completedRecord(task, planHash, step, before, "reconciled", now), `close step ${step.step_id}`);
         continue;
       }
-      await executor.execute(step, before);
-      const after = await probeSatisfied(executor, step, "post-execution");
-      if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
+      let after;
+      try {
+        await executor.execute(step, before);
+        after = await probeSatisfied(executor, step, "post-execution");
+        if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
+      } catch (error) {
+        // Preserve the first failed step before surfacing the real error.  A
+        // later invocation can probe and retry the same immutable plan.
+        createOrVerify(task, recordPath, failedRecord(task, planHash, step, before, error, now), `close step ${step.step_id} failure`);
+        throw error;
+      }
       createOrVerify(task, recordPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id}`);
     }
 

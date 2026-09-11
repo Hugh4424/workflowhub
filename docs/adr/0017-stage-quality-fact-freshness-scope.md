@@ -12,6 +12,10 @@
 - 读取消费者：`evaluateFactFreshness`、`deriveCurrentProductRelease`、`stage-runtime status`、正式 close 投影。
 - 质量事实仍是事实，不是新的状态机或推进许可证；scope 校验失败保持 stale/失败，不能变成通过。
 
+ADR-0029 进一步规定产品发布的逐 AC current 权威和四域 close 读模型：本 ADR 只拥有阶段
+质量事实的 material scope/freshness 语义，不另建产品发布 writer、current selector 或
+close 状态。`quality/verify.json` 的既有唯一 writer 和四域只读投影按 ADR-0029 执行。
+
 ## 证据与测试
 
 - `tests/integration/verify-freshness-selection.test.mjs` 覆盖下游新增、上游修改和伪造 scope。

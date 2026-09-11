@@ -137,11 +137,11 @@ function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
     try {
       if (typeof worker.readDecisionFreezeSources !== "function") throw new Error("authenticated decision freeze source reader is unavailable");
       const sources = worker.readDecisionFreezeSources(supplied);
-      // The existing parser still owns decision id, packet coverage and open
-      // direction questions. Only its approval claims are replaced by the
-      // authenticated canonical sources; text cannot approve itself.
+      // Keep the parsed decision id when present; otherwise use the authenticated
+      // approved scope identity. The parser still owns coverage and open questions;
+      // canonical sources own approval, and the validator checks scope freshness.
       const model = {
-        approval_binding: { ...sources.approval_binding, decision_id: checked.decision_id },
+        approval_binding: { ...sources.approval_binding, decision_id: checked.decision_id ?? sources.approval_binding.material_scope_revision },
         final_confirmation: sources.final_confirmation,
         step_11: sources.step_11,
         freeze_packet: { coverage: checked.coverage },
@@ -3547,6 +3547,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
     tasks: materials["tasks.md"],
     completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
   });
+  const sliceAdvisory = structural.facts?.slice_advisory ?? null;
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
   const decisionFreeze = currentDecisionFreeze(worker, input, materials["decision-log.md"], before);
@@ -3640,6 +3641,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
       source_digest: before.source_digest,
       decision_freeze: decisionFreeze,
       material_oracle: materialOracle,
+      slice_advisory: sliceAdvisory,
       stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,
       completion_subjects: {

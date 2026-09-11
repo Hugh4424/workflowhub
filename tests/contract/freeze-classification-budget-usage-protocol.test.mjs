@@ -322,7 +322,7 @@ describe("Phase 3 budget and usage observation contracts", () => {
     });
   });
 
-  it("T010 allows one focused review after a real material change and one narrow diff reconciliation", () => {
+  it("T010 exhausts the focused round without creating a narrow-diff budget kind", () => {
     const attempts = [
       boundAttempt("initial", "initial"),
       boundAttempt("focused", "focused", { changed: true }),
@@ -330,13 +330,13 @@ describe("Phase 3 budget and usage observation contracts", () => {
     expect(validateReviewBudget({
       material_revision: "rev-1",
       attempts,
-      request: { kind: "narrow_diff", changed: true, changed_paths: ["runtime/stage/example.mjs"], allowed_paths: ["runtime/stage/example.mjs"] },
-    })).toMatchObject({ ok: true, status: "ready", route: "narrow_diff_reconciled" });
+      request: { kind: "focused", changed: true },
+    })).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
     expect(validateReviewBudget({
       material_revision: "rev-1",
-      attempts: [...attempts, boundAttempt("narrow_diff", "narrow")],
-      request: { kind: "narrow_diff", changed: true, changed_paths: ["runtime/stage/example.mjs"], allowed_paths: ["runtime/stage/example.mjs"] },
-    })).toMatchObject({ ok: false, reason: "budget_exceeded" });
+      attempts,
+      request: { kind: "narrow_diff", changed: true },
+    })).toMatchObject({ ok: false, reason: "budget_input_invalid", errors: ["review_kind_invalid"] });
   });
 
   it("rejects review budget entries that are not bound to canonical attempt records", () => {

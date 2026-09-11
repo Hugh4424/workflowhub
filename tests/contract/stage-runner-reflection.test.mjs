@@ -10,6 +10,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runStage, runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
+import { deriveExecutionOutcomes } from "../../runtime/stage/completion-predicates.mjs";
 
 import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 
@@ -184,6 +185,33 @@ describe("stage-runner reflection transfer matrix", () => {
     expect(availabilityFiles(state)).toHaveLength(1);
     const fact = JSON.parse(readFileSync(join(state.task.taskPath, "quality", "evidence", "stage-reflection-availability", availabilityFiles(state)[0]), "utf8"));
     expect(fact).toMatchObject({ stage: "build-spec", state: "unavailable", reason_code: "executor_absent" });
+  });
+
+  it("does not let execution-status writeback poison the execution projection", () => {
+    const state = fixture("record-only-outcome", { stage: "build-code" });
+    const outcome = writeStageOutcomeFixture({
+      task: state.task,
+      kernel: state.context.kernel,
+      artifacts: state.context.artifacts,
+      candidateWorkspace: state.context.candidateWorkspace,
+      stage: "build-code",
+      attemptId: "record-only-attempt",
+      status: "incomplete",
+    });
+    const before = state.context.artifacts.read("tasks.md");
+    state.context.artifacts.writeAtomic("tasks.md", `${before}\n\n### 执行状态填写区\n- stage outcome 已写回\n`);
+
+    expect(authenticateStageOutcomeForProjection(state.context, "build-code", outcome.ref)).toBeNull();
+    const execution = deriveExecutionOutcomes({
+      task_id: state.task.identity.taskId,
+      read: state.task.readRecord,
+      stage_outcome_refs: { "build-code": [outcome.ref] },
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      material_revision: state.context.kernel.currentVNextMaterialRevision(),
+      snapshot_root: state.context.candidateWorkspace.worktreeRoot,
+      authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(state.context, stage, ref),
+    });
+    expect(execution["build-code"]).toMatchObject({ status: "unavailable", attempt_count: 0, completed_attempt_count: 0, refs: [] });
   });
 
   it("preserves the injected executor path and publishes a fixed judgment", async () => {

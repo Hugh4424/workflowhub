@@ -442,6 +442,25 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(statuses["build-code"]).toBe("conflict");
   });
 
+  it("selects the latest uniquely ordered quality binding after a retry", () => {
+    const older = boundOutcomeObservation({ suffix: "a".repeat(64) });
+    const newer = boundOutcomeObservation({ suffix: "b".repeat(64) });
+    older.observation.fact.value.recorded_at = "2026-09-11T04:00:00.000Z";
+    newer.observation.fact.value.recorded_at = "2026-09-11T04:01:00.000Z";
+    const records = new Map([...older.records, ...newer.records]);
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: "task",
+      read: (ref) => records.get(ref),
+      stage_outcome_refs: { "build-code": [older.stageOutcome, newer.stageOutcome] },
+      snapshot_tree: "tree",
+      material_revision: "revision",
+      material_scope_revisions: {},
+      quality_fact_observations: [older.observation, newer.observation],
+      authenticate: () => ({ status: "incomplete", value: { status: "incomplete" } }),
+    });
+    expect(statuses["build-code"]).toBe("incomplete");
+  });
+
   it("requires a current quality-fact binding for a new completed attempt after an incomplete outcome", () => {
     const current = boundOutcomeObservation({ stage: "build-plan", suffix: "new-execution-attempt" });
     const records = new Map(current.records);

@@ -3,12 +3,16 @@
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../../runtime/evidence/write-boundary-preflight.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { deriveCurrentStatusDomains } from "./stage-runtime.mjs";
 import {
   closePlanHash,
   closeDelivery,
@@ -20,6 +24,7 @@ import {
   prepareDeliveryClosePlan,
   recordManualDeliveryClose,
 } from "../../core/task-close.mjs";
+import { deriveCurrentCloseProjection } from "../../runtime/stage/current-close-projection.mjs";
 
 const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -129,6 +134,77 @@ function resultSourceRef(result, fallback) {
   return fallback;
 }
 
+function readCurrentStatusMaterials(artifacts) {
+  return Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => {
+    try { return [file, artifacts.read(file)]; }
+    catch (error) {
+      if (error?.code === "ENOENT") return [file, null];
+      throw error;
+    }
+  }));
+}
+
+function currentWorkspaceUnavailable(error) {
+  return error?.code === "ENOENT"
+    || /target repository validation failed:.*not a git repository/i.test(String(error?.message ?? ""));
+}
+
+function currentCloseProjection(task, closeState) {
+  const domains = {};
+  try {
+    const workspace = openCurrentTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const statusKernel = createTaskKernel(task, { workspace, artifacts });
+    const currentSnapshot = statusKernel.currentVNextSnapshot();
+    const materials = readCurrentStatusMaterials(artifacts);
+    const materialRevision = materialRevisionFromValues(CURRENT_MATERIAL_FILES.map((file) => [file, materials[file]]));
+    Object.assign(domains, deriveCurrentStatusDomains({
+      task,
+      kernel: statusKernel,
+      identity: task.identity,
+      manifest: task.manifest,
+      workspace,
+      artifacts,
+    }, {
+      // A planning close stops at the plan stage; a delivery close reports
+      // the verify-code quality that the close plan inspected.
+      stage: closeState.close_mode === "planning" ? "build-plan" : "verify-code",
+      currentSnapshot,
+      materialRevision,
+      materials,
+    }));
+  } catch (error) {
+    // After deterministic close cleanup the worktree is intentionally gone.
+    // Keep the physical readback useful while leaving the other domains
+    // explicitly unknown; do not hide identity or integrity errors.
+    if (!currentWorkspaceUnavailable(error)) throw error;
+  }
+  return deriveCurrentCloseProjection({ task_id: task.identity.taskId, ...domains, close: closeState });
+}
+
+function statusWithoutPlan(task, completion) {
+  if (completion?.plan_hash) {
+    const plan = preparedPlan(task, completion.plan_hash);
+    const closeState = inspectDeliveryCloseState({ task, kernel: createTaskKernel(task), plan });
+    return {
+      status: completion.status,
+      ref: "operations/close/completed.json",
+      value: completion,
+      plan_hash: closePlanHash(plan),
+      record_status: completion.status,
+      physical_state: closeState,
+      current: currentCloseProjection(task, closeState),
+    };
+  }
+  const closeState = { task_id: task.identity.taskId, plan: null };
+  return {
+    status: completion?.status ?? "not_completed",
+    ref: "operations/close/completed.json",
+    ...(completion ? { value: completion } : {}),
+    current: currentCloseProjection(task, closeState),
+  };
+}
+
 function usage() {
   return [
     "Usage:",
@@ -199,9 +275,7 @@ async function main() {
   }
   if (command === "status" && values["plan-hash"] === undefined) {
     const completion = optionalCompletion(task);
-    return completion
-      ? { status: completion.status, ref: "operations/close/completed.json", value: completion }
-      : { status: "not_completed", ref: "operations/close/completed.json" };
+    return statusWithoutPlan(task, completion);
   }
   if (command === "prepare") {
     if (postArchive) {
@@ -269,7 +343,13 @@ async function main() {
   if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {
     throw new Error("completed close record conflicts with the requested plan");
   }
-  return { plan_hash: closePlanHash(plan), record_status: completion?.status ?? "not_completed", physical_state: inspectDeliveryCloseState({ task, kernel, plan }) };
+  const closeState = inspectDeliveryCloseState({ task, kernel, plan });
+  return {
+    plan_hash: closePlanHash(plan),
+    record_status: completion?.status ?? "not_completed",
+    physical_state: closeState,
+    current: currentCloseProjection(task, closeState, kernel),
+  };
 }
 
 main().then((result) => console.log(JSON.stringify(result, null, 2))).catch((error) => {

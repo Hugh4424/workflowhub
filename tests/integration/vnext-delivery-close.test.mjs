@@ -2,21 +2,22 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { prepareDeliveryClosePlan } from "../../core/task-close.mjs";
+import { closeDelivery, inspectDeliveryCloseState, prepareDeliveryClosePlan } from "../../core/task-close.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { publishVerifySummary } from "../../runtime/evidence/quality-store.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { writeCanonicalStageMaterials } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const taskCloseCli = join(resolve(dirname(fileURLToPath(import.meta.url)), "../.."), "tools/cli/task-close.mjs");
 
 function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) {
   const publishFixtureFact = (stage, kind, subject, status = "passed") => {
@@ -95,10 +96,7 @@ function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) 
     evidence: [{ ref: review.resultRef, sha256: sha256(reviewRaw), evidence_type: "review_result" }],
   });
 
-  const materialRevision = materialRevisionFromValues(
-    ["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, artifacts.read(name)]),
-  );
-  const sourceDigest = "c".repeat(64);
+  const sourceDigest = snapshot.source_digest;
   const acceptanceLeafRaw = `${JSON.stringify({
     schema_version: "acceptance-evidence.v1",
     acceptance_criterion_id: "AC-001",
@@ -110,12 +108,8 @@ function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) 
   })}\n`;
   kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-leaf.json", acceptanceLeafRaw);
   kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-proof.json", "ac-001-proof\n");
-  publishVerifySummary(task.taskPath, {
+  kernel.publishVerifySummary({
     status: "passed",
-    source_digest: sourceDigest,
-    material_digest: materialRevision.slice("revision-".length),
-    material_revision: materialRevision,
-    snapshot_tree: snapshot.tree,
     criteria: [{
       acceptance_criterion_id: "AC-001",
       result: "pass",
@@ -138,7 +132,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDisposition = undefined, reviewVerdict = "pass", reviewFindingSeverity = "major", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDisposition = undefined, reviewVerdict = "pass", reviewFindingSeverity = "major", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false, existingWorkspace = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -155,21 +149,25 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDispo
   git(repo, ["remote", "add", "origin", bare]);
   git(repo, ["push", "-q", "origin", "main"]);
   const taskId = "vnext-delivery-close";
+  const existingRoot = join(root, "repo-existing");
+  if (existingWorkspace) git(repo, ["worktree", "add", "-b", `task/WorkflowHub/${taskId}`, existingRoot, "main"]);
   const task = createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0", project_name: "WorkflowHub", task_id: taskId,
     created_at: "2026-08-04T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {},
     record_model: "vnext-single-write",
+    ...(existingWorkspace ? { workspace_mode: "existing", workspace_root: existingRoot } : {}),
   } });
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-  const candidate = prepareTaskWorkspace(task);
+  let candidate = prepareTaskWorkspace(task);
   const worktreeRoot = candidate.worktreeRoot;
   const artifacts = ArtifactDir.open(worktreeRoot, task);
   writeCanonicalStageMaterials(artifacts);
-  if (testVariant === "clean-head") {
+  if (testVariant === "clean-head" || existingWorkspace) {
     git(worktreeRoot, ["add", "specs"]);
     git(worktreeRoot, ["commit", "-qm", "publish current materials"]);
+    candidate = prepareTaskWorkspace(task);
   }
-  const kernel = testVariant === "clean-head"
+  const kernel = testVariant === "clean-head" || existingWorkspace
     ? createTaskKernel(task, { workspace: openCurrentTaskWorkspace(task), artifacts })
     : createTaskKernel(task, { candidateWorkspace: candidate });
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
@@ -284,7 +282,34 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDispo
     const current = captureGitWorktreeSnapshot(worktreeRoot);
     return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: current };
   }
-  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot };
+  const taskCommit = testVariant === "clean-head" || existingWorkspace ? snapshot.head : snapshot.commit;
+  return { task, kernel, repo, root, taskId, taskCommit, candidate, artifacts, receiptSnapshot, snapshot };
+}
+
+function closePlanFor(state) {
+  return prepareDeliveryClosePlan({
+    task: state.task,
+    kernel: state.kernel,
+    delivery: {
+      remote: "origin",
+      task_branch: `task/WorkflowHub/${state.taskId}`,
+      target_branch: "main",
+      task_commit: state.taskCommit,
+      spec_source_path: `specs/${state.taskId}`,
+      spec_archive_path: `specs/archive/${state.taskId}`,
+    },
+  });
+}
+
+function runTaskCloseStatus(state, planHash) {
+  return spawnSync(process.execPath, [
+    taskCloseCli,
+    "status",
+    `--project=WorkflowHub`,
+    `--task=${state.taskId}`,
+    `--task-path=${state.task.taskPath}`,
+    `--plan-hash=${planHash}`,
+  ], { cwd: state.root, env: process.env, encoding: "utf8" });
 }
 
 describe("vNext formal delivery close", () => {
@@ -307,6 +332,50 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery).toMatchObject({
       task_commit: state.snapshot.commit, target_baseline: targetBaseline, remote_target_baseline: targetBaseline,
     });
+  });
+
+  it("binds task-close CLI status to the live current domains and removed physical readback", async () => {
+    const state = fixture({ testVariant: "clean-head" });
+    const prepared = closePlanFor(state);
+    await expect(closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: prepared.plan.delivery,
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
+    })).resolves.toMatchObject({ status: "completed" });
+
+    const inspected = inspectDeliveryCloseState({ task: state.task, kernel: createTaskKernel(state.task), plan: prepared.plan });
+    expect(inspected.facts.cleanup).toEqual({ removed: true });
+    const cli = runTaskCloseStatus(state, prepared.plan_hash);
+    expect(cli.status).toBe(0);
+    expect(cli.stderr).toBe("");
+    const output = JSON.parse(cli.stdout);
+    expect(output.current).toMatchObject({
+      domains: {
+        work_progress: { status: "unknown" },
+        stage_quality: { status: "unknown" },
+        product_release: { status: "unknown" },
+        physical_delivery: { status: "removed" },
+      },
+      close: {
+        step_records: expect.arrayContaining([expect.objectContaining({ status: "completed" })]),
+        completed: expect.objectContaining({ status: "completed" }),
+      },
+    });
+  });
+
+  it("keeps an authenticated existing workspace and reports its physical state", () => {
+    const state = fixture({ existingWorkspace: true });
+    const prepared = closePlanFor(state);
+    const inspected = inspectDeliveryCloseState({ task: state.task, kernel: state.kernel, plan: prepared.plan });
+    expect(inspected.facts.cleanup).toMatchObject({ skipped: true });
+    const cli = runTaskCloseStatus(state, prepared.plan_hash);
+    expect(cli.status).toBe(0);
+    expect(cli.stderr).toBe("");
+    const output = JSON.parse(cli.stdout);
+    expect(output.current.domains.physical_delivery).toMatchObject({ status: "not_applicable_recorded" });
+    expect(output.current.domains.work_progress).toMatchObject({ work_status: "ready" });
   });
 
   it("prepares close without a verify-code human confirmation", () => {

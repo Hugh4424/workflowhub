@@ -357,9 +357,10 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 指定时可以使用，但 Agent 必须说明风险。来自 A 的 mini-task 完成后，A 按普通 stage 重新调用
 继续，不把 mini-task 结果伪装成 A 已完成。
 
-## close：唯一的完整交付动作
+## close：交付动作集与三种收口语义
 
-`close` 只有一个含义：把当前任务完整交付并结束。用户明确调用 `task-close.mjs close` 后，
+阅读 `close` 时区分交付动作集、阶段收口和质量记录归档三种语义。只有用户明确调用
+`task-close.mjs close` 才执行完整物理交付：
 系统自动冻结 delivery plan，把这次调用作为该计划的人工确认，再在内部生成逐项不可逆操作授权，
 按顺序执行并读回 commit、spec archive、merge、push、worktree cleanup 和 branch cleanup。只有
 所有物理事实读回成功后，才写入不可变 `operations/close/completed.json`。
@@ -369,8 +370,15 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 任务/分支/worktree 身份漂移、远端基线变化、冲突或不安全清理属于结构错误，必须明确失败，不能
 靠状态记录冒充 close。
 
-`prepare`、`confirm`、`execute`、`complete` 只作为内部恢复和测试接口，不要求用户重复确认；
+`prepare`、`confirm`、`execute`、`complete` 只作为内部执行和测试接口，不要求用户重复确认；
 不再提供第二个用户-facing close 动作。
+
+close/status 的只读视图由 `runtime/stage/current-close-projection.mjs` 组合四个独立域：
+`work_progress`、`stage_quality`、`product_release`、`physical_delivery`。产品发布只消费既有
+`quality/verify.json` 的 current per-AC 权威；物理域只消费计划、不可变步骤记录和现场读回。
+物理状态只允许 `not_started`、`incomplete`、`removed`、`not_applicable_recorded`、
+`unavailable`、`unknown`；计划预测不等于执行结果，质量或发布状态也不等于物理交付状态。
+计划、步骤、完成结果分开；确认先于逐动作授权，失败步骤保留且同一计划只读回补足，不覆盖旧失败。
 
 ## 四层状态的最终读法
 

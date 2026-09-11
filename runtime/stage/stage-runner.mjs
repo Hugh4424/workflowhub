@@ -54,6 +54,7 @@ const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9.
 const REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
 const RESOLVED_CODE_REVIEW_MISSING = /^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/;
 const DEFAULT_REFLECTION_TIMEOUT_MS = 30_000;
+const ACCEPTANCE_TASK_DIR_TOKEN = /\$\{TASK_DIR\}|\$TASK_DIR(?![A-Za-z0-9_])/g;
 
 export function isStageReflectionRef(value) {
   return typeof value === "string" && value.startsWith(STAGE_REFLECTION_NAMESPACE) && STAGE_REFLECTION_REF.test(value);
@@ -819,14 +820,27 @@ export function authenticateStageOutcomeForProjection(context, stage, ref) {
   try { candidate = JSON.parse(task.readRecord(ref)); }
   catch (error) { throw outcomeError(`stage outcome receipt is unavailable: ${error.message}`); }
   if (candidate?.task_id !== task.identity.taskId || candidate?.stage !== stage || candidate?.run_id !== workflowRunId) return null;
-  const authenticated = authenticateStageOutcome({
-    ...context,
-    task,
-    kernel,
-    identity: context.identity ?? task.identity,
-    stage,
-    workflowRunId,
-  }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+  let authenticated;
+  try {
+    authenticated = authenticateStageOutcome({
+      ...context,
+      task,
+      kernel,
+      identity: context.identity ?? task.identity,
+      stage,
+      workflowRunId,
+    }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+  } catch (error) {
+    // The material revision intentionally ignores the task execution-status
+    // block.  A prior outcome can therefore pass the current snapshot/revision
+    // projection while retaining the pre-writeback raw tasks.md hash.  It is
+    // historical for status/close/reflection consumers, not a current
+    // integrity failure; leave the canonical record untouched and let the
+    // read-only projector ignore it.
+    if (error?.code === "MATERIAL_INCOMPLETE"
+        && error?.message === "MATERIAL_INCOMPLETE: stage outcome material binding is stale") return null;
+    throw error;
+  }
   if (authenticated.value.run_id !== workflowRunId) throw outcomeError(`${stage} stage outcome workflow run identity mismatch`);
   return authenticated;
 }
@@ -1168,7 +1182,9 @@ export async function runStageEndReflection(context, {
         stageOutcome: handoffStageOutcome,
         stageReflection: reflectionResultValue,
         materials,
-        nextAction: `继续读取当前 ${stage} 四份材料并处理仍未完成项`,
+        // The next action is derived from the stage chain and the stage status
+        // inside the handoff renderer; a hardcoded "continue the current stage"
+        // was wrong for every completed stage.
       });
     } catch (error) {
       handoff = stageHandoffFailure({
@@ -1944,6 +1960,23 @@ function currentBrowserAcceptanceBinding(candidate, { binding, attemptId, invoca
     && String(candidate.service_identity?.instance ?? "").toLowerCase() !== "fixture";
 }
 
+function resolveAcceptanceCommandArgs(args, taskPath) {
+  if (!Array.isArray(args)) return args;
+  if (!args.some((arg) => typeof arg === "string" && ACCEPTANCE_TASK_DIR_TOKEN.test(arg))) {
+    ACCEPTANCE_TASK_DIR_TOKEN.lastIndex = 0;
+    return args;
+  }
+  ACCEPTANCE_TASK_DIR_TOKEN.lastIndex = 0;
+  if (typeof taskPath !== "string" || !isAbsolute(taskPath)) {
+    throw new Error("acceptance command task directory is unavailable");
+  }
+  const taskDir = realpathSync(taskPath);
+  return args.map((arg) => {
+    ACCEPTANCE_TASK_DIR_TOKEN.lastIndex = 0;
+    return typeof arg === "string" ? arg.replace(ACCEPTANCE_TASK_DIR_TOKEN, taskDir) : arg;
+  });
+}
+
 const ACCEPTANCE_SERVICE_LAUNCHER = `
 const [url, name, input] = process.argv.slice(1);
 const module = await import(url);
@@ -1978,7 +2011,7 @@ async function executePrivateAcceptance(ctx, scenario, binding, authenticatedSta
     args = ["--input-type=module", "--eval", ACCEPTANCE_SERVICE_LAUNCHER, pathToFileURL(modulePath).href, declared.export_name, JSON.stringify(declared.input)];
   } else {
     command = declared.command;
-    args = declared.args;
+    args = resolveAcceptanceCommandArgs(declared.args, ctx.task?.taskPath);
   }
   const options = { asynchronous: true, timeoutMs: declared.timeout_ms, signal };
   const result = await (ctx.workspace
@@ -2010,7 +2043,7 @@ async function executePrivateAcceptance(ctx, scenario, binding, authenticatedSta
   const processPassed = result.status === 0 && result.signal === null;
   if (!reason && !processPassed) reason = "acceptance process did not exit successfully";
   const execution = {
-    ...declared, tier: scenario.tier, source: scenario.source, sample: scenario.sample, scenario: scenario.scenario,
+    ...declared, ...(scenario.tier === "command" ? { args } : {}), tier: scenario.tier, source: scenario.source, sample: scenario.sample, scenario: scenario.scenario,
     ...(moduleHash ? { module_sha256: moduleHash } : {}),
     exit_code: result.status, signal: result.signal, timed_out: result.timed_out, cancelled: result.cancelled,
     cleanup: result.cleanup, ...outputBindings,

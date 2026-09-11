@@ -601,7 +601,7 @@ const p9Rows = () => [
   { acceptance_criterion_id: p9Ids[1], assertions: [{ id: "literal-argv", expected: "$(not-a-shell); literal", actual: "$(not-a-shell); literal" }] },
 ];
 
-function p9Actor(state, { missing = false, tamper = false } = {}) {
+function p9Actor(state, { missing = false, tamper = false, attemptId = "p9-attempt-A" } = {}) {
   if (missing) return null;
   const stage = "build-code";
   const steps = JSON.parse(readFileSync(join(process.cwd(), "workflows", stage, "steps.json"), "utf8")).steps;
@@ -620,7 +620,7 @@ function p9Actor(state, { missing = false, tamper = false } = {}) {
   const first = { subject_kind: "step", subject_id: steps[0].step_slug };
   const request = {
     project_name: state.task.identity.projectName, task_id: state.task.identity.taskId, task_path: state.task.taskPath,
-    stage, attempt_id: "p9-attempt-A", agent_run_id: "p9-agent-B",
+    stage, attempt_id: attemptId, agent_run_id: "p9-agent-B",
     session: {
       host: "fixture-host", source_id: "fixture/p9-executor", source_family: "fixture", source_ref: "fixture-process:p9-executor",
       task_id: state.task.identity.taskId, status: "incomplete", events,
@@ -631,7 +631,7 @@ function p9Actor(state, { missing = false, tamper = false } = {}) {
       },
     },
   };
-  const outcome = publishCurrentWorkflowHubSession({ context: state.context, stage, attemptId: request.attempt_id, input: request });
+  const outcome = publishCurrentWorkflowHubSession({ context: state.context, stage, attemptId, input: request });
   expect(outcome.value.status).toBe("incomplete");
   const authenticated = authenticateCurrentBuildCodeStageOutcome(state.context, { outcomeRef: outcome.ref, outcomeHash: outcome.sha256 });
   expect(authenticated.actor).toEqual({ source_kind: "workflowhub-session", source_id: "fixture/p9-executor", run_id: "p9-agent-B" });
@@ -698,7 +698,8 @@ export async function accept(input) {
 
 async function p9Execute(state, signal) {
   return runOfficialStage("build-code", state.context, {
-    attempt_id: "p9-attempt-A", receipts: state.outcome ? { stage_outcomes: state.outcome.ref } : {},
+    attempt_id: state.outcome?.value?.attempt_id ?? "p9-attempt-A",
+    receipts: state.outcome ? { stage_outcomes: state.outcome.ref } : {},
   }, {}, signal ? { requireStageOutcome: true, signal } : { requireStageOutcome: true });
 }
 
@@ -778,31 +779,38 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(JSON.stringify(records)).not.toContain('"run_id":"p9-attempt-A"');
   });
 
+  it("expands only the authenticated task directory in command argv", async () => {
+    const state = p9Fixture({
+      executionOverride: (execution) => ({
+        ...execution,
+        args: ["acceptance-command.mjs", "--task-dir=$TASK_DIR", "--output=${TASK_DIR}/quality/tests/final/current-snapshot.json", "$UNSUPPORTED_VAR"],
+      }),
+    });
+    await p9Execute(state);
+    const observed = JSON.parse(readFileSync(join(state.marker, "started.json"), "utf8"));
+    expect(observed.argv).toEqual([
+      `--task-dir=${state.task.taskPath}`,
+      `--output=${state.task.taskPath}/quality/tests/final/current-snapshot.json`,
+      "$UNSUPPORTED_VAR",
+    ]);
+  });
+
   it("rejects the cached pre-command identity when execution changes a build-code material", async () => {
     const state = p9Fixture({ mutateMaterialDuringExecution: true });
     const before = state.context.kernel.currentVNextContext({ fresh: true });
 
-    const result = await p9Execute(state);
+    await expect(p9Execute(state)).rejects.toMatchObject({
+      code: "FORMAL_SNAPSHOT_MISMATCH",
+      message: expect.stringContaining("FORMAL_SNAPSHOT_MISMATCH"),
+    });
 
     const after = state.context.kernel.currentVNextContext({ fresh: true });
-    expect(after.materialRevision).not.toBe(before.materialRevision);
+    // The fixture mutates a repository-root file, so the authenticated
+    // four-material revision stays stable while the full Workspace snapshot
+    // changes.  Publication must still reject the cached snapshot.
+    expect(after.materialRevision).toBe(before.materialRevision);
     expect(after.snapshot.tree).not.toBe(before.snapshot.tree);
-    const aggregate = acceptanceExecutionSubjectFact(state, result);
-    expect(aggregate).toMatchObject({
-      status: "missing",
-      execution_items: [{
-        status: "failed",
-        reason: "acceptance source or materials changed during execution",
-      }],
-    });
-    const records = aggregate.execution_items[0].evidence_refs.map(({ ref }) => JSON.parse(state.task.readRecord(ref)));
-    expect(records).toHaveLength(2);
-    expect(records.every(({ material_revision, snapshot_tree, subject_fact }) => (
-      material_revision === before.materialRevision
-      && snapshot_tree === before.snapshot.tree
-      && subject_fact.status === "missing"
-      && subject_fact.detail === "acceptance source or materials changed during execution"
-    ))).toBe(true);
+    expect(existsSync(join(state.marker, "started.json"))).toBe(true);
   });
 
   it("executes a real service module with one loopback request and releases its port", async () => {
@@ -1227,7 +1235,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const state = p9Fixture({ tier: "service", independent: true, missingActor: true });
     await expect(p9Execute(state)).rejects.toMatchObject({ code: "MATERIAL_INCOMPLETE", message: expect.stringContaining("stage_outcome_missing") });
     expect(existsSync(join(state.marker, "service-data.json"))).toBe(false);
-    state.outcome = p9Actor(state);
+    state.outcome = p9Actor(state, { attemptId: "p9-attempt-B" });
     const second = await p9Execute(state);
     const input = p9ExecutionInput(state, second);
     expect(input.ref).toMatch(/acceptance_execution-/);

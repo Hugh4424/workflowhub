@@ -17,6 +17,10 @@ import { reviewIdentityFromInput } from "./review-policy.mjs";
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MATERIAL_REVISION = /^revision-[a-f0-9]{64}$/;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
+const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const REVIEW_REPORT_REF = /^quality\/reviews\/reports\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
+const REVIEW_PROVIDER_OUTPUT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/providers\/[A-Za-z0-9][A-Za-z0-9._-]*\.output\.json$/;
 const IN_PROCESS_REQUEST_LOCKS = new Map();
 const EXECUTION_CONTEXTS = new WeakSet();
 
@@ -498,14 +502,19 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
   const status = completed ? "completed" : item?.status === "cancelled" ? "cancelled" : "failed";
   const execution = item?.execution && typeof item.execution === "object" ? item.execution : {};
   const retry = execution.retry ?? item?.retry ?? { count: 0, progress_events: 0 };
+  const rawOutputRef = item?.raw_output_ref ?? execution.raw_output_ref ?? null;
+  const identity = normalizeIdentity(item.identity, item.provider);
   return {
     provider: item.provider,
     status,
-    identity: normalizeIdentity(item.identity, item.provider),
+    // The attempt schema treats identity as optional: a failed/cancelled
+    // provider with no authenticated identity must retain that absence rather
+    // than serializing an invalid `identity: null` property.
+    ...(identity === null ? {} : { identity }),
     session_id: item.session_id ?? null,
     runtime_id: runtimeId ?? null,
     output_ref: outputRef,
-    raw_output_ref: null,
+    raw_output_ref: rawOutputRef,
     error: status === "completed" ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
     ...(item?.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     execution: {
@@ -515,6 +524,7 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
       thinking: Object.hasOwn(execution, "thinking") ? execution.thinking : null,
       timing: execution.timing ?? item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
       usage: execution.usage ?? item.usage ?? null,
+      ...(rawOutputRef === null ? {} : { raw_output_ref: rawOutputRef }),
       retry: { count: retry.count ?? 0, progress_events: retry.progress_events ?? 0 },
       runtime_id: runtimeId ?? "unknown",
       session_file_path: null,
@@ -1023,8 +1033,11 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
     // Failed/cancelled members are transport facts, not identity attestations.
     // Preserve their actual identity in the public report; only completed
     // semantic members must satisfy the trusted selection before aggregation.
-    const failedMember = ["failed", "cancelled"].includes(item.status);
-    if (semantic || !failedMember) {
+    // Any non-semantic member is a transport fact. Providers can report a
+    // completed lifecycle with a broker error (for example an invalid finding
+    // anchor), so keying this exception only on the canonical failed/cancelled
+    // labels would reject a real unavailable result before it is recorded.
+    if (semantic) {
       if (!id || id.provider !== item.provider || id.adapter !== providerAdapter(item.provider)
           || typeof id.source_id !== "string" || !id.source_id.trim()
           || typeof id.config_id !== "string" || !id.config_id.trim()) throw new TypeError(`review provider source identity is missing or invalid: ${item.provider}`);
@@ -1033,7 +1046,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
       const expected = selection.provider_identities?.[item.provider];
       if (!Array.isArray(selection.providers) || !selection.providers.includes(item.provider) || !expected) throw new TypeError(`review role provider selection identity is missing: ${item.provider}`);
       for (const field of ["provider", "adapter", "source_id", "config_id", "model"]) {
-        if ((semantic || !failedMember) && expected[field] !== undefined && id?.[field] !== expected[field]) throw new TypeError(`review provider source identity ${field} mismatch: ${item.provider}`);
+        if (semantic && expected[field] !== undefined && id?.[field] !== expected[field]) throw new TypeError(`review provider source identity ${field} mismatch: ${item.provider}`);
       }
     }
     if (semantic) completed.push(item);
@@ -1118,6 +1131,223 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   if (canonical) records.push([resultRef, JSON.stringify(canonical)]);
   records.push([reportRef, reviewReportBody({ attempt, result: canonical, requestKey }) + "\n## Public result and coverage\n\n```json\n" + JSON.stringify({ semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete", public_result: result, ...(context ? { budget_context: context } : {}), ...(executionContext ? { execution_context: executionContext } : {}) }, null, 2) + "\n```\n"]);
   return { records, refs, semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete" };
+}
+
+function importFailure(error) {
+  const message = String(error?.message ?? error ?? "result-only review provenance is unavailable")
+    .replace(/(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g, "<host-path-redacted>");
+  return Object.freeze({
+    status: "unavailable",
+    imported: false,
+    authoritative: false,
+    reused: false,
+    attempt_ref: null,
+    result_ref: null,
+    report_ref: null,
+    reason: Object.freeze({ code: "REVIEW_IMPORT_UNAUTHENTICATED", message }),
+  });
+}
+
+function importRawHash(value, label, { nullable = false } = {}) {
+  if (nullable && value === null) return null;
+  if (typeof value !== "string" || !SHA256_HEX.test(value)) throw new TypeError(`${label} must be a sha256 hex string${nullable ? " or null" : ""}`);
+  return value;
+}
+
+function importScalar(provenance, field, { nullable = false } = {}) {
+  if (!Object.hasOwn(provenance, field)) throw new TypeError(`result-only provenance is missing ${field}`);
+  const value = provenance[field];
+  if (nullable && value === null) return null;
+  if (typeof value !== "string" || value.trim() === "") throw new TypeError(`result-only provenance ${field} is invalid`);
+  return value;
+}
+
+function importIdentityValue(record, field) {
+  if (field === "phase_id") return record.phase_id ?? null;
+  if (field === "subject_kind") return record.subject_kind ?? "worktree";
+  if (field === "review_scope") return record.review_scope ?? null;
+  if (field === "review_track") return record.review_track ?? null;
+  if (field === "review_kind") return record.review_kind ?? null;
+  return record[field];
+}
+
+function importResultProjection(result, canonical) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("result-only review result must be an object");
+  const identityFields = ["task_id", "stage", "review_track", "review_kind", "subject_kind", "phase_id", "review_scope", "snapshot_tree", "material_id", "material_revision", "attempt_ref", "report_ref"];
+  for (const field of identityFields) {
+    if (Object.hasOwn(result, field) && canonicalJson(result[field] ?? null) !== canonicalJson(canonical[field] ?? null)) {
+      throw new TypeError(`result-only review result ${field} does not match the immutable result`);
+    }
+  }
+  if (result.version === "wh-review-result.v1") return result;
+  if (!Array.isArray(result.provider_results) || !Array.isArray(result.findings) || !result.adjudication) {
+    throw new TypeError("result-only review result must carry the canonical semantic projection");
+  }
+  return {
+    provider_results: result.provider_results.map((item) => {
+      if (!item || typeof item !== "object" || typeof item.provider !== "string" || !item.output || typeof item.output !== "object") {
+        throw new TypeError("result-only provider semantic projection is invalid");
+      }
+      return { provider: item.provider, output: item.output };
+    }),
+    findings: result.findings,
+    adjudication: result.adjudication,
+  };
+}
+
+function validateImportedReport(report, attempt, canonicalResult, requestKey) {
+  if (typeof report !== "string" || report.trim() === "") throw new TypeError("result-only review report is empty");
+  const requiredLines = [
+    `task_id: ${attempt.task_id}`,
+    `stage: ${attempt.stage}`,
+    `attempt_id: ${attempt.attempt_id}`,
+    `snapshot_tree: ${attempt.snapshot_tree}`,
+    `material_id: ${attempt.material_id}`,
+    ...(requestKey ? [`request_key: ${requestKey}`] : []),
+  ];
+  if (requiredLines.some((line) => !report.includes(line))) throw new TypeError("result-only review report provenance is incomplete");
+  const match = report.match(/## Public result and coverage\n\n```json\n([\s\S]*?)\n```/);
+  if (!match) throw new TypeError("result-only review report has no public result provenance");
+  let saved;
+  try { saved = JSON.parse(match[1]); } catch { throw new TypeError("result-only review report public result is invalid JSON"); }
+  if (!saved?.public_result || typeof saved.public_result !== "object" || Array.isArray(saved.public_result)) {
+    throw new TypeError("result-only review report public result is missing");
+  }
+  if (saved.public_result.stage !== attempt.stage || saved.public_result.material_id !== attempt.material_id) {
+    throw new TypeError("result-only review report public result identity is invalid");
+  }
+  if (saved.coverage !== "satisfied" || saved.semantic_status !== "available") {
+    throw new TypeError("result-only review report does not attest a semantic result");
+  }
+  if (canonicalResult.report_ref !== attempt.report_ref) throw new TypeError("result-only review report reference is inconsistent");
+}
+
+function validateImportedProviderOutputs(task, attempt, canonicalResult, providerOutputs) {
+  if (!Array.isArray(providerOutputs) || providerOutputs.length !== attempt.provider_attempts.length) {
+    throw new TypeError("result-only provenance must enumerate every provider attempt");
+  }
+  const byProvider = new Map();
+  for (const entry of providerOutputs) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.provider !== "string") {
+      throw new TypeError("result-only provider provenance entry is invalid");
+    }
+    if (byProvider.has(entry.provider)) throw new TypeError(`result-only provider provenance is duplicated: ${entry.provider}`);
+    byProvider.set(entry.provider, entry);
+  }
+  const authenticatedOutputs = [];
+  for (const member of attempt.provider_attempts) {
+    const entry = byProvider.get(member.provider);
+    if (!entry) throw new TypeError(`result-only provider provenance is missing: ${member.provider}`);
+    for (const field of ["status", "identity", "output_ref", "output_sha256", "raw_output_ref", "raw_output_sha256"]) {
+      if (!Object.hasOwn(entry, field)) throw new TypeError(`result-only provider provenance is missing ${member.provider}.${field}`);
+    }
+    if (entry.status !== member.status || canonicalJson(entry.identity ?? null) !== canonicalJson(member.identity ?? null)) {
+      throw new TypeError(`result-only provider identity does not match the immutable attempt: ${member.provider}`);
+    }
+    const expectedRawRef = member.raw_output_ref ?? member.execution?.raw_output_ref ?? null;
+    if (canonicalJson(entry.raw_output_ref ?? null) !== canonicalJson(expectedRawRef)) {
+      throw new TypeError(`result-only provider raw output reference does not match: ${member.provider}`);
+    }
+    const expectedRawHash = expectedRawRef === null ? null : textHash(canonicalJson(expectedRawRef));
+    if ((entry.raw_output_sha256 ?? null) !== expectedRawHash) {
+      throw new TypeError(`result-only provider raw output hash does not match: ${member.provider}`);
+    }
+    if (member.status === "completed") {
+      if (typeof member.output_ref !== "string" || !REVIEW_PROVIDER_OUTPUT_REF.test(member.output_ref)) throw new TypeError(`result-only provider output reference is invalid: ${member.provider}`);
+      if (entry.output_ref !== member.output_ref) throw new TypeError(`result-only provider output reference does not match: ${member.provider}`);
+      const outputRaw = task.readRecord(member.output_ref);
+      if (importRawHash(entry.output_sha256, `${member.provider}.output_sha256`) !== textHash(outputRaw)) throw new TypeError(`result-only provider output hash does not match: ${member.provider}`);
+      let output;
+      try { output = JSON.parse(outputRaw); } catch { throw new TypeError(`result-only provider output is invalid JSON: ${member.provider}`); }
+      if (output?.schema_version !== "wh-review-provider-output.v1"
+          || output.task_id !== attempt.task_id || output.stage !== attempt.stage
+          || output.attempt_id !== attempt.attempt_id || output.provider !== member.provider
+          || typeof output.content !== "string" || output.content_hash !== textHash(output.content)
+          || !Array.isArray(output.evidence_anchor_valid)
+          || output.evidence_anchor_valid.some((value) => typeof value !== "boolean")) {
+        throw new TypeError(`result-only provider output provenance is invalid: ${member.provider}`);
+      }
+      let review;
+      try { review = JSON.parse(output.content); } catch { throw new TypeError(`result-only provider semantic output is invalid: ${member.provider}`); }
+      const canonicalMember = canonicalResult.provider_results.find((item) => item.provider === member.provider);
+      if (!canonicalMember || canonicalJson(canonicalMember.output) !== canonicalJson(review)) {
+        throw new TypeError(`result-only provider semantic output does not match the result: ${member.provider}`);
+      }
+      authenticatedOutputs.push({ ref: member.output_ref, provider: member.provider, review, evidenceAnchors: output.evidence_anchor_valid });
+    } else if (entry.output_ref !== null || entry.output_sha256 !== null || member.output_ref !== null) {
+      throw new TypeError(`result-only failed provider must not carry a semantic output: ${member.provider}`);
+    }
+  }
+  const completedProviders = attempt.provider_attempts.filter((member) => member.status === "completed").map((member) => member.provider).sort();
+  const resultProviders = canonicalResult.provider_results.map((member) => member.provider).sort();
+  if (canonicalJson(completedProviders) !== canonicalJson(resultProviders)) throw new TypeError("result-only result/provider provenance inventory is inconsistent");
+  return authenticatedOutputs;
+}
+
+/**
+ * Import an already-created canonical result without creating a new attempt,
+ * consuming budget, or treating caller-supplied result bytes as a writer.
+ * Every accepted reference is re-read from the authenticated TaskHandle and
+ * bound to the current task/snapshot/material identity.
+ */
+export function importCanonicalReviewResult({ task, kernel, result, provenance } = {}) {
+  try {
+    const handle = assertTaskHandle(task);
+    const identity = assertAuthenticatedReviewIdentity(handle, kernel);
+    if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) throw new TypeError("result-only review provenance is required");
+    const attemptRef = importScalar(provenance, "attempt_ref");
+    const resultRef = importScalar(provenance, "result_ref");
+    const reportRef = importScalar(provenance, "report_ref");
+    if (!REVIEW_ATTEMPT_REF.test(attemptRef) || !REVIEW_RESULT_REF.test(resultRef) || !REVIEW_REPORT_REF.test(reportRef)) throw new TypeError("result-only review provenance reference is invalid");
+    const attemptHash = importRawHash(importScalar(provenance, "attempt_sha256"), "attempt_sha256");
+    const resultHash = importRawHash(importScalar(provenance, "result_sha256"), "result_sha256");
+    const reportHash = importRawHash(importScalar(provenance, "report_sha256"), "report_sha256");
+    const requestKey = importRawHash(importScalar(provenance, "request_key"), "request_key");
+    const listedAttempts = handle.listCanonicalReviewAttemptRefs();
+    const listedResults = handle.listCanonicalReviewResultRefs();
+    if (!listedAttempts.includes(attemptRef) || !listedResults.includes(resultRef)) throw new TypeError("result-only review reference is not a canonical record");
+    const attemptRaw = handle.readRecord(attemptRef);
+    const resultRaw = handle.readRecord(resultRef);
+    const reportRaw = handle.readRecord(reportRef);
+    if (textHash(attemptRaw) !== attemptHash || textHash(resultRaw) !== resultHash || textHash(reportRaw) !== reportHash) throw new TypeError("result-only review provenance hash mismatch");
+    const attempt = JSON.parse(attemptRaw);
+    const canonicalResult = JSON.parse(resultRaw);
+    validateSchema("attempt", attempt);
+    validateSchema("result", canonicalResult);
+    const attemptId = REVIEW_ATTEMPT_REF.exec(attemptRef)?.[1];
+    if (attempt.attempt_id !== attemptId || canonicalResult.attempt_ref !== attemptRef
+        || attempt.report_ref !== reportRef || canonicalResult.report_ref !== reportRef
+        || attempt.request_key !== requestKey || attempt.terminal_status !== "semantic" || attempt.error !== null) {
+      throw new TypeError("result-only review attempt/result/report binding is invalid");
+    }
+    const identityFields = ["task_id", "stage", "review_track", "review_kind", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "material_id", "material_revision", "snapshot_tree"];
+    for (const field of identityFields) {
+      const expected = importScalar(provenance, field, { nullable: ["review_track", "review_kind", "phase_id", "review_scope"].includes(field) });
+      const actual = importIdentityValue(attempt, field);
+      if (canonicalJson(expected) !== canonicalJson(actual) || canonicalJson(importIdentityValue(canonicalResult, field)) !== canonicalJson(actual)) throw new TypeError(`result-only review identity mismatch: ${field}`);
+    }
+    if (provenance.source === undefined || canonicalJson(provenance.source) !== canonicalJson(attempt.source)
+        || canonicalJson(attempt.source) !== canonicalJson(identity.source)
+        || attempt.snapshot_tree !== identity.tree || attempt.material_revision !== identity.materialRevision) throw new TypeError("result-only review source or current identity mismatch");
+    const evidenceHash = Object.hasOwn(attempt, "authenticated_evidence_sha256") ? (attempt.authenticated_evidence_sha256 ?? null) : null;
+    if (!Object.hasOwn(provenance, "authenticated_evidence_sha256") || (provenance.authenticated_evidence_sha256 ?? null) !== evidenceHash
+        || (canonicalResult.authenticated_evidence_sha256 ?? null) !== evidenceHash) throw new TypeError("result-only authenticated evidence identity mismatch");
+    const routeIdentity = attempt.closure_manifest?.route_identity ?? null;
+    if (!Object.hasOwn(provenance, "route_identity") || (provenance.route_identity ?? null) !== routeIdentity) throw new TypeError("result-only route identity is missing or mismatched");
+    if (!Object.hasOwn(provenance, "policy_snapshot_hash") || (provenance.policy_snapshot_hash ?? null) !== (attempt.policy_snapshot_hash ?? null)) throw new TypeError("result-only policy identity is missing or mismatched");
+    const authenticatedOutputs = validateImportedProviderOutputs(handle, attempt, canonicalResult, provenance.provider_outputs);
+    authenticateCanonicalReviewResult({ attempt, result: canonicalResult, providerOutputs: authenticatedOutputs });
+    validateImportedReport(reportRaw, attempt, canonicalResult, requestKey);
+    const projection = importResultProjection(result, canonicalResult);
+    const expectedProjection = result.version === "wh-review-result.v1"
+      ? canonicalResult
+      : { provider_results: canonicalResult.provider_results, findings: canonicalResult.findings, adjudication: canonicalResult.adjudication };
+    if (canonicalJson(projection) !== canonicalJson(expectedProjection)) throw new TypeError("result-only supplied result does not match the immutable canonical result");
+    return Object.freeze({ status: "recorded", imported: true, authoritative: true, reused: true,
+      attempt_ref: attemptRef, result_ref: resultRef, report_ref: reportRef });
+  } catch (error) {
+    return importFailure(error);
+  }
 }
 
 export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null, closureManifest = null, identityOverride = null }) {

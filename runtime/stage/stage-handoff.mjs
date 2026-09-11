@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
+import yaml from "js-yaml";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
@@ -34,6 +35,114 @@ const SECTION_TITLES = Object.freeze([
 ]);
 
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
+
+/**
+ * The stage chain is declared once in the spec-analyze profiles; the handoff
+ * only needs the immediate successor to name an executable next action. A
+ * completed stage that keeps telling the reader to "continue the current
+ * stage" is wrong, so the successor is derived instead of hardcoded.
+ */
+const NEXT_STAGE = Object.freeze({
+  "make-decision": "build-spec",
+  "build-spec": "build-plan",
+  "build-plan": "build-code",
+  "build-code": "verify-code",
+});
+
+/** Mechanically摘录 a material section's leading lines; never summarises. */
+function materialSectionLines(markdown, heading, { limit = 4, keepTable = false } = {}) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const start = lines.findIndex((line) => heading.test(line));
+  if (start < 0) return [];
+  const out = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^#{1,3}\s/.test(line)) break;
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("```") || trimmed.startsWith("---")) continue;
+    if (!keepTable && trimmed.startsWith("|")) continue;
+    out.push(trimmed.replace(/^[-*]\s*/, ""));
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function outcomeCounts(outcomeValue) {
+  const steps = Array.isArray(outcomeValue?.step_outcomes) ? outcomeValue.step_outcomes : [];
+  const skills = Array.isArray(outcomeValue?.skill_outcomes) ? outcomeValue.skill_outcomes : [];
+  const settled = (row) => row?.status === "completed" || row?.status === "not_applicable";
+  const describe = (row, label) => `- ${label}: ${row.status}${row.reason ? `（${row.reason}）` : ""}`;
+  return {
+    steps,
+    skills,
+    unsettled: [
+      ...steps.filter((row) => row?.status && !settled(row)).map((row) => describe(row, `step \`${row.step_slug}\``)),
+      ...skills.filter((row) => row?.status && !settled(row)).map((row) => describe(row, `skill \`${row.skill_id}\``)),
+    ],
+    completedSteps: steps.filter((row) => row?.status === "completed").length,
+    completedSkills: skills.filter((row) => row?.status === "completed").length,
+  };
+}
+
+function deriveProgressLines(outcomeValue) {
+  if (!outcomeValue || typeof outcomeValue !== "object") {
+    return ["- 当前没有可读的 authenticated stage outcome，进度保持 unknown。"];
+  }
+  const counts = outcomeCounts(outcomeValue);
+  const status = outcomeValue.status ?? "unknown";
+  const attemptId = outcomeValue.attempt_id ?? "unknown";
+  const snapshotTree = outcomeValue.snapshot_tree ?? "unknown";
+  const materialRevision = outcomeValue.material_revision ?? "unknown";
+  return [
+    `- stage outcome: \`${status}\`（attempt \`${attemptId}\`）`,
+    `- identity: snapshot \`${snapshotTree}\` / material \`${materialRevision}\``,
+    `- step: ${counts.steps.length} 项，completed ${counts.completedSteps} 项，其它 ${counts.steps.length - counts.completedSteps} 项`,
+    `- skill: ${counts.skills.length} 项，completed ${counts.completedSkills} 项，其它 ${counts.skills.length - counts.completedSkills} 项`,
+    ...(counts.unsettled.length ? ["- 非完成行：", ...counts.unsettled.map((line) => `  ${line}`)] : ["- 非完成行：无"]),
+  ];
+}
+
+function reflectionBlockLines(judgment, key, label) {
+  const block = judgment?.[key];
+  if (!block || typeof block !== "object" || Array.isArray(block)) return [`- ${label}：unknown（没有可读的 reflection judgment）`];
+  if (block.state === "none_observed") return [`- ${label}：none_observed`];
+  if (block.state === "unknown") return [`- ${label}：unknown（${block.unknown_reason ?? "未给原因"}）`];
+  const items = Array.isArray(block.items) ? block.items : [];
+  if (items.length === 0) return [`- ${label}：observed，但当前没有条目`];
+  return items.map((item) => `- ${item.summary ?? item.reason ?? "（条目缺少摘要）"}`);
+}
+
+function decisionLines(judgment) {
+  const items = Array.isArray(judgment?.judgments) ? judgment.judgments : [];
+  if (items.length === 0) return null;
+  return items.map((item) => `- \`${item.subject_kind ?? "step"}:${item.subject_id ?? "unknown"}\`（${item.classification ?? "unknown"}）：${item.title ?? item.reason ?? ""}`);
+}
+
+function backgroundLines(materials) {
+  const decisionLog = typeof materials?.["decision-log.md"] === "string" ? materials["decision-log.md"] : null;
+  const spec = typeof materials?.["spec.md"] === "string" ? materials["spec.md"] : null;
+  const lines = [];
+  const goalLines = decisionLog ? materialSectionLines(decisionLog, /^##\s*目标/, { limit: 3 }) : [];
+  const needLines = decisionLog ? materialSectionLines(decisionLog, /^##\s*核心需求/, { limit: 4 }) : [];
+  const cardLines = spec ? materialSectionLines(spec, /^##\s*速读卡/, { limit: 6, keepTable: true }) : [];
+  if (goalLines.length) lines.push("- 目标（摘录 `decision-log.md`）：", ...goalLines.map((line) => `  - ${line}`));
+  if (needLines.length) lines.push("- 核心需求（摘录 `decision-log.md`）：", ...needLines.map((line) => `  - ${line}`));
+  if (cardLines.length) lines.push("- 速读卡（摘录 `spec.md`）：", ...cardLines.map((line) => `  - ${line}`));
+  if (lines.length === 0) lines.push("- 当前材料不可读，背景与目标保持 unknown。");
+  lines.push("- 只摘录关键行、不复制材料全文；权威仍以四份当前材料为准。");
+  return lines;
+}
+
+function deriveNextAction(stage, stageStatus) {
+  const next = NEXT_STAGE[stage] ?? null;
+  if (stageStatus !== "completed") {
+    return `继续处理当前 \`${stage}\`：按本 handoff 的非完成行与 run 结果修复后重跑本阶段。`;
+  }
+  if (next === null) {
+    return `\`${stage}\` 不在四阶段作者链条上：按四份材料与正式质量原件确认后续动作。`;
+  }
+  return `进入 \`${next}\`：只消费当前四份材料与正式质量原件；执行顺序、Phase 边界与 STOP 条件以 plan.md / tasks.md 为准。`;
+}
 
 function fail(message, code = "STAGE_HANDOFF_INPUT_INVALID") {
   const error = new Error(message);
@@ -127,20 +236,25 @@ function sectionBody(index, {
   readableMaterials,
   decisionSummary,
   risks,
+  background = null,
+  progress = null,
+  solution = null,
+  pitfalls = null,
+  riskLines = null,
 } = {}) {
   const refs = sources.length ? sources.map((value) => `\`${value.ref}#${value.sha256}\``).join(", ") : "（当前没有可引用的正式原件）";
   const failure = diagnostic?.error_summary ?? diagnostic?.reason ?? "没有观察到额外失败";
   const common = {
     0: [`- task: \`${taskId}\``, `- stage: \`${stage}\``, `- reflection: \`${reflectionStatus}\``],
-    1: ["- 本 handoff 只保留当前续接所需的结论和指针。", "- 详细背景与需求仍以四份当前材料为准。"],
-    2: [`- stage status: \`${stageStatus}\``, `- reflection status: \`${reflectionStatus}\``, `- observation: ${observation || "（无）"}`],
-    3: [decisionSummary || "- 重要决策请回读 decision-log.md、spec.md、plan.md 和 tasks.md。"],
-    4: ["- 当前实现沿用既有 WorkflowHub TaskHandle、stage runner 和 canonical evidence 边界。"],
-    5: [`- 本次阶段末事实：${failure}`],
+    1: background ?? ["- 本 handoff 只保留当前续接所需的结论和指针。", "- 详细背景与需求仍以四份当前材料为准。"],
+    2: progress ?? [`- stage status: \`${stageStatus}\``, `- reflection status: \`${reflectionStatus}\``, `- observation: ${observation || "（无）"}`],
+    3: decisionSummary ?? ["- 重要决策请回读 decision-log.md、spec.md、plan.md 和 tasks.md。"],
+    4: solution ?? ["- 当前实现沿用既有 WorkflowHub TaskHandle、stage runner 和 canonical evidence 边界。"],
+    5: pitfalls ?? [`- 本次阶段末事实：${failure}`],
     6: [`- 当前正式来源指针：${refs}`],
-    7: [`- current snapshot/material binding：\`${refs}\``],
+    7: [`- current snapshot/material binding：${refs}`],
     8: ["- 成功：只表示本阶段或本 hook 的实际记录已写入。", "- 失败、unavailable、unknown 和 stale 不得改写为完成。"],
-    9: [risks || "- 未决项和风险必须以当前四材料与正式质量原件回读为准。"],
+    9: risks ?? riskLines ?? ["- 未决项和风险必须以当前四材料与正式质量原件回读为准。"],
     10: [`- ${nextAction}`],
     11: [readableMaterials?.length ? readableMaterials.map((name) => `- \`${name}\``).join("\n") : "- decision-log.md\n- spec.md\n- plan.md\n- tasks.md"],
     12: ["- 可以自行判断：读取当前文件、正式原件和本 handoff 的指针。", "- 必须问用户：产品方向、不可逆交付授权和超出当前材料的范围变化。"],
@@ -163,6 +277,8 @@ export function renderStageHandoff({
   nextAction = null,
   decisionSummary = null,
   risks = null,
+  stageOutcomeValue = null,
+  reflectionJudgment = null,
 } = {}) {
   stageHandoffRef(stage);
   nonEmpty(taskId, "taskId");
@@ -170,14 +286,38 @@ export function renderStageHandoff({
   nonEmpty(materialScopeRevision, "materialScopeRevision");
   nonEmpty(reflectionStatus, "reflectionStatus");
   const sources = normalizeSources([...sourceRefs, ...materialSourceRefs(materials, artifacts)]);
-  const action = nonEmpty(nextAction ?? `继续读取当前 ${stage} 材料并处理仍未完成项`, "nextAction");
+  const action = nonEmpty(nextAction ?? deriveNextAction(stage, stageStatus), "nextAction");
+  const progress = deriveProgressLines(stageOutcomeValue);
+  const failure = diagnostic?.error_summary ?? diagnostic?.reason ?? null;
+  const progressLines = [
+    `- stage status: \`${stageStatus}\``,
+    `- reflection status: \`${reflectionStatus}\``,
+    ...progress,
+    ...(observation ? [`- observation: ${observation}`] : []),
+  ];
+  const pitfallLines = [
+    ...(failure ? [`- 阶段末诊断：${failure}`] : []),
+    ...reflectionBlockLines(reflectionJudgment, "blockers", "阻塞"),
+  ];
+  const decisionLinesValue = decisionLines(reflectionJudgment);
+  const riskLines = [
+    ...reflectionBlockLines(reflectionJudgment, "what_to_improve", "需要改进"),
+    ...reflectionBlockLines(reflectionJudgment, "what_to_simplify", "可以简化"),
+    ...reflectionBlockLines(reflectionJudgment, "simplifiable_now", "现在即可简化"),
+  ];
   const frontMatter = renderFrontMatter({ taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus, sources });
   const sections = SECTION_TITLES.map((title, index) => [
     `## ${index + 1}. ${title}`,
     sectionBody(index, {
       taskId, stage, stageStatus, reflectionStatus, observation, diagnostic, sources,
       nextAction: action, readableMaterials: ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
-      decisionSummary, risks,
+      decisionSummary: decisionSummary ?? decisionLinesValue,
+      risks,
+      background: backgroundLines(materials),
+      progress: progressLines,
+      solution: reflectionBlockLines(reflectionJudgment, "what_helped", "实际帮助"),
+      pitfalls: pitfallLines,
+      riskLines,
     }),
   ].join("\n"));
   return `${frontMatter}\n\n> ${BANNER}\n\n${sections.join("\n\n")}\n`;
@@ -214,17 +354,53 @@ function compareAttempts(left, right) {
   return a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]);
 }
 
-function currentHandoffOutcome(task, raw, stage) {
-  if (typeof raw !== "string") return null;
-  const match = new RegExp(`quality/evidence/stage-outcomes/${stage}/([a-f0-9]{64})\\.json#\\1`).exec(raw);
-  if (!match) return null;
-  const ref = `quality/evidence/stage-outcomes/${stage}/${match[1]}.json`;
-  try {
-    const value = JSON.parse(task.readRecord(ref));
-    return value?.attempt_id ? { ref, value } : null;
-  } catch {
-    return null;
+function currentHandoffOutcome(task, raw, stage, runId) {
+  // Only an absent projection is an initial publication. Broken existing
+  // sources must not silently disable the current-writer guard.
+  if (raw === null) return null;
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(raw);
+  if (!frontmatter) fail("stage handoff current frontmatter is missing");
+  let header;
+  try { header = yaml.load(frontmatter[1], { schema: yaml.JSON_SCHEMA }); }
+  catch (error) { fail(`stage handoff current frontmatter is invalid: ${error.message}`); }
+  if (header?.schema !== SCHEMA || header.task !== task.identity.taskId || header.stage !== stage
+      || typeof header.snapshot_tree !== "string" || header.snapshot_tree.trim() === ""
+      || !/^revision-[a-f0-9]{64}$/.test(header.material_scope_revision ?? "")
+      || !Array.isArray(header.source_refs)) {
+    fail("stage handoff current frontmatter identity or source_refs is invalid");
   }
+  let sources;
+  try { sources = normalizeSources(header.source_refs); }
+  catch (error) { fail(`stage handoff current source_refs is invalid: ${error.message}`); }
+  const matches = [];
+  for (const source of sources) {
+    if (!source.ref.startsWith("quality/evidence/stage-outcomes/")) continue;
+    const match = STAGE_OUTCOME_REF.exec(source.ref);
+    if (!match || match[2] !== source.sha256) fail("stage handoff current outcome source ref/hash is invalid");
+    let sourceRaw;
+    try { sourceRaw = task.readRecord(source.ref); }
+    catch (error) { fail(`stage handoff current outcome source is unreadable: ${error.message}`); }
+    if (sha256(sourceRaw) !== source.sha256) fail("stage handoff current outcome source hash mismatch");
+    let value;
+    try { value = JSON.parse(sourceRaw); }
+    catch (error) { fail(`stage handoff current outcome source is invalid JSON: ${error.message}`); }
+    if (value?.schema_version !== "workflowhub-stage-outcomes.v1"
+        || typeof value.attempt_id !== "string" || value.attempt_id.trim() === ""
+        || typeof value.producer?.source_id !== "string" || value.producer.source_id.trim() === ""
+        || typeof value.producer?.agent_run_id !== "string" || value.producer.agent_run_id.trim() === ""
+        || value.task_id !== header.task || value.stage !== match[1]) {
+      fail("stage handoff current outcome source identity or producer is invalid");
+    }
+    // Historical context is allowed, but neither its position in the document
+    // nor its attempt spelling can identify the current projection.
+    if (value.stage === stage && value.run_id === runId
+        && value.snapshot_tree === header.snapshot_tree
+        && value.material_scope_revision === header.material_scope_revision) {
+      matches.push({ ref: source.ref, value });
+    }
+  }
+  if (matches.length !== 1) fail("stage handoff current outcome source must uniquely match the frontmatter identity");
+  return matches[0];
 }
 
 export function publishStageHandoff({
@@ -282,6 +458,22 @@ export function publishStageHandoff({
   }
   const ref = stageHandoffRef(stage);
   const absolutePath = resolve(task.taskPath, ...ref.split("/"));
+  // The reflection judgment is the session-authored content source for the
+  // decisions, blockers, simplifications and next-stage advice rendered below.
+  // A missing or unavailable reflection keeps those sections honestly unknown.
+  let reflectionJudgmentValue = null;
+  if (stageReflection && typeof stageReflection.ref === "string") {
+    try {
+      const reflectionRaw = task.readRecord(stageReflection.ref);
+      const parsed = JSON.parse(reflectionRaw);
+      if (parsed?.schema_version === "stage-reflection.v2" && parsed.stage === stage
+          && Array.isArray(parsed.judgments)) {
+        reflectionJudgmentValue = parsed;
+      }
+    } catch {
+      reflectionJudgmentValue = null;
+    }
+  }
   const sources = [
     ...sourceRefs,
     stageOutcomeSource(stageOutcome),
@@ -349,6 +541,7 @@ export function publishStageHandoff({
   const raw = renderStageHandoff({
     taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus, stageStatus,
     observation, diagnostic, sourceRefs: sources, materials, artifacts, nextAction, decisionSummary, risks,
+    stageOutcomeValue: outcomeValue, reflectionJudgment: reflectionJudgmentValue,
   });
   const writeHandoff = () => {
     // The fixed current-view ref is a replaceable projection. Serialize the
@@ -356,6 +549,9 @@ export function publishStageHandoff({
     // check and overwrite a newer current handoff after it has advanced.
     const lockedSnapshot = kernel.currentVNextSnapshot();
     if (lockedSnapshot.tree !== snapshotTree) fail("stage handoff snapshot changed before current write");
+    if (kernel.currentVNextMaterialScopeRevision(stage) !== materialScopeRevision) {
+      fail("stage handoff material scope is not current");
+    }
     if (materials && artifacts) materialSourceRefs(materials, artifacts);
     const lockedOutcomeRaw = task.readRecord(stageOutcome.ref);
     if (sha256(lockedOutcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source changed before current write");
@@ -370,8 +566,13 @@ export function publishStageHandoff({
     }
     let existingRaw = null;
     try { existingRaw = task.readRecord(ref); } catch (error) { if (error?.code !== "ENOENT") throw error; }
-    const existingOutcome = currentHandoffOutcome(task, existingRaw, stage);
-    if (existingOutcome && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
+    const existingOutcome = currentHandoffOutcome(task, existingRaw, stage, lockedOutcome.run_id);
+    // The authenticated current view is stale when either materials or the
+    // implementation snapshot changed. Opaque attempts need no invented order.
+    const existingIsStale = existingOutcome
+      && (existingOutcome.value.material_scope_revision !== materialScopeRevision
+        || existingOutcome.value.snapshot_tree !== lockedSnapshot.tree);
+    if (existingOutcome && !existingIsStale && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
       const ordering = compareAttempts(outcomeValue.attempt_id, existingOutcome.value.attempt_id);
       // A retry id is not an ordering authority.  If chronology cannot be
       // authenticated, preserve the already-current projection instead of

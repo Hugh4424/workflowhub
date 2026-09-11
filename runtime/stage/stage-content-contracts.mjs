@@ -4083,6 +4083,12 @@ const TASK_FIELDS_V3 = Object.freeze([
   "verification_role", "paired_task", "gate_cmd", "expected_exit", "oracle",
   "evidence_path", "STOP", "recovery", "task risk",
 ]);
+export const PLAN_TASK_SLICE_SIGNALS = Object.freeze([
+  "SIG-FILES", "SIG-TARGETS", "SIG-CROSS-PHASE",
+]);
+export const PLAN_TASK_SLICE_STATUSES = Object.freeze([
+  "within_budget", "explained_overage", "unexplained_overage",
+]);
 const PLAN_TASK_V3 = "plan-task.v3";
 const PLAN_TASK_V4 = "plan-task.v4";
 const SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS = new Set([PLAN_TASK_V3, PLAN_TASK_V4]);
@@ -4278,6 +4284,191 @@ function fieldValue(body, field) {
     `^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
     "mi",
   ))?.[1]?.trim() ?? null;
+}
+
+const SLICE_ADVISORY_MARKER = /^slice-advisory: reason="([^"\r\n]+)"; impact="([^"\r\n]+)"; owner="([^"\r\n]+)"; recheck="([^"\r\n]+)"$/;
+
+function freezeSliceAdvisoryMarker(marker) {
+  return Object.freeze({
+    reason: marker.reason,
+    impact: marker.impact,
+    owner: marker.owner,
+    recheck: marker.recheck,
+  });
+}
+
+function parseSliceAdvisoryRisk(value, taskId) {
+  const markers = [];
+  const errors = [];
+  for (const line of String(value ?? "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const markerStart = trimmed.indexOf("slice-advisory:");
+    if (markerStart < 0) continue;
+    const candidate = trimmed.slice(markerStart).replace(/`\s*$/, "").trim();
+    const match = candidate.match(SLICE_ADVISORY_MARKER);
+    if (!match || match.slice(1).some((part) => part.trim() === "")) {
+      errors.push(`${taskId} task risk contains a malformed slice-advisory marker`);
+      continue;
+    }
+    markers.push(freezeSliceAdvisoryMarker({
+      reason: match[1], impact: match[2], owner: match[3], recheck: match[4],
+    }));
+  }
+  return Object.freeze({ markers: Object.freeze(markers), errors: Object.freeze(errors) });
+}
+
+function phaseVerifyTargets(value) {
+  const targets = [];
+  const pattern = /(?:^|\r?\n)\s*(?:[-*]\s+)?(?:\*\*)?(?:(?:Verify\.)?Target)(?:\*\*)?\s*[:=：]\s*([^\r\n]+)$/gmi;
+  for (const match of String(value ?? "").matchAll(pattern)) {
+    const target = match[1].trim();
+    if (target !== "") targets.push(target);
+  }
+  return Object.freeze(targets);
+}
+
+function freezeSliceSignalDetail(detail) {
+  const frozen = {
+    ...detail,
+    marker_task_ids: Object.freeze([...detail.marker_task_ids]),
+    marker_errors: Object.freeze([...detail.marker_errors]),
+  };
+  if (detail.files) frozen.files = Object.freeze([...detail.files]);
+  if (detail.targets) frozen.targets = Object.freeze([...detail.targets]);
+  if (detail.phases) frozen.phases = Object.freeze([...detail.phases]);
+  return Object.freeze(frozen);
+}
+
+function derivePlanTaskSlicingFromRows({ planPhaseRows = [], taskRows = [] } = {}) {
+  const taskMarkerFacts = taskRows.map((task) => {
+    const parsed = parseSliceAdvisoryRisk(task.fields?.["task risk"], task.id ?? "unknown-task");
+    return Object.freeze({
+      task_id: task.id,
+      phase: task.phase,
+      markers: parsed.markers,
+      errors: parsed.errors,
+    });
+  });
+  const markerByTask = new Map(taskMarkerFacts.map((fact) => [fact.task_id, fact]));
+  const allMarkers = taskMarkerFacts.flatMap((fact) => fact.markers.map((marker) => Object.freeze({
+    task_id: fact.task_id,
+    phase: fact.phase,
+    ...marker,
+  })));
+  const explanationFor = (taskIds) => {
+    const relevant = taskIds.map((id) => markerByTask.get(id)).filter(Boolean);
+    const markerTaskIds = relevant.filter((fact) => fact.markers.length > 0).map(({ task_id }) => task_id);
+    const markerErrors = relevant.flatMap(({ errors }) => errors);
+    return {
+      explained: markerTaskIds.length > 0 && markerErrors.length === 0,
+      marker_task_ids: markerTaskIds,
+      marker_errors: markerErrors,
+    };
+  };
+
+  const signalDetails = [];
+  for (const task of taskRows) {
+    const files = inlinePaths(task.fields?.["精确文件"]);
+    if (new Set(files).size <= 10) continue;
+    const explanation = explanationFor([task.id]);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-FILES",
+      task_id: task.id,
+      file_count: new Set(files).size,
+      files: [...new Set(files)],
+      ...explanation,
+    }));
+  }
+
+  for (const phase of planPhaseRows) {
+    const targets = phaseVerifyTargets(phase.fields?.Verify);
+    if (targets.length <= 1) continue;
+    const phaseTaskIds = taskRows.filter((task) => task.phase === phase.phase).map(({ id }) => id);
+    const explanation = explanationFor(phaseTaskIds);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-TARGETS",
+      phase: phase.phase,
+      target_count: targets.length,
+      targets: [...targets],
+      ...explanation,
+    }));
+  }
+
+  const filesByPhase = new Map();
+  for (const phase of planPhaseRows) {
+    for (const file of phaseWritePaths(phase.fields?.Files)) {
+      const owners = filesByPhase.get(file) ?? [];
+      owners.push(phase.phase);
+      filesByPhase.set(file, owners);
+    }
+  }
+  for (const [file, phases] of filesByPhase) {
+    const uniquePhases = [...new Set(phases)];
+    if (uniquePhases.length <= 1) continue;
+    const phaseTaskIds = taskRows.filter((task) => uniquePhases.includes(task.phase)).map(({ id }) => id);
+    const explanation = explanationFor(phaseTaskIds);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-CROSS-PHASE",
+      file,
+      phases: uniquePhases,
+      ...explanation,
+    }));
+  }
+
+  const signals = [...new Set(signalDetails.map(({ signal }) => signal))]
+    .filter((signal) => PLAN_TASK_SLICE_SIGNALS.includes(signal));
+  const explainedSignals = PLAN_TASK_SLICE_SIGNALS.filter((signal) => {
+    const matches = signalDetails.filter((detail) => detail.signal === signal);
+    return matches.length > 0 && matches.every((detail) => detail.explained);
+  });
+  const unexplainedSignals = signals.filter((signal) => !explainedSignals.includes(signal));
+  const markerErrors = taskMarkerFacts.flatMap(({ errors }) => errors);
+  const diagnostics = [
+    ...markerErrors,
+    ...signalDetails
+      .filter((detail) => !detail.explained)
+      .map((detail) => `${detail.signal} overage is not fully explained by task risk`),
+  ];
+  const status = signals.length === 0
+    ? "within_budget"
+    : unexplainedSignals.length === 0
+    ? "explained_overage"
+    : "unexplained_overage";
+  return Object.freeze({
+    status,
+    signals: Object.freeze(signals),
+    explained_signals: Object.freeze(explainedSignals),
+    unexplained_signals: Object.freeze(unexplainedSignals),
+    signal_details: Object.freeze(signalDetails),
+    markers: Object.freeze(allMarkers),
+    marker_count: allMarkers.length,
+    diagnostics: Object.freeze([...new Set(diagnostics)]),
+  });
+}
+
+export function derivePlanTaskSlicing({ plan, tasks } = {}) {
+  if (typeof plan !== "string" || typeof tasks !== "string" || plan.trim() === "" || tasks.trim() === "") {
+    return Object.freeze({
+      status: "unavailable",
+      signals: Object.freeze([]),
+      explained_signals: Object.freeze([]),
+      unexplained_signals: Object.freeze([]),
+      signal_details: Object.freeze([]),
+      markers: Object.freeze([]),
+      marker_count: 0,
+      diagnostics: Object.freeze(["plan and tasks content are required for slicing advisory"]),
+    });
+  }
+  const parsedTasks = taskBlocks(tasks).map((task, order) => Object.freeze({
+    id: task.heading_id,
+    order,
+    phase: task.phase,
+    fields: Object.freeze({ ...task.fields }),
+  }));
+  return derivePlanTaskSlicingFromRows({
+    planPhaseRows: phaseRows(plan, ["Files", "Verify"], [], "plan"),
+    taskRows: parsedTasks,
+  });
 }
 
 function cycleIn(tasks) {
@@ -6208,6 +6399,7 @@ export function validatePlanTaskContract({
   for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
   for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
 
+  const sliceAdvisory = derivePlanTaskSlicingFromRows({ planPhaseRows, taskRows });
   const completionTasks = parsedTasks.map((task) => taskCompletionFact(task, completionEvidence));
   const facts = Object.freeze({
     template_version: isPlanTask ? templateLabel : "legacy-v1",
@@ -6234,6 +6426,7 @@ export function validatePlanTaskContract({
     command_oracle_checks: Object.freeze({
       valid: !errors.some((error) => /gate_cmd|expected_exit|RED before GREEN|oracle|paired_task|RED\/GREEN|GREEN must depend/.test(error)),
     }),
+    slice_advisory: sliceAdvisory,
     task_completion: Object.freeze({
       total_count: completionTasks.length,
       claimed_completed_count: completionTasks.filter(({ claimed_complete }) => claimed_complete).length,
@@ -6743,6 +6936,7 @@ export function buildPlanTaskContract({
     ac_coverage: validation.facts.ac_coverage,
     dependency_validation: validation.facts.dependency_validation,
     command_oracle_checks: validation.facts.command_oracle_checks,
+    slice_advisory: validation.facts.slice_advisory,
     errors: Object.freeze([]),
   });
 }
@@ -6752,12 +6946,26 @@ const V2_AC = ACCEPTANCE_CRITERION_ID;
 
 export function activeAcceptanceCriterionIds(spec) {
   const text = String(spec ?? "");
-  const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/mi);
-  const body = heading
-    ? text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0]
-    : text;
+  // A spec may legitimately carry more than one section titled 验收标准: the
+  // document's own summary card and the detailed acceptance list.  Matching
+  // only the first heading silently narrowed the authoritative AC set to the
+  // summary card, so collect every such section.  Sections are found by
+  // heading rather than by number, because the summary card can sit before the
+  // numbered body.
+  const headingPattern = /^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/gmi;
+  const sections = [];
+  for (const match of text.matchAll(headingPattern)) {
+    sections.push(text.slice(match.index + match[0].length).split(/^##\s+/m, 1)[0]);
+  }
+  const body = sections.length > 0 ? sections.join("\n") : text;
   const listEntries = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*([^\n]*)/gm)];
   const listIds = listEntries
+    .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
+    .filter(Boolean);
+  // Acceptance criteria may also be declared as their own heading
+  // (`#### AC-S3-01 <title>`).  Heading declarations carry no status suffix,
+  // so the deferred markers below only apply to the list/table forms.
+  const headingEntries = [...body.matchAll(/^#{1,6}\s+([^\n]*)$/gm)]
     .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
     .filter(Boolean);
   const tableEntries = [];
@@ -6778,7 +6986,7 @@ export function activeAcceptanceCriterionIds(spec) {
     }
   }
   const tableIds = tableEntries.map(({ id }) => id);
-  const headingIds = [...listIds, ...tableIds];
+  const headingIds = [...listIds, ...headingEntries, ...tableIds];
   const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
   const explicitMetadata = /^\s*(?:[[(（]\s*(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）]|(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s—–:：,，;；.。-]))/i;
   const deferredIds = new Set(listEntries.flatMap(([, label, suffix]) => {
