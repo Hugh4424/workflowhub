@@ -3547,6 +3547,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
     tasks: materials["tasks.md"],
     completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
   });
+  const sliceAdvisory = structural.facts?.slice_advisory ?? null;
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
   const decisionFreeze = currentDecisionFreeze(worker, input, materials["decision-log.md"], before);
@@ -3640,6 +3641,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
       source_digest: before.source_digest,
       decision_freeze: decisionFreeze,
       material_oracle: materialOracle,
+      slice_advisory: sliceAdvisory,
       stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,
       completion_subjects: {

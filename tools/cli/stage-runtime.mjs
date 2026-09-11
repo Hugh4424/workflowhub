@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import { importCanonicalReviewResult, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 
 import {
@@ -27,7 +27,7 @@ import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-cod
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
 import { deriveCurrentProductRelease, deriveExecutionOutcomes, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
-import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
+import { activeAcceptanceCriterionIds, validatePlanTaskContract } from "../../runtime/stage/stage-content-contracts.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
@@ -206,13 +206,20 @@ function isIntegrationReviewRequest(request) {
     && (request.review_scope ?? request.reviewScope ?? null) === "integration";
 }
 
-/** Build the provider-visible integration packet from the authenticated task workspace. */
-export function prepareTaskBoundIntegrationReviewBundle(context, request, {
+function isTaskBoundBuildCodeReviewRequest(request) {
+  const scope = request?.review_scope ?? request?.reviewScope ?? null;
+  return request?.stage === "build-code"
+    && (scope === "phase" || scope === "integration");
+}
+
+/** Build the provider-visible build-code packet from the authenticated task workspace. */
+export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
   captureSource = captureReviewSource,
   buildMaterials = buildReviewMaterials,
 } = {}) {
-  if (!isIntegrationReviewRequest(request)) throw new TypeError("task-bound integration review request required");
+  if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
+  const reviewScope = request.review_scope ?? request.reviewScope;
   const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
   const source = captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
@@ -227,7 +234,7 @@ export function prepareTaskBoundIntegrationReviewBundle(context, request, {
       stage: request.stage,
       phaseId: request.phase_id ?? null,
       reviewTrack: request.review_track ?? request.reviewTrack ?? null,
-      reviewScope: "integration",
+      reviewScope,
       reviewKind: request.review_kind ?? request.reviewKind ?? null,
       materials: request.materials,
     });
@@ -243,6 +250,12 @@ export function prepareTaskBoundIntegrationReviewBundle(context, request, {
   } finally {
     source.dispose?.();
   }
+}
+
+/** Kept as a named compatibility export for integration callers. */
+export function prepareTaskBoundIntegrationReviewBundle(context, request, dependencies = {}) {
+  if (!isIntegrationReviewRequest(request)) throw new TypeError("task-bound integration review request required");
+  return prepareTaskBoundBuildCodeReviewBundle(context, request, dependencies);
 }
 
 function readQualityEvidence(task) {
@@ -347,6 +360,52 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
   });
 }
 
+/**
+ * Derive the current status domains used by another read-only CLI consumer.
+ * Keep the quality and product-release readers on the same authenticated
+ * path as `stage-runtime status`; this helper does not write a fact or create
+ * a second status authority.
+ */
+export function deriveCurrentStatusDomains(context, {
+  stage = "verify-code",
+  currentSnapshot,
+  materialRevision,
+  materials,
+} = {}) {
+  if (!context?.task || !context?.kernel || !currentSnapshot || typeof materialRevision !== "string" || !materials || typeof materials !== "object" || Array.isArray(materials)) {
+    throw new TypeError("current status domain derivation requires an authenticated context, snapshot, material revision, and materials");
+  }
+  const observations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage });
+  const allQualityFactObservations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials });
+  const stageOutcomeStatuses = deriveStageOutcomeStatuses({
+    task_id: context.identity.taskId,
+    read: readQualityEvidence(context.task),
+    stage_outcome_refs: Object.fromEntries(WORKFLOW_STAGES.map((name) => [name, context.task.listCanonicalStageOutcomeRefs(name)])),
+    snapshot_tree: currentSnapshot.tree,
+    material_revision: materialRevision,
+    material_scope_revisions: stageMaterialScopeRevisions(materials),
+    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+    quality_fact_observations: allQualityFactObservations,
+    authenticate: ({ stage: outcomeStage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage: outcomeStage }, outcomeStage, ref),
+  });
+  const quality = deriveStageCompletion(stage, observations, {
+    requireStageOutcome: true,
+    stageOutcomeStatus: stageOutcomeStatuses?.[stage] ?? "unavailable",
+    requireOutline: stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
+  });
+  return Object.freeze({
+    work_progress: deriveStageProgress(stage, observations, materials),
+    stage_quality: quality,
+    product_release: currentProductReleaseView({
+      context,
+      currentSnapshot,
+      materialRevision,
+      materials,
+      qualityFactObservations: allQualityFactObservations,
+    }),
+  });
+}
+
 // Keep status as a read-only projection of the existing facts. The grouping
 // makes the next action obvious without turning quality facts into a new gate
 // or hiding unavailable/not-applicable evidence.
@@ -363,7 +422,7 @@ function gapRootCauseId(gap) {
   return text;
 }
 
-export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [], research = null, closePreparationGaps: closePreparationGapsInput = undefined, close_preparation_gaps: closePreparationGapsSnakeInput = undefined } = {}) {
+export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [], research = null, sliceAdvisory = null, slice_advisory: sliceAdvisorySnakeInput = undefined, closePreparationGaps: closePreparationGapsInput = undefined, close_preparation_gaps: closePreparationGapsSnakeInput = undefined } = {}) {
   // Status is a projection of the same authenticated/current facts used by
   // deriveStageCompletion. Never let a stale or unauthenticated attempt hide
   // a current actionable gap, and never let array order decide which attempt
@@ -454,6 +513,12 @@ export function deriveStatusGroups({ stage = null, quality, productRelease, obse
     return value ? { status: value.status } : null;
   })();
   if (disclosedResearch?.status === "unavailable") external_unavailable.push("research:unavailable");
+  const disclosedSliceAdvisory = sliceAdvisory ?? sliceAdvisorySnakeInput ?? null;
+  const advisory_reminders = disclosedSliceAdvisory?.status === "unexplained_overage"
+    ? Object.freeze(["slice_advisory:unexplained_overage"])
+    : disclosedSliceAdvisory?.diagnostics?.length
+    ? Object.freeze(["slice_advisory:diagnostic"])
+    : Object.freeze([]);
   // Read-only preflight for physical close. These are facts to surface to the
   // operator, never a new gate or a replacement for verify-code quality.
   const close_preparation_gaps = close_gaps;
@@ -468,6 +533,8 @@ export function deriveStatusGroups({ stage = null, quality, productRelease, obse
       derived_views: Object.freeze(group.derived_views),
       gaps: Object.freeze(group.gaps),
     }))),
+    slice_advisory: disclosedSliceAdvisory,
+    advisory_reminders,
     close_supported,
     close_preparation_gaps: Object.freeze(close_preparation_gaps),
     next_action: actionable_now[0] ?? (external_unavailable[0] ?? null),
@@ -749,6 +816,25 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       stageOutcomeStatus: stageOutcomeStatuses?.[values.stage] ?? "unavailable",
       requireOutline: values.stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
     });
+    const slicingValidation = typeof materials["spec.md"] === "string"
+      && typeof materials["plan.md"] === "string"
+      && typeof materials["tasks.md"] === "string"
+      ? validatePlanTaskContract({
+        spec: materials["spec.md"],
+        plan: materials["plan.md"],
+        tasks: materials["tasks.md"],
+      })
+      : null;
+    const sliceAdvisory = slicingValidation?.facts?.slice_advisory ?? Object.freeze({
+      status: "unavailable",
+      signals: Object.freeze([]),
+      explained_signals: Object.freeze([]),
+      unexplained_signals: Object.freeze([]),
+      signal_details: Object.freeze([]),
+      markers: Object.freeze([]),
+      marker_count: 0,
+      diagnostics: Object.freeze(["current spec/plan/tasks are unavailable for slicing advisory"]),
+    });
     const progression = deriveStageProgress(values.stage, observations, materials);
     const productRelease = current
       ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials, qualityFactObservations: allQualityFactObservations })
@@ -757,7 +843,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         acceptance_results: [],
         expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
       });
-    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations: statusObservations, research: researchDisclosure });
+    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations: statusObservations, research: researchDisclosure, sliceAdvisory });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,
@@ -844,16 +930,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const hasResult = Object.prototype.hasOwnProperty.call(input, "result");
     if (hasRequest === hasResult) throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
     let preparedBundle = null;
-    const useTaskBoundIntegrationBundle = hasRequest
+    const useTaskBoundBuildCodeBundle = hasRequest
       && typeof services.runReviewRound !== "function"
-      && isIntegrationReviewRequest(input.request);
+      && isTaskBoundBuildCodeReviewRequest(input.request);
     const prepareBundle = (request) => {
       if (preparedBundle === null) {
-        preparedBundle = prepareTaskBoundIntegrationReviewBundle(context, request, services.reviewBundleDependencies);
+        preparedBundle = prepareTaskBoundBuildCodeReviewBundle(context, request, services.reviewBundleDependencies);
       }
       return preparedBundle;
     };
-    const runTaskBoundIntegrationReview = async (request) => {
+    const runTaskBoundBuildCodeReview = async (request) => {
       const bundle = prepareBundle(request);
       const result = await runSimpleReview(request, { buildBundle: () => bundle });
       // The broker may echo a packet identity that does not match the
@@ -890,24 +976,25 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           request: input.request,
           runRound: typeof services.runReviewRound === "function"
             ? services.runReviewRound
-            : useTaskBoundIntegrationBundle
-              ? runTaskBoundIntegrationReview
+            : useTaskBoundBuildCodeBundle
+              ? runTaskBoundBuildCodeReview
               : runSimpleReview,
           materialIdForRequest: typeof services.materialIdForRequest === "function"
             ? services.materialIdForRequest
-            : useTaskBoundIntegrationBundle
+            : useTaskBoundBuildCodeBundle
               ? (request) => prepareBundle(request).materialId
               : (request) => createSimpleReviewPacket(request).material_id,
         })
-        : recordSimpleReviewResult({
+        : importCanonicalReviewResult({
           task: context.task,
           result: input.result,
+          provenance: input.provenance,
           kernel: context.kernel,
         });
     } finally {
       preparedBundle?.dispose();
     }
-    return { status: "recorded", ...refs };
+    return refs.authoritative === false ? refs : { status: "recorded", ...refs };
   }
   if (command === "reflect") {
     const allowed = new Set(["stage", "project", "task", "input", "now"]);

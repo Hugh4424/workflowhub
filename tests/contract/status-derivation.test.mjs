@@ -117,6 +117,31 @@ function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
 }
 
 describe("status is derived from current quality facts", () => {
+  it("projects the validator slicing fact and exposes unexplained overage as a reminder only", () => {
+    const sliceAdvisory = {
+      status: "unexplained_overage",
+      signals: ["SIG-FILES", "SIG-TARGETS"],
+      diagnostics: ["SIG-FILES overage is not fully explained by task risk"],
+    };
+    const groups = deriveStatusGroups({
+      stage: "build-plan",
+      quality: { missing: [], predicates: {} },
+      productRelease: { reasons: [] },
+      sliceAdvisory,
+    });
+    expect(groups.slice_advisory).toBe(sliceAdvisory);
+    expect(groups.advisory_reminders).toEqual(["slice_advisory:unexplained_overage"]);
+    expect(groups.actionable_now).toEqual([]);
+
+    const withinBudget = deriveStatusGroups({
+      stage: "build-plan",
+      quality: { missing: [], predicates: {} },
+      productRelease: { reasons: [] },
+      slice_advisory: { status: "within_budget", signals: [], diagnostics: [] },
+    });
+    expect(withinBudget.advisory_reminders).toEqual([]);
+  });
+
   it("discloses unavailable research without turning it into an actionable completion gap", () => {
     const groups = deriveStatusGroups({
       stage: "make-decision",

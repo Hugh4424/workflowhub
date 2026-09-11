@@ -33,7 +33,11 @@ import { spawnSync } from "node:child_process";
 import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateTestRuntimeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
+import {
+  TEST_RUNTIME_PROFILE_LIMITS_MS,
+  TEST_RUNTIME_PROFILE_NAMES,
+  validateTestRuntimeProfile,
+} from "../../runtime/stage/stage-content-contracts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // tools/cli/ -> repository root; run child checkers from the project root so
@@ -82,7 +86,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function parseProfileArgs(args) {
+export function parseProfileArgs(args) {
   const separator = args.indexOf("--");
   if (separator < 0) return null;
   const options = args.slice(0, separator);
@@ -93,7 +97,7 @@ function parseProfileArgs(args) {
   const runtimeProfile = profileArg.slice("--runtime-profile=".length);
   const evidencePath = evidenceArg.slice("--evidence-path=".length);
   if (!evidencePath) throw new Error("runtime profile evidence path is required");
-  if (!new Set(["inner", "medium", "large"]).has(runtimeProfile)) throw new Error("runtime profile must be inner, medium, or large");
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(runtimeProfile)) throw new Error("runtime profile must be inner, medium, or large");
   const resolvedEvidencePath = isAbsolute(evidencePath) ? evidencePath : resolve(repoRoot, evidencePath);
   const qualityRoot = resolve(repoRoot, "quality", "tests");
   if (resolvedEvidencePath !== qualityRoot && !resolvedEvidencePath.startsWith(`${qualityRoot}/`)) {
@@ -102,13 +106,16 @@ function parseProfileArgs(args) {
   return { runtimeProfile, evidencePath: resolvedEvidencePath, target };
 }
 
-function profileForExecutor(runtimeProfile, target) {
+export function profileForExecutor(runtimeProfile, target) {
   const permissions = runtimeProfile === "inner"
     ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny", environment: "local_ci" }
     : runtimeProfile === "medium"
       ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" }
       : { network: "ci_only", db: "ci_only", filesystem: "ci_only", subprocess: "ci_only", environment: "ci_only" };
-  const ceiling_ms = runtimeProfile === "large" ? 900_000 : { inner: 60_000, medium: 300_000 }[runtimeProfile];
+  // The finite profile ceilings are owned by the runtime contract.  The large
+  // profile deliberately has no contract ceiling; keep its existing CI-only
+  // supervisor timeout as an operational guard, not as a new profile value.
+  const ceiling_ms = TEST_RUNTIME_PROFILE_LIMITS_MS[runtimeProfile] ?? 900_000;
   const observations = Object.entries(permissions).map(([capability, decision]) => ({
     capability, requested: decision, decision: "unknown", observed: false,
     mechanism: "run-checks-profile-declaration-only", proof_ref: null, proof_hash: null,
@@ -126,7 +133,7 @@ function profileForExecutor(runtimeProfile, target) {
   };
 }
 
-function runProfiledCommand({ runtimeProfile, evidencePath, target }) {
+export function runProfiledCommand({ runtimeProfile, evidencePath, target }) {
   const profile = profileForExecutor(runtimeProfile, target);
   const valid = validateTestRuntimeProfile(profile, { declarationOnly: true });
   if (valid.errors.length > 0) throw new Error(`runtime profile declaration is ${valid.status}: ${valid.errors.join("; ")}`);

@@ -88,9 +88,13 @@ function deriveProgressLines(outcomeValue) {
     return ["- 当前没有可读的 authenticated stage outcome，进度保持 unknown。"];
   }
   const counts = outcomeCounts(outcomeValue);
+  const status = outcomeValue.status ?? "unknown";
+  const attemptId = outcomeValue.attempt_id ?? "unknown";
+  const snapshotTree = outcomeValue.snapshot_tree ?? "unknown";
+  const materialRevision = outcomeValue.material_revision ?? "unknown";
   return [
-    `- stage outcome: \`${outcomeValue.status}\`（attempt \`${outcomeValue.attempt_id}\`）`,
-    `- identity: snapshot \`${outcomeValue.snapshot_tree}\` / material \`${outcomeValue.material_revision}\``,
+    `- stage outcome: \`${status}\`（attempt \`${attemptId}\`）`,
+    `- identity: snapshot \`${snapshotTree}\` / material \`${materialRevision}\``,
     `- step: ${counts.steps.length} 项，completed ${counts.completedSteps} 项，其它 ${counts.steps.length - counts.completedSteps} 项`,
     `- skill: ${counts.skills.length} 项，completed ${counts.completedSkills} 项，其它 ${counts.skills.length - counts.completedSkills} 项`,
     ...(counts.unsettled.length ? ["- 非完成行：", ...counts.unsettled.map((line) => `  ${line}`)] : ["- 非完成行：无"]),

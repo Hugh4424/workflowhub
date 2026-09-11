@@ -113,6 +113,17 @@ describe("stage-handoff current view contract", () => {
     expect([...raw.matchAll(/^## (\d+)\. (.+)$/gm)].map((match) => match[2])).toEqual(SECTION_TITLES);
   });
 
+  it("renders explicit unknowns when an outcome omits optional identity fields", () => {
+    const raw = renderStageHandoff({
+      taskId: "task-1", stage: "build-spec", snapshotTree: "tree-1",
+      materialScopeRevision: "revision-1", reflectionStatus: "completed",
+      stageOutcomeValue: { step_outcomes: [], skill_outcomes: [] },
+      nextAction: "继续读取当前材料",
+    });
+    expect(raw).toContain("- stage outcome: `unknown`（attempt `unknown`）");
+    expect(raw).not.toContain("undefined");
+  });
+
   it("publishes by atomic overwrite, reads back current identity, and returns an absolute path", () => {
     const state = fixture("handoff-overwrite");
     const first = publishStageHandoff({

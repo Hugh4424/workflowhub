@@ -772,14 +772,27 @@ export function authenticateStageOutcomeForProjection(context, stage, ref) {
   try { candidate = JSON.parse(task.readRecord(ref)); }
   catch (error) { throw outcomeError(`stage outcome receipt is unavailable: ${error.message}`); }
   if (candidate?.task_id !== task.identity.taskId || candidate?.stage !== stage || candidate?.run_id !== workflowRunId) return null;
-  const authenticated = authenticateStageOutcome({
-    ...context,
-    task,
-    kernel,
-    identity: context.identity ?? task.identity,
-    stage,
-    workflowRunId,
-  }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+  let authenticated;
+  try {
+    authenticated = authenticateStageOutcome({
+      ...context,
+      task,
+      kernel,
+      identity: context.identity ?? task.identity,
+      stage,
+      workflowRunId,
+    }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+  } catch (error) {
+    // The material revision intentionally ignores the task execution-status
+    // block.  A prior outcome can therefore pass the current snapshot/revision
+    // projection while retaining the pre-writeback raw tasks.md hash.  It is
+    // historical for status/close/reflection consumers, not a current
+    // integrity failure; leave the canonical record untouched and let the
+    // read-only projector ignore it.
+    if (error?.code === "MATERIAL_INCOMPLETE"
+        && error?.message === "MATERIAL_INCOMPLETE: stage outcome material binding is stale") return null;
+    throw error;
+  }
   if (authenticated.value.run_id !== workflowRunId) throw outcomeError(`${stage} stage outcome workflow run identity mismatch`);
   return authenticated;
 }

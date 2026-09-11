@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +10,7 @@ import {
   validatePlanTaskContract,
   validatePlanTaskContractV2,
   validateExecutablePlanTaskMinimum,
+  derivePlanTaskSlicing,
 } from "../runtime/stage/stage-content-contracts.mjs";
 import { certifyCurrentTaskCompletion } from "../runtime/stage/stage-handlers.mjs";
 
@@ -238,6 +242,37 @@ function validate(overrides = {}) {
   return validatePlanTaskContract({ spec, plan, tasks, ...overrides });
 }
 
+const sliceAdvisory = `slice-advisory: reason="拆分会丢失同一行为的边界证据"; impact="审查包会变大"; owner="slicing owner"; recheck="下次计划重排时复查"`;
+const wideSliceFiles = [
+  ...Array.from({ length: 11 }, (_, index) => `tests/slice-${index + 1}.test.mjs`),
+  "core/demo.mjs",
+].map((file) => `- **MODIFY**：\`${file}\``).join("\n");
+const wideSliceBoundary = [
+  "### NEW",
+  ...Array.from({ length: 11 }, (_, index) => `- \`tests/slice-${index + 1}.test.mjs\``),
+  "### MODIFY",
+  "- `core/demo.mjs`",
+  "### DO NOT TOUCH",
+  "- `core/authority.mjs`",
+].join("\n");
+const wideSlicePlan = plan
+  .replace(
+    "### NEW\n- `tests/demo.test.mjs`\n### MODIFY\n- `core/demo.mjs`\n### DO NOT TOUCH\n- `core/authority.mjs`",
+    wideSliceBoundary,
+  )
+  .replace(files, wideSliceFiles);
+const wideSliceTasks = tasks
+  .replace(files, wideSliceFiles)
+  .replace(
+    "- **精确文件**：`tests/demo.test.mjs`\n- **boundary**：files: `tests/demo.test.mjs`; symbols/regions: only the declared symbol.",
+    `- **精确文件**：${Array.from({ length: 11 }, (_, index) => `\`tests/slice-${index + 1}.test.mjs\``).join("、")}\n- **boundary**：files: \`tests/slice-1.test.mjs\`; symbols/regions: only the declared symbol.`,
+  )
+  .replace("- **task risk**：False test result.", `- **task risk**：${sliceAdvisory}`);
+
+function sliceValidate(overrides = {}) {
+  return validatePlanTaskContract({ spec, plan: wideSlicePlan, tasks: wideSliceTasks, ...overrides });
+}
+
 describe("plan-task.v3 structural contract", () => {
   it("accepts one readable authority with eight-section phases and paired RED/GREEN", () => {
     expect(validate()).toMatchObject({
@@ -254,6 +289,142 @@ describe("plan-task.v3 structural contract", () => {
         },
       },
     });
+    expect(validate().facts.slice_advisory).toMatchObject({
+      status: "within_budget",
+      signals: [],
+    });
+  });
+
+
+  it("detects all slicing signals and keeps the advisory result non-blocking", () => {
+    const result = derivePlanTaskSlicing({
+      plan: `
+## Phase One
+### Files
+- **MODIFY**: \`shared.mjs\`
+### Verify
+Target=one
+- **Target**：two
+## Phase Two
+### Files
+- **MODIFY**: \`shared.mjs\`
+### Verify
+Target=three
+`,
+      tasks: `
+### T001 — wide
+- **Phase**: Phase One
+- **精确文件**：\`shared.mjs\`, \`a.mjs\`, \`b.mjs\`, \`c.mjs\`, \`d.mjs\`, \`e.mjs\`, \`f.mjs\`, \`g.mjs\`, \`h.mjs\`, \`i.mjs\`, \`j.mjs\`
+- **task risk**：no explanation
+### T002 — second
+- **Phase**: Phase Two
+- **精确文件**：\`shared.mjs\`
+- **task risk**：no explanation
+`,
+    });
+    expect(result).toMatchObject({
+      status: "unexplained_overage",
+      signals: ["SIG-FILES", "SIG-TARGETS", "SIG-CROSS-PHASE"],
+    });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.stringContaining("SIG-FILES"),
+      expect.stringContaining("SIG-TARGETS"),
+      expect.stringContaining("SIG-CROSS-PHASE"),
+    ]));
+  });
+
+  it("recognizes the exact task-risk marker and rejects malformed variants", () => {
+    const explained = sliceValidate();
+    expect(explained).toMatchObject({ ok: true, errors: [] });
+    expect(explained.facts.slice_advisory).toMatchObject({
+      status: "explained_overage",
+      signals: ["SIG-FILES"],
+      diagnostics: [],
+    });
+
+    const malformed = sliceValidate({
+      tasks: wideSliceTasks.replace("impact=\"审查包会变大\"", "impact='审查包会变大'"),
+    });
+    expect(malformed).toMatchObject({ ok: true, errors: [] });
+    expect(malformed.facts.slice_advisory.status).toBe("unexplained_overage");
+    expect(malformed.facts.slice_advisory.diagnostics.join("\n")).toMatch(/marker/i);
+  });
+
+  it("runs the current-plan self-check as a non-gating exit-0 readback", () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-slice-self-check-"));
+    try {
+      const specPath = join(root, "spec.md");
+      const planPath = join(root, "plan.md");
+      const tasksPath = join(root, "tasks.md");
+      const outputPath = join(root, "self-check.json");
+      const malformedTasks = wideSliceTasks.replace(
+        "impact=\"审查包会变大\"",
+        "impact='审查包会变大'",
+      );
+      writeFileSync(specPath, spec);
+      writeFileSync(planPath, wideSlicePlan);
+      writeFileSync(tasksPath, malformedTasks);
+      const result = spawnSync(process.execPath, [
+        "tools/cli/validate-current-plan-tasks.mjs",
+        `--spec=${specPath}`,
+        `--plan=${planPath}`,
+        `--tasks=${tasksPath}`,
+        `--output=${outputPath}`,
+      ], { encoding: "utf8" });
+      expect(result.status).toBe(0);
+      const readback = JSON.parse(readFileSync(outputPath, "utf8"));
+      expect(readback).toMatchObject({
+        exit_code: 0,
+        task_id: expect.any(String),
+        material_revision: expect.stringMatching(/^revision-[a-f0-9]{64}$/),
+        snapshot_tree: expect.stringMatching(/^[a-f0-9]{40,64}$/),
+        snapshot_commit: expect.stringMatching(/^[a-f0-9]{40,64}$/),
+        source_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        zero_cross_phase_producer: expect.any(Boolean),
+        status: "passed",
+        result: "passed",
+        slice_advisory: {
+          status: "unexplained_overage",
+          signals: ["SIG-FILES"],
+        },
+      });
+      expect(readback.materials).toMatchObject({
+        spec: { sha256: sha256(spec) },
+        plan: { sha256: sha256(wideSlicePlan) },
+        tasks: { sha256: sha256(malformedTasks) },
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns a non-zero process status when the material contract is invalid", () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-slice-self-check-invalid-"));
+    try {
+      const specPath = join(root, "spec.md");
+      const planPath = join(root, "plan.md");
+      const tasksPath = join(root, "tasks.md");
+      const outputPath = join(root, "self-check.json");
+      writeFileSync(specPath, spec);
+      writeFileSync(planPath, wideSlicePlan.replace("### Done\nThe same assertion moves from RED to GREEN.\n", ""));
+      writeFileSync(tasksPath, wideSliceTasks);
+      const result = spawnSync(process.execPath, [
+        "tools/cli/validate-current-plan-tasks.mjs",
+        `--spec=${specPath}`,
+        `--plan=${planPath}`,
+        `--tasks=${tasksPath}`,
+        `--output=${outputPath}`,
+      ], { encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(JSON.parse(readFileSync(outputPath, "utf8"))).toMatchObject({
+        status: "failed",
+        result: "failed",
+        state: "invalid",
+        exit_code: 1,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("accepts named robust acceptance criterion identifiers", () => {

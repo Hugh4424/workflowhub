@@ -630,7 +630,7 @@ describe("wh-review production CLI", () => {
     try {
       let calls = 0;
       const request = { stage: "build-code", host_provider: "codex", materials: { raw: "sink fixture" } };
-      const runRound = async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 10)); return { status: "unavailable", error_code: "MATERIAL_INCOMPLETE" }; };
+      const runRound = async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 10)); return { status: "unavailable", authoritative: true, error_code: "MATERIAL_INCOMPLETE" }; };
       const [first, second] = await Promise.all([runReviewRecovery(request, { runRound }), runReviewRecovery(request, { runRound })]);
       expect(calls).toBe(1);
       expect(first).toMatchObject({ authoritative: false, reused: false });
@@ -638,6 +638,7 @@ describe("wh-review production CLI", () => {
       expect(second).toMatchObject({ authoritative: false, reused: true, sink_ref: first.sink_ref, error_code: "MATERIAL_INCOMPLETE" });
       expect(readdirSync(sink)).toHaveLength(1);
       expect(JSON.parse(readFileSync(first.sink_ref, "utf8"))).toMatchObject({ authoritative: false, request_key: expect.any(String) });
+      expect(JSON.parse(readFileSync(first.sink_ref, "utf8")).result.authoritative).toBe(false);
       const distinct = await runReviewRecovery({ ...request, subject: { ref: "other-subject" }, review_policy: { mode: "strict" } }, { runRound });
       expect(distinct.reused).toBe(false);
       expect(distinct.sink_ref).not.toBe(first.sink_ref);
@@ -915,26 +916,24 @@ const trustedIdentity = {
   }), "utf8").digest("hex"),
 };
 const runtimeId = "fixture-runtime-" + count;
+const requestId = process.argv.find((value) => value.startsWith("--request-id="))?.slice("--request-id=".length);
 const error = { code: "AUTH", message: "fixture auth unavailable" };
+const member = {
+  adapter: "kimi", continuable: false, effort: null, error,
+  material_id: attachments.bundle_id, model: null, output: null, provider: "kimi",
+  raw_output_ref: null, result_protocol: "workflowhub-result.v2",
+  retry: { count: 0, progress_events: 0 }, runtime_id: runtimeId,
+  session_file_path: null, session_id: null, status: "failed", thinking: null,
+  timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+  unavailable_diagnostics: error, usage: null,
+};
 process.stdout.write(JSON.stringify({
-  version: "workflowhub-result.v3", outcome: "partial", runtime_id: runtimeId, round: 1,
-  host_provider: request.host_provider, material_id: attachments.bundle_id, selected_tier: 0,
-  providers: [{
-    attempts: [{ attempt_id: "fixture-attempt-" + count, completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "failed" }],
-    continuable: false, deadline_ms: null, error,
-    identity: { adapter: "kimi", config_id: "${brokerConfigId}", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
-    material: {
-      contract_hash: request.contract_hash ?? "fixture-contract-hash",
-      contract_id: request.contract_id ?? "fixture-contract",
-      material_id: attachments.bundle_id,
-      semantic_hash: request.semantic_hash ?? "fixture-semantic-hash",
-    },
-    output: null,
-    provenance: { raw_output_sha256: null, raw_stderr_sha256: null, runtime_id: runtimeId },
-    recovery: { fresh_execution_retry_count: 0, provider_internal_retry_count: 0, same_session_repair_count: 0 },
-    result_protocol: "workflowhub-result.v3", session_id: null, status: "failed",
-    timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-  }],
+  version: "workflowhub-run.v1", state: "terminal", request_id: requestId,
+  runtime_id: runtimeId, material_id: attachments.bundle_id,
+  group: {
+    version: 4, host_provider: request.host_provider, outcome: "unavailable",
+    providers: [member], round: 1, runtime_id: runtimeId, selected_tier: 0,
+  },
 }));
 `);
     writeFileSync(join(configDir, "config.json"), JSON.stringify({
@@ -952,6 +951,7 @@ process.stdout.write(JSON.stringify({
       direction_selection: { current_selection: "fixture choice" },
       materials: {
         raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
+        convergence_outline: "The fixture review converges on the configured direction.",
         review_instructions: "Review the materials.",
       },
     }));

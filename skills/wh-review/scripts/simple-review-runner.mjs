@@ -828,7 +828,7 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
       // route selection may supply it; never copy identity-like fields from
       // the broker member or invent a fallback identity.
       identity: selectedIdentities?.[item.provider]
-        ? { provider: item.provider, ...selectedIdentities[item.provider] }
+        ? { provider: item.provider, adapter: providerAdapter(item.provider), ...selectedIdentities[item.provider] }
         : null,
       ...(pair ? pairFields(pair) : {}),
     })),
