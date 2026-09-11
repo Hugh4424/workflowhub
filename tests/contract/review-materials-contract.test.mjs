@@ -22,6 +22,7 @@ import {
   verifyCodeDiffDeliveryForPath,
   buildReviewMaterials,
   reviewInstructionsFor,
+  REVIEW_PACKET_MAX_DELIVERY_BYTES,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
@@ -533,7 +534,10 @@ describe("current review material and capture contracts", () => {
 
   it("rejects an oversized non-build-code packet before dispatch instead of silently truncating it", () => {
     const { root, task } = taskFixture();
-    const oversized = "关键行为\n" + "x".repeat(400 * 1024);
+    // Size against the shared ceiling so this test tracks the constant instead
+    // of drifting from it (the ceiling was raised 330 KiB -> 2 MiB on
+    // 2026-09-11 so a complete build-prd packet can be dispatched at all).
+    const oversized = "关键行为\n" + "x".repeat(REVIEW_PACKET_MAX_DELIVERY_BYTES + 64 * 1024);
     expect(() => buildReviewMaterials({
       reviewDataRoot: root,
       attachmentRoot: root,
@@ -547,7 +551,9 @@ describe("current review material and capture contracts", () => {
         draft_spec: "# Spec\nAC-01\n",
         review_instructions: reviewInstructionsFor("build-spec"),
       },
-    })).toThrow(/MATERIAL_TOO_LARGE.*330 KiB/);
+    // Both enforcement sites report MATERIAL_TOO_LARGE with the ceiling derived
+    // from REVIEW_PACKET_MAX_DELIVERY_BYTES; assert the shape, not one wording.
+    })).toThrow(/MATERIAL_TOO_LARGE.*\d+ KiB/);
   });
 
   it("defines distinct mini-task design and implementation packet contracts", async () => {

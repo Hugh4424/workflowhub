@@ -36,11 +36,25 @@ const MINI_TASK_PROVIDER_PROTOCOL = `# Provider Protocol (mini-task)\n\n本文�
 const BUILD_PRD_PROVIDER_PROTOCOL = `# Provider Protocol (build-prd report-only)\n\nThis packet is for the build-prd non-stage report-only surface. It is not a formal stage, does not create a canonical stage attempt/result, and does not grant completion or release permission. The host owns transport, manifest, snapshot, public result, retry, and review facts; the provider reads only this bundle and returns findings.\n\n## Material boundary\n\n- Read only the submitted build-prd bundle: review-instructions.md, contracts/, requirements/, and declared skills/.\n- Review only decision_log, prd, task_map, design_facts, quality_facts, and explicitly declared confirmation/source/delivery/analyze/reflection facts.\n- Do not substitute approved_spec, draft_plan, draft_tasks, plan, tasks, changes_diff, changed_files, test_evidence, ac_trace, or any material outside the bundle.\n- Preserve missing, unreadable, transport-failure, provider-failure, partial, and unavailable facts; never rewrite them as pass.\n\n## Reviewer output\n\nReturn exactly one JSON object with a findings array. Do not emit a verdict, summary, pass/fail label, checklist, process explanation, or second JSON object. Findings must be concrete and anchored to submitted bundle bytes. An empty findings array is advice only; it does not approve, complete, or release the PRD.\n`;
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
-export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 330 * 1024;
+// Shared ceiling for the provider delivery bundle.
+//
+// Raised from 330 KiB to 2 MiB (user decision 2026-09-11, option 2). Measured
+// reason: the real build-prd packet is 707,698 bytes (decision_log 239,459 +
+// prd 456,130 + task_map 11,062 + facts 1,047), and the `prd` material alone is
+// 1.35x the old bound — so a complete build-prd review could not be dispatched
+// at all: it failed closed with MATERIAL_TOO_LARGE before any provider saw a
+// byte. The build-prd contract requires "complete PRD coverage", which a
+// truncated packet cannot satisfy.
+//
+// This is a ceiling, not a target: each surface still assembles its own bounded
+// projection, and the phase bound below deliberately stays at 330 KiB so that
+// build-code packets do not grow just because this ceiling moved.
+export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 2 * 1024 * 1024;
 // Kept as a named compatibility export for phase-packet callers. The bound
 // is a build-code packet bound, not a license to let integration packets grow
-// without limit.
-export const PHASE_DIFF_MAX_DELIVERY_BYTES = REVIEW_PACKET_MAX_DELIVERY_BYTES;
+// without limit. Pinned explicitly (not aliased) so raising the shared ceiling
+// above does not silently enlarge build-code phase packets.
+export const PHASE_DIFF_MAX_DELIVERY_BYTES = 330 * 1024;
 // Leave room for the fixed contract, prompt, manifest, and selected-context
 // overhead before choosing the inline path. The final cap remains enforced
 // after the complete packet is measured.
@@ -2159,7 +2173,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
   if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
-    const error = new Error("MATERIAL_TOO_LARGE: review packet exceeds 330 KiB after content deduplication and semantic slicing");
+    const error = new Error(`MATERIAL_TOO_LARGE: review packet exceeds ${Math.round(REVIEW_PACKET_MAX_DELIVERY_BYTES / 1024)} KiB after content deduplication and semantic slicing`);
     error.code = "MATERIAL_TOO_LARGE";
     throw error;
   }
