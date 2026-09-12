@@ -1,6 +1,6 @@
 # workflowhub UI/前端能力升级 · 任务组 PRD
 
-> Status: `final` | Decision revision: `sha256:02052e8acbf96e8a640f9d878fb7b28cc2daeb809b688ebbf4fcbb1be6de37a3` | Source revision: `sha256:662f66906d62149e54f1129f598b02ba4585418b3f609f5ab9202cad9d227b30`
+> Status: `final` | Decision revision: `sha256:735dda71608a9d3fb153fc4134ec3dfca274e7bafb20a7f1d1bd1243f97812d4` | Source revision: `sha256:662f66906d62149e54f1129f598b02ba4585418b3f609f5ab9202cad9d227b30`
 > Writer: `spec-prd`（内容契约：两次调用语义 + 单写目标；**本次为 DSH 会话手工执行，未走 build-prd 编排与 kernel 写盘——偏差见「风险与交付说明 · 缺口 G-1」**）
 > Write target: `specs/workflowhub-ui-frontend-capability-20260904/prd.md`
 
@@ -18,13 +18,13 @@
 
 ## 产品总览
 
-- **母决定与确认**：`specs/workflowhub-ui-frontend-capability-20260904/decision-log.md`，revision `sha256:02052e8acbf96e8a640f9d878fb7b28cc2daeb809b688ebbf4fcbb1be6de37a3`（295 行 / 40,981 B）。母任务 make-decision 已收尾（Talk R1–R4 + Grill 完成，**23 项决策锁定**，四轮审查共 58 条 findings 全部处置）。方向、理由、风险、非目标与延期方向均以该文件为准。
+- **母决定与确认**：`specs/workflowhub-ui-frontend-capability-20260904/decision-log.md`，revision `sha256:735dda71608a9d3fb153fc4134ec3dfca274e7bafb20a7f1d1bd1243f97812d4`（302 行 / 42,398 B）。母任务 make-decision 已收尾（Talk R1–R4 + Grill 完成，**23 项决策锁定**，四轮审查共 58 条 findings 全部处置）。方向、理由、风险、非目标与延期方向均以该文件为准。
 - **目标与范围**：把 workflowhub 的 UI/前端链路升级为「设计源冻结 → 精确提取 → 对照清单 → 规格驱动派发 → 逐块视觉验证 → 矩阵验收 → 规范沉淀回写」。范围内 = workflowhub 仓的 `skills/`+`workflows/`+`tools/cli/` 改造、外部技能移植与概念并入、Design.md/Experience.md 模板升级、以及 B0/P1/P2/P3 四次真实试点对照。有稿任务以可证伪口径落地「100% 复现」（矩阵全绿 ∨ 仅剩经确认的 accepted-minor）；无稿任务建立自建设计稿子流程；工程质量四维度（组件化/统一性/可维护性/性能）嵌入全流程。
 - **总成功标准**（P2 试点可证伪判定）：返工轮次 ≤2、缺陷数 ≤10（基线 30 的 1/3）、用户人工介入 ≤2 小时（基线 20+）、验收确认次数 =1、视觉判定 CRITICAL/MODERATE=0 且 MINOR 全部列入经确认的容忍清单。
 - **非目标**：见「明确排除」（E-1 ~ E-10），逐条有依据与影响面。
 - **规划对象设计适用性**：`ui_applicability = ui`（承接母决定 `decision-log.md` L33 的 `## UI applicability` JSON：`{"result":"ui",...}`——本次改造实质影响未来所有 UI 前端任务）。
   **设计链登记：不适用 + 原因**（truthful 登记，不伪造设计展示确认）：本规划对象是 `skills/`/`workflows/`/`tools/cli/` 的能力建设，**没有待设计的 in-scope UI 页面/状态/viewport**；PRD 内 T01/T09 涉及的页面是**后续子任务**的产物，不是本规划阶段的设计对象。因此「完整流程所有 in-scope UI 页面真实设计展示 + no-omissions 覆盖检查」在本 PRD 无适用对象，记为 `not_applicable + 上述原因`；子任务 T01/T09 各自进入其正式阶段时，按各自 `ui_applicability` 走设计链。
-- **当前状态**：`draft`（待最终展示稿确认；见「最终展示稿确认」节）。
+- **当前状态**：`final`（2026-09-12 通过终稿确认；见「最终展示稿确认」节。其后经一轮异源审查并提出 14 条修正，修正已处置并**待重新确认**——见「最终展示稿确认 · 确认后的修正记录」）。
 
 ## 共享定义
 
@@ -78,12 +78,22 @@
 - **目标仓**：Next.js（**非 Vite**——设计稿本身是 Vite+React 源码，同栈会被直接抄源码污染实验）。
 - **模式覆盖**：B0/P1/P2 全部为 reference-reproduction（有稿）；original-design（无稿）另设 P3/T10。
 - **判定只写「达到/未达到阈值」**；「较 B0 收敛程度」只作数据呈现，不作判定条件。
+- **对照单位冻结（B0 与 P2 必须同单位才算对照）**：两侧必须记录并比对——①相同页面与 route 集合；②相同状态集合（默认/空/加载/错误/边界）；③相同 viewport 集合；④相同数据来源与夹具；⑤相同依赖版本（目标仓 lockfile 与设计源 commit 均锁定并记录）。任一维度不同即登记为**偏差行**，且该维度不参与「达到/未达到」判定（防止以不同工作量冒充对照）。
+
+### 失败状态闭环（LOW_FIDELITY / 质量分<0.8 / unavailable / incomplete）
+
+四类失败状态不得被当作用来判断依据的「沉默通过」：
+
+1. `LOW_FIDELITY` 或质量分 <0.8 的输入 → **触发人工确认点**并标记；未确认时该范围不得进入「复现完成」判定。
+2. `unavailable`（服务不可达、证据缺失）与 `incomplete`（缺视觉证据）→ 只能作为**未完成事实**，不得计入 PASS 行、不得作为判定通过的输入。
+3. 判定前必须核对：判定输入中不存在未确认的上述任一状态；存在即判定为**未达到**或如实标 `unknown`，不得沉默通过。
+4. 该规则同时约束派发与验收两侧：派发规格中出现未确认失败状态 → 不得派发；验收矩阵中出现 → 不得判绿。
 
 ### 来源绑定
 
 | 来源 | revision | 说明 |
 | --- | --- | --- |
-| `specs/<task>/decision-log.md` | `sha256:02052e8acbf96e8a640f9d878fb7b28cc2daeb809b688ebbf4fcbb1be6de37a3`（295 行 / 40,981 B） | 母决定（23 项决策 + UI applicability） |
+| `specs/<task>/decision-log.md` | `sha256:735dda71608a9d3fb153fc4134ec3dfca274e7bafb20a7f1d1bd1243f97812d4`（302 行 / 42,398 B） | 母决定（23 项决策 + UI applicability） |
 | `specs/<task>/evidence/frontend-capability-upgrade-plan-v2.md` | `sha256:662f66906d62149e54f1129f598b02ba4585418b3f609f5ab9202cad9d227b30`（255 行 / 32,160 B） | 方案 v3（§8 含对照实验协议） |
 | `specs/<task>/evidence/research-website-skills.md` | `sha256:12946fc8ccf49988e9fb90f310587afdc9070174546a4884aaf99c2b47bc8b32`（112 行） | 124 技能分类全表（①7/②24/③24/④69） |
 | `specs/<task>/evidence/pilot-baseline-design.md` | `sha256:db1014e76cc8214a8aebd7a7a836468e083d2a07f158a3578ce93710ec8c026c`（228 行） | 设计稿项目摸底（§5 早期建议已被 E-8 排除） |
@@ -192,16 +202,23 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 
 > 本节在定稿确认时填写。**不是第三次内容调用。**
 
-- **展示稿状态**：`final`
-- **展示稿 hash**（`displayed_draft_hash`）：`sha256:a32eb28036d4e06dd3b3df254663faaa2d64558f4d8b6a24cb0bb408667cb9f5`（553 行）——这是**用户实际看到并确认的那一版**；`markdownlint-cli2`（仓库自身配置）实测 **0 error**
-- **Decision revision**：`sha256:02052e8acbf96e8a640f9d878fb7b28cc2daeb809b688ebbf4fcbb1be6de37a3`（295 行 / 40,981 B）
+- **展示稿状态**：`final`（第二轮：异源审查修正后重新确认）
+- **展示稿 hash**（`displayed_draft_hash`）：`sha256:dcdbad2b171a0d83a1b500ff173025f185d69710f629893f706e763c8b798ea6`（585 行）——这是**用户实际看到并确认的那一版**（异源审查 14 条修正后的版本）；`markdownlint-cli2`（仓库自身配置）实测 **0 error**。首轮确认版本为 `a32eb280…`（553 行）
+- **Decision revision**：`sha256:735dda71608a9d3fb153fc4134ec3dfca274e7bafb20a7f1d1bd1243f97812d4`（302 行 / 42,398 B）
 - **Source revision**：`sha256:662f66906d62149e54f1129f598b02ba4585418b3f609f5ab9202cad9d227b30`（255 行 / 32,160 B；其余来源见「共享定义 · 来源绑定」）
 - **Map revision**：`uifc-prd-map-v1`（已通过地图核对，见「任务地图 · 地图核对记录」）
-- **PRD revision**：`sha256:a32eb28036d4e06dd3b3df254663faaa2d64558f4d8b6a24cb0bb408667cb9f5`（= 被确认的那一版）
-- **最终确认 revision**：`sha256:a32eb28036d4e06dd3b3df254663faaa2d64558f4d8b6a24cb0bb408667cb9f5`（与上述四个 revision 逐个一致，**无错版**）
+- **PRD revision**：`sha256:dcdbad2b171a0d83a1b500ff173025f185d69710f629893f706e763c8b798ea6`（= 第二轮被确认的那一版）
+- **最终确认 revision**：`sha256:dcdbad2b171a0d83a1b500ff173025f185d69710f629893f706e763c8b798ea6`（与上述四个 revision 逐个一致，**无错版**；第二轮）
 - **display_before_reply**：`true`（完整 PRD 先在会话中展示并同时在侧边栏打开，之后才收到用户答复）
-- **human_approved**：`true`（用户原话：**「定稿确认（含提交）」**）——绑定的是 `a32eb280…` 那一版
-- **确认结果与缺口**：确认**通过**，并同时授权将本 PRD 提交入库（含旧 `prd-ui-frontend-capability.md` 的删除）。缺口 G-1（未走 build-prd 编排）、G-2（设计链 `not_applicable`）、G-3（文件级 revision 易失）、G-4（各卡交付物尚未产出）**保持登记、未被本次确认消除**；本版**未过异源审查**这一事实同样保留。
+- **human_approved**：`true`（第一轮原话：**「定稿确认（含提交）」**，绑定 `a32eb280…`；第二轮原话：**「重新确认（含提交）」**，绑定 `dcdbad2b…`）
+- **确认结果与缺口**：两轮确认均**通过**：第一轮（`a32eb280…`）授权重构稿入库；第二轮（`dcdbad2b…`）授权异源审查 14 条修正稿入库。缺口 G-1（未走 build-prd 编排）、G-2（设计链 `not_applicable`）、G-3（文件级 revision 易失——本轮已实例化一次）、G-4（各卡交付物尚未产出）**保持登记、未被确认消除**。审查事实：本轮异源审查为 **report-only**（3 provider 全部 completed；16 findings/去重 14 条全部处置），**不构成完成或放行**；**本版之后的修正若属实质变化，须再次重新确认**。
+
+### ⚠️ 确认后的修正记录（**必须重新确认**）
+
+- **触发**：2026-09-12 一轮异源审查（build-prd 非 stage report-only 面；provider = pi/v4flash + antigravity/flash + codex/luna 全部 completed；结果 `quality/reviews/prd-review-20260912-buildprd.json`，16 findings / 去重 14 条）。
+- **性质**：**实质变化**（状态一致性、依赖门禁、对照单位、失败状态闭环、验收 oracle、降级路径），按「变更说明」的归档维护口径须重新取得真实确认。
+- **修正清单（14 条，全部已处置）**：①状态自相矛盾（产品总览/交付说明/变更说明残留 draft）→ 统一 `final`；②T03/T07 `skills/external/` 时序倒挂 → T03 建立结构+首条登记、T07 沿用扩展；③T05/T07/T08 未落 T04 条件边 → 三卡「准备依赖」补 T04 判定通过；④B0/P2 对照单位未冻结 → 新增「对照单位冻结」五维条款（页面/状态/viewport/数据/依赖版本）；⑤禁读源码无审计证据 → T04-AC-3、T09-AC-4；⑥失败状态未统一接入判定 → 新增「失败状态闭环」四条规则 + T09-AC-3；⑦T06-FR-3 只有存在性验收 → T06-AC-1 加逐列内容抽查；⑧T02 校验器/stylelint 可能被误读为未授权 gate → 新增 13b 边界澄清；⑨T07 license 降级无判定 → T07-FR-3b 降级路径 + AC-1/AC-3 改写；⑩T07 计数口径（8 vs ①7）→ 统一「①7 + ADR 0016 的 1 = 8 条登记，124 分类不含 vercel」；⑪`fullstack-slice-testing` 承接不对称 → T08-FR-1 显式列入；⑫T02 开工前提被写成串行 → 改为可并行、仅合入受红线；⑬T06-FR-6 消歧协议无 AC → T06-AC-4；⑭正文残留 draft 描述 → 同①。
+- **状态**：**已重新确认**（2026-09-12，用户原话「重新确认（含提交）」），绑定 `dcdbad2b…`；14 条修正随该版定稿。
 
 > **本节填写本身使文件字节发生变化**：本 PRD 的定稿正文即为用户确认的 `a32eb280…` 那一版；本节仅记录该次确认，其后正文无实质变更。若日后需要修改正文，须按「变更说明」的归档维护口径区分小修与实质变化，实质变化须重新取得真实确认。
 
@@ -264,10 +281,11 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 - **11. 共享资源冲突与集成责任**：冲突资源 = `spec.md` UI Contract 区块定义、`ui-project-init` 技能文件。**集成责任 = T02**：区块字段契约由 T02 建立，T08 只做完整模板升级（不得改字段语义）。
 - **12. 来源/设计**：母决定 #9/#15/#16；方案 v3 §1.1/§1.4/M0 行（revision `662f6690…`）；`evidence/engineering-quality-integration.md`（revision `3c5a4c9c…`）§1–2。
 - **13. 局部风险**：验收对象卡**字段过度设计**——只允许登记有真实 consumer 的字段（宪法：无 consumer 不新增控制面）；stylelint **误伤存量项目**——规则包分「新增代码严 / 存量代码警告」两档。
+- **13b. 边界澄清（防未授权 gate）**：验收对象卡校验器与 stylelint 是**工具层 schema/静态校验**（拒绝写入缺字段的卡、对新增代码报违规），**不是新的 stage 或流程门**：它们不阻断阶段推进、不产出质量裁决、不改变「唯一阻断边界 = 五要素派发」的全局约束；校验失败按事实记录并交 owner。
 - **14. 可后置技术项**：`none`。（验收对象卡完整字段 schema + 校验器是**本卡交付物**，不是延期项。）
 - **15. 最小读取集**：**必读**：本卡全文；方案 v3 §1.1/§1.4；`evidence/engineering-quality-integration.md` §1–2；`workflows/build-spec/SKILL.md` 的 UI Contract 节。**条件读**：`ui-project-init` 现有 SKILL.md（决定挂载点时才读）。**正常不读**：`evidence/p0-deep/**`（属 T08）、方案 §6（移植）。
 - **16. 五阶段开工说明**（可直接复制）：
-  > 本卡 = `workflowhub-ui-frontend-capability-20260904` 的任务 **T02（M0 地基）**，后续标准开发任务。开工输入：①decision：`decision-log.md`（`sha256:02052e8a…`）决策 #9/#15/#16；②spec：本 PRD「共享定义」＋本卡；③plan：本卡「范围」「流程/状态」；④tasks：本卡 FR/AC/oracle。**开工前提**：确认 T01 已完成（B0 基线已冻结）。**开工第一条命令**：`git log --oneline -1 main` 记录基线 commit，并在本任务 worktree 内作业；T01 未完成前不得合入 main。
+  > 本卡 = `workflowhub-ui-frontend-capability-20260904` 的任务 **T02（M0 地基）**，后续标准开发任务。开工输入：①decision：`decision-log.md`（`sha256:02052e8a…`）决策 #9/#15/#16；②spec：本 PRD「共享定义」＋本卡；③plan：本卡「范围」「流程/状态」；④tasks：本卡 FR/AC/oracle。**开工前提**：无（**可与 T01 并行开发**；红线仅在合入——T01 完成前本卡不得合入 main，改动留在本任务 worktree）。**开工第一条命令**：`git log --oneline -1 main` 记录基线 commit，并在本任务 worktree 内作业。
 
 ---
 
@@ -281,7 +299,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
   - `T03-FR-2`（R-020）：提取器属**设计源读取侧**，不受「实现侧禁读源码」约束。
   - `T03-FR-3`：parity 矩阵两阶段——初始化以实现侧全 `missing`；每行含设计值/实现值/状态/证据引用。
   - `T03-FR-4`：派发接线最小化——只接「规格→任务卡」通道；完整接线归 T06。
-  - `T03-FR-5`：`iterate-until-verified` 按 ADR 0016 模式完整复制 + 固定 commit + LICENSE 登记。
+  - `T03-FR-5`：`iterate-until-verified` 按 ADR 0016 模式完整复制 + 固定 commit + LICENSE 登记；**本卡首次建立 `skills/external/` 目录与登记结构（LICENSE/UPSTREAM/改造点三件套），T07 沿用并扩展该结构**（消除 T03/T07 时序倒挂）。
   - `T03-FR-6`（R-014）：设计源质量分扣分模型为**本卡交付物**（在 build-spec 固化）；质量分 <0.8 与 `LOW_FIDELITY` 同级处理。
 - **5. AC**：
   - `T03-AC-1` 对 UI 设计稿项目实跑提取，产出 `design-extract.v1` 且覆盖率有分母定义。**失败判据**：覆盖率无分母，或产物缺页面/组件行。
@@ -316,6 +334,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 - **5. AC**：
   - `T04-AC-1` 三项标准各有可核查记录（覆盖率数字 / 派发规格中的矩阵行引用 / 返工轮次日志）。**失败判据**：任一标准只有结论无记录。
   - `T04-AC-2` 判定结论明确写「达到 / 未达到阈值」，且未达到时给出缺口清单。**失败判据**：写「基本达到」「接近」等不可判定表述，或未达但无缺口清单。
+  - `T04-AC-3` **禁读源码约束有可核查审计证据**：实现侧无设计稿源码读取痕迹（会话/派发记录中无源码读取，或实现侧工作目录不含设计稿源码副本），且派发规格与提取产物逐项对应。**失败判据**：无法提供审计证据，或证据显示实现侧读取过源码。
 - **6. oracle**：三项记录可直接对照阈值（`≥90%` / 矩阵行引用存在 / 轮次 ≤2）；判定文本可二值判定。**失败判据**：任一标准不可独立复核。
 - **7. 准备依赖**：T03 合入（提取器 + 对照矩阵 + 最小派发）。
 - **8. 实现依赖**：`none`（本卡是使用而非建设）。
@@ -351,7 +370,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
   - `T05-AC-4` 对含对比度违规的样例设计稿：产出缺陷清单且 parity 无未授权偏差。**失败判据**：builder 擅自修改设计值而清单缺失/偏差无记录。
   - `T05-AC-5` 9 维清单与 `visual-diff-report.v1` 结构作为本卡交付物落盘。**失败判据**：缺失或留待后续卡定义。
 - **6. oracle**：未启动端口的 `ui-capture` 输出含 `unavailable + 原因`；边界样例输出含溢出/截断条目；两次标尺输出级别字符串相同；样例任务的缺陷清单存在且 parity 无未授权偏差行；两份交付物文件存在。**失败判据**：任一 oracle 不满足。
-- **7. 准备依赖**：T03 合入（parity 矩阵与提取产物）。
+- **7. 准备依赖**：T03 合入（parity 矩阵与提取产物）；**T04 判定通过**（条件边：T04 失败则本卡暂停铺开，回 build-spec 重估）。
 - **8. 实现依赖**：`agent-browser`；`isolated-browser-qa` 技能；`frontend-testing` 技能（边界电池挂点）。
 - **9. 验收依赖**：T03 的 parity 矩阵行结构（比对按行引用）。
 - **10. 合并依赖**：依赖 T03 合入；可与 T07/T08 并行；本卡合入是 T06 的前置。
@@ -378,9 +397,10 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
   - `T06-FR-5`：build-spec UI 路径接线（ui-project-init / design-source-readiness / frontend-prototype-render 原型确认环节）含在无稿链路内。
   - `T06-FR-6`：**消歧协议**——用户验收反馈先定位确认（目标元素/页面/状态）再修（PB-T08 缺陷类 9）。
 - **5. AC**：
-  - `T06-AC-1` 样例 UI 任务走通「提取→对照→派发→写码→截图验证→矩阵验收」全程，各环节产物链路可追溯。**失败判据**：任一环节产物缺失或断链。
+  - `T06-AC-1` 样例 UI 任务走通「提取→对照→派发→写码→截图验证→矩阵验收」全程，各环节产物链路可追溯；**且抽查至少一行验收矩阵，逐列验证其内容**：Gate、验证方法（可执行）、二值通过条件、证据引用，以及失败时的责任 workstream 路由。**失败判据**：任一环节产物缺失或断链，或抽查行缺列/条件非二值/失败无路由。
   - `T06-AC-2` proven boundary 登记条目存在且四要素齐全。**失败判据**：缺任一要素。
   - `T06-AC-3` approved-deviation 与 overlay 可执行：owner 批准一个设计修正 + 一个新 token → 偏差记录四要素齐全、overlay 任务内生效且结束合并回写、冻结 revision 未被污染。**失败判据**：任一环节不成立。
+  - `T06-AC-4` 消歧协议可执行：对一条含歧义的验收反馈（如「右上角那个」），流程先产出定位确认（目标元素/页面/状态）**再**修改；确认记录可见。**失败判据**：直接按歧义反馈修改而无定位确认记录。
 - **6. oracle**：样例任务的产物链路清单（提取产物/矩阵/派发规格/截图证据/矩阵验收记录）逐项存在；登记条目四要素文本存在；偏差记录与回写差异可见且冻结 revision 哈希未变。**失败判据**：任一 oracle 不满足。
 - **7. 准备依赖**：T05 合入（`visual-diff-report.v1` 与矩阵判定规则）。
 - **8. 实现依赖**：`workflows/build-code`、`workflows/verify-code`、`skills/frontend-prototype-render`、`skills/verify-change`。
@@ -400,19 +420,20 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 
 - **1. 结果与 consumer**：外部技能以**固定 commit + LICENSE + UPSTREAM + 改造点**入库；ADR 0016 债清偿（`vercel-react-best-practices` 70 规则完整）；③类 24 个 references 登记；④类 69 个不引入登记在案。consumer = T03/T05/T06/T08 的规则来源、未来全部 UI 任务、维护者。
 - **2. 范围**：**做**：①类 7 技能完整复制 + 逐项登记；ADR 0016 补债；③类 references 登记；catalog `update_policy` 落地；逐技能 LICENSE 审计表。**不做**：不从 Website-skills 镜像取件（非官方快照）；不做规则二次创作；不整族 vendor；不引入 ④类 69 个。
-- **3. 流程/状态**：改前——`skills/external/` 不存在，`react-best-practices` 只有 21 行手写摘要（违反 ADR 0016）。改后——8 条 external 登记齐备且可追溯。谁写：T07 主会话。谁读：各卡与未来任务。读不到会怎样：规则来源不可追溯，上游漂移无法复查。
+- **3. 流程/状态**：改前——`skills/external/` **仅含 T03 建立的首条登记（`iterate-until-verified`）**，`react-best-practices` 只有 21 行手写摘要（违反 ADR 0016）。改后——**8 条登记**齐备（①7 条 + ADR 0016 既定的 1 条）且可追溯。谁写：T07 主会话（沿用 T03 建立的登记结构）。谁读：各卡与未来任务。读不到会怎样：规则来源不可追溯，上游漂移无法复查。
 - **4. FR**：
   - `T07-FR-1`（R-001）：全部取件从**官方上游仓固定 commit**，不从镜像取。
   - `T07-FR-2`：`web-design-guidelines` 固化快照**含远端规则全文**（本体仅 40 行 wrapper）。
   - `T07-FR-3`：LICENSE 审计表（来源/署名义务/改造再分发边界）是 M4 完成的必要条件。
+  - `T07-FR-3b`（合法降级路径）：若某技能 license 不允许改造再分发，则**降级为 references 引用或不引入**，并在登记中写明：技能名 / 降级原因 / 替代形态 / 受影响 consumer（如 T03/T05/T06/T08 的规则来源）；服务同一 consumer 的规则必须给出替代物或如实标 `unavailable`。
   - `T07-FR-4`（R-001）：④类 69 个不引入清单登记在案（防反复重议）。
   - `T07-FR-5`：`animate` 连同 `RECIPES.md`（14 配方）一起复制；4 处姊妹引用改写；自带 review-output 剪掉。
 - **5. AC**：
-  - `T07-AC-1` 每条 external 登记目录含 LICENSE + UPSTREAM（来源/commit/改造点）——8 条全齐。**失败判据**：任一目录缺文件或 commit 缺失。
+  - `T07-AC-1` **8 条登记**（①7 条 + ADR 0016 既定的 `vercel-react-best-practices` 1 条）各有最终形态记录：external 复制目录含 LICENSE + UPSTREAM（来源/commit/改造点），或**已登记的降级形态**（references 引用/不引入，按 FR-3b 写全四要素）。**失败判据**：任一登记缺文件/缺 commit，或降级无登记。
   - `T07-AC-2` `vercel-react-best-practices` 含 `rules/` 完整 70 条（8 大类）。**失败判据**：条数不足或类别缺失。
-  - `T07-AC-3` LICENSE 审计表覆盖全部 ①+③ 登记项。**失败判据**：存在未审计项。
+  - `T07-AC-3` LICENSE 审计表覆盖 **8 条 external 登记 + ③类 24 项 = 32 项**。**失败判据**：存在未审计项。
 - **6. oracle**：逐目录文件存在性检查（含 commit 字符串）；`rules/` 计数 = 70 且类别 = 8；审计表行数 ≥ 登记项数（8 + 24）。**失败判据**：任一不满足。
-- **7. 准备依赖**：`none`（可与 T05/T08 并行）。
+- **7. 准备依赖**：**T04 判定通过**（条件边：T04 失败则本卡暂停铺开，回 build-spec 重估）；其余可与 T05/T08 并行。
 - **8. 实现依赖**：`skills/external/` 登记模式（ADR 0016）；catalog 结构。
 - **9. 验收依赖**：`iterate-until-verified` 登记完整性由本卡验收（其移植在 T03）。
 - **10. 合并依赖**：可并行；受 **T01 合并红线**约束（T01 完成前不得合入 main）。
@@ -432,7 +453,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 - **2. 范围**：**做**：②类 24 技能概念并入宿主；`frontend-component-quality` 四维度扩展；三份 review-output 合并为单一契约；两文件完整模板升级；CONTEXT.md 术语 + ADR 0024。**不做**：不新增技能（扩展现有）；不整篇复制 ①类内容（只放指针）；不只写文档而无检查脚本。
 - **3. 流程/状态**：改前——最佳实践躺在参考库，四维度无检查手段。改后——规则默认生效，违规样例会被告警。谁写：T08 主会话。谁读：build-code/verify-code、未来任务。读不到会怎样：工程质量四维度停留口号。
 - **4. FR**：
-  - `T08-FR-1`：并入规则进 `references/` 按需加载，不进默认加载链。
+  - `T08-FR-1`：并入规则进 `references/` 按需加载，不进默认加载链；②类并入的宿主技能清单**显式包含 `frontend-testing` 与 `fullstack-slice-testing`**（a11y/边界电池/端到端切片检查的落点，消除「机制承接行声明但与卡内容不对称」）。
   - `T08-FR-2`（R-022）：四维度落点照 `engineering-quality-integration.md` 执行（规范→执行→验收→证据四环）。
   - `T08-FR-3`：性能维度——`optimize-web-animations` 先测后改原则 + 性能预算写入 Experience.md 章节；超预算记事实交 owner。
   - `T08-FR-4`：ADR 0024 按三要素（不可逆/跨任务/影响后续所有 UI 任务）撰写登记。
@@ -442,7 +463,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
   - `T08-AC-2` `frontend-component-quality` 的检查脚本覆盖四维度新检查项：对四类违规样例各报出至少一条。**失败判据**：任一维度无检查能力。
   - `T08-AC-3` CONTEXT.md 术语与 ADR 0024 落盘并通过仓内登记校验。**失败判据**：缺失或校验失败。
 - **6. oracle**：回执表 24/24；四类违规样例的脚本输出非空；术语与 ADR 文件存在且登记校验 exit 0。**失败判据**：任一不满足。
-- **7. 准备依赖**：`none`（软依赖 T07 的登记名，可先写内容后对齐）。
+- **7. 准备依赖**：**T04 判定通过**（条件边：T04 失败则本卡暂停铺开，回 build-spec 重估）；软依赖 T07 的登记名（可先写内容后对齐）。
 - **8. 实现依赖**：`skills/frontend-component-quality`、`skills/ui-project-init`、`CONTEXT.md`、ADR 目录。
 - **9. 验收依赖**：T07 的 external 登记名（并入处引用）。
 - **10. 合并依赖**：可并行；受 **T01 合并红线**约束；软依赖 T07。
@@ -469,6 +490,8 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 - **5. AC**：
   - `T09-AC-1` 六指标对照表（B0 / P2 / T08 历史三列）落盘，同口径。**失败判据**：列缺失或口径不一致（如 B0 侧未标适配口径）。
   - `T09-AC-2` 判定结论写「达到/未达到阈值」，不含「统计显著」类表述。**失败判据**：出现统计显著表述，或判定不可二值复核。
+  - `T09-AC-3` **对照单位逐维核对**（页面/route、状态、viewport、数据、依赖版本）+ 判定输入中不存在未确认的失败状态（LOW_FIDELITY / 低质量分 / unavailable / incomplete）。**失败判据**：任一维度未记录，或存在未确认失败状态仍判绿。
+  - `T09-AC-4` 禁读源码约束有可核查审计证据（同 T04-AC-3）。**失败判据**：无审计证据。
 - **6. oracle**：对照表文件存在且六行三列齐全；判定文本可二值判定；未达时缺口清单存在。**失败判据**：任一 oracle 不满足。
 - **7. 准备依赖**：T04/T05/T06/T07/T08 全部合入。
 - **8. 实现依赖**：`none`（使用而非建设）。
@@ -533,7 +556,7 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 
 ### 交付说明
 
-- **规划完成**：待最终确认。地图核对已通过；终稿确认未完成前状态保持 `draft`。
+- **规划完成**：地图核对通过（`uifc-prd-map-v1`）+ 终稿确认真实通过（`displayed_draft_hash a32eb280…`）；其后一轮异源审查（`prd-review-20260912-buildprd.json`，16 findings / 去重 14 条）已全部处置，**该批修正待重新确认**。
 - **材料可用**：本 PRD（`prd.md`）+ `decision-log.md` + `evidence/**` + `ui-frontend-workflow-handbook.md` 均可用；来源 revision 见「共享定义 · 来源绑定」。
 - **开发状态**：**未开始**——本 PRD 不授权任何实现；各卡按「五阶段开工说明」在其自身任务内执行。
 - **质量事实**：见上（含「本版未过异源审查」的诚实登记）。
@@ -542,12 +565,21 @@ W6                          └─→ T09（依赖 T04–T08 全部合入）
 
 ## 变更说明
 
-### 2026-09-12 · 按 build-prd/spec-prd 规范重构（本次）
+### 2026-09-12 · 异源审查修正（第二轮，**待重新确认**）
+
+- **依据**：build-prd 非 stage 异源审查结果 `prd-review-20260912-buildprd.json`（3 provider 全部 completed，16 findings / 去重 14 条，0 blocking）。
+- **影响**：见「最终展示稿确认 · 确认后的修正记录」的 14 条清单；涉及共享定义（新增「失败状态闭环」、对照实验协议新增「对照单位冻结」）、T02/T03/T04/T05/T06/T07/T08/T09 的 FR/AC/依赖/开工前提，以及三处状态残留。
+- **前后承诺对比**：需求与卡的范围/FR **未新增或删除**；**收紧**的是可判定性（内容级 oracle、审计证据、对照单位、失败状态闭环）与依赖门禁（T04 条件边落到卡内）；**澄清**的是边界（工具层校验≠流程门）与降级路径（license 不允许时的登记形态）。
+- **来源 revision**：`decision-log.md` 更新为 `sha256:735dda71608a9d3fb153fc4134ec3dfca274e7bafb20a7f1d1bd1243f97812d4`（302 行 / 42,398 B）——本轮向该文件追加了「PRD 异源审查轮」记录并修正 DM1 计数口径，故其 revision 前进；方案 v3 未变（`662f6690…`）。**这正是缺口 G-3（文件级哈希）的实例：来源一改，绑定即需重读更新**。
+- **确认引用**：**待重新确认**——修正属实质变化，旧确认（`a32eb280…`）不覆盖本版。
+- **在途影响**：无子任务在途（各卡「五阶段开工说明」尚未被消费），修正不影响在途工作。
+
+### 2026-09-12 · 按 build-prd/spec-prd 规范重构（第一轮）
 
 - **依据**：仓库新增 `workflows/build-prd/SKILL.md`（v1.0.0）与 `skills/spec-prd/SKILL.md`（v1.0.0，含 `templates/prd-template.md`）；用户要求按新规范优化调整本规划。
 - **影响**：文件名 `prd-ui-frontend-capability.md` → `prd.md`（唯一写目标）；结构由「背景/目标/范围/地图/卡/约束/风险/度量/移交/附录」重构为「导航/产品总览/共享定义/任务地图/最终展示稿确认/任务卡/风险与交付说明/变更说明」；10 卡由「来源决策/目标产出/用户故事/FR/AC/风险/素材/规模」补齐为 **16 必填字段**；新增需求覆盖表（R-001~R-023）与明确排除表（E-1~E-10）；原「战雾」4 项改为**卡内交付物**（规范禁止任务级延期）；新增来源绑定表（含文件级 sha256）与地图核对记录。
 - **前后承诺对比**：卡的**范围/FR/AC/风险**内容保持实质一致（逐条迁移，未新增或删除需求）；**新增**的是字段完备性与可追溯性（consumer / 四类依赖 / 最小读取集 / 五阶段开工说明 / 共享资源冲突 / oracle 独立字段）；**收紧**的是延期口径（战雾 → 卡内交付物）与判定口径（绝对口径，E-9）。
 - **来源 revision**：`decision-log.md` `sha256:02052e8a…`、方案 v3 `sha256:662f6690…`、HEAD `35a6fb6f…`。
-- **确认引用**：地图核对已通过（`uifc-prd-map-v1`）；**终稿确认待完成**（见「最终展示稿确认」）。
+- **确认引用**：地图核对通过（`uifc-prd-map-v1`）；终稿确认通过（`a32eb280…`，见「最终展示稿确认」）。
 - **在途影响**：本 PRD 尚无子任务在途——各卡「五阶段开工说明」尚未被任何任务消费，重构不影响在途工作。
 - **历史事实**：旧版 PRD 的两次异源审查 findings（18 条）与处置记录保持不变（见 `quality/reviews/prd-review-20260904-attempt1.json`、`attempt2.json`）。
