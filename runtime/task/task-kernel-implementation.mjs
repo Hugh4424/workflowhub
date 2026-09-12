@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import factsContract from "../../contracts/facts-subschema.json" with { type: "json" };
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { listCanonicalConfirmationRefs, readTaskIndex, replaceTaskIndex, withStoreLock } from "./task-store.mjs";
+import { listCanonicalConfirmationRefs, withStoreLock } from "./task-store.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
-import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+import { CLOSE_PLAN_REF, STAGE_OUTCOME_REF, isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+
 import { deriveStageCompletion, stageMaterialScopeRevision, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import {
   buildRiskAcceptance,
@@ -21,20 +23,19 @@ import { activeAcceptanceCriterionIds, validateInteractionAggregateContract } fr
 import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
 import { publishResearchReport } from "../evidence/research-report.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
+// Both forms below are deliberately narrower than the shared reflection grammar:
+// this resolver only accepts the bare per-stage reflection names it can resolve.
+const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 export { createQualityFact } from "../evidence/quality-fact.mjs";
 export { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 export { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/i;
 const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
-const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const AUTHORIZATION_OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup"]);
-const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
-const RESOLVED_REVIEW_STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/verify-code\/[a-f0-9]{64}\.json$/;
 const RESOLVED_REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
 const RESOLVED_REVIEW_STATUS = "resolved";
 const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
@@ -82,7 +83,7 @@ function oid(value, label) {
   return value;
 }
 function sha(value, label) {
-  if (!HASH.test(value ?? "")) throw new TypeError(`${label} must be sha256`);
+  if (!SHA256_HEX.test(value ?? "")) throw new TypeError(`${label} must be sha256`);
   return value;
 }
 function readAcceptedHumanConfirmation(task, confirmationRef, label = "human confirmation") {
@@ -217,7 +218,7 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
   }
   const outcomeRef = proof.stage_outcome_ref;
   const outcomeHash = proof.stage_outcome_hash;
-  if (!RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef ?? "") || !HASH.test(outcomeHash ?? "")) {
+  if (STAGE_OUTCOME_REF.exec(outcomeRef ?? "")?.[1] !== "verify-code" || !SHA256_HEX.test(outcomeHash ?? "")) {
     throwResolvedReviewError(
       "resolved review authorization must bind a verify-code stage outcome",
       "outcome_ref",
@@ -309,7 +310,9 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
   const reviewEvidence = Array.isArray(input.evidence)
     ? input.evidence.find((entry) => entry?.ref === stageReview.quality_review_ref && entry?.sha256 === stageReview.quality_review_hash)
     : null;
-  if (!reviewEvidence || !RESOLVED_REVIEW_STAGE_OUTCOME_REF.test(outcomeRef)) {
+  // A resolved code review binds one verify-code stage outcome, derived from
+  // the single shared outcome grammar instead of a second local copy.
+  if (!reviewEvidence || STAGE_OUTCOME_REF.exec(outcomeRef ?? "")?.[1] !== "verify-code") {
     throwResolvedReviewError(
       "resolved review authorization does not bind the current review evidence",
       "review_binding",
@@ -321,7 +324,7 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
       || stageReview.step_slug !== "finalize-code-review"
       || stageReview.skill_id !== "dsh-code-review"
       || typeof stageReview.quality_review_ref !== "string"
-      || !HASH.test(stageReview.quality_review_hash ?? "")) {
+      || !SHA256_HEX.test(stageReview.quality_review_hash ?? "")) {
     throwResolvedReviewError(
       "resolved review authorization code_review binding is invalid",
       "review_identity",
@@ -798,32 +801,18 @@ export function buildTaskKernel(taskHandle, {
         if (!Number.isFinite(Date.parse(value.created_at))) throw new TypeError("verify summary created_at is invalid");
         const raw = `${JSON.stringify(value, null, 2)}\n`;
         const verifyHash = hash(raw);
-        const oldIndex = readTaskIndex(task.taskPath);
-        const indexAlreadyCurrent = oldIndex.quality.verify?.ref === "quality/verify.json"
-          && oldIndex.quality.verify?.sha256 === verifyHash;
-        if (!sameLogical || hash(task.readRecord("quality/verify.json")) !== verifyHash) {
-          writeVerifySummary(raw, { testHooks: options.testHooks });
-        }
+        // The verify summary bytes are the fact. Readers authenticate the file
+        // directly, so no index projection is written or read back here.
+        const currentRaw = (() => { try { return task.readRecord("quality/verify.json"); } catch { return null; } })();
+        const alreadyCurrent = currentRaw !== null && hash(currentRaw) === verifyHash;
+        if (!alreadyCurrent) writeVerifySummary(raw, { testHooks: options.testHooks });
         const readback = task.readRecord("quality/verify.json");
         if (readback !== raw || hash(readback) !== verifyHash) throw new Error("verify summary readback mismatch");
-        if (!indexAlreadyCurrent) {
-          const nextIndex = structuredClone(oldIndex);
-          nextIndex.quality.verify = {
-            ref: "quality/verify.json", sha256: verifyHash, schema: value.schema_version, task_id: task.identity.taskId,
-            logical_ref: "quality/verify.json", content_hash: verifyHash, version: "v1", related_task_id: task.identity.taskId,
-            external_raw_ref: "task.json", external_governance_archive_ref: null,
-          };
-          replaceTaskIndex(task.taskPath, nextIndex, { testHooks: options.indexTestHooks });
-        }
-        const finalIndex = readTaskIndex(task.taskPath);
-        if (finalIndex.quality.verify?.sha256 !== verifyHash || finalIndex.quality.verify?.ref !== "quality/verify.json") {
-          throw new Error("verify summary index readback mismatch");
-        }
         return Object.freeze({
           ref: "quality/verify.json",
           sha256: verifyHash,
           value: Object.freeze(value),
-          status: sameLogical && indexAlreadyCurrent ? "idempotent" : sameLogical ? "recovered" : "published",
+          status: sameLogical && alreadyCurrent ? "idempotent" : sameLogical ? "recovered" : "published",
         });
       });
     },
@@ -1025,7 +1014,7 @@ export function buildTaskKernel(taskHandle, {
       if (!AUTHORIZATION_OPERATIONS.has(operation)) throw new TypeError("authorization operation is invalid");
       const confirmation = readAcceptedHumanConfirmation(task, text(input.confirmation_ref, "authorization confirmation_ref"), "authorization confirmation_ref");
       const planHash = input.plan_hash;
-      if (!HASH.test(planHash ?? "")) throw new TypeError("authorization plan_hash must be sha256");
+      if (!SHA256_HEX.test(planHash ?? "")) throw new TypeError("authorization plan_hash must be sha256");
       const stepId = text(input.step_id, "authorization step_id");
       const expectedPlanRef = `operations/close/plans/${planHash}/plan.json`;
       if (confirmation.value.subject_ref !== expectedPlanRef) throw new Error("authorization confirmation is not bound to the requested close plan");

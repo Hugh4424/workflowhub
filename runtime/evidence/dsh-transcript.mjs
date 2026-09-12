@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 /**
  * DSH (DeepSeek Harness) transcript support.
@@ -190,7 +191,7 @@ function selectedDshRequirementMessages(value) {
       || typeof message.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(message.id)
       || ids.has(message.id)
       || message.order !== index + 1
-      || !/^[a-f0-9]{64}$/.test(message.content_hash ?? "")) return [];
+      || !SHA256_HEX.test(message.content_hash ?? "")) return [];
     ids.add(message.id);
     messages.push(message);
   }

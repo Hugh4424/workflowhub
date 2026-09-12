@@ -4,6 +4,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { governanceTreeHash, listDeliveryFiles } from "./inventory.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUTPUT = resolve(ROOT, "docs/architecture/complexity-baseline.json");
@@ -363,7 +364,7 @@ export function validateReport(report) {
   if (!Number.isInteger(report.measurements?.formal_test_files?.actual)) {
     errors.push("formal test file count is required");
   }
-  if (!/^[a-f0-9]{64}$/.test(report.source?.tracked_tree_sha256 ?? "")) {
+  if (!SHA256_HEX.test(report.source?.tracked_tree_sha256 ?? "")) {
     errors.push("current tracked tree sha256 is required");
   }
   if (!Number.isInteger(report.measurements?.test_support_lines?.actual)) {
@@ -371,7 +372,7 @@ export function validateReport(report) {
   }
   const families = report.measurements?.persistent_object_families;
   if (!Array.isArray(families?.names) || families.names.length === 0
-      || !/^[a-f0-9]{64}$/.test(families.source_sha256 ?? "")
+      || !SHA256_HEX.test(families.source_sha256 ?? "")
       || report.budgets?.persistent_object_families?.actual !== families.names.length) {
     errors.push("persistent object families must derive from the canonical storage contract");
   }
@@ -386,7 +387,7 @@ export function validateReport(report) {
   if (report.distribution_boundary?.node_modules_gitignored !== true) {
     errors.push("node_modules must be ignored");
   }
-  if (!/^[a-f0-9]{64}$/.test(report.distribution_boundary?.package_lock_sha256 ?? "")) {
+  if (!SHA256_HEX.test(report.distribution_boundary?.package_lock_sha256 ?? "")) {
     errors.push("package-lock sha256 is required");
   }
   for (const name of ["dedicated_recovery_state", "dual_write_markers", "bundle_forbidden_content"]) {
@@ -420,7 +421,7 @@ export function buildFinalReport() {
 export function validateFinalReport(finalReport) {
   const errors = [];
   if (finalReport?.schema_version !== "workflowhub-final-complexity-report.v2") errors.push("invalid final complexity report schema");
-  if (!/^[a-f0-9]{64}$/.test(finalReport?.snapshot_tracked_tree_sha256 ?? "")) errors.push("final complexity report snapshot hash is required");
+  if (!SHA256_HEX.test(finalReport?.snapshot_tracked_tree_sha256 ?? "")) errors.push("final complexity report snapshot hash is required");
   const nested = finalReport?.build_report;
   errors.push(...validateReport(nested ?? {}).map((error) => `final complexity report: ${error}`));
   if (nested?.source?.tracked_tree_sha256 !== finalReport?.snapshot_tracked_tree_sha256) errors.push("final complexity report snapshot does not match build report");

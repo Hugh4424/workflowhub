@@ -1,5 +1,6 @@
-import { sha256 } from "./freshness.mjs";
+import { sha256 } from "./canonical-utils.mjs";
 import { STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const KINDS = new Set(["test", "review", "acceptance_criterion", "confirmation"]);
@@ -55,7 +56,7 @@ export function createQualityFact({ taskId, stage, materialRevision, materialSco
   }
   if (!Array.isArray(evidence) || evidence.length === 0 || evidence.some((entry) =>
     !entry || typeof entry !== "object" || typeof entry.ref !== "string"
-    || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || entry.evidence_type !== EVIDENCE_TYPES[kind])) {
+    || !SHA256_HEX.test(entry.sha256 ?? "") || entry.evidence_type !== EVIDENCE_TYPES[kind])) {
     throw new TypeError("quality fact requires typed canonical evidence");
   }
   if (!Number.isFinite(Date.parse(recordedAt))) throw new TypeError("quality fact recordedAt is invalid");

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUTPUT = resolve(ROOT, "docs/architecture/repository-inventory.tsv");
@@ -208,7 +209,7 @@ export function validateInventory(
     if (!reason) errors.push(`missing reason for ${path}`);
     if (path === INVENTORY_PATH) {
       if (digest !== "SELF") errors.push("inventory self row must use SELF instead of a recursive digest");
-    } else if (!/^[a-f0-9]{64}$/.test(digest)) {
+    } else if (!SHA256_HEX.test(digest)) {
       errors.push(`invalid sha256 for ${path}`);
     }
     rows.set(path, { disposition, digest });

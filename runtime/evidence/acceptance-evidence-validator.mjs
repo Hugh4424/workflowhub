@@ -1,3 +1,4 @@
+import { SHA256_HEX } from "./canonical-utils.mjs";
 const GIT_OID = /^[a-f0-9]{40}$/i;
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
@@ -30,11 +31,11 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
   if (!new Set(["pass", "fail", "inconclusive", "deferred"]).has(value.result)) throw new Error(`${label} result must be pass, fail, inconclusive, or deferred`);
   if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
   const refs = value.refs.map((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !SHA256_HEX.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
     return { ref: entry.ref, sha256: entry.sha256 };
   });
   if (value.snapshot_tree !== undefined && (typeof value.snapshot_tree !== "string" || !GIT_OID.test(value.snapshot_tree))) throw new Error(`${label} snapshot_tree must be a Git tree id`);
-  if (value.source_digest !== undefined && (typeof value.source_digest !== "string" || !/^[a-f0-9]{64}$/.test(value.source_digest))) throw new Error(`${label} source_digest must be a sha256`);
+  if (value.source_digest !== undefined && (typeof value.source_digest !== "string" || !SHA256_HEX.test(value.source_digest))) throw new Error(`${label} source_digest must be a sha256`);
   let freshness;
   if (value.freshness !== undefined) {
     if (!value.freshness || typeof value.freshness !== "object" || Array.isArray(value.freshness)) throw new Error(`${label}.freshness must be an object`);
@@ -49,7 +50,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
       snapshot_tree: value.freshness.snapshot_tree,
       material_revision: value.freshness.material_revision,
       evidence_freshness: Object.freeze(value.freshness.evidence_freshness.map((entry) => {
-        if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.ref !== "string" || typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256) || !new Set(["current", "stale", "missing"]).has(entry.status)) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.ref !== "string" || typeof entry.sha256 !== "string" || !SHA256_HEX.test(entry.sha256) || !new Set(["current", "stale", "missing"]).has(entry.status)) {
           throw new Error(`${label}.freshness.evidence_freshness entry must contain ref, sha256, and status`);
         }
         return Object.freeze({ ref: entry.ref, sha256: entry.sha256, status: entry.status });

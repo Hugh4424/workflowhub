@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createTask } from "../../runtime/task/task-handle.mjs";
-import { initializeTaskStore, appendTaskFact, readTaskFacts, readTaskIndex } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { publishQualityFact, publishVerifySummary } from "../../runtime/evidence/quality-store.mjs";
 
 function taskRoot() {
@@ -28,7 +28,7 @@ function taskRoot() {
 }
 
 describe("minimal task storage", () => {
-  it("creates only identity, append-only facts, quality, and index", () => {
+  it("creates only identity, the execution record, and quality paths", () => {
     const root = taskRoot();
 
     initializeTaskStore(root, { taskId: "minimal-task" });
@@ -38,41 +38,31 @@ describe("minimal task storage", () => {
     expect(existsSync(join(root, "quality", "reviews"))).toBe(true);
     expect(existsSync(join(root, "quality", "tests"))).toBe(true);
     expect(existsSync(join(root, "quality", "verify.json"))).toBe(true);
-    expect(existsSync(join(root, "index.json"))).toBe(true);
-    expect(readdirSync(root).sort()).toEqual(["facts.jsonl", "index.json", "quality", "task.json"]);
+    expect(existsSync(join(root, "index.json"))).toBe(false);
+    expect(readdirSync(root).sort()).toEqual(["facts.jsonl", "quality", "task.json"]);
   });
 
-  it("appends facts and indexes logical references without lineage fields", () => {
+  it("keeps one row per stage without any lineage field", () => {
     const root = taskRoot();
     initializeTaskStore(root, { taskId: "minimal-task" });
 
-    const first = appendTaskFact(root, {
-      stage: "build-code",
-      material_digest: "a".repeat(64),
-      source_digest: "b".repeat(64),
-      invocation_id: "invocation-1",
+    const row = (stage, reviewOrigin) => ({
+      record_kind: "stage",
+      stage,
       source: "focused-test",
-      status: "passed",
-      content_hash: "c".repeat(64),
-      output_ref: "quality/tests/test-1.json",
+      review_origin: reviewOrigin,
+      finding_dispositions: [],
+      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
     });
-    const second = appendTaskFact(root, {
-      stage: "build-code",
-      material_digest: "a".repeat(64),
-      source_digest: "d".repeat(64),
-      invocation_id: "invocation-2",
-      source: "review",
-      status: "unavailable",
-      content_hash: "e".repeat(64),
-      output_ref: "quality/reviews/review-1.json",
-    });
+    const first = writeStageRow(root, row("build-code", "not_run"));
+    const second = writeStageRow(root, row("build-plan", "not_run"));
+    const repaired = writeStageRow(root, row("build-code", "unavailable"));
 
-    expect(first.ref).toMatch(/^facts\.jsonl#1$/);
-    expect(second.ref).toMatch(/^facts\.jsonl#2$/);
+    expect(first.action).toBe("inserted");
+    expect(second.action).toBe("inserted");
+    expect(repaired.action).toBe("replaced");
     expect(readTaskFacts(root)).toHaveLength(2);
-    const index = readTaskIndex(root);
-    expect(index.facts.map(({ ref }) => ref)).toEqual([first.ref, second.ref]);
-    expect(JSON.stringify(index)).not.toMatch(/parent|previous|generation|selector|successor|current/);
+    expect(JSON.stringify(readTaskFacts(root))).not.toMatch(/parent|previous|generation|selector|successor/);
   });
 
   it("fails loudly on malformed historical monitoring rows", () => {
@@ -142,7 +132,97 @@ describe("minimal task storage", () => {
     expect(review.ref).toMatch(/^quality\/reviews\/[a-f0-9]{64}\.json$/);
     expect(test.ref).toMatch(/^quality\/tests\/[a-f0-9]{64}\.json$/);
     expect(JSON.parse(readFileSync(join(root, "quality", "verify.json"), "utf8"))).toMatchObject({ status: "incomplete" });
-    expect(readTaskIndex(root).quality.reviews).toHaveLength(1);
-    expect(readTaskIndex(root).quality.tests).toHaveLength(1);
+    expect(readdirSync(join(root, "quality", "reviews"))).toHaveLength(1);
+    expect(readdirSync(join(root, "quality", "tests"))).toHaveLength(1);
+    expect(readdirSync(root).some((name) => /index/i.test(name))).toBe(false);
+  });
+
+  it("T1 AC-MS-009 enforces the exact stage and close-action field contract", () => {
+    const root = taskRoot();
+    initializeTaskStore(root, { taskId: "minimal-task" });
+
+    const stageRow = {
+      record_kind: "stage", stage: "build-code", source: "field-contract-fixture",
+      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/current.json" },
+      finding_dispositions: [{ finding: "F-1", disposition: "fixed" }],
+      spec_analyze: { value: "aligned" },
+      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
+      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "unavailable", task_closure: "unavailable" },
+      serious_issue_disposition: { value: null, reason: "no serious issue in this fixture" },
+      close_action: { value: null, reason: "stage rows never carry a close action" },
+      handoff: { value: "HANDOFF-001", reason: "one named handoff item" },
+    };
+    writeStageRow(root, stageRow);
+    const row = readTaskFacts(root)[0];
+    // Two row types share one frozen field table.
+    expect(Object.keys(row).sort()).toEqual([
+      "close_action", "created_at", "evidence", "finding_dispositions", "handoff", "layer_states",
+      "material_digest", "record_kind", "review_origin", "review_result_ref", "serious_issue_disposition",
+      "snapshot_tree", "source", "spec_analyze", "stage", "task_id",
+    ]);
+    // Four independent layers, never merged into one verdict.
+    expect(Object.keys(row.layer_states).sort()).toEqual(["delivery", "implementation_completion", "stage_quality", "task_closure"]);
+    for (const state of Object.values(row.layer_states)) expect(["completed", "unavailable", "incomplete", "partial"]).toContain(state);
+    // Nested element shapes are frozen too.
+    expect(row.finding_dispositions[0]).toEqual({ finding: "F-1", disposition: "fixed" });
+    expect(row.evidence.value[0]).toEqual({ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" });
+    // Conditional fields use the empty-with-reason encoding, never a missing key.
+    expect(row.close_action.value).toBeNull();
+    expect(typeof row.close_action.reason).toBe("string");
+
+    // A close-action row is the same key set with the close-specific values.
+    writeStageRow(root, {
+      record_kind: "close_action", stage: "close", source: "field-contract-fixture",
+      review_origin: "not_run", finding_dispositions: [],
+      evidence: { value: [{ command: "git push", exit_code: 0, failure_signature: "none" }] },
+      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "completed", task_closure: "incomplete" },
+      close_action: { action: "push", result: "pushed", ref: "origin/main" },
+      handoff: { value: null, reason: "no handoff item on a close-action row" },
+    });
+    const closeRow = readTaskFacts(root).find((value) => value.record_kind === "close_action");
+    expect(Object.keys(closeRow).sort()).toEqual(Object.keys(row).sort());
+    expect(closeRow.close_action).toMatchObject({ action: "push", result: "pushed", ref: "origin/main" });
+    expect(closeRow.stage).toBe("close");
+
+    // The four finding dispositions are the only accepted machine values.
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", finding_dispositions: [{ finding: "F-2", disposition: "looks_fine" }] }))
+      .toThrow(/disposition must be one of the four frozen values/);
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-spec", review_origin: "conducted", review_result_ref: { value: null, reason: "forgot the ref" } }))
+      .toThrow(/conducted reviews require a named review_result_ref/);
+
+    // close_action is a conditional field on stage rows too, so the same
+    // empty-with-reason encoding applies: an empty value needs a real reason.
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null } }))
+      .toThrow(/close_action requires a reason when its value is empty/);
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null, reason: "   " } }))
+      .toThrow(/close_action requires a reason when its value is empty/);
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { reason: "no value position" } }))
+      .toThrow(/close_action must carry only value and reason/);
+    // A stage row still never carries a close action, in the frozen shape or
+    // in the close-action row shape.
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: { action: "push", result: "pushed" } } }))
+      .toThrow(/stage rows must leave close_action empty with a reason/);
+    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { action: "push", result: "pushed" } }))
+      .toThrow(/close_action must carry only value and reason/);
+    expect(writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null, reason: "this stage row carries no close action" } }).action)
+      .toBe("inserted");
+    expect(readTaskFacts(root).find((value) => value.stage === "build-plan").close_action)
+      .toEqual({ value: null, reason: "this stage row carries no close action" });
+  });
+  it("T1 AC-MS-007 writes facts without index", () => {
+    const taskRootPath = taskRoot();
+    initializeTaskStore(taskRootPath, { taskId: "minimal-task" });
+    const row = (stage) => ({
+      record_kind: "stage", stage, source: "ac007-fixture",
+      review_origin: "not_run", finding_dispositions: [],
+      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
+    });
+    writeStageRow(taskRootPath, row("build-code"));
+    writeStageRow(taskRootPath, row("verify-code"));
+    const rows = readTaskFacts(taskRootPath);
+    expect(rows.map((row) => row.stage)).toEqual(["build-code", "verify-code"]);
+    // The execution record file is the only non-quality execution artefact.
+    expect(readdirSync(taskRootPath).sort()).toEqual(["facts.jsonl", "quality", "task.json"]);
+    expect(readdirSync(taskRootPath).some((name) => /index/i.test(name))).toBe(false);
   });
 });

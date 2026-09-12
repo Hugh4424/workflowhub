@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
@@ -19,7 +20,6 @@ import { validateAmbiguityLedgerV2, validateInteractionQuestionBatch } from "../
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { canonicalJson } from "./canonical-source.mjs";
 
-const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40}$/i;
 const EVIDENCE_REF = /^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.json$/;
 const HOST_VISIBLE_REF = Object.freeze({
@@ -53,7 +53,7 @@ function schemaErrors(validate) {
 function requireBinding(value, label) {
   if (!value || typeof value !== "object"
       || typeof value.ref !== "string" || value.ref.trim() === ""
-      || !HASH.test(value.hash ?? "")) {
+      || !SHA256_HEX.test(value.hash ?? "")) {
     throw new TypeError(`${label} must contain a non-empty ref and sha256 hash`);
   }
 }
@@ -85,7 +85,7 @@ function validateTalkQuestion(question, label) {
   if (!question || typeof question !== "object" || Array.isArray(question)
       || typeof question.question_id !== "string" || question.question_id.trim() === ""
       || !Number.isInteger(question.question_number) || question.question_number < 1
-      || !HASH.test(question.card_hash ?? "")) {
+      || !SHA256_HEX.test(question.card_hash ?? "")) {
     throw new TypeError(`${label} must bind a question id, question number, and card hash`);
   }
   for (const event of ["ask", "reply", "rerank"]) {
@@ -286,9 +286,9 @@ function validateRouteRepairAttempt(attempt, request) {
   if (attempt.dispatch_state !== "dispatched") return "route_repair_not_dispatched";
   if (!new Set(["failed", "unavailable"]).has(attempt.status)
       || !new Set(["failed", "unavailable"]).has(attempt.terminal_status)) return "route_repair_not_terminal_failure";
-  if (!HASH.test(attempt.route_identity ?? "") || !HASH.test(request.route_identity ?? "")) return "route_repair_identity_invalid";
+  if (!SHA256_HEX.test(attempt.route_identity ?? "") || !SHA256_HEX.test(request.route_identity ?? "")) return "route_repair_identity_invalid";
   if (attempt.route_identity === request.route_identity) return "route_repair_identity_unchanged";
-  if (!HASH.test(attempt.closure_identity ?? "") || !HASH.test(request.closure_identity ?? "")
+  if (!SHA256_HEX.test(attempt.closure_identity ?? "") || !SHA256_HEX.test(request.closure_identity ?? "")
       || attempt.closure_identity !== request.closure_identity) return "route_repair_source_changed";
   if (attempt.has_semantic_output !== false) return "route_repair_semantic_output_present";
   if (typeof attempt.error_code !== "string" || !attempt.error_code.trim()
@@ -321,7 +321,7 @@ export function validateReviewBudget({ material_revision, attempts = [], canonic
     }
     if (typeof attempt.attempt_id !== "string" || attempt.attempt_id.trim() === "") errors.push(`attempt_${index + 1}_id_missing`);
     if (!REVIEW_ATTEMPT_REF.test(attempt.attempt_ref ?? "")) errors.push(`attempt_${index + 1}_ref_invalid`);
-    if (!HASH.test(attempt.attempt_hash ?? "")) errors.push(`attempt_${index + 1}_hash_invalid`);
+    if (!SHA256_HEX.test(attempt.attempt_hash ?? "")) errors.push(`attempt_${index + 1}_hash_invalid`);
     if (!REVIEW_ATTEMPT_STATUSES.has(attempt.status)) errors.push(`attempt_${index + 1}_status_invalid`);
   });
   const canonicalAttempts = canonical_attempts === null ? null : (Array.isArray(canonical_attempts) ? canonical_attempts : []);
@@ -496,7 +496,7 @@ export function verifyStageContentEvidence({
 } = {}) {
   const safeTask = assertTaskHandle(task);
   if (!EVIDENCE_REF.test(ref ?? "")) throw new TypeError("stage content evidence ref is invalid");
-  if (!HASH.test(hash ?? "")) throw new TypeError("stage content evidence hash is invalid");
+  if (!SHA256_HEX.test(hash ?? "")) throw new TypeError("stage content evidence hash is invalid");
   const raw = safeTask.readRecord(ref);
   if (sha256(raw) !== hash) throw new Error("stage content evidence integrity hash mismatch");
   let value;

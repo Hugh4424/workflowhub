@@ -27,15 +27,12 @@ const RUNTIME_SIDECARS_AND_HELPERS = [
   "metrics/collector.mjs",
   "workflows/build-code",
   "workflows/verify-code",
-  "scripts/ci",
 ];
 
 // Historical spellings are allowed only in immutable migration inputs. Every
 // exception is a reviewed file, never a directory-wide test/archive bypass.
 const FIXTURE_ALLOWLIST = new Set([
-  "tests/fixtures/task-path-legacy-input.json",
   "core/__tests__/artifact-dir.test.mjs",
-  "core/__tests__/runtime-mode.test.mjs",
   "core/__tests__/storage-root.test.mjs",
   "core/__tests__/check-anti-host.test.mjs",
   "core/__tests__/check-contract.test.mjs",
@@ -50,7 +47,6 @@ const FIXTURE_ALLOWLIST = new Set([
   "core/__tests__/skill-static-deps.test.mjs",
   "core/__tests__/stage-skill-runtime.test.mjs",
   "core/__tests__/task-identity.test.mjs",
-  "core/__tests__/task-index.test.mjs",
   "core/__tests__/task-kernel-security.test.mjs",
   "core/__tests__/workspace-manager.test.mjs",
   "core/__tests__/workspace-runner.test.mjs",
@@ -60,7 +56,6 @@ const FIXTURE_ALLOWLIST = new Set([
   "skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs",
   "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
-  "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/material-redaction.test.mjs",

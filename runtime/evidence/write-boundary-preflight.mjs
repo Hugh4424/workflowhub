@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
@@ -10,7 +11,6 @@ import { assertCurrentSourceDigest, captureGitWorktreeSnapshot } from "../../run
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const OID = /^[a-f0-9]{40}$/;
-const HASH = /^[a-f0-9]{64}$/;
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -49,7 +49,7 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
   }
 
   const violations = [];
-  if (sourceDigest !== undefined && !HASH.test(sourceDigest ?? "")) {
+  if (sourceDigest !== undefined && !SHA256_HEX.test(sourceDigest ?? "")) {
     throw new TypeError("write boundary sourceDigest must be a sha256");
   }
   const targetTop = targetGitTop(handle.manifest.target_repo_root);
@@ -83,7 +83,7 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
   }
 
   let identity = null;
-  if (!invocation || typeof invocation.ref !== "string" || !HASH.test(invocation.hash ?? "")) {
+  if (!invocation || typeof invocation.ref !== "string" || !SHA256_HEX.test(invocation.hash ?? "")) {
     violations.push("INVOCATION_IDENTITY_INVALID");
   } else {
     let raw = null;
@@ -115,9 +115,9 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
       violations.push("INVOCATION_IDENTITY_INVALID");
     } else if (identity.source_kind !== "git_invocation" || typeof identity.source_clean !== "boolean"
         || !OID.test(identity.source?.git_oid ?? "") || !OID.test(identity.source?.git_tree ?? "")
-        || !HASH.test(identity.contracts?.agents?.sha256 ?? "")
-        || !HASH.test(identity.contracts?.stage_skill?.sha256 ?? "")
-        || !HASH.test(identity.contracts?.constitution?.sha256 ?? "")) {
+        || !SHA256_HEX.test(identity.contracts?.agents?.sha256 ?? "")
+        || !SHA256_HEX.test(identity.contracts?.stage_skill?.sha256 ?? "")
+        || !SHA256_HEX.test(identity.contracts?.constitution?.sha256 ?? "")) {
       violations.push("EXECUTION_CONTENT_IDENTITY_INVALID");
     }
   }
@@ -210,7 +210,7 @@ export function persistWriteBoundaryPathCard({ task, boundary, source } = {}) {
     throw new TypeError("valid write boundary result is required");
   }
   if (!source || typeof source.ref !== "string" || source.ref.trim() === ""
-      || !HASH.test(source.hash ?? "")) {
+      || !SHA256_HEX.test(source.hash ?? "")) {
     throw new TypeError("path card source ref/hash is required");
   }
   const sourceRaw = handle.readRecord(source.ref);

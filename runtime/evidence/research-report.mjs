@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import schema from "../schemas/research-report.v1.json" with { type: "json" };
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validateSchema = ajv.compile(schema);
-const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40}$/i;
 const REVISION = /^revision-[a-f0-9]{64}$/;
 const REPORT_REF = /^quality\/evidence\/research\/([a-f0-9]{64})\.json$/;
@@ -98,7 +98,7 @@ export function researchReportHash(raw) {
 }
 
 export function researchReportRef(rawOrHash) {
-  const digest = HASH.test(rawOrHash ?? "") ? rawOrHash : researchReportHash(rawOrHash);
+  const digest = SHA256_HEX.test(rawOrHash ?? "") ? rawOrHash : researchReportHash(rawOrHash);
   return `quality/evidence/research/${digest}.json`;
 }
 

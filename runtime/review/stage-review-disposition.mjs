@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { separateAttemptFindingFacts, validateFindingDispositionState } from "../stage/completion-predicates.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40,64}$/;
 const FINDING_ID = /^F-[a-f0-9]{12,16}$/;
 const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
@@ -94,12 +94,12 @@ export function validateReportableFindingDispositions({ result, dispositions, au
     const reply = object(userReply, "user reply");
     const replyFindingId = requiredText(reply.finding_id, "user_reply.finding_id");
     const replyRef = requiredText(reply.reply_ref, "user_reply.reply_ref");
-    if (!HASH.test(reply.reply_hash ?? "")) throw new TypeError("user_reply.reply_hash must be sha256");
+    if (!SHA256_HEX.test(reply.reply_hash ?? "")) throw new TypeError("user_reply.reply_hash must be sha256");
     const index = dispositions.findIndex((entry) => entry?.finding_id === replyFindingId);
     if (index < 0) throw new Error(`user reply finding is not in finding_dispositions: ${replyFindingId}`);
     const current = dispositions[index];
     if (current?.status !== "needs_human") throw new Error(`user reply requires needs_human disposition: ${replyFindingId}`);
-    if (!HASH.test(current.card_hash ?? "")) throw new TypeError("needs_human disposition must preserve the authenticated finding card_hash");
+    if (!SHA256_HEX.test(current.card_hash ?? "")) throw new TypeError("needs_human disposition must preserve the authenticated finding card_hash");
     normalizedDispositions = dispositions.map((entry, entryIndex) => entryIndex === index
       ? { ...entry, status: "user_decided", source: "user_reply", evidence_ref: replyRef, reply_ref: replyRef, card_hash: current.card_hash }
       : entry);
@@ -210,7 +210,7 @@ export function deriveSeriousReviewPause({
     throw new Error("review result identity/snapshot mismatch");
   }
   text(reviewRef, "reviewRef");
-  if (!HASH.test(reviewHash ?? "")) throw new TypeError("reviewHash must be sha256");
+  if (!SHA256_HEX.test(reviewHash ?? "")) throw new TypeError("reviewHash must be sha256");
   const clusters = canonicalReviewFindings(review);
   const findings = clusters.filter(isActionableSeriousFinding).map((cluster) => cardFor(
     cluster,
@@ -249,7 +249,7 @@ export function buildRiskAcceptance({
   if (selectedOption !== "accept-risk") throw new Error("risk acceptance requires the exact accept-risk option");
   text(cardRef, "risk card ref");
   text(replyRef, "risk reply ref");
-  if (!HASH.test(replyHash ?? "")) throw new Error("risk reply hash must be sha256");
+  if (!SHA256_HEX.test(replyHash ?? "")) throw new Error("risk reply hash must be sha256");
   if (!Number.isFinite(Date.parse(acceptedAt))) throw new Error("risk acceptance time is invalid");
   return Object.freeze({
     schema_version: "risk-acceptance.v1",

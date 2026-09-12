@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,6 @@ import { artifactReference } from "../../core/artifact-dir.mjs";
 const AUTO_MANAGED_RUNTIME_BLOCK = /<!-- BEGIN ([A-Z][A-Z0-9_-]*-RUNTIME) \(auto-managed; do not edit\) -->\r?\n[\s\S]*?<!-- END \1 -->\r?\n?/g;
 const SNAPSHOT_OBJECT_ROOT = resolve(tmpdir(), "workflowhub-git-snapshots");
 const LFS_POINTER_VERSION = "version https://git-lfs.github.com/spec/v1";
-const HASH = /^[a-f0-9]{64}$/;
 // Large evaluation worktrees can contain thousands of evidence paths. Git
 // output is still bounded machine data, but Node's default buffer is too small
 // and otherwise turns a valid snapshot into an opaque ENOBUFS failure.
@@ -592,7 +592,7 @@ export function isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTre
 
 /** Re-read the current source manifest and require the caller's digest to be current. */
 export function assertCurrentSourceDigest(root, expectedDigest, taskId = null) {
-  if (!HASH.test(expectedDigest ?? "")) throw new TypeError("expected source digest must be a sha256");
+  if (!SHA256_HEX.test(expectedDigest ?? "")) throw new TypeError("expected source digest must be a sha256");
   const snapshot = captureGitWorktreeSnapshot(root, taskId);
   if (snapshot.source_digest !== expectedDigest) {
     const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected ${expectedDigest}, observed ${snapshot.source_digest}`);

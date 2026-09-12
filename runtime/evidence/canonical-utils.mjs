@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
 export function sha256(raw) { return createHash("sha256").update(raw).digest("hex"); }
+
+/** The one owners of the 64-char hex digest grammar: the same-semantics
+ * lowercase form and the deliberately case-insensitive variant. */
+export const SHA256_HEX = /^[a-f0-9]{64}$/;
+export const SHA256_HEX_CASE_INSENSITIVE = /^[a-f0-9]{64}$/i;
 export function canonical(value) { return `${JSON.stringify(value, null, 2)}\n`; }
 
 export function isRuntimeOnlyPath(path) {

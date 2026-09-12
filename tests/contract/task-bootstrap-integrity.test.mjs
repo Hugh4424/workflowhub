@@ -59,14 +59,17 @@ describe("official existing task bootstrap integrity", () => {
     const values = { "task-path": task.taskPath, project: "workflowhub", task: "half-created-task" };
     const first = bootstrapTask(values, { env: state.env, home: state.home, cwd: state.repo });
     expect(first).toMatchObject({ task_path: task.taskPath, project: "workflowhub", task: "half-created-task" });
-    for (const file of ["facts.jsonl", "index.json", "quality/verify.json"]) {
+    // A current task owns exactly one execution record file; the retired index
+    // object is no longer created.
+    for (const file of ["facts.jsonl", "quality/verify.json"]) {
       expect(existsSync(join(task.taskPath, file)), file).toBe(true);
     }
+    expect(existsSync(join(task.taskPath, "index.json"))).toBe(false);
     for (const directory of ["quality", "quality/reviews", "quality/tests"]) {
       expect(statSync(join(task.taskPath, directory)).isDirectory(), directory).toBe(true);
     }
 
-    const before = Object.fromEntries(["facts.jsonl", "index.json", "quality/verify.json"]
+    const before = Object.fromEntries(["facts.jsonl", "quality/verify.json"]
       .map((file) => [file, readFileSync(join(task.taskPath, file), "utf8")]));
     const second = bootstrapTask(values, { env: state.env, home: state.home, cwd: state.repo });
     expect(second.task_path).toBe(first.task_path);
@@ -75,14 +78,19 @@ describe("official existing task bootstrap integrity", () => {
     }
   });
 
-  it("fails loudly when an existing task store contains an invalid index", () => {
+  it("ignores a leftover invalid index object when bootstrapping an existing store", () => {
     const state = fixture();
     const task = taskWithManifestOnly(state, "invalid-existing-store");
+    // A legacy index object is read-only history for current tasks: it must not
+    // be created, rewritten, or treated as a current integrity failure.
     writeFileSync(join(task.taskPath, "index.json"), "{}\n");
 
-    expect(() => bootstrapTask(
+    const result = bootstrapTask(
       { "task-path": task.taskPath, project: "workflowhub", task: "invalid-existing-store" },
       { env: state.env, home: state.home, cwd: state.repo },
-    )).toThrow(/task index identity is invalid/i);
+    );
+    expect(result).toMatchObject({ task_path: task.taskPath });
+    expect(readFileSync(join(task.taskPath, "index.json"), "utf8")).toBe("{}\n");
+    expect(existsSync(join(task.taskPath, "facts.jsonl"))).toBe(true);
   });
 });

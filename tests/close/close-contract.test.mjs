@@ -11,9 +11,14 @@ import {
   confirmClosePlan,
   createDeliveryCloseExecutorRegistry,
   executeClosePlan,
+  inspectDeliveryCloseState,
   prepareDeliveryClosePlan,
 } from "../../core/task-close.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
+import { stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 
 const roots = [];
@@ -235,6 +240,37 @@ const ACTION_TO_OPERATION = {
   "push-target-branch": "push",
   "cleanup": "cleanup",
 };
+const STEP_TO_CLOSE_ACTION = {
+  "commit-delivery": "delivery_committed",
+  "merge-task-branch": "merge",
+  "archive-spec": "archive",
+  "push-target-branch": "push",
+  "cleanup": "worktree_cleanup",
+};
+const FIXED_CLOSE_TIME = "2026-08-21T00:00:00.000Z";
+
+/** Prepare a confirmed, authorized first-time close over the five physical actions. */
+async function confirmedFirstTimeClose(state, { now = () => FIXED_CLOSE_TIME } = {}) {
+  const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+  const confirmation = confirmClosePlan({
+    task: state.task,
+    kernel: state.kernel,
+    plan: prepared.plan,
+    outcome: "confirmed",
+    replyText: "用户确认执行关闭。",
+    stepSlug: "confirm-close-plan",
+  });
+  authorizeBatch(state, confirmation.confirmation.human_confirmation_ref);
+  const result = await executeClosePlan({
+    task: state.task,
+    kernel: state.kernel,
+    plan: prepared.plan,
+    closeConfirmationRef: confirmation.ref,
+    executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
+    now,
+  });
+  return { prepared, confirmation, result };
+}
 
 describe("close contract (T0-RED)", () => {
   it("requires explicit user reply text and current-step provenance", () => {
@@ -334,6 +370,106 @@ describe("close contract (T0-RED)", () => {
     }
   });
 
+  it("records one close-action row per physical action on a first-time close", async () => {
+    const state = fixture();
+    // A real task owns its execution record from bootstrap onwards; the close
+    // path writes the five close-action rows into that existing record file.
+    initializeTaskStore(state.task.taskPath, { taskId: state.taskId });
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(readTaskFacts(state.task.taskPath)).toEqual([]);
+    const confirmation = confirmClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      outcome: "confirmed",
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
+    });
+    authorizeBatch(state, confirmation.confirmation.human_confirmation_ref);
+    // First-time close with nothing pre-satisfied: the delivery snapshot commit
+    // is still unpublished, so even the commit action has to execute instead of
+    // reconciling an existing state.
+    const deliveryParent = git(state.worktreeRoot, ["rev-parse", `${state.delivery.task_commit}^`]);
+    git(state.worktreeRoot, ["update-ref", `refs/heads/${state.delivery.task_branch}`, deliveryParent, state.delivery.task_commit]);
+
+    const result = await executeClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmation.ref,
+      executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
+      now: () => FIXED_CLOSE_TIME,
+    });
+
+    expect(result).toMatchObject({ status: "completed" });
+    // Every write landed: a failed row write would surface here instead of
+    // being swallowed.
+    expect(result).not.toHaveProperty("close_action_row_errors");
+    // Nothing was pre-satisfied, so no step may report the reconcile shortcut.
+    const stepRecords = prepared.plan.steps.map((step) =>
+      JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/${step.step_id}.json`)));
+    expect(stepRecords.map((record) => record.completion_mode)).toEqual(EXPECTED_ACTIONS.map(() => "executed"));
+
+    const rows = readTaskFacts(state.task.taskPath).filter((row) => row.record_kind === "close_action");
+    expect(rows).toHaveLength(EXPECTED_ACTIONS.length);
+    expect(rows.map((row) => row.close_action.action)).toEqual(EXPECTED_ACTIONS.map((step) => STEP_TO_CLOSE_ACTION[step]));
+    expect(rows.map((row) => row.close_action.result)).toEqual(EXPECTED_ACTIONS.map(() => "executed"));
+    expect(rows.map((row) => row.stage)).toEqual(EXPECTED_ACTIONS.map(() => "close"));
+    expect(rows.map((row) => row.close_action.ref)).toEqual(prepared.plan.steps.map(
+      (step) => `operations/close/plans/${prepared.plan_hash}/steps/${step.step_id}.json`));
+
+    // The production reader (public close state readback) surfaces those same
+    // recorded values, so the row is not only readable from a test.
+    const inspected = inspectDeliveryCloseState({ task: state.task, kernel: createTaskKernel(state.task), plan: prepared.plan });
+    expect(inspected.close_actions).toEqual({
+      status: "recorded",
+      actions: prepared.plan.steps.map((step) => ({
+        action: STEP_TO_CLOSE_ACTION[step.step_id],
+        recorded: true,
+        result: "executed",
+        ref: `operations/close/plans/${prepared.plan_hash}/steps/${step.step_id}.json`,
+        recorded_at: FIXED_CLOSE_TIME,
+      })),
+    });
+  });
+
+  it("surfaces a failed close-action row write without rolling the physical action back", async () => {
+    const state = fixture();
+    // Make only the execution-record write fail: facts.jsonl is a directory, so
+    // the atomic row write fails while every close record and every physical
+    // action still succeed.
+    mkdirSync(join(state.task.taskPath, "facts.jsonl"));
+    initializeTaskStore(state.task.taskPath, { taskId: state.taskId });
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+
+    const result = await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: state.delivery,
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
+      now: () => FIXED_CLOSE_TIME,
+    });
+
+    expect(result).toMatchObject({ status: "completed", close_mode: "normal" });
+    expect(result.close_action_row_errors).toHaveLength(EXPECTED_ACTIONS.length);
+    expect(result.close_action_row_errors.map((entry) => entry.action)).toEqual(EXPECTED_ACTIONS.map((step) => STEP_TO_CLOSE_ACTION[step]));
+    expect(result.close_action_row_errors.map((entry) => entry.step_id)).toEqual(EXPECTED_ACTIONS);
+    for (const entry of result.close_action_row_errors) expect(entry.error).toMatch(/EISDIR|directory/i);
+    // The physical action really happened and is never rolled back; the
+    // persisted completion record keeps its frozen shape and only the returned
+    // close output reports the missing rows.
+    const completed = JSON.parse(state.task.readRecord("operations/close/completed.json"));
+    expect(completed.status).toBe("completed");
+    expect(completed).not.toHaveProperty("close_action_row_errors");
+    expect(() => readTaskFacts(state.task.taskPath)).toThrow();
+    const inspected = inspectDeliveryCloseState({ task: state.task, kernel: createTaskKernel(state.task), plan: prepared.plan });
+    expect(inspected.close_actions.status).toBe("unavailable");
+    expect(inspected.close_actions.reason).toMatch(/EISDIR|directory/i);
+    expect(inspected.close_actions.actions).toHaveLength(EXPECTED_ACTIONS.length);
+    expect(inspected.close_actions.actions.every((entry) => entry.recorded === false)).toBe(true);
+  });
+
   it("existing workspace mode completes without deleting the directory", async () => {
     const state = baseFixture({ existing: true });
     await expect(closeDelivery({
@@ -353,6 +489,96 @@ describe("close contract (T0-RED)", () => {
 function fixture() {
   return baseFixture({ existing: false });
 }
+
+const ROW_MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+
+/** The current bindings the close-path projection compares a stage row against. */
+function closeRowBindings(state) {
+  const artifacts = ArtifactDir.open(state.worktreeRoot, state.task);
+  return {
+    snapshot_tree: captureExecutionSnapshot(state.worktreeRoot, state.taskId).tree,
+    material_scope_revisions: stageMaterialScopeRevisions(Object.fromEntries(
+      ROW_MATERIALS.map((name) => [name, artifacts.read(name)]),
+    )),
+  };
+}
+
+/** Write one real stage row through the only writer of the execution record. */
+function writeCloseStageRow(state, { stage = "build-code", layerState = "completed" } = {}) {
+  const bindings = closeRowBindings(state);
+  return writeStageRow(state.task.taskPath, {
+    record_kind: "stage",
+    stage,
+    source: `stage-end:${stage}`,
+    material_digest: { value: bindings.material_scope_revisions[stage].replace(/^revision-/, "") },
+    snapshot_tree: { value: bindings.snapshot_tree, reason: "handoff snapshot captured from the current workspace" },
+    review_origin: "not_run",
+    review_result_ref: { value: null, reason: "the stage row records the stage-end facts; reviews are recorded separately" },
+    finding_dispositions: [],
+    evidence: { value: [{ command: `stage-handoff:${stage}`, exit_code: 0, failure_signature: "published" }] },
+    layer_states: {
+      implementation_completion: layerState,
+      stage_quality: "incomplete",
+      delivery: "unavailable",
+      task_closure: "unavailable",
+    },
+    spec_analyze: { value: null, reason: "spec analysis is recorded by its own stage-end profile" },
+    serious_issue_disposition: { value: null, reason: "no serious issue was recorded on this stage row" },
+    close_action: { value: null, reason: "stage rows never carry a close action" },
+    handoff: { value: null, reason: "no handoff item on this close-contract stage row" },
+  });
+}
+
+/** The close-path product release still reports this stage's outcome as missing. */
+function closeReportsMissingStageOutcome(plan, stage) {
+  return plan.delivery.product_release.reasons.includes(`stage_predicate_missing:${stage}:stage_outcome`);
+}
+
+describe("close reads the current close stage result from the execution-record row", () => {
+  it("follows the frozen row instead of the old stage-outcome envelopes", () => {
+    const state = fixture();
+    initializeTaskStore(state.task.taskPath, { taskId: state.taskId });
+
+    // No row yet: every formal stage reports its missing row as an observable
+    // completion gap, and the close plan is still prepared.
+    const withoutRow = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(withoutRow.plan.delivery.product_release.status).toBe("not_released");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      expect(closeReportsMissingStageOutcome(withoutRow.plan, stage)).toBe(true);
+    }
+
+    writeCloseStageRow(state, { stage: "build-code", layerState: "completed" });
+    const withRow = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    // The row is the current stage result, so build-code no longer reports a
+    // missing stage outcome; the stages without a row keep their honest reason.
+    expect(closeReportsMissingStageOutcome(withRow.plan, "build-code")).toBe(false);
+    for (const stage of ["make-decision", "build-spec", "build-plan", "verify-code"]) {
+      expect(closeReportsMissingStageOutcome(withRow.plan, stage)).toBe(true);
+    }
+
+    // Only the row changes: the close projection follows its value.
+    writeCloseStageRow(state, { stage: "build-code", layerState: "incomplete" });
+    const afterRetry = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(closeReportsMissingStageOutcome(afterRetry.plan, "build-code")).toBe(true);
+  });
+
+  it("degrades a store without the execution record honestly instead of failing the close plan", () => {
+    // A store prepared before the single execution record existed carries no
+    // facts.jsonl at all. The close path must keep working and report the real
+    // reason instead of reading the retired stage-outcome envelopes.
+    const state = fixture();
+    expect(existsSync(join(state.task.taskPath, "facts.jsonl"))).toBe(false);
+
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+
+    expect(prepared.plan.steps.map((step) => step.step_id)).toEqual(EXPECTED_ACTIONS);
+    expect(prepared.plan.delivery.product_release.status).toBe("not_released");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      expect(closeReportsMissingStageOutcome(prepared.plan, stage)).toBe(true);
+    }
+    expect(prepared.plan.delivery.quality_gaps.join("\n")).toContain("stage_predicate_missing:verify-code:stage_outcome");
+  });
+});
 
 describe("planning-hardening unarchived planning close", () => {
   it("prepares a declared planning task with four actions and no archive step", () => {

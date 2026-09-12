@@ -118,7 +118,8 @@ describe("TaskContext static guard", () => {
     expect(result.stderr).toContain("cwd identity discovery");
   });
 
-  it.each(["core/source-manifest.mjs", "runtime/evidence/requirement-ledger.mjs", "runtime/task/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
+  it("guards identity sidecar bypass in a production module even before it is imported", () => {
+    const relativeFile = "runtime/task/task-store.mjs";
     const root = fixture();
     const full = join(root, relativeFile); mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, "export const guessed = process.cwd();\n");

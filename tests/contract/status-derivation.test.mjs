@@ -705,3 +705,118 @@ describe("status is derived from current quality facts", () => {
     ]));
   });
 });
+
+describe("T1 AC-MS-011", () => {
+  it("T1 AC-MS-011 surfaces real execution-record row values through their production reader", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, readdirSync, realpathSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { basename, dirname, join } = await import("node:path");
+    const { execFileSync } = await import("node:child_process");
+    const { createTask, createTaskKernel } = await import("../../runtime/task/task-handle.mjs");
+    const { initializeTaskStore, readTaskFacts, writeStageRow } = await import("../../runtime/task/task-store.mjs");
+    const { inspectDeliveryCloseState } = await import("../../core/task-close.mjs");
+
+    const storage = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac011-")));
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac011-repo-")));
+    const bare = join(dirname(repo), `${basename(repo)}-origin.git`);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "WorkflowHub Tests"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "tests@workflowhub.local"], { cwd: repo });
+    writeFileSync(join(repo, "README.md"), "baseline\n");
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "baseline"], { cwd: repo });
+    mkdirSync(bare);
+    execFileSync("git", ["init", "--bare", "-q"], { cwd: bare });
+    execFileSync("git", ["remote", "add", "origin", bare], { cwd: repo });
+    execFileSync("git", ["push", "-q", "origin", "main"], { cwd: repo });
+    const task = createTask({ storageRoot: storage, manifest: {
+      schema_version: "1.0.0", project_name: "workflowhub", task_id: "ac011",
+      created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+
+    // The real writer produces the current stage row.
+    writeStageRow(task.taskPath, {
+      record_kind: "stage", stage: "build-code", source: "ac011-fixture",
+      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/current.json" },
+      finding_dispositions: [{ finding: "F-1", disposition: "fixed" }],
+      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
+      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "unavailable", task_closure: "unavailable" },
+      serious_issue_disposition: { value: null, reason: "no serious issue in this fixture" },
+      close_action: { value: null, reason: "stage rows never carry a close action" },
+      handoff: { value: "HANDOFF-001", reason: "one named handoff item" },
+    });
+    // And the real close-action rows for the five physical actions of a close plan.
+    const planHash = "d".repeat(64);
+    const actionByStep = {
+      "commit-delivery": "delivery_committed", "merge-task-branch": "merge", "archive-spec": "archive",
+      "push-target-branch": "push", "cleanup": "worktree_cleanup",
+    };
+    for (const [stepId, action] of Object.entries(actionByStep)) {
+      writeStageRow(task.taskPath, {
+        record_kind: "close_action", stage: "close", source: "task-close",
+        created_at: "2026-09-11T00:00:00.000Z",
+        review_origin: "not_run", finding_dispositions: [],
+        evidence: { value: [{ command: `close:${stepId}`, exit_code: 0, failure_signature: "executed" }] },
+        layer_states: { implementation_completion: "completed", stage_quality: "incomplete", delivery: "completed", task_closure: "incomplete" },
+        close_action: { action, result: "executed", ref: `operations/close/plans/${planHash}/steps/${stepId}.json` },
+      });
+    }
+    const rows = readTaskFacts(task.taskPath);
+    const row = rows.find((value) => value.record_kind === "stage");
+    const closeRows = rows.filter((value) => value.record_kind === "close_action");
+
+    // The close state readback is the real production reader of the frozen
+    // rows: it reads facts.jsonl back and surfaces the recorded action values
+    // to the public close status output. No production producer feeds these
+    // rows into deriveStageCompletion/deriveStageOutcomeStatuses, whose
+    // observations come from quality facts, so this is where the values must
+    // reach a real caller. A row-shape drift stops the values from surfacing
+    // here, which fails this test.
+    const state = inspectDeliveryCloseState({
+      task,
+      kernel: createTaskKernel(task),
+      plan: {
+        schema_version: "task-close-plan.v1",
+        task_id: task.identity.taskId,
+        steps: Object.keys(actionByStep).map((stepId) => ({ step_id: stepId, operation: stepId })),
+        delivery: {
+          target_repo_root: repo,
+          worktree_root: join(dirname(repo), `${basename(repo)}-${task.identity.taskId}`),
+          task_branch: `task/workflowhub/${task.identity.taskId}`,
+          target_branch: "main",
+          remote: "origin",
+          task_commit: "b".repeat(40),
+          spec_source_path: `specs/${task.identity.taskId}`,
+          spec_archive_path: `specs/archive/${task.identity.taskId}`,
+          target_baseline: "c".repeat(40),
+          remote_target_baseline: "c".repeat(40),
+          merge_strategy: "--no-ff --no-edit",
+          close_mode: "ordinary",
+        },
+      },
+    });
+    expect(state.close_actions).toEqual({
+      status: "recorded",
+      actions: Object.entries(actionByStep).map(([stepId, action]) => ({
+        action,
+        recorded: true,
+        result: "executed",
+        ref: `operations/close/plans/${planHash}/steps/${stepId}.json`,
+        recorded_at: "2026-09-11T00:00:00.000Z",
+      })),
+    });
+    expect(JSON.stringify(state.close_actions)).not.toContain("undefined");
+
+    // Field-level truth: the row is the only carrier, and its layer states stay
+    // four independent slots rather than one merged verdict.
+    expect(row.layer_states).toEqual({
+      implementation_completion: "completed", stage_quality: "completed",
+      delivery: "unavailable", task_closure: "unavailable",
+    });
+    expect(Object.keys(row)).toHaveLength(16);
+    expect(closeRows.map((value) => value.close_action.action)).toEqual(Object.values(actionByStep));
+    for (const value of closeRows) expect(Object.keys(value)).toHaveLength(16);
+    expect(readdirSync(task.taskPath).some((name) => /index/i.test(name))).toBe(false);
+  });
+});

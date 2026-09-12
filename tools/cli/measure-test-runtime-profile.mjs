@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { SHA256_HEX_CASE_INSENSITIVE } from "../../runtime/evidence/canonical-utils.mjs";
 /**
  * Capture the S3 runtime profile without reusing an older result.
  *
@@ -38,7 +39,6 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const CAPABILITIES = Object.freeze(["network", "db", "filesystem", "subprocess", "environment"]);
-const HASH = /^[a-f0-9]{64}$/i;
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 const PROFILE_SOURCE_EXPORT = "TEST_RUNTIME_PROFILE_LIMITS_MS";
 
@@ -180,7 +180,7 @@ function resolveCapabilityObservation(document, node, name, contractValue) {
   }
   if (typeof value.source !== "string" || value.source.trim() === ""
       || typeof value.evidence_ref !== "string" || value.evidence_ref.trim() === ""
-      || !HASH.test(value.evidence_hash)) {
+      || !SHA256_HEX_CASE_INSENSITIVE.test(value.evidence_hash)) {
     return {
       status: "incomplete",
       counts,
@@ -643,7 +643,7 @@ function capabilityResult(profile, manifest) {
   if (!valid) return { status: "incomplete", counts: counts ?? null, reason: "capability observation did not cover every capability" };
   if (typeof value.source !== "string" || value.source.trim() === ""
       || typeof value.evidence_ref !== "string" || value.evidence_ref.trim() === ""
-      || !HASH.test(value.evidence_hash)) {
+      || !SHA256_HEX_CASE_INSENSITIVE.test(value.evidence_hash)) {
     return { status: "incomplete", counts, reason: "capability observation is missing authenticated source/ref/hash" };
   }
   if (!object(value.capability_proof) || value.capability_proof.status !== "passed") {

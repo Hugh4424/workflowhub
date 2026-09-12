@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { SHA256_HEX_CASE_INSENSITIVE } from "../../runtime/evidence/canonical-utils.mjs";
 /**
  * Produce the one final, current acceptance snapshot for T013.
  *
@@ -30,7 +31,6 @@ import { fileURLToPath } from "node:url";
 
 import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 
-const HASH = /^[a-f0-9]{64}$/i;
 const OID = /^[a-f0-9]{40,64}$/i;
 const AC = /^AC-[A-Za-z0-9_-]+$/;
 const TOP_LEVEL_AC = "AC-GOV-001";
@@ -322,7 +322,7 @@ function authenticateEvidence(value, taskDir, receiptPath) {
       continue;
     }
     const record = { ref: relativeRef, sha256: declared, field: candidate.field };
-    if (!HASH.test(String(declared ?? ""))) {
+    if (!SHA256_HEX_CASE_INSENSITIVE.test(String(declared ?? ""))) {
       status = "conflict";
       errors.push(`${ref} has no valid sha256`);
       refs.push(record);
@@ -364,7 +364,7 @@ function receiptIdentity(value, { taskId, materialRevision, snapshotTree }) {
 function receiptFor(taskDir, ref, label, taskId, identity = {}) {
   const path = resolve(taskDir, ref);
   const { raw, value, sha256: hash } = readJson(path, `${label} receipt ${ref}`);
-  if (!HASH.test(hash)) throw new Error(`${label} receipt hash could not be computed`);
+  if (!SHA256_HEX_CASE_INSENSITIVE.test(hash)) throw new Error(`${label} receipt hash could not be computed`);
   if (value.task_id !== undefined && typeof value.task_id === "string" && value.task_id.trim() === "") throw new Error(`${label} receipt task_id is empty`);
   const identityStatus = value.task_id !== undefined && value.task_id !== taskId ? "conflict" : null;
   const authentication = authenticateEvidence(value, taskDir, ref);
@@ -447,7 +447,7 @@ function evidenceRefsFor(receipt) {
   for (const candidate of receipt.authentication?.refs ?? []) {
     if (candidate.actual_sha256 === undefined || candidate.actual_sha256 !== String(candidate.sha256 ?? "").toLowerCase()) continue;
     const ref = { ref: candidate.ref, sha256: candidate.actual_sha256 };
-    if (HASH.test(String(ref.sha256 ?? ""))) refs.push(ref);
+    if (SHA256_HEX_CASE_INSENSITIVE.test(String(ref.sha256 ?? ""))) refs.push(ref);
   }
   const seen = new Set();
   return refs.filter((ref) => {
@@ -612,7 +612,7 @@ function captureCurrentSnapshotIdentity(sourceRoot, taskId, materialRevision) {
   let snapshot;
   try { snapshot = captureExecutionSnapshot(sourceRoot, taskId); }
   catch (error) { throw new Error(`current worktree snapshot cannot be captured: ${error.message}`); }
-  if (!OID.test(snapshot?.tree ?? "") || !OID.test(snapshot?.commit ?? "") || !HASH.test(snapshot?.source_digest ?? "")) {
+  if (!OID.test(snapshot?.tree ?? "") || !OID.test(snapshot?.commit ?? "") || !SHA256_HEX_CASE_INSENSITIVE.test(snapshot?.source_digest ?? "")) {
     throw new Error("current worktree snapshot has incomplete tree/commit/source identity");
   }
   return Object.freeze({
@@ -661,8 +661,8 @@ function profileRunStatus(run) {
       && member.exit_code === 0
       && member.signal === null
       && member.cleanup?.status === "completed"
-      && HASH.test(String(member.stdout_hash ?? ""))
-      && HASH.test(String(member.stderr_hash ?? ""))
+      && SHA256_HEX_CASE_INSENSITIVE.test(String(member.stdout_hash ?? ""))
+      && SHA256_HEX_CASE_INSENSITIVE.test(String(member.stderr_hash ?? ""))
       && typeof member.stdout_ref === "string"
       && typeof member.stderr_ref === "string"
   ));
@@ -696,7 +696,7 @@ function fiveSampleProfileStatus(value, taskDir) {
     && profileGroupComplete(groups?.inner_collection, { workerCeiling: innerWorkerCeiling, requireOverlap: true })
     && profileGroupComplete(groups?.medium_collection, { workerCeiling: mediumWorkerCeiling });
   const profileInputs = object(value.profile_source)
-    && HASH.test(String(value.profile_source.sha256 ?? ""))
+    && SHA256_HEX_CASE_INSENSITIVE.test(String(value.profile_source.sha256 ?? ""))
     && object(value.profiles?.inner)
     && object(value.profiles?.medium)
     && object(value.manifests?.inner)

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { governanceTreeHash } from "./inventory.mjs";
 import { auditReferences, classifyReferenceAudit } from "./reference-audit.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -13,7 +14,7 @@ function sha256(bytes) {
 }
 
 function validateHashCheckedRef(evidence, label, errors, { phase9Only = false, testSource = false } = {}) {
-  if (!evidence || typeof evidence.ref !== "string" || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")) {
+  if (!evidence || typeof evidence.ref !== "string" || !SHA256_HEX.test(evidence.sha256 ?? "")) {
     errors.push(`${label} has malformed evidence ref`);
     return;
   }
@@ -150,7 +151,7 @@ export function validateFinalCoverageRequirements({ coverage, required_ids = [] 
     const qualityPath = path.resolve(ROOT, qualityVerify.ref ?? "");
     const relative = path.relative(ROOT, qualityPath);
     if (relative.startsWith("..") || path.isAbsolute(relative) || !fs.existsSync(qualityPath)
-        || !/^[a-f0-9]{64}$/.test(qualityVerify.sha256 ?? "")) {
+        || !SHA256_HEX.test(qualityVerify.sha256 ?? "")) {
       errors.push("quality_verify_unresolvable");
     } else if (sha256(fs.readFileSync(qualityPath)) !== qualityVerify.sha256) {
       errors.push("quality_verify_unresolvable");
@@ -160,9 +161,9 @@ export function validateFinalCoverageRequirements({ coverage, required_ids = [] 
         const requiredFields = ["schema_version", "task_id", "stage", "ac_id", "status", "method", "evidence_ref", "evidence_hash", "material_digest", "created_at"];
         if (value.schema_version !== "quality-verify.v1"
             || requiredFields.some((field) => value[field] === undefined)
-            || !/^[a-f0-9]{64}$/.test(value.evidence_hash ?? "")
-            || !/^[a-f0-9]{64}$/.test(value.material_digest ?? "")
-            || !/^[a-f0-9]{64}$/.test(qualityVerify.sha256)) {
+            || !SHA256_HEX.test(value.evidence_hash ?? "")
+            || !SHA256_HEX.test(value.material_digest ?? "")
+            || !SHA256_HEX.test(qualityVerify.sha256)) {
           errors.push("quality_verify_schema_invalid");
         } else if (!Array.isArray(value.acceptance_criteria)) {
           errors.push("quality_verify_ac_records_missing");
@@ -191,7 +192,7 @@ export function validateFinalCoverageRequirements({ coverage, required_ids = [] 
       continue;
     }
     const evidence = item.evidence ?? item.oracle;
-    if (!evidence?.ref || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")) {
+    if (!evidence?.ref || !SHA256_HEX.test(evidence.sha256 ?? "")) {
       errors.push("ac_evidence_unresolvable");
       continue;
     }
@@ -210,7 +211,7 @@ export function validateReviewTreeBinding({ manifest, actual_tree_hash } = {}) {
 
 export function validateReviewRawHash({ review } = {}) {
   if (!review || !/^evidence\/(?:final|phase-[^/]+)\//.test(review.raw_ref ?? "")
-      || !/^[a-f0-9]{64}$/.test(review.raw_sha256 ?? "")) return ["review_raw_hash_missing"];
+      || !SHA256_HEX.test(review.raw_sha256 ?? "")) return ["review_raw_hash_missing"];
   return [];
 }
 
@@ -225,7 +226,7 @@ export function validateHandoffBinding({ artifacts, required = ["deletion_list",
   for (const name of required) {
     const item = artifacts[name];
     const expectedRef = finalArtifactEntries()[name];
-    if (typeof item.ref !== "string" || item.ref !== expectedRef || !/^[a-f0-9]{64}$/.test(item.sha256 ?? "")) {
+    if (typeof item.ref !== "string" || item.ref !== expectedRef || !SHA256_HEX.test(item.sha256 ?? "")) {
       errors.push("final_evidence_binding_drift");
       continue;
     }

@@ -41,6 +41,7 @@ import {
   TASK_BOUND_PROVIDER_INPUT_MAX_BYTES,
 } from "./review-input-bounds.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
+import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const taskBoundReviewQueues = new Map();
@@ -155,9 +156,9 @@ function readBareReviewSink(request) {
   try {
     const value = JSON.parse(readFileSync(ref, "utf8"));
     if (value?.version !== "workflowhub-review-sink.v1" || value.request_key !== bareSinkKey(request)) throw new Error("review sink identity is invalid");
-    if (!/^[a-f0-9]{64}$/.test(value.sink_sha256 ?? "") || value.sink_sha256 !== bareSinkDigest(value)) throw new Error("review sink integrity is invalid");
+    if (!SHA256_HEX.test(value.sink_sha256 ?? "") || value.sink_sha256 !== bareSinkDigest(value)) throw new Error("review sink integrity is invalid");
     if (!bareSinkRequestMatches(value.request, request)) throw new Error("review sink authentication context is invalid");
-    if (value.route_identity !== null && !/^[a-f0-9]{64}$/.test(value.route_identity ?? "")) throw new Error("review sink route identity is invalid");
+    if (value.route_identity !== null && !SHA256_HEX.test(value.route_identity ?? "")) throw new Error("review sink route identity is invalid");
     return { ...value, sink_ref: ref };
   } catch (cause) {
     const error = new Error("review sink exists but cannot be authenticated", { cause });
@@ -276,7 +277,7 @@ async function runBareReview(request, runRound, resolveRouteIdentity, requestIde
     try {
       routeIdentity = request.stage && (request.host_provider ?? request.hostProvider)
         ? resolveRouteIdentity(request)?.route_identity : null;
-      if (routeIdentity !== null && !/^[a-f0-9]{64}$/.test(routeIdentity ?? "")) throw new TypeError("trusted route identity must be a sha256 hex string");
+      if (routeIdentity !== null && !SHA256_HEX.test(routeIdentity ?? "")) throw new TypeError("trusted route identity must be a sha256 hex string");
     } catch (error) {
       const diagnostic = { code: "ROUTE_UNAVAILABLE", message: safeRecoveryError(error).message };
       if (existing) return {
@@ -441,7 +442,7 @@ function taskBoundSubjectBinding(trusted, execution, snapshotTree, materialRevis
 }
 
 function readHashedJson(task, reference) {
-  if (!reference || typeof reference.ref !== "string" || !/^[a-f0-9]{64}$/.test(reference.sha256 ?? "")) return null;
+  if (!reference || typeof reference.ref !== "string" || !SHA256_HEX.test(reference.sha256 ?? "")) return null;
   try {
     const raw = task.readRecord(reference.ref);
     if (createHash("sha256").update(raw).digest("hex") !== reference.sha256) return null;
@@ -546,7 +547,7 @@ function readCurrentExecutionFact(trusted, factRef, subjectBinding, snapshot) {
       const screenshotBytes = [];
       try {
         for (const attachment of screenshots) {
-          if (!attachment?.ref || !/^[a-f0-9]{64}$/.test(attachment.hash ?? "")) return null;
+          if (!attachment?.ref || !SHA256_HEX.test(attachment.hash ?? "")) return null;
           const attachmentRaw = trusted.task.readRecord(attachment.ref);
           if (createHash("sha256").update(attachmentRaw).digest("hex") !== attachment.hash) return null;
           const publication = JSON.parse(attachmentRaw);
@@ -560,7 +561,7 @@ function readCurrentExecutionFact(trusted, factRef, subjectBinding, snapshot) {
         const outputRef = value.test?.output_ref;
         const outputHash = value.test?.output_hash;
         if (typeof outputRef !== "string" || !outputRef.startsWith("quality/tests/output/")
-            || !/^[a-f0-9]{64}$/.test(outputHash ?? "")) return null;
+            || !SHA256_HEX.test(outputHash ?? "")) return null;
         const output = trusted.task.readRecord(outputRef);
         if (createHash("sha256").update(output).digest("hex").toString() !== outputHash) return null;
         browser.push({ raw: evidence.raw, screenshots: screenshotBytes, output });
@@ -727,7 +728,7 @@ function selectTaskBoundReviewer(selection, executorSourceId) {
   const reviewerSourceId = selection.provider_identities[provider]?.source_id;
   const reviewerConfigId = selection.provider_identities[provider]?.config_id;
   if (typeof reviewerSourceId !== "string" || reviewerSourceId.trim() === ""
-      || typeof reviewerConfigId !== "string" || !/^[a-f0-9]{64}$/.test(reviewerConfigId)
+      || typeof reviewerConfigId !== "string" || !SHA256_HEX.test(reviewerConfigId)
       || reviewerSourceId === executorSourceId) {
     throw new Error("verify-code E2E review requires one configured heterologous reviewer source identity");
   }
@@ -1053,7 +1054,7 @@ export function publishStageReviewFact({ trusted, stage, reviewTrack = null, rev
   if (result.subjectKind !== "worktree" || result.phaseId !== null || result.reviewScope !== null) {
     throw new Error("verify-code quality fact requires a worktree-scoped final review");
   }
-  if (typeof result.materialId !== "string" || !/^[a-f0-9]{64}$/.test(result.materialId)) {
+  if (typeof result.materialId !== "string" || !SHA256_HEX.test(result.materialId)) {
     throw new Error("verify-code review result is missing material identity");
   }
   const evidenceRef = result.status === "available" ? result.resultRef : result.attemptRef;

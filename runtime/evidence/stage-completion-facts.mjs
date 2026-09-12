@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 export { assertStageCompleted, deriveStageCompletion } from "../stage/completion-predicates.mjs";
 
-const SHA256 = /^[a-f0-9]{64}$/;
 const CANONICAL = new WeakSet();
 const INTERNAL_USER_TERMS = /(?:\bprovider\b|\btoken\b|\battempt\b|\brunner\b|receipts?\/|reviews?\/|[a-f0-9]{64})/i;
 
@@ -27,7 +27,7 @@ function stringList(value, label) {
 function ref(value, label) {
   const item = object(value, label);
   text(item.ref, `${label}.ref`);
-  if (!SHA256.test(item.hash ?? "")) throw new TypeError(`${label} hash must be sha256`);
+  if (!SHA256_HEX.test(item.hash ?? "")) throw new TypeError(`${label} hash must be sha256`);
   return { ref: item.ref, hash: item.hash };
 }
 
@@ -35,7 +35,7 @@ function artifact(value, index) {
   const item = object(value, `artifacts[${index}]`);
   text(item.label, `artifacts[${index}].label`);
   text(item.ref, `artifacts[${index}].ref`);
-  if (!SHA256.test(item.hash ?? "")) throw new TypeError(`artifact hash must be sha256`);
+  if (!SHA256_HEX.test(item.hash ?? "")) throw new TypeError(`artifact hash must be sha256`);
   return {
     label: item.label,
     ref: item.ref,
@@ -393,7 +393,7 @@ export function summarizeStageOutcome({
 }) {
   const stageName = text(stage, "stage");
   const refValue = text(stageOutcomeRef, "stage_outcome_ref");
-  if (!SHA256.test(stageOutcomeHash ?? "")) throw new TypeError("stage_outcome_hash must be sha256");
+  if (!SHA256_HEX.test(stageOutcomeHash ?? "")) throw new TypeError("stage_outcome_hash must be sha256");
   const declaredStatus = text(stageOutcomeStatus, "stage_outcome_status");
   if (!["completed", "skipped", "incomplete", "unavailable", "failed"].includes(declaredStatus)) {
     throw new TypeError("stage_outcome_status is invalid");

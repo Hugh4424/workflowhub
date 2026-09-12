@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { isMaterialOnlySnapshotDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
@@ -6,7 +7,6 @@ import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-vali
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const DERIVED = new WeakSet();
-const SHA256 = /^[a-f0-9]{64}$/;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 // A stage may only depend on materials that exist at that point in the
@@ -142,7 +142,7 @@ export function validateFindingDispositionState(disposition = {}, { authorizedRi
   }
   if (status === "user_decided") {
     if (typeof value.finding_id !== "string" || value.finding_id.trim() === "") errors.push("user_decided_requires_finding_id");
-    if (!/^[a-f0-9]{64}$/.test(value.card_hash ?? "")) errors.push("user_decided_requires_card_hash");
+    if (!SHA256_HEX.test(value.card_hash ?? "")) errors.push("user_decided_requires_card_hash");
     if (typeof value.reply_ref !== "string" || value.reply_ref.trim() === "") errors.push("user_decided_requires_reply_ref");
   }
   const uniqueErrors = [...new Set(errors)];
@@ -384,9 +384,9 @@ function authenticatedVerifySummary({ read, value, taskId, materialRevision, sna
       || value.material_digest !== materialRevision?.slice("revision-".length)
       || !(value.snapshot_tree === snapshotTree
         || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, value.snapshot_tree, snapshotTree, taskId)))
-      || !SHA256.test(value.source_digest ?? "")
+      || !SHA256_HEX.test(value.source_digest ?? "")
       || typeof value.evidence_ref !== "string"
-      || !SHA256.test(value.evidence_hash ?? "")) return null;
+      || !SHA256_HEX.test(value.evidence_hash ?? "")) return null;
 
   // `quality/verify.json` is the existing per-AC authority, not a status
   // pointer. Authenticate its own current source binding and every leaf/hash
@@ -456,7 +456,7 @@ function productBinding(value) {
       ?? candidate.fact_hash
       ?? candidate.result_hash
       ?? candidate.confirmation_hash;
-    if (typeof ref === "string" && ref.trim() !== "" && SHA256.test(hash ?? "")) {
+    if (typeof ref === "string" && ref.trim() !== "" && SHA256_HEX.test(hash ?? "")) {
       return Object.freeze({ ref, hash });
     }
   }
@@ -472,7 +472,7 @@ function productBinding(value) {
     if (!Array.isArray(refs) || !value?.[`${key.replace(/_refs$/, "_hashes")}`]) continue;
     for (const ref of refs) {
       const hash = value[`${key.replace(/_refs$/, "_hashes")}`][ref];
-      if (typeof ref === "string" && SHA256.test(hash ?? "")) return Object.freeze({ ref, hash });
+      if (typeof ref === "string" && SHA256_HEX.test(hash ?? "")) return Object.freeze({ ref, hash });
     }
   }
   return null;
@@ -531,7 +531,7 @@ export function deriveFactBoundStageOutcomeRefs({
   const bound = new Map([...allowed.keys()].map((stage) => [stage, new Map()]));
   const invalid = new Set();
   const add = (stage, ref, hash) => {
-    if (!allowed.has(stage) || !canonicalStageOutcomeRef(ref) || !allowed.get(stage).has(ref) || !SHA256.test(hash ?? "")) return;
+    if (!allowed.has(stage) || !canonicalStageOutcomeRef(ref) || !allowed.get(stage).has(ref) || !SHA256_HEX.test(hash ?? "")) return;
     const prior = bound.get(stage).get(ref);
     if (prior !== undefined && prior !== hash) invalid.add(stage);
     bound.get(stage).set(ref, hash);
@@ -574,7 +574,7 @@ export function deriveFactBoundStageOutcomeRefs({
     for (const evidence of evidenceEntries) {
       if (evidence?.evidence_type !== "review_result"
           || typeof evidence.ref !== "string"
-          || !SHA256.test(evidence.sha256 ?? "")) continue;
+          || !SHA256_HEX.test(evidence.sha256 ?? "")) continue;
       for (const ref of allowed.get("verify-code") ?? []) {
         try {
           const { raw, value } = readJson(ref);
@@ -601,13 +601,13 @@ export function deriveFactBoundStageOutcomeRefs({
     const evidenceEntries = Array.isArray(fact.evidence) ? fact.evidence : [];
     bindVerifyCodeReviewOutcome(fact, evidenceEntries);
     for (const evidence of evidenceEntries) {
-      if (evidence?.evidence_type !== "acceptance_evidence" || typeof evidence.ref !== "string" || !SHA256.test(evidence.sha256 ?? "")) continue;
+      if (evidence?.evidence_type !== "acceptance_evidence" || typeof evidence.ref !== "string" || !SHA256_HEX.test(evidence.sha256 ?? "")) continue;
       try {
         const wrapper = readJson(evidence.ref, evidence.sha256).value;
         if (wrapper?.schema_version !== "acceptance-evidence.v1" || wrapper.snapshot_tree !== snapshotTree || wrapper.freshness?.status !== "current" || wrapper.freshness.snapshot_tree !== snapshotTree || wrapper.freshness.material_revision !== materialRevision) continue;
         const stageQualityRefs = Array.isArray(wrapper.refs) ? wrapper.refs : [];
         for (const stageQuality of stageQualityRefs) {
-          if (typeof stageQuality?.ref !== "string" || !SHA256.test(stageQuality.sha256 ?? "") || !/^quality\/evidence\/stage-quality\//.test(stageQuality.ref)) continue;
+          if (typeof stageQuality?.ref !== "string" || !SHA256_HEX.test(stageQuality.sha256 ?? "") || !/^quality\/evidence\/stage-quality\//.test(stageQuality.ref)) continue;
           const stageQualityValue = readJson(stageQuality.ref, stageQuality.sha256).value;
           const stage = stageQualityValue?.stage;
           if (!allowed.has(stage) || stageQualityValue.schema_version !== "stage-quality-evidence.v1"
@@ -672,6 +672,115 @@ function executionSemanticSignature(value) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The single execution record is the current stage result.
+//
+// A task under the single-record model carries each stage's current result on
+// its own row of the one execution record file.  These helpers make that row
+// the current source for the two stage-result projections.  They read rows
+// only: they never read or authenticate stage-outcome envelope bytes, so a
+// stage whose result is not on the record is reported as unavailable with its
+// real reason instead of being reconstructed from an older file.  Immutable
+// stage-outcome envelopes stay readable history for the reference and proof
+// consumers that authenticate old bytes; they are not the current status of a
+// stage that has a current row.
+// ---------------------------------------------------------------------------
+
+/** The four frozen lifecycle values a row layer state may carry (spec §8). */
+const RECORD_LIFECYCLE_STATES = new Set(["completed", "unavailable", "incomplete", "partial"]);
+/** The one execution record file every current task owns. */
+const EXECUTION_RECORD_REF = "facts.jsonl";
+
+function recordReason(code, reason) {
+  return Object.freeze({ code, reason });
+}
+
+/**
+ * Read the rows of the single execution record through the caller-supplied
+ * reader.  `null` means the caller did not declare the single-record model, so
+ * the projection keeps its read-only stage-outcome branch; anything else is
+ * the record's real read result, including the reason it could not be read.
+ */
+function readExecutionRecord(readTaskFacts) {
+  if (typeof readTaskFacts !== "function") return null;
+  try {
+    const rows = readTaskFacts();
+    if (!Array.isArray(rows)) return recordReason("execution_record_unreadable", "the single execution record reader returned no row list");
+    return Object.freeze({ rows });
+  } catch (error) {
+    return recordReason("execution_record_unreadable", `the single execution record is unreadable: ${error?.message ?? String(error)}`);
+  }
+}
+
+/**
+ * Select the one current row for a stage.  Empty-with-reason bindings mean the
+ * field does not apply to that row, so they never invent a staleness claim; a
+ * row that does carry a snapshot or a material digest must still match the
+ * current one.  Two rows for one stage are an explicit conflict, never a pick.
+ */
+function selectCurrentStageRow(record, stage, {
+  task_id: taskId,
+  snapshot_tree: snapshotTree,
+  material_revision: materialRevision,
+  material_scope_revisions: materialScopeRevisions = {},
+  snapshot_root: snapshotRoot = null,
+}) {
+  if (record === null) return Object.freeze({ legacy: true });
+  if (record.code) return Object.freeze({ reason: record });
+  const rows = (record.rows ?? []).filter((row) => row !== null && typeof row === "object" && !Array.isArray(row)
+    && row.record_kind === "stage" && row.stage === stage && row.task_id === taskId);
+  if (rows.length === 0) {
+    return Object.freeze({ reason: recordReason("execution_record_row_missing", `the single execution record carries no ${stage} stage row`) });
+  }
+  if (rows.length > 1) {
+    return Object.freeze({ reason: recordReason("execution_record_row_duplicate", `the single execution record carries ${rows.length} ${stage} stage rows`) });
+  }
+  const row = rows[0];
+  const rowSnapshot = row.snapshot_tree?.value ?? null;
+  if (rowSnapshot !== null && !isStageSnapshotCurrent(stage, rowSnapshot, snapshotTree, { snapshotRoot, taskId })) {
+    return Object.freeze({ reason: recordReason("execution_record_row_snapshot_stale", `the ${stage} stage row is not bound to the current workspace snapshot`) });
+  }
+  const rowDigest = row.material_digest?.value ?? null;
+  const hasScopeRevision = Object.prototype.hasOwnProperty.call(materialScopeRevisions, stage) && materialScopeRevisions[stage] !== undefined;
+  const scopeFiles = STAGE_FACT_MATERIALS[stage] ?? [];
+  const scopeIsWholeMaterialSet = scopeFiles.length === CURRENT_MATERIAL_FILES.length
+    && CURRENT_MATERIAL_FILES.every((file) => scopeFiles.includes(file));
+  const expectedDigest = hasScopeRevision
+    ? String(materialScopeRevisions[stage]).replace(/^revision-/, "")
+    : scopeIsWholeMaterialSet && typeof materialRevision === "string" ? materialRevision.replace(/^revision-/, "") : null;
+  if (rowDigest !== null && expectedDigest !== null && rowDigest !== expectedDigest) {
+    return Object.freeze({ reason: recordReason("execution_record_row_material_stale", `the ${stage} stage row is not bound to the current stage material revision`) });
+  }
+  return Object.freeze({ row });
+}
+
+/**
+ * The row's own implementation-completion layer is the stage's recorded
+ * execution result.  A row that records a command exiting non-zero can never
+ * be reported as completed: the record itself says the command failed, so the
+ * projection degrades to incomplete and keeps the reason observable instead of
+ * over-claiming completion.
+ */
+function recordedStageStatus(row) {
+  const stage = row?.stage ?? "stage";
+  const layer = row?.layer_states?.implementation_completion;
+  if (!RECORD_LIFECYCLE_STATES.has(layer)) {
+    return Object.freeze({
+      status: "unavailable",
+      reason: recordReason("execution_record_row_layer_state_invalid", `the ${stage} stage row carries no frozen implementation_completion layer value`),
+    });
+  }
+  const failed = (Array.isArray(row?.evidence?.value) ? row.evidence.value : [])
+    .filter((entry) => entry !== null && typeof entry === "object" && Number.isInteger(entry.exit_code) && entry.exit_code !== 0);
+  if (layer === "completed" && failed.length > 0) {
+    return Object.freeze({
+      status: "incomplete",
+      reason: recordReason("execution_record_row_records_failed_command", `the ${stage} stage row records a command exiting non-zero: ${failed.map((entry) => `${entry.command ?? "unnamed command"} (exit ${entry.exit_code})`).join(", ")}`),
+    });
+  }
+  return Object.freeze({ status: layer, reason: null });
+}
+
 /**
  * Project current authenticated stage outcomes by semantic content. Retry
  * identity, producer/session, timing, cost and evidence refs are deliberately
@@ -679,6 +788,10 @@ function executionSemanticSignature(value) {
  * analyzer/review details, coordination text and evidence refs belong to
  * quality consumers, not execution identity. This is a read-only projection
  * and never becomes a completion predicate by itself.
+ *
+ * When the caller supplies `read_task_facts`, the stage result is the frozen
+ * 16-key row of the single execution record and the stage-outcome envelope
+ * bytes are not read at all.
  */
 export function deriveExecutionOutcomes({
   task_id: taskId,
@@ -689,10 +802,59 @@ export function deriveExecutionOutcomes({
   material_scope_revisions: materialScopeRevisions = {},
   snapshot_root: snapshotRoot = null,
   authenticate,
+  read_task_facts: readTaskFacts = null,
 } = {}) {
   if (typeof read !== "function") throw new TypeError("stage-outcome reader is required");
   if (typeof authenticate !== "function") throw new TypeError("stage-outcome authenticator is required");
+  const record = readExecutionRecord(readTaskFacts);
   return Object.freeze(Object.fromEntries(STAGES.map((stage) => {
+    const selection = selectCurrentStageRow(record, stage, {
+      task_id: taskId,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
+      material_scope_revisions: materialScopeRevisions,
+      snapshot_root: snapshotRoot,
+    });
+    if (!selection.legacy) {
+      if (selection.reason) {
+        return [stage, Object.freeze({
+          blocking: false,
+          attempt_count: 0,
+          completed_attempt_count: 0,
+          refs: Object.freeze([]),
+          status: "unavailable",
+          diagnostic: Object.freeze({
+            kind: "unavailable",
+            code: selection.reason.code,
+            reason: selection.reason.reason,
+            refs: Object.freeze([]),
+          }),
+        })];
+      }
+      const recorded = recordedStageStatus(selection.row);
+      const row = selection.row;
+      return [stage, Object.freeze({
+        blocking: false,
+        attempt_count: 1,
+        completed_attempt_count: recorded.status === "completed" ? 1 : 0,
+        refs: Object.freeze([EXECUTION_RECORD_REF]),
+        status: recorded.status,
+        record: Object.freeze({
+          ref: EXECUTION_RECORD_REF,
+          source: typeof row.source === "string" ? row.source : null,
+          created_at: typeof row.created_at === "string" ? row.created_at : null,
+          layer_states: Object.freeze({ ...(row.layer_states ?? {}) }),
+        }),
+        ...(recorded.reason === null ? {} : {
+          diagnostic: Object.freeze({
+            kind: "degraded",
+            code: recorded.reason.code,
+            reason: recorded.reason.reason,
+            refs: Object.freeze([EXECUTION_RECORD_REF]),
+          }),
+        }),
+      })];
+    }
     const refs = Array.isArray(stageOutcomeRefs[stage]) ? stageOutcomeRefs[stage] : [];
     const current = [];
     const seenAttempts = new Map();
@@ -780,6 +942,10 @@ export function deriveExecutionOutcomes({
  * hash, task/stage identity, stage-owned material scope, and stage snapshot
  * all match the current task.  Multiple current completed envelopes are a
  * conflict; an unavailable/incomplete envelope never satisfies completion.
+ *
+ * When the caller supplies `read_task_facts`, the frozen 16-key row of the
+ * single execution record is the current stage result and the stage-outcome
+ * envelope bytes are not read at all.
  */
 export function deriveStageOutcomeStatuses({
   task_id: taskId,
@@ -792,13 +958,19 @@ export function deriveStageOutcomeStatuses({
   authenticate,
   quality_fact_observations: qualityFactObservationsAlias,
   qualityFactObservations: directQualityFactObservations,
+  read_task_facts: readTaskFacts = null,
 } = {}) {
   if (typeof read !== "function") throw new TypeError("stage-outcome reader is required");
   if (typeof authenticate !== "function") throw new TypeError("stage-outcome authenticator is required");
+  const record = readExecutionRecord(readTaskFacts);
   let projectedRefs = stageOutcomeRefs;
   let factBindingConflicts = {};
   const qualityFactObservations = qualityFactObservationsAlias ?? directQualityFactObservations;
-  if (qualityFactObservations !== undefined) {
+  // Under the single-record model the row is the current source, so quality
+  // facts no longer select which stage-outcome envelope is current.  The
+  // observations stay diagnostics for their own consumers; they never decide
+  // the stage status here, and no envelope byte is read for a stage row.
+  if (record === null && qualityFactObservations !== undefined) {
     const bound = deriveFactBoundStageOutcomeRefs({
       observations: qualityFactObservations ?? [],
       read,
@@ -813,7 +985,24 @@ export function deriveStageOutcomeStatuses({
     // retry siblings remain readable, but a sole unbound ref is not promoted
     // by array cardinality, mtime, hash order, or caller choice.
   }
-  return Object.freeze(Object.fromEntries(STAGES.map((stage) => {
+  const recordReasons = {};
+  const projected = Object.fromEntries(STAGES.map((stage) => {
+    const selection = selectCurrentStageRow(record, stage, {
+      task_id: taskId,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
+      material_scope_revisions: materialScopeRevisions,
+      snapshot_root: snapshotRoot,
+    });
+    if (!selection.legacy) {
+      if (selection.reason) {
+        recordReasons[stage] = selection.reason.reason;
+        return [stage, selection.reason.code === "execution_record_row_duplicate" ? "conflict" : "unavailable"];
+      }
+      const recorded = recordedStageStatus(selection.row);
+      if (recorded.reason !== null) recordReasons[stage] = recorded.reason.reason;
+      return [stage, recorded.status];
+    }
     if (factBindingConflicts[stage]) return [stage, "conflict"];
     const refs = Array.isArray(projectedRefs[stage]) ? projectedRefs[stage] : [];
     const candidates = [];
@@ -881,7 +1070,13 @@ export function deriveStageOutcomeStatuses({
     if (candidates.filter((status) => status === "completed").length > 1) return [stage, "conflict"];
     if (candidates.includes("completed")) return [stage, "completed"];
     return [stage, candidates[0] ?? "unavailable"];
-  })));
+  }));
+  // Additive reason channel for the stages whose result is not on the record.
+  // It is never a stage key, so stage lookups and the existing map shape stay
+  // unchanged while the honest reason stays observable.
+  return Object.freeze(record === null
+    ? projected
+    : { ...projected, record_reasons: Object.freeze({ ...recordReasons }) });
 }
 
 /**

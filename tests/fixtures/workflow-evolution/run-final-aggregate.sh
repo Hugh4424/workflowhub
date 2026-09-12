@@ -55,7 +55,7 @@ fi
 if node tests/fixtures/workflow-evolution/validate-final-review-chain.mjs "${validator_args[@]}" >/dev/null; then review_validation_status=0; else review_validation_status=$?; fi
 if [[ "$review_validation_status" -ne 0 ]]; then exit 32; fi
 focused_status=0
-if npx vitest run tests/contract/workflow-evolution-candidates.test.mjs tests/contract/workflow-evolution-ledgers.test.mjs tests/contract/generate-iteration-brief.test.mjs tests/contract/check-skill-updates.test.mjs tests/contract/build-reflection-page.test.mjs tests/contract/workflow-evolution-governance.test.mjs tests/e2e/workflow-evolution-current.test.mjs --poolOptions.forks.singleFork --no-fileParallelism; then focused_status=0; else focused_status=$?; fi
+if npx vitest run tests/contract/workflow-evolution-candidates.test.mjs tests/contract/build-reflection-page.test.mjs tests/contract/workflow-evolution-governance.test.mjs tests/e2e/workflow-evolution-current.test.mjs --poolOptions.forks.singleFork --no-fileParallelism; then focused_status=0; else focused_status=$?; fi
 if [[ "$focused_status" -ne 0 ]]; then node tests/fixtures/workflow-evolution/atomic-write-final-aggregate.mjs "$aggregate_path" 0 "$focused_status" pending pending "$review_ref" "$review_sha256"; exit "$focused_status"; fi
 repository_test_status=0
 if npm test >/tmp/workflowhub-m16-npm-test.log 2>&1; then repository_test_status=0; else repository_test_status=$?; fi

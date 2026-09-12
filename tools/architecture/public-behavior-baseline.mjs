@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, realpathSync, readdirSync, lstatSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -15,7 +16,6 @@ const BASELINE_PATH = "tests/fixtures/public-behavior-baseline/v1";
 const BEHAVIORS = Object.freeze(["doctor", "status", "run", "review", "verify", "confirm", "authorize"]);
 const PROBES = Object.freeze(["help", ...BEHAVIORS]);
 export const COMPARISON_CLASSES = Object.freeze(["preserved", "approved_internal_change", "approved_bug_fix", "behavior_regression"]);
-const SHA256 = /^[a-f0-9]{64}$/;
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -38,7 +38,7 @@ function normalize(value) {
     .replace(/\/Users\/[^\s'"`]+/g, "<PATH>")
     .replace(/\/private\/var\/folders\/[^\s'"`]+/g, "<PATH>")
     .replace(/\/(?:private\/)?tmp\/[^\s'"`]+/g, "<PATH>")
-    .replace(/[A-Fa-f0-9]{64}/g, "<SHA256>")
+    .replace(/[A-Fa-f0-9]{64}/g, "<SHA256_HEX>")
     .replace(/[A-Fa-f0-9]{40}/g, "<GIT_OID>")
     .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "<UUID>")
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<TIME>")
@@ -328,7 +328,7 @@ function semanticProjection(value) {
 function validateCaseEvidence(caseValue, label, errors) {
   if (typeof caseValue?.case_id !== "string" || caseValue.case_id.trim() === "") errors.push(`${label}: case_id is missing`);
   if (!Array.isArray(caseValue?.write_set) || !Array.isArray(caseValue?.write_set_content)) errors.push(`${label}: write-set evidence is missing`);
-  if (!SHA256.test(caseValue?.write_set_content_hash ?? "")) errors.push(`${label}: write-set content hash is invalid`);
+  if (!SHA256_HEX.test(caseValue?.write_set_content_hash ?? "")) errors.push(`${label}: write-set content hash is invalid`);
   if (Array.isArray(caseValue?.write_set_content) && sha256(JSON.stringify(caseValue.write_set_content)) !== caseValue.write_set_content_hash) errors.push(`${label}: write-set content hash mismatch`);
 }
 
@@ -419,9 +419,9 @@ export function verify({ root = ROOT } = {}) {
   const manifest = readJson(MANIFEST);
   const errors = [];
   if (manifest.schema_version !== "workflowhub-public-behavior-baseline.v1") errors.push("invalid baseline schema");
-  if (!SHA256.test(manifest.baseline?.sha256 ?? "") || !SHA256.test(manifest.candidate?.sha256 ?? "")) errors.push("baseline evidence hashes are invalid");
+  if (!SHA256_HEX.test(manifest.baseline?.sha256 ?? "") || !SHA256_HEX.test(manifest.candidate?.sha256 ?? "")) errors.push("baseline evidence hashes are invalid");
   if (JSON.stringify(manifest.behaviors) !== JSON.stringify(BEHAVIORS)) errors.push("public behavior set is not the frozen seven-behavior set");
-  if (!SHA256.test(manifest.collector?.sha256 ?? "") || manifest.collector?.path !== "tools/architecture/public-behavior-baseline.mjs") errors.push("collector identity is missing");
+  if (!SHA256_HEX.test(manifest.collector?.sha256 ?? "") || manifest.collector?.path !== "tools/architecture/public-behavior-baseline.mjs") errors.push("collector identity is missing");
   if (!manifest.runtime?.node || !manifest.runtime?.platform || !manifest.runtime?.runner_contract) errors.push("runtime identity is missing");
   for (const entry of [manifest.baseline, manifest.candidate]) {
     if (!entry?.path) continue;

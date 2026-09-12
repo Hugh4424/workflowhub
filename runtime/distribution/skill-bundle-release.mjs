@@ -8,6 +8,7 @@ import yaml from "js-yaml";
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
 import { checkSkillClosure, workflowDeclarations } from "../evidence/check-skill-closure.mjs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const PORTABLE_WORKFLOW_KIND = "portable_workflow";
@@ -439,7 +440,7 @@ export function validateSkillBundleRelease({ releaseRoot } = {}) {
   const seen = new Set();
   for (const entry of manifest.files) {
     if (!entry || typeof entry.path !== "string" || entry.path === RELEASE_MANIFEST_LOCATOR
-        || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")
+        || !SHA256_HEX.test(entry.sha256 ?? "")
         || Object.keys(entry).some((key) => !new Set(["path", "sha256"]).has(key))
         || path.isAbsolute(entry.path) || entry.path.split(/[\\/]/).includes("..") || seen.has(entry.path)) {
       throw new Error("skill bundle file manifest is invalid");

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { initializeTaskStore, readTaskIndex } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { publishVerifySummary } from "../../runtime/evidence/quality-store.mjs";
 
@@ -73,7 +73,8 @@ describe("verify summary canonical writer boundary", () => {
         task_id: task.identity.taskId, stage: "verify-code", status: "passed", source_digest: sourceDigest,
       } });
       expect(JSON.parse(task.readRecord(published.ref))).toEqual(published.value);
-      expect(readTaskIndex(task.taskPath).quality.verify.sha256).toBe(published.sha256);
+      // The published bytes are the fact; a second publication is idempotent
+      // and the retired index projection is never written.
       expect(kernel.publishVerifySummary({ status: "passed", criteria }).status).toBe("idempotent");
       expect(() => task.writeRecordAtomic("quality/verify.json", "{}\n")).toThrow(/kernel-owned/);
       expect(() => kernel.publishVerifySummary({ status: "incomplete", criteria })).toThrow(/status does not match/);
