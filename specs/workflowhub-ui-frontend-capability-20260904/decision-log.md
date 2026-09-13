@@ -105,6 +105,13 @@
 - 外挂修复：3rd-review 仓配置模板修复已提交 main（`4a746dc`）；长期建议（broker 超时配置化）记入 build-spec 移交清单。
 - **移交 build-spec 待办（重启时执行，10 项）**：分级标尺表、质量分扣分模型、收敛度量口径、9 维比对清单+visual-diff-report.v1 结构、P1/P2/P3 测量契约（分母/计数单位/轮次边界/停滞判定）、验收对象卡字段 schema+校验器、逐技能 LICENSE 审计表、CONTEXT.md 术语写入+ADR 0024 文本、派发边界正式登记条目、工具 CLI 终参数+固定 commit。
 
+### PRD 异源审查轮（2026-09-12，build-prd 非 stage report-only 面）
+
+- 背景：PRD 按仓库新增 `workflows/build-prd/SKILL.md` + `skills/spec-prd/SKILL.md`（v1.0.0）重构为 `prd.md`（六节结构 + 10 卡×16 字段 + 需求覆盖 R-001~R-023 + 明确排除 E-1~E-10 + 来源绑定）。
+- 审查：走信任配置 `wh_review.non_stage.build_prd` 路由（pi/v4flash + antigravity/flash + codex/luna），**3 provider 全部 completed 且 status=available**；结果 `quality/reviews/prd-review-20260912-buildprd.json`（16 findings / 去重 14 条，0 blocking）。
+- 处置：14 条全部处置并写入 `prd.md`（状态一致性、T03/T07 external 时序倒挂、T04 条件边落卡、对照单位冻结、禁读源码审计证据、失败状态闭环、内容级 oracle、工具层校验≠流程门、license 降级路径、计数口径、`fullstack-slice-testing` 承接、T02 并行前提、消歧协议 AC）；同时修正本文件 DM1 行的移植计数口径（统一为「①7+ADR 0016 的 1=8 条 external 登记；124 镜像分类不含 vercel-react-best-practices」）。
+- 事实边界：该审查是 **report-only**（不产生 canonical stage attempt/result，不构成完成或放行）；修正属实质变化，PRD 须**重新确认**后方可视为定稿交接。
+
 ### 任务群 PRD（2026-09-04，用户指示：不走单 spec 路径，产出任务群 PRD）
 
 - 产物：`prd-ui-frontend-capability.md`——10 任务/6 波次拆解（T01 B0 基线 → T02 M0 → T03 M1 → T04 P1 → T05 M2/T07 M4a/T08 M4b → T06 M3 → T09 P2/T10 P3），每卡含来源决策/FR/AC/风险失败边界/素材索引；23 项决策→任务映射（附录 A）逐条核实。
@@ -212,7 +219,7 @@ workflowhub 仓内已有 2026-08-22《UI 与前端：最小可执行流程设计
 | # | 级别 | finding | 处置 |
 |---|---|---|---|
 | DB1/DB2 | blocking | 附录基线设计与 R4 决策冲突（Board 页/Vite 载体/允许读源码）；实验协议不自洽 | 方案 §8 新增「对照实验协议（唯一权威版）」；附录头部加效力声明（以 §8 为准） |
-| DM1/D13残留 | major | §6 计数残留旧数（22/23/~80）；8+24+24+69=125 口径错 | 统一 ①7/②24/③24/④69=124 ✓（vercel-react-best-practices 计入①7，取件走官方仓） |
+| DM1/D13残留 | major | §6 计数残留旧数（22/23/~80）；8+24+24+69=125 口径错 | 统一 **①7/②24/③24/④69=124** ✓（镜像分类不含 vercel-react-best-practices；该技能按 ADR 0016 从官方仓固定 commit 单独登记，与 ①7 合计 **8 条 `skills/external/` 登记**） |
 | DM2 | major | P2"较 B0 显著收敛"不可证伪 | 改绝对口径：CRITICAL/MODERATE=0 + MINOR 全列容忍清单确认；相对 B0 只作数据呈现 |
 | DM3 | major | B0 双重约束下无设计输入 | 协议精确化：B0=现状流程可读源码（复现 PB-T08 做法）；P1/P2=实现侧禁读、提取器输出唯一规格来源；提取器属设计源读取侧不受禁读约束 |
 | DM4 | major | M0-M4 无里程碑承接工程质量四维度扩展 | M4 加入 frontend-component-quality 四维度扩展开发（SKILL+check 脚本+references） |
