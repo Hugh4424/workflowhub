@@ -1158,6 +1158,35 @@ describe("T006 trusted review-round budget from actual task history", () => {
     expect(calls).toBe(2);
     expect(JSON.stringify(denied)).toMatch(/budget|exhausted|unavailable/i);
   });
+
+  it("does not reuse an authenticated verify-code result across a moved code snapshot", async () => {
+    // Regression guard for the reuse gate: an authenticated (semantic) result
+    // must not make a prior attempt reusable once the reviewed code snapshot
+    // moved, or the one focused re-review FR-C4-003 permits for an ordinary
+    // verify-code repair could never run.
+    const { task, kernel, candidateWorkspace } = makeTask();
+    let calls = 0;
+    const runRound = async (input) => {
+      calls += 1;
+      return {
+        ...baseResult(),
+        stage: "verify-code",
+        findings: [],
+        provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })),
+        material_id: createSimpleReviewPacket(input).material_id,
+      };
+    };
+    const request = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "semantic baseline" } };
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(calls).toBe(1);
+    expect(first.result_ref).not.toBeNull();
+
+    // The code snapshot moves while the reviewed request bytes stay the same.
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-semantic-repair.mjs"), "export const repaired = true;\n");
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(calls, "a moved code snapshot must not reuse an authenticated prior result").toBe(2);
+    expect(second.result_ref).not.toBeNull();
+  });
 });
 
 describe("T014 authenticated route-repair review budget", () => {

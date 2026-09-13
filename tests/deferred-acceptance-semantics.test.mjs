@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord } from "../runtime/evidence/freshness.mjs";
+import { createQualityFact } from "../runtime/evidence/quality-fact.mjs";
 import { validateVerifyLeaves } from "../runtime/evidence/quality-store.mjs";
 import { classifyAcceptanceEvidenceResult } from "../runtime/stage/stage-handlers.mjs";
 import { acceptanceResultForSubjectStatus } from "../runtime/stage/stage-runner.mjs";
@@ -56,43 +57,35 @@ describe("deferred acceptance semantics", () => {
     expect(output[0]).toMatchObject({ result, status: "incomplete" });
   });
 
-  it.each(["inconclusive", "deferred"])("freshness authenticates a missing quality fact bound to %s", (result) => {
-    const taskId = "deferred-task";
-    const materialRevision = `revision-${"d".repeat(64)}`;
-    const snapshotTree = "e".repeat(40);
-    const proofRaw = "proof\n";
+  it.each(["inconclusive", "deferred"])("authenticates a missing quality fact bound to %s", (result) => {
+    // The freshness/currentness comparison chain was removed. Readback of a
+    // recorded fact is now an integrity check against the fact's own canonical
+    // ref, hash and nested evidence, with no current-material input. A fact
+    // recorded with an inconclusive or deferred leaf must still authenticate
+    // as that recorded fact.
     const acceptanceRef = "quality/evidence/ac-1.json";
     const proofRef = "quality/evidence/proof.txt";
-    const acceptanceValue = {
+    const proofRaw = "proof\n";
+    const acceptanceRaw = `${JSON.stringify({
       schema_version: "acceptance-evidence.v1",
       acceptance_criterion_id: "AC-1",
       result,
       refs: [{ ref: proofRef, sha256: hash(proofRaw) }],
-      snapshot_tree: snapshotTree,
-    };
-    const acceptanceRaw = `${JSON.stringify(acceptanceValue)}\n`;
-    const factValue = {
-      schema_version: "quality-fact.v1",
-      fact_id: "quality-placeholder",
-      task_id: taskId,
+    })}`;
+    const fact = createQualityFact({
+      taskId: "deferred-task",
       stage: "verify-code",
-      material_revision: materialRevision,
-      snapshot_tree: snapshotTree,
+      materialRevision: `revision-${"d".repeat(64)}`,
+      snapshotTree: "e".repeat(40),
       kind: "acceptance_criterion",
       status: "missing",
       subject: "AC-1",
       evidence: [{ ref: acceptanceRef, sha256: hash(acceptanceRaw), evidence_type: "acceptance_evidence" }],
-      recorded_at: new Date().toISOString(),
-    };
-    const factRaw = `${JSON.stringify(factValue)}\n`;
-    const read = (ref) => ({
-      "quality/facts/ac-1.json": factRaw,
-      [acceptanceRef]: acceptanceRaw,
-      [proofRef]: proofRaw,
-    }[ref]);
-    const fact = { ...factValue, ref: "quality/facts/ac-1.json", sha256: hash(factRaw) };
-    const evaluated = evaluateFactFreshness(fact, { material_revision: materialRevision, snapshot_tree: snapshotTree }, { read });
-    expect(evaluated.status).toBe("current");
+    });
+    const evaluated = authenticateQualityFactRecord({ ...fact.value, ref: fact.ref, sha256: fact.sha256 }, {
+      read: (entry) => entry === fact.ref ? fact.raw : entry === acceptanceRef ? acceptanceRaw : entry === proofRef ? proofRaw : undefined,
+    });
+    expect(evaluated.status).toBe("recorded");
     expect(evaluated.authenticated).toBe(true);
   });
 });

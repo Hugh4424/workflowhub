@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
 import crypto from "node:crypto";
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
@@ -31,9 +31,14 @@ function observations(stage) {
 }
 
 describe("five mutation guards reject stale, incomplete, polluted facts", () => {
-  it("rejects an identity/tree hash mutation as stale", () => {
+  it("rejects a fact whose recorded bytes do not match its own hash", () => {
+    // The freshness/currentness invalidation chain was removed, so a later
+    // material edit is no longer an invalidation signal. Fact-level integrity
+    // is still mandatory: a record whose bytes do not match its recorded hash,
+    // or whose ref is not the digest-addressed canonical path, must not
+    // authenticate.
     const descriptor = fixture("identity-tree-hash");
-    expect(descriptor.expected).toBe("stale");
+    expect(descriptor.mutation).toBe("identity-tree-hash");
     const raw = JSON.stringify({
       schema_version: "quality-fact.v1",
       fact_id: "fact-identity",
@@ -45,22 +50,14 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       subject: "risk_tests_fresh",
       status: "passed",
     });
-    const fact = {
+    const mismatched = authenticateQualityFactRecord({
       ref: "quality/fact-identity.json",
-      sha256: sha256(raw),
+      sha256: sha256("different bytes"),
       material_revision: "revision-a",
       snapshot_tree: "tree-a",
-      kind: "test",
-      subject: "risk_tests_fresh",
-      status: "passed",
-      task_id: "task",
-      stage: "build-code",
-      fact_id: "fact-identity",
-      evidence: [],
-    };
-    const result = evaluateFactFreshness(fact, { material_revision: "revision-a", snapshot_tree: "tree-b" }, { read: () => raw });
-    expect(result.status).toBe("stale");
-    expect(result.authenticated).toBe(false);
+    }, { read: () => raw });
+    expect(mismatched.authenticated).toBe(false);
+    expect(mismatched.status).toBe("unavailable");
   });
 
   it("rejects missing stage completion", () => {

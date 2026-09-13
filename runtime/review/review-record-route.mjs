@@ -511,7 +511,7 @@ function subjectMatchesAttempt(attempt, subject) {
     : actual === reviewSubjectHash(subject);
 }
 
-function findReusableReview({ history, request, routeIdentity = null }) {
+function findReusableReview({ history, request, routeIdentity = null, materialRevision = null, snapshotTree = null }) {
   const requestOrigin = semanticOriginFromRecord(request);
   // An origin that cannot be reconstructed from the record fails closed: the
   // request is dispatched under the round budget instead of reusing an attempt
@@ -549,11 +549,21 @@ function findReusableReview({ history, request, routeIdentity = null }) {
     // reusable review result. It must not consume the one-round allowance and
     // must also remain retryable after the caller bounds the material.
     if (isNonConsumingMaterialBoundFailure(attempt)) continue;
-    // Material revision and material hash are immutable provenance on the
-    // attempt/result, not dedup dimensions. Once the five-dimensional identity
-    // matches, a valid semantic result can be read back even after material
-    // edits; current-status consumers decide separately whether the fact is
-    // usable. Unavailable records remain reusable only as the recorded fact.
+    // Material identity stays OUT of the five-dimensional dedup key
+    // (FR-C4-002), but reading an attempt back as the current review still
+    // requires that the reviewed input did not move on. The round budget is
+    // only evaluated after this lookup, so an attempt recorded for a different
+    // reviewed input must fall through to the budget rather than be returned
+    // here as the current result.
+    const sameSource = attempt.material_revision === materialRevision;
+    const semantic = (entry.prepared?.semantic_status ?? entry.pairSummary?.semantic_status) === "available";
+    if (!sameSource && (!semantic || attempt.material_id !== reviewRequestMaterialId(request))) continue;
+    // An ordinary verify-code review is permitted one focused round after an
+    // authenticated code-snapshot repair (FR-C4-003). A recorded authenticated
+    // result must not be returned once that snapshot moved, or the permitted
+    // round could never run. Material-only moves keep the same code snapshot
+    // and still reuse.
+    if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
     return entry.pairSummary ?? entry.prepared.refs;
   }
   return null;
@@ -1048,7 +1058,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: `complete review budget history is unavailable: ${error.message}` },
         review_budget: { ok: false, reason: "budget_unknown", counts: null } };
     }
-    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null });
+    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, materialRevision: before.materialRevision, snapshotTree: before.tree });
     const sameSubject = (prior) => prior.stage === request.stage
       && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
       && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)

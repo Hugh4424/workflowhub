@@ -227,8 +227,12 @@ export async function runScenario(fixture, scenario) {
         const currentTree = captureGitWorktreeSnapshot(worktree).tree;
         const value = { task_id: fixture.taskId, stage: "build-code", material_revision: "revision-a", snapshot_tree: historicalTree, kind: "review", subject: "integration", status: "passed", evidence: [] };
         const raw = JSON.stringify(value);
-        const { evaluateFactFreshness } = await import(pathToFileURL(path.join(SOURCE_ROOT, "runtime/evidence/freshness.mjs")).href);
-        stale = evaluateFactFreshness({ ...value, ref: "fact.json", sha256: hash(raw) }, { material_revision: "revision-b", snapshot_tree: currentTree }, { read: () => raw }).status === "stale";
+        // The freshness/currentness invalidation chain was removed: a later
+        // material edit is no longer a stale signal. The fact is still only a
+        // fact when its own recorded ref, hash and evidence authenticate, so
+        // this scenario now reports whether that integrity check fails.
+        const { authenticateQualityFactRecord } = await import(pathToFileURL(path.join(SOURCE_ROOT, "runtime/evidence/freshness.mjs")).href);
+        stale = !authenticateQualityFactRecord({ ...value, ref: "fact.json", sha256: hash(raw) }, { read: () => raw }).authenticated;
       }
     },
   });
