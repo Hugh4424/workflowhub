@@ -21,10 +21,10 @@ import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-prov
 import { publishStageReviewFact } from "../../skills/wh-review/scripts/wh-review-cli.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
-import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { qualityFactDigest } from "../../runtime/evidence/quality-fact.mjs";
 import { deriveStageCompletion, deriveStageOutcomeStatuses, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
-import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
+import { deriveStatusRootCauses } from "../../tools/cli/stage-runtime.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { completeCanonicalStageMaterials, createRequirementAuthenticationFixture, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
@@ -333,10 +333,7 @@ describe("resolved code review through the real bridge and status consumers", ()
         .toContainEqual(expect.objectContaining({ subject: "code_review", status: "recorded", review_status: "resolved" }));
       const observations = result.quality_fact_refs.map((ref) => {
         const raw = value.state.task.readRecord(ref), fact = JSON.parse(raw);
-        const freshness = evaluateFactFreshness({ ...fact, ref, sha256: sha256(raw) }, {
-          snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision,
-          material_scope_revisions: { "verify-code": outcome.value.material_scope_revision },
-        }, { read: value.state.task.readRecord, workspaceRoot: value.context.workspace.worktreeRoot });
+        const freshness = authenticateQualityFactRecord({ ...fact, ref, sha256: sha256(raw) }, { read: value.state.task.readRecord });
         return { fact: { ref, value: fact }, authenticated: freshness.authenticated, freshness, review_status: freshness.review_status };
       });
       const statuses = deriveStageOutcomeStatuses({
@@ -580,15 +577,15 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
     const observations = official.quality_fact_refs.map((ref) => {
       const raw = state.task.readRecord(ref);
       const value = JSON.parse(raw);
-      const freshness = evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, current, { read: state.task.readRecord, workspaceRoot: state.candidate.worktreeRoot, taskId: state.task.identity.taskId });
+      const freshness = authenticateQualityFactRecord({ ...value, ref, sha256: sha256(raw) }, { read: state.task.readRecord });
       return { fact: { ref, value }, freshness, authenticated: freshness.authenticated };
     });
     expect(observations.some(({ authenticated }) => authenticated)).toBe(true);
     const completion = deriveStageCompletion("build-code", observations, { requireStageOutcome: true, stageOutcomeStatus: official.stage_outcome_status });
     expect(completion.status).toBe(official.completion.status);
     expect(completion.missing).toContain("risk_tests_fresh");
-    const groups = deriveStatusGroups({ stage: "build-code", quality: completion, observations });
-    expect(groups.actionable_now).toContain("risk_tests_fresh");
+    const rootCauses = deriveStatusRootCauses({ quality: completion });
+    expect(rootCauses.map(({ root_cause_id }) => root_cause_id)).toContain("risk_tests_fresh");
     const outcomes = deriveStageOutcomeStatuses({ task_id: state.task.identity.taskId, read: state.task.readRecord, stage_outcome_refs: { "build-code": [outcome.ref] }, ...current, snapshot_root: state.candidate.worktreeRoot,
       authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(context, stage, ref) });
     expect(outcomes["build-code"]).toBe("completed");

@@ -55,7 +55,7 @@
 ## vNext 永久实施边界
 
 - `make-decision` 只创建并维护四份当前材料；`build-spec`、`build-plan` 只细化同一份材料；`build-code`、`verify-code` 只消费同一份材料和 task facts。
-- vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`quality/verify.json`、`index.json` 及必要的 `quality/evidence/`；不创建旧 accepted、run、receipt、review-flow 或 current projection。
+- vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`index.json` 及必要的 `quality/evidence/`；C6 规定移除 active `quality/verify.v1` object graph、`product_release` 与 `status_groups`，不创建旧 accepted、run、receipt、review-flow 或 current projection。`specs/archive/**`、`docs/research/**` 只读保留。
 - 禁止 successor/predecessor、selector、snapshot lineage、phase trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。

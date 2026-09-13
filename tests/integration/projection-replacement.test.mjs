@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,7 +21,7 @@ function task() {
 }
 
 describe("projection replacement", () => {
-  it("replacement:projection exposes fact and quality references without lineage selectors", () => {
+  it("replacement:projection exposes the facts row without lineage selectors or a verify summary", () => {
     const value = task();
     writeStageRow(value.taskPath, {
       record_kind: "stage", stage: "build-code", source: "replacement-test",
@@ -36,6 +36,7 @@ describe("projection replacement", () => {
     const rows = readTaskFacts(value.taskPath);
     expect(JSON.stringify(rows)).not.toMatch(/selector|successor|previous|parent|generation/);
     expect(rows[0]).toMatchObject({ record_kind: "stage", stage: "build-code" });
-    expect(JSON.parse(readFileSync(join(value.taskPath, "quality", "verify.json"), "utf8"))).toMatchObject({ schema_version: "quality-verify.v1" });
+    expect(existsSync(join(value.taskPath, "quality", "verify.json"))).toBe(false);
+    rmSync(value.taskPath, { recursive: true, force: true });
   });
 });

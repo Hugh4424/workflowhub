@@ -19,7 +19,7 @@ const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const taskCloseCli = join(resolve(dirname(fileURLToPath(import.meta.url)), "../.."), "tools/cli/task-close.mjs");
 
-function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) {
+function seedCurrentQualityFacts({ task, kernel, snapshot }) {
   const publishFixtureFact = (stage, kind, subject, status = "passed") => {
     const base = `quality/evidence/release-fixture/${stage}-${subject}`;
     let ref;
@@ -96,36 +96,6 @@ function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) 
     evidence: [{ ref: review.resultRef, sha256: sha256(reviewRaw), evidence_type: "review_result" }],
   });
 
-  const sourceDigest = snapshot.source_digest;
-  const acceptanceLeafRaw = `${JSON.stringify({
-    schema_version: "acceptance-evidence.v1",
-    acceptance_criterion_id: "AC-001",
-    result: "pass",
-    refs: [{ ref: "quality/evidence/release-fixture/ac-001-proof.json", sha256: sha256("ac-001-proof\n") }],
-    snapshot_tree: snapshot.tree,
-    source_digest: sourceDigest,
-    summary: { actual_outcome: "fixture passed" },
-  })}\n`;
-  kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-leaf.json", acceptanceLeafRaw);
-  kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-proof.json", "ac-001-proof\n");
-  kernel.publishVerifySummary({
-    status: "passed",
-    criteria: [{
-      acceptance_criterion_id: "AC-001",
-      result: "pass",
-      source_digest: sourceDigest,
-      acceptance_leaf: { ref: "quality/evidence/release-fixture/ac-001-leaf.json", sha256: sha256(acceptanceLeafRaw) },
-      nested_evidence: [{ ref: "quality/evidence/release-fixture/ac-001-proof.json", sha256: sha256("ac-001-proof\n") }],
-      scenario: "执行当前夹具并读取结果",
-      oracle: "结果状态为通过",
-      actual_outcome: "当前夹具结果为通过",
-      evidence_type: "fixture",
-      coverage_limits: ["仅覆盖当前夹具"],
-      exceptions: ["无"],
-      implementation_anchor: { id: "fixture-implementation", path: "src/app.txt", start_line: 1, end_line: 1, role: "implementation" },
-      verification_anchor: { id: "fixture-verification", path: "tests/fixture.test.mjs", start_line: 1, end_line: 1, role: "verification" },
-    }],
-  });
 }
 
 afterEach(() => {
@@ -275,7 +245,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDispo
       kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new", reply_text: "fixture accepted verify-code new", step_slug: "finalize-code-review" });
     }
   }
-  seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot });
+  seedCurrentQualityFacts({ task, kernel, snapshot });
   const receiptSnapshot = { ...snapshot, commit: testValue.snapshot_commit };
   if (materialOnlyWriteback) {
     artifacts.writeAtomic("tasks.md", `${artifacts.read("tasks.md")}\n### 执行状态填写区\n- result written back\n`);
@@ -355,7 +325,6 @@ describe("vNext formal delivery close", () => {
       domains: {
         work_progress: { status: "unknown" },
         stage_quality: { status: "unknown" },
-        product_release: { status: "unknown" },
         physical_delivery: { status: "removed" },
       },
       close: {
@@ -572,7 +541,7 @@ describe("vNext formal delivery close", () => {
     ]));
   });
 
-  it("keeps nonblocking minor review advice visible in close quality gaps", () => {
+  it("does not turn nonblocking minor review advice into a close freshness gap", () => {
     const state = fixture({ reviewVerdict: "findings", reviewFindingSeverity: "minor" });
     const result = prepareDeliveryClosePlan({
       task: state.task,
@@ -583,7 +552,7 @@ describe("vNext formal delivery close", () => {
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     });
-    expect(result.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
+    expect(result.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/verify-code freshness: .*code_review/),
     ]));
   });

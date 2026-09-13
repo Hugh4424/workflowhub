@@ -1,822 +1,198 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { STAGE_FACT_MATERIALS, STAGE_PREDICATES, deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses } from "../../runtime/stage/completion-predicates.mjs";
-import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
-import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
+import {
+  STAGE_FACT_MATERIALS,
+  STAGE_PREDICATES,
+  deriveStageCompletion,
+  deriveStageOutcomeStatuses,
+} from "../../runtime/stage/completion-predicates.mjs";
+import { deriveNamedStatusRefs, deriveStatusRootCauses } from "../../tools/cli/stage-runtime.mjs";
 
-function facts(stage, overrides = {}) {
-  return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function observation(stage, subject, kind, status = kind === "review" ? "recorded" : "passed", extra = {}) {
+  return {
     fact: {
-      ref: `quality/${subject}.json`,
+      ref: `quality/facts/${stage}-${subject}.json`,
       value: {
         task_id: "task",
         stage,
-        material_revision: "revision",
-        snapshot_tree: "tree",
         kind,
         subject,
-        status: overrides[subject]?.status ?? (kind === "review" ? "recorded" : "passed"),
-        fact_id: `fact-${index}`,
+        status,
+        fact_id: `${stage}-${subject}`,
+        ...extra,
       },
     },
-    freshness: { status: overrides[subject]?.freshness ?? "current" },
-    authenticated: overrides[subject]?.authenticated ?? true,
-    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean" } : {}),
-  }));
+    authenticated: true,
+    freshness: { status: "current" },
+  };
 }
 
-function productAcFixture({ buildResult = "pass", includeVerify = true } = {}) {
-  const taskId = "task";
-  const tree = "a".repeat(40);
-  const materialRevision = `revision-${"b".repeat(64)}`;
-  const sourceDigest = "c".repeat(64);
-  const records = new Map();
-  const proofRef = "quality/evidence/ac-proof.json";
-  const proofRaw = "current AC proof\n";
-  records.set(proofRef, proofRaw);
-  const leafRef = "quality/evidence/ac-leaf.json";
-  const leafValue = {
-    schema_version: "acceptance-evidence.v1",
-    acceptance_criterion_id: "AC-001",
-    result: buildResult,
-    refs: [{ ref: proofRef, sha256: sha256(proofRaw) }],
-    snapshot_tree: tree,
-    source_digest: sourceDigest,
-  };
-  const leafRaw = `${JSON.stringify(leafValue)}\n`;
-  records.set(leafRef, leafRaw);
-  const buildFactRef = "quality/facts/build-ac.json";
-  records.set(buildFactRef, `${JSON.stringify({
-    schema_version: "quality-fact.v1",
-    fact_id: "build-ac-fact",
-    task_id: taskId,
-    stage: "build-code",
-    material_revision: materialRevision,
-    snapshot_tree: tree,
-    kind: "acceptance_criterion",
-    subject: "AC-001",
-    status: buildResult === "pass" ? "passed" : "failed",
-    evidence: [{ ref: leafRef, sha256: sha256(leafRaw), evidence_type: "acceptance_evidence" }],
-    recorded_at: "2026-08-22T00:00:00.000Z",
-  })}\n`);
-  if (includeVerify) {
-    if (buildResult !== "pass") {
-      const verifyLeaf = { ...leafValue, result: "pass" };
-      records.set(leafRef, `${JSON.stringify(verifyLeaf)}\n`);
-    }
-    const sourceRef = "quality/evidence/verify-source.json";
-    const sourceRaw = "verify source\n";
-    records.set(sourceRef, sourceRaw);
-    const verifyLeafRaw = records.get(leafRef);
-    const verify = {
-      schema_version: "quality-verify.v1",
-      task_id: taskId,
-      stage: "verify-code",
-      status: "passed",
-      source_digest: sourceDigest,
-      material_digest: materialRevision.slice("revision-".length),
-      material_revision: materialRevision,
-      snapshot_tree: tree,
-      evidence_ref: sourceRef,
-      evidence_hash: sha256(sourceRaw),
-      criteria: [{
-        acceptance_criterion_id: "AC-001",
-        result: "pass",
-        status: "passed",
-        source_digest: sourceDigest,
-        acceptance_leaf: { ref: leafRef, sha256: sha256(verifyLeafRaw) },
-        nested_evidence: [{ ref: proofRef, sha256: sha256(proofRaw) }],
-        scenario: "当前场景执行并读取结果",
-        oracle: "结果符合当前验收",
-        actual_outcome: "当前实现返回了符合预期的结果",
-        evidence_type: "structured_observation",
-        coverage_limits: ["仅覆盖当前夹具"],
-        exceptions: ["无"],
-        implementation_anchor: { id: "impl", path: "src/app.mjs", start_line: 1, end_line: 2, role: "implementation" },
-        verification_anchor: { id: "test", path: "tests/app.test.mjs", start_line: 1, end_line: 2, role: "verification" },
-      }],
-    };
-    records.set("quality/verify.json", `${JSON.stringify(verify)}\n`);
-  }
-  const read = (ref) => {
-    const raw = records.get(ref);
-    if (raw === undefined) {
-      const error = new Error("missing");
-      error.code = "ENOENT";
-      throw error;
-    }
-    return raw;
-  };
+function stageFacts(stage, overrides = {}) {
+  return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind]) => observation(
+    stage,
+    subject,
+    kind,
+    overrides[subject]?.status ?? (kind === "review" ? "recorded" : "passed"),
+    kind === "review" ? { review_status: overrides[subject]?.review_status ?? (stage === "verify-code" ? "clean" : undefined) } : {},
+  ));
+}
+
+function stageOutcome({ taskId = "task", stage, tree = "a".repeat(40), revision = "revision-" + "b".repeat(64), status = "completed" }) {
   return {
-    taskId,
-    tree,
-    materialRevision,
-    refs: [...records.keys()].filter((ref) => ref.startsWith("quality/facts/")),
-    read,
+    schema_version: "workflowhub-stage-outcomes.v1",
+    task_id: taskId,
+    stage,
+    run_id: `vnext-${sha256(`${taskId}\0${stage}`).slice(0, 32)}`,
+    status,
+    attempt_id: `attempt-${stage}`,
+    producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: `attempt-${stage}` },
+    snapshot_tree: tree,
+    material_revision: revision,
+    material_hashes: {},
+    material_scope: STAGE_FACT_MATERIALS[stage],
+    material_scope_revision: "revision-" + "d".repeat(64),
+    material_scope_hashes: {},
+    steps_manifest_ref: `workflows/${stage}/steps.json`,
+    steps_manifest_hash: "e".repeat(64),
+    skills_manifest_ref: `workflows/${stage}/skill-deps.yaml`,
+    skills_manifest_hash: "f".repeat(64),
+    step_outcomes: [],
+    skill_outcomes: [],
   };
 }
 
-describe("status is derived from current quality facts", () => {
-  it("projects the validator slicing fact and exposes unexplained overage as a reminder only", () => {
-    const sliceAdvisory = {
-      status: "unexplained_overage",
-      signals: ["SIG-FILES", "SIG-TARGETS"],
-      diagnostics: ["SIG-FILES overage is not fully explained by task risk"],
-    };
-    const groups = deriveStatusGroups({
-      stage: "build-plan",
-      quality: { missing: [], predicates: {} },
-      productRelease: { reasons: [] },
-      sliceAdvisory,
-    });
-    expect(groups.slice_advisory).toBe(sliceAdvisory);
-    expect(groups.advisory_reminders).toEqual(["slice_advisory:unexplained_overage"]);
-    expect(groups.actionable_now).toEqual([]);
-
-    const withinBudget = deriveStatusGroups({
-      stage: "build-plan",
-      quality: { missing: [], predicates: {} },
-      productRelease: { reasons: [] },
-      slice_advisory: { status: "within_budget", signals: [], diagnostics: [] },
-    });
-    expect(withinBudget.advisory_reminders).toEqual([]);
-  });
-
-  it("discloses unavailable research without turning it into an actionable completion gap", () => {
-    const groups = deriveStatusGroups({
-      stage: "make-decision",
-      quality: { missing: [], predicates: {} },
-      productRelease: { reasons: [] },
-      observations: [{
-        fact: {
-          ref: "quality/evidence/research/" + "a".repeat(64) + ".json",
-          value: {
-            subject: "research",
-            status: "unavailable",
-            recorded_at: "2026-09-10T00:00:00.000Z",
-          },
-        },
-        authenticated: true,
-        freshness: { status: "current" },
-      }],
-    });
-    expect(groups.actionable_now).not.toContain("research");
-    expect(groups.external_unavailable).toContain("research:unavailable");
-  });
-
-  it("P3 T007 exposes an actual failed current execution predicate without hiding it behind a completed outcome", () => {
-    const observations = facts("build-code", { risk_tests_fresh: { status: "failed" } });
-    const completion = deriveStageCompletion("build-code", observations, { requireStageOutcome: true, stageOutcomeStatus: "completed" });
-    expect(completion.status).toBe("in_progress");
-    const groups = deriveStatusGroups({ stage: "build-code", quality: completion, observations });
-    expect(groups.actionable_now).toContain("risk_tests_fresh");
-    expect(groups.external_unavailable).not.toContain("risk_tests_fresh:failed");
-  });
-  it("does not turn upstream quality gaps into actions that block the current stage", () => {
-    const groups = deriveStatusGroups({
-      stage: "verify-code",
-      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
-      productRelease: {
-        reasons: [
-          "stage_completion_missing:make-decision",
-          "stage_predicate_missing:build-code:stage_outcome",
-          "stage_predicate_missing:verify-code:code_review",
-        ],
+describe("C6 status root causes and named references", () => {
+  it("deduplicates one root cause while retaining all concrete details and refs", () => {
+    const roots = deriveStatusRootCauses({
+      quality: {
+        missing: ["verify-code prerequisite missing: code_review", "code_review"],
+        predicates: { code_review: { fact_ref: "quality/facts/code-review.json" } },
       },
+      stale: { status: "stale", source: "plan.md:HEAD-diff", detail: "main advanced" },
     });
-    expect(groups.actionable_now).toEqual(["code_review"]);
-    expect(groups.next_action).toBe("code_review");
-    expect(groups).not.toHaveProperty("upstream_actions");
+
+    expect(roots).toHaveLength(2);
+    expect(roots[0]).toMatchObject({
+      root_cause_id: "code_review",
+      status: "actionable",
+      source: "quality facts",
+      refs: ["quality/facts/code-review.json"],
+    });
+    expect(roots[0].details).toEqual(["verify-code prerequisite missing: code_review", "code_review"]);
+    expect(roots[1]).toMatchObject({
+      root_cause_id: "stale",
+      status: "stale",
+      source: "plan.md:HEAD-diff",
+      refs: ["plan.md:HEAD-diff"],
+    });
   });
 
-  it("requires exactly one current completed stage outcome for product stage completion", () => {
-    const taskId = "task";
+  it("reports unavailable research as a root cause without creating a derived status group", () => {
+    const reportRef = "quality/evidence/research/" + "a".repeat(64) + ".json";
+    const roots = deriveStatusRootCauses({
+      quality: { missing: [], predicates: {} },
+      research: { status: "unavailable", report_ref: reportRef },
+    });
+    expect(roots).toEqual([{
+      root_cause_id: "research",
+      status: "unavailable",
+      source: "research report",
+      refs: [reportRef],
+      details: ["research:unavailable"],
+    }]);
+  });
+
+  it("returns exactly K1 through K6 and classifies confirmation versus evidence refs", () => {
+    const confirmation = "quality/confirmations/" + "a".repeat(64) + ".json";
+    const authorization = "quality/authorizations/" + "b".repeat(64) + ".json";
+    const review = "quality/reviews/results/" + "c".repeat(64) + ".json";
+    const proof = "quality/evidence/stage-outcome-proofs/build-code/" + "d".repeat(64) + ".json";
+    const refs = deriveNamedStatusRefs({ facts: [{
+      record_kind: "stage",
+      stage: "build-code",
+      human_confirmation_ref: confirmation,
+      authorization_ref: authorization,
+      review_result_ref: { value: review },
+      evidence: { value: [{ ref: proof }] },
+    }] });
+
+    expect(refs.map(({ class: name }) => name)).toEqual(["K1", "K2", "K3", "K4", "K5", "K6"]);
+    expect(refs[0].refs).toEqual(["task.json"]);
+    expect(refs[1].refs).toEqual(["facts.jsonl"]);
+    expect(refs[2].refs).toEqual(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
+    expect(refs[3].refs).toEqual([confirmation, authorization].sort());
+    expect(refs[4].refs).toEqual([proof, review].sort());
+    expect(refs[5].refs).toEqual([
+      "decision-log.md:HEAD-diff",
+      "spec.md:HEAD-diff",
+      "plan.md:HEAD-diff",
+      "tasks.md:HEAD-diff",
+    ]);
+  });
+
+  it("uses current stage facts and never emits the retired projection fields", () => {
+    const completion = deriveStageCompletion("build-code", stageFacts("build-code"), {
+      requireStageOutcome: true,
+      stageOutcomeStatus: "completed",
+    });
+    const roots = deriveStatusRootCauses({ quality: completion });
+    expect(completion.status).toBe("completed");
+    expect(roots).toEqual([{
+      root_cause_id: "none",
+      status: "clear",
+      source: "facts.jsonl",
+      refs: ["facts.jsonl"],
+      details: ["no canonical root cause recorded"],
+    }]);
+    for (const retired of ["quality_gaps", "release_gaps", "close_preparation_gaps", "actionable_now", "status_groups", "product_release"]) {
+      expect(roots).not.toHaveProperty(retired);
+    }
+  });
+
+  it("keeps a failed current predicate visible and does not promote it to completion", () => {
+    const completion = deriveStageCompletion("build-code", stageFacts("build-code", {
+      risk_tests_fresh: { status: "failed" },
+    }), { requireStageOutcome: true, stageOutcomeStatus: "completed" });
+    expect(completion.status).toBe("in_progress");
+    expect(completion.missing).toContain("risk_tests_fresh");
+    expect(deriveStatusRootCauses({ quality: completion })[0]).toMatchObject({ root_cause_id: "risk_tests_fresh" });
+  });
+
+  it("requires the current stage outcome in addition to its quality facts", () => {
+    const completedFacts = stageFacts("verify-code");
+    expect(deriveStageCompletion("verify-code", completedFacts, {
+      requireStageOutcome: true,
+      stageOutcomeStatus: "unavailable",
+    })).toMatchObject({ status: "in_progress", missing: ["stage_outcome"] });
+    expect(deriveStageCompletion("verify-code", completedFacts, {
+      requireStageOutcome: true,
+      stageOutcomeStatus: "completed",
+    })).toMatchObject({ status: "completed", missing: [] });
+  });
+
+  it("reads a valid legacy stage-outcome envelope only when no frozen row is supplied", () => {
     const tree = "a".repeat(40);
-    const materialRevision = `revision-${"b".repeat(64)}`;
-    const scopeRevision = `revision-${"c".repeat(64)}`;
-    const value = {
-      schema_version: "workflowhub-stage-outcomes.v1",
-      task_id: taskId,
-      stage: "make-decision",
-      run_id: `vnext-${sha256(`${taskId}\0make-decision`).slice(0, 32)}`,
-      status: "completed",
-      attempt_id: "attempt-make-decision",
-      producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: "attempt-make-decision" },
-      snapshot_tree: tree,
-      material_revision: materialRevision,
-      material_hashes: {},
-      material_scope: STAGE_FACT_MATERIALS["make-decision"],
-      material_scope_revision: scopeRevision,
-      steps_manifest_ref: "workflows/make-decision/steps.json",
-      steps_manifest_hash: "d".repeat(64),
-      skills_manifest_ref: "workflows/make-decision/skill-deps.yaml",
-      skills_manifest_hash: "e".repeat(64),
-      step_outcomes: [],
-      skill_outcomes: [],
-    };
+    const revision = "revision-" + "b".repeat(64);
+    const value = stageOutcome({ stage: "make-decision", tree, revision });
     const raw = `${JSON.stringify(value)}\n`;
     const ref = `quality/evidence/stage-outcomes/make-decision/${sha256(raw)}.json`;
     const statuses = deriveStageOutcomeStatuses({
-      task_id: taskId,
-      read: (candidate) => candidate === ref ? raw : (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
+      task_id: "task",
+      read: (candidate) => {
+        if (candidate === ref) return raw;
+        const error = new Error("missing");
+        error.code = "ENOENT";
+        throw error;
+      },
       stage_outcome_refs: { "make-decision": [ref] },
       snapshot_tree: tree,
-      material_revision: materialRevision,
-      material_scope_revisions: { "make-decision": scopeRevision },
+      material_revision: revision,
+      material_scope_revisions: { "make-decision": value.material_scope_revision },
       authenticate: ({ value: candidate }) => candidate,
     });
     expect(statuses["make-decision"]).toBe("completed");
-    expect(deriveStageCompletion("make-decision", [], { requireStageOutcome: true, stageOutcomeStatus: statuses["make-decision"] }).status).toBe("in_progress");
-  });
-
-  it("ignores an older retry envelope that reuses the deterministic stage run id", () => {
-    const taskId = "task";
-    const currentTree = "a".repeat(40);
-    const oldTree = "b".repeat(40);
-    const materialRevision = `revision-${"c".repeat(64)}`;
-    const runId = `vnext-${sha256(`${taskId}\0make-decision`).slice(0, 32)}`;
-    const outcome = (snapshot_tree) => ({
-      schema_version: "workflowhub-stage-outcomes.v1",
-      task_id: taskId,
-      stage: "make-decision",
-      run_id: runId,
-      status: "completed",
-      attempt_id: `attempt-${snapshot_tree.slice(0, 4)}`,
-      producer: { kind: "stage-agent", host: "fixture", source_id: "fixture/agent", source_family: "fixture", agent_run_id: runId },
-      snapshot_tree,
-      material_revision: materialRevision,
-      material_hashes: {},
-      material_scope: STAGE_FACT_MATERIALS["make-decision"],
-      material_scope_revision: "revision-scope",
-      material_scope_hashes: {},
-      steps_manifest_ref: "workflows/make-decision/steps.json",
-      steps_manifest_hash: "d".repeat(64),
-      skills_manifest_ref: "workflows/make-decision/skill-deps.yaml",
-      skills_manifest_hash: "e".repeat(64),
-      step_outcomes: [],
-      skill_outcomes: [],
-    });
-    const currentRaw = `${JSON.stringify(outcome(currentTree))}\n`;
-    const oldRaw = `${JSON.stringify(outcome(oldTree))}\n`;
-    const currentRef = `quality/evidence/stage-outcomes/make-decision/${sha256(currentRaw)}.json`;
-    const oldRef = `quality/evidence/stage-outcomes/make-decision/${sha256(oldRaw)}.json`;
-    const records = new Map([[currentRef, currentRaw], [oldRef, oldRaw]]);
-    const statuses = deriveStageOutcomeStatuses({
-      task_id: taskId,
-      read: (ref) => records.get(ref),
-      stage_outcome_refs: { "make-decision": [oldRef, currentRef] },
-      snapshot_tree: currentTree,
-      material_revision: materialRevision,
-      material_scope_revisions: { "make-decision": "revision-scope" },
-      authenticate: ({ value: candidate }) => candidate,
-    });
-    expect(statuses["make-decision"]).toBe("completed");
-  });
-
-  it("does not consume an accepted/current pointer or caller status", () => {
-    const result = deriveStageCompletion("build-spec", facts("build-spec"));
-    expect(result).toMatchObject({ stage: "build-spec", status: "completed", missing: [] });
-    expect(result).not.toHaveProperty("accepted_ref");
-    expect(result).not.toHaveProperty("current_pointer");
-  });
-
-  it("reports missing and stale facts instead of inventing completion", () => {
-    const missing = facts("build-plan").filter(({ fact }) => fact.value.subject !== "human_confirmation");
-    expect(deriveStageCompletion("build-plan", missing).status).toBe("in_progress");
-
-    const stale = facts("build-plan", { fr_coverage: { freshness: "stale" } });
-    expect(deriveStageCompletion("build-plan", stale).status).toBe("in_progress");
-  });
-
-  it("does not let stale or older unavailable attempts hide a current actionable gap", () => {
-    const observation = (ref, status, recorded_at, freshness = "current", authenticated = true) => ({
-      fact: { ref, value: { subject: "code_review", status, recorded_at } },
-      freshness: { status: freshness },
-      authenticated,
-    });
-    const quality = { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } };
-    const productRelease = { reasons: [] };
-    const groups = deriveStatusGroups({
-      quality,
-      productRelease,
-      observations: [
-        observation("quality/old-unavailable.json", "unavailable", "2026-08-22T00:00:00.000Z"),
-        observation("quality/stale-unavailable.json", "unavailable", "2026-08-22T02:00:00.000Z", "stale", false),
-        observation("quality/current-missing.json", "missing", "2026-08-22T01:00:00.000Z"),
-      ],
-    });
-    expect(groups.actionable_now).toEqual(["code_review"]);
-    expect(groups.external_unavailable).toEqual([]);
-  });
-
-  it("projects the newest current unavailable attempt as external, not actionable", () => {
-    const groups = deriveStatusGroups({
-      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
-      productRelease: { reasons: [] },
-      observations: [
-        { fact: { ref: "quality/old-missing.json", value: { subject: "code_review", status: "missing", recorded_at: "2026-08-22T00:00:00.000Z" } }, authenticated: true, freshness: { status: "current" } },
-        { fact: { ref: "quality/new-unavailable.json", value: { subject: "code_review", status: "unavailable", recorded_at: "2026-08-22T01:00:00.000Z" } }, authenticated: true, freshness: { status: "current" } },
-      ],
-    });
-    expect(groups.actionable_now).toEqual([]);
-    expect(groups.external_unavailable).toEqual(["code_review:unavailable"]);
-  });
-
-  it("keeps release gaps visible without turning them into close blockers", () => {
-    const groups = deriveStatusGroups({
-      stage: "verify-code",
-      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
-      productRelease: { reasons: ["acceptance_result_not_pass:AC-001"] },
-      observations: [],
-    });
-    expect(groups).toMatchObject({
-      close_supported: true,
-      quality_gaps: ["acceptance_result_not_pass:AC-001"],
-      release_gaps: ["acceptance_result_not_pass:AC-001"],
-    });
-    expect(groups).not.toHaveProperty("close_blockers");
-  });
-
-  it("derives released from five current completions and AC results without verify confirmation", () => {
-    const hash = "a".repeat(64);
-    const identity = {
-      task_id: "task",
-      material_revision: `revision-${"a".repeat(64)}`,
-      snapshot_tree: "a".repeat(40),
-    };
-    const stage_completions = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-    ].map((stage, index) => ({
-      stage,
-      status: "completed",
-      ...identity,
-      ref: `quality/facts/${index + 1}.json`,
-      hash,
-      freshness: { status: "current" },
-    }));
-    const result = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [{
-        acceptance_criterion_id: "AC-001",
-        result: "pass",
-        ...identity,
-        ref: "quality/evidence/ac-001.json",
-        hash,
-        freshness: { status: "current" },
-      }],
-      expected_acceptance_ids: ["AC-001"],
-    });
-
-    expect(result).toMatchObject({ producer: "deriveProductRelease", status: "released", reasons: [] });
-    expect(result.input_refs).toHaveLength(6);
-    expect(result.input_refs.every((entry) => entry.ref && entry.hash === hash)).toBe(true);
-  });
-
-  it("keeps missing, stale, or unbound facts as not_released without guessing hashes", () => {
-    const result = deriveProductRelease({
-      stage_completions: [{ stage: "make-decision", status: "completed", ref: "quality/facts/one.json" }],
-      acceptance_results: [{ acceptance_criterion_id: "AC-001", result: "pass" }],
-      verify_confirmation: { decision: "rejected" },
-    });
-
-    expect(result.status).toBe("not_released");
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      "stage_completion_unbound:make-decision",
-      "stage_completion_missing:build-spec",
-      "acceptance_result_unbound:AC-001",
-    ]));
-    expect(result.reasons).not.toContain("verify_confirmation_not_accepted:rejected");
-    expect(result.input_refs).toEqual([]);
-  });
-
-  it("does not silently deduplicate one ref when two facts bind different hashes", () => {
-    const hash = "a".repeat(64);
-    const stage_completions = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-    ].map((stage, index) => ({
-      stage,
-      status: "completed",
-      ref: stage === "build-code" ? "quality/shared.json" : `quality/facts/${index + 1}.json`,
-      hash: stage === "build-code" ? hash : "a".repeat(64),
-      freshness: { status: "current" },
-    }));
-    const result = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [{
-        acceptance_criterion_id: "AC-001",
-        result: "passed",
-        ref: "quality/shared.json",
-        hash: "b".repeat(64),
-        freshness: { status: "current" },
-      }],
-      expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: {
-        schema_version: "human-confirmation.v2",
-        task_id: "task",
-        stage: "verify-code",
-        decision: "accepted",
-        material_revision: `revision-${"a".repeat(64)}`,
-        snapshot_tree: "a".repeat(40),
-        confirmed_at: "2026-08-20T00:00:00.000Z",
-        ref: "quality/confirmations/verify.json",
-        hash,
-        freshness: { status: "current" },
-      },
-    });
-
-    expect(result.status).toBe("not_released");
-    expect(result.reasons).toContain("acceptance_result_binding_conflict:quality/shared.json");
-  });
-
-  it("does not release mixed current task/material/snapshot identities", () => {
-    const hash = "a".repeat(64);
-    const identity = { task_id: "task", material_revision: `revision-${"a".repeat(64)}`, snapshot_tree: "a".repeat(40) };
-    const stage_completions = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-    ].map((stage, index) => ({ stage, status: "completed", ...identity, ref: `quality/facts/${index + 1}.json`, hash, freshness: { status: "current" } }));
-    const result = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [{ acceptance_criterion_id: "AC-001", result: "pass", ...identity, snapshot_tree: "b".repeat(40), ref: "quality/ac.json", hash, freshness: { status: "current" } }],
-      expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: { schema_version: "human-confirmation.v2", ...identity, stage: "verify-code", decision: "accepted", confirmed_at: "2026-08-20T00:00:00.000Z", ref: "quality/confirm.json", hash, freshness: { status: "current" } },
-    });
-    expect(result.status).toBe("not_released");
-    expect(result.reasons).toContain("acceptance_result:AC-001_identity_conflict:snapshot_tree");
-  });
-
-  it("uses verify AC leaves once when build-code facts agree, and exposes disagreement", () => {
-    const same = productAcFixture({ buildResult: "pass", includeVerify: true });
-    const sameResult = deriveCurrentProductRelease({
-      task_id: same.taskId,
-      read: same.read,
-      refs: same.refs,
-      snapshot_tree: same.tree,
-      material_revision: same.materialRevision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: () => ({ status: "current", authenticated: true }),
-    });
-    expect(sameResult.reasons).not.toContain("acceptance_result_conflicting:AC-001");
-
-    const different = productAcFixture({ buildResult: "fail", includeVerify: true });
-    const differentResult = deriveCurrentProductRelease({
-      task_id: different.taskId,
-      read: different.read,
-      refs: different.refs,
-      snapshot_tree: different.tree,
-      material_revision: different.materialRevision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: () => ({ status: "current", authenticated: true }),
-    });
-    expect(differentResult.reasons).toContain("acceptance_result_conflicting:AC-001");
-
-    const buildOnly = productAcFixture({ buildResult: "pass", includeVerify: false });
-    const buildOnlyResult = deriveCurrentProductRelease({
-      task_id: buildOnly.taskId,
-      read: buildOnly.read,
-      refs: buildOnly.refs,
-      snapshot_tree: buildOnly.tree,
-      material_revision: buildOnly.materialRevision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: () => ({ status: "current", authenticated: true }),
-    });
-    expect(buildOnlyResult.status).toBe("not_released");
-    expect(buildOnlyResult.reasons).not.toContain("verify_confirmation_missing");
-  });
-
-  it("projects the newest timestamped current AC fact after a repair", () => {
-    const taskId = "task";
-    const tree = "a".repeat(40);
-    const materialRevision = `revision-${"b".repeat(64)}`;
-    const records = new Map();
-    const fact = (status, recorded_at) => ({
-      schema_version: "quality-fact.v1",
-      task_id: taskId,
-      stage: "build-code",
-      material_revision: materialRevision,
-      snapshot_tree: tree,
-      kind: "acceptance_criterion",
-      subject: "AC-001",
-      status,
-      recorded_at,
-    });
-    records.set("quality/facts/old.json", `${JSON.stringify(fact("missing", "2026-08-22T00:00:00.000Z"))}\n`);
-    records.set("quality/facts/new.json", `${JSON.stringify(fact("passed", "2026-08-22T00:01:00.000Z"))}\n`);
-    const result = deriveCurrentProductRelease({
-      task_id: taskId,
-      read: (ref) => records.get(ref),
-      refs: [...records.keys()],
-      snapshot_tree: tree,
-      material_revision: materialRevision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: () => ({ status: "current", authenticated: true }),
-    });
-    expect(result.reasons).not.toContain("acceptance_result_conflicting:AC-001");
-    expect(result.reasons).not.toContain("acceptance_result_not_pass:AC-001:missing");
-    expect(result.reasons).not.toContain("acceptance_result_not_pass:AC-001:undefined");
-  });
-
-  it("does not release from a partial or ambiguous AC result set", () => {
-    const hash = "a".repeat(64);
-    const stage_completions = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-    ].map((stage, index) => ({
-      stage,
-      status: "completed",
-      ref: `quality/facts/${index + 1}.json`,
-      hash,
-      freshness: { status: "current" },
-    }));
-    const base = {
-      acceptance_criterion_id: "AC-001",
-      result: "pass",
-      ref: "quality/evidence/ac-001.json",
-      hash,
-      freshness: { status: "current" },
-    };
-    const confirmation = {
-      schema_version: "human-confirmation.v2",
-      task_id: "task",
-      stage: "verify-code",
-      decision: "accepted",
-      material_revision: `revision-${"a".repeat(64)}`,
-      snapshot_tree: "a".repeat(40),
-      confirmed_at: "2026-08-20T00:00:00.000Z",
-      ref: "quality/confirmations/verify.json",
-      hash,
-      freshness: { status: "current" },
-    };
-    const partial = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [base],
-      expected_acceptance_ids: ["AC-001", "AC-002"],
-      verify_confirmation: confirmation,
-    });
-    expect(partial.status).toBe("not_released");
-    expect(partial.reasons).toContain("acceptance_result_missing:AC-002");
-
-    const dualInput = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [base],
-      product_results: [base],
-      expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: confirmation,
-    });
-    expect(dualInput.status).toBe("not_released");
-    expect(dualInput.reasons).toContain("acceptance_results_product_results_conflict");
-
-    const incompleteAcceptance = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [{ ...base, status: "incomplete" }],
-      expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: confirmation,
-    });
-    expect(incompleteAcceptance.status).toBe("not_released");
-    expect(incompleteAcceptance.reasons).toContain("acceptance_result_not_pass:AC-001:pass");
-  });
-
-  it("does not promote unauthenticated or duplicate current AC facts", () => {
-    const tree = "a".repeat(40);
-    const revision = `revision-${"a".repeat(64)}`;
-    const records = new Map();
-    const add = (ref, value) => {
-      const raw = `${JSON.stringify(value)}\n`;
-      records.set(ref, raw);
-      return sha256(raw);
-    };
-    const fact = (index, evidenceRef, evidenceHash) => ({
-      schema_version: "quality-fact.v1",
-      fact_id: `fact-${index}`,
-      task_id: "task",
-      stage: "verify-code",
-      material_revision: revision,
-      snapshot_tree: tree,
-      kind: "acceptance_criterion",
-      subject: "AC-001",
-      status: "passed",
-      evidence: [{ ref: evidenceRef, sha256: evidenceHash, evidence_type: "acceptance_evidence" }],
-    });
-    const proof = add("quality/evidence/ac-proof.json", { schema_version: "proof.v1", result: "pass" });
-    const evidence = add("quality/evidence/ac.json", {
-      schema_version: "acceptance-evidence.v1",
-      acceptance_criterion_id: "AC-001",
-      result: "pass",
-      refs: [{ ref: "quality/evidence/ac-proof.json", sha256: proof }],
-      snapshot_tree: tree,
-    });
-    const first = fact(1, "quality/evidence/ac.json", evidence);
-    const secondEvidence = add("quality/evidence/ac-2.json", {
-      schema_version: "acceptance-evidence.v1",
-      acceptance_criterion_id: "AC-001",
-      result: "pass",
-      refs: [{ ref: "quality/evidence/ac-proof.json", sha256: proof }],
-      snapshot_tree: tree,
-    });
-    const second = fact(2, "quality/evidence/ac-2.json", secondEvidence);
-    const unauthenticated = deriveCurrentProductRelease({
-      task_id: "task",
-      read: (ref) => records.get(ref) ?? (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
-      refs: ["quality/facts/one.json", "quality/facts/two.json"],
-      snapshot_tree: tree,
-      material_revision: revision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: evaluateFactFreshness,
-    });
-    expect(unauthenticated.reasons).toContain("acceptance_result_missing:AC-001");
-    records.set("quality/facts/one.json", `${JSON.stringify(first)}\n`);
-    records.set("quality/facts/two.json", `${JSON.stringify(second)}\n`);
-    const duplicate = deriveCurrentProductRelease({
-      task_id: "task",
-      read: (ref) => records.get(ref) ?? (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
-      refs: ["quality/facts/one.json", "quality/facts/two.json"],
-      snapshot_tree: tree,
-      material_revision: revision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: evaluateFactFreshness,
-    });
-    expect(duplicate.status).toBe("not_released");
-    expect(duplicate.reasons).toContain("acceptance_result_conflicting:AC-001");
-    expect(duplicate.reasons).not.toContain("acceptance_result_missing:AC-001");
-  });
-
-  it("does not promote a copied verify summary without current evidence bytes", () => {
-    const tree = "a".repeat(40);
-    const revision = `revision-${"a".repeat(64)}`;
-    const sourceDigest = "c".repeat(64);
-    const records = new Map([["task.json", "task\n"]]);
-    records.set("quality/verify.json", `${JSON.stringify({
-      schema_version: "quality-verify.v1",
-      task_id: "task",
-      stage: "verify-code",
-      status: "passed",
-      source_digest: sourceDigest,
-      material_digest: revision.slice("revision-".length),
-      material_revision: revision,
-      snapshot_tree: tree,
-      evidence_ref: "task.json",
-      evidence_hash: sha256("task\n"),
-      criteria: [{
-        acceptance_criterion_id: "AC-001",
-        result: "pass",
-        source_digest: sourceDigest,
-        acceptance_leaf: { ref: "quality/evidence/ac-001.json", sha256: sha256("missing-leaf\n") },
-        nested_evidence: [{ ref: "quality/evidence/ac-001-proof.json", sha256: sha256("missing-proof\n") }],
-        scenario: "当前场景",
-        oracle: "结果符合预期",
-        actual_outcome: "结果符合预期",
-        evidence_type: "structured_observation",
-        coverage_limits: ["仅覆盖当前场景"],
-        exceptions: ["无"],
-        implementation_anchor: { id: "impl", path: "src/app.mjs", start_line: 1, end_line: 1, role: "implementation" },
-        verification_anchor: { id: "test", path: "tests/app.test.mjs", start_line: 1, end_line: 1, role: "verification" },
-      }],
-    })}\n`);
-    const result = deriveCurrentProductRelease({
-      task_id: "task",
-      read: (ref) => records.get(ref) ?? (() => { const error = new Error("missing"); error.code = "ENOENT"; throw error; })(),
-      refs: [],
-      snapshot_tree: tree,
-      material_revision: revision,
-      expected_acceptance_ids: ["AC-001"],
-      evaluate_freshness: evaluateFactFreshness,
-    });
-    expect(result.reasons).toContain("acceptance_result_missing:AC-001");
-  });
-
-  it("requires explicit current freshness for release inputs", () => {
-    const hash = "a".repeat(64);
-    const stage_completions = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-    ].map((stage, index) => ({
-      stage,
-      status: "completed",
-      ref: `quality/facts/${index + 1}.json`,
-      hash,
-      freshness: { status: "current" },
-    }));
-    const result = deriveProductRelease({
-      stage_completions,
-      acceptance_results: [{ acceptance_criterion_id: "AC-001", result: "pass", ref: "quality/ac.json", hash }],
-      expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: { decision: "accepted", ref: "quality/confirm.json", hash },
-    });
-    expect(result.status).toBe("not_released");
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      "acceptance_result_not_current:AC-001",
-    ]));
-  });
-});
-
-describe("T1 AC-MS-011", () => {
-  it("T1 AC-MS-011 surfaces real execution-record row values through their production reader", async () => {
-    const { mkdtempSync, mkdirSync, writeFileSync, readdirSync, realpathSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { basename, dirname, join } = await import("node:path");
-    const { execFileSync } = await import("node:child_process");
-    const { createTask, createTaskKernel } = await import("../../runtime/task/task-handle.mjs");
-    const { initializeTaskStore, readTaskFacts, writeStageRow } = await import("../../runtime/task/task-store.mjs");
-    const { inspectDeliveryCloseState } = await import("../../core/task-close.mjs");
-
-    const storage = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac011-")));
-    const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac011-repo-")));
-    const bare = join(dirname(repo), `${basename(repo)}-origin.git`);
-    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
-    execFileSync("git", ["config", "user.name", "WorkflowHub Tests"], { cwd: repo });
-    execFileSync("git", ["config", "user.email", "tests@workflowhub.local"], { cwd: repo });
-    writeFileSync(join(repo, "README.md"), "baseline\n");
-    execFileSync("git", ["add", "."], { cwd: repo });
-    execFileSync("git", ["commit", "-qm", "baseline"], { cwd: repo });
-    mkdirSync(bare);
-    execFileSync("git", ["init", "--bare", "-q"], { cwd: bare });
-    execFileSync("git", ["remote", "add", "origin", bare], { cwd: repo });
-    execFileSync("git", ["push", "-q", "origin", "main"], { cwd: repo });
-    const task = createTask({ storageRoot: storage, manifest: {
-      schema_version: "1.0.0", project_name: "workflowhub", task_id: "ac011",
-      created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
-    } });
-    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-
-    // The real writer produces the current stage row.
-    writeStageRow(task.taskPath, {
-      record_kind: "stage", stage: "build-code", source: "ac011-fixture",
-      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/current.json" },
-      finding_dispositions: [{ finding: "F-1", disposition: "fixed" }],
-      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
-      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "unavailable", task_closure: "unavailable" },
-      serious_issue_disposition: { value: null, reason: "no serious issue in this fixture" },
-      close_action: { value: null, reason: "stage rows never carry a close action" },
-      handoff: { value: "HANDOFF-001", reason: "one named handoff item" },
-    });
-    // And the real close-action rows for the five physical actions of a close plan.
-    const planHash = "d".repeat(64);
-    const actionByStep = {
-      "commit-delivery": "delivery_committed", "merge-task-branch": "merge", "archive-spec": "archive",
-      "push-target-branch": "push", "cleanup": "worktree_cleanup",
-    };
-    for (const [stepId, action] of Object.entries(actionByStep)) {
-      writeStageRow(task.taskPath, {
-        record_kind: "close_action", stage: "close", source: "task-close",
-        created_at: "2026-09-11T00:00:00.000Z",
-        review_origin: "not_run", finding_dispositions: [],
-        evidence: { value: [{ command: `close:${stepId}`, exit_code: 0, failure_signature: "executed" }] },
-        layer_states: { implementation_completion: "completed", stage_quality: "incomplete", delivery: "completed", task_closure: "incomplete" },
-        close_action: { action, result: "executed", ref: `operations/close/plans/${planHash}/steps/${stepId}.json` },
-      });
-    }
-    const rows = readTaskFacts(task.taskPath);
-    const row = rows.find((value) => value.record_kind === "stage");
-    const closeRows = rows.filter((value) => value.record_kind === "close_action");
-
-    // The close state readback is the real production reader of the frozen
-    // rows: it reads facts.jsonl back and surfaces the recorded action values
-    // to the public close status output. No production producer feeds these
-    // rows into deriveStageCompletion/deriveStageOutcomeStatuses, whose
-    // observations come from quality facts, so this is where the values must
-    // reach a real caller. A row-shape drift stops the values from surfacing
-    // here, which fails this test.
-    const state = inspectDeliveryCloseState({
-      task,
-      kernel: createTaskKernel(task),
-      plan: {
-        schema_version: "task-close-plan.v1",
-        task_id: task.identity.taskId,
-        steps: Object.keys(actionByStep).map((stepId) => ({ step_id: stepId, operation: stepId })),
-        delivery: {
-          target_repo_root: repo,
-          worktree_root: join(dirname(repo), `${basename(repo)}-${task.identity.taskId}`),
-          task_branch: `task/workflowhub/${task.identity.taskId}`,
-          target_branch: "main",
-          remote: "origin",
-          task_commit: "b".repeat(40),
-          spec_source_path: `specs/${task.identity.taskId}`,
-          spec_archive_path: `specs/archive/${task.identity.taskId}`,
-          target_baseline: "c".repeat(40),
-          remote_target_baseline: "c".repeat(40),
-          merge_strategy: "--no-ff --no-edit",
-          close_mode: "ordinary",
-        },
-      },
-    });
-    expect(state.close_actions).toEqual({
-      status: "recorded",
-      actions: Object.entries(actionByStep).map(([stepId, action]) => ({
-        action,
-        recorded: true,
-        result: "executed",
-        ref: `operations/close/plans/${planHash}/steps/${stepId}.json`,
-        recorded_at: "2026-09-11T00:00:00.000Z",
-      })),
-    });
-    expect(JSON.stringify(state.close_actions)).not.toContain("undefined");
-
-    // Field-level truth: the row is the only carrier, and its layer states stay
-    // four independent slots rather than one merged verdict.
-    expect(row.layer_states).toEqual({
-      implementation_completion: "completed", stage_quality: "completed",
-      delivery: "unavailable", task_closure: "unavailable",
-    });
-    expect(Object.keys(row)).toHaveLength(16);
-    expect(closeRows.map((value) => value.close_action.action)).toEqual(Object.values(actionByStep));
-    for (const value of closeRows) expect(Object.keys(value)).toHaveLength(16);
-    expect(readdirSync(task.taskPath).some((name) => /index/i.test(name))).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../core/artifact-dir.mjs";
+import { validateRiskCloseQualityReasons } from "../core/task-close.mjs";
 import { createTask, createTaskKernel } from "../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../runtime/task/workspace.mjs";
 import { stageRuntimeMain } from "../tools/cli/stage-runtime.mjs";
@@ -296,7 +297,7 @@ describe("current quality boundary", () => {
   });
 
   it("keeps the 22-clause constitution and its checklist synchronized", () => {
-    expect(constitution).toMatch(/Version:\s*1\.7\.0\b/);
+    expect(constitution).toMatch(/Version:\s*1\.8\.0\b/);
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect(checklist).toMatch(/\*\*条目数\*\*：22/);
@@ -330,6 +331,35 @@ describe("current quality boundary", () => {
 });
 
 describe("risk acceptance behavior", () => {
+  it("requires risk quality reasons to equal the deduplicated current root-cause refs", () => {
+    const risk = {
+      accepted: true,
+      reason: "用户明确接受当前风险。",
+      deferred_items: [],
+      quality_reasons: ["facts.jsonl"],
+    };
+
+    expect(() => validateRiskCloseQualityReasons(
+      { ...risk, quality_reasons: ["caller-invented-explanation"] },
+      ["quality/facts/reported-gap.json"],
+      ["facts.jsonl"],
+    )).toThrow("delivery risk close quality_reasons must exactly match status root cause refs");
+
+    expect(() => validateRiskCloseQualityReasons(
+      risk,
+      [],
+      [],
+    )).toThrow("delivery risk close requires at least one current quality gap");
+
+    expect(validateRiskCloseQualityReasons(
+      { ...risk, quality_reasons: ["quality/facts/reported-gap.json", "facts.jsonl", "facts.jsonl"] },
+      ["ignored-quality-prose"],
+      ["facts.jsonl", "quality/facts/reported-gap.json"],
+    )).toMatchObject({
+      quality_reasons: ["quality/facts/reported-gap.json", "facts.jsonl", "facts.jsonl"],
+    });
+  });
+
   it("routes accepted risk through the existing confirm public behavior", async () => {
     const state = publicRiskFixture();
     await withPublicRuntime(state, async () => {

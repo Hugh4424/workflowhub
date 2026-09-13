@@ -74,6 +74,47 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
   "skills/wh-review/scripts/wh-review-cli.mjs",
 ]);
 
+// These files are data dependencies of the public entrypoint closure. Keep
+// the list explicit: a source checkout may contain historical or private
+// schemas that are not Runner inputs.
+const RUNNER_SCHEMA_DEPENDENCIES = Object.freeze([
+  "runtime/review/schemas/ac-evidence-summary.schema.json",
+  "runtime/review/schemas/attempt.schema.json",
+  "runtime/review/schemas/result.schema.json",
+  "runtime/review/schemas/stage-materials.schema.json",
+  "runtime/review/stage-materials.json",
+  "runtime/schemas/ambiguity-ledger.v1.json",
+  "runtime/schemas/ambiguity-ledger.v2.json",
+  "runtime/schemas/browser-qa-evidence.v1.json",
+  "runtime/schemas/decision-correction-appendix.v1.json",
+  "runtime/schemas/decision-coverage-audit.v1.json",
+  "runtime/schemas/decision-entry.v1.json",
+  "runtime/schemas/decision-log-contract.v1.json",
+  "runtime/schemas/decision-omission-acceptance.v1.json",
+  "runtime/schemas/human-confirmation.v1.schema.json",
+  "runtime/schemas/interaction-completion.v1.json",
+  "runtime/schemas/plan-task-contract.v1.json",
+  "runtime/schemas/plan-task-contract.v2.json",
+  "runtime/schemas/quality-fact.v1.json",
+  "runtime/schemas/repository-structure.v1.json",
+  "runtime/schemas/requirement-ledger.schema.json",
+  "runtime/schemas/requirements-coverage.schema.json",
+  "runtime/schemas/research-report.v1.json",
+  "runtime/schemas/review-bundle.schema.json",
+  "runtime/schemas/risk-acceptance.v1.json",
+  "runtime/schemas/runner-release.schema.json",
+  "runtime/schemas/source-manifest.schema.json",
+  "runtime/schemas/stage-completion-facts.v1.json",
+  "runtime/schemas/stage-content-evidence.v1.json",
+  "runtime/schemas/stage-reflection.v1.json",
+  "runtime/schemas/stage-reflection.v2.json",
+  "runtime/schemas/stage-skill-deps.schema.json",
+  "runtime/schemas/steps.schema.json",
+  "runtime/schemas/task-fact.v1.json",
+  "runtime/schemas/task-index.v1.json",
+  "runtime/schemas/workflow-evolution.v1.json",
+]);
+
 function collectRunnerReleaseFiles(root) {
   const locators = new Set([
     "AGENTS.md",
@@ -84,15 +125,7 @@ function collectRunnerReleaseFiles(root) {
     // must be present even if both file and manifest entry were removed.
     "runtime/schemas/runner-release.schema.json",
     ...RUNNER_ENTRYPOINTS,
-    // Phase 8 moved the authoritative schema tree under runtime/.  Keep the
-    // release self-contained: installed Runner validation must not reach back
-    // into a source checkout or a now-empty legacy schemas/ directory.
-    ...filesUnder(root, "runtime/schemas", (locator) => locator.endsWith(".json")),
-    // Review schemas live with the review parser, not in the generic runtime
-    // schema directory.  They are loaded through import.meta.url, so static
-    // import discovery cannot see them; include the declared runtime review
-    // data explicitly in the Runner release.
-    ...filesUnder(root, "runtime/review", (locator) => locator.endsWith(".json")),
+    ...RUNNER_SCHEMA_DEPENDENCIES,
     ...filesUnder(root, "contracts", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
   ]);

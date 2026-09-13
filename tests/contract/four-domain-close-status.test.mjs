@@ -35,24 +35,27 @@ function baseProjection(close = {}) {
     task_id: "task",
     work_progress: { status: "ready", stage: "verify-code" },
     stage_quality: { status: "incomplete", gaps: ["code_review"] },
-    product_release: { status: "not_released", reasons: ["acceptance_result_missing:AC-1"] },
+    root_causes: [{ root_cause_id: "code_review", status: "actionable", refs: ["facts.jsonl"] }],
+    named_refs: [{ class: "K2", refs: ["facts.jsonl"] }],
+    status_matrix: { status: "incomplete" },
     close,
   });
 }
 
 describe("S7 current close projection", () => {
-  it("always returns the four independent domains in stable order", () => {
+  it("always returns the three stable domains plus named status facts", () => {
     const projection = baseProjection({ plan: null });
 
     expect(Object.keys(projection.domains)).toEqual([...CURRENT_STATUS_DOMAINS]);
     expect(projection.domains).toMatchObject({
       work_progress: { status: "ready" },
       stage_quality: { status: "incomplete" },
-      product_release: { status: "not_released" },
       physical_delivery: { status: "not_started" },
     });
     expect(projection.domains.stage_quality.gaps).toEqual(["code_review"]);
-    expect(projection.domains.product_release.reasons).toEqual(["acceptance_result_missing:AC-1"]);
+    expect(projection.root_causes).toEqual([{ root_cause_id: "code_review", status: "actionable", refs: ["facts.jsonl"] }]);
+    expect(projection.named_refs).toEqual([{ class: "K2", refs: ["facts.jsonl"] }]);
+    expect(projection).not.toHaveProperty("product_release");
   });
 
   it.each([

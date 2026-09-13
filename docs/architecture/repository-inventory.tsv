@@ -335,7 +335,7 @@ runtime/schemas/interaction-completion.v1.json	keep	no approved deletion or move
 runtime/schemas/plan-task-contract.v1.json	keep	no approved deletion or move proof in Phase 0	582b69a605bd5ce563753979ad93adc6bf9fa808ddedae853c6d96db230a792b
 runtime/schemas/plan-task-contract.v2.json	keep	no approved deletion or move proof in Phase 0	c4c2adcc362cb99e48b86a8ce6cef333ba627ef3bd88948f95b56b3faeaba4ff
 runtime/schemas/quality-fact.v1.json	keep	no approved deletion or move proof in Phase 0	f054eae190cf1b3b59d371775795c539ecee5b2db248dba0037c3f63cea74bc0
-runtime/schemas/quality-verify.v1.json	keep	no approved deletion or move proof in Phase 0	b97977065646e0c39729d91ee2d3c539e81920b1d4881e8b2730f3e8315b1ae3
+runtime/schemas/quality-verify.v1.json	delete	C6 Tier-C removal: active quality/verify.v1 object graph is removed after structured T54/T55 proof; immutable archive/research references remain read-only	1629345410d8f4edd8254d7cc3314e95f5226af1341b910fcae725dc12eb994d
 runtime/schemas/repository-structure.v1.json	keep	no approved deletion or move proof in Phase 0	f7c3190bf4053f6452e08bc35401982a90596bfcea115803efce300beb4e1ca2
 runtime/schemas/requirement-ledger.schema.json	keep	no approved deletion or move proof in Phase 0	73bab36a7a2c2df3c3a0e31bb0e4f0133f9d09c192066ca5e3f0a3b0fd291c54
 runtime/schemas/requirements-coverage.schema.json	keep	no approved deletion or move proof in Phase 0	c240a353c65c0e91546caa1b9c0a69ec6c51c56a283e1c3630829ea3b36c20d7

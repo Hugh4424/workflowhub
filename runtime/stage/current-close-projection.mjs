@@ -1,14 +1,13 @@
 // Read-only status composition for the current task.
 //
 // This module deliberately owns no store and writes no record.  It composes
-// the existing authenticated quality/product facts with the existing close
+// the existing authenticated quality facts with the existing close
 // plan, immutable step records, and live physical observations.  The close
 // writer remains in core/task-close.mjs; this file is only its status reader.
 
 export const CURRENT_STATUS_DOMAINS = Object.freeze([
   "work_progress",
   "stage_quality",
-  "product_release",
   "physical_delivery",
 ]);
 
@@ -106,7 +105,7 @@ function cleanupShape(facts) {
 
 /**
  * Derive exactly one physical-delivery state from an existing close view.
- * The function never treats a quality/release snapshot as an execution fact.
+ * The function never treats a quality snapshot as an execution fact.
  */
 export function derivePhysicalDeliveryStatus(input = {}) {
   const close = asObject(input, "close projection");
@@ -226,7 +225,7 @@ function closeView(input) {
 }
 
 /**
- * Compose the four stable status domains and the separate close records.
+ * Compose the three stable status domains and the separate close records.
  * `close` is deliberately returned as plan/step/completed only; no derived
  * status is persisted or promoted to a second authority.
  */
@@ -234,7 +233,12 @@ export function deriveCurrentCloseProjection({
   task_id: taskId = null,
   work_progress: workProgress,
   stage_quality: stageQuality,
-  product_release: productRelease,
+  root_causes: rootCauses = [],
+  named_refs: namedRefs = [],
+  stage_reflection: stageReflection = null,
+  status_matrix: statusMatrix = null,
+  identity = null,
+  source_completeness: sourceCompleteness = null,
   close: closeInput,
   ...directClose
 } = {}) {
@@ -243,7 +247,6 @@ export function deriveCurrentCloseProjection({
   const domains = {
     work_progress: domain(workProgress, "work progress is unavailable"),
     stage_quality: domain(stageQuality, "stage quality is unavailable"),
-    product_release: domain(productRelease, "product release is unavailable"),
     physical_delivery: physical,
   };
   return Object.freeze({
@@ -251,6 +254,12 @@ export function deriveCurrentCloseProjection({
     task_id: taskId,
     producer: "deriveCurrentCloseProjection",
     domains: Object.freeze(domains),
+    root_causes: Object.freeze(clone(rootCauses) ?? []),
+    named_refs: Object.freeze(clone(namedRefs) ?? []),
+    stage_reflection: clone(stageReflection),
+    status_matrix: clone(statusMatrix),
+    identity: clone(identity),
+    source_completeness: clone(sourceCompleteness),
     close: closeView(close),
   });
 }

@@ -184,8 +184,6 @@ function authorizePlanningOperation({ state, kernel, plan, confirmation, operati
     operation,
     subject_ref: confirmation.confirmation.human_confirmation_ref,
     subject_hash: confirmation.confirmation.human_confirmation_hash,
-    material_revision: plan.delivery.planning.material_revision,
-    snapshot_tree: plan.delivery.planning.snapshot_tree,
     authorized_at: "2026-09-11T00:00:00.000Z",
   };
   const raw = `${JSON.stringify(value, null, 2)}\n`;
@@ -529,37 +527,30 @@ function writeCloseStageRow(state, { stage = "build-code", layerState = "complet
   });
 }
 
-/** The close-path product release still reports this stage's outcome as missing. */
-function closeReportsMissingStageOutcome(plan, stage) {
-  return plan.delivery.product_release.reasons.includes(`stage_predicate_missing:${stage}:stage_outcome`);
-}
-
 describe("close reads the current close stage result from the execution-record row", () => {
-  it("follows the frozen row instead of the old stage-outcome envelopes", () => {
+  it("does not reconstruct a product-release projection from stage-outcome envelopes", () => {
     const state = fixture();
     initializeTaskStore(state.task.taskPath, { taskId: state.taskId });
 
-    // No row yet: every formal stage reports its missing row as an observable
-    // completion gap, and the close plan is still prepared.
+    // The ordinary close plan has its own quality reader. It must remain
+    // usable when the execution record has no rows, without recreating the
+    // retired product-release object graph.
     const withoutRow = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    expect(withoutRow.plan.delivery.product_release.status).toBe("not_released");
-    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
-      expect(closeReportsMissingStageOutcome(withoutRow.plan, stage)).toBe(true);
-    }
+    expect(withoutRow.plan.delivery).not.toHaveProperty("product_release");
+    expect(withoutRow.plan.delivery.quality_gaps).toEqual([
+      "verify-code: current verify-code quality facts are incomplete: code_review",
+    ]);
 
     writeCloseStageRow(state, { stage: "build-code", layerState: "completed" });
     const withRow = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    // The row is the current stage result, so build-code no longer reports a
-    // missing stage outcome; the stages without a row keep their honest reason.
-    expect(closeReportsMissingStageOutcome(withRow.plan, "build-code")).toBe(false);
-    for (const stage of ["make-decision", "build-spec", "build-plan", "verify-code"]) {
-      expect(closeReportsMissingStageOutcome(withRow.plan, stage)).toBe(true);
-    }
+    expect(withRow.plan.delivery).not.toHaveProperty("product_release");
+    expect(withRow.plan.delivery.quality_gaps).toEqual(withoutRow.plan.delivery.quality_gaps);
 
-    // Only the row changes: the close projection follows its value.
+    // A later row replacement does not create a second close status source.
     writeCloseStageRow(state, { stage: "build-code", layerState: "incomplete" });
     const afterRetry = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    expect(closeReportsMissingStageOutcome(afterRetry.plan, "build-code")).toBe(true);
+    expect(afterRetry.plan.delivery).not.toHaveProperty("product_release");
+    expect(afterRetry.plan.delivery.quality_gaps).toEqual(withoutRow.plan.delivery.quality_gaps);
   });
 
   it("degrades a store without the execution record honestly instead of failing the close plan", () => {
@@ -572,11 +563,10 @@ describe("close reads the current close stage result from the execution-record r
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
 
     expect(prepared.plan.steps.map((step) => step.step_id)).toEqual(EXPECTED_ACTIONS);
-    expect(prepared.plan.delivery.product_release.status).toBe("not_released");
-    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
-      expect(closeReportsMissingStageOutcome(prepared.plan, stage)).toBe(true);
-    }
-    expect(prepared.plan.delivery.quality_gaps.join("\n")).toContain("stage_predicate_missing:verify-code:stage_outcome");
+    expect(prepared.plan.delivery).not.toHaveProperty("product_release");
+    expect(prepared.plan.delivery.quality_gaps).toEqual([
+      "verify-code: current verify-code quality facts are incomplete: code_review",
+    ]);
   });
 });
 
@@ -713,8 +703,6 @@ describe("planning-hardening unarchived planning close", () => {
       operation: "push",
       subject_ref: confirmation.confirmation.human_confirmation_ref,
       subject_hash: confirmation.confirmation.human_confirmation_hash,
-      material_revision: archivePlan.plan.delivery.planning.material_revision,
-      snapshot_tree: archivePlan.plan.delivery.planning.snapshot_tree,
       authorized_at: "2026-09-11T00:00:00.000Z",
     };
     const authorizationRaw = `${JSON.stringify(authorization, null, 2)}\n`;
@@ -887,8 +875,6 @@ describe("planning-hardening unarchived planning close", () => {
         operation,
         subject_ref: confirmation.confirmation.human_confirmation_ref,
         subject_hash: confirmation.confirmation.human_confirmation_hash,
-        material_revision: archivePlan.plan.delivery.planning.material_revision,
-        snapshot_tree: archivePlan.plan.delivery.planning.snapshot_tree,
         authorized_at: "2026-09-11T00:00:00.000Z",
       };
       const authorizationRaw = `${JSON.stringify(authorization, null, 2)}\n`;

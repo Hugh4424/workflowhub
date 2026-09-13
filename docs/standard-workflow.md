@@ -35,14 +35,13 @@
 publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
 什么，不会覆盖四份材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
 
-## 四个状态视角和十个读取入口
+## 三个状态视角和十个读取入口
 
-四个视角只从当前事实即时派生：`work_progress` 看能否继续修复，`stage_quality` 看本阶段
-质量是否闭合，`product_release` 由 `completion-predicates.mjs` 的
-`deriveProductRelease()` 读取五阶段 current completion、逐 AC 结果和 verify-code 当前代码审查结果，
-同时接收批准 spec 的完整适用 AC ID 集合；缺失、重复、意外、非 current 或身份未绑定的输入
-只能得到 `not_released`，延期/不适用项不能被猜成通过。
-`physical_delivery` 只看 close 的真实物理结果。它们不是新状态机，也不是继续工作的许可证。
+三个视角只从当前事实即时派生：`work_progress` 看能否继续修复，`stage_quality` 看本阶段
+质量是否闭合，`physical_delivery` 只看 close 的真实物理结果。status/close 以 `facts.jsonl`
+K2 当前行和 K1–K6 具名 ref 为准；C6 removal 收口后 active `quality/verify.v1` object graph、
+`product_release` 与 `status_groups` 不再是输出。`specs/archive/**`、`docs/research/**` 只读保留。
+它们不是新状态机，也不是继续工作的许可证。
 
 host、doctor、status、monitor、run、review、verify、confirm、authorize、close 只按职责读取
 这些视角；先给主结论，再给当前绑定、失败原因、未改变事实和唯一下一步。任何入口都不能把
@@ -373,9 +372,9 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 `prepare`、`confirm`、`execute`、`complete` 只作为内部执行和测试接口，不要求用户重复确认；
 不再提供第二个用户-facing close 动作。
 
-close/status 的只读视图由 `runtime/stage/current-close-projection.mjs` 组合四个独立域：
-`work_progress`、`stage_quality`、`product_release`、`physical_delivery`。产品发布只消费既有
-`quality/verify.json` 的 current per-AC 权威；物理域只消费计划、不可变步骤记录和现场读回。
+close/status 的只读视图由 `runtime/stage/current-close-projection.mjs` 组合三个独立域：
+`work_progress`、`stage_quality`、`physical_delivery`。它只消费 K2 当前行、K1–K6 具名 ref、
+计划、不可变步骤记录和现场读回；不生成或消费 `product_release`、`status_groups`。
 物理状态只允许 `not_started`、`incomplete`、`removed`、`not_applicable_recorded`、
 `unavailable`、`unknown`；计划预测不等于执行结果，质量或发布状态也不等于物理交付状态。
 计划、步骤、完成结果分开；确认先于逐动作授权，失败步骤保留且同一计划只读回补足，不覆盖旧失败。

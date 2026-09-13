@@ -61,7 +61,7 @@ describe("official existing task bootstrap integrity", () => {
     expect(first).toMatchObject({ task_path: task.taskPath, project: "workflowhub", task: "half-created-task" });
     // A current task owns exactly one execution record file; the retired index
     // object is no longer created.
-    for (const file of ["facts.jsonl", "quality/verify.json"]) {
+    for (const file of ["facts.jsonl"]) {
       expect(existsSync(join(task.taskPath, file)), file).toBe(true);
     }
     expect(existsSync(join(task.taskPath, "index.json"))).toBe(false);
@@ -69,7 +69,7 @@ describe("official existing task bootstrap integrity", () => {
       expect(statSync(join(task.taskPath, directory)).isDirectory(), directory).toBe(true);
     }
 
-    const before = Object.fromEntries(["facts.jsonl", "quality/verify.json"]
+    const before = Object.fromEntries(["facts.jsonl"]
       .map((file) => [file, readFileSync(join(task.taskPath, file), "utf8")]));
     const second = bootstrapTask(values, { env: state.env, home: state.home, cwd: state.repo });
     expect(second.task_path).toBe(first.task_path);

@@ -8,7 +8,6 @@ import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues, materializeGitSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
-import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
 import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../runtime/review/schema-validator.mjs";
@@ -19,9 +18,8 @@ import { ArtifactDir, artifactReference } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
 import { initializeTaskStore, readTaskFacts, writeStageRow } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
-import { deriveCurrentProductRelease, deriveStageOutcomeStatuses, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
-import { authenticateStageOutcomeForProjection } from "../runtime/stage/stage-runner.mjs";
-import { activeAcceptanceCriterionIds, readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
+import { STAGE_PREDICATES } from "../runtime/stage/completion-predicates.mjs";
+import { readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
 const GOVERNED_EXECUTORS = new WeakSet();
@@ -1351,55 +1349,6 @@ function createOrVerify(task, path, record, label) {
   return record;
 }
 
-function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, currentSnapshotTree = null, repositoryRoot = null, closeMode = "ordinary") {
-  if (acceptedVerify?.vnext !== true) {
-    return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
-  }
-  const requiredKinds = { ...STAGE_PREDICATES["verify-code"] };
-  const requiredSubjects = Object.keys(requiredKinds);
-  const required = requiredSubjects.map((subject) => {
-    if (closeMode === "mini-task" && subject === "code_review") {
-      return acceptedVerify?.facts?.mini_task_implementation_review;
-    }
-    if (closeMode === "mini-task" && subject === "human_confirmation") {
-      return acceptedVerify?.facts?.mini_task_human_confirmation;
-    }
-    return acceptedVerify?.facts?.[subject === "full_tests_fresh" ? "tests" : subject];
-  });
-  const missing = requiredSubjects.filter((subject, index) => {
-    const fact = required[index];
-    const kind = requiredKinds[subject];
-    return !fact || fact.kind !== kind || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === ""
-      || !qualityPredicateSatisfied(fact, kind, {
-        stage: "verify-code",
-        subject,
-        review_status: fact.review_status,
-      });
-  });
-  if (missing.length) {
-    const state = existsSync(worktreeRoot) ? "current verify-code quality facts are incomplete" : "current verify-code quality facts are incomplete after worktree removal";
-    return Object.freeze({
-      current: false,
-      reason: `${state}: ${missing.join(", ")}`,
-    });
-  }
-  const snapshot = existsSync(worktreeRoot)
-    ? captureExecutionSnapshot(worktreeRoot, taskId)
-    : Object.freeze({ tree: currentSnapshotTree ?? required[0]?.snapshot_tree ?? null });
-  // The verify-code quality review is the single independent review for the
-  // final snapshot. Phase reviews remain immutable audit facts; requiring a
-  // second build-code integration review here duplicated work without adding
-  // a new acceptance question. The explicit close confirmation decides what
-  // to do with the current verification conclusion.
-  // Historical freshness helpers may explain execution/material writebacks,
-  // but current close requires the exact snapshot that produced the facts.
-  const stale = required.filter((fact) => fact?.snapshot_tree !== snapshot.tree);
-  if (stale.length) {
-    return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(stale.map((fact) => fact.snapshot_tree))] });
-  }
-  return Object.freeze({ current: true, reason: "current", snapshot_tree: snapshot.tree });
-}
-
 /** Persist one immutable, plan-bound close decision. */
 export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, outcome, replyText, stepSlug, now = () => new Date().toISOString() } = {}) {
   const task = assertTaskHandle(taskHandle);
@@ -1593,6 +1542,35 @@ function executorFor(executors, step) {
   plain(executor, `close executor ${step.step_id}`);
   if (typeof executor.probe !== "function" || typeof executor.execute !== "function" || typeof executor.verify !== "function") throw new TypeError(`close executor ${step.step_id} requires probe, execute, and verify functions`);
   return executor;
+}
+
+/**
+ * Run every close-wide read-only check before the first step probe or commit.
+ * This keeps merge conflicts, target dirt, remote drift, and local execution
+ * sidecars from being discovered only after commit-delivery has changed state.
+ */
+function preflightCloseExecution({ task, plan, delivery }) {
+  if (!delivery) return Object.freeze({ status: "not_applicable" });
+  const postCleanupArchive = isPostCleanupArchivePlan(plan, task);
+  targetPreflight(delivery, null, {
+    checkRemote: true,
+    ...(postCleanupArchive ? { allowPlannedArchiveRename: archiveRenameRecoveryState(delivery) } : {}),
+  });
+  if (existsSync(delivery.worktree_root)) {
+    assertNoCloseExecutionSidecars(delivery.worktree_root, { taskId: task.identity.taskId });
+  }
+  if (plan.steps.some((step) => step.operation === "merge-task-branch")) {
+    plannedMergePreflight(delivery);
+  }
+  if (plan.steps.some((step) => step.operation === "commit-delivery")) {
+    if (!existsSync(delivery.worktree_root)) throw new Error("task worktree is unavailable before commit-delivery");
+    const snapshot = captureExecutionSnapshot(delivery.worktree_root, task.identity.taskId);
+    const plannedTree = gitResult(delivery.target_repo_root, ["rev-parse", `${delivery.task_commit}^{tree}`]);
+    if (!plannedTree.ok || snapshot.tree.toLowerCase() !== plannedTree.stdout.toLowerCase()) {
+      throw new Error("task worktree bytes changed before close preflight");
+    }
+  }
+  return Object.freeze({ status: "ready", target_branch: delivery.target_branch });
 }
 
 async function probeSatisfied(executor, step, phase) {
@@ -2081,7 +2059,7 @@ function validateArchiveDeclarationArgument(plan, task, archiveDeclarationRef) {
   });
 }
 
-function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true, allowPlannedArchiveRename = false } = {}) {
+function targetPreflight(delivery, expectedLocal = null, { checkRemote = true, allowPlannedArchiveRename = false } = {}) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
   const dirtySource = sourceWorktreeStatus(root);
@@ -2092,15 +2070,17 @@ function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { c
     }
   }
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
-  if (expectedLocal !== null && branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
-  if (checkRemote && remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
+  const remoteTarget = checkRemote ? remoteOid(root, delivery.remote, delivery.target_branch) : null;
+  if (checkRemote && !/^[a-f0-9]{40}$/i.test(remoteTarget ?? "")) throw new Error("remote target object is unavailable");
 }
 
 function plannedMergePreflight(delivery) {
+  const targetBaseline = branchOid(delivery.target_repo_root, delivery.target_branch);
+  if (!targetBaseline) throw new Error("target branch does not exist before merge");
   const tip = branchOid(delivery.target_repo_root, delivery.task_branch);
   if (!tip) throw new Error("task branch does not exist before merge");
-  const result = gitResult(delivery.target_repo_root, ["merge-tree", "--write-tree", delivery.target_baseline, tip]);
-  if (result.ok) return Object.freeze({ target_baseline: delivery.target_baseline, task_tip: tip, conflict: false });
+  const result = gitResult(delivery.target_repo_root, ["merge-tree", "--write-tree", targetBaseline, tip]);
+  if (result.ok) return Object.freeze({ target_baseline: targetBaseline, task_tip: tip, conflict: false });
   if (result.status === 1) throw new Error("planned merge has conflicts; run skills/resolving-merge-conflicts on the task branch, then retry close");
   throw new Error(`planned merge preflight failed: ${result.stderr || result.stdout || "git merge-tree failed"}`);
 }
@@ -2123,7 +2103,7 @@ function validateDeliveryPlan(plan, task, kernel) {
   if (delivery.spec_source_path === delivery.spec_archive_path) throw new Error("delivery spec source and archive paths must differ");
   if (delivery.risk_close !== undefined) {
     validateRiskClose(delivery.risk_close);
-    validateRiskCloseQualityReasons(delivery.risk_close, delivery.quality_gaps);
+    validateRiskCloseQualityReasons(delivery.risk_close, delivery.quality_gaps, delivery.status_root_cause_refs);
   }
   for (const branch of [delivery.task_branch, delivery.target_branch]) {
     if (!gitResult(delivery.target_repo_root, ["check-ref-format", "--branch", branch]).ok) throw new TypeError(`invalid Git branch: ${branch}`);
@@ -2148,9 +2128,9 @@ function validateDeliveryPlan(plan, task, kernel) {
         || planning.source_path !== planningSourcePath(task)
         || !Array.isArray(planning.material_files)
         || planning.material_files.join(",") !== PLANNING_MATERIAL_FILES.join(",")
-        || !/^revision-[a-f0-9]{64}$/.test(planning.material_revision ?? "")
-        || !/^[a-f0-9]{40,64}$/i.test(planning.snapshot_tree ?? "")
-        || !/^[a-f0-9]{40}$/i.test(planning.snapshot_commit ?? "")) {
+        || (planning.material_revision !== undefined && !/^revision-[a-f0-9]{64}$/.test(planning.material_revision))
+        || (planning.snapshot_tree !== undefined && !/^[a-f0-9]{40,64}$/i.test(planning.snapshot_tree))
+        || (planning.snapshot_commit !== undefined && !/^[a-f0-9]{40}$/i.test(planning.snapshot_commit))) {
       throw new Error("planning close material identity is invalid");
     }
     if (!planning.materials || typeof planning.materials !== "object" || Array.isArray(planning.materials)
@@ -2222,8 +2202,9 @@ function validateRiskClose(value) {
   return risk;
 }
 
-function validateRiskCloseQualityReasons(risk, qualityGaps) {
-  const expected = [...new Set((Array.isArray(qualityGaps) ? qualityGaps : [])
+export function validateRiskCloseQualityReasons(risk, qualityGaps, statusRootCauseRefs = undefined) {
+  const source = Array.isArray(statusRootCauseRefs) ? statusRootCauseRefs : qualityGaps;
+  const expected = [...new Set((Array.isArray(source) ? source : [])
     .filter((item) => typeof item === "string" && item.trim() !== "")
     .map((item) => item.trim()))].sort();
   const supplied = [...new Set(risk.quality_reasons.map((item) => item.trim()))].sort();
@@ -2231,7 +2212,7 @@ function validateRiskCloseQualityReasons(risk, qualityGaps) {
     throw new Error("delivery risk close requires at least one current quality gap");
   }
   if (expected.length !== supplied.length || expected.some((item, index) => item !== supplied[index])) {
-    throw new Error("delivery risk close quality_reasons must exactly match current quality_gaps");
+    throw new Error("delivery risk close quality_reasons must exactly match status root cause refs");
   }
   return risk;
 }
@@ -2261,18 +2242,12 @@ function closeConfirmation(task, planHash, ref) {
 }
 
 function publishPlanningHumanConfirmation({ task, kernel, plan, decision, replyText, stepSlug, now }) {
-  const planning = plan.delivery?.planning;
-  if (typeof planning?.material_revision !== "string" || typeof planning?.snapshot_tree !== "string") {
-    throw new Error("planning close plan is missing its material/snapshot identity");
-  }
   const value = {
     schema_version: "human-confirmation.v3",
     task_id: task.identity.taskId,
     stage: "planning-close",
     decision,
     subject_ref: `operations/close/plans/${closePlanHash(plan)}/plan.json`,
-    material_revision: planning.material_revision,
-    snapshot_tree: planning.snapshot_tree,
     confirmed_at: now(),
     reply_text: replyText,
     step_slug: stepSlug,
@@ -2288,18 +2263,12 @@ function publishPlanningHumanConfirmation({ task, kernel, plan, decision, replyT
 }
 
 function publishPlanningIrreversibleAuthorization({ task, kernel, plan, operation, confirmation }) {
-  const planning = plan.delivery?.planning;
-  if (typeof planning?.material_revision !== "string" || typeof planning?.snapshot_tree !== "string") {
-    throw new Error("planning close plan is missing its material/snapshot identity");
-  }
   const value = {
     schema_version: "irreversible-authorization.v1",
     task_id: task.identity.taskId,
     operation,
     subject_ref: confirmation.ref,
     subject_hash: confirmation.hash,
-    material_revision: planning.material_revision,
-    snapshot_tree: planning.snapshot_tree,
     authorized_at: new Date().toISOString(),
   };
   const raw = `${JSON.stringify(value, null, 2)}\n`;
@@ -2475,7 +2444,7 @@ function preparedStepIsCompletedAfterTargetAdvance(task, planHash, stepId, plan)
         || recorded.target_oid !== mergeOid
         || !/^[a-f0-9]{40}$/i.test(taskTip ?? "")
         || parents.length !== 2
-        || parents[0] !== delivery.target_baseline
+        || !contains(delivery.target_baseline, parents[0])
         || !contains(delivery.task_commit, parents[1])
         || !contains(mergeOid, currentTarget)) {
       throw new Error(`prior close step ${stepId} physical state does not match the current repository`);
@@ -2650,12 +2619,8 @@ export function prepareDeliveryClosePlan({
     : normalizePlanningAttachments(requestedPlanningAttachments);
   let planningContext = null;
   let materialRevision;
-  let materialArtifacts = null;
-  let materialValues = {};
   let qualityReasons = [];
-  let acceptedVerify;
-  let productRelease = null;
-  let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
+  let statusRootCauseRefs = [];
   if (selectedCloseMode === "planning" || declaredPlanningTask) {
     planningContext = planningMaterialContext({
       task,
@@ -2667,13 +2632,10 @@ export function prepareDeliveryClosePlan({
     });
     materialRevision = planningContext.materialRevision;
     qualityReasons = planningContext.qualityGaps;
-    verifyFreshness = { current: false, reason: "planning close does not execute verify-code or product-release checks" };
   } else {
     materialRevision = currentMaterialRevision(task, worktree);
-    materialArtifacts = ArtifactDir.open(worktree, task);
-    materialValues = Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, materialArtifacts.read(name)]));
     try {
-      acceptedVerify = currentVerifyFacts(task, {
+      currentVerifyFacts(task, {
         snapshotTree: currentSnapshot.tree,
         materialRevision,
         snapshotCommit: deliverySnapshotCommit,
@@ -2683,60 +2645,10 @@ export function prepareDeliveryClosePlan({
       });
     } catch (error) {
       qualityReasons.push(`verify-code: ${error.message}`);
-    }
-    if (!allowMiniTaskFocused) {
-      try {
-        const stageOutcomeStatuses = deriveStageOutcomeStatuses({
-          task_id: task.identity.taskId,
-          read: task.readRecord,
-          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, task.listCanonicalStageOutcomeRefs(stage)])),
-          snapshot_tree: currentSnapshot.tree,
-          material_revision: materialRevision,
-          material_scope_revisions: stageMaterialScopeRevisions(materialValues),
-          snapshot_root: worktree,
-          // The current stage result is the frozen row of the single execution
-          // record, exactly as the public status path reads it. A stage whose
-          // row is missing stays unavailable with an observable reason instead
-          // of falling back to the old stage-outcome envelope bytes.
-          read_task_facts: () => readTaskFacts(task.taskPath),
-          authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({
-            task,
-            kernel,
-            identity: task.identity,
-            workspace,
-            artifacts: materialArtifacts,
-            stage,
-          }, stage, ref),
-        });
-        productRelease = deriveCurrentProductRelease({
-          task_id: task.identity.taskId,
-          read: task.readRecord,
-          refs: task.listCanonicalQualityFactRefs(),
-          snapshot_tree: currentSnapshot.tree,
-          material_revision: materialRevision,
-          material_scope_revisions: stageMaterialScopeRevisions(materialValues),
-          snapshot_root: worktree,
-          expected_acceptance_ids: activeAcceptanceCriterionIds(materialArtifacts.read("spec.md")),
-          evaluate_freshness: evaluateFactFreshness,
-          stage_outcome_statuses: stageOutcomeStatuses,
-        });
-      } catch (error) {
-        qualityReasons.push(`product-release: ${error.message}`);
-      }
-    }
-    if (productRelease && productRelease.status !== "released") {
-      qualityReasons.push(`product-release: ${productRelease.reasons.join(", ")}`);
-    }
-    if (acceptedVerify) verifyFreshness = verifyFactsFreshForClose(
-      acceptedVerify,
-      worktree,
-      task.identity.taskId,
-      currentSnapshot.tree,
-      null,
-      allowMiniTaskFocused ? "mini-task" : "ordinary",
-    );
-    if (!verifyFreshness.current) {
-      qualityReasons.push(`verify-code freshness: ${verifyFreshness.reason}`);
+      // The current quality gap is declared by the canonical execution
+      // record. Keep the risk-close comparison on that named K2 ref rather
+      // than on a caller-provided prose explanation.
+      statusRootCauseRefs = ["facts.jsonl"];
     }
   }
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
@@ -2788,15 +2700,15 @@ export function prepareDeliveryClosePlan({
         development_status: "not_executed",
         quality_status: "not_run",
       } : {}),
-      ...(productRelease ? { product_release: productRelease } : {}),
       ...(planningContext ? {} : { quality_status: qualityReasons.length === 0 ? "observed" : "incomplete" }),
       quality_gaps: [...new Set(qualityReasons)],
+      status_root_cause_refs: [...new Set(statusRootCauseRefs)],
     },
     steps: (declaredPlanningTask ? UNARCHIVED_PLANNING_STEPS : DELIVERY_STEPS)
       .map(([step_id, operation]) => ({ step_id, operation })),
   };
   const delivery = validateDeliveryPlan(plan, task, kernel);
-  targetPreflight(delivery);
+  targetPreflight(delivery, null);
   if (!gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok) throw new Error("task commit does not exist");
   if (treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.type !== "tree") throw new Error("accepted spec source must be a directory in the task commit");
   if (gitResult(root, ["cat-file", "-e", `${delivery.task_commit}:${delivery.spec_archive_path}`]).ok) throw new Error("spec is already archived in the task commit");
@@ -2818,37 +2730,11 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const root = delivery.target_repo_root;
   const taskSnapshotTree = gitResult(root, ["rev-parse", `${delivery.task_commit}^{tree}`]);
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
-  let acceptedVerify;
-  let verifyError;
   const planningMode = delivery.close_mode === "planning";
   const declaredPlanning = isDeclaredPlanningDelivery(plan, task);
   const unarchivedPlanning = declaredPlanning && stepListMatches(plan.steps, UNARCHIVED_PLANNING_STEPS);
   const archivePlan = declaredPlanning && stepListMatches(plan.steps, POST_CLEANUP_ARCHIVE_STEPS);
   const planningDelivery = planningMode || declaredPlanning;
-  if (!planningDelivery) {
-    try {
-      acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? {
-        snapshotTree: taskSnapshotTree.stdout,
-        snapshotCommit: delivery.task_commit,
-        worktreeRoot: delivery.target_repo_root,
-        allowMiniTaskFocused: delivery.close_mode === "mini-task",
-      } : {});
-    } catch (error) {
-      verifyError = error;
-    }
-  }
-  const verifyFreshness = planningDelivery
-    ? { current: false, reason: "planning close does not execute verify-code or product-release checks" }
-    : acceptedVerify
-      ? verifyFactsFreshForClose(
-        acceptedVerify,
-        delivery.worktree_root,
-        task.identity.taskId,
-        taskSnapshotTree.ok ? taskSnapshotTree.stdout : null,
-        root,
-        delivery.close_mode,
-      )
-      : { current: false, reason: verifyError?.message ?? "verify-code facts are unavailable" };
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
@@ -2859,7 +2745,8 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const archiveScopePreserved = archivePlan
     ? archive.commit !== null
       && archive.commit === localTarget.stdout.toLowerCase()
-      && archive.parent_oid === delivery.target_baseline
+      && archive.parent_oid !== null
+      && gitResult(root, ["merge-base", "--is-ancestor", delivery.target_baseline, archive.parent_oid]).ok
     : unarchivedPlanning
       ? true
       : archiveCommitIncluded;
@@ -2906,12 +2793,6 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     branch_cleanup: branchCleanup,
     cleanup: cleanupFact,
   };
-  facts.verify_facts_fresh = verifyFreshness.current;
-  if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
-  if (planningDelivery) {
-    facts.verify_facts_fresh = false;
-    delete facts.verify_facts_fresh_reason;
-  }
   const missing = [
     ["delivery", facts.delivery_committed],
     ["archive", facts.archive],
@@ -2920,7 +2801,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     ["worktree_cleanup", facts.worktree_cleanup],
     ["formal_cleanup_safe", facts.formal_cleanup_safe],
     ["branch_cleanup", facts.branch_cleanup],
-    ...(planningDelivery ? [["planning_material", planningMaterial?.status === "complete" && delivery.material_status === "complete"]] : [["verify_facts_fresh", verifyFreshness.current]]),
+    ...(planningDelivery ? [["planning_material", planningMaterial?.status === "complete" && delivery.material_status === "complete"]] : []),
   ].filter(([, done]) => !done).map(([name]) => name);
   const physicalMissing = physicalDeliveryMissing(facts, { requireArchive: !unarchivedPlanning });
   return Object.freeze({
@@ -3088,7 +2969,9 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     const value = findArchive();
     const target = postCleanupArchive ? branchOid(root, delivery.target_branch) : null;
     const scopePreserved = !postCleanupArchive
-      || (value.commit !== null && value.commit === target && value.parent_oid === delivery.target_baseline);
+      || (value.commit !== null && value.commit === target
+        && value.parent_oid !== null
+        && gitResult(root, ["merge-base", "--is-ancestor", delivery.target_baseline, value.parent_oid]).ok);
     return {
       satisfied: value.commit !== null && value.tree_preserved && value.only_renames && scopePreserved,
       archive_commit: value.commit,
@@ -3102,7 +2985,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     const list = gitResult(root, ["rev-list", "--first-parent", target]).stdout.split(/\s+/).filter(Boolean);
     for (const commit of list) {
       const parents = gitResult(root, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(" ").slice(1);
-      if (parents.length === 2 && parents[0] === delivery.target_baseline && contains(delivery.task_commit, parents[1])) {
+      if (parents.length === 2 && contains(delivery.target_baseline, parents[0]) && contains(delivery.task_commit, parents[1])) {
         return { satisfied: true, target_oid: target, task_tip: parents[1], archive_commit: null, planned_merge_oid: commit, resolved: false };
       }
     }
@@ -3209,14 +3092,15 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             const archive = archiveFacts(root, target ? delivery.target_branch : null, delivery);
             const exactArchive = archive.commit !== null
               && archive.commit === target
-              && archive.parent_oid === delivery.target_baseline;
+              && archive.parent_oid !== null
+              && contains(delivery.target_baseline, archive.parent_oid);
             return { satisfied: exactArchive && archive.tree_preserved && archive.only_renames && remote === target, target_oid: target, remote_oid: remote, archive_commit: archive.commit, parent_oid: archive.parent_oid };
           };
           return {
             probe: archivePublished,
             execute: async () => {
               const archive = archiveFacts(root, delivery.target_branch, delivery);
-              if (archive.commit === null || archive.parent_oid !== delivery.target_baseline || archive.commit !== branchOid(root, delivery.target_branch)) {
+              if (archive.commit === null || archive.parent_oid === null || !contains(delivery.target_baseline, archive.parent_oid) || archive.commit !== branchOid(root, delivery.target_branch)) {
                 throw new Error("target branch is not the exact prepared archive commit");
               }
               targetPreflight(delivery, archive.commit);
@@ -3362,6 +3246,7 @@ export async function executeClosePlan(options = {}) {
   // Validate every executable boundary before creating a record or performing a
   // physical probe. A malformed later step must have zero side effects.
   for (const step of plan.steps) executorFor(executors, step);
+  preflightCloseExecution({ task, plan, delivery });
   const now = options.now ?? (() => new Date().toISOString());
   if (typeof now !== "function") throw new TypeError("close now must be a function");
 
