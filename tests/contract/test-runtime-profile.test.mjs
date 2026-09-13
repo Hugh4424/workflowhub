@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   TEST_RUNTIME_PROFILE_NAMES,
+  TEST_RUNTIME_PROFILE_LIMITS_MS,
   validateTestRuntimeProfile,
 } from "../../runtime/stage/stage-content-contracts.mjs";
 import { captureWorkspaceSnapshot, createCanonicalReceiptWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
@@ -44,7 +45,7 @@ const CAPABILITY_PROOF = {
 
 const PROFILE = {
   test_tier: "feature",
-  runtime_profile: "medium",
+  runtime_profile: "phase",
   ceiling_ms: 300_000,
   permissions: {
     network: "localhost_only",
@@ -73,8 +74,8 @@ function validProfile(overrides = {}) {
 }
 
 describe("test runtime profile contract", () => {
-  it("keeps test tier orthogonal to runtime profile and validates a complete medium profile", () => {
-    expect(TEST_RUNTIME_PROFILE_NAMES).toEqual(["inner", "medium", "large"]);
+  it("keeps test tier orthogonal to runtime profile and validates a complete phase profile", () => {
+    expect(TEST_RUNTIME_PROFILE_NAMES).toEqual(["inner", "phase", "aggregate"]);
     expect(validateTestRuntimeProfile(validProfile({ capability_proof: CAPABILITY_PROOF }))).toMatchObject({ ok: true, status: "ready" });
     expect(validateTestRuntimeProfile(validProfile({ test_tier: "simple", capability_proof: CAPABILITY_PROOF })).ok).toBe(true);
     expect(validateTestRuntimeProfile(validProfile({ runtime_profile: "inner", ceiling_ms: 60_000, permissions: {
@@ -82,9 +83,31 @@ describe("test runtime profile contract", () => {
     }, capability_proof: { ...CAPABILITY_PROOF, observations: CAPABILITY_PROOF.observations.map((entry) => ({ ...entry, requested: entry.capability === "environment" ? "local_ci" : "deny", decision: entry.capability === "environment" ? "local_ci" : "deny" })) } })).ok).toBe(true);
   });
 
+  it("freezes aggregate as an unbounded CI-only profile and accepts it only in CI", () => {
+    expect(TEST_RUNTIME_PROFILE_LIMITS_MS.aggregate).toBeNull();
+    const aggregateEvidence = join(process.cwd(), "quality", "tests", `aggregate-contract-accepted-${process.pid}-${Date.now()}.json`);
+    const aggregate = validProfile({
+      runtime_profile: "aggregate",
+      ceiling_ms: null,
+      permissions: { network: "ci_only", db: "ci_only", filesystem: "ci_only", subprocess: "ci_only", environment: "ci_only" },
+      capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] },
+    });
+    expect(validateTestRuntimeProfile(aggregate, { declarationOnly: true })).toMatchObject({ ok: false, status: "unavailable" });
+    expect(() => execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=aggregate", "--evidence-path=quality/tests/aggregate-contract-rejected.json", "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), stdio: "pipe" })).toThrow();
+    expect(validateTestRuntimeProfile(validProfile({ runtime_profile: "aggregate", ceiling_ms: 900_000, permissions: aggregate.permissions, capability_proof: aggregate.capability_proof }), { declarationOnly: true })).toMatchObject({ ok: false });
+    try {
+      const ciAggregate = execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=aggregate", `--evidence-path=${aggregateEvidence}`, "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), env: { ...process.env, CI: "true" }, encoding: "utf8" });
+      expect(ciAggregate).toBe("");
+      const evidence = JSON.parse(readFileSync(aggregateEvidence, "utf8"));
+      expect(evidence).toMatchObject({ runtime_profile: "aggregate", ceiling_ms: null, supervisor_timeout_ms: 900_000, exit_code: 0 });
+    } finally {
+      rmSync(aggregateEvidence, { force: true });
+    }
+  });
+
   it.each([
     ["inner", 60_001],
-    ["medium", 300_001],
+    ["phase", 300_001],
   ])("rejects %s profile over its duration ceiling", (runtime_profile, ceiling_ms) => {
     const result = validateTestRuntimeProfile(validProfile({ runtime_profile, ceiling_ms }));
     expect(result.ok).toBe(false);
@@ -127,7 +150,7 @@ describe("test runtime profile contract", () => {
   it("preserves an unavailable wrapper result even when the target command exits zero", () => {
     const evidence = join(process.cwd(), "quality", "tests", "p1-unavailable-wrapper.json");
     try {
-      execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=medium", `--evidence-path=${evidence}`, "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), stdio: "pipe" });
+      execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=phase", `--evidence-path=${evidence}`, "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), stdio: "pipe" });
       const value = JSON.parse(readFileSync(evidence, "utf8"));
       expect(value.exit_code).toBe(0);
       expect(value.runtime_profile_status).toBe("unavailable");
@@ -181,7 +204,7 @@ describe("test runtime profile contract", () => {
       const first = createCanonicalReceiptWriter({ task: root.task, workspace: root.workspace, stage: "build-code", component: "profile-capture" })
         .captureTests({ command: "printf ok", receiptRef: "quality/tests/profile-capture.json", outputRef: "quality/tests/output/profile-capture", runtimeProfile: validProfile({ capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] } }), capabilityProof: { status: "unavailable", executor_id: "run-checks", observations: [] }, behaviorFingerprint: validProfile().behavior_fingerprint });
       expect(first.duration_ms).toBeGreaterThanOrEqual(0);
-      expect(first.runtime_profile.runtime_profile).toBe("medium");
+      expect(first.runtime_profile.runtime_profile).toBe("phase");
       expect(first.output_hash).toBe(createHash("sha256").update("ok\n").digest("hex"));
       expect(() => createCanonicalReceiptWriter({ task: root.task, workspace: root.workspace, stage: "build-code", component: "profile-capture" })
         .captureTests({ command: "printf ok", receiptRef: "quality/tests/profile-capture.json", outputRef: "quality/tests/output/profile-capture", runtimeProfile: validProfile({ runtime_profile: "inner", ceiling_ms: 60_000, permissions: { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny", environment: "local_ci" }, capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] } }), capabilityProof: { status: "unavailable", executor_id: "run-checks", observations: [] }, behaviorFingerprint: validProfile().behavior_fingerprint }))
@@ -215,11 +238,11 @@ describe("test runtime profile contract", () => {
 
   it("records profile execution through the explicit argv wrapper without changing the target command", () => {
     const root = mkdtempSync(join(tmpdir(), "wh-runtime-profile-"));
-    const evidence = join(process.cwd(), "quality", "tests", "p1-runtime-wrapper.json");
+    const evidence = join(process.cwd(), "quality", "tests", `p1-runtime-wrapper-${process.pid}.json`);
     try {
       const output = execFileSync(process.execPath, [
         "tools/cli/run-checks.mjs",
-        "--runtime-profile=medium",
+        "--runtime-profile=phase",
         `--evidence-path=${evidence}`,
         "--",
         process.execPath,
@@ -228,7 +251,9 @@ describe("test runtime profile contract", () => {
       ], { cwd: process.cwd(), encoding: "utf8" });
       expect(output).toContain("profile-ok");
       expect(JSON.parse(readFileSync(evidence, "utf8"))).toMatchObject({
-        runtime_profile: "medium",
+        runtime_profile: "phase",
+        ceiling_ms: 300_000,
+        supervisor_timeout_ms: 300_000,
         capability_proof: { status: "unavailable" },
         target: { argv: [process.execPath, "-e", "process.stdout.write('profile-ok')"] },
       });

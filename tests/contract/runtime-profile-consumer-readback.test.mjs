@@ -50,10 +50,10 @@ function measurementFixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-profile-readback-")));
   roots.push(root);
   const innerCommand = [process.execPath, "-e", "setTimeout(()=>process.stdout.write('inner'),30)"];
-  const mediumCommand = [process.execPath, "-e", "process.stderr.write('medium')"];
+  const phaseCommand = [process.execPath, "-e", "process.stderr.write('phase')"];
   const profilePath = join(root, "profile.json");
   const innerManifestPath = join(root, "inner.json");
-  const mediumManifestPath = join(root, "medium.json");
+  const phaseManifestPath = join(root, "phase.json");
   const outputPath = join(root, "S3.json");
   writeFileSync(profilePath, `${JSON.stringify({
     schema_version: "workflowhub-test-runtime-profile.v1",
@@ -64,7 +64,7 @@ function measurementFixture() {
       counts: { network: 0, db: 0, filesystem: 0, subprocess: 0, environment: 0 },
       source: "unverified-test-fixture",
     },
-    profiles: { inner: profile("inner"), medium: profile("medium") },
+    profiles: { inner: profile("inner"), phase: profile("phase") },
   }, null, 2)}\n`);
   writeFileSync(innerManifestPath, `${JSON.stringify({
     runtime_profile: "inner",
@@ -75,23 +75,23 @@ function measurementFixture() {
         { id: "inner-c", file: "inner-c.test.mjs", argv: innerCommand, cwd: process.cwd() },
       ],
   }, null, 2)}\n`);
-  writeFileSync(mediumManifestPath, `${JSON.stringify({
-    runtime_profile: "medium",
+  writeFileSync(phaseManifestPath, `${JSON.stringify({
+    runtime_profile: "phase",
     worker_ceiling: 2,
-    members: [{ id: "medium-contract", file: "medium-contract.test.mjs", argv: mediumCommand, cwd: process.cwd() }],
+    members: [{ id: "phase-contract", file: "phase-contract.test.mjs", argv: phaseCommand, cwd: process.cwd() }],
   }, null, 2)}\n`);
-  return { root, profilePath, innerManifestPath, mediumManifestPath, outputPath };
+  return { root, profilePath, innerManifestPath, phaseManifestPath, outputPath };
 }
 
 describe("S3 runtime profile consumer readback", () => {
   it("keeps the route advisor orthogonal and run-checks on the single runtime ceiling source", () => {
-    expect(TEST_RUNTIME_PROFILE_NAMES).toEqual(["inner", "medium", "large"]);
+    expect(TEST_RUNTIME_PROFILE_NAMES).toEqual(["inner", "phase", "aggregate"]);
     expect(routeTests({ changed_files: ["tests/contract/runtime-profile-consumer-readback.test.mjs"] }).routing_tier).toBe("feature");
     expect(profileForExecutor("inner", []).ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.inner);
-    expect(profileForExecutor("medium", []).ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.medium);
+    expect(profileForExecutor("phase", []).ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.phase);
     const source = readFileSync(new URL("../../tools/cli/run-checks.mjs", import.meta.url), "utf8");
     expect(source).toContain("TEST_RUNTIME_PROFILE_LIMITS_MS");
-    const duplicatedThresholds = new RegExp(`\\{\\s*inner:\\s*${TEST_RUNTIME_PROFILE_LIMITS_MS.inner}\\s*,\\s*medium:\\s*${TEST_RUNTIME_PROFILE_LIMITS_MS.medium}\\s*\\}`);
+    const duplicatedThresholds = new RegExp(`\\{\\s*inner:\\s*${TEST_RUNTIME_PROFILE_LIMITS_MS.inner}\\s*,\\s*phase:\\s*${TEST_RUNTIME_PROFILE_LIMITS_MS.phase}\\s*\\}`);
     expect(source).not.toMatch(duplicatedThresholds);
   });
 
@@ -107,7 +107,7 @@ describe("S3 runtime profile consumer readback", () => {
     const fixture = measurementFixture();
     const inputs = loadMeasurementInputs(fixture);
     expect(inputs.profiles.inner.ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.inner);
-    expect(inputs.profiles.medium.ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.medium);
+    expect(inputs.profiles.phase.ceiling_ms).toBe(TEST_RUNTIME_PROFILE_LIMITS_MS.phase);
     expect(inputs.profiles.inner.worker_ceiling).toBe(2);
     expect(inputs.profiles.inner.capability_observation.status).toBe("incomplete");
     expect(inputs.manifests.inner.members).toHaveLength(3);
@@ -124,7 +124,7 @@ describe("S3 runtime profile consumer readback", () => {
     expect(receipt.groups.inner_files[0].runs.slice(1).every((run) => run.cold_observation === false)).toBe(true);
     expect(receipt.groups.inner_collection.runs).toHaveLength(5);
     expect(receipt.groups.inner_collection.runs[0].cold_observation).toBe(true);
-    expect(receipt.groups.medium_collection.runs).toHaveLength(5);
+    expect(receipt.groups.phase_collection.runs).toHaveLength(5);
     expect(receipt.groups.inner_collection.runs.every((run) => run.actual_workers <= 2)).toBe(true);
     expect(receipt.groups.inner_collection.runs.some((run) => run.overlap_observed)).toBe(true);
     expect(receipt.capability_observations.inner.status).toBe("incomplete");

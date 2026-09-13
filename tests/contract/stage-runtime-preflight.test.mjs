@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,26 @@ function fixture() {
   const input = join(root, "payload.json");
   return { root, input };
 }
+
+function preflightPayload(overrides = {}) {
+  return {
+    receipts: {},
+    ...overrides,
+  };
+}
+
+function preflightServices(overrides = {}) {
+  return {
+    command: [process.execPath, "-e", "process.exit(0)"],
+    paths: [join(ROOT, "tools", "cli", "stage-runtime.mjs")],
+    host_provider: "codex/host",
+    route: { providers: ["opencode/reviewer"] },
+    packet: { bytes: 128, limit_bytes: 2 * 1024 * 1024 },
+    capabilities: { network: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" },
+    ...overrides,
+  };
+}
+
 
 function writePayload(path, value) {
   writeFileSync(path, `${JSON.stringify(value)}\n`);
@@ -175,6 +195,37 @@ describe("stage-runtime private run:preflight", () => {
       review_budget: { attempts: [], request: { kind: "initial" } },
       user_reply: { finding_id: "F-a", reply_ref: "quality/confirmations/reply.json", reply_hash: "b".repeat(64) },
     })).not.toThrow();
+  });
+
+  it("rejects command/path, packet-budget, and missing capability facts before dispatch and retries after repair", async () => {
+    const cases = [
+      ["command", preflightPayload(), preflightServices({ command: [join(ROOT, "missing-command")] }), "command"],
+      ["path", preflightPayload(), preflightServices({ paths: [join(ROOT, "missing-path")] }), "paths"],
+      ["packet", preflightPayload(), preflightServices({ packet: { bytes: 2 * 1024 * 1024 + 1, limit_bytes: 2 * 1024 * 1024 } }), "packet.bytes"],
+      ["capability", preflightPayload(), preflightServices({ capabilities: {} }), "capabilities"],
+    ];
+    for (const [label, payload, services, expectedPath] of cases) {
+      const state = fixture();
+      writePayload(state.input, payload);
+      const started = Date.now();
+      const result = await stageRuntimeMain(["preflight", `--stage=build-code`, `--input=${state.input}`], {
+        cwd: join(state.root, "not-a-worktree"),
+        services: { preflight: services },
+      });
+      expect(Date.now() - started).toBeLessThanOrEqual(5000);
+      expect(result.status).toBe("protocol_invalid");
+      expect(result.diagnostics).toEqual([expect.objectContaining({ path: expectedPath, expected: expect.any(String), actual: expect.any(String) })]);
+      expect(result.diagnostics[0].expected).not.toBe("");
+      expect(result.diagnostics[0].actual).not.toBe("");
+      expect(existsSync(join(state.root, "child-started"))).toBe(false);
+      expect(label).toBeTypeOf("string");
+    }
+
+    const retry = fixture();
+    writePayload(retry.input, preflightPayload());
+    await expect(stageRuntimeMain(["preflight", "--stage=build-code", `--input=${retry.input}`], {
+      services: { preflight: preflightServices() },
+    })).resolves.toMatchObject({ status: "valid", diagnostics: [] });
   });
 
   it("returns valid=0 with no stdout diagnostics and protocol-invalid=2 with a stdout array", () => {

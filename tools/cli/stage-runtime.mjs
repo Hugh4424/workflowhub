@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -9,6 +9,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { importCanonicalReviewResult, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
+import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
 
 import {
   authenticateStageWriteBoundary,
@@ -26,9 +27,9 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveCurrentProductRelease, deriveExecutionOutcomes, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
-import { activeAcceptanceCriterionIds, validatePlanTaskContract } from "../../runtime/stage/stage-content-contracts.mjs";
-import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
+import { deriveExecutionOutcomes, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
+import { validatePlanTaskContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 // The two stage-result projections read their current result from the frozen
@@ -59,14 +60,20 @@ export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = pr
   const hasTask = typeof values.task === "string" && values.task.trim() !== "";
   if (hasProject !== hasTask) throw new TypeError("--project and --task must be supplied together");
   const explicit = hasProject
-    ? Object.freeze({ project: validateProjectName(values.project), task: validateTaskId(values.task) })
+    ? resolveCanonicalTaskPath({ project: values.project, task: values.task, taskPath: values["task-path"], env, home: env?.HOME })
     : null;
   const derived = deriveIdentityFromAuthenticatedWorktree(cwd, env);
   if (explicit && derived
       && (explicit.project !== derived.project || explicit.task !== derived.task)) {
     throw new Error(`WorkflowHub identity conflict: explicit ${explicit.project}/${explicit.task} does not match authenticated worktree ${derived.project}/${derived.task}`);
   }
-  if (explicit) return Object.freeze({ ...explicit, taskPath: undefined, source: "explicit" });
+  if (explicit) return Object.freeze({
+    project: explicit.project,
+    task: explicit.task,
+    taskPath: explicit.taskPath,
+    source: "explicit",
+    taskPathSource: explicit.source,
+  });
   if (derived) return derived;
   throw new Error("WorkflowHub identity missing: supply --project and --task or run from an authenticated task worktree");
 }
@@ -177,6 +184,7 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
     task: task.identity.taskId,
     taskPath: task.taskPath,
     source: "worktree",
+    taskPathSource: "authenticated_worktree",
   });
 }
 
@@ -266,45 +274,7 @@ function readQualityEvidence(task) {
     ? task.readRecordBytes(ref) : task.readRecord(ref);
 }
 
-function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot, materialRevision, materials, read, workspaceRoot, taskId }) {
-  const acceptanceEvidence = (fact.evidence ?? []).find((entry) => entry?.evidence_type === "acceptance_evidence" && typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
-  if (acceptanceEvidence && currentSnapshot?.tree && materialRevision) {
-    try {
-      const raw = read(acceptanceEvidence.ref);
-      const parsed = validateAcceptanceEvidence(JSON.parse(raw));
-      if (
-        !(parsed.refs ?? []).some((entry) => /^quality\/evidence\/stage-quality\//.test(entry.ref))
-        && parsed.freshness?.status === "current"
-        && parsed.freshness.snapshot_tree === currentSnapshot.tree
-        && parsed.freshness.material_revision === materialRevision
-        && parsed.freshness.evidence_freshness.every((entry) => entry.status === "current" && entry.sha256 === acceptanceEvidence.sha256)
-      ) {
-        return Object.freeze({
-          fact_ref: fact.ref,
-          status: "current",
-          authenticated: true,
-          reused: true,
-          dependencies: Object.freeze({ material: "current", tree: "current", fact: "current", evidence: "current" }),
-        });
-      }
-    } catch {
-      // Fall through to full freshness evaluation on any mismatch or validation failure.
-    }
-  }
-  if (!currentSnapshot?.tree || !materialRevision) {
-    return Object.freeze({ fact_ref: fact.ref, status: "unknown", authenticated: false });
-  }
-  return evaluateFactFreshness(
-    { ...fact, ref: fact.ref, sha256: factSha256 },
-    {
-      material_revision: materialRevision,
-      material_scope_revisions: stageMaterialScopeRevisions(materials),
-      snapshot_tree: currentSnapshot.tree,
-    },
-    { read, workspaceRoot, taskId },
-  );
-}
-function collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage = null }) {
+function collectCurrentQualityFactObservations({ context, stage = null }) {
   const observations = [];
   for (const ref of context.task.listCanonicalQualityFactRefs()) {
     let value;
@@ -314,67 +284,139 @@ function collectCurrentQualityFactObservations({ context, currentSnapshot, mater
       value = JSON.parse(raw);
     } catch { continue; }
     if (value?.task_id !== context.task.identity.taskId || (stage !== null && value?.stage !== stage)) continue;
-    const freshness = currentSnapshot
-      ? evaluateFreshnessWithReuse({
-          fact: { ...value, ref },
-          factRaw: raw,
-          factSha256: sha256(raw),
-          currentSnapshot,
-          materialRevision,
-          materials,
-          read: readQualityEvidence(context.task),
-          workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-          taskId: context.task.identity.taskId,
-        })
-      : { status: "unknown", authenticated: false };
-    observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
+    const authentication = authenticateQualityFactRecord({ ...value, ref, sha256: sha256(raw) }, {
+      read: readQualityEvidence(context.task),
+    });
+    observations.push({ fact: { ref, value }, authenticated: authentication.authenticated === true, recorded: true, authentication });
   }
   return observations;
 }
 
-function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials, qualityFactObservations = [] }) {
-  const stageOutcomeRefs = Object.fromEntries(WORKFLOW_STAGES.map((stage) => [
-    stage,
-    context.task.listCanonicalStageOutcomeRefs(stage),
-  ]));
-  const stageOutcomeStatuses = deriveStageOutcomeStatuses({
-    task_id: context.identity.taskId,
-    read: readQualityEvidence(context.task),
-    stage_outcome_refs: stageOutcomeRefs,
-    snapshot_tree: currentSnapshot.tree,
-    material_revision: materialRevision,
-    material_scope_revisions: stageMaterialScopeRevisions(materials),
-    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-    quality_fact_observations: qualityFactObservations,
-    read_task_facts: () => readTaskFacts(context.task.taskPath),
-    authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
-  });
-  return deriveCurrentProductRelease({
-    task_id: context.identity.taskId,
-    read: readQualityEvidence(context.task),
-    refs: context.task.listCanonicalQualityFactRefs(),
-    snapshot_tree: currentSnapshot?.tree,
-    material_revision: materialRevision,
-    material_scope_revisions: stageMaterialScopeRevisions(materials),
-    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-    expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
-    evaluate_freshness: evaluateFactFreshness,
-    stage_outcome_statuses: stageOutcomeStatuses,
-    require_outline: context.manifest?.record_model === "vnext-single-write",
-  });
+/**
+ * Read the six named status reference classes from canonical task facts.
+ * Directory contents never decide which reference is current: K1-K3 are
+ * fixed names, and K4-K6 are names carried by the frozen facts row.
+ */
+const STATUS_MATERIAL_REFS = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
+
+function statusRootCauseId(gap) {
+  const text = String(gap);
+  const prerequisite = /^verify-code prerequisite missing:\s*(.+)$/.exec(text);
+  if (prerequisite) return statusRootCauseId(prerequisite[1]);
+  const stagePredicate = /^stage_predicate_missing:([^:]+):(.+)$/.exec(text);
+  if (stagePredicate) return `stage_predicate_missing:${stagePredicate[1]}:${stagePredicate[2]}`;
+  const stageCompletion = /^stage_completion_(?:missing|not_completed|unbound):(.+)$/.exec(text);
+  if (stageCompletion) return `stage_completion:${stageCompletion[1]}`;
+  const acceptance = /^(acceptance_result_(?:not_pass|unbound|missing|unexpected)):(.+?)(?::.*)?$/.exec(text);
+  if (acceptance) return `${acceptance[1]}:${acceptance[2]}`;
+  return text;
+}
+
+function collectNamedRefs(value, refs = new Set()) {
+  if (typeof value === "string") {
+    const normalized = value.replace(/^\.\//, "");
+    if (/^(?:quality|evidence|operations|review|reviews)\/[A-Za-z0-9._/-]+$/.test(normalized)) refs.add(normalized);
+    return refs;
+  }
+  if (!value || typeof value !== "object") return refs;
+  for (const nested of Object.values(value)) collectNamedRefs(nested, refs);
+  return refs;
+}
+
+function canonicalTaskFacts(context) {
+  try {
+    return readTaskFacts(context.task.taskPath);
+  } catch {
+    return [];
+  }
+}
+
+function readStageReflectionConclusion(context, stage, facts) {
+  const refs = new Set();
+  for (const row of facts) {
+    if (row?.stage !== stage) continue;
+    for (const ref of collectNamedRefs(row)) {
+      if (ref.includes("stage-reflection")) refs.add(ref);
+    }
+  }
+  const ref = [...refs].sort()[0] ?? null;
+  if (!ref) return Object.freeze({ status: "unavailable", ref: null, conclusion: null });
+  try {
+    const value = JSON.parse(context.task.readRecord(ref));
+    return Object.freeze({
+      status: typeof value?.status === "string" ? value.status : "recorded",
+      ref,
+      conclusion: value?.conclusion ?? value?.summary ?? value?.reflection ?? null,
+      status_matrix: value?.status_matrix ?? null,
+    });
+  } catch {
+    return Object.freeze({ status: "unavailable", ref, conclusion: null, status_matrix: null });
+  }
+}
+
+export function deriveNamedStatusRefs({ facts = [] } = {}) {
+  const K4 = new Set();
+  const K5 = new Set();
+  for (const row of facts) {
+    for (const ref of collectNamedRefs(row)) {
+      if (/^quality\/(?:confirmations|authorizations)\/[a-f0-9]{64}\.json$/.test(ref)) K4.add(ref);
+      else K5.add(ref);
+    }
+  }
+  return Object.freeze([
+    Object.freeze({ class: "K1", name: "task.json", refs: Object.freeze(["task.json"]), source: "task.json" }),
+    Object.freeze({ class: "K2", name: "facts.jsonl", refs: Object.freeze(["facts.jsonl"]), source: "facts.jsonl" }),
+    Object.freeze({ class: "K3", name: "current materials", refs: Object.freeze([...STATUS_MATERIAL_REFS]), source: "authenticated worktree" }),
+    Object.freeze({ class: "K4", name: "named confirmations and authorizations", refs: Object.freeze([...K4].sort()), source: "facts.jsonl" }),
+    Object.freeze({ class: "K5", name: "named evidence references", refs: Object.freeze([...K5].sort()), source: "facts.jsonl or close-action row" }),
+    Object.freeze({ class: "K6", name: "material diff inputs", refs: Object.freeze(STATUS_MATERIAL_REFS.map((file) => `${file}:HEAD-diff`)), source: "git diff" }),
+  ]);
+}
+
+export function deriveStatusRootCauses({ quality = null, research = null, sliceAdvisory = null, stale = null } = {}) {
+  const causes = new Map();
+  const add = (id, status, source, refs = [], detail = null) => {
+    const rootCauseId = statusRootCauseId(id);
+    const current = causes.get(rootCauseId) ?? { root_cause_id: rootCauseId, status, source, refs: [], details: [] };
+    for (const ref of refs) if (typeof ref === "string" && !current.refs.includes(ref)) current.refs.push(ref);
+    if (detail !== null && !current.details.includes(detail)) current.details.push(detail);
+    causes.set(rootCauseId, current);
+  };
+  for (const gap of quality?.missing ?? []) {
+    const subject = String(gap);
+    const normalized = statusRootCauseId(subject);
+    add(subject, "actionable", "quality facts", [quality?.predicates?.[subject]?.fact_ref ?? quality?.predicates?.[normalized]?.fact_ref ?? "facts.jsonl"], subject);
+  }
+  if (["unavailable", "unknown", "incomplete"].includes(research?.status)) {
+    add("research", research.status, "research report", [research.report_ref].filter(Boolean), `research:${research.status}`);
+  }
+  if (sliceAdvisory?.status === "unexplained_overage" || sliceAdvisory?.diagnostics?.length) {
+    add("slice_advisory", "advisory", "plan.md", ["plan.md"], "slice advisory requires operator review");
+  }
+  if (stale?.status === "stale") {
+    add("stale", "stale", stale.source ?? "named material diff", [stale.source].filter(Boolean), stale.detail ?? "current target advanced");
+  }
+  if (causes.size === 0) {
+    add("none", "clear", "facts.jsonl", ["facts.jsonl"], "no canonical root cause recorded");
+  }
+  return Object.freeze([...causes.values()].map((cause) => Object.freeze({
+    ...cause,
+    refs: Object.freeze(cause.refs),
+    details: Object.freeze(cause.details),
+  })));
 }
 
 /**
- * Derive the current status domains used by another read-only CLI consumer.
- * Keep the quality and product-release readers on the same authenticated
- * path as `stage-runtime status`; this helper does not write a fact or create
- * a second status authority.
+ * Derive the current status from authenticated quality facts and the frozen
+ * task row. The result has three fact domains, six named reference classes,
+ * and one stage-reflection conclusion; it does not create another authority.
  */
 export function deriveCurrentStatusDomains(context, {
   stage = "verify-code",
   currentSnapshot,
   materialRevision,
   materials,
+  stale = null,
 } = {}) {
   if (!context?.task || !context?.kernel || !currentSnapshot || typeof materialRevision !== "string" || !materials || typeof materials !== "object" || Array.isArray(materials)) {
     throw new TypeError("current status domain derivation requires an authenticated context, snapshot, material revision, and materials");
@@ -384,7 +426,10 @@ export function deriveCurrentStatusDomains(context, {
   const stageOutcomeStatuses = deriveStageOutcomeStatuses({
     task_id: context.identity.taskId,
     read: readQualityEvidence(context.task),
-    stage_outcome_refs: Object.fromEntries(WORKFLOW_STAGES.map((name) => [name, context.task.listCanonicalStageOutcomeRefs(name)])),
+    // Current stage status is read from the frozen K2 row.  K5 stage-outcome
+    // envelopes remain named evidence, never a directory-selected status
+    // source for this route.
+    stage_outcome_refs: {},
     snapshot_tree: currentSnapshot.tree,
     material_revision: materialRevision,
     material_scope_revisions: stageMaterialScopeRevisions(materials),
@@ -398,161 +443,17 @@ export function deriveCurrentStatusDomains(context, {
     stageOutcomeStatus: stageOutcomeStatuses?.[stage] ?? "unavailable",
     requireOutline: stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
   });
+  const facts = canonicalTaskFacts(context);
+  const stageReflection = readStageReflectionConclusion(context, stage, facts);
   return Object.freeze({
     work_progress: deriveStageProgress(stage, observations, materials),
     stage_quality: quality,
-    product_release: currentProductReleaseView({
-      context,
-      currentSnapshot,
-      materialRevision,
-      materials,
-      qualityFactObservations: allQualityFactObservations,
-    }),
-  });
-}
-
-// Keep status as a read-only projection of the existing facts. The grouping
-// makes the next action obvious without turning quality facts into a new gate
-// or hiding unavailable/not-applicable evidence.
-function gapRootCauseId(gap) {
-  const text = String(gap);
-  const prerequisite = /^verify-code prerequisite missing:\s*(.+)$/.exec(text);
-  if (prerequisite) return gapRootCauseId(prerequisite[1]);
-  const stagePredicate = /^stage_predicate_missing:([^:]+):(.+)$/.exec(text);
-  if (stagePredicate) return `stage_predicate_missing:${stagePredicate[1]}:${stagePredicate[2]}`;
-  const stageCompletion = /^stage_completion_(?:missing|not_completed|unbound):(.+)$/.exec(text);
-  if (stageCompletion) return `stage_completion:${stageCompletion[1]}`;
-  const acceptance = /^(acceptance_result_(?:not_pass|unbound|missing|unexpected)):(.+?)(?::.*)?$/.exec(text);
-  if (acceptance) return `${acceptance[1]}:${acceptance[2]}`;
-  return text;
-}
-
-export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [], research = null, sliceAdvisory = null, slice_advisory: sliceAdvisorySnakeInput = undefined, closePreparationGaps: closePreparationGapsInput = undefined, close_preparation_gaps: closePreparationGapsSnakeInput = undefined } = {}) {
-  // Status is a projection of the same authenticated/current facts used by
-  // deriveStageCompletion. Never let a stale or unauthenticated attempt hide
-  // a current actionable gap, and never let array order decide which attempt
-  // wins.
-  const current = observations.filter((observation) => observation?.authenticated === true
-    && observation?.freshness?.status === "current");
-  const byRef = new Map();
-  const bySubject = new Map();
-  for (const observation of current) {
-    const fact = observation?.fact?.value ?? observation?.fact;
-    const subject = fact?.subject;
-    if (typeof observation?.fact?.ref === "string") byRef.set(observation.fact.ref, observation);
-    if (typeof subject !== "string" || subject.trim() === "") continue;
-    const candidates = bySubject.get(subject) ?? [];
-    candidates.push(observation);
-    bySubject.set(subject, candidates);
-  }
-  const latestFor = (subject) => {
-    const candidates = bySubject.get(subject) ?? [];
-    if (candidates.length === 0) return null;
-    const ranked = candidates.map((observation) => ({
-      observation,
-      recordedAt: Date.parse((observation.fact?.value ?? observation.fact)?.recorded_at ?? ""),
-    }));
-    if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) return { conflict: true };
-    const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
-    const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt);
-    return latest.length === 1 ? latest[0].observation : { conflict: true };
-  };
-  const selectedFor = (subject) => {
-    const selectedRef = quality?.predicates?.[subject]?.fact_ref;
-    return (selectedRef && byRef.get(selectedRef)) ?? latestFor(subject);
-  };
-  const actionable_now = [];
-  const external_unavailable = [];
-  const not_applicable = [];
-  const missing = quality?.missing ?? [];
-  for (const subject of missing) {
-    const selected = selectedFor(subject);
-    const fact = selected?.fact?.value ?? selected?.fact;
-    if (selected?.conflict) {
-      actionable_now.push(subject);
-    } else if (["unavailable", "unknown"].includes(fact?.status)) {
-      external_unavailable.push(`${subject}:${fact.status}`);
-    } else if (fact?.status === "not_applicable") {
-      not_applicable.push(`${subject}:not_applicable`);
-    } else {
-      actionable_now.push(subject);
-    }
-  }
-  const quality_gaps = [...new Set(productRelease?.reasons ?? [])];
-  const release_gaps = [...quality_gaps];
-  const close_supported = stage === "verify-code";
-  const close_gaps = [...new Set(closePreparationGapsInput ?? closePreparationGapsSnakeInput ?? (close_supported
-    ? [
-      ...missing.map((subject) => `verify-code prerequisite missing: ${subject}`),
-      ...quality_gaps,
-    ]
-    : []))];
-  const qualityRootCauses = new Set(missing.map((gap) => gapRootCauseId(gap)));
-  const gapGroups = new Map();
-  const addGap = (gap, view, source) => {
-    const text = String(gap);
-    const rootCauseId = gapRootCauseId(text);
-    const group = gapGroups.get(rootCauseId) ?? {
-      root_cause_id: rootCauseId,
-      source_layer: source,
-      owner: "stage-runtime",
-      derived_views: [],
-      gaps: [],
-    };
-    if (!group.gaps.includes(text)) group.gaps.push(text);
-    if (!group.derived_views.includes(view)) group.derived_views.push(view);
-    if (group.source_layer !== "quality" && source === "quality") group.source_layer = "quality";
-    gapGroups.set(rootCauseId, group);
-  };
-  for (const gap of missing) addGap(gap, "quality", "quality");
-  for (const gap of release_gaps) {
-    // A release reason is not automatically a quality gap.  Only retain the
-    // quality view when it resolves to a currently missing quality root cause.
-    if (qualityRootCauses.has(gapRootCauseId(gap))) addGap(gap, "quality", "quality");
-    addGap(gap, "release", "release");
-  }
-  for (const gap of close_gaps) addGap(gap, "close", "close");
-  const disclosedResearch = research ?? (() => {
-    const candidates = current.filter((observation) => (observation?.fact?.value ?? observation?.fact)?.subject === "research");
-    const value = candidates.at(-1)?.fact?.value ?? candidates.at(-1)?.fact;
-    return value ? { status: value.status } : null;
-  })();
-  if (disclosedResearch?.status === "unavailable") external_unavailable.push("research:unavailable");
-  const disclosedSliceAdvisory = sliceAdvisory ?? sliceAdvisorySnakeInput ?? null;
-  const advisory_reminders = disclosedSliceAdvisory?.status === "unexplained_overage"
-    ? Object.freeze(["slice_advisory:unexplained_overage"])
-    : disclosedSliceAdvisory?.diagnostics?.length
-    ? Object.freeze(["slice_advisory:diagnostic"])
-    : Object.freeze([]);
-  // Read-only preflight for physical close. These are facts to surface to the
-  // operator, never a new gate or a replacement for verify-code quality.
-  const close_preparation_gaps = close_gaps;
-  return Object.freeze({
-    actionable_now: Object.freeze(actionable_now),
-    external_unavailable: Object.freeze(external_unavailable),
-    not_applicable: Object.freeze(not_applicable),
-    quality_gaps: Object.freeze(quality_gaps),
-    release_gaps: Object.freeze(release_gaps),
-    gap_groups: Object.freeze([...gapGroups.values()].map((group) => Object.freeze({
-      ...group,
-      derived_views: Object.freeze(group.derived_views),
-      gaps: Object.freeze(group.gaps),
-    }))),
-    slice_advisory: disclosedSliceAdvisory,
-    advisory_reminders,
-    close_supported,
-    close_preparation_gaps: Object.freeze(close_preparation_gaps),
-    next_action: actionable_now[0] ?? (external_unavailable[0] ?? null),
-    research: research ?? Object.freeze({
-      status: "unavailable",
-      report_ref: null,
-      report_sha256: null,
-      required_questions: [],
-      covered_questions: [],
-      tool_attempts: [],
-      gaps: [],
-      fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] },
-    }),
+    root_causes: deriveStatusRootCauses({ quality, stale }),
+    named_refs: deriveNamedStatusRefs({ facts }),
+    stage_reflection: stageReflection,
+    status_matrix: stageReflection.status_matrix ?? null,
+    identity: Object.freeze({ task_id: context.identity.taskId, material_revision: materialRevision, snapshot_tree: currentSnapshot.tree }),
+    source_completeness: Object.freeze({ task_json: true, facts_jsonl: facts.length > 0, materials: STATUS_MATERIAL_REFS.every((file) => typeof materials[file] === "string") }),
   });
 }
 
@@ -596,8 +497,44 @@ function preflightDiagnostic(error) {
   };
 }
 
-function runPreflight(stage, input) {
+function preflightFactDiagnostic(path, expected, actual) {
+  return { path, expected: String(expected), actual: String(actual) };
+}
+
+function executableCommand(argv) {
+  if (!Array.isArray(argv) || argv.length === 0 || typeof argv[0] !== "string" || argv[0].trim() === "") return false;
+  try {
+    accessSync(argv[0], fsConstants.X_OK);
+    return true;
+  } catch {
+    if (!argv[0].includes("/")) {
+      return String(process.env.PATH ?? "").split(":").filter(Boolean).some((directory) => {
+        try { accessSync(resolve(directory, argv[0]), fsConstants.X_OK); return true; } catch { return false; }
+      });
+    }
+    return false;
+  }
+}
+
+function runPreflight(stage, input, services = {}) {
   validateStageInvocation(stage, input);
+  const adapter = services.preflight;
+  if (adapter === undefined) return { status: "valid", diagnostics: [] };
+  if (!adapter || typeof adapter !== "object" || Array.isArray(adapter)) {
+    return { status: "protocol_invalid", diagnostics: [preflightFactDiagnostic("services.preflight", "an object adapter", adapter)] };
+  }
+  const checks = [
+    ["command", executableCommand(adapter.command), "an existing executable command", adapter.command ?? "missing"],
+    ["paths", Array.isArray(adapter.paths) && adapter.paths.length > 0 && adapter.paths.every((value) => typeof value === "string" && value.trim() !== "" && isAbsolute(value) && existsSync(value)), "existing absolute paths", adapter.paths ?? "missing"],
+    ["host_provider", typeof adapter.host_provider === "string" && adapter.host_provider.trim() !== "", "configured host_provider", adapter.host_provider ?? "missing"],
+    ["route", adapter.route && Array.isArray(adapter.route.providers) && adapter.route.providers.length > 0, "a resolvable non-empty provider route", adapter.route ?? "missing"],
+    ["packet.bytes", Number.isSafeInteger(adapter.packet?.bytes) && Number.isSafeInteger(adapter.packet?.limit_bytes) && adapter.packet.bytes >= 0 && adapter.packet.bytes <= adapter.packet.limit_bytes, "packet bytes at or below limit_bytes", adapter.packet?.bytes ?? "missing"],
+    ["capabilities", adapter.capabilities && typeof adapter.capabilities === "object" && Object.keys(adapter.capabilities).length > 0 && Object.values(adapter.capabilities).every((value) => typeof value === "string" && value.trim() !== "" && value !== "unknown"), "configured non-unknown capability permissions", adapter.capabilities ?? "missing"],
+  ];
+  const failed = checks.find(([, ok]) => !ok);
+  if (failed) {
+    return { status: "protocol_invalid", diagnostics: [preflightFactDiagnostic(failed[0], failed[2], failed[3])] };
+  }
   return { status: "valid", diagnostics: [] };
 }
 
@@ -683,7 +620,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (typeof values.input !== "string" || values.input.trim() === "") throw new TypeError(`${prefix}preflight requires --input=<payload.json>`);
     const payload = JSON.parse(readFileSync(values.input, "utf8"));
     try {
-      return runPreflight(values.stage, payload);
+      return runPreflight(values.stage, payload, services);
     } catch (error) {
       if (error?.preflight_protocol === true) return { status: "protocol_invalid", diagnostics: [preflightDiagnostic(error)] };
       throw error;
@@ -740,8 +677,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     context = prepareMakeDecisionWorkspace(context);
   }
   if (command === "status") {
-    const allowed = new Set(["stage", "project", "task", "reason"]);
-    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("status accepts only --stage, --project, --task, and optional --reason");
+    const allowed = new Set(["stage", "project", "task", "task-path", "reason"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("status accepts only --stage, --project, --task, optional --task-path, and optional --reason");
     let current = null;
     let materialRevision = null;
     const materials = {};
@@ -795,7 +732,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       ? deriveStageOutcomeStatuses({
           task_id: context.identity.taskId,
           read: readQualityEvidence(context.task),
-          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
+          stage_outcome_refs: {},
           snapshot_tree: current.tree,
           material_revision: materialRevision,
           material_scope_revisions: stageMaterialScopeRevisions(materials),
@@ -809,7 +746,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       ? deriveExecutionOutcomes({
           task_id: context.identity.taskId,
           read: readQualityEvidence(context.task),
-          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
+          stage_outcome_refs: {},
           snapshot_tree: current.tree,
           material_revision: materialRevision,
           material_scope_revisions: stageMaterialScopeRevisions(materials),
@@ -843,24 +780,28 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       diagnostics: Object.freeze(["current spec/plan/tasks are unavailable for slicing advisory"]),
     });
     const progression = deriveStageProgress(values.stage, observations, materials);
-    const productRelease = current
-      ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials, qualityFactObservations: allQualityFactObservations })
-      : deriveProductRelease({
-        stage_completions: [],
-        acceptance_results: [],
-        expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
-      });
-    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations: statusObservations, research: researchDisclosure, sliceAdvisory });
+    const taskFacts = current ? canonicalTaskFacts(context) : [];
+    const stageReflection = current
+      ? readStageReflectionConclusion(context, values.stage, taskFacts)
+      : Object.freeze({ status: "unavailable", ref: null, conclusion: null });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,
       quality_missing: quality.missing,
       quality_fact_refs: Object.freeze(observations.map(({ fact }) => fact.ref).sort()),
       quality_predicates: quality.predicates,
-      product_release_status: productRelease.status,
-      product_release_reasons: productRelease.reasons,
-      product_release_input_refs: productRelease.input_refs,
-      status_groups: statusGroups,
+      root_causes: deriveStatusRootCauses({ quality, research: researchDisclosure, sliceAdvisory }),
+      named_refs: deriveNamedStatusRefs({ facts: taskFacts }),
+      stage_reflection: stageReflection,
+      status_matrix: stageReflection.status_matrix ?? null,
+      identity: current
+        ? Object.freeze({ task_id: context.identity.taskId, material_revision: materialRevision, snapshot_tree: current.tree })
+        : Object.freeze({ task_id: context.identity.taskId, material_revision: null, snapshot_tree: null }),
+      source_completeness: Object.freeze({
+        task_json: Boolean(context.task),
+        facts_jsonl: taskFacts.length > 0,
+        materials: STATUS_MATERIAL_REFS.every((file) => typeof materials[file] === "string"),
+      }),
       research: researchDisclosure,
       execution_outcome: executionOutcome?.[values.stage] ?? { status: "unavailable", blocking: false, attempt_count: 0, completed_attempt_count: 0, refs: [], diagnostic: null },
     });
@@ -870,8 +811,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     operation: command,
   });
   if (command === "doctor") {
-    const allowed = new Set(["stage", "project", "task"]);
-    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("doctor accepts only --stage, --project, and --task");
+    const allowed = new Set(["stage", "project", "task", "task-path"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("doctor accepts only --stage, --project, --task, and optional --task-path");
     const activeWorkspace = context.candidateWorkspace ?? context.workspace;
     return {
       stage: values.stage,
@@ -905,7 +846,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     });
   }
   if (command === "capture-evidence") {
-    const allowed = new Set(["stage", "project", "task", "input"]);
+    const allowed = new Set(["stage", "project", "task", "task-path", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) {
       throw new TypeError("capture-evidence accepts only --stage, --project, --task, and --input");
     }
@@ -1006,7 +947,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     return refs.authoritative === false ? refs : { status: "recorded", ...refs };
   }
   if (command === "reflect") {
-    const allowed = new Set(["stage", "project", "task", "input", "now"]);
+    const allowed = new Set(["stage", "project", "task", "task-path", "input", "now"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) {
       throw new TypeError("reflect accepts only --stage, --project, --task, --input, and optional --now");
     }
@@ -1026,7 +967,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
       "fallback_protocol", "review_budget", "user_reply", "stage_reflection",
       ...(values.stage === "make-decision" ? ["research_report"] : []),
-      ...(values.stage === "verify-code" ? ["verify_summary"] : []),
       ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),
     ]);
     const suppliedInput = { ...(input ?? {}) };
@@ -1044,18 +984,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       delete suppliedInput.research_report;
     }
     // Missing, stale, or unavailable upstream quality facts remain visible in
-    // quality/product-release projections, but never become a work permit.
+    // the read-only status projection, but never become a work permit.
     // Stage outcomes must be supplied explicitly by the caller; no host
     // session is scanned or rebound as a side effect of public run.
-    const verifySummary = suppliedInput.verify_summary;
-    delete suppliedInput.verify_summary;
     const stageResult = await runOfficialStage(values.stage, context, {
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
     }, stageReflectionPublication(services));
-    if (verifySummary === undefined) return stageResult;
-    const publication = context.kernel.publishVerifySummary(verifySummary);
-    return Object.freeze({ ...stageResult, verify_summary: publication });
+    return stageResult;
   }
   if (command === "confirm") {
     if (input !== undefined) {

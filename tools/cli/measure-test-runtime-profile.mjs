@@ -115,13 +115,13 @@ export function parseMeasurementArgs(args, cwd = process.cwd()) {
   const values = {};
   for (const arg of args) {
     const pair = parseKeyValueArg(arg);
-    if (!pair || !["--profile-json", "--inner-manifest", "--medium-manifest", "--runs", "--output"].includes(pair[0])) {
+    if (!pair || !["--profile-json", "--inner-manifest", "--phase-manifest", "--runs", "--output"].includes(pair[0])) {
       throw new Error(`unknown measurement option: ${arg}`);
     }
     if (values[pair[0]] !== undefined) throw new Error(`duplicate measurement option: ${pair[0]}`);
     values[pair[0]] = pair[1];
   }
-  for (const name of ["--profile-json", "--inner-manifest", "--medium-manifest", "--runs", "--output"]) {
+  for (const name of ["--profile-json", "--inner-manifest", "--phase-manifest", "--runs", "--output"]) {
     if (values[name] === undefined || values[name] === "") throw new Error(`${name} is required`);
   }
   const runs = Number(values["--runs"]);
@@ -130,7 +130,7 @@ export function parseMeasurementArgs(args, cwd = process.cwd()) {
   return Object.freeze({
     profilePath: inputPath(values["--profile-json"], "--profile-json", cwd),
     innerManifestPath: inputPath(values["--inner-manifest"], "--inner-manifest", cwd),
-    mediumManifestPath: inputPath(values["--medium-manifest"], "--medium-manifest", cwd),
+    phaseManifestPath: inputPath(values["--phase-manifest"], "--phase-manifest", cwd),
     runs,
     outputPath: inputPath(values["--output"], "--output", cwd),
   });
@@ -214,7 +214,7 @@ function resolveCapabilityObservation(document, node, name, contractValue) {
 }
 
 function normaliseProfile(document, name) {
-  if (!TEST_RUNTIME_PROFILE_NAMES.includes(name) || name === "large") throw new Error(`measurement profile must be inner or medium, got ${name}`);
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(name) || name === "aggregate") throw new Error(`measurement profile must be inner or phase, got ${name}`);
   const node = profileNode(document, name);
   const runtime_profile = node.runtime_profile ?? node.profile;
   if (runtime_profile !== name) throw new Error(`${name} runtime_profile does not match its profile key`);
@@ -300,19 +300,19 @@ function normaliseManifest(document, expectedProfile, profile) {
   });
 }
 
-export function loadMeasurementInputs({ profilePath, innerManifestPath, mediumManifestPath } = {}) {
+export function loadMeasurementInputs({ profilePath, innerManifestPath, phaseManifestPath } = {}) {
   const profile = readJson(inputPath(profilePath, "profile JSON"), "profile JSON");
   const innerManifest = readJson(inputPath(innerManifestPath, "inner manifest"), "inner manifest");
-  const mediumManifest = readJson(inputPath(mediumManifestPath, "medium manifest"), "medium manifest");
+  const phaseManifest = readJson(inputPath(phaseManifestPath, "phase manifest"), "phase manifest");
   const innerProfile = normaliseProfile(profile, "inner");
-  const mediumProfile = normaliseProfile(profile, "medium");
+  const phaseProfile = normaliseProfile(profile, "phase");
   const inner = normaliseManifest(innerManifest, "inner", innerProfile);
-  const medium = normaliseManifest(mediumManifest, "medium", mediumProfile);
+  const phase = normaliseManifest(phaseManifest, "phase", phaseProfile);
   if (inner.members.length < 2) throw new Error("inner manifest must contain at least two members to prove file-level overlap");
   return Object.freeze({
     profile_document: Object.freeze({ path: profile.path, sha256: sha256(profile.raw), value: profile.value }),
-    profiles: Object.freeze({ inner: innerProfile, medium: mediumProfile }),
-    manifests: Object.freeze({ inner, medium }),
+    profiles: Object.freeze({ inner: innerProfile, phase: phaseProfile }),
+    manifests: Object.freeze({ inner, phase }),
     profile_change: profile.value.profile_change ?? { status: "none" },
   });
 }
@@ -658,7 +658,7 @@ export async function measureRuntimeProfile(options) {
     ...options,
     profilePath: inputPath(options?.profilePath, "profile JSON"),
     innerManifestPath: inputPath(options?.innerManifestPath, "inner manifest"),
-    mediumManifestPath: inputPath(options?.mediumManifestPath, "medium manifest"),
+    phaseManifestPath: inputPath(options?.phaseManifestPath, "phase manifest"),
     outputPath: inputPath(options?.outputPath, "output"),
     runs: options?.runs,
   };
@@ -668,10 +668,10 @@ export async function measureRuntimeProfile(options) {
   const loaded = loadMeasurementInputs(input);
   const profileChange = validateProfileChange(loaded.profile_change);
   const rawDir = resolve(dirname(input.outputPath), `${basename(input.outputPath, extname(input.outputPath))}-raw`);
-  const cache = { inner: [], medium: [] };
+  const cache = { inner: [], phase: [] };
   const innerFile = {};
   const innerCollection = [];
-  const mediumCollection = [];
+  const phaseCollection = [];
   for (const member of loaded.manifests.inner.members) {
     const samples = [];
     for (let runIndex = 1; runIndex <= input.runs; runIndex += 1) {
@@ -688,27 +688,27 @@ export async function measureRuntimeProfile(options) {
     innerCollection.push(await runCollection(loaded.manifests.inner, loaded.profiles.inner, rawDir, "inner-collection", runIndex));
   }
   for (let runIndex = 1; runIndex <= input.runs; runIndex += 1) {
-    cache.medium.push(await clearTransformCache(loaded.profiles.medium, `medium-collection-run-${runIndex}`));
-    mediumCollection.push(await runCollection(loaded.manifests.medium, loaded.profiles.medium, rawDir, "medium-collection", runIndex));
+    cache.phase.push(await clearTransformCache(loaded.profiles.phase, `phase-collection-run-${runIndex}`));
+    phaseCollection.push(await runCollection(loaded.manifests.phase, loaded.profiles.phase, rawDir, "phase-collection", runIndex));
   }
   const innerFileSummaries = Object.values(innerFile);
   const innerCollectionSummary = collectionSummary(innerCollection, loaded.profiles.inner, loaded.manifests.inner, { requireOverlap: true });
-  const mediumCollectionSummary = collectionSummary(mediumCollection, loaded.profiles.medium, loaded.manifests.medium);
+  const phaseCollectionSummary = collectionSummary(phaseCollection, loaded.profiles.phase, loaded.manifests.phase);
   const capability = {
     inner: capabilityResult(loaded.profiles.inner, loaded.manifests.inner),
-    medium: capabilityResult(loaded.profiles.medium, loaded.manifests.medium),
+    phase: capabilityResult(loaded.profiles.phase, loaded.manifests.phase),
   };
   const hardFailure = innerFileSummaries.some((value) => value.result === "fail")
     || innerCollectionSummary.result === "fail"
-    || mediumCollectionSummary.result === "fail"
+    || phaseCollectionSummary.result === "fail"
     || capability.inner.status === "failed"
-    || capability.medium.status === "failed";
-  const cacheConfigured = [...cache.inner, ...cache.medium].every((value) => value.status === "cleared");
+    || capability.phase.status === "failed";
+  const cacheConfigured = [...cache.inner, ...cache.phase].every((value) => value.status === "cleared");
   const incomplete = capability.inner.status !== "observed"
-    || capability.medium.status !== "observed"
+    || capability.phase.status !== "observed"
     || toolingVersion() === null
     || loaded.profiles.inner.run_location === null
-    || loaded.profiles.medium.run_location === null
+    || loaded.profiles.phase.run_location === null
     || !cacheConfigured;
   const status = hardFailure ? "failed" : incomplete ? "incomplete" : "passed";
   return {
@@ -728,17 +728,17 @@ export async function measureRuntimeProfile(options) {
     cache_policy: { transform_cache: "only configured Vitest transform paths are cleared before every run", os_page_cache: "not_cleared", observations: cache },
     profiles: {
       inner: { runtime_profile: loaded.profiles.inner.runtime_profile, ceiling_ms: loaded.profiles.inner.ceiling_ms, permissions: loaded.profiles.inner.permissions, run_location: loaded.profiles.inner.run_location, worker_ceiling: loaded.profiles.inner.worker_ceiling, worker_ceiling_source: loaded.profiles.inner.worker_ceiling_source },
-      medium: { runtime_profile: loaded.profiles.medium.runtime_profile, ceiling_ms: loaded.profiles.medium.ceiling_ms, permissions: loaded.profiles.medium.permissions, run_location: loaded.profiles.medium.run_location, worker_ceiling: loaded.profiles.medium.worker_ceiling, worker_ceiling_source: loaded.profiles.medium.worker_ceiling_source },
+      phase: { runtime_profile: loaded.profiles.phase.runtime_profile, ceiling_ms: loaded.profiles.phase.ceiling_ms, permissions: loaded.profiles.phase.permissions, run_location: loaded.profiles.phase.run_location, worker_ceiling: loaded.profiles.phase.worker_ceiling, worker_ceiling_source: loaded.profiles.phase.worker_ceiling_source },
     },
     manifests: {
       inner: { ref: loaded.manifests.inner.manifest_ref, sha256: loaded.manifests.inner.manifest_sha256, members: loaded.manifests.inner.members.map(({ id, file, argv, cwd }) => ({ id, file, argv, cwd })) },
-      medium: { ref: loaded.manifests.medium.manifest_ref, sha256: loaded.manifests.medium.manifest_sha256, members: loaded.manifests.medium.members.map(({ id, file, argv, cwd }) => ({ id, file, argv, cwd })) },
+      phase: { ref: loaded.manifests.phase.manifest_ref, sha256: loaded.manifests.phase.manifest_sha256, members: loaded.manifests.phase.members.map(({ id, file, argv, cwd }) => ({ id, file, argv, cwd })) },
     },
     capability_observations: capability,
     groups: {
       inner_files: innerFileSummaries,
       inner_collection: innerCollectionSummary,
-      medium_collection: mediumCollectionSummary,
+      phase_collection: phaseCollectionSummary,
     },
     limitations: [
       "Five child-process samples describe this machine and these manifest members only.",

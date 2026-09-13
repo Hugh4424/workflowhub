@@ -10,6 +10,7 @@
     "probe:public-behavior": "WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR=1 vitest run tests/contract/public-behavior-baseline.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
     "compare:public-behavior": "node tools/architecture/public-behavior-baseline.mjs compare --baseline=c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf --candidate=worktree",
     "test": "npm run test:safe && npm run test:exclusive",
+    "test:profile": "node tools/cli/run-checks.mjs --runtime-profile=phase --evidence-path=${WORKFLOWHUB_PROFILE_EVIDENCE_PATH:-quality/tests/test-profile.json} -- ./node_modules/.bin/vitest run tests/contract/test-runtime-profile.test.mjs tests/contract/runtime-profile-consumer-readback.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
     "test:safe": "vitest run --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
     "test:exclusive": "vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism"
   },
