@@ -162,6 +162,16 @@ describe("stage row publication", () => {
       delivery: "unavailable",
       task_closure: "unavailable",
     });
+    expect(row.spec_analyze.value).toMatchObject({
+      ref: result.ref,
+      sha256: result.sha256,
+      reflection_status: expect.stringMatching(/^(?:ok|degraded|failed|unavailable)$/),
+    });
+    expect(Object.keys(row).sort()).toEqual([
+      "close_action", "created_at", "evidence", "finding_dispositions", "handoff",
+      "layer_states", "material_digest", "record_kind", "review_origin", "review_result_ref",
+      "serious_issue_disposition", "snapshot_tree", "source", "spec_analyze", "stage", "task_id",
+    ]);
   });
 
   it("carries the three handoff items when the current plan.md declares them", async () => {

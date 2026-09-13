@@ -338,6 +338,40 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+/**
+ * Project one canonical stage-material rule into the views used by callers
+ * and the runner.  The rule itself comes from stage-materials.json through
+ * reviewRuleFor; consumers must not maintain a second material-key list.
+ */
+export function materialAllowlistForRule(rule, { includeGenerated = true } = {}) {
+  if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+    throw new TypeError("MATERIAL_INCOMPLETE: material rule must be an object");
+  }
+  const required = [...(rule.required ?? [])];
+  const optional = [...(rule.optional ?? [])];
+  const generated = [...(rule.generated ?? [])];
+  const forbidden = [...(rule.forbidden ?? [])];
+  const generatedKeys = new Set(generated);
+  const legal = [...new Set([...required, ...optional])]
+    .filter((key) => includeGenerated || !generatedKeys.has(key))
+    .sort((left, right) => Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")));
+  const known = [...new Set([...required, ...optional, ...generated, ...forbidden])];
+  return Object.freeze({
+    required: Object.freeze(required),
+    optional: Object.freeze(optional),
+    generated: Object.freeze(generated),
+    forbidden: Object.freeze(forbidden),
+    legal: Object.freeze(legal),
+    known: Object.freeze(known),
+  });
+}
+
+export function materialForbiddenMessage(key, rule, { allowedKeys = null } = {}) {
+  const allowlist = materialAllowlistForRule(rule);
+  const legal = allowedKeys ?? allowlist.legal;
+  return `MATERIAL_FORBIDDEN: ${key} is not allowed for this review; legal material keys: ${legal.join(", ")}`;
+}
+
 function assertPlainMaterials(materials) {
   if (!materials || typeof materials !== "object" || Array.isArray(materials)
       || Object.getPrototypeOf(materials) !== Object.prototype) {
@@ -357,7 +391,9 @@ export function validateDetailReviewInput({ materials, currentDecisionLog = null
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
     throw new TypeError("MATERIAL_INCOMPLETE: detail materials must be an object");
   }
-  const required = ["raw_requirement", "approved_direction", "draft_spec_or_acceptance"];
+  const rule = reviewRuleFor("make-decision", "detail");
+  const allowlist = materialAllowlistForRule(rule, { includeGenerated: false });
+  const required = allowlist.required.filter((key) => !allowlist.generated.includes(key));
   for (const key of required) {
     if (!Object.prototype.hasOwnProperty.call(materials, key)) {
       errors.push(`missing ${key}`);
@@ -369,9 +405,8 @@ export function validateDetailReviewInput({ materials, currentDecisionLog = null
     }
     if (materials[key].trim() === "") errors.push(`empty ${key}`);
   }
-  const allowed = new Set([...required, "context_map", "evidence_map"]);
-  const forbidden = Object.keys(materials).filter((key) => !allowed.has(key));
-  if (forbidden.length) errors.push(`forbidden ${forbidden.join(", ")}`);
+  const forbidden = Object.keys(materials).filter((key) => !allowlist.legal.includes(key));
+  if (forbidden.length) errors.push(`forbidden ${forbidden.join(", ")}; legal material keys: ${allowlist.legal.join(", ")}`);
   if (typeof currentDecisionLog !== "string" || currentDecisionLog.length === 0) {
     errors.push("freshness current decision-log.md bytes are unavailable");
   } else if (typeof materials.approved_direction === "string" && materials.approved_direction !== currentDecisionLog) {
@@ -783,9 +818,9 @@ function validateV2AuthorityMaps(_rule, materials, _strictV2Maps, changeMap = nu
 }
 
 function validateMaterialAllowlist(rule, materials) {
-  const allowed = new Set([...rule.required, ...rule.optional]);
+  const allowlist = materialAllowlistForRule(rule);
   for (const key of Object.keys(materials)) {
-    if (!Object.prototype.hasOwnProperty.call(materials, key) || !allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for this review`);
+    if (!allowlist.legal.includes(key)) throw new Error(materialForbiddenMessage(key, rule));
   }
 }
 
@@ -1947,13 +1982,16 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
   validateMaterialAllowlist(rule, materials);
   if (stage === "make-decision" && reviewTrack === "direction") {
-    const allowed = new Set([...rule.required, ...rule.optional]);
+    const allowlist = materialAllowlistForRule(rule);
+    const allowed = new Set(allowlist.legal);
     if (!["challenge", "combined"].includes(directionMode)) {
       for (const key of ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"]) {
         allowed.delete(key);
       }
     }
-    for (const key of Object.keys(materials)) if (!Object.prototype.hasOwnProperty.call(materials, key) || !allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
+    for (const key of Object.keys(materials)) if (!allowed.has(key)) {
+      throw new Error(materialForbiddenMessage(key, rule, { allowedKeys: [...allowed].sort() }));
+    }
   }
   for (const key of rule.forbidden) if (Object.prototype.hasOwnProperty.call(materials, key)) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
   const usesDiffBundle = rule.source_bundle === "diff";

@@ -365,6 +365,48 @@ describe("simple material-only review", () => {
     }));
   });
 
+  // AC-C4-023 / FR-C4-004: the dispatch state belongs to the paired aggregate
+  // result itself, not only inside role_results.red/blue.
+  it("exposes the pair dispatch state on the aggregate result", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-dispatch-")));
+    roots.push(attachmentRoot);
+    const dispatched = await runSimpleReview({
+      stage: "make-decision", review_track: "detail", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup(request) {
+        return { runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
+          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(dispatched.status).toBe("available");
+    expect(Object.keys(dispatched)).toContain("dispatch_state");
+    expect(dispatched.dispatch_state).toBe("dispatched");
+  });
+
+  it("reports a blocked pair at the aggregate top level too", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-blocked-")));
+    roots.push(attachmentRoot);
+    const blocked = await runSimpleReview({
+      stage: "make-decision", review_track: "detail", host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: { async runGroup() { throw new Error("a blocked pair must not dispatch"); } },
+    });
+    expect(blocked.status).toBe("unavailable");
+    expect(blocked.error.code).toBe("ROUTE_UNAVAILABLE");
+    expect(blocked.role_results.red.dispatch_state).toBe("blocked_before_dispatch");
+    expect(blocked.dispatch_state).toBe("blocked_before_dispatch");
+  });
+
   it("keeps pair role metadata when a paired provider member identity is degraded", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-identity-")));
     roots.push(attachmentRoot);

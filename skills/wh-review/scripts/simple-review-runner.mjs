@@ -9,7 +9,7 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
-import { redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor,
+import { materialAllowlistForRule, materialForbiddenMessage, redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor,
   REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
@@ -100,6 +100,11 @@ function stableValue(value) {
   return value;
 }
 
+// Local request-identity input version.  This changes only the managed request
+// id's stable input so a protocol revision can be retried within the broker's
+// TTL; the managed public envelope and its exact key set remain unchanged.
+const MANAGED_REQUEST_ID_PROTOCOL_VERSION = "managed-request-id.v1";
+
 function managedRequestId(input, { materialId, hostProvider, providers, providerIdentities, reviewMode, prompt }) {
   const subject = {
     stage: input.stage,
@@ -111,7 +116,7 @@ function managedRequestId(input, { materialId, hostProvider, providers, provider
     pair_id: input.pair_id ?? input.pairId ?? null,
     role: input.role ?? null,
   };
-  const identity = stableValue({ material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, review_mode: reviewMode, prompt, subject });
+  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, review_mode: reviewMode, prompt, subject });
   return "wh-review-" + hash(JSON.stringify(identity));
 }
 
@@ -646,20 +651,15 @@ function blockedPreflight(input, code, message, diagnostic, pair = null) {
 
 function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerated = false } = {}) {
   const materials = input.materials;
-  const generated = new Set(rule.generated ?? []);
-  const forbidden = new Set(rule.forbidden ?? []);
-  const required = (rule.required ?? []).filter((key) => !generated.has(key));
-  const allowed = new Set([
-    ...(rule.required ?? []),
-    ...(rule.optional ?? []),
-    ...(rule.generated ?? []),
-    ...(rule.forbidden ?? []),
-  ]);
+  const allowlist = materialAllowlistForRule(rule);
+  const generated = new Set(allowlist.generated);
+  const forbidden = new Set(allowlist.forbidden);
+  const required = allowlist.required.filter((key) => !generated.has(key));
   const forbiddenMaterial = Object.keys(materials).find((key) =>
-    !allowed.has(key) || forbidden.has(key) || (rejectGenerated && generated.has(key)));
+    !allowlist.known.includes(key) || forbidden.has(key) || (rejectGenerated && generated.has(key)));
   if (forbiddenMaterial) {
-    const actual = !allowed.has(forbiddenMaterial) ? "unknown" : generated.has(forbiddenMaterial) ? "generated" : "forbidden";
-    return blockedPreflight(input, "MATERIAL_FORBIDDEN", `material ${forbiddenMaterial} is not allowed for this review`, preflightDiagnostic({
+    const actual = !allowlist.known.includes(forbiddenMaterial) ? "unknown" : generated.has(forbiddenMaterial) ? "generated" : "forbidden";
+    return blockedPreflight(input, "MATERIAL_FORBIDDEN", materialForbiddenMessage(forbiddenMaterial, rule), preflightDiagnostic({
       field: forbiddenMaterial,
       expected: rejectGenerated ? "caller-owned allowlisted material key" : "allowlisted material key",
       actual,
@@ -706,8 +706,8 @@ function shouldRunMaterialPreflight(input, rule) {
   if (input.review_scope === "integration" || input.reviewScope === "integration") return true;
   const materials = input.materials;
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) return false;
-  const contractKeys = new Set([...(rule.required ?? []), ...(rule.optional ?? []), ...(rule.generated ?? []), ...(rule.forbidden ?? [])]);
-  return Object.keys(materials).some((key) => contractKeys.has(key));
+  const allowlist = materialAllowlistForRule(rule);
+  return Object.keys(materials).some((key) => allowlist.known.includes(key));
 }
 
 function runStaticPreflight(input, { route, providerSelection }, pair = null) {
@@ -854,8 +854,14 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
       return {
         ...item,
         provider,
+        // A managed member that is not a workflowhub-result.v3 envelope carries
+        // no identity of its own, so the trusted route selection supplies
+        // provider/source_id/config_id. The adapter is a pure function of the
+        // provider name and is added here when the selection does not carry one,
+        // so the normalized member satisfies the same adapter contract as every
+        // other path instead of degrading to PROVIDER_IDENTITY_INVALID.
         identity: brokerV3Identity ?? (selectedIdentities?.[provider]
-          ? { provider, ...selectedIdentities[provider] }
+          ? { provider, adapter: providerAdapter(provider), ...selectedIdentities[provider] }
           : null),
         ...(pair ? pairFields(pair) : {}),
       };
@@ -1236,6 +1242,7 @@ function uniquePairFindings(roleResults) {
 }
 
 function combinePairedResults(input, pairId, roleResults) {
+  if (roleResults.length === 0) throw new TypeError("paired review requires at least one role result");
   const byRole = Object.fromEntries(roleResults.map((result) => [result.role, result]));
   const red = byRole.red;
   const blue = byRole.blue;
@@ -1249,8 +1256,24 @@ function combinePairedResults(input, pairId, roleResults) {
   const allIncomplete = roleResults.every((result) => incomplete[result.role]);
   const status = !anyAvailable ? "unavailable" : (anyIncomplete || !materialConsistent ? "available-with-failures" : "available");
   const materialStatus = materialConsistent ? "consistent" : "partial";
+  // FR-C4-004: the dispatch state belongs to the aggregate result itself, not
+  // only to each role record. The pair was blocked before dispatch only when
+  // every role was; otherwise at least one role reached the provider.
+  const allReused = roleResults.every((result) => result?.dispatch_state === "reused");
+  // Older managed group adapters omit dispatch_state after a provider call.
+  // Their presence is still evidence that dispatch was attempted; only an
+  // explicit blocked_before_dispatch state proves that no role reached a
+  // provider.
+  const anyDispatched = roleResults.some((result) => result?.dispatch_state === "dispatched"
+    || result?.dispatch_state === undefined);
+  const dispatchState = allReused
+    ? "reused"
+    : anyDispatched
+      ? "dispatched"
+      : "blocked_before_dispatch";
   return {
     status,
+    dispatch_state: dispatchState,
     stage: input.stage,
     ...reviewSubjectFields(input),
     review_track: input.review_track ?? input.reviewTrack ?? null,

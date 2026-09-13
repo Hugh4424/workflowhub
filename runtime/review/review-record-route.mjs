@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { assertTaskKernel } from "../task/task-capability.mjs";
-import { validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult, providerAdapter } from "./canonical-review-result.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
@@ -10,8 +9,6 @@ import { openCurrentTaskWorkspace } from "../task/workspace.mjs";
 import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../evidence/canonical-receipt-writer.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
-import { evaluateFactFreshness } from "../evidence/freshness.mjs";
-import { stageMaterialScopeRevision } from "../stage/completion-predicates.mjs";
 import { validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 
@@ -41,12 +38,11 @@ function readExecutionSource(task, selection, identity, materials) {
     materialScope: fact.material_scope, materialScopeRevision: fact.material_scope_revision, snapshotTree: fact.snapshot_tree,
     kind: fact.kind, subject: fact.subject, status: fact.status, evidence: fact.evidence, recordedAt: fact.recorded_at });
   const read = (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref) ? task.readRecordBytes(ref) : task.readRecord(ref);
-  const freshness = evaluateFactFreshness({ ...fact, ref: selection.quality_fact_ref, sha256: textHash(raw) }, {
-    snapshot_tree: identity.tree, material_revision: identity.materialRevision,
-    material_scope_revisions: { "build-code": stageMaterialScopeRevision("build-code", materials) },
-  }, { read });
-  if (!freshness.authenticated) throw new Error(`reviewed_execution authentication is ${freshness.status}`);
   if (fact.evidence.length !== 1) throw new Error("reviewed_execution requires one exact acceptance wrapper");
+  for (const evidence of fact.evidence) {
+    const evidenceRaw = read(evidence.ref);
+    if (textHash(evidenceRaw) !== evidence.sha256) throw new Error("reviewed_execution evidence hash mismatch");
+  }
   const wrapper = JSON.parse(task.readRecord(fact.evidence[0].ref));
   if (wrapper.refs.length !== 1 || wrapper.refs[0].ref !== selection.ref || wrapper.refs[0].sha256 !== selection.sha256) throw new Error("reviewed_execution wrapper binds another aggregate");
   const aggregateRaw = task.readRecord(selection.ref);
@@ -335,6 +331,167 @@ function requestLockHash(request, materialId, routeIdentity) {
   return textHash(canonicalJson(stable));
 }
 
+// The C4 semantic origin is a finite host classification reconstructed from
+// existing normalized scope/subject fields. It is intentionally separate from
+// request_key (operational locking/provenance), K2 review_origin (lifecycle),
+// and route/provider/material evidence bindings. Its whole domain is the three
+// values returned below; every other field combination fails closed.
+function semanticOriginFromRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const stage = value.stage;
+  // An absent build-code scope takes the canonical integration default, while an
+  // explicitly declared null is its own record and stays a distinct class.
+  const scopeDeclared = value.review_scope !== undefined || value.reviewScope !== undefined;
+  const declaredScope = value.review_scope ?? value.reviewScope ?? null;
+  const reviewScope = scopeDeclared ? declaredScope : (stage === "build-code" ? "integration" : null);
+  const subjectKind = value.subject_kind ?? (reviewScope === "phase" ? "phase" : "worktree");
+  if (!["worktree", "phase"].includes(subjectKind)) return null;
+  if (reviewScope === "phase" && (stage !== "build-code" || subjectKind !== "phase")) return null;
+  if (reviewScope === "integration" && (stage !== "build-code" || subjectKind !== "worktree")) return null;
+  if (![null, "phase", "integration"].includes(reviewScope)) return null;
+  // A null scope only ever classifies a worktree subject; a phase subject there
+  // is not a reconstructable classification.
+  if (reviewScope === null && subjectKind !== "worktree") return null;
+  return `${reviewScope ?? "stage"}:${subjectKind}`;
+}
+
+// ---------------------------------------------------------------------------
+// The review round policy. FR-C4-002 removes the material-hash-driven dedup
+// gate and its evidence-layer validator; the per-Phase core review plus the one
+// focus review (FR-C4-003) stay, and their decision table now lives with its
+// only remaining caller, the review route. Decisions and reported fields are
+// unchanged; only the owner and the symbol name changed.
+// ---------------------------------------------------------------------------
+
+const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "phase", "route_repair"]);
+const REVIEW_ATTEMPT_STATUSES = new Set(["completed", "executed", "failed", "unavailable"]);
+
+function reviewBudgetResult({ ok, reason = null, route = null, budget_scope = "material", attempt_created = false, counts, errors = [] }) {
+  return Object.freeze({
+    ok,
+    status: ok ? "ready" : "incomplete",
+    ...(reason ? { reason } : {}),
+    ...(route ? { route } : {}),
+    budget_scope,
+    attempt_created,
+    counts: Object.freeze({ ...counts }),
+    errors: Object.freeze([...errors]),
+  });
+}
+
+const ROUTE_REPAIR_EXCLUDED_ERRORS = new Set([
+  "ROUTE_UNAVAILABLE", "MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "REVIEW_INPUT_TOO_LARGE",
+  "PROTOCOL_INCOMPATIBLE", "REVIEW_BROKER_START_FAILED", "REVIEW_STATUS_UNAVAILABLE",
+  "REVIEW_RUNTIME_EXPIRED", "REVIEW_RUNTIME_MISSING", "REVIEW_SOURCE_DRIFT",
+  "REVIEW_MATERIAL_MISMATCH", "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH",
+  "REVIEW_CANCELLED", "REVIEW_EXECUTION_TIMEOUT",
+]);
+
+function validateRouteRepairAttempt(attempt, request) {
+  if (!attempt) return "route_repair_attempt_missing";
+  if (attempt.dispatch_state !== "dispatched") return "route_repair_not_dispatched";
+  if (!new Set(["failed", "unavailable"]).has(attempt.status)
+      || !new Set(["failed", "unavailable"]).has(attempt.terminal_status)) return "route_repair_not_terminal_failure";
+  if (!SHA256_HEX.test(attempt.route_identity ?? "") || !SHA256_HEX.test(request.route_identity ?? "")) return "route_repair_identity_invalid";
+  if (attempt.route_identity === request.route_identity) return "route_repair_identity_unchanged";
+  if (!SHA256_HEX.test(attempt.closure_identity ?? "") || !SHA256_HEX.test(request.closure_identity ?? "")
+      || attempt.closure_identity !== request.closure_identity) return "route_repair_source_changed";
+  if (attempt.has_semantic_output !== false) return "route_repair_semantic_output_present";
+  if (typeof attempt.error_code !== "string" || !attempt.error_code.trim()
+      || ROUTE_REPAIR_EXCLUDED_ERRORS.has(attempt.error_code)) return "route_repair_failure_ineligible";
+  if (!Array.isArray(attempt.provider_attempts) || attempt.provider_attempts.length === 0) return "route_repair_provider_attempts_missing";
+  if (attempt.provider_attempts.some((member) => !member || !new Set(["failed", "cancelled"]).has(member.status)
+      || member.output_ref !== null || typeof member.error_code !== "string" || !member.error_code.trim())) {
+    return "route_repair_provider_failure_unverified";
+  }
+  if (attempt.provider_attempts.some((member) => ROUTE_REPAIR_EXCLUDED_ERRORS.has(member.error_code))) {
+    return "route_repair_provider_failure_ineligible";
+  }
+  return null;
+}
+
+/**
+ * Decide whether one review round may be dispatched, without creating a new
+ * gate or persistent counter. The caller supplies the immutable attempt facts
+ * for the current frozen revision; phase reviews use their own target
+ * namespace.
+ */
+export function evaluateReviewRound({ material_revision, attempts = [], canonical_attempts = null, request = {} } = {}) {
+  const errors = [];
+  if (typeof material_revision !== "string" || material_revision.trim() === "") errors.push("material_revision_missing");
+  if (!Array.isArray(attempts)) errors.push("attempts_must_be_array");
+  const suppliedAttempts = Array.isArray(attempts) ? attempts : [];
+  suppliedAttempts.forEach((attempt, index) => {
+    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) {
+      errors.push(`attempt_${index + 1}_must_be_object`);
+      return;
+    }
+    if (typeof attempt.attempt_id !== "string" || attempt.attempt_id.trim() === "") errors.push(`attempt_${index + 1}_id_missing`);
+    if (!REVIEW_ATTEMPT_REF.test(attempt.attempt_ref ?? "")) errors.push(`attempt_${index + 1}_ref_invalid`);
+    if (!SHA256_HEX.test(attempt.attempt_hash ?? "")) errors.push(`attempt_${index + 1}_hash_invalid`);
+    if (!REVIEW_ATTEMPT_STATUSES.has(attempt.status)) errors.push(`attempt_${index + 1}_status_invalid`);
+  });
+  const canonicalAttempts = canonical_attempts === null ? null : (Array.isArray(canonical_attempts) ? canonical_attempts : []);
+  if (canonical_attempts !== null && !Array.isArray(canonical_attempts)) errors.push("canonical_attempts_must_be_array");
+  if (canonicalAttempts !== null) {
+    const canonicalByRef = new Map(canonicalAttempts.map((attempt) => [attempt?.attempt_ref, attempt]));
+    for (const attempt of suppliedAttempts) {
+      const canonical = canonicalByRef.get(attempt?.attempt_ref);
+      if (!canonical || canonical.attempt_hash !== attempt.attempt_hash || canonical.attempt_id !== attempt.attempt_id) {
+        errors.push("attempt_not_bound_to_canonical_record");
+      }
+    }
+    const currentCanonical = canonicalAttempts.filter((attempt) => attempt?.material_revision === material_revision);
+    const suppliedRefs = new Set(suppliedAttempts.map((attempt) => attempt?.attempt_ref));
+    if (currentCanonical.some((attempt) => !suppliedRefs.has(attempt.attempt_ref))) errors.push("attempt_history_incomplete");
+  }
+  if (!request || typeof request !== "object" || Array.isArray(request)) errors.push("request_must_be_object");
+  const kind = request?.kind ?? "initial";
+  if (!REVIEW_BUDGET_KINDS.has(kind)) errors.push("review_kind_invalid");
+  const currentAttempts = suppliedAttempts.filter((attempt) => attempt?.material_revision === material_revision);
+  if (currentAttempts.length !== suppliedAttempts.length) errors.push("material_revision_mismatch");
+  const counts = {
+    initial: currentAttempts.filter((attempt) => attempt?.kind === "initial").length,
+    focused: currentAttempts.filter((attempt) => attempt?.kind === "focused").length,
+    phase: currentAttempts.filter((attempt) => attempt?.kind === "phase" && attempt?.phase_id === request?.phase_id).length,
+    route_repair: currentAttempts.filter((attempt) => attempt?.kind === "route_repair").length,
+  };
+  if (errors.length) return reviewBudgetResult({ ok: false, reason: "budget_input_invalid", budget_scope: kind === "phase" ? "phase" : "material", counts, errors });
+  if (kind === "phase") {
+    if (typeof request.phase_id !== "string" || request.phase_id.trim() === "") {
+      return reviewBudgetResult({ ok: false, reason: "phase_id_missing", budget_scope: "phase", counts, errors: ["phase_id_missing"] });
+    }
+    if (counts.phase > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", budget_scope: "phase", counts });
+    return reviewBudgetResult({ ok: true, route: "phase_review", budget_scope: "phase", counts });
+  }
+  if (kind === "initial") {
+    if (counts.initial > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "initial_review", counts });
+  }
+  if (kind === "focused") {
+    if (request.changed !== true) return reviewBudgetResult({ ok: false, reason: "no_material_change_for_focused_review", route: "ask_user", counts });
+    if (counts.focused > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "focused_review", counts });
+  }
+  if (kind === "route_repair") {
+    if (canonicalAttempts === null) {
+      return reviewBudgetResult({ ok: false, reason: "route_repair_canonical_history_required", counts,
+        errors: ["route_repair_canonical_history_required"] });
+    }
+    if (counts.route_repair > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    const prior = currentAttempts.find((attempt) => attempt.attempt_ref === request.repair_attempt_ref);
+    const canonical = canonicalAttempts.find((attempt) => attempt?.attempt_ref === request.repair_attempt_ref);
+    if (!prior || !canonical || canonicalJson(prior) !== canonicalJson(canonical)) {
+      return reviewBudgetResult({ ok: false, reason: "route_repair_attempt_not_canonical", counts,
+        errors: ["route_repair_attempt_not_canonical"] });
+    }
+    const reason = validateRouteRepairAttempt(prior, request);
+    if (reason) return reviewBudgetResult({ ok: false, reason, route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "route_repair_review", counts });
+  }
+  return reviewBudgetResult({ ok: false, reason: "review_kind_invalid", counts, errors: ["review_kind_invalid"] });
+}
+
 function reviewSubjectHash(subject) {
   return textHash(canonicalJson(subject ?? null));
 }
@@ -354,24 +511,49 @@ function subjectMatchesAttempt(attempt, subject) {
     : actual === reviewSubjectHash(subject);
 }
 
-function findReusableReview({ history, request, identity, materialId, requestKey }) {
+function findReusableReview({ history, request, routeIdentity = null }) {
+  const requestOrigin = semanticOriginFromRecord(request);
+  // An origin that cannot be reconstructed from the record fails closed: the
+  // request is dispatched under the round budget instead of reusing an attempt
+  // whose canonical identity is unprovable.
+  if (requestOrigin === null) return null;
+  // Reuse is an authenticated transport decision. If the current route could
+  // not be resolved, a legacy attempt with a null route identity must not be
+  // mistaken for an equivalent reusable result.
+  if (!SHA256_HEX.test(routeIdentity ?? "")) return null;
+  const requestTrack = request.review_track ?? request.reviewTrack ?? null;
+  const requestKind = request.review_kind ?? request.reviewKind ?? null;
+  const requestPhaseId = request.phase_id ?? null;
   for (const entry of history) {
     const attempt = entry.attempt;
+    // Canonical dedup identity, exactly as spec FR-C4-001 fixes it:
+    // (stage, phase_id, track, review_kind, origin). `origin` is the
+    // host-classified scope/subject category of the authorized C4 definition;
+    // it is never a material id, route identity, provider identity or evidence
+    // hash, and it is not the K2 review_origin lifecycle value.
     if (attempt.stage !== request.stage
-        || (attempt.review_track ?? null) !== (request.review_track ?? request.reviewTrack ?? null)
-        || (attempt.review_kind ?? null) !== (request.review_kind ?? request.reviewKind ?? null)
-        || (attempt.phase_id ?? null) !== (request.phase_id ?? null)
-        || (attempt.subject_kind ?? "worktree") !== (request.subject_kind ?? "worktree")
-        || attempt.request_key !== requestKey) continue;
+        || (attempt.phase_id ?? null) !== requestPhaseId
+        || (attempt.review_track ?? null) !== requestTrack
+        || (attempt.review_kind ?? null) !== requestKind
+        || semanticOriginFromRecord(attempt) !== requestOrigin) continue;
+    // The identity matched, so this entry is the same canonical review. The
+    // checks below are transport and integrity preconditions on the recorded
+    // attempt as a reuse target; they are deliberately not part of the key.
+    // A changed trusted route keeps a failed attempt a repair candidate so the
+    // round budget decides, while an unchanged route reuses the record. An
+    // unresolved route proves nothing, so it never reuses a recorded route.
+    if ((entry.fact?.route_identity ?? null) !== (routeIdentity ?? null)) continue;
+    if (!subjectMatchesAttempt(attempt, request.subject)) continue;
+    if ((attempt.authenticated_evidence_sha256 ?? null) !== authenticatedEvidenceHash(request.authenticated_evidence)) continue;
     // A provider material-size rejection is a transport preflight fact, not a
     // reusable review result. It must not consume the one-round allowance and
     // must also remain retryable after the caller bounds the material.
     if (isNonConsumingMaterialBoundFailure(attempt)) continue;
-    const semantic = (entry.pairSummary?.semantic_status ?? entry.prepared.semantic_status) === "available";
-    const sameSource = attempt.snapshot_tree === identity.tree && attempt.material_revision === identity.materialRevision;
-    // Semantic refs retain their original source identity; freshness remains a
-    // separate consumer decision. Cross-revision reuse requires actual inputs.
-    if (!sameSource && (!semantic || materialId === null || attempt.material_id !== materialId)) continue;
+    // Material revision and material hash are immutable provenance on the
+    // attempt/result, not dedup dimensions. Once the five-dimensional identity
+    // matches, a valid semantic result can be read back even after material
+    // edits; current-status consumers decide separately whether the fact is
+    // usable. Unavailable records remain reusable only as the recorded fact.
     return entry.pairSummary ?? entry.prepared.refs;
   }
   return null;
@@ -866,7 +1048,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: `complete review budget history is unavailable: ${error.message}` },
         review_budget: { ok: false, reason: "budget_unknown", counts: null } };
     }
-    const reusable = findReusableReview({ history, request, identity: before, materialId: authenticatedMaterialId, requestKey });
+    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null });
     const sameSubject = (prior) => prior.stage === request.stage
       && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
       && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
@@ -893,7 +1075,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       : routeRepaired ? "route_repair"
         : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
     const attempts = priorSubject.map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
-    const reviewBudget = validateReviewBudget({ material_revision: before.materialRevision,
+    const reviewBudget = evaluateReviewRound({ material_revision: before.materialRevision,
       attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id,
         route_identity: routeIdentity, closure_identity: currentClosureIdentity,
         repair_attempt_ref: routeRepaired ? latestCurrent.fact.attempt_ref : null } });
@@ -1484,4 +1666,33 @@ export function recordTaskBoundE2eReviewResult(input = {}) {
   identity.taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
   identity.taskHandle.writeRecordAtomic(resultRef, JSON.stringify(resultRecord));
   return Object.freeze({ attempt_ref: attemptRef, result_ref: resultRef });
+}
+
+// ---------------------------------------------------------------------------
+// Focused re-review input (FR-C4-014 / AC-C4-017).
+// ---------------------------------------------------------------------------
+
+const FOCUS_REVIEW_INPUT_KEYS = Object.freeze([
+  "finding_ref", "minimal_diff", "tests", "source_tree", "delta_verification",
+]);
+
+/**
+ * Assemble the one-shot minimal input of a focused re-review. The object is
+ * built once, in memory, and is exactly the five declared items; it is never
+ * written to the task store, so a focused re-review creates no path card, no
+ * packet and no receipt. The caller passes the returned object straight to the
+ * provider round; anything besides the five named items is rejected instead of
+ * being forwarded to the provider.
+ */
+export function assembleFocusReviewInput(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("focus review input must be an object");
+  const unknown = Object.keys(input).filter((key) => !FOCUS_REVIEW_INPUT_KEYS.includes(key));
+  if (unknown.length) throw new TypeError(`focus review input carries undeclared items: ${unknown.join(", ")}`);
+  const focus = {};
+  for (const key of FOCUS_REVIEW_INPUT_KEYS) {
+    const value = input[key];
+    if (value === undefined || value === null) throw new TypeError(`focus review input requires ${key}`);
+    focus[key] = value;
+  }
+  return Object.freeze(focus);
 }

@@ -1,7 +1,8 @@
 import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { randomUUID, createHash } from "node:crypto";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { canonicalJson } from "../evidence/canonical-source.mjs";
 
 export const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
@@ -151,8 +152,51 @@ function packetSourceEntries(source_materials, files) {
   return entries.sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
 }
 
+// Same repository-root idiom the runtime already uses (see stage-runner.mjs); a
+// multi-segment parent walk would trip the anti-host repo-root-climb guard.
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const STAGE_SKILL_PLAN_PATH = "skills/wh-review/stage-skill-plan.json";
+
+function declaredSkillLenses(stage, track) {
+  if (typeof track !== "string" || track.trim() === "") throw new TypeError("stage input packet track must be non-empty text");
+  const planPath = join(REPOSITORY_ROOT, STAGE_SKILL_PLAN_PATH);
+  let plan;
+  try {
+    plan = JSON.parse(readFileSync(planPath, "utf8"));
+  } catch (error) {
+    throw new TypeError(`stage input packet skill plan is unreadable: ${STAGE_SKILL_PLAN_PATH}: ${error.message}`);
+  }
+  const planForTrack = plan?.stages?.[stage]?.tracks?.[track] ?? plan?.stages?.[stage] ?? plan?.mini_task?.[track] ?? plan?.non_stage?.[track];
+  const names = planForTrack?.required_skills;
+  if (!Array.isArray(names) || names.length === 0) {
+    throw new TypeError(`stage input packet declares no required skills for ${stage}/${track}`);
+  }
+  return [...new Set(names)];
+}
+
+function skillLensEntries(stage, track, files) {
+  const entries = declaredSkillLenses(stage, track).map((name) => {
+    const path = `skills/${name}/SKILL.md`;
+    if (!validPacketPath(path)) throw new TypeError(`skill lens path is invalid: ${path}`);
+    if (files[path] !== undefined) throw new TypeError(`duplicate packet path: ${path}`);
+    const source = join(REPOSITORY_ROOT, "skills", name, "SKILL.md");
+    let content;
+    try {
+      content = readFileSync(source, "utf8");
+    } catch (error) {
+      throw new TypeError(`skill lens is unreadable: ${path}: ${error.message}`);
+    }
+    const normalized = normalizePacketText(content);
+    if (normalized.trim() === "") throw new TypeError(`skill lens is empty: ${path}`);
+    files[path] = normalized;
+    const digest = sha256(Buffer.from(normalized, "utf8"));
+    return { path, source_digest: digest, sha256: digest, producer: "wh-review", consumer: stage, authority: "review_lens" };
+  });
+  return entries.sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
+}
+
 /** Build the ephemeral stage-input packet; it is not a fifth material. */
-export function buildStageInputPacket({ task_id, stage, material_revision, snapshot_tree, source_materials = {}, derived_files = [] } = {}) {
+export function buildStageInputPacket({ task_id, stage, track = null, material_revision, snapshot_tree, source_materials = {}, derived_files = [] } = {}) {
   if (typeof task_id !== "string" || task_id.trim() === "") throw new TypeError("stage input packet task_id is required");
   if (typeof stage !== "string" || stage.trim() === "") throw new TypeError("stage input packet stage is required");
   if (typeof material_revision !== "string" || material_revision.trim() === "") throw new TypeError("stage input packet material_revision is required");
@@ -160,6 +204,7 @@ export function buildStageInputPacket({ task_id, stage, material_revision, snaps
   if (!source_materials || typeof source_materials !== "object" || Array.isArray(source_materials)) throw new TypeError("source_materials must be an object");
   const files = {};
   const sourceEntries = packetSourceEntries(source_materials, files);
+  const skillLensSourceEntries = track === null || track === undefined ? [] : skillLensEntries(stage, track, files);
   if (!Array.isArray(derived_files)) throw new TypeError("derived_files must be an array");
   const derivedEntries = derived_files.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || !validPacketPath(entry.path)) throw new TypeError(`derived file ${index + 1} path is invalid`);
@@ -170,7 +215,7 @@ export function buildStageInputPacket({ task_id, stage, material_revision, snaps
     const sourceDigest = entry.source_digest ?? sha256(Buffer.from(normalized, "utf8"));
     if (!SHA256_HEX.test(sourceDigest)) throw new TypeError(`derived file ${entry.path} source_digest is invalid`);
     return { path: entry.path, source_digest: sourceDigest, sha256: sha256(Buffer.from(normalized, "utf8")), producer: entry.producer, consumer: entry.consumer, authority: "non-material" };
-  }).sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
+  }).concat(skillLensSourceEntries).sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
   const manifest = {
     algorithm_version: STAGE_INPUT_PACKET_VERSION,
     task_id,
