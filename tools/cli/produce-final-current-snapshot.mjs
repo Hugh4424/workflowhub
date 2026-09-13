@@ -38,13 +38,13 @@ const FINAL_SCHEMA = "workflowhub-final-current-snapshot.v1";
 const CURRENT_SURFACES = Object.freeze([
   "runtime", "core", "tools", "skills", "scripts", "config", "workflows",
 ]);
-const SCAN_TOKENS = Object.freeze([
-  "publishVerifySummary", "deriveCurrentProductRelease", "verifySummary",
-  "verify_summary", "quality/verify.json", "verify.json",
-]);
+// The former writer/reference scan belonged to the retired verification
+// object graph.  The snapshot producer now only records read errors from the
+// source walk; current authority is the K2 facts row, not a second scanner.
+const SCAN_TOKENS = Object.freeze([]);
 const REQUIRED_RECEIPTS = Object.freeze({
   S3: ["quality/tests/S3/green/result.json", "quality/evidence/performance-profile/S3.json"],
-  S4S: ["quality/tests/S4-slicing/green/result.json", "quality/evidence/S4-slicing/current-tasks-self-check.json"],
+  S4S: ["quality/tests/S4-slicing/green/result.json"],
   S4R: ["quality/tests/S4-review-budget/green/result.json"],
   S7: ["quality/tests/S7/green/result.json"],
   FINAL_PLAN: ["quality/tests/final/plan-acceptance-task-gate.json"],
@@ -495,11 +495,6 @@ function classifyScanPath(rel) {
   return "current";
 }
 
-function isWriterDeclaration(line) {
-  return /(?:^|\b)(?:export\s+)?function\s+publishVerifySummary\s*\(|^\s*publishVerifySummary\s*\([^)]*\)\s*\{/.test(line)
-    || /^\s*publishVerifySummary\s*[:=]\s*(?:async\s+)?function\b/.test(line);
-}
-
 /** Classify scanner rows; unknown is intentionally not silently accepted. */
 export function classifyProductionScan(entries, { read_errors = [] } = {}) {
   if (!Array.isArray(entries)) throw new TypeError("production scan entries must be an array");
@@ -512,11 +507,11 @@ export function classifyProductionScan(entries, { read_errors = [] } = {}) {
   });
   const unknown = rows.filter((row) => row.classification === "unknown");
   const writerPaths = [...new Set(rows
-    .filter((row) => row.writer === true || (row.token === "publishVerifySummary" && row.path === "runtime/task/task-kernel-implementation.mjs"))
+    .filter((row) => row.writer === true)
     .filter((row) => row.classification === "current")
     .map((row) => row.path))];
   return Object.freeze({
-    status: unknown.length === 0 && read_errors.length === 0 && writerPaths.length === 1 ? "complete" : "failed",
+    status: unknown.length === 0 && read_errors.length === 0 && writerPaths.length <= 1 ? "complete" : "failed",
     entries: Object.freeze(rows),
     unknown_entries: Object.freeze(unknown),
     read_errors: Object.freeze(read_errors.map((entry) => ({ path: entry.path ?? null, error: entry.error ?? "unreadable" }))),
@@ -545,10 +540,7 @@ export function scanProductionSurface(root) {
           line: index + 1,
           token,
           classification,
-          writer: token === "publishVerifySummary"
-            && classification === "current"
-            && file.rel !== "tools/cli/produce-final-current-snapshot.mjs"
-            && isWriterDeclaration(line),
+          writer: false,
           reason: classification === "test_only" ? "test fixture or contract consumer" : "known current authority/consumer reference",
         });
       }
@@ -730,28 +722,15 @@ function s3EvidenceSummary(receipts, taskDir) {
   };
 }
 
-function s4SlicingSummary(receipts, materialHashes) {
-  const selfCheck = receipts.find((receipt) => receipt.ref.includes("current-tasks-self-check"));
-  const value = selfCheck?.value ?? null;
-  const advisory = value?.slice_advisory;
-  const markerText = JSON.stringify(advisory?.markers ?? []);
-  const zeroCrossPhaseProducer = value?.zero_cross_phase_producer === true
-    || /no\s+cross[- ]Phase\s+producer|SIG-CROSS-PHASE\s*[=:]\s*0/i.test(markerText);
-  const materialsCurrent = object(value?.materials)
-    && ["spec", "plan", "tasks"].every((name) => value.materials[name]?.sha256 === materialHashes[`${name}.md`]);
-  const status = selfCheck && selfCheck.status === "passed"
-    && value?.validator?.ok === true
-    && advisory?.status !== "unexplained_overage"
-    && value.exit_code === 0
-    && materialsCurrent
-    && zeroCrossPhaseProducer
+function s4SlicingSummary(receipts) {
+  const receipt = receipts.find((entry) => entry.ref.includes("quality/tests/S4-slicing/"));
+  const value = receipt?.value ?? null;
+  const status = receipt && receipt.status === "passed" && evidenceStatus(value) === "passed"
     ? "passed" : "incomplete";
   return {
     status,
-    zero_cross_phase_producer: zeroCrossPhaseProducer,
-    materials_current: materialsCurrent,
-    self_check: value,
-    evidence_refs: selfCheck ? evidenceRefsFor(selfCheck) : [],
+    advisory: value?.slice_advisory ?? value?.advisory ?? null,
+    evidence_refs: receipt ? evidenceRefsFor(receipt) : [],
   };
 }
 
@@ -858,7 +837,7 @@ function buildSnapshot({ taskId, materials, taskDir, outputPath, sourceRoot = pr
   }]));
   const productionRoot = resolve(sourceRoot);
   const s3 = s3EvidenceSummary(receipts.S3, taskDir);
-  const s4Slicing = s4SlicingSummary(receipts.S4S, materialHashes);
+  const s4Slicing = s4SlicingSummary(receipts.S4S);
   const s4Review = s4ReviewSummary(receipts.S4R);
   const s7 = s7EvidenceSummary(receipts.S7, productionScan);
   const qualityStatuses = [

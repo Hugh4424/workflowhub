@@ -235,12 +235,12 @@ describe("T013 final current snapshot producer", () => {
 
   it("fails closed for duplicate normative headings and unclassified production references", () => {
     expect(() => deriveActiveAcIds(`${SPEC}\n#### AC-S3-01 duplicate\n`)).toThrow(/duplicate/i);
-    const scan = classifyProductionScan([{ path: "runtime/mystery.mjs", line: 4, token: "publishVerifySummary", classification: "unknown" }]);
+    const scan = classifyProductionScan([{ path: "runtime/mystery.mjs", line: 4, token: "retired-authority", classification: "unknown" }]);
     expect(scan).toMatchObject({ status: "failed", zero_second_writer: true });
     expect(scan.unknown_entries).toHaveLength(1);
     expect(classifyProductionScan([
-      { path: "runtime/a.mjs", line: 1, token: "publishVerifySummary", classification: "current", writer: true },
-      { path: "runtime/b.mjs", line: 2, token: "publishVerifySummary", classification: "current", writer: true },
+      { path: "runtime/a.mjs", line: 1, token: "retired-authority", classification: "current", writer: true },
+      { path: "runtime/b.mjs", line: 2, token: "retired-authority", classification: "current", writer: true },
     ])).toMatchObject({ status: "failed", unique_writer_count: 2 });
     expect(classifyProductionScan([], { read_errors: [{ path: "runtime/unreadable.mjs", error: "EACCES" }] })).toMatchObject({ status: "failed", read_errors: [{ path: "runtime/unreadable.mjs" }] });
   });

@@ -282,7 +282,7 @@ async function runBareReview(request, runRound, resolveRouteIdentity, requestIde
       const diagnostic = { code: "ROUTE_UNAVAILABLE", message: safeRecoveryError(error).message };
       if (existing) return {
         ...existingResult, route_error: diagnostic,
-        sink_ref: existing.sink_ref, authoritative: false, reused: true,
+        sink_ref: existing.sink_ref, authoritative: false, reused: true, dispatch_state: "reused",
       };
       const unavailable = {
         status: "unavailable", ...recoveryRequestIdentityFields(request, requestIdentity),
@@ -297,9 +297,9 @@ async function runBareReview(request, runRound, resolveRouteIdentity, requestIde
         status: "unavailable", ...recoveryRequestIdentityFields(request, requestIdentity),
         ...bareSinkAuthContext(request), ...reviewSubjectFields(request),
         error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: "trusted review route changed but bare review has no authenticated retry budget" },
-        prior_result: existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true,
+        prior_result: existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true, dispatch_state: "reused",
       };
-      return { ...existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true };
+      return { ...existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true, dispatch_state: "reused" };
     }
     let result;
     try {

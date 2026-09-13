@@ -77,7 +77,6 @@ export function validateWorkerSummary(value, { read } = {}) {
 }
 
 function supportedTaskOutputRef(value) {
-  if (value === "quality/verify.json") return true;
   const parts = value.split("/");
   return parts.length >= 3
     && parts[0] === "quality"
@@ -748,8 +747,7 @@ export function publishStageAgentOutcome({
       identity: {
         task_id: safeTask.identity.taskId,
         stage,
-        material_revision: materials.revision,
-        snapshot_tree: snapshot.tree,
+        workspace_path: active.worktreeRoot,
       },
     }));
   const stepOutcomes = input.steps.map((entry, index) => {

@@ -24,7 +24,7 @@
               "target": { "type": "string", "minLength": 1 },
               "inputs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
               "identity": {
-                "const": ["task_id", "stage", "material_revision", "snapshot_tree"]
+                "const": ["task_id", "stage", "workspace_path"]
               },
               "result": { "type": "string", "minLength": 1 }
             },

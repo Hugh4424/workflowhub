@@ -8,8 +8,8 @@ import { CLOSE_PLAN_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmatio
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
-import { isStageSnapshotCurrent, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
-import { ensureGitSnapshotObjectStore, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
+import { ensureGitSnapshotObjectStore } from "../task/git-worktree-snapshot.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
@@ -251,24 +251,6 @@ function validateBrowserQaEvidence(value) {
     throw new Error(`browser QA evidence schema is invalid: ${(browserQaValidator.errors ?? []).map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ")}`);
   }
   return value;
-}
-
-// Only reviews explicitly declared advisory by the stage contract can survive
-// an arbitrary later snapshot. Required verify-code facts still go stale for
-// real material changes, but the narrow executor-only tasks.md writeback is
-// record keeping and may reuse the same quality fact.
-function isAdviceReviewFact(fact) {
-  return fact?.kind === "review"
-    && fact?.status === "recorded"
-    && Object.hasOwn(STAGE_ADVISORY_PREDICATES[fact.stage] ?? {}, fact.subject);
-}
-
-// An execution-status writeback is intentionally reusable only for a
-// registered formal stage predicate. Arbitrary quality facts must still go
-// stale when material identity changes; this keeps the existing bookkeeping
-// exception narrow without adding another control plane.
-function isRegisteredStagePredicate(fact) {
-  return STAGE_PREDICATES[fact?.stage]?.[fact?.subject] === fact?.kind;
 }
 
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -592,7 +574,6 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       if (!/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(evidence.ref)) {
         throw new Error("review evidence ref is outside the canonical wh-review namespace");
       }
-      const adviceReview = isAdviceReviewFact(fact);
       if (value.version === "wh-review-attempt.v1") {
         validateSchema("attempt", value);
         if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree || value.terminal_status !== "unavailable" || fact.status !== "unavailable") {
@@ -605,7 +586,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
           && fact.review_status === "resolved";
         if (value.task_id !== fact.task_id || value.stage !== reviewStage
             || (value.material_revision !== undefined && value.material_revision !== fact.material_revision)
-            || (!adviceReview && !allowMaterialOnlySnapshot && !repairedReview && value.snapshot_tree !== fact.snapshot_tree)) {
+            || (!allowMaterialOnlySnapshot && !repairedReview && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
         // review_kind is optional for the five formal stages.  Older and
@@ -705,75 +686,61 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
   }
 }
 
-export function evaluateFactFreshness(fact, current, { read, workspaceRoot = null, taskId = null } = {}) {
-  const adviceReview = isAdviceReviewFact(fact);
-  const stageScopedSnapshot = !adviceReview
-    && workspaceRoot
-    && typeof taskId === "string"
-    && isRegisteredStagePredicate(fact)
-    && isStageSnapshotCurrent(fact.stage, fact.snapshot_tree, current.snapshot_tree, { snapshotRoot: workspaceRoot, taskId });
-  const recordOnly = stageScopedSnapshot && isRegisteredStagePredicate(fact);
-  const scopeMatchesStage = fact.material_scope === undefined
-    || JSON.stringify(fact.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[fact.stage]);
-  const scopedMaterialCurrent = scopeMatchesStage
-    && fact.material_scope_revision !== undefined
-    && current.material_scope_revisions
-    && fact.material_scope_revision === current.material_scope_revisions[fact.stage];
-  const acMaterialOnlyRevision = fact.kind === "acceptance_criterion"
-    && fact.material_scope === undefined
-    && fact.material_scope_revision === undefined
-    && fact.material_revision !== current.material_revision
-    && fact.snapshot_tree === current.snapshot_tree;
-  const materialCurrent = scopedMaterialCurrent
-    || (fact.material_scope === undefined
-      && fact.material_scope_revision === undefined
-      && (fact.material_revision === current.material_revision
-        // A quality fact keeps its original material revision as provenance.
-        // When every other authenticated identity remains unchanged, a later
-        // material-only revision is the one explicitly tolerated difference.
-        || acMaterialOnlyRevision));
-  const dependencies = {
-    material: adviceReview || recordOnly || materialCurrent ? "current" : "stale",
-    tree: adviceReview || stageScopedSnapshot || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
-    fact: "current",
-  };
-  const factRaw = readBound(fact, read, dependencies, "fact");
-  if (factRaw !== undefined) {
-    try {
-      const parsed = JSON.parse(factRaw);
-      for (const field of ["schema_version", "fact_id", "task_id", "stage", "material_revision", "material_scope", "material_scope_revision", "snapshot_tree", "kind", "status", "review_status", "subject"]) {
-        if (JSON.stringify(parsed[field]) !== JSON.stringify(fact[field])) dependencies.fact = "stale";
-      }
-      if (parsed.schema_version !== "quality-fact.v1") dependencies.fact = "stale";
-      if (!QUALITY_STATUSES.has(parsed.status)
-          || (parsed.status === "recorded" && parsed.kind !== "review")) dependencies.fact = "stale";
-      if (parsed.review_status !== undefined
-          && (parsed.kind !== "review" || !REVIEW_STATUSES.has(parsed.review_status))) dependencies.fact = "stale";
-    } catch { dependencies.fact = "stale"; }
+/**
+ * Authenticate a recorded quality fact and its immutable evidence chain.
+ *
+ * This reader deliberately has no current material or worktree input.  The
+ * fact's material/snapshot fields remain part of its own proof binding, while
+ * later material edits are not treated as an invalidation signal.
+ */
+export function authenticateQualityFactRecord(fact, { read } = {}) {
+  if (!fact || typeof fact !== "object" || Array.isArray(fact)
+      || typeof fact.ref !== "string" || typeof fact.sha256 !== "string"
+      || typeof read !== "function") {
+    return Object.freeze({ fact_ref: fact?.ref ?? null, status: "unavailable", authenticated: false, dependencies: Object.freeze({ fact: "unavailable" }) });
   }
-  let reviewStatus = fact.review_status ?? null;
-  for (const evidence of fact.evidence ?? []) {
+  const dependencies = { fact: "current" };
+  const factRaw = readBound(fact, read, dependencies, "fact");
+  if (factRaw === undefined) {
+    return Object.freeze({ fact_ref: fact.ref, status: dependencies.fact === "missing" ? "missing" : "unavailable", authenticated: false, dependencies: Object.freeze(dependencies) });
+  }
+  let parsed;
+  try {
+    parsed = validateCanonicalQualityFact(JSON.parse(factRaw));
+    const digest = qualityFactDigest(parsed);
+    if (fact.ref !== `quality/facts/${digest}.json` || parsed.fact_id !== `quality-${digest}`) throw new Error("quality fact ref identity mismatch");
+    if (sha256(factRaw) !== fact.sha256) throw new Error("quality fact hash mismatch");
+  } catch {
+    dependencies.fact = "stale";
+    return Object.freeze({ fact_ref: fact.ref, status: "unavailable", authenticated: false, dependencies: Object.freeze(dependencies) });
+  }
+
+  let reviewStatus = parsed.review_status ?? null;
+  for (const evidence of parsed.evidence) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
-    if (raw !== undefined
-        && ((fact.stage === "verify-code" && fact.subject === "code_review")
-          || (fact.stage === "build-code" && fact.subject === "integration_review"))
-        && evidence.evidence_type === "review_result") {
+    if (raw === undefined) continue;
+    if (evidence.evidence_type === "review_result"
+        && ((parsed.stage === "verify-code" && parsed.subject === "code_review")
+          || (parsed.stage === "build-code" && parsed.subject === "integration_review"))) {
       try {
-        const parsed = JSON.parse(raw);
-        if (parsed?.version === "wh-review-result.v1" && Array.isArray(parsed.findings)) {
-          if (reviewStatus === null) reviewStatus = canonicalReviewFindings(parsed).some(isActionableSeriousFinding) ? "findings" : "clean";
+        const value = JSON.parse(raw);
+        if (value?.version === "wh-review-result.v1" && Array.isArray(value.findings)) {
+          reviewStatus ??= canonicalReviewFindings(value).some(isActionableSeriousFinding) ? "findings" : "clean";
         }
       } catch {
-        // authenticateNested records the actual integrity failure below.
+        // authenticateNested below records the integrity failure.
       }
     }
-    if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot: recordOnly });
+    authenticateNested(parsed, evidence, raw, { read, dependencies, key });
   }
   const values = Object.values(dependencies);
-  const status = values.includes("missing") ? "missing" : values.every((value) => value === "current") ? "current" : "stale";
+  const missing = values.includes("missing");
+  const authenticated = values.every((value) => value === "current");
   return Object.freeze({
-    fact_ref: fact.ref, status, authenticated: status === "current",
+    fact_ref: fact.ref,
+    status: authenticated ? "recorded" : missing ? "missing" : "unavailable",
+    authenticated,
     dependencies: Object.freeze(dependencies),
     ...(reviewStatus ? { review_status: reviewStatus } : {}),
   });

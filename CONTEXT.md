@@ -83,11 +83,12 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 3. **质量记录归档**：把测试、审查、AC、风险接受等质量事实写入外置记录的整理动作。
 三者都遵循宪法 F7、F9、Q1；交付动作集只记物理事实，不写质量结论。
 
-**四域 current/close projection**：
+**三域 current/close projection（C6）**：
 `runtime/stage/current-close-projection.mjs` 是只读组合器，不写入 task store，也不产生
-第二个 current、selector 或发布结论。它稳定并列 `work_progress`、`stage_quality`、
-`product_release`、`physical_delivery` 四域。产品发布只读既有 `quality/verify.json` 的
-逐 AC current 权威；物理域只读 close 计划、不可变步骤记录和现场探测。
+第二个 current、selector、`product_release` 或 `status_groups`。它并列
+`work_progress`、`stage_quality`、`physical_delivery` 三域；状态读取以 `facts.jsonl` 的
+K2 当前行和 K1–K6 具名 ref 为准。active `quality/verify.v1` object graph 纳入 C6 removal；
+`specs/archive/**` 与 `docs/research/**` 只作不可变历史/审计来源。
 
 物理域只有六态：没有计划为 `not_started`；计划未完成或失败为 `incomplete`；确定性工作区
 清理且现场读回完成为 `removed`；既有工作区保留并记录为 `not_applicable_recorded`；现场
@@ -380,7 +381,7 @@ build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`ta
 核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次运行内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
 
 **阶段完成判据（stage completion criteria）**：
-与推进资格不同的派生谓词。只有当前 task、stage、material revision 和适用 snapshot 上的阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。
+与推进资格不同的派生谓词。阶段完成须核对 task_id、stage、工作区路径与待写字节的身份，并读取 facts.jsonl 本阶段行及六类具名 ref（K1–K6），确认阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全；缺失事实保持 unknown/unavailable/incomplete，不能宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。
 
 ## 决策收敛与 Clarify 边界（2026-08-28）
 

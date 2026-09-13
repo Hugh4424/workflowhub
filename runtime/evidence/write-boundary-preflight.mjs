@@ -1,47 +1,43 @@
-import { createHash } from "node:crypto";
-import { SHA256_HEX } from "./canonical-utils.mjs";
-import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 import { assertTaskHandle } from "../../runtime/task/task-handle.mjs";
-import { inspectOfficialInvocation, isOfficialInvocation, persistOfficialInvocation } from "./invocation-identity.mjs";
+import { inspectOfficialInvocation, persistOfficialInvocation } from "./invocation-identity.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../runtime/task/workspace.mjs";
-import { assertCurrentSourceDigest, captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const OID = /^[a-f0-9]{40}$/;
 
-function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
+function bytes(value, label) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (typeof value === "string") return Buffer.from(value, "utf8");
+  throw new TypeError(`${label} must be bytes or text`);
 }
 
-function targetGitTop(targetRepoRoot) {
-  try {
-    return realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: targetRepoRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    })).trim());
-  } catch (error) {
-    throw new Error(`target Git validation failed: ${error.stderr?.toString().trim() || error.message}`);
-  }
-}
-
-function gitCommonDir(root) {
-  const value = String(execFileSync("git", ["rev-parse", "--git-common-dir"], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  })).trim();
-  return realpathSync(resolve(root, value));
+function boundWorkspacePath(workspace) {
+  if (workspace === undefined || workspace === null) return null;
+  let authenticated;
+  try { authenticated = assertWorkspace(workspace); }
+  catch { authenticated = assertCandidateWorkspace(workspace); }
+  return realpathSync(authenticated.worktreeRoot);
 }
 
 /**
- * Read-only structural facts shared by formal write boundaries. It deliberately
- * knows nothing about review quality, provider availability, or human approval.
+ * Read-only structural facts shared by formal write boundaries. The boundary
+ * has exactly three inputs: task identity, workspace path, and write bytes.
+ * Review quality and source snapshots are outside this check.
  */
-export function inspectWriteBoundary({ task, stage, operation, invocation, workspace, sourceDigest } = {}) {
+export function inspectWriteBoundary({
+  task,
+  stage,
+  operation,
+  taskId,
+  workspace,
+  workspacePath,
+  bytesToWrite,
+  authenticatedSourceBytes,
+  sourceBytes,
+} = {}) {
   const handle = assertTaskHandle(task);
   if (!STAGES.has(stage)) throw new TypeError("write boundary stage is invalid");
   if (typeof operation !== "string" || !/^[a-z][a-z0-9._-]*$/.test(operation)) {
@@ -49,105 +45,43 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
   }
 
   const violations = [];
-  if (sourceDigest !== undefined && !SHA256_HEX.test(sourceDigest ?? "")) {
-    throw new TypeError("write boundary sourceDigest must be a sha256");
-  }
-  const targetTop = targetGitTop(handle.manifest.target_repo_root);
-  if (targetTop !== handle.manifest.target_repo_root) violations.push("TARGET_GIT_TOP_MISMATCH");
-  let worktreeRoot = null;
-  let observedSourceDigest = null;
-  if (workspace !== undefined) {
-    let authenticatedWorkspace;
-    try {
-      try { authenticatedWorkspace = assertWorkspace(workspace); }
-      catch { authenticatedWorkspace = assertCandidateWorkspace(workspace); }
-      worktreeRoot = authenticatedWorkspace.worktreeRoot;
-      if (targetGitTop(worktreeRoot) !== worktreeRoot) violations.push("WORKTREE_GIT_TOP_MISMATCH");
-      const common = gitCommonDir(worktreeRoot);
-      const targetCommon = gitCommonDir(targetTop);
-      if (common !== targetCommon) violations.push("WORKTREE_TASK_REPOSITORY_MISMATCH");
-    } catch {
-      violations.push("WORKTREE_IDENTITY_INVALID");
-    }
-    if (worktreeRoot !== null) {
+  const checkedTaskId = taskId ?? handle.identity.taskId;
+  if (checkedTaskId !== handle.identity.taskId) violations.push("TASK_ID_MISMATCH");
+
+  let authenticatedPath = null;
+  try { authenticatedPath = boundWorkspacePath(workspace); }
+  catch { violations.push("WORKSPACE_PATH_INVALID"); }
+  const checkedWorkspacePath = workspacePath ?? authenticatedPath;
+  if (checkedWorkspacePath !== undefined && checkedWorkspacePath !== null) {
+    if (typeof checkedWorkspacePath !== "string" || !isAbsolute(checkedWorkspacePath)) {
+      violations.push("WORKSPACE_PATH_INVALID");
+    } else {
       try {
-      const snapshot = sourceDigest === undefined
-        ? captureGitWorktreeSnapshot(worktreeRoot, handle.identity.taskId)
-        : assertCurrentSourceDigest(worktreeRoot, sourceDigest, handle.identity.taskId);
-      observedSourceDigest = snapshot.source_digest;
-      } catch (error) {
-        if (error?.code === "FORMAL_LFS_CONTENT_UNAVAILABLE" || error?.code === "FORMAL_SNAPSHOT_MISMATCH") throw error;
-        violations.push("SOURCE_SNAPSHOT_UNAVAILABLE");
+        const realPath = realpathSync(resolve(checkedWorkspacePath));
+        if (authenticatedPath !== null && realPath !== authenticatedPath) violations.push("WORKSPACE_PATH_MISMATCH");
+        if (handle.manifest.workspace_root !== undefined
+            && realPath !== realpathSync(handle.manifest.workspace_root)) violations.push("WORKSPACE_PATH_MISMATCH");
+        authenticatedPath = realPath;
+      } catch {
+        violations.push("WORKSPACE_PATH_INVALID");
       }
     }
   }
 
-  let identity = null;
-  if (!invocation || typeof invocation.ref !== "string" || !SHA256_HEX.test(invocation.hash ?? "")) {
-    violations.push("INVOCATION_IDENTITY_INVALID");
-  } else {
-    let raw = null;
-    try {
-      // Once an invocation has been persisted, the TaskHandle record is the
-      // authority. Never trust identity or raw bytes supplied alongside it.
-      raw = handle.readRecord(invocation.ref);
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-      // authenticateWriteBoundary validates an inspected invocation before it
-      // persists it. Only that internal, non-forgeable object may carry the
-      // pre-persist raw bytes; a caller-created clone must fail closed.
-      if (!isOfficialInvocation(invocation) || typeof invocation.raw !== "string") {
-        violations.push("INVOCATION_RECORD_UNAVAILABLE");
-      } else raw = invocation.raw;
-    }
-    if (raw !== null) {
-      if (sha256(raw) !== invocation.hash) violations.push("INVOCATION_RECORD_HASH_MISMATCH");
-      try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
-        identity = parsed;
-      } catch {
-        violations.push("INVOCATION_RECORD_INVALID");
-      }
-    }
-    if (!identity || identity.task_id !== handle.identity.taskId || identity.project_name !== handle.identity.projectName
-        || identity.stage !== stage) {
-      violations.push("INVOCATION_IDENTITY_INVALID");
-    } else if (identity.source_kind !== "git_invocation" || typeof identity.source_clean !== "boolean"
-        || !OID.test(identity.source?.git_oid ?? "") || !OID.test(identity.source?.git_tree ?? "")
-        || !SHA256_HEX.test(identity.contracts?.agents?.sha256 ?? "")
-        || !SHA256_HEX.test(identity.contracts?.stage_skill?.sha256 ?? "")
-        || !SHA256_HEX.test(identity.contracts?.constitution?.sha256 ?? "")) {
-      violations.push("EXECUTION_CONTENT_IDENTITY_INVALID");
-    }
+  const declaredSourceBytes = authenticatedSourceBytes ?? sourceBytes;
+  if (bytesToWrite !== undefined && declaredSourceBytes !== undefined
+      && !bytes(bytesToWrite, "bytesToWrite").equals(bytes(declaredSourceBytes, "authenticatedSourceBytes"))) {
+    throw new Error("write boundary source bytes mismatch");
   }
 
   return Object.freeze({
     schema_version: "workflowhub-write-boundary-preflight.v1",
-    task_id: handle.identity.taskId,
+    task_id: checkedTaskId,
     stage,
     operation,
-    target_git_top: targetTop,
-    worktree_root: worktreeRoot,
-    invocation_ref: invocation?.ref ?? null,
-    invocation_hash: invocation?.hash ?? null,
-    source_digest: observedSourceDigest,
-    authority_refs: invocation?.ref ? [{ ref: invocation.ref, sha256: invocation.hash }] : [],
-    legacy_identity: handle.manifest.execution_mode === "per_invocation" ? "absent" : "not_applicable",
+    workspace_path: authenticatedPath,
     status: violations.length === 0 ? "valid" : "invalid",
     violations: Object.freeze(violations),
-    path_card: Object.freeze({
-      schema_version: "workflowhub-path-card.v1",
-      task_path: handle.taskPath,
-      target_repo_root: targetTop,
-      worktree_root: worktreeRoot,
-      source: Object.freeze({
-        invocation_ref: invocation?.ref ?? null,
-        invocation_hash: invocation?.hash ?? null,
-        source_digest: observedSourceDigest,
-      }),
-      authority: "informational_only",
-    }),
   });
 }
 
@@ -159,17 +93,14 @@ export function assertWriteBoundary(input) {
   return result;
 }
 
-/**
- * Authenticate one owner transaction without leaving an invocation record
- * behind when the shared structural preflight itself fails.
- */
+/** Authenticate one owner transaction before its canonical write. */
 export function authenticateWriteBoundary({
   task,
   stage,
   operation,
   runnerRoot,
   workspace,
-  sourceDigest,
+  sourceDigest: _sourceDigest,
   runId,
 } = {}) {
   const handle = assertTaskHandle(task);
@@ -182,65 +113,12 @@ export function authenticateWriteBoundary({
     task: handle,
     stage,
     operation,
-    invocation: inspected,
     ...(workspace === undefined ? {} : { workspace }),
-    ...(sourceDigest === undefined ? {} : { sourceDigest }),
   });
   persistOfficialInvocation(handle, inspected);
-  return boundary;
-}
-
-function readOptional(task, ref) {
-  try { return task.readRecord(ref); }
-  catch (error) {
-    if (error?.code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-
-/**
- * Persist an informational, append-only path card after its source publication
- * exists. Cards never participate in bootstrap or authorization.
- */
-export function persistWriteBoundaryPathCard({ task, boundary, source } = {}) {
-  const handle = assertTaskHandle(task);
-  if (!boundary || boundary.status !== "valid"
-      || boundary.task_id !== handle.identity.taskId
-      || boundary.schema_version !== "workflowhub-write-boundary-preflight.v1") {
-    throw new TypeError("valid write boundary result is required");
-  }
-  if (!source || typeof source.ref !== "string" || source.ref.trim() === ""
-      || !SHA256_HEX.test(source.hash ?? "")) {
-    throw new TypeError("path card source ref/hash is required");
-  }
-  const sourceRaw = handle.readRecord(source.ref);
-  if (sha256(sourceRaw) !== source.hash) throw new Error("path card source hash is stale");
-  const card = {
-    schema_version: "workflowhub-path-card.v1",
-    task_id: handle.identity.taskId,
-    stage: boundary.stage,
-    operation: boundary.operation,
-    task_path: boundary.path_card.task_path,
-    target_repo_root: boundary.target_git_top,
-    worktree_root: boundary.worktree_root,
-    invocation: {
-      ref: boundary.invocation_ref,
-      hash: boundary.invocation_hash,
-    },
-    source: { ref: source.ref, hash: source.hash },
-    authority: "informational_only",
-  };
-  const raw = `${JSON.stringify(card, null, 2)}\n`;
-  const ref = `identity/path-cards/${boundary.stage}/${sha256(raw)}.json`;
-  const existing = readOptional(handle, ref);
-  if (existing !== undefined) {
-    if (existing !== raw) throw new Error("path card append-only conflict");
-    return Object.freeze({ ref, hash: sha256(raw), card: Object.freeze(card) });
-  }
-  try { handle.createPathCardRecord(ref, raw); }
-  catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-    if (handle.readRecord(ref) !== raw) throw new Error("path card append-only conflict");
-  }
-  return Object.freeze({ ref, hash: sha256(raw), card: Object.freeze(card) });
+  return Object.freeze({
+    ...boundary,
+    invocation_ref: inspected.ref,
+    invocation_hash: inspected.hash,
+  });
 }
