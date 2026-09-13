@@ -30,7 +30,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve, dirname, isAbsolute, relative } from "node:path";
+import { resolve, dirname, isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -86,6 +86,39 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function isInside(basePath, candidatePath) {
+  const path = relative(basePath, candidatePath);
+  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+}
+
+function isTaskStoreEvidencePath(candidatePath) {
+  const taskTrackingRoot = process.env.WORKFLOWHUB_TASK_DIR;
+  if (typeof taskTrackingRoot !== "string" || taskTrackingRoot.trim() === "" || !isAbsolute(taskTrackingRoot)) {
+    return false;
+  }
+
+  const relativePath = relative(resolve(taskTrackingRoot), candidatePath);
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
+  const segments = relativePath.split(sep);
+  const [taskId, quality, tests, ...fileSegments] = segments;
+  return SAFE_PATH_SEGMENT.test(taskId ?? "")
+    && quality === "quality"
+    && tests === "tests"
+    && fileSegments.length > 0
+    && fileSegments.every((segment) => SAFE_PATH_SEGMENT.test(segment));
+}
+
+function resolveProfileEvidencePath(evidencePath) {
+  const resolvedEvidencePath = isAbsolute(evidencePath) ? resolve(evidencePath) : resolve(repoRoot, evidencePath);
+  const qualityRoot = resolve(repoRoot, "quality", "tests");
+  if (isInside(qualityRoot, resolvedEvidencePath) || isTaskStoreEvidencePath(resolvedEvidencePath)) {
+    return resolvedEvidencePath;
+  }
+  throw new Error("runtime profile evidence path must be under repository quality/tests or authenticated task-store quality/tests");
+}
+
 export function parseProfileArgs(args) {
   const separator = args.indexOf("--");
   if (separator < 0) return null;
@@ -119,12 +152,7 @@ export function parseProfileArgs(args) {
     filteredTarget.push(target[index]);
   }
   if (filteredTarget.length === 0) throw new Error("runtime profile target argv is required");
-  const resolvedEvidencePath = isAbsolute(evidencePath) ? evidencePath : resolve(repoRoot, evidencePath);
-  const qualityRoot = resolve(repoRoot, "quality", "tests");
-  if (resolvedEvidencePath !== qualityRoot && !resolvedEvidencePath.startsWith(`${qualityRoot}/`)) {
-    throw new Error("runtime profile evidence path must be under quality/tests");
-  }
-  return { runtimeProfile, evidencePath: resolvedEvidencePath, target: filteredTarget };
+  return { runtimeProfile, evidencePath: resolveProfileEvidencePath(evidencePath), target: filteredTarget };
 }
 
 export function profileForExecutor(runtimeProfile, target) {
