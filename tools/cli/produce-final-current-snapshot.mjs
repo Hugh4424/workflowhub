@@ -624,11 +624,11 @@ function profileEvidenceCandidates(value) {
   };
   add(value?.profile_source, null, "profile_source");
   add(value?.manifests?.inner, null, "inner_manifest");
-  add(value?.manifests?.medium, null, "medium_manifest");
+  add(value?.manifests?.phase, null, "phase_manifest");
   for (const group of [
     ...Object.values(value?.groups?.inner_files ?? {}),
     value?.groups?.inner_collection,
-    value?.groups?.medium_collection,
+    value?.groups?.phase_collection,
   ]) {
     for (const run of group?.runs ?? []) {
       for (const member of run?.members ?? [run]) {
@@ -679,23 +679,23 @@ function fiveSampleProfileStatus(value, taskDir) {
   if (evidenceStatus(value) !== "passed") return evidenceStatus(value);
   const groups = value?.groups;
   const files = object(groups?.inner_files) ? Object.values(groups.inner_files) : [];
-  const collections = [groups?.inner_collection, groups?.medium_collection];
+  const collections = [groups?.inner_collection, groups?.phase_collection];
   const samples = [...files, ...collections];
   const innerWorkerCeiling = value?.profiles?.inner?.worker_ceiling;
-  const mediumWorkerCeiling = value?.profiles?.medium?.worker_ceiling;
+  const phaseWorkerCeiling = value?.profiles?.phase?.worker_ceiling;
   const complete = files.length > 0
     && files.every((group) => profileGroupComplete(group))
     && profileGroupComplete(groups?.inner_collection, { workerCeiling: innerWorkerCeiling, requireOverlap: true })
-    && profileGroupComplete(groups?.medium_collection, { workerCeiling: mediumWorkerCeiling });
+    && profileGroupComplete(groups?.phase_collection, { workerCeiling: phaseWorkerCeiling });
   const profileInputs = object(value.profile_source)
     && SHA256_HEX_CASE_INSENSITIVE.test(String(value.profile_source.sha256 ?? ""))
     && object(value.profiles?.inner)
-    && object(value.profiles?.medium)
+    && object(value.profiles?.phase)
     && object(value.manifests?.inner)
-    && object(value.manifests?.medium);
+    && object(value.manifests?.phase);
   const capability = value.capability_observations;
   const capabilityComplete = object(capability)
-    && ["inner", "medium"].every((name) => (
+    && ["inner", "phase"].every((name) => (
       object(capability[name])
         && capability[name].status === "observed"
         && object(capability[name].counts)

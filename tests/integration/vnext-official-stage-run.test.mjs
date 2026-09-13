@@ -1988,7 +1988,7 @@ describe("vNext official stage completion", () => {
       output_ref: "quality/tests/output/unavailable-profile.output",
       output_hash: sha256("ok\\n"),
       runtime_profile: {
-        runtime_profile: "medium", ceiling_ms: 300000,
+        runtime_profile: "phase", ceiling_ms: 300000,
         permissions: { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" },
         executor_id: "run-checks",
         capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] },
