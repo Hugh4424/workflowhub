@@ -32,11 +32,11 @@ describe("final coverage failure contracts", () => {
       .toContain("missing_ac");
   });
 
-  test("final-coverage:quality-verify-source-required", () => {
+  test("final-coverage:direct-evidence-source-required", () => {
     expect(validateFinalCoverageRequirements({
       coverage: { items: [{ acceptance_criterion_id: "AC-01", detail: "observed" }] },
       required_ids: ["AC-01"],
-    })).toContain("quality_verify_missing");
+    })).toContain("ac_evidence_unresolvable");
   });
 
   test("final-coverage:ac-evidence-unresolvable", () => {

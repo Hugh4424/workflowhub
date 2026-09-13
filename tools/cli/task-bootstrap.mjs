@@ -17,6 +17,7 @@ import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
+import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
@@ -31,7 +32,14 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     const allowed = new Set(["task-path", "project", "task", "runner-root", "stage"]);
     const unexpected = Object.keys(values).find((key) => !allowed.has(key));
     if (unexpected) throw new TypeError(`--${unexpected} is invalid for existing task bootstrap`);
-    const task = openTask(values["task-path"], values.project, values.task);
+    const pathResolution = resolveCanonicalTaskPath({
+      project: values.project,
+      task: values.task,
+      taskPath: values["task-path"],
+      env,
+      home,
+    });
+    const task = openTask(pathResolution.taskPath, pathResolution.project, pathResolution.task);
     // createTask publishes task.json atomically before workspace/store setup.
     // Re-enter the existing official path through the idempotent store owner so
     // a manifest-only directory is never returned as an initialized task.
@@ -43,6 +51,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
       task_path: task.taskPath,
       project: task.identity.projectName,
       task: task.identity.taskId,
+      task_path_source: pathResolution.source,
       runner_identity: runnerIdentity,
     });
   }
@@ -82,6 +91,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     task_path: task.taskPath,
     project: task.identity.projectName,
     task: task.identity.taskId,
+    task_path_source: "canonical_resolver",
     storage_root: authority.storage_root,
     cutover_epoch: authority.cutover_epoch,
     workspace: Object.freeze({ worktree_root: workspace.worktreeRoot, branch: workspace.branch, baseline_commit: workspace.baselineCommit }),

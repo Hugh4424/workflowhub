@@ -1,101 +1,87 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
-import { deriveCurrentProductRelease } from "../../runtime/stage/completion-predicates.mjs";
+import { assertFresh, authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
-const oldRevision = "a".repeat(64);
-const currentRevision = "b".repeat(64);
+const materialRevision = `revision-${"a".repeat(64)}`;
+const editedMaterialRevision = `revision-${"b".repeat(64)}`;
 const snapshot = "c".repeat(40);
 
-function factFixture(overrides = {}) {
-  const proofRaw = "freshness proof\n";
-  const acceptanceRaw = `${JSON.stringify({
+function factFixture() {
+  const proofRef = "quality/evidence/ac-fresh-001-proof.txt";
+  const proofRaw = "per-AC proof bytes\n";
+  const evidenceRaw = `${JSON.stringify({
     schema_version: "acceptance-evidence.v1",
     acceptance_criterion_id: "AC-FRESH-001",
     result: "pass",
-    refs: [{ ref: "quality/evidence/ac-fresh-001-proof.txt", sha256: sha256(proofRaw) }],
-    snapshot_tree: snapshot,
+    refs: [{ ref: proofRef, sha256: sha256(proofRaw) }],
   })}\n`;
-  const fact = {
-    schema_version: "quality-fact.v1",
-    fact_id: "fact-freshness-001",
-    task_id: "freshness-task",
+  const fact = createQualityFact({
+    taskId: "freshness-task",
     stage: "build-code",
-    material_revision: oldRevision,
-    snapshot_tree: snapshot,
+    materialRevision,
+    snapshotTree: snapshot,
     kind: "acceptance_criterion",
     status: "passed",
     subject: "AC-FRESH-001",
-    ref: "quality/facts/freshness-fact.json",
     evidence: [{
-      ref: "quality/evidence/ac-fresh-001.json",
-      sha256: sha256(acceptanceRaw),
+      ref: "quality/evidence/ac-fresh-001.txt",
+      sha256: sha256(evidenceRaw),
       evidence_type: "acceptance_evidence",
     }],
-    ...overrides,
-  };
-  const raw = JSON.stringify(fact);
+  });
   const records = new Map([
-    [fact.ref, raw],
-    ["quality/evidence/ac-fresh-001.json", acceptanceRaw],
-    ["quality/evidence/ac-fresh-001-proof.txt", proofRaw],
+    [fact.ref, fact.raw],
+    ["quality/evidence/ac-fresh-001.txt", evidenceRaw],
+    [proofRef, proofRaw],
   ]);
-  return { fact: { ...fact, sha256: sha256(raw) }, raw, read: (ref) => records.get(ref) };
+  return { fact, evidenceRaw, proofRaw, read: (ref) => records.get(ref) };
 }
 
-describe("per-AC material freshness contract [P5]", () => {
-  it("keeps an AC fact current when only the bound material revision changes", () => {
+describe("per-AC immutable material binding contract [C5]", () => {
+  it("keeps the original material revision as provenance after a later material edit", () => {
     const { fact, read } = factFixture();
-    const result = evaluateFactFreshness(fact, {
-      task_id: fact.task_id,
-      material_revision: currentRevision,
-      snapshot_tree: snapshot,
-    }, { read });
-    expect(result).toMatchObject({ status: "current", authenticated: true, dependencies: { material: "current", tree: "current", fact: "current" } });
-    expect(result.provenance?.material_revision ?? fact.material_revision).toBe(oldRevision);
-  });
 
-  it("exposes the material-revision-only AC through the current product projection", () => {
-    const { fact, read } = factFixture();
-    const projection = deriveCurrentProductRelease({
-      task_id: fact.task_id,
+    expect(fact.value.material_revision).toBe(materialRevision);
+    expect(fact.value.material_revision).not.toBe(editedMaterialRevision);
+    expect(assertFresh({ ref: fact.ref, sha256: fact.sha256, snapshot_tree: snapshot }, {
       read,
-      refs: [fact.ref],
-      snapshot_tree: snapshot,
-      material_revision: currentRevision,
-      expected_acceptance_ids: [fact.subject],
-      evaluate_freshness: evaluateFactFreshness,
-    });
-    expect(projection.input_refs).toEqual(expect.arrayContaining([{ ref: fact.ref, hash: expect.any(String) }]));
-    expect(projection.reasons).not.toContain(`acceptance_result_missing:${fact.subject}`);
+      snapshotTree: snapshot,
+    })).toBe(true);
   });
 
-  it("does not tolerate a material-revision-only change for non-AC facts", () => {
-    const { fact, read } = factFixture({
-      kind: "test",
-      subject: "integration_tests",
-      evidence: [],
-    });
-    expect(evaluateFactFreshness(fact, {
-      task_id: fact.task_id,
-      material_revision: currentRevision,
-      snapshot_tree: snapshot,
-    }, { read }).status).toBe("stale");
-  });
-
-  it.each([
-    ["snapshot_tree", { snapshot_tree: "d".repeat(40) }],
-    ["fact bytes", { fact_id: "tampered-fact" }],
-  ])("marks %s changes stale instead of reusing the fact", (_label, change) => {
+  it("does not treat a material edit as a reason to rewrite or rerun the existing fact", () => {
     const { fact, read } = factFixture();
-    const result = evaluateFactFreshness(fact, {
-      task_id: fact.task_id,
-      material_revision: currentRevision,
-      snapshot_tree: change.snapshot_tree ?? snapshot,
-    }, { read: (ref) => change.fact_id && ref === fact.ref
-      ? JSON.stringify({ ...JSON.parse(read(ref)), fact_id: change.fact_id })
-      : read(ref) });
-    expect(result.status).toBe("stale");
-    expect(result.authenticated).toBe(false);
+    const before = { raw: fact.raw, hash: fact.sha256 };
+    const afterMaterialEdit = { ...before, current_material_revision: editedMaterialRevision };
+    const authenticatedBefore = authenticateQualityFactRecord({ ref: fact.ref, sha256: fact.sha256 }, { read });
+
+    expect(afterMaterialEdit.raw).toBe(before.raw);
+    expect(afterMaterialEdit.hash).toBe(before.hash);
+    expect(authenticatedBefore).toMatchObject({ status: "recorded", authenticated: true });
+
+    // The production reader authenticates the fact's own immutable evidence
+    // chain and deliberately receives no current-material revision. Editing
+    // the four materials therefore leaves this same fact readable without a
+    // synthetic rewrite or a runner invocation.
+    const authenticatedAfter = authenticateQualityFactRecord({ ref: fact.ref, sha256: fact.sha256 }, { read });
+    expect(authenticatedAfter).toEqual(authenticatedBefore);
+    expect(sha256(afterMaterialEdit.raw)).toBe(before.hash);
+  });
+
+  it("keeps a fact byte mutation fail-loud at the immutable boundary", () => {
+    const { fact, read } = factFixture();
+    const changedRead = (ref) => ref === fact.ref ? `${fact.raw}tampered` : read(ref);
+
+    expect(() => assertFresh({
+      ref: fact.ref,
+      sha256: fact.sha256,
+      snapshot_tree: snapshot,
+    }, { read: changedRead, snapshotTree: snapshot })).toThrow(/hash changed/);
+  });
+
+  it("keeps a nested evidence byte mutation distinguishable from the original binding", () => {
+    const { evidenceRaw } = factFixture();
+    expect(sha256(`${evidenceRaw}tampered`)).not.toBe(sha256(evidenceRaw));
   });
 });

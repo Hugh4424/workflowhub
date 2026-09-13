@@ -3,9 +3,18 @@
 ## Session: 2026-09-09
 
 ### Current Status
-- **Phase:** 3 — build-spec review/analyze/publish/reflect
+- **Phase:** 7 — 合并任务Ⅰ后的材料再对齐与两阶段重发布（已完成）
 - **Started:** 2026-09-09
 - **Goal:** build-spec 与 build-plan 两阶段均 completed
+
+### Session: 2026-09-12（main 合并后重发布）
+- 合并 main（任务Ⅰ 合入 `9f9d0c44`、归档 `35a6fb6f`）；A2 补丁与 main 冲突按保留 main 三值 allowlist + 本仓回归测试解决。
+- 三路只读审计 + 独立复核确认四处必改：K2 判别字段已被任务Ⅰ 冻结为 `record_kind`、已删 `validate-current-plan-tasks.mjs` 仍在写边界、`quality-verify.v1.json` 与 ADR-0030 冲突、行号/计数与 RED/GREEN 大量陈旧。
+- 用户裁决：接受 `record_kind`（不改名/不迁移）；`quality-verify.v1.json` 仍物理删除（扩到 distribution/registry 证明）。
+- 四材料重写并本地校验：spec-content/clarify 通过、plan-task 0 错误、oracle ready、markdownlint 0 error。
+- 重发布：build-spec outcome `a3f6d16c…` + run completed；build-plan outcome `a83a5bc1…` + 用户确认 `20b8c76c…` + run completed（7/7 谓词）。
+- 发布两阶段 reflection：build-spec `822c7cef…`、build-plan `a789704e…`。
+- 产出下一步交接文档 `quality/evidence/handoff/build-plan-to-build-code.md`。
 
 ### Actions Taken
 - 创建同会话持续目标 `goal-0701f53d-3d36-4aa9-b9c9-0154a4f5e8a5`。

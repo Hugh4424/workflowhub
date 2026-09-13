@@ -640,11 +640,29 @@ function brokerConfigId(provider, configured) {
   }), "utf8").digest("hex");
 }
 
-function sameSourceProfile(_config, provider, hostProvider) {
-  // WorkflowHub route/profile keys are the only configured dispatch identity.
-  // Broker identity.source_id remains result provenance and is validated at
-  // the public result boundary; it is not a second pre-dispatch config gate.
-  return provider === hostProvider;
+// FR-C4-006: the heterologous comparison key is the underlying model that
+// 3rd-review attests as `identity.model` (broker `providers[provider].model`,
+// the same value normalized into the broker identity `config_id` by
+// brokerConfigId), never the WorkflowHub provider/profile key string. Two
+// profile keys on one model are one reviewer, and two models under one adapter
+// family are two reviewers.
+function brokerModelIdentity(config, provider) {
+  const model = config.providers[provider]?.model ?? null;
+  return typeof model === "string" && model.length > 0 ? model : null;
+}
+
+function sameSourceProfile(config, provider, hostProvider) {
+  // The host's own profile key is same-source by definition; the model
+  // comparison only ever widens that exclusion, never replaces it.
+  if (provider === hostProvider) return true;
+  const model = brokerModelIdentity(config, provider);
+  const hostModel = brokerModelIdentity(config, hostProvider);
+  // A missing identity.model cannot establish a positive same-source match
+  // (and must not silently collapse two model-less profiles onto each other),
+  // so such a candidate is not certified same-source and keeps the
+  // pre-existing profile-key judgement.
+  if (model === null || hostModel === null) return false;
+  return model === hostModel;
 }
 
 function highestPriorityProfilesByAdapter(providers) {

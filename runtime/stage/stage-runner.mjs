@@ -9,7 +9,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
-import { deriveStageCompletion, deriveStageProgress, isStageSnapshotCurrent, stageMaterialScopeRevision, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision, STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
@@ -106,10 +106,9 @@ function validateOutputRefs(value, label) {
       throw outcomeError(`${label}[${index}] is outside the task evidence namespace`);
     }
     const parts = normalized.split("/");
-    const supported = normalized === "quality/verify.json"
-      || (parts.length >= 3 && parts[0] === "quality"
-        && new Set(["evidence", "tests", "reviews", "facts"]).has(parts[1])
-        && parts.slice(2).every((part) => /^[A-Za-z0-9._-]+$/.test(part)));
+    const supported = parts.length >= 3 && parts[0] === "quality"
+      && new Set(["evidence", "tests", "reviews", "facts"]).has(parts[1])
+      && parts.slice(2).every((part) => /^[A-Za-z0-9._-]+$/.test(part));
     if (!supported) throw outcomeError(`${label}[${index}] is not a supported task-local output reference`);
   });
   return value;
@@ -221,8 +220,9 @@ function validateSkillOutcome(ctx, actual, expected, index, binding) {
     identity: {
       task_id: binding.taskId,
       stage: binding.stage,
-      material_revision: binding.materialRevision,
-      snapshot_tree: binding.snapshotTree,
+      workspace_path: ctx.candidateWorkspace?.worktreeRoot
+        ?? ctx.workspace?.worktreeRoot
+        ?? ctx.kernel?.task?.manifest?.target_repo_root,
     },
   });
   return { ...value, evidence_refs: evidence, consumer_binding: consumer };
@@ -729,28 +729,15 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   if (input.attempt_id !== undefined && input.attempt_id !== record.attempt_id) throw outcomeError("stage outcome attempt identity mismatch");
   if (!STAGE_OUTCOME_STATUSES.has(record.status)) throw outcomeError("stage outcome status is invalid");
   validateStageOutcomeProducer(record, stage);
-  const currentSnapshot = ctx.kernel.currentVNextSnapshot();
-  const snapshot = expectedBinding?.snapshot ?? (
-    isStageSnapshotCurrent(stage, record.snapshot_tree, currentSnapshot.tree, {
-      snapshotRoot: ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot ?? null,
-      taskId: ctx.identity.taskId,
-    })
-      ? { ...currentSnapshot, tree: record.snapshot_tree }
-      : currentSnapshot
-  );
-  if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot_tree is stale");
+  // The envelope's snapshot and material revision are immutable provenance for
+  // the authenticated outcome. They are not a currentness gate: an ordinary
+  // edit to the four materials must not invalidate a readable historical fact.
+  // An explicit expected binding is still checked when a caller has already
+  // authenticated the invocation that is being consumed.
+  const snapshot = expectedBinding?.snapshot ?? { tree: record.snapshot_tree };
+  if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot binding mismatch");
   const materials = currentMaterialBinding(ctx);
-  if (expectedBinding?.materials && (materials.revision !== expectedBinding.materials.revision || !sameJson(materials.hashes, expectedBinding.materials.hashes))) {
-    throw outcomeError("current materials changed after stage invocation was claimed");
-  }
-  const fullMaterialCurrent = record.material_revision === materials.revision
-    && sameJson(record.material_hashes, materials.hashes);
-  const scopedMaterialCurrent = record.material_scope !== undefined
-    && sameJson(record.material_scope, materials.material_scope)
-    && record.material_scope_revision === materials.material_scope_revision
-    && sameJson(record.material_scope_hashes, materials.material_scope_hashes);
-  if (!fullMaterialCurrent && !scopedMaterialCurrent) throw outcomeError("stage outcome material binding is stale");
-  const outcomeMaterialRevision = scopedMaterialCurrent ? record.material_revision : materials.revision;
+  const outcomeMaterialRevision = record.material_revision;
   const stepsRef = `workflows/${stage}/steps.json`;
   const skillsRef = `workflows/${stage}/skill-deps.yaml`;
   if (record.steps_manifest_ref !== stepsRef || record.skills_manifest_ref !== skillsRef) throw outcomeError("stage outcome manifest refs are not canonical");
@@ -1193,6 +1180,20 @@ export async function runStageEndReflection(context, {
         : handoffFacts.materialScopeRevision;
       const materialDigest = { value: materialScopeRevision === null ? null : materialScopeRevision.replace(/^revision-/, "") };
       if (materialDigest.value === null) materialDigest.reason = "no current material scope revision was available at this stage end";
+      const reflectionRefPattern = new RegExp(`^quality/stage-reflection/${stage}/[a-f0-9]{64}\\.json$`);
+      const stageOutcomeProofRefs = [...(handoffStageOutcome?.value?.step_outcomes ?? []), ...(handoffStageOutcome?.value?.skill_outcomes ?? [])]
+        .flatMap((outcome) => outcome?.evidence_refs ?? [])
+        .map((entry) => entry?.ref)
+        .filter((ref) => /^quality\/evidence\/stage-outcome-proofs\/[a-f0-9]{64}\.json$/.test(ref ?? ""));
+      const specAnalyze = reflectionRefPattern.test(reflectionResultValue?.ref ?? "")
+        && SHA256_HEX.test(reflectionResultValue?.sha256 ?? "")
+        ? { value: {
+          ref: reflectionResultValue.ref,
+          sha256: reflectionResultValue.sha256,
+          reflection_status: reflectionResultValue.reflection_status ?? reflectionResultValue.status,
+          ...(stageOutcomeProofRefs.length > 0 ? { stage_outcome_proof_refs: [...new Set(stageOutcomeProofRefs)] } : {}),
+        } }
+        : { value: null, reason: "stage reflection did not publish a current immutable judgment" };
       // The one evidence entry states the stage end that really ran: the four
       // handoff stages record their handoff publication result, and a stage
       // that publishes no handoff records its own stage-end result instead of
@@ -1208,6 +1209,13 @@ export async function runStageEndReflection(context, {
           exit_code: handoffFacts.handoff?.status === "unavailable" ? 1 : 0,
           failure_signature: handoffFacts.handoff?.status ?? "unknown",
         }];
+      const existingStageRow = currentStageRow(ctx.task.taskPath, ctx.identity.taskId, stage);
+      // The stage row is the K2 carrier of the real review facts. An
+      // authenticated stage outcome already binds the reviewed K5 result, so the
+      // row records that conducted review with its named reference instead of
+      // the not_run placeholder; a later stage end never erases a fact the row
+      // already records (FR-C6-009 / AC-C6-007).
+      const reviewFacts = mergeStageReviewFacts(authenticatedStageReviewFacts(stage, handoffStageOutcome), existingStageRow);
       const stageRow = mergeProtocolErrorTraceStageRow({
         record_kind: "stage",
         stage,
@@ -1215,10 +1223,16 @@ export async function runStageEndReflection(context, {
         created_at: observedAt,
         material_digest: materialDigest,
         snapshot_tree: { value: snapshot.tree ?? null, reason: "handoff snapshot captured from the current workspace" },
-        review_origin: "not_run",
-        review_result_ref: { value: null, reason: "the stage row records the stage-end facts; reviews are recorded separately" },
-        finding_dispositions: [],
-        spec_analyze: { value: null, reason: "spec analysis is recorded by its own stage-end profile" },
+        ...(reviewFacts ?? {
+          review_origin: "not_run",
+          review_result_ref: { value: null, reason: "the stage row records the stage-end facts; reviews are recorded separately" },
+          finding_dispositions: [],
+        }),
+        // `spec_analyze` is the existing frozen field for a stage's analysis
+        // result and named original reference.  Stage reflection uses that
+        // field as its carrier; it does not add a seventeenth row key or a
+        // second execution record.
+        spec_analyze: specAnalyze,
         evidence: { value: evidence },
         layer_states: {
           // A stage end that did not complete must never be recorded as a
@@ -1234,7 +1248,7 @@ export async function runStageEndReflection(context, {
         // The handoff items live on this same row; no extra object or row is
         // created for them.
         handoff: handoffItems,
-      }, currentStageRow(ctx.task.taskPath, ctx.identity.taskId, stage));
+      }, existingStageRow);
       writeStageRow(ctx.task.taskPath, stageRow);
     } catch (error) {
       // A record write failure must not turn a published handoff or a finished
@@ -2036,11 +2050,79 @@ function currentStageRow(taskRoot, taskId, stage) {
 }
 
 /**
+ * The real review facts an authenticated stage outcome already binds. Only
+ * verify-code's stage outcome validates `code_review.quality_review_ref` against
+ * the referenced bytes, so only that stage may contribute a review fact here; a
+ * code_review block on any other stage is unvalidated bytes and is ignored. A
+ * stage outcome with no proven review binding yields null, and the caller then
+ * keeps whatever real review facts the row already records.
+ */
+function authenticatedStageReviewFacts(stage, stageOutcome) {
+  if (stage !== "verify-code") return null;
+  const ref = stageOutcome?.value?.code_review?.quality_review_ref;
+  if (typeof ref === "string" && REVIEW_RESULT_REF.test(ref)) {
+    return { review_origin: "conducted", review_result_ref: { value: ref }, finding_dispositions: [] };
+  }
+  if (typeof ref === "string" && REVIEW_ATTEMPT_REF.test(ref)) {
+    return {
+      review_origin: "unavailable",
+      review_result_ref: { value: null, reason: `the bound review attempt ${ref} terminated without a semantic result` },
+      finding_dispositions: [],
+    };
+  }
+  return null;
+}
+
+/**
+ * The review fact group already recorded on a stage row. `not_run` is the
+ * placeholder a stage end writes when it has no review fact of its own, so it is
+ * not treated as a recorded fact; every other frozen origin value is a real
+ * review outcome that a later replacement must not erase.
+ */
+function recordedStageReviewFacts(row) {
+  if (!row || typeof row.review_origin !== "string" || row.review_origin === "not_run") return null;
+  return {
+    review_origin: row.review_origin,
+    review_result_ref: row.review_result_ref,
+    finding_dispositions: Array.isArray(row.finding_dispositions) ? row.finding_dispositions : [],
+  };
+}
+
+/**
+ * Merge this stage end's review fact with the fact the row already records.
+ * FR-C6-009 / AC-C6-007 forbid a same-stage replacement from resetting the
+ * recorded review to the not_run placeholder or emptying its named reference,
+ * so a recorded conducted review is never downgraded by a later non-conducted
+ * fact, and a recorded non-empty finding-disposition list is never emptied. A
+ * newer conducted fact (or a newer fact with dispositions of its own) does
+ * supersede the older one, because it is the current authenticated outcome.
+ */
+function mergeStageReviewFacts(incoming, existingRow) {
+  const recorded = recordedStageReviewFacts(existingRow);
+  if (incoming === null || incoming === undefined) return recorded;
+  if (recorded === null) return incoming;
+  if (recorded.review_origin === "conducted" && incoming.review_origin !== "conducted") {
+    return {
+      ...incoming,
+      review_origin: recorded.review_origin,
+      review_result_ref: recorded.review_result_ref,
+      finding_dispositions: recorded.finding_dispositions,
+    };
+  }
+  const dispositions = (incoming.finding_dispositions ?? []).length
+    ? incoming.finding_dispositions
+    : recorded.finding_dispositions;
+  return { ...incoming, finding_dispositions: dispositions ?? [] };
+}
+
+/**
  * Two producers share one stage row: the protocol-error trace and the
  * stage-end record. The row is a single in-place key, so the later writer
  * inherits the earlier writer's facts instead of destroying them. The trace
  * owns the row's writer identity when it is present, and both producers'
- * evidence entries survive in one list.
+ * evidence entries survive in one list. A recorded review fact is never reset
+ * to the not_run placeholder or emptied by a writer that has no review fact of
+ * its own (FR-C6-009 / AC-C6-007).
  */
 function mergeProtocolErrorTraceStageRow(input, existing) {
   const protocolTrace = existing
@@ -2057,11 +2139,31 @@ function mergeProtocolErrorTraceStageRow(input, existing) {
     seenEvidence.add(key);
     evidence.push(entry);
   }
+  const hasConditionalValue = (field) => field
+    && typeof field === "object"
+    && !Array.isArray(field)
+    && field.value !== null
+    && field.value !== undefined;
+  const incomingProtocolTrace = typeof input.source === "string" && input.source.startsWith("protocol_error:");
+  // The same stage key is replaced in place by both producers.  A placeholder
+  // from a later writer must not erase a previously recorded reflection or
+  // analysis fact; a real new value is allowed to supersede it.  Protocol
+  // traces also carry an empty handoff placeholder, so keep a real handoff
+  // when the trace is the later writer.
+  const specAnalyze = hasConditionalValue(input.spec_analyze) || !hasConditionalValue(existing?.spec_analyze)
+    ? input.spec_analyze
+    : existing.spec_analyze;
+  const handoff = incomingProtocolTrace && hasConditionalValue(existing?.handoff) && !hasConditionalValue(input.handoff)
+    ? existing.handoff
+    : input.handoff;
+  const preservedReview = recordedStageReviewFacts(input) === null ? recordedStageReviewFacts(existing) : null;
   return {
     ...input,
     ...(protocolTrace ? { source: existing.source, created_at: existing.created_at ?? input.created_at } : {}),
+    ...(preservedReview ?? {}),
     evidence: { value: evidence },
-    handoff: protocolTrace ? existing.handoff : input.handoff,
+    spec_analyze: specAnalyze,
+    handoff,
   };
 }
 

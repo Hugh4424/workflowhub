@@ -190,7 +190,7 @@
         "selected_count": { "type": "integer", "minimum": 0 },
         "valid_provider_count": { "type": "integer", "minimum": 0 },
         "minimum_required": { "type": "integer", "minimum": 1 },
-        "group_outcome": { "enum": ["completed", "partial", "unavailable", "cancelled"] }
+        "group_outcome": { "enum": ["completed", "partial", "unavailable", "cancelled", "stalled"] }
       },
       "additionalProperties": false
     },

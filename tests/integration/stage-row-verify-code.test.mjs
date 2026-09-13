@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,7 @@ import { join } from "node:path";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { initializeTaskStore, readTaskFacts, STAGE_ROW_KEYS, LAYER_STATE_VALUES } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts, STAGE_ROW_KEYS, LAYER_STATE_VALUES, REVIEW_ORIGINS } from "../../runtime/task/task-store.mjs";
 import { runStageEndReflection, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { STAGE_HANDOFF_STAGES } from "../../runtime/stage/stage-handoff.mjs";
 import { deriveStageOutcomeStatuses, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
@@ -260,6 +261,115 @@ describe("verify-code owns one current stage row", () => {
   it("does not add verify-code to the handoff stages", () => {
     expect(STAGE_HANDOFF_STAGES).toEqual(["make-decision", "build-spec", "build-plan", "build-code"]);
     expect(STAGE_HANDOFF_STAGES).not.toContain(STAGE);
+  });
+
+  // FR-C4-002 / FR-C6-009: the stage row is the K2 carrier of the real review
+  // facts. The authenticated stage outcome already binds the reviewed K5 result
+  // (code_review.quality_review_ref), so the row must record a conducted review
+  // with that named ref instead of the not_run placeholder.
+  it("carries the authenticated conducted review facts on the verify-code stage row", async () => {
+    const state = verifyCodeState("stage-row-verify-code-review-facts");
+
+    const result = await runVerifyCodeStageEnd(state);
+
+    expect(result.stage_row_error).toBeUndefined();
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]).sort()).toEqual([...STAGE_ROW_KEYS].sort());
+    expect(REVIEW_ORIGINS).toContain(rows[0].review_origin);
+    expect(rows[0].review_origin).toBe("conducted");
+    expect(rows[0].review_result_ref).toEqual({ value: state.qualityReview.resultRef });
+  });
+
+  // FR-C6-009 / AC-C6-007: a same-stage replacement must not reset a recorded
+  // conducted review to not_run or empty its named result reference.
+  it("keeps the recorded conducted review facts when a later stage end replaces the row", async () => {
+    const state = verifyCodeState("stage-row-verify-code-review-preserved");
+    expect(await runVerifyCodeStageEnd(state)).not.toHaveProperty("stage_row_error");
+    const conducted = readTaskFacts(state.task.taskPath);
+    expect(conducted).toHaveLength(1);
+    expect(conducted[0].review_origin).toBe("conducted");
+
+    const failed = await runVerifyCodeStageEnd(state, {
+      stageStatus: "failed",
+      judgment: null,
+      stageOutcome: null,
+      availabilityState: "unavailable",
+      reasonCode: "executor_absent",
+    });
+
+    expect(failed.stage_row_error).toBeUndefined();
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].review_origin).toBe("conducted");
+    expect(rows[0].review_result_ref).toEqual({ value: state.qualityReview.resultRef });
+  });
+
+  // FR-C6-009 / AC-C6-007, asymmetric branch: the newer authenticated outcome
+  // carries an ATTEMPT ref (origin unavailable, ref empty-with-reason) while the
+  // row already records a conducted result ref. The same-stage replacement must
+  // keep the recorded conducted origin and its named reference instead of
+  // downgrading the row to not_run/unavailable with an empty ref.
+  it("keeps the recorded conducted review when a later authenticated outcome carries only a review attempt ref", async () => {
+    const state = verifyCodeState("stage-row-verify-code-attempt-ref");
+    expect(await runVerifyCodeStageEnd(state)).not.toHaveProperty("stage_row_error");
+    const conducted = readTaskFacts(state.task.taskPath);
+    expect(conducted).toHaveLength(1);
+    expect(conducted[0].review_origin).toBe("conducted");
+    expect(conducted[0].review_result_ref).toEqual({ value: state.qualityReview.resultRef });
+
+    // Publish a real wh-review-attempt.v1 record whose terminal status is
+    // unavailable. The runner only accepts an attempt ref for a non-completed
+    // stage outcome, and it validates this record's task/stage/snapshot/material
+    // and terminal status against the current authenticated bindings.
+    const snapshotTree = state.kernel.currentVNextSnapshot().tree;
+    const materialRevision = state.kernel.currentVNextMaterialRevision();
+    const attemptId = "verify-code-unavailable-attempt";
+    const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+    const attemptRaw = `${JSON.stringify({
+      version: "wh-review-attempt.v1",
+      attempt_id: attemptId,
+      task_id: state.task.identity.taskId,
+      stage: STAGE,
+      review_track: null,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      base_tree: snapshotTree,
+      candidate_tree: snapshotTree,
+      provider_attempts: [],
+      terminal_status: "unavailable",
+      error: { code: "PROCESS_DEAD", message: "the review transport terminated without a semantic result" },
+    }, null, 2)}\n`;
+    const attemptHash = createHash("sha256").update(attemptRaw).digest("hex");
+    state.task.writeRecordAtomic(attemptRef, attemptRaw);
+
+    const attemptOutcome = writeStageOutcomeFixture({
+      task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+      workspace: state.candidateWorkspace, stage: STAGE,
+      attemptId: "stage-row-verify-attempt-ref", status: "unavailable",
+      qualityReview: { ref: attemptRef, sha256: attemptHash },
+    });
+    const attemptSource = authenticateStageOutcomeForProjection(state.context, STAGE, attemptOutcome.ref);
+    expect(attemptSource).not.toBeNull();
+    expect(attemptSource.value.code_review.quality_review_ref).toBe(attemptRef);
+
+    const failed = await runVerifyCodeStageEnd(state, {
+      stageStatus: "failed",
+      judgment: null,
+      stageOutcome: attemptSource,
+      availabilityState: "unavailable",
+      reasonCode: "executor_absent",
+    });
+
+    expect(failed.stage_row_error).toBeUndefined();
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    // The later attempt-ref outcome must not reset the recorded review.
+    expect(rows[0].review_origin).toBe("conducted");
+    expect(rows[0].review_result_ref).toEqual({ value: state.qualityReview.resultRef });
   });
 
   it("never records a stage end that did not complete as a completed implementation", async () => {

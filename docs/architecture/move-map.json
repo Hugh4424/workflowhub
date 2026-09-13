@@ -3277,6 +3277,17 @@
       "consumer": "no production and no test consumer",
       "delete_condition": "restore only with a new decision and current consumer proof",
       "content_change": "removed as a re-export shim with zero production and zero test references"
+    },
+    {
+      "source": "runtime/schemas/quality-verify.v1.json",
+      "destination": null,
+      "status": "delete",
+      "owner": "workflowhub mechanism simplification T54/T55",
+      "consumer": "none after C6 active object-graph closure; specs/archive/** and docs/research/** remain read-only historical references",
+      "delete_condition": "C6 structured proof verifies schema absence, named writer/reader/import closure, explicit Runner closure and clean install",
+      "content_change": "C6 removal of quality/verify.v1 object graph, product_release and status_groups; immutable archive/research references unchanged",
+      "bytes_before": 1455,
+      "sha256_before": "1629345410d8f4edd8254d7cc3314e95f5226af1341b910fcae725dc12eb994d"
     }
   ]
 }

@@ -16,7 +16,7 @@ import {
 import { assertNoCloseExecutionSidecars, captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
+import { deriveStatusRootCauses } from "../../tools/cli/stage-runtime.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
 const roots = [];
@@ -206,19 +206,18 @@ describe("P5 close sidecar and archive contract", () => {
     expect(existsSync(join(worktreeRoot, "quality", "post-merge.txt"))).toBe(true);
   });
 
-  it("keeps missing verification and release facts as a close-plan gap list instead of a completed quality claim", () => {
+  it("keeps missing verification facts as a close-plan gap list instead of a completed quality claim", () => {
     const state = fixture();
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
 
     expect(prepared.plan.delivery).toMatchObject({ quality_status: "incomplete" });
     expect(prepared.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
       expect.stringMatching(/^verify-code:/),
-      expect.stringMatching(/^product-release:/),
     ]));
     expect(prepared.plan.delivery).not.toHaveProperty("quality_status", "observed");
   });
 
-  it("keeps an authenticated clean code-review status when checking ordinary close freshness", () => {
+  it("keeps an authenticated clean code-review status without a freshness rejection", () => {
     const state = fixture();
     const snapshot = state.kernel.currentVNextSnapshot();
     const review = writeFormalReviewFixture({
@@ -252,10 +251,10 @@ describe("P5 close sidecar and archive contract", () => {
     expect(prepared.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/^verify-code(?: freshness)?:/),
     ]));
-    expect(prepared.plan.delivery.quality_status).toBe("incomplete");
+    expect(prepared.plan.delivery.quality_status).toBe("observed");
   });
 
-  it("does not bleach recorded code-review findings into ordinary close freshness", () => {
+  it("does not turn recorded code-review findings into a material-freshness gap", () => {
     const state = fixture();
     const snapshot = state.kernel.currentVNextSnapshot();
     const review = writeFormalReviewFixture({
@@ -283,10 +282,10 @@ describe("P5 close sidecar and archive contract", () => {
 
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
 
-    expect(prepared.plan.delivery.quality_gaps).toEqual(expect.arrayContaining([
-      expect.stringMatching(/^verify-code freshness: .*code_review/),
+    expect(prepared.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/^verify-code freshness:/),
     ]));
-    expect(prepared.plan.delivery.quality_status).toBe("incomplete");
+    expect(prepared.plan.delivery.quality_status).toBe("observed");
   });
 
   it("rejects risk close without a plan-bound confirmation and records it only after all close authorizations", async () => {
@@ -301,7 +300,7 @@ describe("P5 close sidecar and archive contract", () => {
           accepted: true,
           reason: "用户明确接受 E2E 验收尚缺失",
           deferred_items: ["e2e_acceptance"],
-          quality_reasons: baseline.plan.delivery.quality_gaps,
+          quality_reasons: baseline.plan.delivery.status_root_cause_refs,
         },
       },
     });
@@ -388,22 +387,31 @@ describe("P5 close sidecar and archive contract", () => {
           quality_reasons: ["unrelated gap"],
         },
       },
-    })).toThrow("delivery risk close quality_reasons must exactly match current quality_gaps");
+    })).toThrow("delivery risk close quality_reasons must exactly match status root cause refs");
   });
 
-  it("adds non-blocking close preparation gaps to the existing status projection", () => {
-    const groups = deriveStatusGroups({
-      stage: "verify-code",
-      quality: { missing: ["e2e_acceptance"], predicates: { e2e_acceptance: { fact_ref: null } } },
-      productRelease: { reasons: ["acceptance_result_missing:AC-001"] },
-      observations: [],
+  it("deduplicates status root causes instead of creating a close-preparation projection", () => {
+    const roots = deriveStatusRootCauses({
+      quality: { missing: ["e2e_acceptance", "e2e_acceptance"], predicates: { e2e_acceptance: { fact_ref: null } } },
+      stale: { status: "stale", source: "plan.md:HEAD-diff", detail: "main advanced" },
     });
 
-    expect(groups.close_preparation_gaps).toEqual([
-      "verify-code prerequisite missing: e2e_acceptance",
-      "acceptance_result_missing:AC-001",
+    expect(roots).toEqual([
+      {
+        root_cause_id: "e2e_acceptance",
+        status: "actionable",
+        source: "quality facts",
+        refs: ["facts.jsonl"],
+        details: ["e2e_acceptance"],
+      },
+      {
+        root_cause_id: "stale",
+        status: "stale",
+        source: "plan.md:HEAD-diff",
+        refs: ["plan.md:HEAD-diff"],
+        details: ["main advanced"],
+      },
     ]);
-    expect(groups).not.toHaveProperty("close_blockers");
   });
 
   it("runs the five physical actions in order only in an isolated fixture with explicit test authorizations", async () => {

@@ -2,7 +2,8 @@
 
 ## 状态
 
-已确认（2026-09-11，任务 `workflowhub-mechanism-simplification-t1-20260911` 的 make-decision 阶段）。
+已确认（2026-09-11，任务 `workflowhub-mechanism-simplification-t1-20260911` 的 make-decision 阶段）；
+C6 修订（2026-09-13）：`quality-verify.v1` active object graph 纳入 removal。
 
 ## 背景
 
@@ -15,6 +16,10 @@
   但被归档 specs / 文档引用，并且**全部**经目录扫描进入 Runner 发布清单
   （`runtime/distribution/runner-release.mjs:89`）。
 
+C6 对 `runtime/schemas/quality-verify.v1.json` 作了明确例外：它与 active
+`quality/verify.json`、`product_release`、`status_groups` graph 同批移除；
+`specs/archive/**` 与 `docs/research/**` 仍只读保留。
+
 同时，PRD 原本点名的三项（`stage-outcome-proofs/**`、`workflow-evolution.mjs`、
 protocol-error 白名单）实测**都有活的生产消费者**，不能删。
 
@@ -22,13 +27,17 @@ protocol-error 白名单）实测**都有活的生产消费者**，不能删。
 
 1. 物理删除**限制在两档**：零引用的 2 个文件（Tier A）+ 零生产引用、仅测试引用的约 10 个
    对象（Tier B）；Tier B 必须同批改/删对应测试。
-2. **不删** Tier C（10 个 schema + `source-manifest.mjs`）：它们的引用面包含归档材料与
-   Runner 发布清单，删除会改变发布契约而不只是"清掉没人用的文件"。
+2. **一般不删** Tier C（10 个 schema + `source-manifest.mjs`）：它们的引用面包含归档材料与
+   Runner 发布清单，删除会改变发布契约而不只是"清掉没人用的文件"。唯一明确例外是
+   C6 的 `runtime/schemas/quality-verify.v1.json`，须连同 active object graph、writer/reader
+   与发布/登记闭环整体移除。
 3. **不删**任何实测有生产消费者的对象，即使 PRD 曾把它们列为删除目标。
 4. 每个被删对象必须附具名 consumer 扫描证据（命令 + 计数 + 命中文件清单）。
 5. 死导出只做**保守清理**：仅删同时满足「零引用 + 不是 re-export + 不是动态访问」的导出。
 6. 删 Tier B 的 5 个 CLI 工具存在**仓库外按路径调用**的可能（仓内扫描无法证明）；该风险由
    用户明确接受，保留在本任务材料的 `RISK-001`。
+7. C6 removal 的回滚必须恢复整个隔离 diff（schema、writer/reader、Runner 闭环和登记），
+   不允许只恢复 schema。
 
 ## 理由（ADR 三项判据）
 
@@ -50,5 +59,6 @@ protocol-error 白名单）实测**都有活的生产消费者**，不能删。
 
 - 本 ADR 只记录本任务的删除边界与理由；它**不**改变五个 stage 的拓扑、质量门或
   `CONSTITUTION.md` 的条款。
-- 治理文档正文的同步仍归后续任务（PRD 的 C7）；本 ADR 不替代那次同步。
+- C6 active 治理文档与登记必须同步 removal 语义；`specs/archive/**`、`docs/research/**`
+  保持只读，不纳入本次写集。
 - 若将来要扩删 Tier C，必须先处理发布清单与归档引用的替代方案，并重新走一次用户确认。

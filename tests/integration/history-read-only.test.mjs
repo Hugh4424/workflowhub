@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { captureBefore, verifyUnchanged } from "../../tools/architecture/history-inventory.mjs";
-import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -93,9 +93,11 @@ describe("history inventory is read-only", () => {
       if (!records.has(ref)) { const error = new Error("missing"); error.code = "ENOENT"; throw error; }
       return records.get(ref);
     };
-    expect(evaluateFactFreshness({ ...fact, sha256: sha256(factRaw) }, {
-      material_revision: fact.material_revision,
-      snapshot_tree: fact.snapshot_tree,
-    }, { read })).toMatchObject({ status: "stale", authenticated: false });
+    // The freshness/currentness comparison chain was removed. A historical
+    // fact whose own recorded hash does not match its bytes must still fail
+    // authentication instead of being promoted to a current result.
+    expect(authenticateQualityFactRecord({ ...fact, sha256: sha256(factRaw) }, {
+      read,
+    })).toMatchObject({ authenticated: false });
   });
 });

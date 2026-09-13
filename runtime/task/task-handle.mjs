@@ -37,9 +37,7 @@ const FORBIDDEN_MANIFEST_FIELDS = new Set([
 ]);
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const CANONICAL_RECORD_WRITERS = new WeakMap();
-const VERIFY_SUMMARY_WRITERS = new WeakMap();
 const INVOCATION_IDENTITY_WRITERS = new WeakMap();
-const PATH_CARD_WRITERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -414,7 +412,7 @@ function assertPublicRecordWritable(relativePath) {
   if (relativePath === "task.json") {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
-  if (relativePath === "index.json" || relativePath === "quality/verify.json") {
+  if (relativePath === "index.json") {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
   if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
@@ -445,7 +443,15 @@ function displayRecordPath(taskRoot, relativePath) {
   return candidate;
 }
 
-function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, validator, expectedPriorRaw } = {}) {
+function assertWriteSourceBytes(data, sourceBytes, encoding) {
+  if (sourceBytes === undefined) return;
+  const actual = Buffer.isBuffer(data) ? data : Buffer.from(data, encoding);
+  const authenticated = Buffer.isBuffer(sourceBytes) ? sourceBytes : Buffer.from(sourceBytes, encoding);
+  if (!actual.equals(authenticated)) throw new Error("write boundary source bytes mismatch");
+}
+
+function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, validator, expectedPriorRaw, sourceBytes, authenticatedSourceBytes } = {}) {
+  assertWriteSourceBytes(data, authenticatedSourceBytes ?? sourceBytes, encoding);
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const temporary = resolve(parent, `.${randomUUID()}.tmp`);
@@ -495,7 +501,8 @@ function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode =
   return candidate;
 }
 
-function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks } = {}) {
+function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, sourceBytes, authenticatedSourceBytes } = {}) {
+  assertWriteSourceBytes(data, authenticatedSourceBytes ?? sourceBytes, encoding);
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const temporary = resolve(parent, `.${randomUUID()}.tmp`);
@@ -842,11 +849,6 @@ function makeTaskHandle(taskPath, manifest) {
       if (typeof writer !== "function") throw new TypeError("authentic invocation identity writer required");
       return writer(relativePath, data);
     },
-    createPathCardRecord(relativePath, data) {
-      const writer = PATH_CARD_WRITERS.get(handle);
-      if (typeof writer !== "function") throw new TypeError("authentic path card writer required");
-      return writer(relativePath, data);
-    },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical evidence only through TaskKernel.
     withRecordLock(relativePath, operation, options) {
@@ -866,28 +868,11 @@ function makeTaskHandle(taskPath, manifest) {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });
-  VERIFY_SUMMARY_WRITERS.set(frozen, (data, options) => {
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    verifyManifest();
-    if (typeof data !== "string" || data.length === 0) throw new TypeError("verify summary data is required");
-    const result = writeAtomicAt(realTaskPath, "quality/verify.json", data, options);
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    return result;
-  });
   INVOCATION_IDENTITY_WRITERS.set(frozen, (relativePath, data) => {
     if (!/^identity\/executions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$/.test(relativePath ?? "")) {
       throw new Error("invocation identity path is invalid");
     }
     if (typeof data !== "string" || data.length === 0) throw new TypeError("invocation identity data is required");
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    verifyManifest();
-    return createOnlyAt(realTaskPath, relativePath, data);
-  });
-  PATH_CARD_WRITERS.set(frozen, (relativePath, data) => {
-    if (!/^identity\/path-cards\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(relativePath ?? "")) {
-      throw new Error("path card record path is invalid");
-    }
-    if (typeof data !== "string" || data.length === 0) throw new TypeError("path card record data is required");
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
     return createOnlyAt(realTaskPath, relativePath, data);
@@ -945,12 +930,6 @@ export function createTaskKernel(taskHandle, options) {
       assertTaskHandle(task);
       const writer = CANONICAL_RECORD_WRITERS.get(task);
       if (typeof writer !== "function") throw new TypeError("authentic TaskHandle canonical writer required");
-      return writer;
-    },
-    createVerifySummaryWriterFor(task) {
-      assertTaskHandle(task);
-      const writer = VERIFY_SUMMARY_WRITERS.get(task);
-      if (typeof writer !== "function") throw new TypeError("authentic TaskHandle verify summary writer required");
       return writer;
     },
   }));

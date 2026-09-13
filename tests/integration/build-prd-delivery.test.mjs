@@ -110,8 +110,6 @@ function authorizePlanning(state, confirmationRef, confirmationHash, operations 
       operation,
       subject_ref: confirmationRef,
       subject_hash: confirmationHash,
-      material_revision: state.prepared.plan.delivery.planning.material_revision,
-      snapshot_tree: state.prepared.plan.delivery.planning.snapshot_tree,
       authorized_at: "2026-09-09T00:00:00.000Z",
     };
     const raw = `${JSON.stringify(value, null, 2)}\n`;
@@ -291,9 +289,11 @@ describe("build-prd planning delivery close", () => {
       executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
     })).rejects.toThrow(/git ls-remote failed|remote|push/i);
 
-    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/commit-delivery.json`)).status).toBe("completed");
-    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).status).toBe("completed");
-    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/archive-spec.json`)).status).toBe("completed");
+    // Close-wide remote preflight runs before the first physical probe or
+    // commit, so a missing push remote leaves no partially executed plan.
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/commit-delivery.json`)).toThrow();
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).toThrow();
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/archive-spec.json`)).toThrow();
     expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/push-target-branch.json`)).toThrow();
     expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
   });
@@ -369,13 +369,13 @@ describe("planning-hardening unarchived planning close", () => {
       executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
     })).rejects.toThrow(/git ls-remote failed|remote|push/i);
 
-    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/commit-delivery.json`)).status).toBe("completed");
-    expect(JSON.parse(state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).status).toBe("completed");
+    // The four-action plan is also protected by the same close-wide preflight;
+    // a remote failure cannot leave commit or merge side effects behind.
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/commit-delivery.json`)).toThrow();
+    expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/merge-task-branch.json`)).toThrow();
     expect(() => state.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/archive-spec.json`)).toThrow();
     expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();
-    expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
 
-    const mergeOid = git(state.repo, ["rev-parse", "refs/heads/main"]);
     execFileSync("git", ["remote", "set-url", "origin", state.bare], { cwd: state.repo });
     await expect(executeClosePlan({
       task: state.task,
@@ -384,6 +384,7 @@ describe("planning-hardening unarchived planning close", () => {
       closeConfirmationRef: confirmation.ref,
       executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: state.kernel, plan: prepared.plan }),
     })).resolves.toMatchObject({ status: "delivered", completion_record: null });
+    const mergeOid = git(state.repo, ["rev-parse", "refs/heads/main"]);
     expect(git(state.repo, ["rev-parse", "refs/heads/main"])).toBe(mergeOid);
     expect(git(state.repo, ["rev-parse", "refs/remotes/origin/main"])).toBe(mergeOid);
     expect(() => state.task.readRecord("operations/close/completed.json")).toThrow();

@@ -174,7 +174,7 @@ function parseFactRecords(raw, taskId, projectName) {
       catch (error) { throw new Error(`historical monitoring fact is invalid on line ${index + 1}: ${error.message}`); }
       return Object.freeze({ kind: "monitoring", value });
     }
-    if (["quality-fact.v1", "quality-verify.v1"].includes(value?.schema_version)) {
+    if (value?.schema_version === "quality-fact.v1") {
       throw new Error(`quality facts must be stored under quality/facts, not facts.jsonl line ${index + 1}`);
     }
     if (TASK_RECORD_KINDS.includes(value?.record_kind)) {
@@ -194,21 +194,6 @@ export function initializeTaskStore(taskRoot, { taskId } = {}) {
     mkdirSync(resolve(identity.root, "quality", "tests"), { recursive: true, mode: 0o700 });
     const factsPath = safeRecordPath(identity.root, "facts.jsonl");
     if (!existsSync(factsPath)) atomicWrite(identity.root, "facts.jsonl", "", { createOnly: true });
-    const verifyRaw = `${JSON.stringify({
-      schema_version: "quality-verify.v1",
-      task_id: identity.taskId,
-      stage: "verify-code",
-      ac_id: "task-store-initialization",
-      status: "unknown",
-      method: "task-store-initialization",
-      evidence_ref: "task.json",
-      evidence_hash: sha256(readFileSync(safeRecordPath(identity.root, "task.json"))),
-      material_digest: "0".repeat(64),
-      created_at: new Date().toISOString(),
-      missing: [],
-    }, null, 2)}\n`;
-    const verifyPath = safeRecordPath(identity.root, "quality/verify.json");
-    if (!existsSync(verifyPath)) atomicWrite(identity.root, "quality/verify.json", verifyRaw, { createOnly: true });
     // A new task owns exactly one execution record file. The retired index
     // object is no longer created, read, or written for current tasks.
     return Object.freeze({ task_id: identity.taskId, root: identity.root, record_ref: "facts.jsonl" });

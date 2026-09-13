@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
 
 const inventoryPath = join(process.cwd(), "docs/architecture/control-plane-inventory.json");
 
@@ -39,27 +38,17 @@ describe("control-plane inventory", () => {
     }
   });
 
-  it("keeps acceptance IDs distinct and does not relabel release gaps as quality", () => {
-    const groups = deriveStatusGroups({
-      stage: "verify-code",
-      quality: { missing: [] },
-      productRelease: { reasons: ["acceptance_result_not_pass:AC-001", "acceptance_result_not_pass:AC-002"] },
+  it("retires the verify-summary and derived-gap controls while retaining the three-domain reader", () => {
+    const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
+    const byId = new Map(inventory.controls.map((control) => [control.id, control]));
+    expect(byId.get("verify-summary-writer")).toMatchObject({ disposition: "removed", consumer: expect.stringContaining("none") });
+    expect(byId.get("gap-root-cause")).toMatchObject({ disposition: "removed", consumer: expect.stringContaining("none") });
+    expect(byId.get("current-close-projection")).toMatchObject({
+      disposition: "retain",
+      consumer: expect.stringContaining("status and close readers"),
+      effect: expect.stringContaining("three-domain"),
     });
-    expect(groups.gap_groups).toEqual([
-      expect.objectContaining({
-        root_cause_id: "acceptance_result_not_pass:AC-001",
-        source_layer: "release",
-        owner: "stage-runtime",
-        derived_views: ["release", "close"],
-        gaps: ["acceptance_result_not_pass:AC-001"],
-      }),
-      expect.objectContaining({
-        root_cause_id: "acceptance_result_not_pass:AC-002",
-        source_layer: "release",
-        owner: "stage-runtime",
-        derived_views: ["release", "close"],
-        gaps: ["acceptance_result_not_pass:AC-002"],
-      }),
-    ]);
+    expect(JSON.stringify(inventory)).not.toContain("product_release_status");
+    expect(JSON.stringify(inventory)).not.toContain("status_groups");
   });
 });

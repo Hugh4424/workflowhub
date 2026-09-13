@@ -51,6 +51,17 @@
 | 初稿含“新增产品方向”否定句触发方向发明检测 | 改为不含触发短语的等义边界；校验恢复 ok |
 | formal review 运行中发现 5 个 trace/semantic gap | 遵守冻结纪律，先记录到 planning；审查结束后与正式 findings 一并修复，不中途改材料 |
 
+## Main Merge Reconciliation (2026-09-12)
+- 当前任务分支 HEAD=`548c45f5`；main=`35a6fb6f`，main 已含任务Ⅰ merge `9f9d0c44` 与 archive `35a6fb6f`。
+- 当前工作区有本任务四材料（untracked）以及 A2 的 `wh-review-cli.mjs` + 测试改动（tracked）；合并前必须完整 stash（含 untracked）。
+- `HEAD..main` 涉及 146 文件、+12345/-3601；任务Ⅰ大量修改当前计划会触及的 runtime/close/review/material/status 文件，合并后需按真实 HEAD 重做 anchor/已实现项扫描。
+- main 已修改 `skills/wh-review/scripts/wh-review-cli.mjs`，恢复 stash 时发生注释级冲突。main 已包含 available-with-failures 三值 allowlist，但没有 A2 专门回归用例；已保留测试并通过 34/34。
+- 任务Ⅰ实际已落 K2 `review_origin`/`review_result_ref` 五值合同，满足 C4 替代物前置；但未删除 `validateReviewBudget`，符合任务Ⅱ C4 仍需删除的范围。
+- 任务Ⅰ删除了 `tools/cli/validate-current-plan-tasks.mjs`；当前 T2 spec/plan/tasks 仍把它列为 C5「补进文件」和 MODIFY owner，这是必须修订的陈旧文件边界（应改为任务Ⅰ已删除、C5 只做零存在/零引用验证，不写入）。
+- 任务Ⅰ没有删除 path-card、quality/verify、product_release/status_groups 等任务Ⅱ范围；这些计划 seam 仍存在，不能误判为已完成。
+- main 已落任务Ⅰ archive 与 close/task-store 大改；计划中的行号与命中计数均来自旧 HEAD，需重测后更新 Code Anchors，避免 build-code 按陈旧行号实施。
+- 用户对 post-merge 两项冲突的真实裁决：①接受任务Ⅰ已冻结的 K2 判别字段 `record_kind`，不在 T2 新增迁移/兼容改名；②仍物理删除 `runtime/schemas/quality-verify.v1.json`，因此 T2 必须扩大删除证明范围，同步 Runner 发布消费者与架构登记，并保留重新确认事实。
+
 ## Resources
 - `workflows/build-spec/steps.json`
 - `workflows/build-plan/steps.json`

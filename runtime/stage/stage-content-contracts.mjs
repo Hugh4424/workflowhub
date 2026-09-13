@@ -66,11 +66,11 @@ function result(errors, extras = {}) {
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), ...extras });
 }
 
-export const TEST_RUNTIME_PROFILE_NAMES = Object.freeze(["inner", "medium", "large"]);
+export const TEST_RUNTIME_PROFILE_NAMES = Object.freeze(["inner", "phase", "aggregate"]);
 export const TEST_RUNTIME_PROFILE_LIMITS_MS = Object.freeze({
   inner: 60_000,
-  medium: 300_000,
-  large: null,
+  phase: 300_000,
+  aggregate: null,
 });
 const TEST_RUNTIME_CAPABILITIES = Object.freeze(["network", "db", "filesystem", "subprocess", "environment"]);
 const TEST_RUNTIME_PERMISSION_POLICIES = Object.freeze({
@@ -161,20 +161,24 @@ function validateCapabilityProof(value, errors, { requireProof, permissions = un
 export function validateTestRuntimeProfile(value, { requireProof = false, allowUnavailable = false, declarationOnly = false } = {}) {
   const errors = [];
   if (!object(value)) return result(["test runtime profile must be an object"], { status: "incomplete" });
-  if (!TEST_RUNTIME_PROFILE_NAMES.includes(value.runtime_profile)) errors.push("runtime profile must be inner, medium, or large");
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(value.runtime_profile)) errors.push("runtime profile must be inner, phase, or aggregate");
   if (value.test_tier !== undefined && !TEST_TIERS.has(value.test_tier)) errors.push("test tier is invalid");
   if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") errors.push("runtime profile executor_id is required");
   const profile = value.runtime_profile;
   const ceiling = value.ceiling_ms;
-  if (!Number.isSafeInteger(ceiling) || ceiling < 1) errors.push("runtime profile ceiling_ms must be a positive integer");
+  if (profile === "aggregate") {
+    if (ceiling !== null) errors.push("aggregate runtime profile ceiling_ms must be null");
+  } else if (!Number.isSafeInteger(ceiling) || ceiling < 1) {
+    errors.push("runtime profile ceiling_ms must be a positive integer");
+  }
   else if (TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== null && TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== undefined && ceiling > TEST_RUNTIME_PROFILE_LIMITS_MS[profile]) {
     errors.push(`${profile} runtime profile ceiling exceeds ${TEST_RUNTIME_PROFILE_LIMITS_MS[profile]}ms`);
   }
-  if (profile === "large" && value.permissions?.environment !== "ci_only") {
-    errors.push("large runtime profile requires CI-only environment");
+  if (profile === "aggregate" && value.permissions?.environment !== "ci_only") {
+    errors.push("aggregate runtime profile requires CI-only environment");
   }
-  if (profile === "large" && !declarationOnly && value.capability_proof?.status === "passed" && value.permissions?.environment !== "ci_only") {
-    errors.push("large runtime profile proof requires CI-only environment");
+  if (profile === "aggregate" && !declarationOnly && value.capability_proof?.status === "passed" && value.permissions?.environment !== "ci_only") {
+    errors.push("aggregate runtime profile proof requires CI-only environment");
   }
   if (!object(value.permissions)) {
     errors.push("runtime profile permissions are required");
@@ -187,15 +191,15 @@ export function validateTestRuntimeProfile(value, { requireProof = false, allowU
     }
     const expected = profile === "inner"
       ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny" }
-      : profile === "medium"
+      : profile === "phase"
         ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" }
         : null;
     for (const [capability, policy] of Object.entries(expected ?? {})) {
       if (value.permissions[capability] !== policy) errors.push(`${profile} ${capability} permission must be ${policy}`);
     }
-    if (profile === "large" && value.permissions.environment !== "ci_only") errors.push("large environment permission must be ci_only");
-    if (profile === "large" && Object.values(value.permissions).some((policy) => policy === "unknown")) errors.push("large unknown permission is denied");
-    if (profile === "medium" && value.permissions.environment !== "local_ci" && value.permissions.environment !== "ci_only") errors.push("medium environment must be local_ci or ci_only");
+    if (profile === "aggregate" && value.permissions.environment !== "ci_only") errors.push("aggregate environment permission must be ci_only");
+    if (profile === "aggregate" && Object.values(value.permissions).some((policy) => policy === "unknown")) errors.push("aggregate unknown permission is denied");
+    if (profile === "phase" && value.permissions.environment !== "local_ci" && value.permissions.environment !== "ci_only") errors.push("phase environment must be local_ci or ci_only");
     if (profile === "inner" && value.permissions.environment !== "local_ci") errors.push("inner environment permission must be local_ci");
   }
   if (value.behavior_fingerprint !== undefined) {
@@ -3224,6 +3228,12 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
     outline_version: outlineVersion,
     task_id: recordTaskId,
     oi_ids: Object.freeze([...byId.keys()]),
+    oi_records: Object.freeze([...byId.values()].map((record) => Object.freeze({
+      oi_id: record.oi_id ?? record.id,
+      category: record.category,
+      source: record.source,
+      question: record.question,
+    }))),
     open_items: Object.freeze([...byId.values()].filter((record) => record.status === "open").map((record) => record.oi_id)),
   });
 }
@@ -6254,8 +6264,8 @@ export function validatePlanTaskContract({
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
     if (tasksVersion === PLAN_TASK_V4 && /\bFR-TEST-001\b/.test(spec)) {
       const profileDeclaration = `${task.fields["test tier / test method"] ?? ""} ${task.fields["runtime profile"] ?? ""}`;
-      const runtimeProfile = profileDeclaration.match(/\bruntime\s+profile\s*[=:：]\s*(inner|medium|large)\b/i)?.[1]?.toLowerCase();
-      if (!runtimeProfile) errors.push(`${task.heading_id} runtime profile must declare inner, medium, or large`);
+      const runtimeProfile = profileDeclaration.match(/\bruntime\s+profile\s*[=:：]\s*(inner|phase|aggregate)\b/i)?.[1]?.toLowerCase();
+      if (!runtimeProfile) errors.push(`${task.heading_id} runtime profile must declare inner, phase, or aggregate`);
       else if (!/\b(?:ceiling|上限)\s*[=:：]\s*\d+\s*(?:ms|s|秒)\b/i.test(profileDeclaration)) errors.push(`${task.heading_id} runtime profile must declare a duration ceiling`);
       const permissions = String(task.fields["runtime permissions"] ?? "");
       for (const capability of ["network", "db", "filesystem", "subprocess", "environment"]) {

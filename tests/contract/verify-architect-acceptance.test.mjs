@@ -76,4 +76,14 @@ describe("verify-code bounded code review", () => {
     expect(skill).toMatch(/无 consumer|没有真实 consumer/);
     expect(skill).toMatch(/不创建额外记录/);
   });
+
+  it("keeps the verify lens order while reading the existing Phase review result by ref", () => {
+    const handlers = read("runtime/stage/stage-handlers.mjs");
+    const route = read("runtime/review/review-record-route.mjs");
+    const verify = JSON.parse(read("runtime/review/stage-materials.json")).surfaces["verify-code"];
+    expect(handlers).toMatch(/readPhaseReviewResultRef/);
+    expect(handlers).toMatch(/partitionVerifyReviewConclusions/);
+    expect(route).toMatch(/review_result_ref|result_ref/);
+    expect(verify.problem_order).toEqual(["implementation", "consumer", "correctness", "lifecycle_security", "test_strength"]);
+  });
 });

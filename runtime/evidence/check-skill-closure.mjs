@@ -152,7 +152,7 @@ const PORTABLE_STEP_CONTRACTS = Object.freeze([
     ]),
   }),
 ]);
-const PORTABLE_DEPENDENCY_IDENTITY = Object.freeze(["task_id", "stage", "material_revision", "snapshot_tree"]);
+const PORTABLE_DEPENDENCY_IDENTITY = Object.freeze(["task_id", "stage", "workspace_path"]);
 const PORTABLE_DEPENDENCY_INPUTS = Object.freeze(["decision", "required_sources", "map_confirmation", "design_facts"]);
 
 function validateEvidenceRefs(refs, expected, label, errors) {

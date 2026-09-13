@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
-import { publishQualityFact, publishVerifySummary } from "../../runtime/evidence/quality-store.mjs";
+import { publishQualityFact } from "../../runtime/evidence/quality-store.mjs";
 
 function taskRoot() {
   const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-task-storage-")));
@@ -37,7 +37,9 @@ describe("minimal task storage", () => {
     expect(existsSync(join(root, "facts.jsonl"))).toBe(true);
     expect(existsSync(join(root, "quality", "reviews"))).toBe(true);
     expect(existsSync(join(root, "quality", "tests"))).toBe(true);
-    expect(existsSync(join(root, "quality", "verify.json"))).toBe(true);
+    // The quality/verify.v1 object and its writer were removed; task
+    // initialization must not recreate it.
+    expect(existsSync(join(root, "quality", "verify.json"))).toBe(false);
     expect(existsSync(join(root, "index.json"))).toBe(false);
     expect(readdirSync(root).sort()).toEqual(["facts.jsonl", "quality", "task.json"]);
   });
@@ -107,7 +109,7 @@ describe("minimal task storage", () => {
     }
   });
 
-  it("stores quality facts and verify summary in separate quality paths", () => {
+  it("stores quality facts in their separate quality paths", () => {
     const root = taskRoot();
     initializeTaskStore(root, { taskId: "minimal-task" });
 
@@ -127,11 +129,11 @@ describe("minimal task storage", () => {
       schema_version: "test-fact.v1",
       content_hash: "1".repeat(64),
     });
-    publishVerifySummary(root, { status: "incomplete", missing: ["review"] });
 
     expect(review.ref).toMatch(/^quality\/reviews\/[a-f0-9]{64}\.json$/);
     expect(test.ref).toMatch(/^quality\/tests\/[a-f0-9]{64}\.json$/);
-    expect(JSON.parse(readFileSync(join(root, "quality", "verify.json"), "utf8"))).toMatchObject({ status: "incomplete" });
+    // quality/verify.json was removed with its writer; it must not reappear.
+    expect(existsSync(join(root, "quality", "verify.json"))).toBe(false);
     expect(readdirSync(join(root, "quality", "reviews"))).toHaveLength(1);
     expect(readdirSync(join(root, "quality", "tests"))).toHaveLength(1);
     expect(readdirSync(root).some((name) => /index/i.test(name))).toBe(false);

@@ -1,20 +1,21 @@
-# ADR-0029: 当前逐 AC 事实与四域收口状态
+# ADR-0029: 当前逐 AC 事实与三域收口状态
 
 ## 决定
 
-S7 保留 main 已建立的 `quality/verify.json` 作为逐验收标准的 current 权威，保留
-`runtime/evidence/quality-store.mjs#publishVerifySummary` 作为其唯一 canonical writer。
-`runtime/stage/completion-predicates.mjs` 只消费经过 material、snapshot、evidence、hash、
-时间、stage/subject allowlist 认证的 `build-code`/`verify-code` `AC-*` 事实。第二 writer、
-双写、旁路导入、坏时间、并列最新和冲突结果均 fail-closed；不迁移、不删除既有权威。
+C6 规定移除 active `quality/verify.json`、`runtime/schemas/quality-verify.v1.json` object graph
+及 `runtime/evidence/quality-store.mjs#publishVerifySummary` writer。C6 proof 收口后的当前权威是
+`facts.jsonl` 的 K2 当前阶段行；K5 原始证据只通过具名 ref 与 sha256 保留。身份/完整性
+字段继续保留，但不再把 freshness/currentness 失效链作为 active 控制面。
 
 状态读取由 `runtime/stage/current-close-projection.mjs` 提供只读投影，不持久化、不创建
-第二状态机或索引。投影稳定并列四个互相独立的域：
+第二状态机或索引。投影稳定并列三个互相独立的域：
 
 - `work_progress`：当前工作是否还能继续；
 - `stage_quality`：当前阶段质量事实；
-- `product_release`：逐 AC current 权威派生的发布状态；
 - `physical_delivery`：close 计划、不可变步骤记录和现场读回派生的物理状态。
+
+不再产生或消费 `product_release`、`status_groups`；状态根因和当前质量只读 K2 当前行及
+K1–K6 具名 ref。`specs/archive/**`、`docs/research/**` 不可变保留。
 
 物理域只允许 `not_started`、`incomplete`、`removed`、`not_applicable_recorded`、
 `unavailable`、`unknown` 六种状态。没有 close 计划是 `not_started`；已有计划但动作未完或
@@ -31,28 +32,27 @@ close 仍由既有 `core/task-close.mjs` 写入：计划冻结质量/发布风�
 
 | seam | owner / writer | consumer |
 | --- | --- | --- |
-| current per-AC authority | `publishVerifySummary` | product-release/status readers |
-| stage freshness scope | `STAGE_FACT_MATERIALS` + existing quality writer | freshness and current product readers |
-| four-domain projection | `deriveCurrentCloseProjection` (read-only) | status and close readers |
+| current stage/AC authority | `facts.jsonl` K2 current row | status and stage-quality readers |
+| K5 evidence | named ref + sha256 | review/reflection/evidence readback |
+| three-domain projection | `deriveCurrentCloseProjection` (read-only) | status and close readers |
 | physical close records | `core/task-close.mjs` | physical-delivery projection and audit readers |
 
 ## 不在本 ADR 中
 
 本 ADR 不新增 public command、HTTP/API、quality store、current selector 或 release writer；
-不修改历史 `quality/verify.json` bytes，不恢复旧索引/lineage/recovery 控制面，不把质量缺口
+不修改 immutable archive/research bytes，不恢复旧索引/lineage/recovery 控制面，不把质量缺口
 变成继续工作的许可证，也不证明真实远端 push、权限或 browser/UI 行为。
 
 ## 证据
 
-- `tests/contract/verify-publication.test.mjs`：既有 canonical writer 和拒绝直接写入；
-- `tests/contract/verify-authority-boundary.test.mjs`：逐 AC stage/subject、最新/并列/坏时间及旁路结果；
-- `tests/contract/four-domain-close-status.test.mjs`：四域、六态、计划/步骤/完成结果分离；
+- C6 Tier-C deletion proof：active writer/schema/object graph removal and immutable archive/research byte stability；
+- `tests/contract/verify-authority-boundary.test.mjs`：K2/K5 identity-bound current status and旁路结果；
+- `tests/contract/four-domain-close-status.test.mjs`：三域、六态、计划/步骤/完成结果分离；
 - `tests/close/close-contract.test.mjs` 与 `tests/close/cleanup-resume-finalize.test.mjs`：确认、逐动作授权、读回和同计划恢复；
 - `docs/architecture/control-plane-inventory.json`：投影与既有唯一 writer 的职责、消费者和删除条件登记。
 
 ## Supersedes
 
-仅精确 supersede ADR-0017 中把产品发布输入限定为阶段质量事实的冲突表述；ADR-0017 的
-阶段质量新鲜度范围继续有效。ADR-0018、ADR-0020 的物理交付与质量分离、既有工作区不删除
-和人工授权语义继续有效。
-
+C6 supersede active `quality/verify.v1`、`product_release`、`status_groups` authority
+及 ADR-0017 的 freshness selector 表述；ADR-0018、ADR-0020 的物理交付与质量分离、
+既有工作区不删除和人工授权语义继续有效。

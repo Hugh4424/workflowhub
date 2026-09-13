@@ -603,6 +603,39 @@ describe("wh-review production CLI", () => {
     expect(result).toMatchObject({ status: "unavailable", error_code: "AUTH" });
   });
 
+  it("preserves an available-with-failures broker result instead of dropping it", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const sinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+    const calls = [];
+    const request = {
+      task_path: "/tmp/task",
+      stage: "build-spec",
+      materials: { frozen_packet: "packet-partial" },
+      snapshot_tree: "tree-1",
+      material_id: "material-1",
+    };
+    const partial = {
+      status: "available-with-failures",
+      stage: "build-spec",
+      snapshot_tree: "tree-1",
+      material_id: "material-1",
+      material_status: "partial",
+      provider_results: [{ provider: "codex", status: "completed", error: null }],
+      findings: [{ id: "F-1", severity: "major", statement: "spec flow gap" }],
+    };
+    const result = await runReviewRecovery(request, {
+      runRound: async (input) => { calls.push(input); return partial; },
+    });
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ status: "available-with-failures", material_status: "partial" });
+    expect(result.findings).toHaveLength(1);
+    expect(result.authoritative).toBe(false);
+    const record = JSON.parse(readFileSync(result.sink_ref, "utf8"));
+    expect(record.result.status).toBe("available-with-failures");
+    expect(record.authoritative).toBe(false);
+    expect(readdirSync(sinkRoot)).toHaveLength(1);
+  });
+
   it("turns a public round exception into one unavailable fact", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const calls = [];

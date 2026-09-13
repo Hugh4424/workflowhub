@@ -43,6 +43,21 @@ function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = fal
   if (requireSourceId && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
   return { provider, adapter, source_id: explicitSourceId ?? provider };
 }
+
+// A provider label identifies the configured route, not necessarily the
+// complete member identity. Paired or multi-profile records can legitimately
+// carry the same provider label while differing by role/source/config. Keep
+// retries for the same member collapsible, but never collapse independent
+// members merely because their provider label is equal.
+function reviewMemberKey(item) {
+  const identity = item?.identity;
+  return JSON.stringify([
+    item?.provider ?? null,
+    item?.role ?? null,
+    item?.source_id ?? identity?.source_id ?? null,
+    identity?.config_id ?? null,
+  ]);
+}
 function normalizedIssue(value) {
   return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
 }
@@ -121,7 +136,7 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   // A configured profile is an independent review member. Do not collapse
   // two profiles merely because they use the same CLI adapter; source/profile
   // identity is already carried by `provider` and is part of the contract.
-  const byProvider = new Map();
+  const byMember = new Map();
   const canonicalReview = (review) => review && typeof review === "object" && !Array.isArray(review)
     && Object.keys(review).length === 1 && Object.hasOwn(review, "findings") && Array.isArray(review.findings)
     && review.findings.every((finding) => finding && typeof finding === "object" && !Array.isArray(finding)
@@ -158,13 +173,15 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
     return { status: "unavailable", valid: [], findings: [], adjudication: { version: "wh-review-adjudication.v1", clusters: [], actionable: [] } };
   }
   validReviewItems.forEach((item, index) => {
-    const current = byProvider.get(item.provider);
+    const memberKey = reviewMemberKey(item);
+    const current = byMember.get(memberKey);
     const rank = priority.get(item.provider) ?? Number.MAX_SAFE_INTEGER;
     const currentRank = current ? (priority.get(current.item.provider) ?? Number.MAX_SAFE_INTEGER) : null;
-    if (!current || rank < currentRank || (rank === currentRank && index < current.index)) byProvider.set(item.provider, { item, index });
+    if (!current || rank < currentRank || (rank === currentRank && index < current.index)) byMember.set(memberKey, { item, index });
   });
-  const valid = [...byProvider.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider));
-  const candidates = validReviewItems.flatMap((item) => {
+  const valid = [...byMember.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider)
+    || reviewMemberKey(left).localeCompare(reviewMemberKey(right)));
+  const candidates = valid.flatMap((item) => {
     // The source identity was already authenticated above. Reuse that exact
     // identity for finding adjudication instead of deriving a second adapter
     // value from the provider label.
@@ -216,12 +233,23 @@ function policyFacts(attempt, fallbackMinimumReviewers) {
   if (attempt.policy_snapshot_hash !== createHash("sha256").update(canonicalJson(policy)).digest("hex")) {
     invalid("review policy snapshot hash mismatch");
   }
-  const attempted = new Set(attempt.provider_attempts.map(({ provider }) => provider));
+  const attempted = attempt.provider_attempts.map(({ provider }) => provider);
   const requested = policy.requested_profiles;
-  if (!Array.isArray(requested) || attempted.size !== requested.length || requested.some((provider) => !attempted.has(provider))) {
+  const counts = (values) => values.reduce((result, provider) => result.set(provider, (result.get(provider) ?? 0) + 1), new Map());
+  const attemptedCounts = counts(attempted);
+  const requestedCounts = Array.isArray(requested) ? counts(requested) : null;
+  if (!Array.isArray(requested) || attempted.length !== requested.length
+      || requestedCounts.size !== attemptedCounts.size
+      || [...requestedCounts].some(([provider, count]) => attemptedCounts.get(provider) !== count)) {
     invalid("provider attempts do not exactly match requested profiles");
   }
-  if (requested.some((provider) => sourceIdentityOf(attempt.provider_attempts.find((item) => item.provider === provider), { requireIdentity: true, requireSourceId: true, requireConfigId: true }) === null)) invalid("review provider broker identity is missing");
+  const remainingAttempts = [...attempt.provider_attempts];
+  for (const provider of requested) {
+    const index = remainingAttempts.findIndex((item) => item.provider === provider
+      && sourceIdentityOf(item, { requireIdentity: true, requireSourceId: true, requireConfigId: true }) !== null);
+    if (index < 0) invalid("review provider broker identity is missing");
+    remainingAttempts.splice(index, 1);
+  }
   if (!Number.isSafeInteger(policy.minimum_heterologous) || policy.minimum_heterologous < 1) invalid("review quorum is invalid");
   if (!Array.isArray(policy.eligible_profiles)) invalid("eligible review profiles are invalid");
   if (!Array.isArray(policy.effective_profiles) || policy.effective_profiles.some((profile) => {
@@ -241,13 +269,13 @@ export function authenticateCanonicalReviewResult({
   const terminalProviderAttempts = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
     if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
-    terminalProviderAttempts.set(providerAttempt.provider, providerAttempt);
+    terminalProviderAttempts.set(reviewMemberKey(providerAttempt), providerAttempt);
   }
   const latestCompleted = new Map();
   for (const providerAttempt of terminalProviderAttempts.values()) {
     const output = outputByRef.get(providerAttempt.output_ref);
     if (!output || output.provider !== providerAttempt.provider) invalid("completed provider output is missing or misbound");
-    latestCompleted.set(providerAttempt.provider, {
+    latestCompleted.set(reviewMemberKey(providerAttempt), {
       provider: providerAttempt.provider,
       ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
       review: output.review, execution: providerAttempt.execution ?? null,
@@ -284,7 +312,7 @@ export function authenticateCanonicalReviewResult({
   const anchored = mustHaveEvidenceAnchors
     ? assessed.map((item) => ({
       ...item,
-      evidenceAnchors: eligibleCompleted.find((candidate) => candidate.provider === item.provider)?.evidenceAnchors,
+      evidenceAnchors: eligibleCompleted.find((candidate) => reviewMemberKey(candidate) === reviewMemberKey(item))?.evidenceAnchors,
     }))
     : assessed;
   const aggregation = aggregateCanonicalProviderResults(anchored, minimum, {

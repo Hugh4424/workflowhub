@@ -69,7 +69,6 @@
           "facts.jsonl",
           "identity/executions/74e7971a-3658-420c-b663-9cf55f1ce6b6.json",
           "index.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -86,15 +85,11 @@
             "sha256": "2c8878da95da30f2b5303823aafe5d28cddfebd60beeeca5e2a125aa133717b3"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "e930f63046426ea0a5a92126b04d89ad0c608b6f1e1346d3e9c1b0676e494577"
-          },
-          {
             "ref": "task.json",
             "sha256": "fa96b83b7b0eacdfee5bb51fea6e071868897a9fee0df974813274890d9802d6"
           }
         ],
-        "write_set_content_hash": "4dc6e113c2a3f39609954262092b09a9ad1f4b5c99c2d9da14930f597763a7eb",
+        "write_set_content_hash": "9e251f34f284616cd898731e981a781c507e29d22bd7630e406d482d8b1d9963",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "task.json"
@@ -135,7 +130,6 @@
           "facts.jsonl",
           "identity/executions/8e6bba31-303f-4a3d-8abc-b793cd97f4f9.json",
           "index.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -152,15 +146,11 @@
             "sha256": "047b3d7908c34d0cf039ba62867861ec3cf1a8163965c9b0e4f43c128f7fee9b"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "b1e85cd3d51bbe2b68faed0df4bbe9ece38f0e953dfe845710a4304f6f955645"
-          },
-          {
             "ref": "task.json",
             "sha256": "a55b88180b6a38293e860cfb86fc90b6142f6d0a2c36be54eabe34312cb11d85"
           }
         ],
-        "write_set_content_hash": "8156d9310dcee922213ad7c434e87888c048f38611206e6931319b359e626d43",
+        "write_set_content_hash": "8c1e68d4954858a68265f2f96049c54b0f2337678fd2e7a1a22862bc81cc0646",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "task.json"
@@ -205,7 +195,6 @@
         "write_set": [
           "facts.jsonl",
           "index.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -218,15 +207,11 @@
             "sha256": "3766e367f00bcd5c086380569b9805ad90c22cce6686f37b6c42023555bc49be"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "16351369399cb32155fc78a34d4cd9cfd436df37c72706238e865f0941c64678"
-          },
-          {
             "ref": "task.json",
             "sha256": "41b859385334ed90666f115091b340e9f05c18e5eb9bcb12a5ea892aea8fd6c2"
           }
         ],
-        "write_set_content_hash": "8f4356a0d6b67a2ae0f7001a5105349db84ef64820c3a351d25b732300174841",
+        "write_set_content_hash": "d92afecda2010f14e6f8eb1247cf4b562a54b003f2770073c2ad3709d92d7bd7",
         "public_write_set": [
           "task.json"
         ],
@@ -315,7 +300,6 @@
         "write_set": [
           "facts.jsonl",
           "index.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -328,15 +312,11 @@
             "sha256": "8c372207d1234b6f354432a35dd3e638da93a7f63b2b7078358d0dfebb454323"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "5949483cc6788ee9b531abf56b9fb78fc1cc36c9efb3e5c8c5bdfa5a7d19bd6f"
-          },
-          {
             "ref": "task.json",
             "sha256": "ced3500ffe66b1db70bdcf3382ace9c0c6e8d4888f6ee518e7b1366ebc236c3c"
           }
         ],
-        "write_set_content_hash": "5be11df22a935bedce8da82fe00ef421ab23a45d2160c07e2a528256fb74cf25",
+        "write_set_content_hash": "5c644a617ca8c489598e05e029c7389b13da7a4cb8f88726dd589fdfbb0c98b3",
         "public_write_set": [
           "task.json"
         ],
@@ -505,7 +485,6 @@
           "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json",
           "quality/tests/baseline-run-default.json",
           "quality/tests/output/baseline-run-default.output",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -570,15 +549,11 @@
             "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "00aa83c55d9508d6203787d4e0662cce8e03605648ee4ce999e4126112b30022"
-          },
-          {
             "ref": "task.json",
             "sha256": "03ff4c24071eadaa328e0bea9af782d51cb46378b4640866a0ed3db43454d59e"
           }
         ],
-        "write_set_content_hash": "143fda4981c906fad19a209d66592eac1e29b69c5a2c363f95d4a55262446903",
+        "write_set_content_hash": "e55a9378d1d5b9da23dc1d8bc7718767e2a098d33d55269ecf067e87e0277f81",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -765,7 +740,6 @@
           "quality/facts/f0312dae8d21c020b78f8b9ee8c732f774cae5efa134fe2375c660b876297854.json",
           "quality/tests/baseline-run-alternate.json",
           "quality/tests/output/baseline-run-alternate.output",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -830,15 +804,11 @@
             "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "08bc44e3ef389af25aa465773e424258e14a6ae4e6a03688f9bf6987ba198c0c"
-          },
-          {
             "ref": "task.json",
             "sha256": "5224f2fbb46d15aab3e619eef00c268f265d7b5c35752b72c8a2464b6477e215"
           }
         ],
-        "write_set_content_hash": "16cbdc40660beb30e751c8a7ccdc8be078960849ac6da082bb08b2b08b656296",
+        "write_set_content_hash": "2e456b6d7acf99f9230bec008bf9d42f4e4c24f8d9f990c129a7f8351da4f64e",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -979,7 +949,6 @@
           "identity/executions/c720c405-9cdd-4c19-9dc9-5a04e8e1574a.json",
           "index.json",
           "quality/reviews/results/baseline-review-default.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1004,15 +973,11 @@
             "sha256": "06eda52f5f9b6ae1a88c77839219bac53b09f629bdb46e917819b6ade65bc0b4"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "b9ad6fa0047ee38775ac0c445c8a6bd771285d5913428975f6705fb846a98ca8"
-          },
-          {
             "ref": "task.json",
             "sha256": "085e549f0f281ebfb5295e0272308222263a487d8e1ccc12943dee91f69c4f90"
           }
         ],
-        "write_set_content_hash": "c16afd06050d90b6353f7e5f9e98b32e73740b54b017c500bf04bf2408b303f5",
+        "write_set_content_hash": "c5e92c712efdb03df4bd15190533374c5391829ed37427242ac0cc23551cd185",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1086,7 +1051,6 @@
           "identity/executions/859b9ad5-72f8-4ca6-9a6a-7127999ab5c6.json",
           "index.json",
           "quality/reviews/results/baseline-review-alternate.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1111,15 +1075,11 @@
             "sha256": "1b0ff6876f45e7f31596eb0512a5e209a72f38d9467f296fe1813155ade4f34d"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "2788f346fbe5b0d7d7f7bc9cd23876ca9e10126cabd1a670a3a017aa936d01d6"
-          },
-          {
             "ref": "task.json",
             "sha256": "89e0e75bee51dd46b7365eacb04efb94b9080ea4d2fce364fb8d9fdc0458c4a3"
           }
         ],
-        "write_set_content_hash": "211c48c826b2002bfb6ba37cd98e3090196a00911e56f1f99e412eac2a890b9a",
+        "write_set_content_hash": "8879a82386559e4626eea7592da8c01b51d4500821e938ffed90f925f1ad01e3",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1198,7 +1158,6 @@
           "index.json",
           "quality/tests/baseline-verify-default.json",
           "quality/tests/output/baseline-verify-default.output",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1227,15 +1186,11 @@
             "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "0a1d176bd8f441fcbc2b6c6d3fc527cba00f49c3ad79a24a861a89cdd2c43d18"
-          },
-          {
             "ref": "task.json",
             "sha256": "f5a5dbd51477e9c06927fef3f476117aa5b37fd5c0b697dd22b28e6593a5f8be"
           }
         ],
-        "write_set_content_hash": "a2f865f8b1395f6e1ba1f021ecc2eb35432bfc1a0a70573a37f8b9c84e0d9bc2",
+        "write_set_content_hash": "fbafdd5c2b67df767dcbc4b4313608588985595e5a52fd48ad98ee8e1f18e809",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1327,7 +1282,6 @@
           "index.json",
           "quality/tests/baseline-verify-alternate.json",
           "quality/tests/output/baseline-verify-alternate.output",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1356,15 +1310,11 @@
             "sha256": "c44ce26ba0d35679b81f9ad5f4e42c6ac10b86d1fe1efacf6c9dcc8e85a3dc7f"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "3de645e68aa2663f54ee4aad5d0aaedc07e504491a830f17cb7a5dbb8a617c53"
-          },
-          {
             "ref": "task.json",
             "sha256": "36b31096ecf00526515ac983db13219871b5c15777dc0ace94abc534798898e1"
           }
         ],
-        "write_set_content_hash": "68891bb2de7a2d67a6b3801bed1d8a534cb896cf54c00c404461fec1920a19e3",
+        "write_set_content_hash": "d1b7d3ea354be7f35ba77e9ac2f203818ddf75da2d0daeec14dffad0f4b0639b",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1438,7 +1388,6 @@
           "index.json",
           "quality/confirmations/fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05.json",
           "quality/facts/c0c10479fece9960d6385ad0b46b357509373895dad97aefd9ea75a35a7be9d2.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1463,15 +1412,11 @@
             "sha256": "22816c1301b724d9c18471b2a9747e0e4d894b418305673dd37c99dc733b71a8"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "0bba9b7981b55ca18dbbd1a2337177cc753065e96bdce42aadf8ec46fbbac0e2"
-          },
-          {
             "ref": "task.json",
             "sha256": "93121ca4978358ab45e334218d296bb8b16f0d9669ae2f5177af2ec6bc9bf9bf"
           }
         ],
-        "write_set_content_hash": "686ac1e979fd1cec20e561c807f72bc488008ee47481d070ee3f68af0c437159",
+        "write_set_content_hash": "c5ef5ded08a0f43236f0b64709be0821b00bdb6a40fab2a840e5a12e240ce905",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "quality/confirmations/<SHA256>.json",
@@ -1528,7 +1473,6 @@
           "index.json",
           "quality/confirmations/10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b.json",
           "quality/facts/c2dcdde2223980f0d3ca380d3143aaee0c316e21412ba7e90be2280f7c1ad858.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1553,15 +1497,11 @@
             "sha256": "0186fe602b9f28e26f333854f115df9656525d665408f4bb5c8156277a596a74"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "9c676d7d0aaef5401ec978446b06a56e2cb6ccc9ebae56816c02515afc4dcb9f"
-          },
-          {
             "ref": "task.json",
             "sha256": "cf054773f423e692427123773997d980bd21778e3990330e81538e4c64282843"
           }
         ],
-        "write_set_content_hash": "9e90c033d64b0bdb9c9798aad3bfda98b13bcc66af7cac6b7a89a39c4e779fc3",
+        "write_set_content_hash": "3eeb9ce6629ec7a196f11f4d38830d84f34556195a88a2daa0ecce7fd903ab59",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "quality/confirmations/<SHA256>.json",
@@ -1653,7 +1593,6 @@
           "quality/authorizations/862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f.json",
           "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json",
           "quality/facts/ef740a8d67199703b79aa1644904a83b964cb954f7cb256bafaf944946b423dd.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1686,15 +1625,11 @@
             "sha256": "feeed05483a021be5c28a57845999a20a6c8fe78d436e3c1830a1117a7332f32"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "a12adc76d4e83526e47550641c11fce34e457733c00fab2ded586a772c262029"
-          },
-          {
             "ref": "task.json",
             "sha256": "e3e89eb1bc2deda285ce43821df736758988aad7e0a36932ef74f61a3054510b"
           }
         ],
-        "write_set_content_hash": "97c796659e29563a42559ad3fd8a8888763cd9e381fe1792e94078ddddc86167",
+        "write_set_content_hash": "30c5822c653b9a693892642f1265e87bfe89223babac0f8d3e83caf60c968200",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1782,7 +1717,6 @@
           "quality/authorizations/200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8.json",
           "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json",
           "quality/facts/2ac3ea3639caf96bb090ff2d980a9d1364eea8d96f4ebf18608189af6ff81d0e.json",
-          "quality/verify.json",
           "task.json"
         ],
         "write_set_content": [
@@ -1815,15 +1749,11 @@
             "sha256": "cea9ef58622e6381369f93a2afe75a5c81a336d0da45c6c8de5e3c0a1cfb98f8"
           },
           {
-            "ref": "quality/verify.json",
-            "sha256": "6ddb2e616743482f8f9210097cc0ac5ddb7c193c6d38a17d390d0170f50894d5"
-          },
-          {
             "ref": "task.json",
             "sha256": "9a12db18b94079ef2c9342f40a9beacc4b04e0359c13840f39e1842521763109"
           }
         ],
-        "write_set_content_hash": "d28c5bdcc28dfb82a4fbf0958766d3fa57c80ce059ab26d4339a8fcbea45561b",
+        "write_set_content_hash": "42b59514e968c94d70f1100b4f750a93661072b205dfa8588df528be4e393b44",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",

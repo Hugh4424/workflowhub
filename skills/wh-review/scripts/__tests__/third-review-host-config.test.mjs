@@ -503,4 +503,71 @@ describe("trusted third-review host configuration", () => {
       .not.toHaveProperty("profiles");
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/build-plan\.initial must be a provider id/i);
   });
+
+  // FR-C4-006 / AC-C4-008: the heterologous comparison key is the underlying
+  // model (broker identity.model), never the provider/profile key string.
+  it("judges one underlying model reached through different profile keys as same source", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["kimi/host"] = { enabled: true, source_id: "source-kimi-host", model: "kimi-for-coding/kimi-for-coding", effort: "max", thinking: true };
+    broker.providers["kimi/twin"] = { enabled: true, source_id: "source-kimi-twin", model: "kimi-for-coding/kimi-for-coding", effort: "high", thinking: true };
+    broker.providers["codex/luna"] = { enabled: true, source_id: "source-codex-luna", model: "gpt-5.6-luna", effort: "max" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const route = { initial: ["kimi/host", "kimi/twin", "codex/luna"], mode: "full_only", minimum_heterologous: 1 };
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "kimi/host", route)).toMatchObject({
+      providers: ["kimi/host", "kimi/twin", "codex/luna"],
+      // Same model under a different profile key is not an independent reviewer.
+      sameSourceExcluded: ["kimi/host", "kimi/twin"],
+      eligibleProfiles: ["codex/luna"],
+    });
+  });
+
+  it("judges one underlying model across adapters as same source while a different model stays heterologous", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["kimi/host"] = { enabled: true, source_id: "source-kimi-host", model: "shared-model" };
+    broker.providers["codex/twin"] = { enabled: true, source_id: "source-codex-twin", model: "shared-model" };
+    broker.providers["antigravity/flash"] = { enabled: true, source_id: "source-antigravity-flash", model: "gemini-3.8-flash-high" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const route = { initial: ["kimi/host", "codex/twin", "antigravity/flash"], mode: "full_only", minimum_heterologous: 1 };
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "kimi/host", route)).toMatchObject({
+      sameSourceExcluded: ["kimi/host", "codex/twin"],
+      eligibleProfiles: ["antigravity/flash"],
+    });
+  });
+
+  it("follows the model field on a fixed profile key and ignores source_id for heterologous judgement", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["kimi/host"] = { enabled: true, source_id: "source-kimi-host", model: "kimi-for-coding/kimi-for-coding" };
+    broker.providers["kimi/other"] = { enabled: true, source_id: "source-kimi-host", model: "kimi-for-coding/kimi-for-coding" };
+    broker.providers["codex/luna"] = { enabled: true, source_id: "source-codex-luna", model: "gpt-5.6-luna" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const route = { initial: ["kimi/host", "kimi/other", "codex/luna"], mode: "full_only", minimum_heterologous: 1 };
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "kimi/host", route)).toMatchObject({
+      sameSourceExcluded: ["kimi/host", "kimi/other"],
+      eligibleProfiles: ["codex/luna"],
+    });
+    // The profile key is unchanged; only the model moves, and the verdict flips.
+    broker.providers["kimi/other"].model = "kimi-for-coding/k3-256k";
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "kimi/host", route)).toMatchObject({
+      sameSourceExcluded: ["kimi/host"],
+      eligibleProfiles: ["kimi/other", "codex/luna"],
+    });
+  });
+
+  it("treats a profile without a declared identity.model as not provably same-source", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["codex/host"] = { enabled: true, source_id: "source-codex-host" };
+    broker.providers["codex/terra"] = { enabled: true, source_id: "source-codex-terra" };
+    broker.providers["kimi"] = { enabled: true, source_id: "source-kimi" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const route = { initial: ["codex/host", "codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 };
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toMatchObject({
+      sameSourceExcluded: ["codex/host"],
+      eligibleProfiles: ["codex/terra", "kimi"],
+    });
+  });
 });

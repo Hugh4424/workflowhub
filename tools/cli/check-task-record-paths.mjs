@@ -58,6 +58,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs",
+  "skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs",
   "skills/wh-review/scripts/__tests__/material-redaction.test.mjs",
   "skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs",
   "skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs",
@@ -68,6 +69,7 @@ const FIXTURE_ALLOWLIST = new Set([
 // These modules implement the authority boundary itself. They are scanned for
 // every legacy mechanism, but may name the capability they mint/validate.
 const CAPABILITY_AUTHORITIES = new Map([
+  ["core/load-config.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/evidence/storage-root.mjs", new Set(["stage/component must not read the storage-root environment"])],
   ["runtime/task/task-identity.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/task/task-handle.mjs", new Set(["caller-supplied storage/task path capability"])],

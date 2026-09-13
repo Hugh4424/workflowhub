@@ -9,10 +9,25 @@ import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect } from "vitest";
+import { parseProfileArgs } from "../../tools/cli/run-checks.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const runChecks = resolve(repoRoot, "tools", "cli", "run-checks.mjs");
+const taskDirEnv = ["WORKFLOWHUB", "TASK_DIR"].join("_");
+
+function profileArgs(evidencePath) {
+  return [
+    "--runtime-profile=phase",
+    "--evidence-path=quality/tests/default-profile.json",
+    "--",
+    process.execPath,
+    "-e",
+    "process.exit(0)",
+    "--evidence-path",
+    evidencePath,
+  ];
+}
 
 /** Helper: run a node script synchronously, collect stdout+stderr combined. */
 function run(args = [], opts = {}) {
@@ -126,5 +141,31 @@ describe("FR-CI-002: self-test validates detection, not empty pass", () => {
     expect(r.status).toBe(0);
     // And the output must not contain "FAILED" for anti-host
     expect(r.output).not.toMatch(/anti-host.*FAILED|FAILED.*anti-host/i);
+  });
+});
+
+describe("FR-CI-003: profile evidence path authority", () => {
+  test("accepts an authenticated task-store quality/tests path", () => {
+    const previousTaskDir = process.env[taskDirEnv];
+    process.env[taskDirEnv] = "/tmp/workflowhub-profile-task-store";
+    try {
+      const evidencePath = "/tmp/workflowhub-profile-task-store/workflowhub-task/quality/tests/profile.json";
+      expect(parseProfileArgs(profileArgs(evidencePath)).evidencePath).toBe(evidencePath);
+    } finally {
+      if (previousTaskDir === undefined) delete process.env[taskDirEnv];
+      else process.env[taskDirEnv] = previousTaskDir;
+    }
+  });
+
+  test("rejects a path outside both repository and authenticated task-store quality/tests", () => {
+    const previousTaskDir = process.env[taskDirEnv];
+    process.env[taskDirEnv] = "/tmp/workflowhub-profile-task-store";
+    try {
+      const evidencePath = "/tmp/workflowhub-profile-task-store/workflowhub-task/quality/evidence/profile.json";
+      expect(() => parseProfileArgs(profileArgs(evidencePath))).toThrow(/quality\/tests/i);
+    } finally {
+      if (previousTaskDir === undefined) delete process.env[taskDirEnv];
+      else process.env[taskDirEnv] = previousTaskDir;
+    }
   });
 });

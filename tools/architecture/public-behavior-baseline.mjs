@@ -262,7 +262,7 @@ function collectCase(root, behavior, variant = "default", { stageOutcomeWriter =
       write_set_content: writeSetContent,
       write_set_content_hash: sha256(JSON.stringify(writeSetContent)),
       public_write_set: writeSet
-        .filter((ref) => !["facts.jsonl", "index.json", "quality/verify.json"].includes(ref))
+        .filter((ref) => !["facts.jsonl", "index.json"].includes(ref))
         .map((ref) => normalize(ref)),
       result,
     };

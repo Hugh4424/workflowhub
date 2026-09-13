@@ -4,10 +4,10 @@
 在认证 task/worktree 内，按两个 stage manifest 的原始顺序完成 build-spec 15 步和 build-plan 13 步；每阶段形成当前材料、独立审查、finding 处置、strict spec-analyze、completed stage outcome 与 stage reflection，且不把本阶段规格缺口推给下游。
 
 ## Next Step
-执行 build-plan steps 1–3：读取 portable package 与当前 decision/spec，判断 conditional research，并建立不执行测试的 testing-system blueprint。
+两个阶段已 completed 并已交接。下一步由用户决定：提交四材料 / 另起 build-code 会话（交接文档 `quality/evidence/handoff/build-plan-to-build-code.md`）。
 
 ## Current Phase
-Phase 4 — build-plan load, blueprint, plan/tasks
+Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 
 ## Phases
 
@@ -52,11 +52,20 @@ Phase 4 — build-plan load, blueprint, plan/tasks
 - **Status:** pending
 
 ### Phase 6: Final verification and delivery
-- [ ] status 验证 build-spec completed / missing=[]
-- [ ] status 验证 build-plan completed / missing=[]
-- [ ] 核对主 checkout 干净、无提交/合并/推送/close
-- [ ] 总结主要产物与证据
-- **Status:** pending
+- [x] build-spec 官方 run/reflection 已发布
+- [x] build-plan 官方 run/reflection 与用户确认已发布
+- [x] 总结主要产物与真实质量缺口
+- **Status:** complete
+
+### Phase 7: Merge completed predecessor task and reconcile
+- [x] 检查当前分支、工作区改动与 main 的任务Ⅰ提交
+- [x] 安全保存未提交改动并合并 main
+- [x] 恢复本任务改动、解决冲突并确认无数据丢失
+- [x] 对照任务Ⅰ实际实现复核 decision-log/spec/plan/tasks 的陈旧假设
+- [x] 按用户裁决修订四材料并重新运行合同校验
+- [x] 重发布 build-spec / build-plan outcome、确认与 reflection
+- [x] 产出 build-code 交接文档
+- **Status:** complete
 
 ## Decisions Made
 | Decision | Rationale |
@@ -76,3 +85,5 @@ Phase 4 — build-plan load, blueprint, plan/tasks
 | 首次 public status 未带 action，exit 1 | 改用 `status --action=begin` |
 | 首次 official run 未传 review/outcome receipts，未识别已发布 outcome | 构造显式 run input，传 canonical review、stage outcome 与 dispositions |
 | disposition classification 初稿不匹配 runtime 枚举；下一次又带 unsupported `evidence_status` | 按 `classifyFinding` 改为 implementation_defect/invalid_finding，并移除 disposition schema 不支持字段后重跑 |
+| `git stash pop` 恢复 A2 时 `wh-review-cli.mjs` 与 main 同行冲突 | main 已包含三值 allowlist；保留简短解释注释和 A2 回归测试，标记冲突解决；stash 暂保留为安全备份 |
+| 误用 `node --test` 运行 Vitest 测试文件，报 Vitest internal state | 改用 `./node_modules/.bin/vitest run ...`，34/34 通过 |

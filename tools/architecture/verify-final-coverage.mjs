@@ -143,38 +143,6 @@ export function parseFinalVerificationArgs(argv = []) {
 
 export function validateFinalCoverageRequirements({ coverage, required_ids = [] } = {}) {
   const errors = [];
-  const qualityVerify = coverage?.quality_verify;
-  let qualityRecords = new Map();
-  if (!qualityVerify || typeof qualityVerify !== "object" || Array.isArray(qualityVerify)) {
-    errors.push("quality_verify_missing");
-  } else {
-    const qualityPath = path.resolve(ROOT, qualityVerify.ref ?? "");
-    const relative = path.relative(ROOT, qualityPath);
-    if (relative.startsWith("..") || path.isAbsolute(relative) || !fs.existsSync(qualityPath)
-        || !SHA256_HEX.test(qualityVerify.sha256 ?? "")) {
-      errors.push("quality_verify_unresolvable");
-    } else if (sha256(fs.readFileSync(qualityPath)) !== qualityVerify.sha256) {
-      errors.push("quality_verify_unresolvable");
-    } else {
-      try {
-        const value = JSON.parse(fs.readFileSync(qualityPath, "utf8"));
-        const requiredFields = ["schema_version", "task_id", "stage", "ac_id", "status", "method", "evidence_ref", "evidence_hash", "material_digest", "created_at"];
-        if (value.schema_version !== "quality-verify.v1"
-            || requiredFields.some((field) => value[field] === undefined)
-            || !SHA256_HEX.test(value.evidence_hash ?? "")
-            || !SHA256_HEX.test(value.material_digest ?? "")
-            || !SHA256_HEX.test(qualityVerify.sha256)) {
-          errors.push("quality_verify_schema_invalid");
-        } else if (!Array.isArray(value.acceptance_criteria)) {
-          errors.push("quality_verify_ac_records_missing");
-        } else {
-          qualityRecords = new Map(value.acceptance_criteria.map((record) => [record?.ac_id, record]));
-        }
-      } catch {
-        errors.push("quality_verify_schema_invalid");
-      }
-    }
-  }
   const items = new Map((coverage?.items ?? []).map((item) => [item?.acceptance_criterion_id, item]));
   for (const id of required_ids) {
     const item = items.get(id);
@@ -182,16 +150,14 @@ export function validateFinalCoverageRequirements({ coverage, required_ids = [] 
       errors.push("missing_ac");
       continue;
     }
-    const qualityRecord = qualityRecords.get(id);
-    if (!qualityRecord || !["passed", "failed", "unknown", "unavailable", "incomplete", "missing"].includes(qualityRecord.status)) {
-      errors.push("ac_quality_fact_missing");
-    }
     const detail = String(item.detail ?? item.result ?? "").trim();
     if (/^(?:see tests?|evidence(?: only)?|tbd|n\/a|covered)$/i.test(detail)) {
       errors.push("ac_evidence_generic_fill");
       continue;
     }
-    const evidence = item.evidence ?? item.oracle;
+    const evidence = item.evidence
+      ?? item.oracle
+      ?? (Array.isArray(item.oracles) && item.oracles.length === 1 ? item.oracles[0] : null);
     if (!evidence?.ref || !SHA256_HEX.test(evidence.sha256 ?? "")) {
       errors.push("ac_evidence_unresolvable");
       continue;

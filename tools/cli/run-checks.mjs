@@ -30,7 +30,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve, dirname, isAbsolute, relative } from "node:path";
+import { resolve, dirname, isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -86,6 +86,39 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function isInside(basePath, candidatePath) {
+  const path = relative(basePath, candidatePath);
+  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+}
+
+function isTaskStoreEvidencePath(candidatePath) {
+  const taskTrackingRoot = process.env.WORKFLOWHUB_TASK_DIR;
+  if (typeof taskTrackingRoot !== "string" || taskTrackingRoot.trim() === "" || !isAbsolute(taskTrackingRoot)) {
+    return false;
+  }
+
+  const relativePath = relative(resolve(taskTrackingRoot), candidatePath);
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
+  const segments = relativePath.split(sep);
+  const [taskId, quality, tests, ...fileSegments] = segments;
+  return SAFE_PATH_SEGMENT.test(taskId ?? "")
+    && quality === "quality"
+    && tests === "tests"
+    && fileSegments.length > 0
+    && fileSegments.every((segment) => SAFE_PATH_SEGMENT.test(segment));
+}
+
+function resolveProfileEvidencePath(evidencePath) {
+  const resolvedEvidencePath = isAbsolute(evidencePath) ? resolve(evidencePath) : resolve(repoRoot, evidencePath);
+  const qualityRoot = resolve(repoRoot, "quality", "tests");
+  if (isInside(qualityRoot, resolvedEvidencePath) || isTaskStoreEvidencePath(resolvedEvidencePath)) {
+    return resolvedEvidencePath;
+  }
+  throw new Error("runtime profile evidence path must be under repository quality/tests or authenticated task-store quality/tests");
+}
+
 export function parseProfileArgs(args) {
   const separator = args.indexOf("--");
   if (separator < 0) return null;
@@ -95,27 +128,43 @@ export function parseProfileArgs(args) {
   const evidenceArg = options.find((arg) => arg.startsWith("--evidence-path="));
   if (!profileArg || !evidenceArg || target.length === 0) throw new Error("runtime profile mode requires --runtime-profile, --evidence-path, and a target argv after --");
   const runtimeProfile = profileArg.slice("--runtime-profile=".length);
-  const evidencePath = evidenceArg.slice("--evidence-path=".length);
-  if (!evidencePath) throw new Error("runtime profile evidence path is required");
-  if (!TEST_RUNTIME_PROFILE_NAMES.includes(runtimeProfile)) throw new Error("runtime profile must be inner, medium, or large");
-  const resolvedEvidencePath = isAbsolute(evidencePath) ? evidencePath : resolve(repoRoot, evidencePath);
-  const qualityRoot = resolve(repoRoot, "quality", "tests");
-  if (resolvedEvidencePath !== qualityRoot && !resolvedEvidencePath.startsWith(`${qualityRoot}/`)) {
-    throw new Error("runtime profile evidence path must be under quality/tests");
+  const scriptEvidencePath = evidenceArg.slice("--evidence-path=".length);
+  const trailingEvidence = [];
+  for (let index = 0; index < target.length; index += 1) {
+    if (target[index] === "--evidence-path") {
+      if (typeof target[index + 1] !== "string" || target[index + 1].trim() === "") throw new Error("runtime profile evidence path override is required");
+      trailingEvidence.push(target[index + 1]);
+      index += 1;
+    } else if (target[index]?.startsWith("--evidence-path=")) {
+      const value = target[index].slice("--evidence-path=".length);
+      if (!value) throw new Error("runtime profile evidence path override is required");
+      trailingEvidence.push(value);
+    }
   }
-  return { runtimeProfile, evidencePath: resolvedEvidencePath, target };
+  if (trailingEvidence.length > 1) throw new Error("runtime profile evidence path override must be supplied once");
+  const evidencePath = trailingEvidence[0] ?? scriptEvidencePath;
+  if (!evidencePath) throw new Error("runtime profile evidence path is required");
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(runtimeProfile)) throw new Error("runtime profile must be inner, phase, or aggregate");
+  const filteredTarget = [];
+  for (let index = 0; index < target.length; index += 1) {
+    if (target[index] === "--evidence-path") { index += 1; continue; }
+    if (target[index]?.startsWith("--evidence-path=")) continue;
+    filteredTarget.push(target[index]);
+  }
+  if (filteredTarget.length === 0) throw new Error("runtime profile target argv is required");
+  return { runtimeProfile, evidencePath: resolveProfileEvidencePath(evidencePath), target: filteredTarget };
 }
 
 export function profileForExecutor(runtimeProfile, target) {
   const permissions = runtimeProfile === "inner"
     ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny", environment: "local_ci" }
-    : runtimeProfile === "medium"
+    : runtimeProfile === "phase"
       ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" }
       : { network: "ci_only", db: "ci_only", filesystem: "ci_only", subprocess: "ci_only", environment: "ci_only" };
-  // The finite profile ceilings are owned by the runtime contract.  The large
+  // The finite profile ceilings are owned by the runtime contract.  The aggregate
   // profile deliberately has no contract ceiling; keep its existing CI-only
   // supervisor timeout as an operational guard, not as a new profile value.
-  const ceiling_ms = TEST_RUNTIME_PROFILE_LIMITS_MS[runtimeProfile] ?? 900_000;
+  const ceiling_ms = TEST_RUNTIME_PROFILE_LIMITS_MS[runtimeProfile];
   const observations = Object.entries(permissions).map(([capability, decision]) => ({
     capability, requested: decision, decision: "unknown", observed: false,
     mechanism: "run-checks-profile-declaration-only", proof_ref: null, proof_hash: null,
@@ -137,13 +186,14 @@ export function runProfiledCommand({ runtimeProfile, evidencePath, target }) {
   const profile = profileForExecutor(runtimeProfile, target);
   const valid = validateTestRuntimeProfile(profile, { declarationOnly: true });
   if (valid.errors.length > 0) throw new Error(`runtime profile declaration is ${valid.status}: ${valid.errors.join("; ")}`);
-  if (runtimeProfile === "large" && process.env.CI !== "true") throw new Error("large runtime profile requires CI=true");
+  if (runtimeProfile === "aggregate" && process.env.CI !== "true") throw new Error("aggregate runtime profile requires CI=true");
+  const supervisorTimeoutMs = runtimeProfile === "aggregate" ? 900_000 : profile.ceiling_ms;
   const started = Date.now();
   const result = spawnSync(target[0], target.slice(1), {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: "pipe",
-    timeout: profile.ceiling_ms,
+    timeout: supervisorTimeoutMs,
     maxBuffer: 50 * 1024 * 1024,
   });
   const duration_ms = Date.now() - started;
@@ -155,8 +205,10 @@ export function runProfiledCommand({ runtimeProfile, evidencePath, target }) {
     status: result.status === 0 ? "target_passed_profile_unavailable" : "target_failed_profile_unavailable",
     quality_status: "unavailable",
     runtime_profile: runtimeProfile,
+    ceiling_ms: profile.ceiling_ms,
     executor_id: "run-checks",
     target: { argv: target },
+    supervisor_timeout_ms: supervisorTimeoutMs,
     duration_ms,
     exit_code,
     capability_proof: profile.capability_proof,

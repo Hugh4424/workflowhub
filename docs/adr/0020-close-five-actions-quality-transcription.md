@@ -19,10 +19,10 @@ close 路径事实上不可达，所有任务都只能"强行风险 close"。
 
 - `close` = verify-code 之后的五个交付动作：提交、合并、归档、推送、清理；开始前一次
   人工确认清单（F7 不可逆授权底线不变）。
-- 质量不归 close 裁判。verify-code 的人工确认已承担质量职责；close 把当时的质量状态
-  如实抄写进完成记录：绿 = 正常完成；不绿 = 物理交付完成 + `quality_status` 保持
-  `incomplete`、`product_release_status` 保持 `not_released`。不伪造通过，也不设平行
-  的 risk close 机制。
+- 质量不归 close 裁判。verify-code/事实记录承担质量职责；close 只把当时 K2
+  `facts.jsonl` 当前行和具名 ref 如实抄写进完成记录。active `product_release_status`、
+  `product_release`、`status_groups` 不再生成或消费；缺失质量事实保持 `incomplete`，不伪造通过，
+  也不设平行的 risk close 机制。
 - 清理规则一句话：框架自己创建的工作目录（deterministic 模式）才删除；绑定的已有目录
   （existing 模式）不删除、只记录为 not_applicable_recorded。判定使用 manifest 已有的
   `workspace_mode` 字段，删除前保留真实路径/common-dir/分支三重校验。**本条修订
@@ -36,8 +36,8 @@ close 路径事实上不可达，所有任务都只能"强行风险 close"。
 ## 责任与消费者
 
 - 唯一用户入口不变：`tools/cli/task-close.mjs close`。
-- 完成事实消费者：`operations/close/completed.json`（物理交付）与质量/发布各自的事实
-  记录（语义状态），消费者不得把 completed.json 读成质量通过。
+- 完成事实消费者：`operations/close/completed.json`（物理交付）与 K2 当前行/K5 具名
+  证据记录（语义状态），消费者不得把 completed.json 读成质量通过。
 - 内部 `prepare`/`execute`/`resume`/`finalize` 仅为恢复与测试接口，不是额外用户审批
   流程（沿用 ADR 0018 边界）。
 

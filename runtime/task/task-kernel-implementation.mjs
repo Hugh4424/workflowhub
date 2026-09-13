@@ -19,10 +19,9 @@ import {
   isActionableSeriousFinding,
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
-import { activeAcceptanceCriterionIds, validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
+import { validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
 import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
 import { publishResearchReport } from "../evidence/research-report.mjs";
-import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 // Both forms below are deliberately narrower than the shared reflection grammar:
 // this resolver only accepts the bare per-stage reflection names it can resolve.
 const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
@@ -112,7 +111,10 @@ function readAcceptedHumanConfirmation(task, confirmationRef, label = "human con
     throw new Error(`${label} uses legacy human-confirmation.v1; it remains readable but cannot authorize current operations`);
   }
   if (typeof value.subject_ref !== "string" || value.subject_ref.trim() === "") throw new Error(`${label} must bind a non-empty subject_ref`);
-  if (!/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "") || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")) {
+  const planningClose = value.stage === "planning-close";
+  if (!planningClose
+      && (!/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+        || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? ""))) {
     throw new Error(`${label} has invalid material/snapshot provenance`);
   }
   if (value.schema_version === "human-confirmation.v3"
@@ -527,7 +529,6 @@ export function buildTaskKernel(taskHandle, {
 } = {}, authority) {
   const task = authority.assertTaskHandle(taskHandle);
   const createRecord = authority.createKernelRecordFor(task);
-  const writeVerifySummary = authority.createVerifySummaryWriterFor(task);
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const activeWorkspace = () => candidate ?? workspace;
   const authenticatedOperationContexts = new AsyncLocalStorage();
@@ -741,80 +742,6 @@ export function buildTaskKernel(taskHandle, {
         throw new Error("canonical record namespace required");
       }
       return createImmutable(relativePath, raw);
-    },
-    publishVerifySummary(summary = {}, options = {}) {
-      object(summary, "verify summary");
-      object(options, "verify summary options");
-      rejectUnknown(summary, new Set(["status", "criteria", "missing"]), "verify summary");
-      rejectUnknown(options, new Set(["created_at", "testHooks", "indexTestHooks"]), "verify summary options");
-      if (!Array.isArray(summary.criteria) || summary.criteria.length === 0) {
-        throw new TypeError("verify summary criteria are required");
-      }
-      if (!Array.isArray(summary.missing ?? []) || (summary.missing ?? []).some((item) => typeof item !== "string" || item.trim() === "")) {
-        throw new TypeError("verify summary missing must be an array of non-empty strings");
-      }
-      const { revision, snapshot } = currentContext({ fresh: true });
-      const criteria = validateVerifyLeaves(summary.criteria, { sourceDigest: snapshot.source_digest });
-      const expectedIds = [...activeAcceptanceCriterionIds(artifactDir().read("spec.md"))].sort();
-      const actualIds = criteria.map((criterion) => criterion.acceptance_criterion_id).sort();
-      if (expectedIds.length === 0 || expectedIds.length !== actualIds.length
-          || expectedIds.some((id, index) => id !== actualIds[index])) {
-        throw new Error("verify summary criteria do not match the current spec acceptance criteria");
-      }
-      for (const criterion of criteria) {
-        for (const evidence of [criterion.acceptance_leaf, ...criterion.nested_evidence]) {
-          const raw = task.readRecord(evidence.ref);
-          if (hash(raw) !== evidence.sha256) throw new Error(`verify summary evidence hash mismatch: ${evidence.ref}`);
-        }
-      }
-      const derivedStatus = criteria.some((criterion) => criterion.status === "failed")
-        ? "failed"
-        : criteria.every((criterion) => criterion.status === "passed") && (summary.missing ?? []).length === 0
-          ? "passed"
-          : "incomplete";
-      if (summary.status !== undefined && summary.status !== derivedStatus) {
-        throw new Error("verify summary status does not match its criteria and missing items");
-      }
-      const taskRaw = task.readRecord("task.json");
-      const logicalValue = {
-        schema_version: "quality-verify.v1",
-        task_id: task.identity.taskId,
-        stage: "verify-code",
-        ac_id: "verify-summary",
-        status: derivedStatus,
-        method: "quality-summary",
-        evidence_ref: "task.json",
-        evidence_hash: hash(taskRaw),
-        material_digest: revision.material_digest,
-        source_digest: snapshot.source_digest,
-        snapshot_tree: snapshot.tree,
-        material_revision: revision.revision_id,
-        criteria,
-        missing: [...(summary.missing ?? [])],
-      };
-      return withStoreLock(task.taskPath, () => {
-        let prior = null;
-        try { prior = JSON.parse(task.readRecord("quality/verify.json")); } catch { /* replaced below */ }
-        const { created_at: _priorCreatedAt, ...priorLogical } = prior ?? {};
-        const sameLogical = prior !== null && aggregateJson(priorLogical) === aggregateJson(logicalValue);
-        const value = { ...logicalValue, created_at: sameLogical ? prior.created_at : (options.created_at ?? now()) };
-        if (!Number.isFinite(Date.parse(value.created_at))) throw new TypeError("verify summary created_at is invalid");
-        const raw = `${JSON.stringify(value, null, 2)}\n`;
-        const verifyHash = hash(raw);
-        // The verify summary bytes are the fact. Readers authenticate the file
-        // directly, so no index projection is written or read back here.
-        const currentRaw = (() => { try { return task.readRecord("quality/verify.json"); } catch { return null; } })();
-        const alreadyCurrent = currentRaw !== null && hash(currentRaw) === verifyHash;
-        if (!alreadyCurrent) writeVerifySummary(raw, { testHooks: options.testHooks });
-        const readback = task.readRecord("quality/verify.json");
-        if (readback !== raw || hash(readback) !== verifyHash) throw new Error("verify summary readback mismatch");
-        return Object.freeze({
-          ref: "quality/verify.json",
-          sha256: verifyHash,
-          value: Object.freeze(value),
-          status: sameLogical && alreadyCurrent ? "idempotent" : sameLogical ? "recovered" : "published",
-        });
-      });
     },
     publishVNextQualityFact(stage, input = {}, options = {}) {
       const name = stageName(stage);

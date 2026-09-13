@@ -392,6 +392,153 @@ describe("review flow task record", () => {
     expect(result.authenticated_evidence_sha256).toBe(packet.authenticated_evidence_sha256);
   });
 
+  // AC-C4-001 / AC-C9-005: the canonical dedup identity is the five-dimension
+  // tuple (stage, phase_id, track, review_kind, origin). The caller-declared
+  // host_provider is not one of those dimensions: the host-authenticated
+  // trusted route identity is the authority for the transport, so an unchanged
+  // trusted route must reuse the recorded conducted result with zero dispatch
+  // instead of asking the round budget for a second review.
+  it("reuses the exact five-dimension identity when only the caller host_provider changes", async () => {
+    const { task, kernel } = makeTask();
+    let dispatches = 0;
+    const runRound = async (input) => {
+      dispatches += 1;
+      return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+    };
+    const trustedRoute = () => ({ route_identity: "a".repeat(64) });
+    const firstRequest = {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { implementation: "same semantic review surface" },
+    };
+    const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, resolveRouteIdentity: trustedRoute, runRound });
+    expect(first).toMatchObject({ status: "recorded", reused: false });
+    const reused = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { ...firstRequest, host_provider: "grok/grok" },
+      resolveRouteIdentity: trustedRoute,
+      runRound,
+    });
+    expect(reused).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    expect(dispatches).toBe(1);
+  });
+
+  // AC-C4-001 scenario: two phases of the same stage and track are two
+  // canonical reviews, so the second phase must be dispatchable under its own
+  // phase allowance while an identical repeat of either phase reuses.
+  it("dispatches each phase of one stage and track and reuses an identical phase repeat", async () => {
+    const { task, kernel } = makeTask();
+    const request = (phase) => ({
+      stage: "build-code", host_provider: "codex/luna", subject_kind: "phase", phase_id: phase,
+      review_scope: "phase", materials: { implementation: `phase ${phase} bytes` },
+    });
+    let calls = 0;
+    const runRound = async (input) => {
+      calls += 1;
+      return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+    };
+    const first = await recordSimpleReviewRequest({ task, kernel, request: request("P1"), runRound });
+    expect(first).toMatchObject({ status: "recorded", reused: false });
+    const second = await recordSimpleReviewRequest({ task, kernel, request: request("P2"), runRound });
+    expect(second).toMatchObject({ status: "recorded", reused: false });
+    expect(calls).toBe(2);
+    const repeat = await recordSimpleReviewRequest({ task, kernel, request: request("P2"), runRound });
+    expect(repeat).toMatchObject({ status: "recorded", reused: true, attempt_ref: second.attempt_ref, result_ref: second.result_ref });
+    expect(calls).toBe(2);
+  });
+
+  // C5: material hash/revision is immutable provenance, not a dedup dimension.
+  // The same five-dimensional review identity reads back the prior result after
+  // the reviewed material bytes change; the current-status consumer handles
+  // material-specific authority separately.
+  it("reuses a recorded review after the reviewed material bytes change", async () => {
+    const { task, kernel } = makeTask();
+    let dispatches = 0;
+    const runRound = async (input) => {
+      dispatches += 1;
+      return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+    };
+    const trustedRoute = () => ({ route_identity: "a".repeat(64) });
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "original reviewed bytes" } };
+    const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, resolveRouteIdentity: trustedRoute, runRound });
+    expect(first).toMatchObject({ status: "recorded", reused: false });
+
+    const changed = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...firstRequest, materials: { implementation: "changed reviewed bytes" } },
+      resolveRouteIdentity: trustedRoute,
+      runRound,
+    });
+
+    expect(dispatches, "material changes do not create a second canonical review").toBe(1);
+    expect(changed).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+  });
+
+  it("five-dimensional identity and review_result_ref readback", async () => {
+    const runPair = async (firstRequest, secondRequest, shouldReuse) => {
+      const { task, kernel } = makeTask();
+      let dispatches = 0;
+      const runRound = async (received) => {
+        dispatches += 1;
+        const result = {
+          ...baseResult(),
+          stage: received.stage,
+          review_track: received.review_track ?? null,
+          review_kind: received.review_kind ?? null,
+          subject_kind: received.subject_kind ?? "worktree",
+          phase_id: received.phase_id ?? null,
+          ...(Object.hasOwn(received, "review_scope") ? { review_scope: received.review_scope } : {}),
+          material_id: createSimpleReviewPacket(received).material_id,
+        };
+        return result;
+      };
+      const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
+      const second = await recordSimpleReviewRequest({ task, kernel, request: secondRequest, runRound });
+      if (shouldReuse) {
+        expect(dispatches).toBe(1);
+        expect(second).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+        const reviewResultRef = first.result_ref;
+        expect(reviewResultRef).toMatch(/^quality\/reviews\/results\//);
+        expect(task.readRecord(reviewResultRef)).toBe(task.readRecord(second.result_ref));
+      } else {
+        expect(second.reused).not.toBe(true);
+        expect(second.attempt_ref).not.toBe(first.attempt_ref);
+      }
+    };
+    const material = { implementation: "five-dimensional review material" };
+    await runPair(
+      { stage: "build-code", materials: material },
+      { stage: "build-code", materials: material },
+      true,
+    );
+    await runPair(
+      { stage: "build-spec", materials: material },
+      { stage: "build-plan", materials: material },
+      false,
+    );
+    await runPair(
+      { stage: "make-decision", review_track: "direction", materials: material },
+      { stage: "make-decision", review_track: "detail", materials: material },
+      false,
+    );
+    await runPair(
+      { stage: "build-code", subject_kind: "phase", phase_id: "P1", review_scope: "phase", materials: material },
+      { stage: "build-code", subject_kind: "phase", phase_id: "P2", review_scope: "phase", materials: material },
+      false,
+    );
+    await runPair(
+      { stage: "build-code", review_kind: "mini_task.design", subject_kind: "phase", phase_id: "P1", review_scope: "phase", materials: material },
+      { stage: "build-code", review_kind: "mini_task.implementation", subject_kind: "phase", phase_id: "P1", review_scope: "phase", materials: material },
+      false,
+    );
+    await runPair(
+      { stage: "build-code", materials: material },
+      { stage: "build-code", subject_kind: "worktree", phase_id: null, review_scope: null, materials: material },
+      false,
+    );
+  });
+
   it("serializes concurrent identical requests under the TaskHandle record lock", async () => {
     const { task, kernel } = makeTask();
     let dispatches = 0;
@@ -1011,6 +1158,35 @@ describe("T006 trusted review-round budget from actual task history", () => {
     expect(calls).toBe(2);
     expect(JSON.stringify(denied)).toMatch(/budget|exhausted|unavailable/i);
   });
+
+  it("does not reuse an authenticated verify-code result across a moved code snapshot", async () => {
+    // Regression guard for the reuse gate: an authenticated (semantic) result
+    // must not make a prior attempt reusable once the reviewed code snapshot
+    // moved, or the one focused re-review FR-C4-003 permits for an ordinary
+    // verify-code repair could never run.
+    const { task, kernel, candidateWorkspace } = makeTask();
+    let calls = 0;
+    const runRound = async (input) => {
+      calls += 1;
+      return {
+        ...baseResult(),
+        stage: "verify-code",
+        findings: [],
+        provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })),
+        material_id: createSimpleReviewPacket(input).material_id,
+      };
+    };
+    const request = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "semantic baseline" } };
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(calls).toBe(1);
+    expect(first.result_ref).not.toBeNull();
+
+    // The code snapshot moves while the reviewed request bytes stay the same.
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-semantic-repair.mjs"), "export const repaired = true;\n");
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(calls, "a moved code snapshot must not reuse an authenticated prior result").toBe(2);
+    expect(second.result_ref).not.toBeNull();
+  });
 });
 
 describe("T014 authenticated route-repair review budget", () => {
@@ -1251,6 +1427,33 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(next.result_ref).toBeTruthy();
     expect(task.readRecord(first.report_ref)).toContain("host route not configured");
   });
+
+  it("does not reuse a legacy unavailable attempt when the current route identity is missing", async () => {
+    const { task, kernel } = makeTask();
+    const runner = countedRunner();
+    const request = input();
+    const first = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: runner.runRound,
+      resolveRouteIdentity: () => { throw new Error("host route not configured"); },
+    });
+    const second = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: runner.runRound,
+      resolveRouteIdentity: () => { throw new Error("host route still unavailable"); },
+    });
+
+    expect(first.reused).not.toBe(true);
+    expect(second.reused).not.toBe(true);
+    expect(runner.calls).toBe(0);
+    expect(second).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch" });
+    expect(second.attempt_ref).not.toBe(first.attempt_ref);
+  });
+
   it("does not consume a review round when material bounds stop dispatch before any provider attempt", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bounded review fixture" } };

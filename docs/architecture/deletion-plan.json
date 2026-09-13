@@ -565,5 +565,16 @@
         }
       }
     }
-  ]
+  ],
+  "c6_amendment": {
+    "status": "c6-removal-planned",
+    "decision": "DELETE AFTER PROOF",
+    "owner": "workflowhub mechanism simplification T54/T55",
+    "candidate_paths": ["runtime/schemas/quality-verify.v1.json"],
+    "active_object_graph": ["quality/verify.json", "product_release", "status_groups"],
+    "replacement": "facts.jsonl K2 current rows plus K1-K6 named refs and read-only three-domain current-close-projection",
+    "immutable_retention": ["specs/archive/**", "docs/research/**"],
+    "proof_ref": "quality/tests/t32-tier-c-proof.json",
+    "rollback": "revert the entire C6 isolated diff; restore schema, object graph, distribution closure and registries together"
+  }
 }

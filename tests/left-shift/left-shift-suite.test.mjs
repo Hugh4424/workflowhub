@@ -20,7 +20,7 @@ describe("left-shift suite (T7)", () => {
     await expect(runSimpleReview({ stage: "build-code", host_provider: "", materials: { a: "b" } })).rejects.toThrow(TypeError);
 
     const result = await runSimpleReview(
-      { stage: "build-code", host_provider: "dsh", materials: { a: "b" }, review_track: "default" },
+      { stage: "build-code", host_provider: "dsh", materials: { a: "b" }, review_scope: "integration" },
       { resolveRoute: () => null },
     );
     expect(result.status).toBe("unavailable");
@@ -48,5 +48,16 @@ describe("left-shift suite (T7)", () => {
     expect(outcomeAdapter).toContain("publishUnavailableStageAgentOutcome");
     const stageRunner = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-runner.mjs", import.meta.url)), "utf8");
     expect(stageRunner).toContain("agent_outcome");
+  });
+
+  it("FR-C5-002/003: write boundary has no retired source-card path", () => {
+    for (const file of [
+      "../../runtime/evidence/write-boundary-preflight.mjs",
+      "../../runtime/task/task-handle.mjs",
+      "../../tools/cli/task-close.mjs",
+    ]) {
+      const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8");
+      expect(src).not.toMatch(/path-card|path card|PATH_CARD|createPathCardRecord|persistWriteBoundaryPathCard/i);
+    }
   });
 });

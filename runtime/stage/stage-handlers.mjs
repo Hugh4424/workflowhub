@@ -8,10 +8,10 @@ import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { aggregateCanonicalProviderResults } from "../review/canonical-review-result.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
-import { validateBrowserQaEvidence, validateReviewAttemptObservation, validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
+import { validateBrowserQaEvidence, validateReviewAttemptObservation } from "../evidence/stage-content-evidence.mjs";
 import { readResearchReport, deriveResearchStatus } from "../evidence/research-report.mjs";
 import { buildStageInputPacket, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
@@ -33,6 +33,7 @@ import {
   validateUiContract,
   validateComponentQualityMap,
   analyzeDecisionConvergence,
+  analyzeDecisionOutline,
   buildShortUiDesignPrompt,
   projectAcceptanceExecutionData,
   readUiApplicabilityFromDecisionLog,
@@ -842,6 +843,154 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+/**
+ * Read the existing build-code review result that verify-code received as its
+ * cross-stage review input.  This is only a discriminator/readback helper:
+ * phaseReviewFacts() below still authenticates the complete attempt/result
+ * chain before exposing any quality fact.
+ */
+export function readPhaseReviewResultRef(worker, invocation) {
+  const ref = invocation?.receipts?.review;
+  if (typeof ref !== "string" || !REVIEW_RESULT_REF.test(ref)) return null;
+  let record;
+  try { record = worker?.readReceipt?.(ref); } catch { return null; }
+  const value = record?.value;
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.stage !== "build-code"
+      || value.subject_kind !== "phase"
+      || value.review_scope !== "phase"
+      || typeof value.phase_id !== "string" || value.phase_id.trim() === ""
+      || (worker?.identity?.taskId !== undefined && value.task_id !== worker.identity.taskId)
+      || !SHA256_HEX.test(record?.sha256 ?? "")) return null;
+  return Object.freeze({
+    source: "build-code-phase-review",
+    result_ref: ref,
+    result_hash: record?.sha256 ?? null,
+    subject_kind: value.subject_kind ?? null,
+    phase_id: value.phase_id ?? null,
+    review_scope: value.review_scope ?? null,
+  });
+}
+
+function reviewConclusion(source, review) {
+  const facts = review?.facts ?? review ?? null;
+  const value = review?.value ?? null;
+  return Object.freeze({
+    source,
+    status: facts?.status ?? "not_supplied",
+    result_ref: facts?.result_ref ?? facts?.attempt_ref ?? null,
+    result_hash: facts?.result_hash ?? facts?.attempt_hash ?? null,
+    finding_count: Array.isArray(value?.findings) ? value.findings.length : null,
+  });
+}
+
+/** Keep cross-stage review input and verify-code's own review in separate facts. */
+export function partitionVerifyReviewConclusions({ phaseReview = null, codeReview = null, independentReview = null } = {}) {
+  return Object.freeze({
+    phase_review: reviewConclusion("build-code-phase-review", phaseReview),
+    verify_code: reviewConclusion("verify-code-code-review", codeReview),
+    ...(independentReview ? { verify_independent: reviewConclusion("verify-code-independent-review", independentReview) } : {}),
+  });
+}
+
+/**
+ * Build the direction-review binding from the current decision-log bytes and
+ * the questions-only OI projection already present in the review input.  The
+ * helper returns facts only; it does not persist a second OI authority.
+ */
+export function buildDirectionReviewInput({ decisionLog = "", directionReview = null, interactionAggregate = null } = {}) {
+  const review = directionReview && typeof directionReview === "object" && !Array.isArray(directionReview)
+    ? directionReview
+    : {};
+  const outlineCandidates = [
+    review.convergence_outline,
+    review.semantic_fields?.convergence_outline,
+    review.value?.convergence_outline,
+    review.value?.semantic_fields?.convergence_outline,
+  ];
+  const outline = outlineCandidates.find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate)) ?? {};
+  const entries = outline.entries ?? outline.items ?? outline.ois ?? outline.records;
+  const errors = [];
+  if (!Array.isArray(entries) || entries.length === 0) errors.push("direction review OI snapshot is unavailable");
+  const currentOutline = analyzeDecisionOutline(String(decisionLog), {
+    directionReview: review,
+    interactionAggregate,
+  });
+  const currentOiIds = new Set(currentOutline.oi_ids ?? []);
+  const currentOiRecords = new Map((currentOutline.oi_records ?? []).map((record) => [record.oi_id, record]));
+  if (currentOiIds.size === 0) errors.push("current decision-log OI authority is unavailable");
+  for (const error of currentOutline.errors ?? []) {
+    if (/^direction convergence_outline\b/i.test(error)) errors.push(error);
+  }
+  const seenOiIds = new Set();
+  const oiSnapshot = (Array.isArray(entries) ? entries : []).map((entry, index) => {
+    const oiId = entry && typeof entry === "object" && !Array.isArray(entry) ? (entry.oi_id ?? entry.id) : null;
+    if (typeof oiId !== "string" || !/^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(oiId)) {
+      errors.push(`direction review OI snapshot entry ${index + 1} has no valid OI id`);
+      return null;
+    }
+    if (!currentOiIds.has(oiId)) {
+      errors.push(`direction review OI snapshot entry ${index + 1} is not in the current decision-log OI authority`);
+      return null;
+    }
+    if (seenOiIds.has(oiId)) {
+      errors.push(`direction review OI snapshot duplicates ${oiId}`);
+      return null;
+    }
+    seenOiIds.add(oiId);
+    const source = currentOiRecords.get(oiId);
+    if (!source) {
+      errors.push(`direction review OI snapshot ${oiId} has no canonical decision-log record`);
+      return null;
+    }
+    if (entry.category !== source.category || entry.source !== source.source || entry.question !== source.question) {
+      errors.push(`direction review OI snapshot ${oiId} does not match the current decision-log OI record`);
+    }
+    if (entry.status !== "open") errors.push(`direction review OI snapshot ${oiId} must expose status open`);
+    const canonicalEntry = {
+      oi_id: source.oi_id,
+      category: source.category,
+      source: source.source,
+      question: source.question,
+      status: "open",
+    };
+    return Object.freeze({ ref: `decision-log.md#${oiId}`, sha256: hashText(canonicalJson(canonicalEntry)) });
+  }).filter(Boolean);
+  for (const oiId of currentOiIds) {
+    if (!seenOiIds.has(oiId)) errors.push(`direction review OI snapshot is missing current OI ${oiId}`);
+  }
+  const aggregateRef = interactionAggregate?.ref;
+  const aggregateHash = interactionAggregate?.evidence?.sha256 ?? interactionAggregate?.sha256;
+  const aggregateMatch = typeof aggregateRef === "string"
+    ? aggregateRef.match(/^quality\/evidence\/interactions\/([a-f0-9]{64})\.json$/)
+    : null;
+  const aggregateValue = interactionAggregate?.value;
+  let interactionBinding = { status: "unavailable", reason: "authenticated interaction aggregate ref/hash is unavailable" };
+  if (!aggregateMatch || aggregateHash !== aggregateMatch[1]
+      || interactionAggregate?.evidence?.ref !== aggregateRef
+      || !aggregateValue || typeof aggregateValue !== "object" || Array.isArray(aggregateValue)) {
+    errors.push("direction review interaction aggregate binding is unavailable");
+  } else {
+    const validation = validateInteractionAggregateContract(aggregateValue);
+    const decisionRevision = hashText(String(decisionLog));
+    if (!validation.ok) {
+      errors.push(`direction review interaction aggregate is not the official contract: ${validation.errors.join("; ")}`);
+    } else if (aggregateValue.decision?.hash !== decisionRevision) {
+      errors.push("direction review interaction aggregate does not bind the current decision-log bytes");
+    } else {
+      interactionBinding = { ref: aggregateRef, sha256: aggregateHash };
+    }
+  }
+  return Object.freeze({
+    direction_integrity_instruction: "Check direction integrity against the current decision-log OI snapshot; do not infer or alter a user's choice.",
+    decision_revision: hashText(String(decisionLog)),
+    oi_snapshot: Object.freeze(oiSnapshot),
+    interaction_aggregate: Object.freeze(interactionBinding),
+    status: errors.length === 0 ? "ready" : "unavailable",
+    ...(errors.length ? { errors: Object.freeze([...new Set(errors)]) } : {}),
+  });
+}
+
 function canonicalBrowserQaComparable(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const comparable = { ...value };
@@ -1628,13 +1777,6 @@ function sameStringSet(left, right) {
   return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
 }
 
-function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
-  if (expectedTree === actualTree) return true;
-  const root = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot;
-  if (!root) return false;
-  return isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, worker.identity.taskId);
-}
-
 function unavailableFormalRecordStatus(reason = "canonical Phase history is unavailable; current quality facts remain authoritative") {
   return Object.freeze({ status: "unavailable", reason });
 }
@@ -2046,7 +2188,7 @@ function canonicalReviewBudgetAttempts(worker) {
   });
 }
 
-function findingDispositions(reviews, invocation, expectedStage = null, currentSnapshot = null, workspaceRoot = null, taskId = null) {
+function findingDispositions(reviews, invocation) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
   const attemptFacts = reviewRecords.map((review) => ({
     status: review?.facts?.status ?? "unknown",
@@ -2062,12 +2204,7 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
   const invalidReviews = dispositionReviews.filter((review) => {
     const legacyPass = review?.facts?.status === undefined && review?.facts?.verdict === "pass";
     const terminal = review?.facts?.status === "recorded" || legacyPass;
-    const snapshotCurrent = currentSnapshot === null
-      || review?.value?.snapshot_tree === currentSnapshot
-      || (workspaceRoot !== null && taskId !== null
-        && typeof review.value?.snapshot_tree === "string"
-        && isMaterialOnlySnapshotDelta(workspaceRoot, review.value?.snapshot_tree, currentSnapshot, taskId));
-    return !terminal || !review?.value || (expectedStage !== null && review.value.stage !== expectedStage) || !snapshotCurrent;
+    return !terminal || !review?.value;
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
     const onlyUnavailable = reviewRecords.length > 0 && reviewRecords.every((review) => review?.facts?.status === "unavailable");
@@ -2086,9 +2223,7 @@ function findingDispositions(reviews, invocation, expectedStage = null, currentS
       ? ["current review result is unavailable for finding disposition"]
       : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
-        const stage = review?.value?.stage;
-        const stale = currentSnapshot !== null && review?.value?.snapshot_tree !== currentSnapshot;
-        return `${status} review result${stage && expectedStage !== null && stage !== expectedStage ? ` from ${stage}` : ""}${stale ? " for the current snapshot" : ""} is not available for finding disposition`;
+        return `${status} review result is not available for finding disposition`;
       });
     return {
       facts: { status: "missing", items: [], attempts: attemptFacts },
@@ -2195,7 +2330,7 @@ function fallbackProtocolFacts(worker, invocation) {
   };
 }
 
-function requirementReplayFacts(worker, verification, currentTree) {
+function requirementReplayFacts(worker, verification) {
   const decisionLog = worker.readArtifact("decision-log.md");
   const expected = [...new Set([
     ...[...String(decisionLog).matchAll(/\bR-?\d+\b/g)].map(([id]) => id),
@@ -2220,10 +2355,6 @@ function requirementReplayFacts(worker, verification, currentTree) {
     text(value.source_id, `requirement_replay[${index}].source_id`);
     if (seen.has(value.source_id)) throw new Error(`duplicate requirement replay source: ${value.source_id}`);
     if (!new Set(["pass", "fail", "unknown", "deferred", "unavailable"]).has(value.status)) throw new Error(`requirement_replay[${index}].status is invalid`);
-    const replayRoot = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot;
-    const replaySnapshotMatches = value.snapshot_tree === currentTree
-      || (replayRoot && isMaterialOnlySnapshotDelta(replayRoot, value.snapshot_tree, currentTree, worker.identity.taskId));
-    if (!replaySnapshotMatches) throw new Error(`requirement_replay ${value.source_id} does not bind the current snapshot`);
     if (!Array.isArray(value.linked_ids) || value.linked_ids.length === 0 || value.linked_ids.some((id) => typeof id !== "string" || id.trim() === "")) throw new Error(`requirement_replay ${value.source_id}.linked_ids is invalid`);
     if (!Array.isArray(value.evidence_refs)) throw new Error(`requirement_replay ${value.source_id}.evidence_refs is invalid`);
     if (value.status === "pass" && value.evidence_refs.length === 0) throw new Error(`requirement_replay ${value.source_id} pass requires evidence`);
@@ -2332,21 +2463,12 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     expected_material_revision: worker.currentMaterialRevision,
     expected_snapshot_tree: authenticatedReview.attempt.snapshot_tree ?? null,
   });
-  const budgetObservation = invocation.review_budget
-    ? validateReviewBudget({
-      material_revision: worker.currentMaterialRevision,
-      attempts: invocation.review_budget.attempts,
-      canonical_attempts: canonicalReviewBudgetAttempts(worker),
-      request: invocation.review_budget.request,
-    })
-    : null;
   return {
     facts: {
       status: "recorded", result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree,
       ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }),
       ...scopeFacts(scope),
       ...(usageObservation ? { usage_observation: usageObservation } : {}),
-      ...(budgetObservation ? { budget: budgetObservation } : {}),
     },
     ref: item.ref,
     evidence: item.evidence,
@@ -2355,7 +2477,6 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     risk_evidence: riskEvidence,
     missing_items: [
       ...dispositionWarnings,
-      ...(budgetObservation?.ok ? [] : budgetObservation ? [`review budget: ${budgetObservation.reason ?? budgetObservation.errors.join("; ")}`] : []),
     ],
   };
 }
@@ -2391,6 +2512,24 @@ function safeReviewFacts(worker, invocation, name = "review", expectedTrack, pro
     if (error?.code !== "MATERIAL_INCOMPLETE" && error?.code !== "ENOENT") throw error;
     return unavailableReviewFacts(worker, invocation, name, expectedTrack, producerStage, error);
   }
+}
+
+function phaseReviewFacts(worker, invocation) {
+  const descriptor = readPhaseReviewResultRef(worker, invocation);
+  if (!descriptor) return null;
+  const review = safeReviewFacts(worker, invocation, "review", undefined, "build-code", {
+    requireRiskAcceptance: false,
+    requireDispositions: false,
+  });
+  return {
+    ...review,
+    facts: {
+      ...review.facts,
+      source: descriptor.source,
+      source_result_ref: review.facts.result_ref ?? review.facts.attempt_ref ?? descriptor.result_ref,
+      source_result_hash: review.facts.result_hash ?? review.facts.attempt_hash ?? descriptor.result_hash,
+    },
+  };
 }
 
 function codeReviewFacts(worker, invocation, name = "quality_review") {
@@ -3352,6 +3491,11 @@ HANDLERS.set("make-decision", async (worker, input) => {
     // records remain readable without fabricating a new predicate.
     requireOutline: currentOnly,
   });
+  const directionReviewInput = buildDirectionReviewInput({
+    decisionLog: currentDecisionLog,
+    directionReview: direction.value ?? direction,
+    interactionAggregate: interaction,
+  });
   const hasCurrentOutline = currentOnly;
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
@@ -3368,6 +3512,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       decision_artifact_hash: decisionArtifactHash,
       audit_gaps: auditGaps,
       ui_applicability: uiApplicability,
+      direction_review_input: directionReviewInput,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
       completion_subjects: {
         ui_applicability: subjectFact(
@@ -3790,11 +3935,6 @@ HANDLERS.set("build-code", async (worker, input) => {
     acceptanceCoverage: coverage,
     formalRecordStatus: integrationAudit.formal_record_status,
   });
-  const current = captureWorkerSnapshot(worker);
-  if (!current) throw new Error("build-code requires an authenticated Workspace snapshot");
-  if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
-    missingItems.push("current Workspace snapshot differs from the reviewed implementation; quality warning only");
-  }
   const acceptanceComplete = coverage.accepted_criterion_ids.length > 0
     && coverage.items.length === coverage.accepted_criterion_ids.length
     && coverage.items.every((entry) => entry.status === "covered" && entry.evidence_refs.length > 0);
@@ -3853,20 +3993,22 @@ HANDLERS.set("build-code", async (worker, input) => {
 });
 
 HANDLERS.set("verify-code", async (worker, input) => {
-  // Verify-code is a code-review stage. It authenticates one current code-review
+  // Verify-code is a code-review stage. It authenticates its current code-review
   // result and exposes its findings; it does not audit materials, AC coverage,
   // test receipts, verification receipts, or requirement replay.
   const review = codeReviewFacts(worker, input, "quality_review");
-  // wh-review is the optional independent/advisory review. Consume its
-  // receipt through the real handler seam so the declared skill binding is
-  // observable; stage-runner later replaces this projection with the
-  // authenticated broker intent before publishing the quality fact.
-  const independentReview = input.receipts?.review !== undefined
+  // A build-code Phase review is an existing K5 input. Read it through the
+  // existing `review` receipt slot and authenticate it with the producer stage;
+  // this leaves quality_review as verify-code's own lens. A verify-code review
+  // in the same slot remains the existing optional independent/advisory path.
+  const phaseReview = phaseReviewFacts(worker, input);
+  const independentReview = phaseReview === null && input.receipts?.review !== undefined
     ? safeReviewFacts(worker, input, "review", undefined, "verify-code", {
       requireRiskAcceptance: false,
       requireDispositions: false,
     })
     : null;
+  const reviewConclusions = partitionVerifyReviewConclusions({ phaseReview, codeReview: review, independentReview });
   const componentQuality = componentQualityConsumerFacts(worker, input);
   const findings = Array.isArray(review.value?.findings) ? review.value.findings : [];
   const actionableFindings = findings.filter(isActionableSeriousFinding);
@@ -3900,6 +4042,8 @@ HANDLERS.set("verify-code", async (worker, input) => {
         status: review.facts.status,
       },
       review_diagnostics: reviewDiagnostics,
+      ...(phaseReview ? { phase_review: phaseReview.facts } : {}),
+      review_conclusions: reviewConclusions,
       ...(independentReview ? { review: independentReview.facts } : {}),
       component_quality: componentQuality.facts,
       ...(e2eAcceptance.required ? { e2e_acceptance: e2eAcceptance } : {}),
@@ -3920,13 +4064,14 @@ HANDLERS.set("verify-code", async (worker, input) => {
     },
     evidence_refs: [
       ...(review.evidence ? [review.evidence] : []),
+      ...(phaseReview?.evidence ? [phaseReview.evidence] : []),
       ...(independentReview?.evidence ? [independentReview.evidence] : []),
     ],
     missing_items: [...reviewMissing, ...componentQuality.missing_items, ...e2eAcceptance.missing_items],
   }, {
     worker,
     artifacts: [],
-    reviews: [review],
+    reviews: [review, ...(phaseReview ? [phaseReview] : []), ...(independentReview ? [independentReview] : [])],
     businessFacts: {
       content: "not_applicable",
       code: review.facts.status === "recorded" ? "reviewed" : "unknown",

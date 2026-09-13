@@ -105,7 +105,7 @@ function fixture({ unavailableS7 = false, declaration = false } = {}) {
   writeFileSync(join(taskDir, "raw/s3.log"), S3_RAW);
   writeFileSync(join(taskDir, "raw/profile.json"), PROFILE_RAW);
   writeFileSync(join(taskDir, "raw/inner-manifest.json"), "inner manifest\n");
-  writeFileSync(join(taskDir, "raw/medium-manifest.json"), "medium manifest\n");
+  writeFileSync(join(taskDir, "raw/phase-manifest.json"), "phase manifest\n");
   const rawHash = hash(FIXTURE_RAW);
   const processRun = (pid) => ({ pid, exit_code: 0, signal: null, cleanup: { status: "completed" }, stdout_ref: "raw/fixture.log", stdout_hash: rawHash, stderr_ref: "raw/fixture.log", stderr_hash: rawHash });
   const fileGroup = { sample_count: 5, runs: [1, 2, 3, 4, 5].map((index) => processRun(100 + index)), result: "pass", threshold_ms: 100, max_ms: 10, p95_ms: 10, independent_processes: true, all_exit_zero: true, cleanup_complete: true };
@@ -116,13 +116,13 @@ function fixture({ unavailableS7 = false, declaration = false } = {}) {
     "quality/evidence/performance-profile/S3.json": {
       schema_version: "workflowhub-performance-profile.v1", task_id: "fixture-task", ...identity, status: "passed", result: "passed",
       profile_source: { ref: "raw/profile.json", sha256: hash(PROFILE_RAW) },
-      profiles: { inner: { worker_ceiling: 2 }, medium: { worker_ceiling: 2 } },
-      manifests: { inner: { ref: "raw/inner-manifest.json", sha256: hash("inner manifest\n") }, medium: { ref: "raw/medium-manifest.json", sha256: hash("medium manifest\n") } },
-      capability_observations: { inner: { status: "observed", counts: { network: 0, db: 0, filesystem: 0, subprocess: 0, environment: 0 }, evidence_ref: "raw/fixture.log", evidence_hash: rawHash }, medium: { status: "observed", counts: { network: 0, db: 0, filesystem: 0, subprocess: 0, environment: 0 }, evidence_ref: "raw/fixture.log", evidence_hash: rawHash } },
+      profiles: { inner: { worker_ceiling: 2 }, phase: { worker_ceiling: 2 } },
+      manifests: { inner: { ref: "raw/inner-manifest.json", sha256: hash("inner manifest\n") }, phase: { ref: "raw/phase-manifest.json", sha256: hash("phase manifest\n") } },
+      capability_observations: { inner: { status: "observed", counts: { network: 0, db: 0, filesystem: 0, subprocess: 0, environment: 0 }, evidence_ref: "raw/fixture.log", evidence_hash: rawHash }, phase: { status: "observed", counts: { network: 0, db: 0, filesystem: 0, subprocess: 0, environment: 0 }, evidence_ref: "raw/fixture.log", evidence_hash: rawHash } },
       groups: {
         inner_files: { fixture: fileGroup },
         inner_collection: collectionGroup(200),
-        medium_collection: collectionGroup(300, false),
+        phase_collection: collectionGroup(300, false),
       },
       evidence: [{ ref: "raw/s3.log", sha256: hash(S3_RAW) }],
     },
@@ -235,12 +235,12 @@ describe("T013 final current snapshot producer", () => {
 
   it("fails closed for duplicate normative headings and unclassified production references", () => {
     expect(() => deriveActiveAcIds(`${SPEC}\n#### AC-S3-01 duplicate\n`)).toThrow(/duplicate/i);
-    const scan = classifyProductionScan([{ path: "runtime/mystery.mjs", line: 4, token: "publishVerifySummary", classification: "unknown" }]);
+    const scan = classifyProductionScan([{ path: "runtime/mystery.mjs", line: 4, token: "retired-authority", classification: "unknown" }]);
     expect(scan).toMatchObject({ status: "failed", zero_second_writer: true });
     expect(scan.unknown_entries).toHaveLength(1);
     expect(classifyProductionScan([
-      { path: "runtime/a.mjs", line: 1, token: "publishVerifySummary", classification: "current", writer: true },
-      { path: "runtime/b.mjs", line: 2, token: "publishVerifySummary", classification: "current", writer: true },
+      { path: "runtime/a.mjs", line: 1, token: "retired-authority", classification: "current", writer: true },
+      { path: "runtime/b.mjs", line: 2, token: "retired-authority", classification: "current", writer: true },
     ])).toMatchObject({ status: "failed", unique_writer_count: 2 });
     expect(classifyProductionScan([], { read_errors: [{ path: "runtime/unreadable.mjs", error: "EACCES" }] })).toMatchObject({ status: "failed", read_errors: [{ path: "runtime/unreadable.mjs" }] });
   });

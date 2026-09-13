@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildStageInputPacket, verifyStageInputPacket } from "../../runtime/task/material-workspace.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runCapture as runBuildCapture } from "../../workflows/build-code/capture.mjs";
@@ -100,6 +101,26 @@ describe("current review material and capture contracts", () => {
     for (const lens of ["横向第三路", "隐藏前提", "防虚假共识", "纵向否定"]) expect(buildSpec).toContain(lens);
   });
 
+  it("RED: carries the manifest-declared detail-track skill lenses into the stage input packet", () => {
+    // The manifest is the source of truth for which lenses the detail track
+    // declares, so the expected set drifts with the manifest instead of with
+    // this test. Read it before asserting the packet subtree.
+    const declaredDetailLenses = JSON.parse(readRepo("skills/wh-review/stage-skill-plan.json"))
+      .stages["make-decision"].tracks.detail.required_skills;
+    expect(declaredDetailLenses).toEqual(expect.arrayContaining(["simplicity-guard", "plan-ceo-review", "review"]));
+    const packet = buildStageInputPacket({
+      task_id: "review-materials-contract",
+      stage: "make-decision",
+      track: "detail",
+      material_revision: `revision-${"a".repeat(64)}`,
+      snapshot_tree: "b".repeat(40),
+      source_materials: { "decision-log": "## 材料导航\n| 章节 | 一句话摘要 | 建议读取时机 |\n| --- | --- | --- |\n| 方向 | 摘要 | M |\n" },
+    });
+    const lensPaths = Object.keys(packet.files).filter((path) => /^skills\/[^/]+\/SKILL\.md$/.test(path)).sort();
+    expect(lensPaths).toEqual(declaredDetailLenses.map((name) => `skills/${name}/SKILL.md`).sort());
+    expect(verifyStageInputPacket(packet)).toMatchObject({ ok: true, packet_freeze_hash: packet.packet_freeze_hash });
+  });
+
   it("reports all missing verify-code materials in one preflight", () => {
     const { root, task } = taskFixture();
     expect(() => buildReviewMaterials({
@@ -137,6 +158,38 @@ describe("current review material and capture contracts", () => {
       stage: "verify-code",
       materials: inherited,
     })).toThrow(/materials must be a plain object|materials.*array/i);
+  });
+
+  it("RED: rejects retired material keys and enumerates the canonical legal keys", () => {
+    const matrix = JSON.parse(readRepo("runtime/review/stage-materials.json"));
+    const rule = matrix.stages["build-code"].profiles.integration;
+    const legalKeys = [...new Set([...rule.required, ...rule.optional])].sort();
+    const retiredKeys = ["phase_coverage", "seam_index", "phase_map_trace", "integration_map"];
+    const { root, task } = taskFixture();
+    const baseMaterials = {
+      approved_spec: "# Spec\n\nAC-01：实现结果正确。\n",
+      acceptance_criteria: "# Acceptance\n\nAC-01：实现结果正确。\n",
+      ac_trace: { snapshot_tree: sourceForPlanFixture.snapshotTree },
+      review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+    };
+    for (const retiredKey of retiredKeys) {
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source: sourceForPlanFixture,
+        task,
+        taskId: "review-materials-contract",
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: { ...baseMaterials, [retiredKey]: "retired" },
+      })).toThrow(new RegExp(`MATERIAL_FORBIDDEN[\\s\\S]*${retiredKey}[\\s\\S]*${legalKeys.join("[\\s\\S]*")}`));
+    }
+
+    const reviewSource = readRepo("skills/wh-review/scripts/review-materials.mjs");
+    const runnerSource = readRepo("skills/wh-review/scripts/simple-review-runner.mjs");
+    expect(reviewSource).toMatch(/export function materialAllowlistForRule/);
+    expect(runnerSource).toMatch(/materialAllowlistForRule/);
+    expect(runnerSource).not.toMatch(/const allowed = new Set\(\[\s*\.\.\.\(rule\.required/);
   });
 
   it("redacts local host paths only in the provider-derived view", () => {

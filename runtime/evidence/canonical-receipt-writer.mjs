@@ -8,7 +8,7 @@ import { createTaskKernel } from "../task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "../task/task-kernel-implementation.mjs";
 import { assertWorkspace } from "../task/workspace.mjs";
 import { MAX_OUTPUT_BYTES, runWorkspaceCommand } from "../task/workspace-runner.mjs";
-import { captureExecutionSnapshot, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot } from "../task/git-worktree-snapshot.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
@@ -300,7 +300,7 @@ function authenticatedProfileEvidence({ task, snapshotTree, runtimeProfile, capa
 function reusableTestCapture({ task, workspace, snapshot, stage, component, command, receiptRef, outputRef, runtimeProfile, capabilityProof, behaviorFingerprint }) {
   const candidateRefs = [
     receiptRef,
-    ...(stage === "verify-code" && command.trim() === FULL_TEST_COMMAND && typeof task.listCanonicalTestReceiptRefs === "function"
+    ...(typeof task.listCanonicalTestReceiptRefs === "function"
       ? task.listCanonicalTestReceiptRefs()
       : []),
   ].filter((ref, index, refs) => refs.indexOf(ref) === index);
@@ -316,13 +316,19 @@ function reusableTestCapture({ task, workspace, snapshot, stage, component, comm
       continue;
     }
     const producerStage = receipt.producer?.stage;
-    const stageAllowed = producerStage === stage || (stage === "verify-code" && producerStage === "build-code");
+    // Any stage may reuse its own completed capture. Cross-stage reuse stays
+    // reserved for the one command whose result is stage-independent: the full
+    // test suite. Any other command is reusable only inside the stage that
+    // captured it, so a verify-code capture can never hand back a build-code
+    // receipt for a different command.
+    const crossStageFullTest = stage === "verify-code" && producerStage === "build-code"
+      && command.trim() === FULL_TEST_COMMAND;
+    const stageAllowed = producerStage === stage || crossStageFullTest;
     const producerComponent = receipt.producer?.component;
     const componentAllowed = producerStage === stage
       ? producerComponent === component
-      : stage === "verify-code"
+      : crossStageFullTest
         && component === "verify-code-test-capture"
-        && producerStage === "build-code"
         && producerComponent === "build-code-test-capture";
     if (receipt.schema_version !== "workflowhub-receipt.v1"
         || receipt.task_id !== task.identity.taskId
@@ -347,20 +353,17 @@ function reusableTestCapture({ task, workspace, snapshot, stage, component, comm
       if (candidateRef === receiptRef) throw new Error("existing test output is missing or tampered");
       continue;
     }
-    const materialOnlySnapshot = receipt.snapshot_tree !== snapshot.tree
-      && isMaterialOnlySnapshotDelta(workspace.worktreeRoot, receipt.snapshot_tree, snapshot.tree, task.identity.taskId);
-    const snapshotMatches = receipt.snapshot_tree === snapshot.tree || materialOnlySnapshot;
     const sourceDigestMatches = SHA256_HEX.test(snapshot.source_digest ?? "")
       && receipt.source_digest === snapshot.source_digest;
-    // A committed executor status writeback changes HEAD and the full
-    // workspace tree, but it does not change the implementation or test
-    // inputs.  Reuse the immutable test result only after the narrow
-    // material-only delta check above; all other HEAD changes stay stale.
-    if ((!snapshotMatches) || (!sourceDigestMatches) || (receipt.snapshot_head !== snapshot.head && !materialOnlySnapshot)) {
+    // The source digest excludes the task's mutable material/status area. It
+    // therefore remains the single input-integrity check for reusing a test
+    // result after ordinary material bookkeeping; no snapshot-currentness
+    // predicate is needed at this consumer.
+    if (!sourceDigestMatches) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt does not match current workspace; use a new receipt ref");
       continue;
     }
-    return Object.freeze({ ...receipt, receipt_ref: candidateRef, receipt_hash: sha256(raw) });
+    return Object.freeze({ ...receipt, dispatch_state: "reused", receipt_ref: candidateRef, receipt_hash: sha256(raw) });
   }
   return undefined;
 }

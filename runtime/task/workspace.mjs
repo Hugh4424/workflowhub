@@ -328,18 +328,12 @@ function validateCandidate(task, expected, facts = {
   if (typeof facts?.worktree_root !== "string" || resolve(facts.worktree_root) !== expected.worktreeRoot) {
     throw new Error(`make-decision worktree_root does not match the authenticated task workspace: ${facts?.worktree_root}`);
   }
-  if (facts?.baseline_commit !== expected.baselineCommit) {
-    throw new Error("make-decision baseline_commit does not match task worktree HEAD");
-  }
   const realWorktree = realGitToplevel(expected.worktreeRoot, "task worktree");
   if (realWorktree !== expected.worktreeRoot) throw new Error("task worktree realpath changed");
   assertWorktreeRegistration(expected, "task worktree");
   if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("task worktree and target repo must share a Git common directory");
   if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree branch") !== expected.branch) {
     throw new Error(`task worktree must use deterministic branch ${expected.branch}`);
-  }
-  if (gitValue(realWorktree, ["rev-parse", "HEAD"], "task worktree HEAD") !== expected.baselineCommit) {
-    throw new Error("task worktree HEAD must equal the make-decision baseline");
   }
   if (expected.requireClean
       && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "task worktree status") !== "") {
@@ -354,7 +348,6 @@ function validateCandidate(task, expected, facts = {
     assertWorktreeRegistration(expected, "CandidateWorkspace");
     if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("CandidateWorkspace Git common directory changed");
     if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
-    if (gitValue(realWorktree, ["rev-parse", "HEAD"], "CandidateWorkspace HEAD") !== expected.baselineCommit) throw new Error("CandidateWorkspace HEAD changed");
     if (expected.requireClean
         && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "CandidateWorkspace status") !== "") {
       throw new Error("CandidateWorkspace must remain clean");
