@@ -391,6 +391,7 @@ export function validateHumanConfirmation(value, {
   object(value, "human confirmation");
   if (value.schema_version === "human-confirmation.v3") {
     const allowed = new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "subject_ref", "material_revision", "snapshot_tree", "confirmed_at", "reply_text", "step_slug"]);
+    const planningClose = value.stage === "planning-close";
     if (Object.keys(value).some((key) => !allowed.has(key))
         || value.task_id !== taskId || value.stage !== stage
         || !new Set(["accepted", "rejected"]).has(value.decision)
@@ -398,8 +399,12 @@ export function validateHumanConfirmation(value, {
         || (value.subject_ref !== undefined && value.subject_ref !== null && typeof value.subject_ref !== "string")
         || (requireSubjectRef && (typeof value.subject_ref !== "string" || value.subject_ref.trim() === ""))
         || (subject !== undefined && value.subject_ref !== subject && value.attempt_ref !== subject)
-        || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
-        || !OID.test(value.snapshot_tree ?? "")
+        || (planningClose
+          ? (value.material_revision !== undefined && !/^revision-[a-f0-9]{64}$/.test(value.material_revision))
+          : !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? ""))
+        || (planningClose
+          ? (value.snapshot_tree !== undefined && !OID.test(value.snapshot_tree))
+          : !OID.test(value.snapshot_tree ?? ""))
         || !Number.isFinite(Date.parse(value.confirmed_at))
         || typeof value.reply_text !== "string" || value.reply_text.trim() === ""
         || typeof value.step_slug !== "string" || value.step_slug.trim() === "") {

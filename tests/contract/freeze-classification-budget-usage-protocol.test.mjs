@@ -1,11 +1,26 @@
-import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
 import { validateReportableFindingDispositions } from "../../runtime/review/stage-review-disposition.mjs";
 import { officialStageHandler } from "../../runtime/stage/stage-handlers.mjs";
 import { separateAttemptFindingFacts, validateFindingDispositionState } from "../../runtime/stage/completion-predicates.mjs";
-import { deriveContextProxyMetrics, validateReviewAttemptObservation, validateReviewBudget } from "../../runtime/evidence/stage-content-evidence.mjs";
+import { deriveContextProxyMetrics, validateReviewAttemptObservation } from "../../runtime/evidence/stage-content-evidence.mjs";
+// FR-C4-002 moved the round-frequency decision table to its only remaining
+// caller, the review route; the policy and its reported fields are unchanged.
+// The public entry `recordSimpleReviewRequest` is the host request path that
+// consumes the same table, so this block drives it here as well as the extracted
+// decision table; tests/review/review-record-route.test.mjs keeps its own
+// independent public-entry coverage.
+import { evaluateReviewRound, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import {
   classifyFinding,
   deriveGapId,
@@ -306,16 +321,79 @@ describe("Phase 2 needs_human and attempt separation contracts", () => {
   });
 });
 
-describe("Phase 3 budget and usage observation contracts", () => {
+describe("Phase 3 review round policy contracts", () => {
+  // The public-entry assertion below needs the same real vnext task store the
+  // review route tests use. The fixture is local to this block so the shared
+  // Phase 1 / Phase 2 / Phase 4 / T001 / P1 sections stay untouched.
+  const roots = [];
+  afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
+  function makeReviewTask() {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "freeze-phase3-review-")));
+    roots.push(root);
+    const repo = join(root, "repo");
+    mkdirSync(repo);
+    const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    git(["init", "-q", "-b", "main"]);
+    git(["config", "user.name", "WorkflowHub review round policy test"]);
+    git(["config", "user.email", "review-round@workflowhub.local"]);
+    writeFileSync(join(repo, "README.md"), "review round policy fixture\n", "utf8");
+    git(["add", "."]);
+    git(["commit", "-qm", "fixture"]);
+    const taskId = randomUUID();
+    const task = createTask({
+      storageRoot: root,
+      manifest: {
+        schema_version: "1.0.0",
+        project_name: "workflowhub",
+        task_id: taskId,
+        created_at: "2026-09-11T00:00:00.000Z",
+        target_repo_root: repo,
+        issue_ids: [],
+        inputs: {},
+        record_model: "vnext-single-write",
+      },
+    });
+    const candidateWorkspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
+    const kernel = createTaskKernel(task, { candidateWorkspace, artifacts });
+    return { task, kernel };
+  }
+
+  // A minimal but canonical available review round result. `material_id` must be
+  // derived from the dispatched request so the route binds the result to the
+  // authenticated material identity.
+  function availableReviewResult(input) {
+    return {
+      status: "available",
+      stage: input.stage,
+      review_track: input.review_track ?? null,
+      review_kind: input.review_kind ?? null,
+      material_id: createSimpleReviewPacket(input).material_id,
+      runtime_id: "runtime-review-round-policy",
+      outcome: "partial",
+      provider_results: [{
+        provider: "codex/luna",
+        status: "completed",
+        identity: { provider: "codex/luna", adapter: "codex", source_id: "codex/luna", config_id: "cfg", model: "gpt-5.6-luna" },
+        error: null,
+        timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+        usage: null,
+        evidence_anchor_valid: [],
+      }],
+      findings: [],
+    };
+  }
+
   it("T009 rejects an unchanged initial review and keeps the phase budget separate", () => {
     const attempts = [boundAttempt("initial", "initial")];
-    expect(validateReviewBudget({ material_revision: "rev-1", attempts, request: { kind: "initial", changed: false } })).toMatchObject({
+    expect(evaluateReviewRound({ material_revision: "rev-1", attempts, request: { kind: "initial", changed: false } })).toMatchObject({
       ok: false,
       status: "incomplete",
       reason: "budget_exceeded",
       attempt_created: false,
     });
-    expect(validateReviewBudget({ material_revision: "rev-1", attempts, request: { kind: "phase", phase_id: "P3", changed: false } })).toMatchObject({
+    expect(evaluateReviewRound({ material_revision: "rev-1", attempts, request: { kind: "phase", phase_id: "P3", changed: false } })).toMatchObject({
       ok: true,
       status: "ready",
       budget_scope: "phase",
@@ -327,12 +405,12 @@ describe("Phase 3 budget and usage observation contracts", () => {
       boundAttempt("initial", "initial"),
       boundAttempt("focused", "focused", { changed: true }),
     ];
-    expect(validateReviewBudget({
+    expect(evaluateReviewRound({
       material_revision: "rev-1",
       attempts,
       request: { kind: "focused", changed: true },
     })).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
-    expect(validateReviewBudget({
+    expect(evaluateReviewRound({
       material_revision: "rev-1",
       attempts,
       request: { kind: "narrow_diff", changed: true },
@@ -340,13 +418,13 @@ describe("Phase 3 budget and usage observation contracts", () => {
   });
 
   it("rejects review budget entries that are not bound to canonical attempt records", () => {
-    expect(validateReviewBudget({
+    expect(evaluateReviewRound({
       material_revision: "rev-1",
       attempts: [{ kind: "initial", material_revision: "rev-1", status: "executed" }],
       request: { kind: "initial" },
     })).toMatchObject({ ok: false, reason: "budget_input_invalid", errors: expect.arrayContaining(["attempt_1_id_missing", "attempt_1_ref_invalid", "attempt_1_hash_invalid"]) });
     const currentAttempt = boundAttempt("initial", "canonical");
-    expect(validateReviewBudget({
+    expect(evaluateReviewRound({
       material_revision: "rev-1",
       attempts: [],
       canonical_attempts: [currentAttempt],
@@ -392,6 +470,61 @@ describe("Phase 3 budget and usage observation contracts", () => {
       expected_material_revision: "rev-1",
       expected_snapshot_tree: "b".repeat(40),
     })).toMatchObject({ status: "incomplete", errors: expect.arrayContaining(["packet[0]_material_revision_mismatch"]) });
+  });
+
+  // decision-log §16.21 第 3.2 条: the extracted decision table is not enough on
+  // its own — the same policy must stay observable through the public host entry
+  // `recordSimpleReviewRequest`. This drives that entry and asserts the three
+  // observable policy outcomes: the first round records, an identical request
+  // reuses the immutable refs with zero extra dispatch, and a request that
+  // cannot start another round is refused before dispatch.
+  it("drives the same review round policy through the public recordSimpleReviewRequest entry", async () => {
+    const { task, kernel } = makeReviewTask();
+    let dispatches = 0;
+    const runRound = async (input) => {
+      dispatches += 1;
+      return availableReviewResult(input);
+    };
+    // Only the fixture dependency is simulated; production still resolves host configuration.
+    const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "public entry bytes" } };
+
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound, resolveRouteIdentity });
+    expect(first).toMatchObject({ status: "recorded", reused: false });
+    expect(first.review_budget).toMatchObject({ ok: true, route: "initial_review" });
+    expect(first.review_budget.counts.initial).toBe(0);
+
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound, resolveRouteIdentity });
+    expect(second).toMatchObject({
+      status: "recorded",
+      reused: true,
+      attempt_ref: first.attempt_ref,
+      result_ref: first.result_ref,
+    });
+    // The reused round still exposes the same policy decision table: the round
+    // is already consumed by the first dispatch, so the reported budget is the
+    // exhausted initial allowance rather than a second grant.
+    expect(second.review_budget).toMatchObject({ ok: false, route: "ask_user", reason: "budget_exceeded" });
+    expect(second.review_budget.counts).toMatchObject({ initial: 1 });
+    expect(dispatches, "an identical public request reuses the recorded round instead of dispatching again").toBe(1);
+
+    // Different reviewed bytes at the same material revision are a new request
+    // but not a new review round: the initial allowance is already consumed.
+    const refused = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { ...request, materials: { implementation: "different bytes at the same revision" } },
+      runRound,
+      resolveRouteIdentity,
+    });
+    expect(refused).toMatchObject({
+      status: "unavailable",
+      reused: false,
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" },
+    });
+    expect(refused.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
+    expect(dispatches, "a refused request must not reach the provider round").toBe(1);
   });
 });
 

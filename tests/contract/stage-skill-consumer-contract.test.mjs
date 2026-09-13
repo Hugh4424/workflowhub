@@ -43,7 +43,7 @@ describe("stage Skill declaration to formal consumer contract", () => {
       expect(skill.consumer, `${stage}/${skill.name} consumer`).toEqual(expect.objectContaining({
         target: expect.stringMatching(/^stage-(?:handlers|runner|content-contracts)#.+/),
         inputs: expect.arrayContaining([expect.any(String)]),
-        identity: ["task_id", "stage", "material_revision", "snapshot_tree"],
+        identity: ["task_id", "stage", "workspace_path"],
       }));
       expect(skill.consumer.target).not.toMatch(/(?:executed|package|event|monitoring|generic)/i);
       expect(skill.consumer.inputs.every((input) => input.trim() !== "")).toBe(true);
@@ -81,8 +81,7 @@ describe("stage Skill declaration to formal consumer contract", () => {
     const identity = {
       task_id: "task-1",
       stage: "build-spec",
-      material_revision: `revision-${"a".repeat(64)}`,
-      snapshot_tree: "b".repeat(40),
+      workspace_path: "/tmp/workflowhub-task-1",
     };
     expect(validateSkillConsumerBinding({
       dependency,
@@ -102,8 +101,8 @@ describe("stage Skill declaration to formal consumer contract", () => {
     expect(() => validateSkillConsumerBinding({
       dependency,
       outcome: { status: "completed", trigger: true, executed: true },
-      identity: { ...identity, material_revision: "stale" },
-    })).toThrow(/material_revision|identity/i);
+      identity: { ...identity, workspace_path: "" },
+    })).toThrow(/workspace_path|identity/i);
   });
 
   it("does not let lifecycle flags spoof a completed or not-applicable result", () => {
@@ -111,8 +110,7 @@ describe("stage Skill declaration to formal consumer contract", () => {
     const identity = {
       task_id: "task-1",
       stage: "build-spec",
-      material_revision: `revision-${"a".repeat(64)}`,
-      snapshot_tree: "b".repeat(40),
+      workspace_path: "/tmp/workflowhub-task-1",
     };
     expect(() => validateSkillConsumerBinding({
       dependency,

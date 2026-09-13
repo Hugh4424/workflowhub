@@ -211,10 +211,10 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(deriveStageCompletion("build-code", observations("build-code").slice(0, 1)).status).toBe("in_progress");
   });
 
-  it.each(["stale", "missing"])("does not consume %s facts", (status) => {
+  it.each(["stale", "missing"])("does not let legacy %s markers invalidate authenticated facts", (status) => {
     const facts = observations("build-spec");
     facts[0] = { ...facts[0], freshness: { status } };
-    expect(deriveStageCompletion("build-spec", facts).status).toBe("in_progress");
+    expect(deriveStageCompletion("build-spec", facts).status).toBe("completed");
   });
 
   it("does not consume unauthenticated or wrong-kind facts", () => {

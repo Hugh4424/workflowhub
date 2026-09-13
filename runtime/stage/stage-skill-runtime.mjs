@@ -4,7 +4,7 @@ import yaml from "js-yaml";
 import { resolveSkillPackage } from "../adapters/local-skill-resolver.mjs";
 import { validateStepManifest } from "./step-manifest.mjs";
 
-const IDENTITY_FIELDS = Object.freeze(["task_id", "stage", "material_revision", "snapshot_tree"]);
+const IDENTITY_FIELDS = Object.freeze(["task_id", "stage", "workspace_path"]);
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const GENERIC_CONSUMER = /(?:executed|package|event|monitoring|generic|stage-outcome)/i;
 const FORMAL_CONSUMERS = new Set([
@@ -38,12 +38,6 @@ function text(value, label) {
 function identity(value) {
   const current = object(value, "skill consumer identity");
   for (const field of IDENTITY_FIELDS) text(current[field], `skill consumer identity.${field}`);
-  if (!/^revision-[a-f0-9]{64}$/.test(current.material_revision)) {
-    throw new Error("skill consumer identity.material_revision must be revision- plus a sha256");
-  }
-  if (!/^[a-f0-9]{40}$/.test(current.snapshot_tree)) {
-    throw new Error("skill consumer identity.snapshot_tree must be a git tree id");
-  }
   return Object.freeze(Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, current[field]])));
 }
 
@@ -63,7 +57,7 @@ export function validateSkillConsumerDescriptor(value, label = "skill consumer")
   if (!Array.isArray(descriptor.identity)
       || descriptor.identity.length !== IDENTITY_FIELDS.length
       || descriptor.identity.some((field, index) => field !== IDENTITY_FIELDS[index])) {
-    throw new Error(`${label}.identity must bind task_id, stage, material_revision and snapshot_tree`);
+    throw new Error(`${label}.identity must bind task_id, stage and workspace_path`);
   }
   if (descriptor.result !== undefined) text(descriptor.result, `${label}.result`);
   return Object.freeze({
