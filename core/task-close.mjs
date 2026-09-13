@@ -102,6 +102,20 @@ function canonical(value, label = "close plan") {
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 
+// Keep close-time review evidence aligned with the canonical member identity.
+// A provider label alone is not enough when a record contains independent
+// role/source/config members; retries of the same member may still reuse one
+// key and retain the existing latest-attempt behavior.
+function reviewMemberKey(item) {
+  const identity = item?.identity;
+  return JSON.stringify([
+    item?.provider ?? null,
+    item?.role ?? null,
+    item?.source_id ?? identity?.source_id ?? null,
+    identity?.config_id ?? null,
+  ]);
+}
+
 function physicalDeliveryMissing(state, { requireArchive = true } = {}) {
   const facts = state?.facts ?? state;
   return PHYSICAL_DELIVERY_FACTS
@@ -131,8 +145,13 @@ export function authenticateReviewEvidence(task, result) {
   }
   const attemptId = attemptRef.match(/^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error(`review attempt identity is invalid: ${attemptRef}`);
+  for (const providerAttempt of attempt.provider_attempts) {
+    if (providerAttempt.status === "completed" && typeof providerAttempt.output_ref !== "string") {
+      throw new Error(`review provider output is missing: ${providerAttempt.provider}`);
+    }
+  }
   const latest = new Map();
-  for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
+  for (const providerAttempt of attempt.provider_attempts) latest.set(reviewMemberKey(providerAttempt), providerAttempt);
   const providerOutputs = [];
   for (const providerAttempt of latest.values()) {
     if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;

@@ -5,6 +5,7 @@ import {
   aggregateCanonicalProviderResults,
   authenticateCanonicalReviewResult,
 } from "../../runtime/review/canonical-review-result.mjs";
+import { authenticateReviewEvidence } from "../../core/task-close.mjs";
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -46,6 +47,74 @@ function fixture({ secondStatus = "completed", findings = [] } = {}) {
     evidenceAnchors: item.review.findings.map(() => true),
   })).filter((_, index) => index === 0 || secondStatus === "completed");
   return { attempt, result, providerOutputs };
+}
+
+function sameProviderMembersFixture() {
+  const taskId = "task", stage = "build-code", attemptId = "duplicate-provider-members";
+  const provider = "alpha/main", tree = "a".repeat(40), materialId = "b".repeat(64);
+  const identities = [1, 2].map((index) => ({
+    provider, adapter: "alpha", source_id: `alpha-source-${index}`, config_id: `alpha-config-${index}`, model: null,
+  }));
+  const finding = {
+    severity: "major", path: "runtime/example.mjs", line: 7, issue: "unsafe fallback permits invalid data",
+    root_cause: "the fallback is used as a success signal", recommendation: "reject the fallback",
+    evidence_kind: "direct", evidence: "runtime/example.mjs:7 shows the fallback bypassing validation",
+  };
+  const reviews = identities.map((identity, index) => ({
+    provider, identity, review: { findings: index === 0 ? [finding] : [] },
+  }));
+  const policy = {
+    source: "wh_review.v2", mode: "single_round", minimum_heterologous: 1,
+    requested_profiles: [provider, provider], eligible_profiles: [provider, provider], same_source_exclusions: [],
+    effective_profiles: [provider, provider].map(() => ({ provider, adapter: "alpha", model: null, effort: null, thinking: null })),
+  };
+  const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+  const outputRefs = identities.map((_, index) => `quality/reviews/attempts/${attemptId}/providers/member-${index}.output.json`);
+  const attempt = {
+    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage,
+    review_track: null, review_kind: null, subject_kind: "worktree", phase_id: null, review_scope: "integration",
+    source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree },
+    base_tree: tree, candidate_tree: tree, snapshot_tree: tree, material_id: materialId,
+    review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"),
+    provider_attempts: identities.map((identity, index) => ({
+      provider, identity, status: "completed", session_id: `session-${index}`, runtime_id: `runtime-${index}`,
+      output_ref: outputRefs[index], error: null,
+    })),
+    terminal_status: "semantic", error: null,
+  };
+  const aggregation = aggregateCanonicalProviderResults(reviews, 1, {
+    profilePriority: [provider, provider], requireIdentity: true, requireSourceId: true,
+  });
+  const result = {
+    version: "wh-review-result.v1", task_id: taskId, stage, review_track: null, review_kind: null,
+    subject_kind: "worktree", phase_id: null, review_scope: "integration",
+    source: attempt.source, base_tree: tree, candidate_tree: tree, snapshot_tree: tree, material_id: materialId,
+    attempt_ref: attemptRef,
+    provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
+    findings: aggregation.findings.map((item) => ({ provider: item.providers[0], ...item })),
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+  };
+  const records = new Map([[attemptRef, JSON.stringify(attempt)]]);
+  const providerOutputs = reviews.map((item, index) => {
+    const content = JSON.stringify(item.review);
+    const output = {
+      schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: attemptId,
+      provider, content, content_hash: createHash("sha256").update(content).digest("hex"),
+      evidence_anchor_valid: item.review.findings.map(() => true),
+    };
+    records.set(outputRefs[index], JSON.stringify(output));
+    return { ref: outputRefs[index], provider, identity: item.identity, review: item.review, evidenceAnchors: output.evidence_anchor_valid };
+  });
+  const readRefs = [];
+  const task = {
+    identity: { taskId },
+    readRecord(ref) {
+      readRefs.push(ref);
+      if (!records.has(ref)) throw new Error(`missing fixture record: ${ref}`);
+      return records.get(ref);
+    },
+  };
+  return { attempt, result, providerOutputs, outputRefs, readRefs, task };
 }
 
 describe("canonical review result authentication", () => {
@@ -199,5 +268,32 @@ describe("canonical review result authentication", () => {
     };
     expect(() => authenticateCanonicalReviewResult({ attempt, result, providerOutputs }))
       .toThrow(/execution adapter/i);
+  });
+
+  it("retains independent members that share a provider label", () => {
+    const { attempt, result, providerOutputs } = sameProviderMembersFixture();
+    const aggregation = authenticateCanonicalReviewResult({ attempt, result, providerOutputs }).aggregation;
+    expect(aggregation.status).toBe("available");
+    expect(aggregation.valid).toHaveLength(2);
+    expect(aggregation.findings).toHaveLength(1);
+    expect(aggregation.findings[0].issue).toContain("unsafe fallback");
+  });
+
+  it("close-time authentication reads every independent completed member output", () => {
+    const { result, outputRefs, readRefs, task } = sameProviderMembersFixture();
+    expect(() => authenticateReviewEvidence(task, result)).not.toThrow();
+    expect(readRefs).toEqual(expect.arrayContaining(outputRefs));
+  });
+
+  it("fails closed when a completed member has no authenticated output reference", () => {
+    const { result, task } = sameProviderMembersFixture();
+    const read = task.readRecord.bind(task);
+    task.readRecord = (ref) => {
+      if (ref !== result.attempt_ref) return read(ref);
+      const attempt = JSON.parse(read(ref));
+      attempt.provider_attempts[0].output_ref = null;
+      return JSON.stringify(attempt);
+    };
+    expect(() => authenticateReviewEvidence(task, result)).toThrow(/review provider output is missing/);
   });
 });
