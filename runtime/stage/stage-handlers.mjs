@@ -1981,7 +1981,12 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
   if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
   if (Object.hasOwn(result, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
-    if (result.result_ref !== attempt.result_ref || (typeof resultRef === "string" && result.result_ref !== resultRef)) {
+    const canonicalSimpleRef = `quality/reviews/results/${producerStage}-simple-${attempt.attempt_id}.json`;
+    const selectedSimpleRef = typeof resultRef === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(resultRef)
+      ? resultRef
+      : null;
+    if (result.result_ref !== attempt.result_ref
+        || (selectedSimpleRef !== null && (selectedSimpleRef !== canonicalSimpleRef || result.result_ref !== selectedSimpleRef))) {
       throw new Error("ordinary review result/attempt path identity mismatch");
     }
   }

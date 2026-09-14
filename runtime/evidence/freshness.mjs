@@ -68,7 +68,12 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   validateSchema("attempt", attempt);
   if (review.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("ordinary execution review canonical ref does not match its producing attempt");
   if (Object.hasOwn(review, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
-    if (review.result_ref !== attempt.result_ref || (reviewReference?.ref !== undefined && review.result_ref !== reviewReference.ref)) {
+    const canonicalSimpleRef = `quality/reviews/results/verify-code-simple-${attempt.attempt_id}.json`;
+    const selectedSimpleRef = typeof reviewReference?.ref === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(reviewReference.ref)
+      ? reviewReference.ref
+      : null;
+    if (review.result_ref !== attempt.result_ref
+        || (selectedSimpleRef !== null && (selectedSimpleRef !== canonicalSimpleRef || review.result_ref !== selectedSimpleRef))) {
       throw new Error("ordinary review result/attempt path identity mismatch");
     }
   }
