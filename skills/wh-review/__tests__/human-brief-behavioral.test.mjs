@@ -23,7 +23,8 @@ describe("v2 human boundary summaries", () => {
     expect(finalize.observable_result).toMatch(/自动|不再等待重复人工确认/i);
     expect(handoff.observable_result).toMatch(/close[\s\S]*(?:独立|separate)/i);
     expect(steps.some(({ step_slug }) => /authorize|commit|push|merge|archive|cleanup/i.test(step_slug))).toBe(false);
-    expect(verifyCode).toMatch(/不再要求.*确认[\s\S]{0,260}(?:close|commit|push|merge|archive|cleanup)/i);
+    expect(verifyCode).toMatch(/不(?:再)?要求用户重复[\s\S]{0,120}(?:Talk\/Grill|确认)/i);
+    expect(verifyCode).toMatch(/(?:close|commit|push|merge|archive|cleanup)[\s\S]{0,140}(?:独立|separate)|(?:独立|separate)[\s\S]{0,140}(?:close|commit|push|merge|archive|cleanup)/i);
   });
 
   it("review records preserve real provider outcomes and provenance", () => {
