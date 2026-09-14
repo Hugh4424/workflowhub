@@ -100,7 +100,7 @@ describe("P4 workflow declarations reach their current consumers", () => {
     expect(dependencies.length).toBeGreaterThan(0);
     const observed = new Set();
     const material = canonicalStageMaterials();
-    const identity = { task_id: `consumer-${stage}`, stage, material_revision: `revision-${"a".repeat(64)}`, snapshot_tree: "b".repeat(40) };
+    const identity = { task_id: `consumer-${stage}`, stage, workspace_path: `/tmp/consumer-${stage}`, material_revision: `revision-${"a".repeat(64)}`, snapshot_tree: "b".repeat(40) };
     const worker = { stage, identity: { taskId: identity.task_id }, manifest: { record_model: "vnext-single-write" },
       currentMaterialRevision: identity.material_revision, snapshotWorkspace: () => ({ tree: identity.snapshot_tree }),
       artifactRef: (name) => `specs/${identity.task_id}/${name}`, readArtifact: (name) => material[name],

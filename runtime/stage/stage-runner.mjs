@@ -13,7 +13,7 @@ import { deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision,
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
-import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
 import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
@@ -407,6 +407,12 @@ function materialTextMap(materials) {
   return Object.fromEntries(materials.values.map(([file, content]) => [file, content]));
 }
 
+function materialBindingContent(file, content) {
+  return file === "tasks.md" && content !== null && content !== undefined
+    ? taskExecutionRecordOnly(content)
+    : content;
+}
+
 function analyzerQualityBinding(ctx, entry, label, snapshot) {
   const value = outcomeObject(entry, label);
   const ref = outcomeText(value.ref, `${label}.ref`);
@@ -463,11 +469,12 @@ function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, sna
     }
     const actual = actualMaterials[expectedSource];
     if (typeof actual !== "string") throw outcomeError(`${stage} spec_analyze material ${expectedSource} is unavailable`);
-    const actualHash = createHash("sha256").update(actual).digest("hex");
+    const bindingContent = materialBindingContent(expectedSource, actual);
+    const actualHash = createHash("sha256").update(bindingContent).digest("hex");
     if (binding.sha256 !== actualHash || binding.snapshot_tree !== snapshot.tree) {
       throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} hash is not current`);
     }
-    if (packet.materials?.[requiredMaterial] !== actual) {
+    if (materialBindingContent(expectedSource, packet.materials?.[requiredMaterial]) !== bindingContent) {
       throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} does not contain the current material bytes`);
     }
   }

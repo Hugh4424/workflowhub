@@ -115,11 +115,11 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "d8ca0b2ab05df3f721177af94fac31096692f7af4162c41e73605690ca9195e5"
+      "sha256": "bd7bda253d70d4e3c9d16f73c3b5bce2d6ed215ca34065b50a28e518d5066b84"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "ac3611eebc0cf58c5994e906d584425e65cac56580ba08594652c2d77c2db5e2"
+      "sha256": "d81ffe68c8b478f2429d3c8e1ceccc8b33306ece49870cc8b1572985ddfde68f"
     },
     {
       "path": "stage-skill-plan.json",
@@ -127,7 +127,7 @@
     },
     {
       "path": "scripts/review-input-bounds.mjs",
-      "sha256": "c882ab9d8dfe6c90e2d545e282da093145baf0d8d2a312f3cafe3e58d74cc105"
+      "sha256": "bbb16033bd983e0589dbd5d904338d0b3c9333dc98b4d6eb53036ebf6ade929a"
     }
   ]
 }

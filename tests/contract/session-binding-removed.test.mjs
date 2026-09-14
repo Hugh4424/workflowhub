@@ -46,7 +46,8 @@ describe("retired host session binding", () => {
       expect(source, relative).not.toMatch(/workflowhub-codex-session-(?:state|hook|event)\.mjs/);
     }
     const bridge = read("tools/host/workflowhub-stage-agent-bridge.mjs");
-    expect(bridge).not.toContain("session.session_id");
+    expect(bridge).not.toMatch(/workflowhub-codex-session-(?:state|hook|event)\.mjs/);
+    expect(bridge).toMatch(/requiredText\(input\.agent_run_id/);
     expect(bridge).toContain("agent_run_id");
   });
 

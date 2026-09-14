@@ -13,6 +13,8 @@ import { materialAllowlistForRule, materialForbiddenMessage, redactProviderHostP
   REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { reviewPacketMaterialId } from "../../../runtime/review/review-packet-identity.mjs";
+import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
@@ -189,19 +191,11 @@ export function validateProviderResultsAgainstSelection(providerResults, selecti
 // Caller fields never attest provider routing; this narrow read-only helper is
 // shared by the task record route and the bare CLI.
 export function resolveSimpleReviewRouteIdentity(input, dependencies = {}) {
-  const identity = reviewIdentityFromInput(input);
-  const track = identity.reviewTrack;
-  const scope = identity.reviewScope;
-  const kind = identity.reviewKind;
-  const host = input.host_provider ?? input.hostProvider;
-  if (typeof host !== "string" || !host.trim()) throw new TypeError("host_provider is required for trusted route identity");
-  const trusted = (dependencies.loadConfig ?? loadTrustedThirdReviewConfig)({ requestedStage: input.stage, requestedTrack: track, requestedReviewKind: kind });
-  const route = (dependencies.resolveRoute ?? resolveTrustedReviewRoute)(trusted.whReview, input.stage, track, kind, scope);
-  if (!route) throw new Error("ROUTE_UNAVAILABLE: no trusted review route");
-  const selection = providerSelectionShape((dependencies.selectProviders ?? selectTrustedReviewProviderSelection)(trusted.config, host, route));
-  const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === "object"
-    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
-  return Object.freeze({ route_identity: hash(JSON.stringify(stable({ stage: input.stage, review_track: track, review_scope: scope, review_kind: kind, host_provider: host, route, selection }))), provider_selection: selection });
+  return resolveReviewRouteIdentity(input, {
+    loadConfig: dependencies.loadConfig ?? loadTrustedThirdReviewConfig,
+    resolveRoute: dependencies.resolveRoute ?? resolveTrustedReviewRoute,
+    selectProviders: dependencies.selectProviders ?? selectTrustedReviewProviderSelection,
+  });
 }
 
 export function reviewSubjectFields(input) {
@@ -478,38 +472,7 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
 }
 
 function materialIdForInput(input) {
-  // Mirror buildBundle exactly: the provider-visible identity is computed over
-  // host-path-redacted values, never over raw caller bytes.
-  // verify-code may receive a large authenticated diff. The provider sees the
-  // bounded projection, so every caller that derives material_id (including
-  // the record route and unavailable results) must derive it from that same
-  // projection. If projection cannot be formed, retain the raw identity so
-  // the explicit MATERIAL_TOO_LARGE fact remains recordable against the
-  // authenticated request.
-  let packetMaterials = input.materials;
-  if (input.stage === "verify-code") {
-    try { packetMaterials = compactVerifyCodeMaterials(input.materials).materials; }
-    catch { packetMaterials = input.materials; }
-  }
-  const instructionBytes = Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8");
-  const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length }];
-  entries[0].sha256 = hash(instructionBytes);
-  Object.entries(packetMaterials ?? {}).forEach(([key, value], index) => {
-    const redacted = redactProviderHostPaths(value);
-    const bytes = materialBytes(redacted);
-    entries.push({ path: safeName(key, index, redacted), bytes: bytes.length, sha256: hash(bytes) });
-  });
-  if (input.authenticated_evidence !== undefined) {
-    const bytes = authenticatedEvidenceBytes(input.authenticated_evidence);
-    entries.push({ path: AUTHENTICATED_EVIDENCE_PATH, bytes: bytes.length, sha256: hash(bytes) });
-  }
-  const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
-  entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
-  const canonicalEntries = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH].includes(entry.path))
-    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
-    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
-  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
+  return reviewPacketMaterialId(input, { instructionText: instructions, compactMaterials: compactVerifyCodeMaterials });
 }
 
 export function createSimpleReviewPacket(input) {

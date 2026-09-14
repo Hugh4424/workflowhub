@@ -3207,6 +3207,39 @@
       "content_change": "test-only Vitest JSON reporter adapter with explicit selector mapping, cross-pair AC-CLOSE-002 coverage, raw child output, and D029 qualitative unavailable facts"
     },
     {
+      "source": "runtime/review/review-input-bounds.mjs",
+      "destination": "runtime/review/review-input-bounds.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-packet-identity.mjs and wh-review bounded provider-input projection",
+      "delete_condition": "remove only when runtime and skill consumers use an independently audited bounded-input implementation",
+      "content_change": "make bounded review diff and material projection a runtime-owned implementation; keep the skill path as a compatibility re-export",
+      "bytes_after": 11417,
+      "sha256_after": "c882ab9d8dfe6c90e2d545e282da093145baf0d8d2a312f3cafe3e58d74cc105"
+    },
+    {
+      "source": "runtime/review/review-packet-identity.mjs",
+      "destination": "runtime/review/review-packet-identity.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-record-route.mjs, runtime/evidence/freshness.mjs, and wh-review packet construction",
+      "delete_condition": "remove only when all canonical review readers share an independently audited neutral packet-identity implementation",
+      "content_change": "move packet material identity and host-path redaction out of the wh-review skill so runtime readers do not depend on a skill implementation",
+      "bytes_after": 6531,
+      "sha256_after": "83eecb174b336f2ad64d5c4a1e0357fb929317adfcc8943440b1335ca9855835"
+    },
+    {
+      "source": "runtime/review/review-route-identity.mjs",
+      "destination": "runtime/review/review-route-identity.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-record-route.mjs and the wh-review trusted-route adapter",
+      "delete_condition": "remove only when canonical recording and the trusted-route adapter share an independently audited route-identity implementation",
+      "content_change": "move trusted route identity shaping into runtime while allowing the skill to inject its trusted config, route, and provider selectors",
+      "bytes_after": 2970,
+      "sha256_after": "8bdfd13eb09d59fa145e117beaa5f1cd9c33e5f462c46e308edecfc7b6a3417c"
+    },
+    {
       "source": "runtime/task/task-index.mjs",
       "destination": null,
       "status": "deleted-final-cleanup",

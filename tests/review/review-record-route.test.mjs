@@ -8,7 +8,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import {
-  recordSimpleReviewRequest as recordRequest,
+  recordSimpleReviewRequest as recordRuntimeRequest,
   recordSimpleReviewResult,
   recordTaskBoundE2eReviewResult,
   recordTaskBoundE2eReviewUnavailable,
@@ -18,7 +18,12 @@ import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-revie
 
 // Only the fixture dependency is simulated; production defaults still resolve host configuration.
 const fixtureRouteIdentity = () => ({ route_identity: "a".repeat(64) });
-const recordSimpleReviewRequest = (options) => recordRequest({ resolveRouteIdentity: fixtureRouteIdentity, ...options });
+const recordRequest = (options) => recordRuntimeRequest({
+  resolveRouteIdentity: fixtureRouteIdentity,
+  materialIdForRequest: (input) => createSimpleReviewPacket(input).material_id,
+  ...options,
+});
+const recordSimpleReviewRequest = recordRequest;
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });

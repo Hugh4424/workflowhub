@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
-import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { reviewPacketMaterialId } from "./review-packet-identity.mjs";
+import { resolveReviewRouteIdentity } from "./review-route-identity.mjs";
 import { assertTaskKernel } from "../task/task-capability.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult, providerAdapter } from "./canonical-review-result.mjs";
@@ -94,7 +95,7 @@ function executionBindingForResult(task, result, identity, context, { allowHisto
   const frozen = readFrozenReviewMaterial({ task, ...context.frozen_material });
   if (frozen.provider_input_sha256 !== context.frozen_material.provider_input_sha256) throw new Error("frozen review original bytes hash mismatch");
   const request = JSON.parse(frozen.bytes.toString("utf8"));
-  const materialIdMatches = createSimpleReviewPacket(request).material_id === result.material_id;
+  const materialIdMatches = reviewPacketMaterialId(request) === result.material_id;
   const preDispatchMaterialFailure = result.status === "unavailable"
     && result.error?.code === "REVIEW_INPUT_TOO_LARGE"
     && Array.isArray(result.provider_results) && result.provider_results.length === 0
@@ -302,7 +303,7 @@ function reviewRequestMaterialId(request, materialIdForRequest = null) {
     if (typeof value !== "string" || !SHA256_HEX.test(value)) throw new TypeError("materialIdForRequest must return a sha256 hex string");
     return value;
   }
-  if (request?.materials && typeof request.materials === "object" && !Array.isArray(request.materials)) return createSimpleReviewPacket(request).material_id;
+  if (request?.materials && typeof request.materials === "object" && !Array.isArray(request.materials)) return reviewPacketMaterialId(request);
   for (const value of [request?.material_id, request?.materialId]) {
     if (typeof value === "string" && SHA256_HEX.test(value)) return value;
   }
@@ -778,7 +779,7 @@ function authenticateBudgetContext(context, identity, requestKey, result) {
 }
 
 // Read the existing pre-coverage-block writer format. This is verification of
-// immutable facts, not conversion or a new legacy writer. New deterministic
+// immutable facts, not conversion or a retired writer. New deterministic
 // records cannot downgrade to this format by deleting their provenance block.
 function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
   validateSchema("attempt", attempt);
@@ -978,7 +979,7 @@ function readCanonicalBudgetHistory(task, scope = null) {
  * under one task lock; a second identical current request reuses the
  * immutable canonical refs instead of dispatching a second provider call.
  */
-export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null, resolveRouteIdentity = resolveSimpleReviewRouteIdentity } = {}) {
+export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null, resolveRouteIdentity = resolveReviewRouteIdentity } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("review request must be an object");
   if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");

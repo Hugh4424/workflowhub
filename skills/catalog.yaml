@@ -92,7 +92,7 @@ skills:
     local_bundle_hash: 5b0252d45de7389499a409efa584903796c66515a770b5cdc3d5959773b9f43f
     last_reviewed_at: "2026-09-10"
     status: native
-    metrics_enabled: false
+    metrics_enabled: true
     purpose: 四个作者阶段 reflection 终态后的当前交接视图
     design_idea: 复用 stage-end hook，以原子覆盖固定 handoff 路径并保留 stale/unavailable 边界
     used_by_stages: [make-decision, build-spec, build-plan, build-code]
@@ -548,7 +548,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 1c1e68b236a97d90371ff1d2591539926bc40b322f9c0fa05b2f0bba32a30dc4
+    local_bundle_hash: 6b3577f5ff10836c74273c8e84e5794e5d6b06636d2b3a2ebc904280adff278d
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true

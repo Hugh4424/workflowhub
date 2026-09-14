@@ -71,7 +71,7 @@ describe("stage-reflection workflow wiring", () => {
         consumer: {
           target: "stage-runner#runStageEndReflection",
           inputs: expect.arrayContaining(["stage_outcome.step_outcomes", "stage_outcome.skill_outcomes"]),
-          identity: ["task_id", "stage", "material_revision", "snapshot_tree"],
+          identity: ["task_id", "stage", "workspace_path"],
           result: "stage_reflection",
         },
       });

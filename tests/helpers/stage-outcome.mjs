@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import yaml from "js-yaml";
 
-import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot, materialRevisionFromValues, taskExecutionRecordOnly } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { STAGE_FACT_MATERIALS, stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
 import { createRegisteredCodexSource, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
@@ -199,7 +199,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       const sourceRef = name === "original_requirement" || name === "decision_log" ? "decision-log.md" : `${name}.md`;
       analyzerBindings[name] = {
         source_ref: sourceRef,
-        sha256: sha256(materialText[sourceRef]),
+        sha256: sha256(sourceRef === "tasks.md" ? taskExecutionRecordOnly(materialText[sourceRef]) : materialText[sourceRef]),
         snapshot_tree: snapshot.tree,
       };
     }

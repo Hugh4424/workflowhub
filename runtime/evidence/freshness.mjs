@@ -13,7 +13,7 @@ import { ensureGitSnapshotObjectStore } from "../task/git-worktree-snapshot.mjs"
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
-import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { reviewPacketMaterialId } from "../review/review-packet-identity.mjs";
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 
@@ -101,7 +101,7 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   if (bytes.toString("base64") !== frozen.content_base64 || sha256(bytes) !== frozen.content_sha256
       || frozen.content_sha256 !== frozenRef.provider_input_sha256) throw new Error("frozen execution review original bytes hash mismatch");
   const request = JSON.parse(bytes.toString("utf8"));
-  if (request.stage !== "verify-code" || createSimpleReviewPacket(request).material_id !== review.material_id
+  if (request.stage !== "verify-code" || reviewPacketMaterialId(request) !== review.material_id
       || materialRevisionFromValues(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, request.materials.runtime_current_materials?.[name]])) !== fact.material_revision) throw new Error("ordinary review did not consume the bound material bundle");
   const execution = readTypedExecutionFact(request.reviewed_execution, fact, read, dependencies, key);
   if (binding.reviewed_execution.ref !== request.reviewed_execution.ref
