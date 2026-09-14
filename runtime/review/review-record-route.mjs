@@ -1296,6 +1296,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
     snapshot_tree: identity.tree, material_id: result.material_id,
     ...(evidenceHash === null ? {} : { authenticated_evidence_sha256: evidenceHash }),
     material_revision: identity.materialRevision,
+    result_ref: resultRef,
     ...(e2eBinding ? { e2e_binding: e2eBinding } : {}),
   };
   const attempt = {
@@ -1610,13 +1611,14 @@ function taskBoundSource(tree) {
   return { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree };
 }
 
-function taskBoundAttempt({ identity, result, attemptId, terminalStatus, error, providerAttempts, binding = undefined }) {
+function taskBoundAttempt({ identity, result, attemptId, terminalStatus, error, providerAttempts, binding = undefined, resultRef = undefined }) {
   return {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: identity.taskId, stage: "verify-code",
     review_track: result.review_track ?? null, review_kind: result.review_kind ?? null,
     subject_kind: "worktree", phase_id: null, review_scope: null,
     source: taskBoundSource(identity.snapshotTree), snapshot_tree: identity.snapshotTree,
     material_id: result.material_id, material_revision: identity.materialRevision,
+    ...(resultRef ? { result_ref: resultRef } : {}),
     ...(binding ? { e2e_binding: binding } : {}),
     ...(result.review_policy ? { review_policy: result.review_policy, policy_snapshot_hash: policyHash(result.review_policy) } : {}),
     provider_attempts: providerAttempts, terminal_status: terminalStatus, error,
@@ -1657,17 +1659,17 @@ export function recordTaskBoundE2eReviewResult(input = {}) {
   const outputContent = JSON.stringify({ findings: providerFindings.map(({ provider: _provider, ...finding }) => finding) });
   const attemptId = randomUUID();
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+  const resultRef = `quality/reviews/results/verify-code-e2e-${randomUUID()}.json`;
   const outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFileName(provider.provider, 0)}`;
   const outputRecord = { schema_version: "wh-review-provider-output.v1", task_id: identity.taskId, stage: "verify-code", attempt_id: attemptId, provider: provider.provider, content: outputContent, content_hash: textHash(outputContent), evidence_anchor_valid: providerFindings.map(() => true) };
   const aggregation = aggregateCanonicalProviderResults([{ provider: provider.provider, identity: normalizeIdentity(provider.identity, provider.provider), evidenceAnchors: outputRecord.evidence_anchor_valid, review: JSON.parse(outputContent) }], 1, { profilePriority: [provider.provider], requireIdentity: true, requireSourceId: true });
   if (aggregation.status !== "available") throw new Error("task-bound provider output could not be aggregated");
-  const attempt = taskBoundAttempt({ identity, result, attemptId, terminalStatus: "semantic", error: null, binding: e2eBinding, providerAttempts: [providerAttemptRecord(provider, result.runtime_id, outputRef)] });
-  const resultRef = `quality/reviews/results/verify-code-e2e-${randomUUID()}.json`;
+  const attempt = taskBoundAttempt({ identity, result, attemptId, terminalStatus: "semantic", error: null, binding: e2eBinding, resultRef, providerAttempts: [providerAttemptRecord(provider, result.runtime_id, outputRef)] });
   const resultRecord = {
     version: "wh-review-result.v1", task_id: identity.taskId, stage: "verify-code", review_track: result.review_track ?? null, review_kind: result.review_kind ?? null,
     subject_kind: "worktree", phase_id: null, review_scope: null,
     source: taskBoundSource(identity.snapshotTree), snapshot_tree: identity.snapshotTree, material_id: result.material_id, material_revision: identity.materialRevision,
-    e2e_binding: e2eBinding, ...(result.review_policy ? { review_policy: result.review_policy } : {}), attempt_ref: attemptRef,
+    result_ref: resultRef, e2e_binding: e2eBinding, ...(result.review_policy ? { review_policy: result.review_policy } : {}), attempt_ref: attemptRef,
     provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
     findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },

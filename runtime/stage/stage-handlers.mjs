@@ -1980,6 +1980,11 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   const attemptId = result.attempt_ref.match(REVIEW_ATTEMPT_REF)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
   if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
+  if (Object.hasOwn(result, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
+    if (result.result_ref !== attempt.result_ref || (typeof resultRef === "string" && result.result_ref !== resultRef)) {
+      throw new Error("ordinary review result/attempt path identity mismatch");
+    }
+  }
   if (!SHA256_HEX.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");
 
   for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {

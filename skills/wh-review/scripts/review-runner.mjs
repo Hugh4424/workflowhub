@@ -310,6 +310,7 @@ function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKin
     version: "wh-review-attempt.v1", attempt_id: reuseId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     ...(materialRevision ? { material_revision: materialRevision } : {}),
+    result_ref: refs.resultRef,
     semantic_projection: semanticProjectionIdentity(semanticProjection), report_ref: refs.reportRef,
     provider_attempts: (sourceAttempt?.provider_attempts ?? []).map((providerAttempt, index) => {
       if (!providerAttempt?.output_ref) return { ...providerAttempt };
@@ -345,6 +346,7 @@ function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKin
   validateSchema("attempt", attempt);
   writeAttempt(task, refs.attemptRef, attempt);
   result.attempt_ref = refs.attemptRef;
+  result.result_ref = refs.resultRef;
   result.report_ref = refs.reportRef;
   validateSchema("result", result);
   writeSemanticResult(task, refs.resultRef, result);

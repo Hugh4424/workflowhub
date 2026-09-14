@@ -67,6 +67,11 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   const attempt = JSON.parse(attemptRaw);
   validateSchema("attempt", attempt);
   if (review.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("ordinary execution review canonical ref does not match its producing attempt");
+  if (Object.hasOwn(review, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
+    if (review.result_ref !== attempt.result_ref || (reviewReference?.ref !== undefined && review.result_ref !== reviewReference.ref)) {
+      throw new Error("ordinary review result/attempt path identity mismatch");
+    }
+  }
   if (JSON.stringify(attempt.e2e_binding) !== JSON.stringify(binding) || attempt.terminal_status !== "semantic"
       || attempt.material_id !== review.material_id || attempt.material_revision !== fact.material_revision || attempt.snapshot_tree !== fact.snapshot_tree) throw new Error("ordinary review attempt binding mismatch");
   const outputs = attempt.provider_attempts.filter((provider) => provider.status === "completed").map((provider, index) => {

@@ -181,6 +181,7 @@
     },
         "dispatch_state": { "enum": ["dispatched", "blocked_before_dispatch", "reused"] },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
+    "result_ref": { "type": "string", "pattern": "^quality/reviews/results/[A-Za-z0-9._-]+\\.json$" },
     "coverage": {
       "type": "object",
       "required": ["mode", "selected_profiles", "selected_count", "valid_provider_count", "minimum_required"],
