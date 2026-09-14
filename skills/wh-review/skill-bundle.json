@@ -95,7 +95,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "6c115850ceba5536a89ad6a3cadc7e25a71eb80b8bad82fdbf2dc1bfb411e570"
+      "sha256": "4448dc01794b6966e60e35285a8fb064c0418255c0534d3b8190a865a59ebde8"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
