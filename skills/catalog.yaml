@@ -548,7 +548,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 6b3577f5ff10836c74273c8e84e5794e5d6b06636d2b3a2ebc904280adff278d
+    local_bundle_hash: cd83485d9865f4bfe15b050e2fdec18410303bcc7406df5e7b7908aca0c24308
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
