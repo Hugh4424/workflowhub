@@ -258,6 +258,7 @@ describe("build-prd non-stage wh-review contract", () => {
       selectProviders: () => { throw new Error("provider selection must not run"); },
     });
     expect(blocked).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "NON_STAGE_IDENTITY_INVALID" } });
+    expect(blocked.material_id).toBeNull();
     expect(() => recordSimpleReviewResult({ result: { status: "unavailable", stage: "build-prd", review_kind: "build_prd" } })).toThrow(/BUILD_PRD_REPORT_ONLY_NOT_PERSISTED/);
     expect(() => recordTaskBoundE2eReviewUnavailable({ result: { status: "unavailable", stage: "verify-code", review_kind: "build_prd" } })).toThrow(/BUILD_PRD_REPORT_ONLY_NOT_PERSISTED/);
     expect(() => recordTaskBoundE2eReviewResult({ result: { status: "available", stage: "verify-code", review_kind: "build_prd" } })).toThrow(/BUILD_PRD_REPORT_ONLY_NOT_PERSISTED/);

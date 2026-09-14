@@ -4,30 +4,55 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: workflowhub-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Contract tests compare retained documents with immutable historical
+          # baselines, so the full reachable history must be available.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - run: npm install
+          node-version: "24.14.0"
+      - run: npm ci
       - run: npm run check
       # Metrics smoke
       - run: node_modules/.bin/vitest run tests/metrics-smoke.test.mjs --passWithNoTests=false
       # Verify-code smoke
       - run: node_modules/.bin/vitest run tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
-      - run: npm run test:contract
-      - run: npm run test:integration
-      - run: npm run test:e2e
-      - run: npm run test:review
-      - run: npm run test:close
-      - run: npm run test:left-shift
-      - run: npm run test:acceptance
-      - run: npm run test:skills
-      - run: npm run test:core
-      - run: npm run test:root
-      - run: npm run test:exclusive
+
+  test-groups:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - "npm run test:contract"
+          - "npm run test:integration"
+          - "npm run test:e2e"
+          - "npm run test:review"
+          - "npm run test:close"
+          - "npm run test:left-shift"
+          - "npm run test:acceptance"
+          - "npm run test:skills"
+          - "npm run test:core"
+          - "npm run test:root"
+          - "npm run test:exclusive"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+      - run: npm ci
+      - run: ${{ matrix.command }}

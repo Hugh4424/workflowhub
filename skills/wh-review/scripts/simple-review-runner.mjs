@@ -568,13 +568,18 @@ function pairFields(pair) {
 }
 
 function unavailableResult(input, error, pair = null, extra = {}) {
+  // An invalid identity cannot produce an authenticated packet id.  The
+  // invalid-identity preflight passes material_id=null explicitly; all other
+  // unavailable paths still compute the id and therefore fail closed on
+  // malformed material or instruction inputs.
+  const materialId = Object.hasOwn(extra, "material_id") ? extra.material_id : materialIdForInput(input);
   return {
     status: "unavailable",
     stage: input.stage,
     ...reviewSubjectFields(input),
     review_track: input.review_track ?? input.reviewTrack ?? null,
     review_kind: input.review_kind ?? input.reviewKind ?? null,
-    material_id: materialIdForInput(input),
+    material_id: materialId,
     ...authenticatedEvidenceFields(input),
     ...pairFields(pair),
     runtime_id: null,
@@ -603,12 +608,13 @@ function preflightDiagnostic({ field, expected, actual, nextAction }) {
   };
 }
 
-function blockedPreflight(input, code, message, diagnostic, pair = null) {
+function blockedPreflight(input, code, message, diagnostic, pair = null, extra = {}) {
   const error = { code, message: redactHostPaths(message), diagnostic };
   return unavailableResult(input, error, pair, {
     dispatch_state: "blocked_before_dispatch",
     provider_results: [],
     findings: [],
+    ...extra,
   });
 }
 
@@ -854,7 +860,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         review_scope: input.review_scope ?? input.reviewScope ?? null,
       }),
       next_action: "use the non-stage build-prd sentinel or a formal stage review kind",
-    }, pair);
+    }, pair, { material_id: null });
   }
   const canonicalInput = {
     ...input,

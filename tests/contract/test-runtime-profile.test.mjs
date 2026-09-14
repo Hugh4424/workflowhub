@@ -93,7 +93,7 @@ describe("test runtime profile contract", () => {
       capability_proof: { status: "unavailable", executor_id: "run-checks", observations: [] },
     });
     expect(validateTestRuntimeProfile(aggregate, { declarationOnly: true })).toMatchObject({ ok: false, status: "unavailable" });
-    expect(() => execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=aggregate", "--evidence-path=quality/tests/aggregate-contract-rejected.json", "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), stdio: "pipe" })).toThrow();
+    expect(() => execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=aggregate", "--evidence-path=quality/tests/aggregate-contract-rejected.json", "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), env: { ...process.env, CI: "" }, stdio: "pipe" })).toThrow();
     expect(validateTestRuntimeProfile(validProfile({ runtime_profile: "aggregate", ceiling_ms: 900_000, permissions: aggregate.permissions, capability_proof: aggregate.capability_proof }), { declarationOnly: true })).toMatchObject({ ok: false });
     try {
       const ciAggregate = execFileSync(process.execPath, ["tools/cli/run-checks.mjs", "--runtime-profile=aggregate", `--evidence-path=${aggregateEvidence}`, "--", process.execPath, "-e", "process.exit(0)"], { cwd: process.cwd(), env: { ...process.env, CI: "true" }, encoding: "utf8" });
