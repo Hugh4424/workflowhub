@@ -94,7 +94,7 @@ Talk 轮次状态：round 1 已完成（6/6 实答）；round 2 已完成（6/6 
 | 处置 | **降级审查**：`status=available_degraded_same_source_subagent`；由独立子代理在独立上下文按 make-decision direction 审查标准执行。**它不是异源 provider 裁决，不构成宪法 Q3 意义上的异源质量事实**，仅作方向建议输入 |
 | finding 数 | 15（R1–R7 待评审项逐条裁决 + A1–A8 审查者自行发现） |
 
-**降级前的真实机制阻塞实录（一手实测，非引用）**
+#### 降级前的真实机制阻塞实录（一手实测，非引用）
 
 | # | 阶段 | error.code | 事实 | 是否必须读源码才能绕过 |
 | --- | --- | --- | --- | --- |
@@ -104,7 +104,7 @@ Talk 轮次状态：round 1 已完成（6/6 实答）；round 2 已完成（6/6 
 
 `blockers_before_any_provider_contact=2`；`blockers_needing_source_reading_to_discover_correct_key=2`。
 
-**审查者发现且直接指向本方向的结构性缺陷（进入争议清单）**
+#### 审查者发现且直接指向本方向的结构性缺陷（进入争议清单）
 
 | id | verdict | severity | 一句话 |
 | --- | --- | --- | --- |
@@ -205,7 +205,7 @@ Talk 轮次状态：round 1 已完成（6/6 实答）；round 2 已完成（6/6 
 | 未记录证据声明 | CLI 被外层 `timeout 900` 杀死（约 15 分钟），**未写 stdout、未建 sink**，因此**没有 wh-review 正式结果 / receipt / review fact / material_revision 绑定**。22 条 finding 系从 broker 运行树（`/tmp/3rd-review/<run>/managed/public.json` 与 provider session jsonl）恢复的**原始 broker 证据**，属**未记录证据**，不得当作正式质量事实引用 |
 | 降级状态 | `degraded_review.status = "not_applicable"` —— 真实通道未失败，写「降级审查」会伪造 provenance |
 
-**finding 处置（每条都必须有处置）**
+#### finding 处置（每条都必须有处置）
 
 | id | severity | 处置 | 落到哪 |
 | --- | --- | --- | --- |
@@ -235,7 +235,7 @@ Talk 轮次状态：round 1 已完成（6/6 实答）；round 2 已完成（6/6 
   },
   "note": "三个来源均无 UI 信号，按三输入规则得出 non_ui。若后续 build-prd 的路线里出现需要人看的界面改动（例如 status 输出改版的交互稿），须重新计算本事实。"
 }
-```
+```text
 
 ## 收敛检查
 
@@ -662,7 +662,7 @@ ois:
     impact_dimensions: [scope]
     requires_user_decision: true
     visible_group_id: G7-验收与路线
-    selected_disposition: "成立；10 个具名批次（⓪ ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨，执行序见 D-018）；每批带同文件同批约束与受影响面清单"
+    selected_disposition: "成立；十个具名批次（⓪ ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨，执行序见 D-018）；每批带同文件同批约束与受影响面清单"
     evidence: "用户 G3=A + 第 5 轮 detail 审查 blocking 项 + 用户「不希望有延期任务」"
     acceptance: "9 个批次全部具名且每批可独立跑通；无未编入批次的决定"
     counterexample_boundary: "若任一批次无定义或任一决定未落批次，视为缺口"
@@ -780,7 +780,7 @@ ois:
 | 7 | `阻塞分析/workflowhub-workflowhub-make-decision-hardening-...-audit-20260910.md` | 15+15+10 | — | — | — | — | 审计对象其实是该任务的 build-code 执行；13 条结构性问题中 3 条已被该任务自己修掉、2 条被删除路线吸收、**8 条完全未覆盖**（其中 3 条与减法目标正交的执行面） |
 | 8 | `阻塞分析/workflowhub-full-task-execution-postmortem-20260910.md`（用户后补，22:11） | 98 | 12 | 47 | 15 | 24 | 8 份里唯一给出「四层状态分离 + 任务粒度 + 主分支并发」三块新主张；§9「不应采取」7 条与当前决定高度同向，但 §7/§8 药方仍是「新增统一 writer / 编译产物 / 预算 / 依赖闭包缓存」；**需新增 4 条 OI（OI-026~OI-029）** |
 
-**跨 7 份的收敛结论**
+### 跨 7 份的收敛结论
 
 - **多数审计的药方是「加一层」，与本任务方向相反**：统一 canonical writer、新终态状态机、digest 分层、executable compiler、contract report、command fingerprint、`doctor --stage`、`execution-ledger.jsonl`、provider preflight、统一读回链。这些与 R-001/Q14/Q16/Q18 的用户答复直接冲突，**须在路线里显式标注为「已裁定不采纳」以防 build-prd 反向采纳**（OI-018）。
 - **真正无人认领的净缺口收敛为 7 条**：①`quality/verify.json` 与 release 投影的归属（OI-013）；②完成判据缺「真实跑过一次」与「物理完成/质量完成」分栏（OI-009）；③build-code 审查频率零覆盖（OI-010）；④close 收口链 8 步与 build-prd 类非正式阶段的收口语义（OI-021）；⑤验收只有指标计数、没有「链路真的通」的功能验收（OI-017）；⑥宿主 lifecycle / requirementAuthentication 缺口无 owner（OI-023）；⑦`facts.jsonl` 从「闲置文件」变「唯一执行记录」与 followup §5-5 禁令冲突，需正式改写（OI-008）。
@@ -920,7 +920,7 @@ ois:
 
 **重要更正**：T-8 曾写「`PROTOCOL_INCOMPATIBLE` 未复现、属间歇性失败」——**本轮在 red+blue 两个 role 同时复现且 `provider_results=[]`，该更正不成立**。真实情况是：provider 腿健康、caller 腿稳定失败。→ D-021④ 由「登记」**升级为「必须修」**（见 D-029）。
 
-**八项裁决与处置**
+#### 八项裁决与处置
 
 | # | 裁决 | severity | 问题 | 处置 |
 | --- | --- | --- | --- | --- |
@@ -934,7 +934,7 @@ ois:
 | 7 | partially_valid | major | 父任务说的「新补链路功能验收」**在草案里还不存在**（只是 OI-017 一行问题 + Q23 一行答复，**没有 D 采纳**，D-015 只有 ①②）；M1 无变更后测量路径；M2 同样需新任务；M3 跨任务规模不可控；M4 是唯一可复算项；D-013「守卫自身计入净增减」**不可证伪**（零产物 → 行数恒为 0）⇒ 能证伪「没净删 / 在搬家」，**不能证伪 R-003/R-006 的未来阻塞减少** | **D-029⑧**：显式声明哪些结论本轮**不可证伪**并以 `unknown` 登记；M1/M2 复测**编入批次⑧ 的验收动作**（**不写成延期登记表**——用户要求不产出延期项）；把「链路功能验收」正式写成 D-015③ |
 | 8 | valid | **blocking** | 七处未提及的失败源（见下） | **D-029⑨~⑮** 逐项编入批次 |
 
-**第 8 项的七处失败源**
+#### 第 8 项的七处失败源
 
 | 编号 | 失败源 | 证据 | 处置 |
 | --- | --- | --- | --- |
@@ -947,7 +947,7 @@ ois:
 | (g) | **第四套形似契约**：detail 合同强制的 `oi_terminal_records`/`confirmation_groups` **不在强制 allowlist**——实测传它会 `MATERIAL_FORBIDDEN`（0 provider 被调用）。D-008① 由「三套」改为「**四套**」 | 本 run 实测 | D-029⑫ |
 | (h) | `dispatch_state` **只在 `role_results.red/blue` 内、不在聚合结果上**；顶层与「provider 派出后失败」同形 | 本 run 结果 | D-029⑬ |
 
-**追加 finding 与处置**
+#### 追加 finding 与处置
 
 | id | severity | 问题 | 处置 |
 | --- | --- | --- | --- |
@@ -959,7 +959,7 @@ ois:
 | X-F | major | 同 8(f)：simplicity 轴未执行却要承担 D-004/D-017 的「已如实记录」 | D-029⑪ |
 | X-G | major | **D-003「整体删除每步完成证据体系」未区分** `stage-outcome-proofs`（内容无 reader）与 `stage-outcomes/<stage>/*.json`（**status 与 acceptance 绑定的真实输入**：`canonical-evidence-validators.mjs:53`、`stage-runner.mjs:92`、`freshness.mjs:412`）⇒ **有误删 status 数据源的风险** | D-029⑯ |
 
-**审查者给出的两句总结**
+#### 审查者给出的两句总结
 
 - 最大**可执行性**风险：「D-018 的批次划分与真实依赖闭包不一致——批次② 无定义、D-011/D-024/D-025 无批次、`material_revision`/`snapshot_tree` 在 6 个 workflow 声明与 `check-skill-closure` 里被硬编码为强制值却未登记，导致『每批都能独立跑通』不成立，整改必然半路撞守卫再补一层（正是前两次的剧本）」。
 - 最大**覆盖缺口**：「草案没有解决它自己赖以成立的审查通道——detail 合同要求的 `oi_terminal_records`/`confirmation_groups` 被强制 allowlist 拒绝（实测 `MATERIAL_FORBIDDEN`）、强制的 `simplicity-guard` lens 从未随包交付、本轮真实通道又以 `PROTOCOL_INCOMPATIBLE` + `provider_results:[]` 收场，因此 D-005/D-017/D-021 赖以成立的『审查已如实记录』这条完成依据**目前既不可提交、也不可核验**」。
@@ -985,6 +985,7 @@ ois:
 ### Module A：问题认定与整改原则
 
 #### D-001
+
 - question/final_option: 「机制开销大于任务开销、且每次改动都在加层」是否成立？→ 成立（比值属推算）
 - recommendation/plain_language: 推荐采信，但要标明这是推算不是实测：现有日志能严谨确认的是 root 主会话 token 占记录下限约一半、以及两次「简化」任务都净增数千行。
 - decision: 把「机制开销过高 + 控制面自我增殖」作为整改的正当性依据；同时把「比值是推算」这一事实固定写入材料，禁止下游当实测引用。
@@ -1006,6 +1007,7 @@ artifacts: [spec.md#FR-001]
 ```
 
 #### D-002
+
 - question/final_option: 控制面总量是否已复现宪法 F10 反例形态？→ 是
 - recommendation/plain_language: 推荐直接承认：宪法自己写下的永久警示（约 9.5 万行 gate 代码、单个 gate 引擎 6000+ 行、33 个 schema、专门长出一套修闸工具箱），本仓已经复现到同量级。
 - decision: 整改按「净减控制面」立目标，不按「补漏」立目标。
@@ -1027,6 +1029,7 @@ artifacts: [spec.md#FR-002]
 ```
 
 #### D-003
+
 - question/final_option: 「每步交一份完成证据」体系保留还是删除？→ 整体删除
 - recommendation/plain_language: 推荐删除：70 个 step 全都声明要交这份证据，实际只有 2 条被程序真读过；一个任务光这类「证明文件」就有 423 份，内容无人消费。
 - decision: 删除「每步完成证据」体系；每个 stage 只留**一行**执行记录（见 D-004/D-005）。
@@ -1050,6 +1053,7 @@ artifacts: [spec.md#FR-003]
 ### Module B：唯一状态层
 
 #### D-004
+
 - question/final_option: 执行记录放在哪？→ 复用**已存在**的 `facts.jsonl`，不新增对象
 - recommendation/plain_language: 推荐复用：任务目录里本来就有一个「一次运行一行」的 append-only 记录文件 `facts.jsonl`，有 schema、有锁、有唯一写入函数，只是从来没被真正用起来（实测 0 字节）。我们要的不是新建一个对象，是把这个闲置的用起来，并把旁边的投影和散件收掉。
 - decision: task 目录只保留**一个**执行记录文件 = `facts.jsonl`；删除 `index.json`；`identity/**` 折入 `facts.jsonl`。
@@ -1071,6 +1075,7 @@ artifacts: [spec.md#FR-004]
 ```
 
 #### D-005
+
 - question/final_option: 阶段「做完」的定义？→ 材料写完 + `facts.jsonl` 有本阶段一行（含审查三态字段）
 - recommendation/plain_language: 推荐：一个阶段算做完，只看两件事——它负责的那份材料写好了，以及记录文件里有一行如实写了这个阶段干了什么。不再要求一堆质量谓词同时满足。
 - decision: 阶段完成判据 = ①本阶段材料存在且可读；②`facts.jsonl` 存在本阶段记录行，且该行含 `review_origin` ∈ {`conducted`, `unavailable`(附真实错误码), `not_run`(附理由), **`same_source_degraded`**}、`review_result_ref`、`actionable_finding_disposition`。缺字段则完成声明不成立（属缺项事实，不新增 gate）。③`review_origin` 必须在 status 中可见（不隐藏）。④`not_run` 必须附理由，且理由字段不得为空或套话（空理由 = 缺项，完成不成立）。
@@ -1095,6 +1100,7 @@ artifacts: [spec.md#FR-005]
 ### Module C：审查生命周期
 
 #### D-006
+
 - question/final_option: wh-review 的绑定语义？→ 保留、标准不变、结果不作通关条件、但必须在完成声明里占位
 - recommendation/plain_language: 审查照旧由 wh-review 做、每个阶段的标准一个字不改；审查结果不再决定这个阶段能不能结束，但「审了什么、结果如何、严重问题怎么处置」必须如实写出来。
 - decision: 五阶段统一：审查必须真发起；结果如实记录；不作为阶段结束条件；D-005 的三态字段是其唯一机制约束。
@@ -1116,6 +1122,7 @@ artifacts: [spec.md#FR-006]
 ```
 
 #### D-007
+
 - question/final_option: provider 全不可用时怎么办？→ 允许降级为子代理审查，但必须可区分且门槛严格
 - recommendation/plain_language: provider 全挂了就派子代理审，别卡住；但要在阶段末尾说清「这是降级审查」，因为子代理虽然上下文独立，来源并不独立，不能当异源裁决用。
 - decision: ①降级判据：必须确实派出过 provider 且至少一条真实 provider 失败；输入协议错误（如 `blocked_before_dispatch` / `MATERIAL_FORBIDDEN`）**一律不许降级**。②降级结果记 `review_origin=same_source_degraded`，并在 status 与阶段末摘要可见。③降级不得写成「独立审查已完成」。
@@ -1137,6 +1144,7 @@ artifacts: [spec.md#FR-007]
 ```
 
 #### D-008
+
 - question/final_option: 审查输入契约怎么整？→ 只做四件零新增对象的事
 - recommendation/plain_language: 不改语义、不加对象：删掉重复的那套允许名单；报错直接告诉你合法取值是什么；把已经存在的 dispatch_state 显示出来；降级门槛写一句规则。
 - decision: ①形似的允许名单**有三套**（不是两套），只留真正强制执行的那一套，删掉另两套（描述性副本 + 被测试强制但生产未调用的 `validateDetailReviewInput`）；②`MATERIAL_FORBIDDEN` 之类错误必须直接列出合法取值；③「未派出」与「派出但失败」在下游显示必须不同（复用已有 `dispatch_state`）；④不新增降级资格字段。
@@ -1160,6 +1168,7 @@ artifacts: [spec.md#FR-008]
 ### Module D：身份与新鲜度
 
 #### D-009
+
 - question/final_option: 「去掉哈希」具体切在哪？→ 删失效链；只在写口保留一次身份核对
 - recommendation/plain_language: 「哈希」要分两刀：让证据因编辑而失效、逼你返工重审的那条链，全删；写正式记录前确认「没写错任务/工作区」的那一次核对，保留。前者是你烦的东西，后者是宪法明文要求必须报错的东西。
 - decision: ①**全删**：材料整体哈希、snapshot tree、currentness 重算、fact 级 freshness 评估，以及由它们派生的「改一个字段 → 既有证据失效 → 重跑审查/测试」链条。②**保留一次**：写入正式记录前做一次窄预检，只含 task_id + 工作区路径 + 即将写入的确切字节/写集合，不匹配则 fail-loud。③被连带删掉的「同一材料不重复调用审查」去重键必须给出替代物，否则退化为重复调用。
@@ -1182,6 +1191,7 @@ artifacts: [spec.md#FR-009]
 ```
 
 #### D-010
+
 - question/final_option: review 轮次预算保留吗？→ 删除
 - recommendation/plain_language: 「同一份材料只允许发几轮审查、超了就报 EXHAUSTED」这套预算机制删掉。它已经实测出过错（按历史记录推断，把没发出去的调用也算成消耗了预算），而且它正是三大硬阻断之一。
 - decision: 删除 review 轮次预算机制（`validateReviewBudget` 及其消费点）；重试改为「人/agent 判断 provider 或材料确已变化时手动发起」，不做自动计数。
@@ -1206,6 +1216,7 @@ artifacts: [spec.md#FR-010]
 ### Module E：保留项与展示
 
 #### D-011
+
 - question/final_option: spec-analyze ×4 与 stage-reflection ×5 怎么办？→ 都保留执行，但必须有真实 reader
 - recommendation/plain_language: 两个都留着（你说了 analyze 是查结果对不对得上原始需求、reflection 是复盘，都不能丢）。但它们现在一个在 4 个阶段问同一个问题、另一个写出来根本没人看。做法是：analyze 四份检查表合并成一套（每阶段仍各跑一次），reflection 的结论写进记录文件的当阶段行并在状态里显示一行——让人真能看到。
 - decision: ①spec-analyze 保留在 4 个 stage 各跑一次，但 profile 合并为一套共享实现；②stage-reflection 保留在 5 个 stage 各跑一次，结论写入 `facts.jsonl` 本阶段行并在 status 占一行；③判据 = 下一阶段/人是否真读了它。
@@ -1227,6 +1238,7 @@ artifacts: [spec.md#FR-011]
 ```
 
 #### D-012
+
 - question/final_option: status 输出形态？→ 只报根因
 - recommendation/plain_language: 现在一个根因会被展开成几十条红字（实测 30 条里只有 2–4 个真问题），而且这些展开没有任何程序在读，纯粹打给人看。改成只显示根因，同一件事只报一次，派生的表象收起来。
 - decision: status 只输出按根因归并的条目；派生投影不再作为独立条目展示；同一根因只出现一次。
@@ -1250,6 +1262,7 @@ artifacts: [spec.md#FR-012]
 ### Module F：防再增殖与验收
 
 #### D-013
+
 - question/final_option: 「减法守卫」用什么形态？→ 零新产物 + 自指
 - recommendation/plain_language: 守卫不能做成一个「统计控制面数量」的工具——那正是宪法明文禁止的「另造计数器来检查是否足够简单」，会是第三次加层。做法是：不加工具、不加 schema、不加检查器、不加新命令，只要求本次改动「删了什么、加了什么」写成 spec/plan 里一个必填小节，看的人就是已有的那个用户确认点。而且守卫自己要算进第一次改动的账里，否则它不可证伪。
 - decision: 约定「控制面净增减申报」为已有材料（spec/plan）的必填小节；consumer = 已有用户确认点；owner = 已有 stage；判定用已有代码改动对比；守卫自身计入第一次改动净增减（自指）。
@@ -1276,6 +1289,7 @@ artifacts: [spec.md#FR-013]
 ```
 
 #### D-014
+
 - question/final_option: 宪法要不要同步修订？→ 要
 - recommendation/plain_language: 你要删的两样东西宪法里都写了字：F3 说「身份、**hash**、顺序」必须报错，F6 要求每次正式写入认证「合同内容校验值」。不同步改就会出现「实现没做但宪法写着要做」，下一个任务会拿宪法当依据把它改回来。
 - decision: 同步修订 F3（`hash` → 「任务与工作区身份」）、F6（去掉「内容校验值」要求）；把「控制面净减法」写成 F5 或 F11 的一句硬规则；同步更新 `constitution-checklist.md`、版本号、修订记录与旧→新映射。ADR 侧同步修订 freshness / canonical ownership / close transcription / review generation / same-snapshot recovery / review dispatch preflight 相关条目。
@@ -1297,6 +1311,7 @@ artifacts: [spec.md#FR-014]
 ```
 
 #### D-015
+
 - question/final_option: 怎么证明整改成功？→ 双证，基线取自已有历史数据，不新跑任务
 - recommendation/plain_language: 两样都要：①静态净减法——代码行数、每个任务的记录文件数、没人看的对象数，逐项必须净降，并且要有具名删除清单；②历史基线对照——拿之前那几个任务的现成数据当对照，看「花在任务本身的比例」有没有上升、机制阻塞有没有下降。不为了量基线专门再跑一个真实任务。
 - decision: 验收 = ①静态净减法（具名删除清单 + 逐项计数净降）；②**历史基线对照，但改用可计算的指标**。基线口径须在批次 0 先写死。
@@ -1330,6 +1345,7 @@ artifacts: [spec.md#FR-015, plan.md]
 ### Module G：边界
 
 #### D-016
+
 - question/final_option: 历史任务与已落盘 provenance 怎么处理？→ 只读冻结，只删读取它的代码
 - recommendation/plain_language: 老任务的记录原样留着，不迁移、不做兼容桥、不新增写入者。要分清楚「删掉读它的代码」和「删掉已经落盘的历史字节」是两件事——前者可以，后者不行。
 - decision: ①历史任务只读冻结，不迁移、不兼容、不双写；②删除只针对读取它的代码与未来的写入路径，**不删**已落盘的历史 provenance / review / 失败事实字节；③新机制只对新任务生效。
@@ -1351,6 +1367,7 @@ artifacts: [spec.md#FR-016]
 ```
 
 #### D-017
+
 - question/final_option: `facts.jsonl` 这个沿用对象要不要登记？→ 要，按 F11 五要件写死
 - recommendation/plain_language: 就算是沿用已有的文件，只要它开始承载新职责，就得写清它有主、谁看、怎么算完成、失败了算什么、什么时候能删——不然它就是下一个难维护的东西。
 - decision: 为复用后的 `facts.jsonl` 登记五要件：owner = 该 stage 主会话；consumer = 下一 stage + status 根因行 + Talk 轮次输入；oracle = 文件存在且当阶段行含 D-005 三态字段；失败语义 = 缺字段则完成声明不成立；退出条件 = 被经过审查的替代记录机制取代。
@@ -1374,6 +1391,7 @@ artifacts: [spec.md#FR-017]
 ### Module H：落地路线
 
 #### D-018
+
 - question/final_option: 后续怎么切任务？→ 3 个后续任务
 - recommendation/plain_language: 切成三块：第一块删掉没人看的东西并把记录文件重建起来；第二块收敛语义（审查解绑、删哈希失效链、状态只报根因）；第三块做治理同步（宪法/ADR/清单）与双证验收。
 - decision: 任务Ⅰ = 批次①②③（定基线口径 / 删无 reader 叶子 / 每步证据→`facts.jsonl` 每阶段一行）；任务Ⅱ = 批次④⑤⑥（审查解绑+降级+审查契约四项 / 删哈希失效链只留写口一次核对 / status 只报根因）；任务Ⅲ = 批次⑦⑧（宪法/ADR/checklist 同步 + 双证验收）。
@@ -1388,7 +1406,7 @@ artifacts: [spec.md#FR-017]
   - **批次⑦**：治理同步 —— 宪法 F3/F6 修订 + checklist + ADR + **`AGENTS.md`/`CLAUDE.md`（含 `:44/:58` 与 D-004/D-023 的冲突）** + `move-map.json`（362 entries）+ `control-plane-inventory.json` + `docs/audit-contracts.md` + `package.json` 的 `npm test` 与「禁止全量回归」冲突 + 「已裁定不采纳」清单进宪法负向条款。
   - **批次⑧**：双证验收 —— 静态净减法 + M1–M5 对照 + D-015③ 链路功能验收；不可证伪项如实标 `unknown`。
   - **批次⑨**（**本轮新增：执行面四条，不再延期；任务Ⅱ 内最先做**，因为它是纯工程改造、不依赖任何语义变更，且做完能降低后续批次的运行成本）：慢测试切分（三层节奏 + 硬时间预算：inner 分钟级、phase 3–5 分钟、aggregate 每任务一次）、同命令去重（同输入不重复启动，复用现有 fingerprint 判定）、超时保留已完成部分（timeout 不抹掉已完成的 provider member 与已跑完的测试文件）、开工前 preflight（命令与路径存在性、provider/host 能力、packet 体积在昂贵动作前校验，5 秒内返回具体原因）。**验收**：两个 900 秒超时与 1,717.39 秒单次门不再复现；同一命令启动次数 ≤ 计划数；超时场景下已完成部分可读回；不存在的命令/文件在开工前即被拦下。
-  - **批次执行序（唯一口径）**：任务Ⅰ = ⓪ → ① → ② → ③；任务Ⅱ = **⑨（最先）** → ④ → ⑤ → ⑥；任务Ⅲ = ⑦ → ⑧。共 **10 个具名批次**。⑨ 之所以在任务Ⅱ 最先做：它是纯工程改造、不依赖任何语义变更，做完能降低后续批次的运行成本。
+  - **批次执行序（唯一口径）**：任务Ⅰ = ⓪ → ① → ② → ③；任务Ⅱ = **⑨（最先）** → ④ → ⑤ → ⑥；任务Ⅲ = ⑦ → ⑧。共 **十个批次**。⑨ 之所以在任务Ⅱ 最先做：它是纯工程改造、不依赖任何语义变更，做完能降低后续批次的运行成本。
 - **修订（detail 审查 item 6，major）**：`index.json` **不是无 reader 叶子** —— `readTaskIndex` 有生产读者（`runtime/evidence/quality-store.mjs:84,223,245`），**且被 facts 写入者自己调用**（`task-store.mjs:316`）；`appendTaskFact` 在同一个 try/catch 里原子写 `facts.jsonl` 与 `index.json` 两个文件（`:320-327`）；要删的 3 个 digest 正是 `validateFact:287` 与 `task-fact.v1.json` 的必填项。→ 批次①与②③改的是同一个 `task-store.mjs`，**不具备独立性**。处置：把「删 `index.json` + 改 `facts.jsonl` 字段 + 给 reader」合并为**同一个批次**（新批次③），批次①只保留「删与 `task-store.mjs` 无关的叶子」（stage-outcome-proofs、`publishVerifySummary`、无引用 schema、无调用者工具链、`workflow-evolution.mjs`）。批次 0 用 `status` 本身安全（D-012 在批次⑥），但需记录「批次③ 改字段后 status 读数形状会变」这一基线漂移事实。
 - source_type/reference/exact_excerpt: 用户 G3=A；审查者 R7 的批次建议。detail 审查原文：「`index.json` **不是无 reader 叶子**……批次①与②③改同一文件，**不具备独立性**（R7 的『删叶子不可能破坏验证』不成立）」。
 - approval_binding: 同上
@@ -1408,6 +1426,7 @@ artifacts: [plan.md, tasks.md]
 ```
 
 #### D-019
+
 - question/final_option: 本任务交付到哪？→ make-decision 定方向，build-prd 出完整路线
 - recommendation/plain_language: 这个任务不删任何代码。它把方向定死、把路线画出来；真正的删除由后续三个任务分批做。
 - decision: 本任务（`workflowhub-mechanism-simplification-20260910`）只产出方向与路线设计，不实现；build-prd 承接并设计完整方案路线。
@@ -1429,6 +1448,7 @@ artifacts: [spec.md]
 ```
 
 #### D-020
+
 - question/final_option: 草案完全没提、但会让整改失败的连带面有哪些？→ 四条必须显式进路线
 - recommendation/plain_language: 有几处「拆了这边、那边就断」的暗线，草案里一个字都没写。不写清楚，整改一定会在半路卡住，然后又补一层绕过——这正是前两次的剧本。
 - decision: 以下四项必须在 build-prd 路线里显式登记、在对应批次处理：
@@ -1454,6 +1474,7 @@ artifacts: [plan.md, tasks.md]
 ```
 
 #### D-021
+
 - question/final_option: 审查 provenance 与降级门槛要不要收紧？→ 要，三条实测漏洞
 - recommendation/plain_language: 这次审查实测暴露三个问题，都会让「审过了」变成假话：①provider 其实已经审出 22 条问题，但调用方没收到，这种情况现在的三个状态装不下；②「读都没读到材料就失败」也算「provider 真实失败」，可以骗到降级资格；③号称「异源」的 provider 里有一个底层模型跟审查者自己是同一个。
 - decision: ①`review_origin` 增加一个已实测必要的取值以区分「已派出但未收齐」；②降级门槛由「有真实 provider 失败」收紧为「**已收到并读取材料之后**才失败」；③`minimum_heterologous` 的判定必须按**底层模型**而非 provider 名；④provider 被派出但失败时，`provider_results` 必须保留每个 provider 的真实身份与逐 provider 错误，不得折叠成一条组级错误码。
@@ -1477,6 +1498,7 @@ artifacts: [spec.md#FR-018]
 ### Module I：第 4 轮收敛新增决定（Talk round 4 实答）
 
 #### D-022
+
 - question/final_option: 审查生命周期怎么改写？→ 每 Phase 保留 1 次核心审查；废除「追查到 findings 清零」的循环；只有大改动才允许一次 focus 复审
 - recommendation/plain_language: 每个 Phase 该审还是要审，但**不要求审到没有 findings 为止**。审一次，拿到 findings 就往下走；只有出现大改动才再来一次 focus。审查是帮着找问题的流程，**做过就算数**。
 - decision: ①build-code 每个 Phase 保留 **1 次核心审查**（per-stage 审查标准不变）；②**删除「反复重审直到 findings 清零」的语义**；③只有**大改动**（跨越原审查覆盖面：接口、schema、安全边界、公共契约）才允许一次 focus 复审；④「小修后再审」不再触发。
@@ -1498,6 +1520,7 @@ artifacts: [spec.md#FR-019]
 ```
 
 #### D-023
+
 - question/final_option: 质量投影与 status 读取来源？→ 投影全删；status/close 只读 canonical 输出
 - recommendation/plain_language: 不要质量投影。`quality/verify.json`、release 投影这些「再存一份质量结论」的东西全部收掉；status 也不许自己到处扫目录，只读 canonical 输出。
 - decision: ①`quality/verify.json` 与 product-release 投影（`deriveProductRelease` / release reasons）**一起收掉**，不再作为独立对象；②只保留 `facts.jsonl` + 被引用的原始证据；③**status/close 只读 canonical 输出，禁止自行扫描旁路目录**；④改动与 `core/task-close.mjs` 的 `quality_gaps` 依赖**同批**完成。
@@ -1519,6 +1542,7 @@ artifacts: [spec.md#FR-020]
 ```
 
 #### D-024
+
 - question/final_option: 入口与外部变化契约？→ 路径单一来源；main 变化只报 stale
 - recommendation/plain_language: task 目录只由「项目 + 任务号」解析出来，别的地方不许自己拼路径（上次就是这里把 close 卡死了）。任务期间主线前进了，不许装作没看见——如实报「已过期」，但不冻结、不强绑。
 - decision: ①所有入口统一为「`project` + `task_id` → 唯一 config resolver → canonical task path」；`--task-path` 降为**受控诊断 override** 并记录来源；②任务期间 main 前进**不冻结 base OID**，只要求「**不许静默使用旧快照，必须报 stale**」。
@@ -1540,6 +1564,7 @@ artifacts: [spec.md#FR-021]
 ```
 
 #### D-025
+
 - question/final_option: close 收口链 + build-prd 类非正式阶段怎么收口？→ 前置检查提到 commit 前；非正式阶段只保证自己的材料
 - recommendation/plain_language: close 之前先把该检查的查完（sidecar、能不能干净合并、允许清单、远端对象），再动手提交——上次是先提交才发现 86 个 sidecar 和 5 组合并冲突，白返工两轮。另外 build-prd 这种便携工作流，别拿正式阶段的完成谓词来考它，它只要保证自己的材料对就行。
 - decision: ①sidecar 发布 / merge 预检 / 允许清单 / 远端对象检查**提到 commit 之前**，用现有命令的顺序，**不新增 `close --preflight-only`**（public runtime 仍只有七类行为）；②build-prd 类 `non_stage` 工作流只保证自己的材料与事实，**不按 5 个正式阶段的谓词收口**；③`prd.md` 明确**永不产出**（不新增第五份材料）。
@@ -1561,6 +1586,7 @@ artifacts: [spec.md#FR-022, plan.md]
 ```
 
 #### D-026
+
 - question/final_option: 卡文件数上限怎么定？执行面四条与仓外能力怎么处置？→ 卡文件数只作建议；执行面四条编入批次⑨；仓外能力按 non_goals 明确排除
 - recommendation/plain_language: 这一轮不留任何「以后再说」：仓库里能做的全部编进批次，仓库范围外的（宿主/broker）明确说清「这不是本仓的东西」并写明影响面。
 - decision: ①**卡文件数上限只作建议**（超过 10 个生产文件时 build-plan 必须写明为什么必须一起改，但不拦截）；②**执行面四条编入任务Ⅱ 批次⑨（本轮修订：不再延期）**：慢测试切分（三层节奏 + 硬时间预算）、同命令去重（同输入不重复启动）、超时保留已完成部分（timeout 不抹掉已完成的 provider member / 已跑完的测试文件）、开工前 preflight（命令与路径存在性、provider/host 能力、packet 体积在昂贵动作前校验）；③**宿主能力缺口**：明确定成「**不在本仓库范围内**」（它属宿主/broker 实现，不是 workflowhub 仓内的可交付物），按 `non_goals` 登记并写明理由与影响面，不阻断任何阶段结束；④任务粒度（seam 级 / wave / write-set）写成 build-prd 材料纪律的**必填小节**（不是延期项，是本阶段就要写出来的东西）。
@@ -1591,6 +1617,7 @@ artifacts: [spec.md#FR-023]
 ```
 
 #### D-027
+
 - question/final_option: 第 5 轮独立覆盖审查发现的四个「零防护」缺口与两个对象族缺口怎么补？→ 按 7 条逐一补，全部零新增对象
 - recommendation/plain_language: 第五轮审查（独立子代理，只读）指出：删掉的东西本身会**制造**新缺口，而且有两整类阻塞在方案里一条防护都没有。这七条必须现在补，否则下一轮会以新形态复现。
 - decision: 七条：
@@ -1603,7 +1630,7 @@ artifacts: [spec.md#FR-023]
   7. **review packet 体积与 compact projection**：审查输入设**体积上限**，超限只发 compact projection（**零新对象**，复用现有 packet 机制）；禁止整包重发。补 F4（8 份文档审计「完全无防护」第 4 条）。
 - source_type/reference/exact_excerpt: 第 5 轮独立覆盖审查（原始需求覆盖审查 75%、8 份文档去重后 59 条 = addressed 32 / partially 20 / **not_addressed 4** / rejected 3）。审查原文：「**整类零防护**：E 编排/上下文类（5 条 0 addressed）——唯一在 D/OI 层面没有任何硬防护的阻塞类型，且与 R-003『超过 50% 花在机制上』直接相关」；「方案拆掉了原本承担冲突语义的 currentness 与 selector，却没把『同身份多结果怎么办』搬到 `facts.jsonl` 上……这是删除动作**自身制造**的新缺口」。
 - approval_binding: 同上
-- facts_and_constraints: 四条「完全无防护」= ①无生产者类（[5][6][7]）②conflict→missing/幂等（[6][7]）③handoff 读取面（13m27s 误扫、1.25GB corpus）④review packet 体积（665KB → `prompt too long`；407,560 B → 1,008,828 B）。E 类 5 条 0 addressed；F 类 8 条仅 1 addressed。
+- facts_and_constraints: 四条「完全无防护」= ①无生产者类（5、6、7）②conflict→missing/幂等（6、7）③handoff 读取面（13m27s 误扫、1.25GB corpus）④review packet 体积（665KB → `prompt too long`；407,560 B → 1,008,828 B）。E 类 5 条 0 addressed；F 类 8 条仅 1 addressed。
 - Logic: 删除动作会移除原有语义的承载层 -> 若不显式搬走，语义以「静默通过」或「再刷新一次」的形态复现 -> 七条把语义搬回唯一记录层与材料纪律，且全部零新增对象
 - choice_reason/impact: 直接决定 R-006「未来不要再出现类似阻塞」是否可验收。
 - consequences_and_risks: 第 7 条需要改审查输入侧（public 行为）；第 6 条靠材料纪律而非机器强制（与 D-013 同样的取舍，刻意选择）。
@@ -1616,9 +1643,10 @@ module: 边界
 requirement_ids: [R-006, R-007, R-008]
 derived_from: [D-013, D-018, D-022, D-023, D-026]
 artifacts: [spec.md#FR-024, plan.md]
-```
+```text
 
 #### D-028
+
 - question/final_option: 第 5 轮冗余实测发现的 9 类漏删对象、5 处失效结论、5 个漂移数字、5 项遗留负担怎么处置？→ 全部登记并写入批次，不改方向
 - recommendation/plain_language: 第五轮实测发现：删除清单方向对，但**漏了 9 类真冗余**（其中 3 类与已点名对象同量级），**3 处结论在合并后已失效**，**7 个数字里 5 个对不上**。最关键的一条：**按现有清单删完，那个 6,806 行的巨型校验引擎仍然原样在**——宪法拿它当永久警示的形态，整改后还成立。这不是方向错，是清单不完整，必须补齐。
 - decision: 五条：
@@ -1645,6 +1673,7 @@ artifacts: [spec.md#FR-025, plan.md, tasks.md]
 ```
 
 #### D-029
+
 - question/final_option: 第 5 轮真实 provider 细节审查的 8 项裁决 + 7 项追加 finding（含 5 个 blocking）怎么处置？→ 16 条逐一处置，其中批次表与审查通道两条必须改决定文本
 - recommendation/plain_language: 这轮真实 provider 审查（虽然通道最后挂了）挖出五个阻塞级问题，最要命的两个：**①我们的批次表是坏的**——批次② 根本没定义，八条决定没有落进任何批次，「每批都能独立跑通」这句话不成立；**②我们赖以成立的那条审查通道自己不可用**——审查包缺了必需的 lens、合同要求的字段被允许名单拒绝、provider 腿健康但调用方腿稳定失败。这两条不改，整改一定半路撞墙再补一层。
 - decision: 16 条：
@@ -1798,7 +1827,8 @@ Grill 于 direction-advice 与 Talk round 3 之后、写决定草案之前执行
 - **非目标**：见 `## 非目标` 节。
 - **剩余风险与未决项**：已分别归入 `## 风险`（RK-1~RK-7）与 `## 未决项`（OPN-1~OPN-5）两节，本节不再重复维护，以免出现第二份清单。
 
-#### D-030
+### D-030
+
 - question/final_option: 审查进程的失败由谁终止？→ **由 3rd-review 的健康检查自动关闭**，不依赖外层 timeout
 - recommendation/plain_language: 「去掉外层 900 秒」不等于「有界」——本次实测证明了这一点：进程空转 21 分钟、零产出，最后只能靠人手动杀。**正确的做法是让审查系统自己知道「这个审查已经失败了」并自己终结**，而不是在外面架一个定时炸弹。
 - decision:
@@ -1824,6 +1854,29 @@ derived_from: [D-007, D-021, D-029]
 artifacts: [spec.md#FR-027, plan.md, tasks.md]
 ```
 
+## C7 父材料更正清单（X1–X14）
+
+以下清单把 `prd.md` 已登记的 X1–X14 更正同步到本父 decision-log。它只修正规划材料的事实口径，不把历史交互聚合、旧 decision_hash 或历史证据改写成当前事实。
+
+| 编号 | 更正后的事实口径 | 落点与约束 |
+| --- | --- | --- |
+| X1 | `task-fact.v1.json` 从未被加载；删除 schema 文件，字段改动落在 `task-store.mjs` 的手写校验。 | 批次①删除 schema，批次③改手写字段表；不保留两套校验。 |
+| X2 | `stage-content-contracts.mjs` 的 HEAD 行数按 `wc -l` 为 6,806；更早的 6,485 不再作为基线。 | M5 使用同一行数口径；仓库 helper 的尾换行差异单独登记。 |
+| X3 | 原 M5 五项基线不是同一提交的可复算集合，整套作废，由 C0 重测。 | 不用 288、1,412、97、47、6,485 充当当前验收值。 |
+| X4 | `decision_hash` 分为确认时绑定值与当前整文件值；当前实现没有按章节取哈希。 | 旧确认值不可由当前编辑恢复；不得把两个口径合并。 |
+| X5 | 交互聚合文件名以实际落盘文件为准，不沿用旧摘要中的文件名。 | C7 只更新材料引用；历史聚合字节保持只读。 |
+| X6 | 重复的六项总结与阶段收口段落按信息量合并为一处；删除重复段会改变整文件哈希。 | 不把合并后的哈希冒充确认时哈希。 |
+| X7 | `Exit checks` 后的补记章节属于结构顺序问题，内容要归位但不能因此丢失。 | 结构修复不新增第五份材料。 |
+| X8 | D-018 的旧 `decision` 行不再独立计数；只认修订句中的执行序。 | 任务Ⅰ、Ⅱ、Ⅲ和批次⓪、⑨按 D-018 修订句执行。 |
+| X9 | `Supersedes` 与 OI 引用统一使用十个明确批次，计数唯一来源是 D-018 修订句。 | 其他段落不得再次建立批次数字口径。 |
+| X10 | `task-index.mjs` 归批次③；它没有生产 importer，是 `index.json` 的第二份实现。 | 批次③同批更新 `task-store.mjs`、路径检查和相关测试登记。 |
+| X11 | `check-extensibility.mjs` 归批次⑤；它同时受 `npm run check` 与 exclusive 测试链消费。 | 删除或迁移时保留两条真实消费链的一致性。 |
+| X12 | D-029⑦ 的逐项批次落点必须显式写出，不能只写“编入批次”。 | 每一项绑定具体批次和同文件同批约束。 |
+| X13 | 批次①删除清单与 K1–K9 保留记录清单交叉时，K 清单优先。 | 删除前逐项对照；冲突停止并修正登记，不静默删除。 |
+| X14 | `Exit checks` 的 R-001–R-013 处置结论与 `interaction_proof` 事实分开记录；后者按实际生产路径核验。 | 不因交互聚合形状或哈希绑定缺失而宣称已通过。 |
+
+`D-025③` 的材料边界用语固定为：`prd.md 不是第五份材料`。本句是边界说明，不改变四份当前材料的权威范围。
+
 ## 六项大白话总结（stage-end spec-analyze）
 
 **1. 这个阶段做了什么（stage_work）**
@@ -1835,8 +1888,9 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 **3. 与上游产物、实际语义和证据是否一致（upstream_alignment）**
 一致，但有 **6 处旧结论因 main 合并而过期**，已全部更正（`N-001-p/u/v/w/x/y/z`）：`verify.json` 已不是「无 publisher 无 guard」而是完成谓词本身；`stage-reflection` 已不是「无 reader」而是 handoff 的输入；`facts.jsonl` 的 schema 从未被加载（校验是手写的）；`index.json` 是 5 写 6 读不是 4 写；`facts.jsonl` 里还有一套零生产者的分支；净减法数字在 HEAD 上全部重测。**凡引用旧行号或旧结论处均已标注须按 HEAD 重核。**
 
-**4. 当前阶段当场修复了什么（current_stage_repairs）**
-- 5 个阻塞级问题：批次表损坏（批次② 无定义）→ 重建为 10 个具名批次（计数唯一来源 = D-018 修订句）；审查通道自身不可用 → 升级为「必须修」；审查去重键与 focus 复审正面对撞 → 改元组；两个哑弹（`check-skill-closure` 硬编码 `material_revision`/`snapshot_tree`、`AGENTS.md` 明文保留 `index.json`/`verify.json`）→ 编入批次；按原清单删完巨型校验引擎仍在 → 写主体级减法落点要求
+### 4. 当前阶段当场修复了什么（current_stage_repairs）
+
+- 5 个阻塞级问题：批次表损坏（批次② 无定义）→ 重建为十个具名批次（计数唯一来源 = D-018 修订句）；审查通道自身不可用 → 升级为「必须修」；审查去重键与 focus 复审正面对撞 → 改元组；两个哑弹（`check-skill-closure` 硬编码 `material_revision`/`snapshot_tree`、`AGENTS.md` 明文保留 `index.json`/`verify.json`）→ 编入批次；按原清单删完巨型校验引擎仍在 → 写主体级减法落点要求
 - 材料内部不自洽：D-010 删预算未落批次 → 编入批次④并写死顺序
 - 用户的两次收紧：撤销全部延期项；执行面四条编入批次⑨
 - 3 处文档缺陷：重复的「目标/范围/非目标」章节、内容契约缺 10 个必备章节、`deferred` 类别未清空
@@ -1844,7 +1898,8 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 **5. 剩余风险、未决和延期（remaining_risks）**
 剩余风险 RK-1~RK-7、未决 OPN-1~OPN-5 见对应两节。**没有延期项**（`deferred` 类别为 `empty: true`）。最需要下游继续处理的是 OPN-3（`stage-content-contracts.mjs` 6,806 行与 `runtime/stage/` 三个巨人的主体级收窄方案）和 OPN-5（本阶段的方向审查尚未带上 OI 快照）。
 
-**6. 下游可以直接消费什么、不能自行猜什么（next_stage_boundary）**
+### 6. 下游可以直接消费什么、不能自行猜什么（next_stage_boundary）
+
 - **可以直接消费**：本 decision-log 的 30 条决定与 30 条 OI、10 个批次定义、保留记录清单 K1–K9、对象族处置表、阻塞分类学、以及标记为「已裁定不采纳」的清单。
 - **不能自行猜**：①不得采纳被明确否决的方案（统一 canonical writer / 新终态状态机 / digest 分层 / executable compiler / contract report / command fingerprint / `doctor --stage` / `execution-ledger.jsonl` / 依赖闭包 freshness）；②不得把「延期」重新引入材料；③不得自行启用宿主/broker 的仓外能力；④不得把 22+13 条 provider 回收 finding 当作已记录审查事实；⑤不得在未重核 HEAD 的情况下引用本材料中的旧行号。
 
@@ -1854,7 +1909,7 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 
 本阶段已通过官方 bridge 提交过**一次真实的 stage outcome**（`unavailable`，非伪造）：
 
-```
+```text
 outcome_ref    quality/evidence/stage-outcomes/make-decision/09e16e90….json
 outcome_status unavailable
 producer       stage-agent / dsh-web-session / dsh-web/no-host-session-lifecycle
@@ -1898,7 +1953,7 @@ reason         host does not expose an authenticated stage-session lifecycle or
 
 **对下游的影响**：`work_status=ready` / `continuation_allowed=true` ⇒ 按宪法 F3/Q2「四材料可读即可继续」，**build-prd 可以直接开工**，只消费已确认的方向，不依赖 stage completion。
 
-## 六项大白话总结（stage-end spec-analyze）
+## 六项大白话总结（stage-end spec-analyze，结构化回读）
 
 **1. 这个阶段做了什么（stage_work）**
 把「workflowhub 机制太重、流程和门禁吃掉一半以上时间」这个诉求，做成了一份可执行的整改方向。共 30 条决定 + 30 条收敛大纲条目（OI），全部经真实用户确认；期间跑了四轮 Talk + 一轮 Grill，做了两次正式异源审查、八份文档逐份覆盖审计、以及四份独立复核（含一次真实 provider 细节审查）。
@@ -1909,8 +1964,9 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 **3. 与上游产物、实际语义和证据是否一致（upstream_alignment）**
 一致，但有 **6 处旧结论因 main 合并而过期**，已全部更正（`N-001-p/u/v/w/x/y/z`）：`verify.json` 已不是「无 publisher 无 guard」而是完成谓词本身；`stage-reflection` 已不是「无 reader」而是 handoff 的输入；`facts.jsonl` 的 schema 从未被加载（校验是手写的）；`index.json` 是 5 写 6 读不是 4 写；`facts.jsonl` 里还有一套零生产者的分支；净减法数字在 HEAD 上全部重测。**凡引用旧行号或旧结论处均已标注须按 HEAD 重核。**
 
-**4. 当前阶段当场修复了什么（current_stage_repairs）**
-- 5 个阻塞级问题：批次表损坏（批次② 无定义）→ 重建为 10 个具名批次（计数唯一来源 = D-018 修订句）；审查通道自身不可用 → 升级为「必须修」；审查去重键与 focus 复审正面对撞 → 改元组；两个哑弹（`check-skill-closure` 硬编码 `material_revision`/`snapshot_tree`、`AGENTS.md` 明文保留 `index.json`/`verify.json`）→ 编入批次；按原清单删完巨型校验引擎仍在 → 写主体级减法落点要求
+### 4. 当前阶段当场修复了什么（current_stage_repairs）
+
+- 5 个阻塞级问题：批次表损坏（批次② 无定义）→ 重建为十个具名批次（计数唯一来源 = D-018 修订句）；审查通道自身不可用 → 升级为「必须修」；审查去重键与 focus 复审正面对撞 → 改元组；两个哑弹（`check-skill-closure` 硬编码 `material_revision`/`snapshot_tree`、`AGENTS.md` 明文保留 `index.json`/`verify.json`）→ 编入批次；按原清单删完巨型校验引擎仍在 → 写主体级减法落点要求
 - 材料内部不自洽：D-010 删预算未落批次 → 编入批次④并写死顺序
 - 用户的两次收紧：撤销全部延期项；执行面四条编入批次⑨
 - 3 处文档缺陷：重复的「目标/范围/非目标」章节、内容契约缺 10 个必备章节、`deferred` 类别未清空
@@ -1918,11 +1974,12 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 **5. 剩余风险、未决和延期（remaining_risks）**
 剩余风险 RK-1~RK-7、未决 OPN-1~OPN-5 见对应两节。**没有延期项**（`deferred` 类别为 `empty: true`）。最需要下游继续处理的是 OPN-3（`stage-content-contracts.mjs` 6,806 行与 `runtime/stage/` 三个巨人的主体级收窄方案）和 OPN-5（本阶段的方向审查尚未带上 OI 快照）。
 
-**6. 下游可以直接消费什么、不能自行猜什么（next_stage_boundary）**
+### 6. 下游可以直接消费什么、不能自行猜什么（next_stage_boundary）
+
 - **可以直接消费**：本 decision-log 的 30 条决定与 30 条 OI、10 个批次定义、保留记录清单 K1–K9、对象族处置表、阻塞分类学、以及标记为「已裁定不采纳」的清单。
 - **不能自行猜**：①不得采纳被明确否决的方案（统一 canonical writer / 新终态状态机 / digest 分层 / executable compiler / contract report / command fingerprint / `doctor --stage` / `execution-ledger.jsonl` / 依赖闭包 freshness）；②不得把「延期」重新引入材料；③不得自行启用宿主/broker 的仓外能力；④不得把 22+13 条 provider 回收 finding 当作已记录审查事实；⑤不得在未重核 HEAD 的情况下引用本材料中的旧行号。
 
-## 阶段收口状态（诚实登记）
+## 阶段收口状态（诚实登记，结构化回读）
 
 | 步骤 | 状态 | 事实 |
 | --- | --- | --- |
@@ -1957,7 +2014,7 @@ R-001~R-013 全部有处置，无「待处理」项（R-013 为本会话新增�
 | # | 发现 | 复核 | 处置 |
 | --- | --- | --- | --- |
 | D-R1 | **A-Q6 假绿**：`Exit checks` 与六项总结声称「R-001~R-012 全部有处置（无「待处理」）」，而 R-001~R-006、R-010 末列**逐字仍写「待处理」**（此前只回填了 R-007/R-008） | **成立** —— 这是本材料自身的一处假绿 | **已修**：7 行逐行回填真实处置（D/OI 编号） |
-| D-R2 | **B1 批次计数不自洽**：D-018 修订写「8 个具名批次」，其他 6 处写「9 个」，实际枚举 10 个标记且 ⑨ 插在 ④ 与 ⑤ 之间（乱序）；同类缺陷第 5 轮已判过 blocking | **成立** —— 「修复」把计数从 8 改成 9，重新引入了同一类不可核验 | **已修**：统一为 **10 个具名批次**并指定「计数唯一口径 = D-018 修订句」；新增「批次执行序（唯一口径）」；⑨ 移到 ⑧ 之后 |
+| D-R2 | **B1 批次计数不自洽**：D-018 修订写「8 个具名批次」，其他 6 处写「9 个」，实际枚举十个标记且 ⑨ 插在 ④ 与 ⑤ 之间（乱序）；同类缺陷第 5 轮已判过 blocking | **成立** —— 「修复」把计数从 8 改成 9，重新引入了同一类不可核验 | **已修**：统一为 **十个具名批次**并指定「计数唯一口径 = D-018 修订句」；新增「批次执行序（唯一口径）」；⑨ 移到 ⑧ 之后 |
 | D-R3 | **A-Q4 `deferred: empty` 理由自证**：原理由同时用了用户的明确指示**和**「所有仓内可交付项一律编入批次」这个**结论**，而 OI-005 恰在问该结论 | **成立** | **已修**：理由改为**只依据用户明确指示**（「我不希望有延期任务」），并写明 OI-005 由该指示裁定为「纳入」，附反例边界 |
 
 **登记但不在本阶段修（属机制与后续批次）**：

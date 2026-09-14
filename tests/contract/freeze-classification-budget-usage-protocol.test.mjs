@@ -68,7 +68,7 @@ function frozenDecision(overrides = {}) {
   };
 }
 
-function buildSpecRoutingFixture({ gap, fallback_protocol } = {}) {
+function buildSpecRoutingFixture({ gap, fallback_protocol, direction_change = false } = {}) {
   const taskId = "handler-routing-task";
   const tree = "a".repeat(40);
   const materialId = "b".repeat(64);
@@ -165,6 +165,11 @@ function buildSpecRoutingFixture({ gap, fallback_protocol } = {}) {
     kind: "implementation_defect",
     impact_dimensions: ["runtime"],
     evidence_refs: [resultRef],
+    ...(direction_change ? {
+      classification: "direction_change",
+      kind: "implementation_defect",
+      impact_dimensions: ["direction_change"],
+    } : {}),
     ...(gap === undefined ? {} : { gap }),
   };
   return {
@@ -243,10 +248,10 @@ describe("Phase 1 freeze and classification contracts", () => {
     expect(validateFindingRouting({ finding, classification: "spec_ambiguity", disposition: { status: "user_decided", reply_ref: "quality/confirmations/reply.json" } })).toMatchObject({ ok: true });
   });
 
-  it("does not allow direction-level findings to be marked fixed and keeps gap ids deterministic", () => {
+  it("allows direction-level findings to be marked fixed and keeps gap ids deterministic", () => {
     const finding = { finding_id: "f-2", kind: "implementation_defect", impact_dimensions: ["direction_change"], evidence_refs: ["quality/reviews/result.json"] };
     expect(classifyFinding(finding)).toMatchObject({ classification: "direction_change" });
-    expect(validateFindingRouting({ finding, classification: "direction_change", disposition: { status: "fixed" } })).toMatchObject({ ok: false });
+    expect(validateFindingRouting({ finding, classification: "direction_change", disposition: { status: "fixed" } })).toMatchObject({ ok: true, route: "return_to_make_decision" });
 
     const first = deriveGapId({ task_id: "task-1", material_revision: "revision-1", gap_kind: "review", content: "  same   gap  " });
     const second = deriveGapId({ task_id: "task-1", material_revision: "revision-1", gap_kind: "review", content: "same gap" });
@@ -276,6 +281,29 @@ describe("Phase 1 freeze and classification contracts", () => {
     const incompleteResult = await officialStageHandler("build-spec")(incomplete.worker, incomplete.input);
     expect(incompleteResult.facts.finding_dispositions.routing).toMatchObject({ status: "incomplete", items: [{ status: "incomplete", gap: { ok: false, reason: "invalid_gap_identity" } }] });
     expect(incompleteResult.missing_items.join("; ")).toContain("invalid_gap_identity");
+  });
+
+  it("accepts a fixed direction change only for the current material revision", async () => {
+    const currentFixture = buildSpecRoutingFixture({
+      direction_change: true,
+      gap: { task_id: "handler-routing-task", material_revision: current.material_revision, gap_kind: "direction_change", content: "current direction repair" },
+    });
+    const currentResult = await officialStageHandler("build-spec")(currentFixture.worker, currentFixture.input);
+    expect(currentResult.facts.finding_dispositions.routing).toMatchObject({
+      status: "recorded",
+      items: [{ status: "recorded", classification: "direction_change", gap: { ok: true } }],
+    });
+
+    const oldFixture = buildSpecRoutingFixture({
+      direction_change: true,
+      gap: { task_id: "handler-routing-task", material_revision: "revision-old", gap_kind: "direction_change", content: "old direction repair" },
+    });
+    const oldResult = await officialStageHandler("build-spec")(oldFixture.worker, oldFixture.input);
+    expect(oldResult.facts.finding_dispositions.routing).toMatchObject({
+      status: "incomplete",
+      items: [{ status: "incomplete", classification: "direction_change" }],
+    });
+    expect(oldResult.facts.finding_dispositions.routing.items[0].errors.join("; ")).toMatch(/material_revision/);
   });
 });
 
@@ -508,23 +536,24 @@ describe("Phase 3 review round policy contracts", () => {
     expect(second.review_budget.counts).toMatchObject({ initial: 1 });
     expect(dispatches, "an identical public request reuses the recorded round instead of dispatching again").toBe(1);
 
-    // Different reviewed bytes at the same material revision are a new request
-    // but not a new review round: the initial allowance is already consumed.
-    const refused = await recordSimpleReviewRequest({
+    // Material bytes are provenance, not a five-dimensional dedup dimension:
+    // the same authenticated material revision reuses the immutable result.
+    const reusedChangedMaterial = await recordSimpleReviewRequest({
       task,
       kernel,
       request: { ...request, materials: { implementation: "different bytes at the same revision" } },
       runRound,
       resolveRouteIdentity,
     });
-    expect(refused).toMatchObject({
-      status: "unavailable",
-      reused: false,
-      dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" },
+    expect(reusedChangedMaterial).toMatchObject({
+      status: "recorded",
+      reused: true,
+      dispatch_state: "reused",
+      attempt_ref: first.attempt_ref,
+      result_ref: first.result_ref,
     });
-    expect(refused.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
-    expect(dispatches, "a refused request must not reach the provider round").toBe(1);
+    expect(reusedChangedMaterial.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
+    expect(dispatches, "a changed-material reuse must not reach a second provider round").toBe(1);
   });
 });
 

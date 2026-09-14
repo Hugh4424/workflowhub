@@ -1,6 +1,6 @@
 # Workflowhub 设计宪法
 
-Version: 1.8.0
+Version: 1.9.0
 
 > 本文件是 workflowhub 的设计宪法，是所有里程碑设计与实现的对照基准。
 > 分三组：框架原则（F）、质量原则（Q）、技能原则（S），共 22 条。
@@ -25,7 +25,7 @@ Version: 1.8.0
 
 ### F3 四材料决定推进，正式发布保持结构真实
 
-- **定义**：进入或继续 build-code、verify-code 只要求当前 `decision-log.md`、`spec.md`、`plan.md` 与 `tasks.md` 存在且可读；accepted、收据、审查、确认和审计记录不是推进许可证。正式写边界和阶段完成是另外两条边界：task/worktree/runtime 身份、hash、顺序与核心 publication 结构错误必须在写成功前 fail-loud。
+- **定义**：进入或继续 build-code、verify-code 只要求当前 `decision-log.md`、`spec.md`、`plan.md` 与 `tasks.md` 存在且可读；accepted、收据、审查、确认和审计记录不是推进许可证。正式写边界和阶段完成是另外两条边界：task/worktree/runtime 身份、顺序与核心 publication 结构错误必须在写成功前 fail-loud。
 - **最佳实践解释**：把“能继续工作”和“能发布成功、能宣称完成”分开。辅助审计缺失只记 `missing/unavailable`，但错绑事实不能当真，缺实际交付、测试、逐 AC 结果、独立审查事实或交接也不能报完成。
 - **正例**：旧 accepted 或 review 缺失时仍可按四份材料修复；发布 implementation 或 verification result 时，工作区错绑、快照不一致或核心结果不完整会明确失败。
 - **反例**：为补审计记录停止编码或新建修复任务；或反过来把 automatic accepted、`live_plan_execution`、空 evidence 当作阶段完成。
@@ -48,7 +48,7 @@ Version: 1.8.0
 
 - **定义**：进度、指标、回溯信息统一写入任务外置记录；每次正式写入使用当次执行身份认证实际运行的干净已提交内容。任务本身不永久绑定某个 runner 路径或提交，缺旧身份记录不得阻止依据四材料继续工作。
 - **最佳实践解释**：任务身份回答“在做什么”，调用身份回答“这次由哪份已提交且干净的 WorkflowHub 执行”。两者分开记录，既能回溯，也不会因工具升级反复改任务身份。
-- **正例**：每次调用把 run、stage、已核验的 WorkflowHub 提交和合同内容校验值写入 create-only 记录，任务清单只保存业务身份与执行模式。
+- **正例**：每次调用把 run、stage 和已核验的 WorkflowHub 提交写入 create-only 记录，任务清单只保存业务身份与执行模式。
 - **反例**：把某个临时 checkout 的绝对路径和 HEAD 永久写进任务清单，工具每更新一次就做一次 runner replacement。
 
 ### F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权
@@ -169,7 +169,27 @@ Version: 1.8.0
 
 ## 治理实施边界（不新增宪法条款）
 
-以下是对现有 F/Q/S 条款的运行时落地声明，不改变宪法条款数量、编号或版本：四份当前材料是唯一工作真相；vNext task 使用 facts 与 `quality/*` 单写事实；质量事实不是推进许可证；旧 accepted/revision/lineage/flow/checkpoint 记录只读；公共入口只有七类稳定行为；不可逆操作使用独立 `authorize --op=<commit|push|merge|archive|cleanup>`；新增控制面必须有唯一 consumer、owner、替代和删除条件。
+以下是对现有 F/Q/S 条款的运行时落地声明，不改变宪法条款数量、编号或版本：四份当前材料是唯一工作真相；vNext task 使用 facts 与 `quality/*` 单写事实；质量事实不是推进许可证；旧 accepted/revision/lineage/flow/checkpoint 记录只读；公共入口只有七类稳定行为；不可逆操作使用独立公共 `node tools/cli/stage-runtime.mjs authorize --action=<commit|push|merge|archive|cleanup>`，或使用一次用户确认的 `task-close close` 由系统按冻结计划内部生成逐项授权；该交付授权不是 build-code 的进入、继续、测试、修复或交接门禁；新增控制面必须有唯一 consumer、owner、替代和删除条件。
+
+### 负向条款与控制面分类（不新增宪法条款）
+
+以下负向条款只是把现有治理边界写成可审查的拒绝方案，不新增 F/Q/S 条目、流程节点或质量 gate；默认不新增 hash，身份与完整性所必需的现有绑定仍须保留。
+
+1. **拒绝方案 1**：未绑定当前 task、stage、attempt 的事实不得作为当前结论。
+2. **拒绝方案 2**：无法归因到真实 producer 的摘要不得覆盖原始事实。
+3. **拒绝方案 3**：把恢复、continuation 或 replacement 当作新公共流程节点的方案不得新增。
+4. **拒绝方案 4**：用额外生命周期状态阻塞正常执行的控制面不得新增。
+5. **拒绝方案 5**：把质量事实改写成推进许可证的方案不得采用。
+6. **拒绝方案 6**：把交互确认复制到非必要 stage 的方案不得采用。
+7. **拒绝方案 7**：把执行记录伪造成成功或把 unavailable 改写为 pass 的方案不得采用。
+8. **拒绝方案 8**：没有真实 consumer、owner、oracle 和删除条件的控制面不得新增。
+9. **拒绝方案 9**：把历史 snapshot、selector 或 lineage 当作当前授权依据的方案不得采用。
+10. **拒绝方案 10**：把旧 receipt、accepted 或 review 投影当作当前材料的方案不得采用。
+11. **拒绝方案 11**：以新 hash、计数器或重复 schema 代替已有身份绑定的方案不得采用。
+12. **拒绝方案 12**：把 provider 不可用、证据缺失或未知状态漂白为完成的方案不得采用。
+13. **拒绝方案 13**：把 public runtime 扩展为 prepare、recover 或 phase 节点的方案不得采用。
+14. **拒绝方案 14**：把物理 close 与质量结论混写、互相替代的方案不得采用。
+15. **拒绝方案 15**：没有失败语义、退出条件和可追溯依据的治理变更不得采用。
 
 ### close 三义（解释说明，非新条款）
 
@@ -187,13 +207,15 @@ Version: 1.8.0
 - **条目变更须同步**：任何对宪法条目的新增/改写/拆分/合并，必须同步更新——① 版本号；② 修订记录；③ 旧条目到新条目的映射；④ 检查清单条目数（须始终等于宪法条目数）。
 - **变更须可追溯**：变更须能追溯回需求权威源或新的批准记录。
 
-Version: 1.8.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-09-09
+Version: 1.9.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-09-14
 
 **修订记录**：
 
+- 1.9.0（2026-09-14）：同步既有 F/Q/S 条款对应的治理实施边界、负向条款和控制面分类；保留 22 条原有编号，不新增 public 流程节点，不把质量或辅助事实升级为推进许可证。默认不新增 hash，仅保留身份与完整性所需的绑定事实。来源：机制简化任务 C7 治理同步决定。
+
 - 2026-08-03（治理同步）：本次只同步执行规则、术语和人工交接材料，不新增、改写、拆分或合并宪法条款；Version 保持 1.5.0，checklist 仍为 21 条。
 
-**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。1.7.0 → 1.8.0 仍保留 22 条宪法条目和原编号；F7 补充 build-prd/spec-prd 第二次内容调用后的最终展示稿同版确认、拒绝/未答/错版保持草稿，且不新增第三次内容调用、formal stage 或 non-UI 日常确认。
+**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。1.7.0 → 1.8.0 仍保留 22 条宪法条目和原编号；F7 补充 build-prd/spec-prd 第二次内容调用后的最终展示稿同版确认、拒绝/未答/错版保持草稿，且不新增第三次内容调用、formal stage 或 non-UI 日常确认。1.8.0 → 1.9.0 保留 22 条宪法条目和原编号；仅同步治理实施边界、负向条款和控制面分类，默认不新增 hash，不新增 public 流程节点。
 
 - 1.8.0（2026-09-09）：在既有 F7 内明确 build-prd/spec-prd 的最终展示稿确认必须位于第二次内容调用之后，绑定 decision/source/map/PRD 同版事实；拒绝、未答、错版保持草稿，不新增第三次内容调用、formal stage 或 non-UI 日常确认。条目数仍为 22。来源：build-prd P2 独立复核修复。
 

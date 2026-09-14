@@ -1,17 +1,21 @@
 # Task Plan: WorkflowHub build-spec 与 build-plan
 
 ## Goal
+
 在认证 task/worktree 内，按两个 stage manifest 的原始顺序完成 build-spec 15 步和 build-plan 13 步；每阶段形成当前材料、独立审查、finding 处置、strict spec-analyze、completed stage outcome 与 stage reflection，且不把本阶段规格缺口推给下游。
 
 ## Next Step
+
 两个阶段已 completed 并已交接。下一步由用户决定：提交四材料 / 另起 build-code 会话（交接文档 `quality/evidence/handoff/build-plan-to-build-code.md`）。
 
 ## Current Phase
+
 Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 
 ## Phases
 
 ### Phase 1: build-spec steps 1–3 — load, conditional research, clarify
+
 - [x] 核对 task/worktree 与阶段状态
 - [x] 读取 build-spec manifest
 - [x] 读取 portable package、依赖与 current decision-log
@@ -20,6 +24,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** complete
 
 ### Phase 2: build-spec steps 4–10 — specify and freeze
+
 - [x] 编写完整 spec.md
 - [x] 执行 simplicity guard 与 CEO review
 - [x] 记录 non-UI steps 7–9 为 not applicable
@@ -27,6 +32,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** complete
 
 ### Phase 3: build-spec steps 11–15 — review, analyze, publish, reflect
+
 - [x] 对冻结 spec 发起一次真实独立 review
 - [x] 逐条处置 finding 并完成最后材料修订
 - [x] 执行 strict stage-end spec-analyze
@@ -35,6 +41,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** complete
 
 ### Phase 4: build-plan steps 1–8 — load, blueprint, plan/tasks
+
 - [ ] 读取 build-plan portable package 与当前 decision/spec
 - [ ] 记录 conditional planning research 事实
 - [ ] 建立逐行为测试蓝图
@@ -44,6 +51,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** pending
 
 ### Phase 5: build-plan steps 9–13 — review, analyze, confirm, publish, reflect
+
 - [ ] 对 current plan/tasks 发起一次真实独立 review
 - [ ] 逐条处置 finding 并完成最后材料修订
 - [ ] 执行 current five-input strict spec-analyze
@@ -52,12 +60,14 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** pending
 
 ### Phase 6: Final verification and delivery
+
 - [x] build-spec 官方 run/reflection 已发布
 - [x] build-plan 官方 run/reflection 与用户确认已发布
 - [x] 总结主要产物与真实质量缺口
 - **Status:** complete
 
 ### Phase 7: Merge completed predecessor task and reconcile
+
 - [x] 检查当前分支、工作区改动与 main 的任务Ⅰ提交
 - [x] 安全保存未提交改动并合并 main
 - [x] 恢复本任务改动、解决冲突并确认无数据丢失
@@ -68,6 +78,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 - **Status:** complete
 
 ## Decisions Made
+
 | Decision | Rationale |
 |----------|-----------|
 | 严格先 build-spec 后 build-plan | build-plan 缺 `spec.md`，manifest 明确依赖；用户也指定顺序 |
@@ -77,6 +88,7 @@ Phase 7 完成 — 两阶段已按合并后材料重新发布并交接
 | 规划文件放 `.planning/...` | 避免污染四份当前材料；这些仅为 agent 工作记忆，不是 WorkflowHub 控制面或质量 gate |
 
 ## Errors Encountered
+
 | Error | Resolution |
 |-------|------------|
 | 初次文件发现用 `workflows/{build-spec,build-plan}/**/*` 未匹配 | 改用精确路径直接读取两个 `steps.json`，不重复同一失败 glob |

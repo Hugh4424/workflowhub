@@ -9,11 +9,11 @@
 
 来源（均为 Anthropic 官方文档）：
 
-- 插件创建指南：https://code.claude.com/docs/en/plugins
-- Marketplace 指南（含 marketplace.json schema）：https://code.claude.com/docs/en/plugin-marketplaces
-- 插件技术参考（含 plugin.json 完整 schema、版本管理）：https://code.claude.com/docs/en/plugins-reference
-- 插件依赖与 semver 约束：https://code.claude.com/docs/en/plugin-dependencies
-- 发现与安装插件（安装/更新机制）：https://code.claude.com/docs/en/discover-plugins
+- 插件创建指南：<https://code.claude.com/docs/en/plugins>
+- Marketplace 指南（含 marketplace.json schema）：<https://code.claude.com/docs/en/plugin-marketplaces>
+- 插件技术参考（含 plugin.json 完整 schema、版本管理）：<https://code.claude.com/docs/en/plugins-reference>
+- 插件依赖与 semver 约束：<https://code.claude.com/docs/en/plugin-dependencies>
+- 发现与安装插件（安装/更新机制）：<https://code.claude.com/docs/en/discover-plugins>
 
 ### 1.1 plugin.json schema
 
@@ -37,7 +37,7 @@
 
 **未识别字段**：顶层未识别字段被忽略，插件照常加载——官方明确说这使得一份 manifest 可以同时兼任 VS Code/Cursor 扩展 manifest、npm package.json 或 MCPB/DXT bundle manifest。`claude plugin validate` 对未识别字段只报 warning（`--strict` 时视为 error）。
 
-来源：https://code.claude.com/docs/en/plugins-reference#plugin-manifest-schema
+来源：<https://code.claude.com/docs/en/plugins-reference#plugin-manifest-schema>
 
 ### 1.2 插件可以包含什么（目录约定）
 
@@ -56,13 +56,14 @@
 | `bin/` | 可执行文件，插件启用时加入 Bash 工具的 PATH |
 | `settings.json` | 插件级默认设置（当前仅支持 `agent`、`subagentStatusLine` 键） |
 
-来源：https://code.claude.com/docs/en/plugins#plugin-structure-overview
+来源：<https://code.claude.com/docs/en/plugins#plugin-structure-overview>
 
 ### 1.3 marketplace.json schema
 
 位置：marketplace 仓库根的 `.claude-plugin/marketplace.json`。
 
 **必需字段**：
+
 - `name`（kebab-case marketplace 标识；官方保留名如 `claude-plugins-official`、`agent-skills` 等第三方不可用）
 - `owner`（object：`name` 必需，`email`/`url` 可选）
 - `plugins`（数组）
@@ -83,23 +84,23 @@
 | `git-subdir` | `url`, `path`, `ref?`, `sha?` | monorepo 子目录，稀疏克隆 |
 | `npm` | `package`, `version?`, `registry?` | npm 包，version 支持 semver range（如 `^2.0.0`） |
 | `archive` | `url`, `sha256?` | HTTPS zip（v2.1.224+）；sha256 做完整性校验，也可充当版本 |
-| `command` | `command`, `timeout?`, `mode?` | 本地命令产出插件目录，每会话重跑一次（v2.1.229+）；`mode: copy|link` |
+| `command` | `command`, `timeout?`, `mode?` | 本地命令产出插件目录，每会话重跑一次（v2.1.229+）；`mode: copy\|link` |
 
 git 系 source 同时给 `ref` 和 `sha` 时以 `sha` 为准。
 
-来源：https://code.claude.com/docs/en/plugin-marketplaces
+来源：<https://code.claude.com/docs/en/plugin-marketplaces>
 
 ### 1.4 安装与更新机制
 
 - **添加 marketplace**：`/plugin marketplace add <owner/repo | git URL | 本地路径 | marketplace.json URL>`；可加 `#ref` 指定分支/tag。官方 marketplace `claude-plugins-official` 首次交互启动时自动注册；社区 marketplace `anthropics/claude-plugins-community` 手动添加。
 - **安装**：`/plugin install <plugin>@<marketplace>`，选 user / project / local / managed 四种 scope；安装即复制到本地版本化缓存 `~/.claude/plugins/cache`（command source 的 link 模式除外，原地使用）。安装带 `@marketplace` 名时会先刷新该 marketplace 目录。
-- **版本解析与更新信号**：版本即缓存键（缓存目录按解析版本命名），解析链按优先级——① plugin.json 的 `version`（优先于 marketplace 条目）→ ② marketplace 条目 `version` → ③ 回退：git 系 source 用 commit SHA（每个 commit 视为新版本）、archive source 用 `sha256`、command copy 模式用目录内容 hash、link 模式用路径+顶层条目派生。设了 `version` 时插件被 pin 在该字符串上，**只有 version 变化才触发更新**。来源：https://code.claude.com/docs/en/plugins-reference#plugin-caching-and-file-resolution 、https://code.claude.com/docs/en/plugin-marketplaces#zip-archives
+- **版本解析与更新信号**：版本即缓存键（缓存目录按解析版本命名），解析链按优先级——① plugin.json 的 `version`（优先于 marketplace 条目）→ ② marketplace 条目 `version` → ③ 回退：git 系 source 用 commit SHA（每个 commit 视为新版本）、archive source 用 `sha256`、command copy 模式用目录内容 hash、link 模式用路径+顶层条目派生。设了 `version` 时插件被 pin 在该字符串上，**只有 version 变化才触发更新**。来源：<https://code.claude.com/docs/en/plugins-reference#plugin-caching-and-file-resolution> 、<https://code.claude.com/docs/en/plugin-marketplaces#zip-archives>
 - **版本锁定手段**：作者设 `version`；marketplace 条目给 git source 设 `ref`/`sha`；用户关 auto-update 或设 `DISABLE_AUTOUPDATER`；依赖方用 semver range 钉区间；社区 marketplace 审核插件 pin commit SHA、CI 自动前移。
 - **更新**：`/plugin marketplace update <name>` 刷新目录；`claude plugin update <plugin>@<marketplace>` 更新单个插件。后台自动更新：会话启动后随机延迟（≤10 分钟）检查 marketplace 与已装插件更新；**官方 marketplace 默认开启自动更新，第三方/本地 marketplace 默认关闭**；`DISABLE_AUTOUPDATER` 可全局关闭，`FORCE_AUTOUPDATE_PLUGINS=1` 可只保留插件自动更新。
 - **版本固定**：git 系 source 可用 `ref`（branch/tag）和 `sha`（精确 commit）pin；`claude plugin tag --push` 按 `{plugin-name}--v{version}` 约定打 tag 供依赖解析（见 1.5）。
 - **社区 marketplace 审核**：提交经 `claude plugin validate` + 自动安全筛查；通过的插件在目录中 pin 到具体 commit SHA，作者推新 commit 时 CI 自动前移 pin。
 
-来源：https://code.claude.com/docs/en/discover-plugins 、https://code.claude.com/docs/en/plugins#submit-your-plugin-to-the-community-marketplace
+来源：<https://code.claude.com/docs/en/discover-plugins> 、<https://code.claude.com/docs/en/plugins#submit-your-plugin-to-the-community-marketplace>
 
 ### 1.5 semver 与依赖声明（plugin 间）
 
@@ -109,7 +110,7 @@ git 系 source 同时给 `ref` 和 `sha` 时以 `sha` 为准。
 - 跨 marketplace 依赖默认拒绝，需根 marketplace 在 `allowCrossMarketplaceDependenciesOn` 中白名单。
 - 也支持"bundle 插件"：manifest 只含 `dependencies`，一键安装一整套。
 
-来源：https://code.claude.com/docs/en/plugin-dependencies
+来源：<https://code.claude.com/docs/en/plugin-dependencies>
 
 ### 1.6 Claude Code 侧未查到官方资料的项
 
@@ -184,7 +185,7 @@ git 系 source 同时给 `ref` 和 `sha` 时以 `sha` 为准。
 
 ## 5. semver 依赖声明的通行做法
 
-1. **机器可解的插件间依赖目前只有 Claude Code 一家做到**：`plugin.json` 的 `dependencies` 数组（裸名或 `{name, version, marketplace}`），version 用 **npm node-semver range**（官方链接 [npm/node-semver#ranges](https://github.com/npm/node-semver#ranges)），git 源按 `{plugin-name}--v{version}` tag 约定解析、多约束取区间交集、预发布需 opt-in。详见 1.5。来源：https://code.claude.com/docs/en/plugin-dependencies
+1. **机器可解的插件间依赖目前只有 Claude Code 一家做到**：`plugin.json` 的 `dependencies` 数组（裸名或 `{name, version, marketplace}`），version 用 **npm node-semver range**（官方链接 [npm/node-semver#ranges](https://github.com/npm/node-semver#ranges)），git 源按 `{plugin-name}--v{version}` tag 约定解析、多约束取区间交集、预发布需 opt-in。详见 1.5。来源：<https://code.claude.com/docs/en/plugin-dependencies>
 2. **`engines` 类宿主版本约束无先例**：Claude Code plugin.json 无 `engines` 字段；对外部 CLI 工具的依赖，生态现状是写 README 或 SKILL.md 的 `compatibility` 自然语言（如 "Requires git, docker, jq"），或 package.json 的 `engines`（gstack 的 `{"bun": ">=1.0.0"}`）。
 3. **SKILL.md 层无机器可解依赖**：Agent Skills 规范无 dependencies/version-range 字段；skills.sh 无版本约束语法；superpowers 实际未用 dependencies 字段。
 4. **包管理生态惯例**（可作设计参照）：npm `dependencies` + caret/tilde range + `engines`（[npm semver 文档](https://docs.npmjs.com/cli/v6/using-npm/semver/)）；Cargo version requirement 默认 caret（[The Cargo Book](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)）；Homebrew `depends_on` DSL（[Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)）。共性：**manifest 字段 + semver range + lockfile/解析器**。
@@ -196,7 +197,7 @@ git 系 source 同时给 `ref` 和 `sha` 时以 `sha` 为准。
 
 1. **以 Claude Code plugin.json schema 为分发 manifest 基准**。理由：它是生态中字段最完整的格式（1.1），且已被第三方跨宿主工具显式兼容（skills.sh 安装时会解析 `.claude-plugin/plugin.json` / `marketplace.json` 里声明的 skills，见 4.3）。workflowhub 按此格式落 `.claude-plugin/plugin.json`，可同时被 Claude Code 原生 `/plugin install` 和 skills.sh 生态消费，一份投入两处收益。
 2. **最小字段集**：`name`（唯一必需，kebab-case，决定命名空间）、`version`（semver 字符串，唯一更新信号）、`description`、`author`、`homepage`/`repository`/`license`、`keywords`；组件路径默认放 `skills/` 即可，不必声明。
-3. **workflowhub 自有字段直接塞进同一 manifest 是安全的**：Claude Code 官方明确忽略未识别顶层字段，并鼓励"一份 manifest 兼任多生态 manifest"（1.1，来源：https://code.claude.com/docs/en/plugins-reference#unrecognized-fields ）。建议自有扩展放 `metadata`（官方承诺不读取的自由对象）或带 `x-`/项目前缀的顶层字段，避免与未来官方字段撞名。
+3. **workflowhub 自有字段直接塞进同一 manifest 是安全的**：Claude Code 官方明确忽略未识别顶层字段，并鼓励"一份 manifest 兼任多生态 manifest"（1.1，来源：<https://code.claude.com/docs/en/plugins-reference#unrecognized-fields> ）。建议自有扩展放 `metadata`（官方承诺不读取的自由对象）或带 `x-`/项目前缀的顶层字段，避免与未来官方字段撞名。
 4. **external skills manifest（技能层）**：技能目录保持 Agent Skills 开放规范（SKILL.md + frontmatter，必填仅 `name`/`description`）——这是 Codex、Kimi、Gemini、opencode 等 20+ 宿主的共同交集（4.3）。**规范本身没有版本和依赖字段**：版本放 frontmatter `metadata.version`，环境要求写 `compatibility` 自然语言；不要发明与之冲突的顶层 frontmatter 字段。
 5. **marketplace.json 采用 Claude Code 格式**（`name`/`owner`/`plugins[]`，条目 `name`+`source`，见 1.3）：Kimi 自定义 marketplace（`{"version":"2","plugins":[...]}`）和 Codex repo marketplace 都是同构轻量 JSON， Claude Code 格式是其中表达力最强且有第三方兼容者的；source 用 `{"source":"github","repo":"...","ref":...}` 或 `git-subdir`（monorepo 场景）即可获得 ref/sha pinning。
 
@@ -214,7 +215,7 @@ git 系 source 同时给 `ref` 和 `sha` 时以 `sha` 为准。
 
 综合 superpowers（4.1）、gstack（4.2）、skills.sh（4.3）三种模式，MVP 形态：
 
-```
+```text
 workflowhub 仓库
 ├── skills/<name>/SKILL.md          # Agent Skills 标准，跨宿主内容层（单一事实源）
 ├── .claude-plugin/

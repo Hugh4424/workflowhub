@@ -23,4 +23,14 @@ jobs:
       - run: node_modules/.bin/vitest run tests/metrics-smoke.test.mjs --passWithNoTests=false
       # verify-code smoke (M9 Phase 5)
       - run: node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
-      - run: npm test
+      - run: npm run test:contract
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - run: npm run test:review
+      - run: npm run test:close
+      - run: npm run test:left-shift
+      - run: npm run test:acceptance
+      - run: npm run test:skills
+      - run: npm run test:core
+      - run: npm run test:root
+      - run: npm run test:exclusive

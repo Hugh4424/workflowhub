@@ -1980,8 +1980,6 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   const attemptId = result.attempt_ref.match(REVIEW_ATTEMPT_REF)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
   if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
-  if (typeof resultRef === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(resultRef)
-      && resultRef !== `quality/reviews/results/${producerStage}-simple-${attempt.attempt_id}.json`) throw new Error("ordinary review result/attempt path identity mismatch");
   if (!SHA256_HEX.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");
 
   for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {
@@ -2188,7 +2186,7 @@ function canonicalReviewBudgetAttempts(worker) {
   });
 }
 
-function findingDispositions(reviews, invocation) {
+function findingDispositions(reviews, invocation, currentMaterialRevision = null) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
   const attemptFacts = reviewRecords.map((review) => ({
     status: review?.facts?.status ?? "unknown",
@@ -2279,6 +2277,10 @@ function findingDispositions(reviews, invocation) {
         })
         : null;
       const gapErrors = gap && !gap.ok ? [gap.reason] : [];
+      if (route.classification === "direction_change" && suppliedDisposition.status === "fixed"
+          && gapSeed?.material_revision !== currentMaterialRevision) {
+        gapErrors.push("fixed direction_change gap material_revision does not match current material_revision");
+      }
       return {
         finding_id: finding.id,
         status: route.ok && gapErrors.length === 0 ? "recorded" : "incomplete",
@@ -3428,7 +3430,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
-  const dispositions = findingDispositions([direction, detail], input);
+  const dispositions = findingDispositions([direction, detail], input, worker.currentMaterialRevision);
   const auditGaps = audit
     ? []
     : ["audit unavailable/unverified/mismatch: decision coverage audit is missing", "support:audit"];
@@ -3587,7 +3589,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const clarify = input.receipts?.clarify === undefined ? null : clarifyFacts(worker, input);
   const ui = buildSpecUiFacts(worker, input);
   const review = safeReviewFacts(worker, input);
-  const dispositions = findingDispositions([review], input);
+  const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
   if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
@@ -3754,7 +3756,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const result = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
   if (review.evidence) evidenceRefs.push(review.evidence);
   evidenceRefs.push(...(review.risk_evidence ?? []), ...result.evidence);
-  const dispositions = findingDispositions([review], input);
+  const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
   missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final plan review");
@@ -3900,7 +3902,7 @@ HANDLERS.set("build-code", async (worker, input) => {
   }
   const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
   if (reviewWarning) missingItems.push(reviewWarning);
-  const dispositions = findingDispositions([review], input);
+  const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
   // An unavailable build-code review is an explicit non-gating quality fact;
   // keep its status visible without turning the advice-only review into an
   // ordinary completion gap. Verify-code reports its unavailable current

@@ -18,7 +18,7 @@
 第四阶段。按计划逐项实现，完成针对性测试、每 Phase 独立审查，并执行前期确定的完整功能验收方案。概念别名：实现（apply）。
 
 **verify-code**：
-第五阶段。独立审查实现及已有验证结果，发现疑点时补充针对性验证，形成验证结论。完整功能验收的实跑由 build-code 负责；verify-code 不替上游补需求或设计验收方案。概念别名：独立代码审查（code-review）。
+第五阶段。独立审查实现及已有验证结果，发现疑点时补充针对性验证，形成验证结论。完整功能验收的实跑由 build-code 负责；verify-code 不替上游补需求或设计验收方案。概念别名：独立代码审查（code-review）；验收（test-acceptance）。
 
 ## 核心概念术语
 
@@ -84,7 +84,7 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 三者都遵循宪法 F7、F9、Q1；交付动作集只记物理事实，不写质量结论。
 
 **三域 current/close projection（C6）**：
-`runtime/stage/current-close-projection.mjs` 是只读组合器，不写入 task store，也不产生
+阶段运行目录下 stage 子目录的 `current-close-projection.mjs` 是只读组合器，不写入 task store，也不产生
 第二个 current、selector、`product_release` 或 `status_groups`。它并列
 `work_progress`、`stage_quality`、`physical_delivery` 三域；状态读取以 `facts.jsonl` 的
 K2 当前行和 K1–K6 具名 ref 为准。active `quality/verify.v1` object graph 纳入 C6 removal；
@@ -233,11 +233,11 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 用于排错和解释旧任务；它们不是当前领域对象，也不授权、阻止或改变普通工作。
 
 当前任务不创建恢复代次或阶段恢复 run。材料修订直接更新当前四份材料，并重新采集受影响
-的测试、AC 和审查事实；旧 hash、阶段记录和 run 只作为只读审计上下文。
+的测试、AC 和审查事实；旧阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
 认证 worktree 的 `specs/<task-id>/` 中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
-变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
+变更来源。旧版本和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
@@ -297,7 +297,7 @@ build-code 结束时对最终快照的当前交互审查。它读取当前四份
 snapshot 控制面，也不把 review verdict 改写成 stage pass。
 
 **AC 证据摘要（AC evidence summary）**：
-逐条 AC 的可读验收视图，记录结果、场景、判定标准、实际结果、证据引用/hash 和覆盖边界；它来自已认证证据，不包含原始日志。
+逐条 AC 的可读验收视图，记录结果、场景、判定标准、实际结果、证据引用和覆盖边界；它来自已认证证据，不包含原始日志。
 
 ## 当前治理边界
 
@@ -409,10 +409,10 @@ stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `buil
 大纲条目的一种合法来源。必须写清「不知道什么 + 所属类别 + 来源 + 为什么现在不知道」四件事；缺任一项不算合法未知。用于覆盖「原始需求里根本没有的东西」。
 
 **questions-only 快照（方向审查输入）**：
-从大纲投影出的、只含类别/未知/来源/`open` 的材料，禁止出现决策编号、处置与拟议答案；它是 `make-decision/direction` 的必需材料字段 `convergence_outline`。唯一权威来源：`runtime/review/stage-materials.json` 与 `skills/wh-review/contracts/make-decision.md`。大纲变更后旧方向审查结果作废。
+从大纲投影出的、只含类别/未知/来源/`open` 的材料，禁止出现决策编号、处置与拟议答案；它是 `make-decision/direction` 的必需材料字段 `convergence_outline`。唯一权威来源：阶段运行目录下 review 子目录的 `stage-materials.json` 与 `skills/wh-review/contracts/make-decision.md`。大纲变更后旧方向审查结果作废。
 
 **outline_closed（大纲闭环完成事实）**：
-`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「四材料可读即可继续」的推进边界。唯一权威来源：`runtime/stage/completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
+`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「四材料可读即可继续」的推进边界。唯一权威来源：阶段运行目录下 stage 子目录的 `completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
 
 **用户未收敛项分组确认**：
 收口前，未收敛项按主题分组、一组一组提交用户确认；影响目标/范围/验收的条目必须单独成组并逐项列出。该确认**并入 `make-decision` 既有的 approve-decision 确认**，不新增第五处正常确认点（宪法 F7）。

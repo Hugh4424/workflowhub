@@ -23,7 +23,8 @@
 - OpenAI 官方论坛公告："Skills for Codex: Experimental support starting today"（实验性 skills 支持）。来源：[community.openai.com/t/1369367](https://community.openai.com/t/skills-for-codex-experimental-support-starting-today/1369367)
 - 现行官方文档将 skills 定义为正式能力："A skill is a directory with a `SKILL.md` file plus optional scripts and references"，遵循 [Agent Skills 开放标准](https://agentskills.io)（与 Claude Code 同源格式）。来源：[developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)（页面重定向至 learn.chatgpt.com/docs/build-skills）
 - Skill 目录结构（官方文档原文）：
-  ```
+
+  ```text
   my-skill/
     SKILL.md        # 必需：frontmatter 含 name + description + 指令正文
     scripts/        # 可选：可执行脚本
@@ -31,6 +32,7 @@
     assets/         # 可选：模板、资源
     agents/openai.yaml  # 可选：UI 元数据、调用策略（allow_implicit_invocation）、MCP 依赖声明
   ```
+
   来源：[developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)
 - 插件（plugin）是分发层："Plugins can include one or more skills… optionally bundle registered MCP server connections, bundled MCP server configuration, and presentation assets in a single package." 构建指南见 [Build plugins](https://developers.openai.com/plugins/build/plugins)。来源：[developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)、[developers.openai.com/codex/plugins](https://developers.openai.com/codex/plugins)
 - 官方示例仓库：

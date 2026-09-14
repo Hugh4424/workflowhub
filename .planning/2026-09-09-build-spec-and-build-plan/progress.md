@@ -3,11 +3,13 @@
 ## Session: 2026-09-09
 
 ### Current Status
+
 - **Phase:** 7 — 合并任务Ⅰ后的材料再对齐与两阶段重发布（已完成）
 - **Started:** 2026-09-09
 - **Goal:** build-spec 与 build-plan 两阶段均 completed
 
 ### Session: 2026-09-12（main 合并后重发布）
+
 - 合并 main（任务Ⅰ 合入 `9f9d0c44`、归档 `35a6fb6f`）；A2 补丁与 main 冲突按保留 main 三值 allowlist + 本仓回归测试解决。
 - 三路只读审计 + 独立复核确认四处必改：K2 判别字段已被任务Ⅰ 冻结为 `record_kind`、已删 `validate-current-plan-tasks.mjs` 仍在写边界、`quality-verify.v1.json` 与 ADR-0030 冲突、行号/计数与 RED/GREEN 大量陈旧。
 - 用户裁决：接受 `record_kind`（不改名/不迁移）；`quality-verify.v1.json` 仍物理删除（扩到 distribution/registry 证明）。
@@ -17,6 +19,7 @@
 - 产出下一步交接文档 `quality/evidence/handoff/build-plan-to-build-code.md`。
 
 ### Actions Taken
+
 - 创建同会话持续目标 `goal-0701f53d-3d36-4aa9-b9c9-0154a4f5e8a5`。
 - 核对认证 worktree/branch/baseline 与未提交变更。
 - 运行 build-spec/build-plan status：build-spec ready；build-plan 因 spec.md 缺失 blocked，符合预期。
@@ -34,12 +37,14 @@
 - 最终 spec 四项结构校验再次全部 `ok=true`，并重新通过官方 `run --action=draft` 注册。
 
 ### Test Results
+
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
 | build-spec status | ready | ready, continuation_allowed=true | PASS |
 | build-plan precondition | blocked until spec.md | blocked_by_missing_material: spec.md | PASS |
 
 ### Errors
+
 | Error | Resolution |
 |-------|------------|
 | brace glob 未发现 workflow 文件 | 精确读取 `workflows/build-spec/steps.json` 与 `workflows/build-plan/steps.json` |

@@ -41,4 +41,3 @@ authenticated outcome 时保持 `unavailable`。
   completion gate。
 - 旧 outcome 仍只读保留；本决策不引入 selector、latest projection 或新的
   persistence control plane。
-

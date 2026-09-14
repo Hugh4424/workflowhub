@@ -1176,7 +1176,7 @@ export async function runStageEndReflection(context, {
         ? { value: null, reason: `${stage} declares no handoff item and publishes no current stage handoff` }
         : handoffDeclaration(handoffFacts.materials);
       const materialScopeRevision = handoffFacts === null
-        ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialRevision()
+        ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialScopeRevision(stage)
         : handoffFacts.materialScopeRevision;
       const materialDigest = { value: materialScopeRevision === null ? null : materialScopeRevision.replace(/^revision-/, "") };
       if (materialDigest.value === null) materialDigest.reason = "no current material scope revision was available at this stage end";
@@ -1284,7 +1284,7 @@ export async function runStageEndReflection(context, {
         }))
         : null;
       materialScopeRevision = handoffStageOutcome?.value?.material_scope_revision
-        ?? ctx.kernel.currentVNextMaterialRevision();
+        ?? ctx.kernel.currentVNextMaterialScopeRevision(stage);
       handoff = publishStageHandoff({
         task: ctx.task,
         kernel: ctx.kernel,

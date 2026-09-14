@@ -448,7 +448,7 @@ export function validateFindingRouting({ finding = {}, classification, dispositi
   const status = disposition?.status;
   if (status === "needs_human") errors.push("needs_human is a pause state, not a terminal disposition");
   if (selected === "direction_change") {
-    if (status !== "user_decided" && status !== "accepted_risk") errors.push("direction_change requires incremental decision or accepted risk route");
+    if (status !== "fixed" && status !== "user_decided" && status !== "accepted_risk") errors.push("direction_change requires fixed, incremental decision, or accepted risk route");
     if (status === "user_decided" && (typeof (disposition.incremental_decision_ref ?? disposition.decision_ref) !== "string" || (disposition.incremental_decision_ref ?? disposition.decision_ref).trim() === "")) errors.push("direction_change user_decided requires incremental decision ref");
   } else if (selected === "spec_ambiguity") {
     if (status !== "user_decided") errors.push("spec_ambiguity requires user_decided route");
@@ -5950,45 +5950,59 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
     }
   }
 
-  if (stage === "make-decision" && nonEmptyString(materials.decision_log) && hasMarkdownHeadings(materials.decision_log)) {
-    const authenticatedMessages = Array.isArray(packet?.authenticated_requirement_messages)
-      ? packet.authenticated_requirement_messages
-      : [];
-    const convergence = analyzeDecisionConvergence(materials.decision_log, {
-      requirementMessages: authenticatedMessages,
-      requirementCoverageOutputs: Array.isArray(packet?.requirement_coverage_outputs)
-        ? packet.requirement_coverage_outputs
-        : [],
-    });
-    // `outline_closed` is owned by the make-decision completion subject. The
-    // historical stage-end analyzer contract retains the six pre-existing
-    // convergence dimensions and must not turn the new close subject into a
-    // second analyzer gate.
-    for (const [dimension, value] of Object.entries(convergence.facts).filter(([dimension]) => dimension !== "outline_closed")) {
-      if (value !== "passed") {
-        findings.push(stageAnalyzeFinding({
-          type: "convergence_gap",
-          requirementId: dimension,
-          impact: `decision-log convergence dimension ${dimension} is ${value}`,
-          correction: "在 make-decision 补齐需求覆盖、目标达成、验收清晰、方案收敛或结束卡三要素",
-        }));
-        errors.push(`convergence gap: ${dimension}`);
+  let specAnalyzeSkip = null;
+  if (stage === "make-decision" && nonEmptyString(materials.decision_log)) {
+    if (hasMarkdownHeadings(materials.decision_log)) {
+      const authenticatedMessages = Array.isArray(packet?.authenticated_requirement_messages)
+        ? packet.authenticated_requirement_messages
+        : [];
+      const convergence = analyzeDecisionConvergence(materials.decision_log, {
+        requirementMessages: authenticatedMessages,
+        requirementCoverageOutputs: Array.isArray(packet?.requirement_coverage_outputs)
+          ? packet.requirement_coverage_outputs
+          : [],
+      });
+      // `outline_closed` is owned by the make-decision completion subject. The
+      // historical stage-end analyzer contract retains the six pre-existing
+      // convergence dimensions and must not turn the new close subject into a
+      // second analyzer gate.
+      for (const [dimension, value] of Object.entries(convergence.facts).filter(([dimension]) => dimension !== "outline_closed")) {
+        if (value !== "passed") {
+          findings.push(stageAnalyzeFinding({
+            type: "convergence_gap",
+            requirementId: dimension,
+            impact: `decision-log convergence dimension ${dimension} is ${value}`,
+            correction: "在 make-decision 补齐需求覆盖、目标达成、验收清晰、方案收敛或结束卡三要素",
+          }));
+          errors.push(`convergence gap: ${dimension}`);
+        }
       }
+    } else {
+      specAnalyzeSkip = {
+        status: "skipped",
+        reason: "decision-log has no Markdown headings; make-decision convergence analysis threshold was not met",
+      };
     }
   }
 
-  if (stage === "build-spec" && nonEmptyString(materials.spec) && nonEmptyString(materials.decision_log)
-      && (hasMarkdownHeadings(materials.spec) || hasMarkdownHeadings(materials.decision_log))) {
-    const fidelity = validateSpecClarifyAndDirectionFidelity(materials.spec, materials.decision_log);
-    if (!fidelity.ok) {
-      for (const error of fidelity.errors) {
-        findings.push(stageAnalyzeFinding({
-          type: "spec_direction_gap",
-          impact: error,
-          correction: "build-spec 必须回到 make-decision 处理方向性歧义，或显式记录 Clarify 触发/跳过",
-        }));
-        errors.push(`spec direction fidelity: ${error}`);
+  if (stage === "build-spec" && nonEmptyString(materials.spec) && nonEmptyString(materials.decision_log)) {
+    if (hasMarkdownHeadings(materials.spec) || hasMarkdownHeadings(materials.decision_log)) {
+      const fidelity = validateSpecClarifyAndDirectionFidelity(materials.spec, materials.decision_log);
+      if (!fidelity.ok) {
+        for (const error of fidelity.errors) {
+          findings.push(stageAnalyzeFinding({
+            type: "spec_direction_gap",
+            impact: error,
+            correction: "build-spec 必须回到 make-decision 处理方向性歧义，或显式记录 Clarify 触发/跳过",
+          }));
+          errors.push(`spec direction fidelity: ${error}`);
+        }
       }
+    } else {
+      specAnalyzeSkip = {
+        status: "skipped",
+        reason: "spec and decision-log have no Markdown headings; build-spec fidelity analysis threshold was not met",
+      };
     }
   }
 
@@ -6008,8 +6022,9 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
       requirement_count: requirements.length,
       covered_count: requirements.filter((requirement) => coverage.some((item) =>
         item?.requirement_id === requirement?.id
-          && item.status === "covered"
-          && !findings.some((finding) => finding.requirement_id === requirement.id))).length,
+        && item.status === "covered"
+        && !findings.some((finding) => finding.requirement_id === requirement.id))).length,
+      ...(specAnalyzeSkip ? { spec_analyze: Object.freeze(specAnalyzeSkip) } : {}),
     }),
   });
 }

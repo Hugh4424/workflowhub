@@ -17,6 +17,8 @@
     ".omc",
     "specs/m9-verify-code",
     "specs/m10-baseline-switch",
+    // Unrelated historical UI capability task; owner=workflowhub-ui-frontend-capability task.
+    "specs/workflowhub-ui-frontend-capability-20260904",
     "docs/3rd-review-redesign-draft.md",
     "docs/human-brief-template.md",
     "docs/plain-language-mechanism-design.md",

@@ -11,7 +11,17 @@
     "compare:public-behavior": "node tools/architecture/public-behavior-baseline.mjs compare --baseline=c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf --candidate=worktree",
     "test": "npm run test:safe && npm run test:exclusive",
     "test:profile": "node tools/cli/run-checks.mjs --runtime-profile=phase --evidence-path=${WORKFLOWHUB_PROFILE_EVIDENCE_PATH:-quality/tests/test-profile.json} -- ./node_modules/.bin/vitest run tests/contract/test-runtime-profile.test.mjs tests/contract/runtime-profile-consumer-readback.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
-    "test:safe": "vitest run --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
+    "test:safe": "npm run test:contract && npm run test:integration && npm run test:e2e && npm run test:review && npm run test:close && npm run test:left-shift && npm run test:acceptance && npm run test:skills && npm run test:core && npm run test:root",
+    "test:contract": "vitest run \"tests/contract/**/*.test.mjs\"",
+    "test:integration": "vitest run \"tests/integration/**/*.test.mjs\"",
+    "test:e2e": "vitest run \"tests/e2e/**/*.test.mjs\"",
+    "test:review": "vitest run \"tests/review/**/*.test.mjs\"",
+    "test:close": "vitest run \"tests/close/**/*.test.mjs\"",
+    "test:left-shift": "vitest run \"tests/left-shift/**/*.test.mjs\"",
+    "test:acceptance": "vitest run \"tests/acceptance/**/*.test.mjs\"",
+    "test:skills": "vitest run \"skills/**/*.test.mjs\"",
+    "test:core": "vitest run \"core/__tests__/**/*.test.mjs\" --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
+    "test:root": "vitest run \"tests/*.test.mjs\" \"scripts/**/*.test.mjs\" \"specs/**/*.test.mjs\" \"workflows/build-code/__tests__/**/*.test.mjs\"",
     "test:exclusive": "vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism"
   },
   "dependencies": {

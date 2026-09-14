@@ -182,6 +182,21 @@ describe("authoring-stage spec-analyze profiles", () => {
     }
   });
 
+  it.each([
+    ["make-decision", { decision_log: MATERIALS.decision_log }],
+    ["build-spec", { decision_log: MATERIALS.decision_log, spec: MATERIALS.spec }],
+  ])("records an explicit spec-analyze skip when the %s structural threshold is absent", (stage, materialOverrides) => {
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage,
+      packet: packet({ materials: { ...MATERIALS, ...materialOverrides } }),
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      status: "consistent",
+      facts: { spec_analyze: { status: "skipped", reason: expect.any(String) } },
+    });
+  });
+
   it("finds semantic drift even when the requirement id, artifacts, and evidence refs exist", () => {
     const result = contracts.validateStageSpecAnalyzeProfile({
       stage: "build-plan",
