@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
 import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
@@ -19,6 +20,7 @@ import { completeCanonicalStageMaterials, writeCanonicalStageMaterials, writeSta
 const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+const STAGE_REFLECTION_HASH = "a".repeat(64);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const completeConvergenceFacts = () => Object.fromEntries([
   "ui_applicability",
@@ -320,6 +322,7 @@ function fixture(taskId, { materialFiles = materials } = {}) {
     },
   });
   const candidate = prepareTaskWorkspace(task);
+  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
   if (materialFiles.length === materials.length) writeCanonicalStageMaterials(artifacts);
   for (const file of materialFiles.filter((name) => materialFiles.length !== materials.length)) {
@@ -409,6 +412,51 @@ function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", stat
     qualityReview,
     skipAnalyzerValidation,
   });
+}
+
+function stageReflectionFor(state, stage, stageOutcome) {
+  return {
+    schema_version: "stage-reflection.v2",
+    record_kind: "judgment",
+    task_id: state.task.identity.taskId,
+    stage,
+    stage_status: "completed",
+    generated_at: "2026-09-10T00:00:00.000Z",
+    status: "ok",
+    error: null,
+    judgments: [{
+      subject_id: "current-five-stage-reflection",
+      subject_kind: "step",
+      classification: "keep",
+      severity: "low",
+      reason: "The current stage outcome is available for a deterministic reflection fixture.",
+      evidence_refs: [stageOutcome.ref],
+      confidence: "medium",
+      next_review_trigger: "next current stage outcome",
+    }],
+    interventions: [],
+    lessons_added: [],
+    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"]
+      .map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    identity: {
+      task_id: state.task.identity.taskId,
+      worktree: state.candidate.worktreeRoot,
+      branch: state.candidate.branch,
+      attempt: stageOutcome.value.attempt_id,
+      snapshot_tree: stageOutcome.value.snapshot_tree,
+      material_revision: stageOutcome.value.material_revision,
+    },
+    executor: {
+      kind: "fixture-reflection-executor",
+      source_id: "fixture/current-five-stage-reflection",
+      attempt_id: stageOutcome.value.attempt_id,
+      started_at: "2026-09-10T00:00:01.000Z",
+      completed_at: "2026-09-10T00:00:02.000Z",
+      output_hash: STAGE_REFLECTION_HASH,
+    },
+    output_hash: STAGE_REFLECTION_HASH,
+    source_completeness: { compaction: false, truncation: false, visible_scope: "fixture", unknown_reasons: [] },
+  };
 }
 
 async function seedCompletedMakeDecision(state) {
@@ -1348,6 +1396,12 @@ describe("current vNext five-stage runtime", () => {
           skill_outcomes: currentOutcome.value.skill_outcomes,
           ...(stage === "verify-code" ? {} : { spec_analyze: { result: { status: "consistent" } } }),
         };
+      }, {}, {
+        stageReflection: {},
+        stageReflectionInput: {
+          judgment: stageReflectionFor(state, stage, currentOutcome),
+          stageOutcome: currentOutcome,
+        },
       });
       statuses[stage] = result.status;
       const projection = publicStatus(state, stage);

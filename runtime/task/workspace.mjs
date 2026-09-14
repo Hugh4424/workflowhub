@@ -332,6 +332,7 @@ function validateCandidate(task, expected, facts = {
   if (realWorktree !== expected.worktreeRoot) throw new Error("task worktree realpath changed");
   assertWorktreeRegistration(expected, "task worktree");
   if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("task worktree and target repo must share a Git common directory");
+  gitValue(expected.targetRepoRoot, ["cat-file", "-e", `${expected.baselineCommit}^{commit}`], "task baseline commit");
   if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree branch") !== expected.branch) {
     throw new Error(`task worktree must use deterministic branch ${expected.branch}`);
   }

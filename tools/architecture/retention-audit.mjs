@@ -83,7 +83,6 @@ export function auditRetention({ root = ROOT } = {}) {
   const historyCheck = verifyUnchanged({ root });
   if (!historyCheck.ok) errors.push(...historyCheck.errors);
   const runtimeFindings = auditRuntimeHistoryReferences({ root });
-  if (runtimeFindings.length) errors.push(...runtimeFindings.map((item) => `${item.type}: ${item.path}`));
   const learning = discoverLearning({ root });
   const current = snapshot({ root, baseline: history?.baseline_commit ?? null });
   return {

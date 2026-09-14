@@ -72,7 +72,8 @@ describe("explicit test entry grouping", () => {
     for (const name of groupNames) {
       const script = packageJson.scripts[`test:${name}`];
       expect(script, `missing test:${name}`).toBeTypeOf("string");
-      expect(script).toContain("vitest run");
+      if (name === "acceptance") expect(script).toMatch(/node tests\/acceptance\/build-prd-current\.mjs/);
+      else expect(script).toContain("vitest run");
       expect(ci).toContain(`npm run test:${name}`);
     }
     expect(packageJson.scripts["test:core"]).toContain("--exclude=core/__tests__/check-extensibility.test.mjs");

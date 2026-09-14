@@ -42,19 +42,37 @@ export async function runAuditFixture({ outputRoot } = {}) {
   } });
   const records = [];
   for (const [stage, reviewTrack] of stages) {
-    const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, providers: providers.map(providerResult) }) };
+    const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, outcome: "completed", providers: providers.map(providerResult) }) };
     const result = await runSimpleReview({
       stage,
       review_track: reviewTrack,
       host_provider: "codex",
       materials: {
         raw_requirement: "fixture requirement",
-        objective_facts: ["fixture fact"],
-        ...(stage === "make-decision" && reviewTrack === "direction" ? { current_selection: "fixture choice", selection_rationale: "fixture only" } : {}),
+        ...(stage === "make-decision" && reviewTrack === "direction" ? {
+          objective_facts: ["fixture fact"],
+          current_selection: "fixture choice",
+          selection_rationale: "fixture only",
+          convergence_outline: "fixture convergence outline",
+        } : {}),
+        ...(stage === "make-decision" && reviewTrack === "detail" ? {
+          approved_direction: "fixture approved direction",
+          draft_spec_or_acceptance: "fixture draft acceptance",
+        } : {}),
+        ...(stage === "build-spec" ? {
+          approved_decision: "fixture approved decision",
+          draft_spec: "fixture draft spec",
+        } : {}),
+        ...(stage === "build-plan" ? {
+          approved_spec: "fixture approved spec",
+          acceptance_criteria: "fixture acceptance criteria",
+          draft_plan: "fixture draft plan",
+          draft_tasks: "fixture draft tasks",
+        } : {}),
       },
     }, {
       loadConfig: () => ({ attachmentRoot, whReview: {}, config: {} }),
-      resolveRoute: () => ({ mode: "fixture" }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["kimi"], minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: ["kimi"] }),
       client: providerClient,
     });

@@ -58,7 +58,11 @@ describe("P6 review finding and close freshness matrix", () => {
   it("accepts accepted_risk only when the current finding is explicitly authorized", () => {
     const result = validateReportableFindingDispositions({
       result: { findings: [findings.serious] },
-      dispositions: [disposition(findings.serious.id, "accepted_risk")],
+      dispositions: [{
+        ...disposition(findings.serious.id, "accepted_risk"),
+        risk_acceptance_ref: "quality/evidence/risk-acceptances/current.json",
+        risk_ref: "quality/evidence/risk-cards/current.json",
+      }],
       authorizedRiskFindingIds: [findings.serious.id],
     });
     expect(result.facts.status).toBe("recorded");

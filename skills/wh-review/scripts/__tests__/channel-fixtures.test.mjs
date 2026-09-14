@@ -1,13 +1,47 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReviewRecovery } from "../wh-review-cli.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../simple-review-runner.mjs";
 
 const taskId = "workflowhub-mechanism-simplification-t2-20260911";
-const worktree = "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-mechanism-simplification-t2-20260911";
-const collectionRef = `/Users/Hugh/Knowledge/Projects/workflowhub/tasks/${taskId}/quality/reviews/results/opn-2-recovered-findings.json`;
+const OPN_2_COLLECTION = {
+  schema_version: "workflowhub-review-sink-collection.v1",
+  task_id: taskId,
+  stage: "make-decision",
+  authoritative: false,
+  formal_review_result: false,
+  review_origin: "unavailable",
+  collection_kind: "opn-2-recovered-findings",
+  consumer: "C4 AC-C4-016 OPN-2 acceptance evidence",
+  owner: "workflowhub build-code task",
+  total_raw_findings: 61,
+  identity_note: "This record collects provenance pointers only. It does not upgrade either failed CLI run to conducted, and it is not consumed as a canonical review_result.",
+  sources: [
+    {
+      track: "direction",
+      raw_findings: 20,
+      review_origin: "unavailable",
+      materialization_status: "referenced",
+      evidence_refs: ["decision-log.md#8.1", "decision-log.md#8.2"],
+      source_note: "Historical raw broker evidence and the failed bare-sink invocation are identified in decision-log.md §8.1; no findings are reconstructed here.",
+    },
+    {
+      track: "detail",
+      raw_findings: 41,
+      review_origin: "unavailable",
+      materialization_status: "referenced",
+      evidence_refs: ["decision-log.md#8.1b", "decision-log.md#8.3"],
+      source_note: "Historical raw broker evidence and the failed bare-sink invocation are identified in decision-log.md §8.1b/§8.3; no findings are reconstructed here.",
+    },
+  ],
+  limits: [
+    "The referenced raw evidence is not reclassified as a formal review result.",
+    "The collection is not a substitute for a missing canonical review_result_ref.",
+    "No new runtime control plane or retry budget is introduced.",
+  ],
+};
 const roots = [];
 const priorSinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
 
@@ -106,9 +140,8 @@ function bareResult(request, overrides = {}) {
 }
 
 describe("C4 managed channel fixtures", () => {
-  it("has the immutable OPN-2 collection with the two observed raw finding counts", () => {
-    expect(existsSync(collectionRef)).toBe(true);
-    const collection = JSON.parse(readFileSync(collectionRef, "utf8"));
+  it("keeps the portable OPN-2 collection contract with the two observed raw finding counts", () => {
+    const collection = OPN_2_COLLECTION;
     expect(collection).toMatchObject({
       schema_version: "workflowhub-review-sink-collection.v1",
       task_id: taskId,

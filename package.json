@@ -18,7 +18,7 @@
     "test:review": "vitest run tests/review",
     "test:close": "vitest run tests/close",
     "test:left-shift": "vitest run tests/left-shift",
-    "test:acceptance": "vitest run tests/acceptance",
+    "test:acceptance": "node tests/acceptance/build-prd-current.mjs",
     "test:skills": "vitest run skills",
     "test:core": "vitest run core/__tests__ --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
     "test:root": "vitest run tests/*.test.mjs scripts specs workflows/build-code/__tests__",

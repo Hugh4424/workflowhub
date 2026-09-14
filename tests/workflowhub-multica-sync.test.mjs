@@ -59,8 +59,17 @@ describe("workflowhub-multica-sync", () => {
   });
 
   it("rejects an unreadable current main snapshot instead of trusting rev-parse alone", () => {
-    const mainCommit = execFileSync("git", ["rev-parse", "main"], { cwd: repo, encoding: "utf8" }).trim();
-    const snapshot = verifyMainSnapshot(repo, mainCommit, 10_000);
+    const mainRef = ["main", "origin/main"].find((ref) => {
+      try {
+        execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], { cwd: repo, stdio: "ignore" });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    expect(mainRef).toBeTruthy();
+    const mainCommit = execFileSync("git", ["rev-parse", "--verify", `${mainRef}^{commit}`], { cwd: repo, encoding: "utf8" }).trim();
+    const snapshot = verifyMainSnapshot(repo, mainCommit, 10_000, mainRef);
     expect(snapshot).toMatchObject({ main_commit: mainCommit });
     expect(snapshot.main_tree).toMatch(/^[0-9a-f]{40}$/);
   });
