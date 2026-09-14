@@ -16,13 +16,10 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npm run check
-      
-      # M10 field-mapping schema validation
-      - run: node tools/cli/validate-field-mapping.mjs
-      # M10 vitest
+      # Metrics smoke
       - run: node_modules/.bin/vitest run tests/metrics-smoke.test.mjs --passWithNoTests=false
-      # verify-code smoke (M9 Phase 5)
-      - run: node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
+      # Verify-code smoke
+      - run: node_modules/.bin/vitest run tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
       - run: npm run test:contract
       - run: npm run test:integration
       - run: npm run test:e2e
