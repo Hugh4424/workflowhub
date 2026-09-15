@@ -13,7 +13,7 @@ import { ensureGitSnapshotObjectStore } from "../task/git-worktree-snapshot.mjs"
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
-import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { reviewPacketMaterialId } from "../review/review-packet-identity.mjs";
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 
@@ -66,8 +66,17 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   catch (error) { if (error?.code === "ENOENT") dependencies[`${key}:attempt`] = "missing"; throw error; }
   const attempt = JSON.parse(attemptRaw);
   validateSchema("attempt", attempt);
-  if (review.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`
-      || reviewReference?.ref !== `quality/reviews/results/verify-code-simple-${attempt.attempt_id}.json`) throw new Error("ordinary execution review canonical ref does not match its producing attempt");
+  if (review.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("ordinary execution review canonical ref does not match its producing attempt");
+  if (Object.hasOwn(review, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
+    // Content binding, not path binding: the result record and its producing
+    // attempt must interlink the same result_ref, but the path a caller used to
+    // read those bytes is not part of the identity. A content-identical alias
+    // (for example a verification-shaped copy) stays acceptable; a record whose
+    // own interlink disagrees with its attempt does not.
+    if (review.result_ref !== attempt.result_ref) {
+      throw new Error(`ordinary review result/attempt path identity mismatch: result_ref ${String(review.result_ref)} does not interlink attempt result_ref ${String(attempt.result_ref)} (selected ${String(reviewReference?.ref)})`);
+    }
+  }
   if (JSON.stringify(attempt.e2e_binding) !== JSON.stringify(binding) || attempt.terminal_status !== "semantic"
       || attempt.material_id !== review.material_id || attempt.material_revision !== fact.material_revision || attempt.snapshot_tree !== fact.snapshot_tree) throw new Error("ordinary review attempt binding mismatch");
   const outputs = attempt.provider_attempts.filter((provider) => provider.status === "completed").map((provider, index) => {
@@ -92,7 +101,7 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   if (bytes.toString("base64") !== frozen.content_base64 || sha256(bytes) !== frozen.content_sha256
       || frozen.content_sha256 !== frozenRef.provider_input_sha256) throw new Error("frozen execution review original bytes hash mismatch");
   const request = JSON.parse(bytes.toString("utf8"));
-  if (request.stage !== "verify-code" || createSimpleReviewPacket(request).material_id !== review.material_id
+  if (request.stage !== "verify-code" || reviewPacketMaterialId(request) !== review.material_id
       || materialRevisionFromValues(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, request.materials.runtime_current_materials?.[name]])) !== fact.material_revision) throw new Error("ordinary review did not consume the bound material bundle");
   const execution = readTypedExecutionFact(request.reviewed_execution, fact, read, dependencies, key);
   if (binding.reviewed_execution.ref !== request.reviewed_execution.ref

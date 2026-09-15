@@ -33,6 +33,14 @@ export default defineConfig({
       "tests/contract/ui-stage-integration.test.mjs",
       "tests/contract/ui-frontend-governance.test.mjs",
       "tests/contract/frontend-component-quality-static.test.mjs",
+      // Historical task artifact, not a Vitest suite: this is one old task's Node
+      // acceptance aggregator (it has no describe/it and no Vitest import) and the
+      // five evidence files it reads were retired together with that task, so it
+      // can only be collected as an empty suite. This is an explicit waiver, not a
+      // silent disappearance: the file is listed here by name, it stays in the
+      // repository, and no test group runs it. See
+      // tests/contract/test-entry-grouping.test.mjs, which asserts this waiver.
+      "tests/acceptance/workflow-execution-current-task.test.mjs",
     ],
     // Fail the run when a filter matches no files, so a mis-typed path can never
     // produce a false-green exit 0 (see memory: vitest-run-path-false-green-exit0).

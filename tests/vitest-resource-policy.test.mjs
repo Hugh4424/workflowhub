@@ -17,7 +17,7 @@ describe("Vitest resource policy", () => {
 
     expect(scripts.test).toBe("npm run test:safe && npm run test:exclusive");
     for (const file of rootWriters) {
-      expect(scripts["test:safe"]).toContain(`--exclude=${file}`);
+      expect(scripts["test:core"]).toContain(`--exclude=${file}`);
       expect(scripts["test:exclusive"]).toContain(file);
     }
     expect(scripts["test:exclusive"]).toContain("--poolOptions.forks.singleFork");

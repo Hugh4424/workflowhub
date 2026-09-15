@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureExecutionSnapshot, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { CURRENT_MATERIAL_FILES, verifyWorkerBrief } from "../task/material-workspace.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import {
@@ -298,6 +298,12 @@ function materialTextMap(materials) {
   return Object.fromEntries(materials.values.map(([file, content]) => [file, content]));
 }
 
+function materialBindingContent(file, content) {
+  return file === "tasks.md" && content !== null && content !== undefined
+    ? taskExecutionRecordOnly(content)
+    : content;
+}
+
 function bindAnalyzerPacketIdentity(packet, identity) {
   const bind = (value, label) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -503,7 +509,7 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     } else {
       const sourceRef = name === "original_requirement" || name === "decision_log" ? "decision-log.md" : `${name}.md`;
       if (typeof materialText[sourceRef] !== "string") throw new Error(`${stage} analyzer material ${sourceRef} is unavailable`);
-      analyzerBindings[name] = { source_ref: sourceRef, sha256: sha256(materialText[sourceRef]), snapshot_tree: snapshot.tree };
+      analyzerBindings[name] = { source_ref: sourceRef, sha256: sha256(materialBindingContent(sourceRef, materialText[sourceRef])), snapshot_tree: snapshot.tree };
     }
   }
   const identity = {

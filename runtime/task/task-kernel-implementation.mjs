@@ -957,7 +957,7 @@ export function buildTaskKernel(taskHandle, {
             || value.material_revision !== confirmation.value.material_revision || value.snapshot_tree !== confirmation.value.snapshot_tree) return null;
         return { ref: authorizationRef, hash: authHash, raw, value };
       }).filter(Boolean);
-      if (candidates.length === 0) throw new Error(`IRREVERSIBLE_AUTHORIZATION_REQUIRED: authorize --operation=${operation} with --subject-ref=${confirmation.ref} before close`);
+      if (candidates.length === 0) throw new Error(`IRREVERSIBLE_AUTHORIZATION_REQUIRED: use public authorize --action=${operation} --subject-ref=${confirmation.ref} or the single task-close close action before close`);
 
       // A retry may reuse only the authorization consumed by this same close step.
       const withConsumption = candidates.map((candidate) => {

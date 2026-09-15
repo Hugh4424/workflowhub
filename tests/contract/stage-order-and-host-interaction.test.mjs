@@ -10,9 +10,9 @@ const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 const readJson = (...parts) => JSON.parse(read(...parts));
 const hash = "a".repeat(64);
 
-function lifecycle(interaction_type) {
-  const card = { card_ref: `conversation/${interaction_type}/card-1`, card_hash: hash, round: 1 };
-  const reply = { ...card, source: "user", reply_ref: `host-message://${interaction_type}/reply-1`, reply_hash: "b".repeat(64) };
+function lifecycle(interaction_type, round = 1) {
+  const card = { card_ref: `conversation/${interaction_type}/card-${round}`, card_hash: hash, round };
+  const reply = { ...card, source: "user", reply_ref: `host-message://${interaction_type}/reply-${round}`, reply_hash: "b".repeat(64) };
   const question = (question_id) => ({
     question_id,
     frontier_id: interaction_type === "grill" ? question_id : undefined,
@@ -25,7 +25,7 @@ function lifecycle(interaction_type) {
     recommended_option: 2,
     recommendation_reason: "当前事实支持",
   });
-  const questions = [question("scope"), question("risk")];
+  const questions = [question(`${interaction_type}-scope-${round}`), question(`${interaction_type}-risk-${round}`)];
   return {
     interaction_type,
     events: [
@@ -44,9 +44,8 @@ function lifecycle(interaction_type) {
 
 describe("P1 stage order and real host interaction contract", () => {
   it("accepts ordered rounds for one declared interaction and rejects a duplicate lifecycle", () => {
-    const first = lifecycle("talk");
-    const second = lifecycle("talk");
-    second.events.forEach((event) => { event.round = 2; event.card_ref = "conversation/talk/card-2"; event.reply_ref = "host-message://talk/reply-2"; });
+    const first = lifecycle("talk", 1);
+    const second = lifecycle("talk", 2);
     expect(validateStageAgentInteractionRounds({ interaction_type: "talk", rounds: [first, second] })).toMatchObject({ ok: true });
 
     const duplicate = lifecycle("talk");

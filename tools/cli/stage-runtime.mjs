@@ -40,7 +40,7 @@ import { openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { validateProjectName, validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
-import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -924,6 +924,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           task: context.task,
           kernel: context.kernel,
           request: input.request,
+          resolveRouteIdentity: typeof services.resolveRouteIdentity === "function"
+            ? services.resolveRouteIdentity
+            : resolveSimpleReviewRouteIdentity,
           runRound: typeof services.runReviewRound === "function"
             ? services.runReviewRound
             : useTaskBoundBuildCodeBundle

@@ -58,24 +58,21 @@ export const STAGE_PREDICATES = Object.freeze({
     solution_convergence: "acceptance_criterion",
     plain_language_card: "acceptance_criterion",
     outline_closed: "acceptance_criterion",
-    stage_end_spec_analyze: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
     zero_major_ambiguities: "acceptance_criterion",
     clarify: "acceptance_criterion",
-    stage_end_spec_analyze: "acceptance_criterion",
   }),
   "build-plan": Object.freeze({
     fr_coverage: "acceptance_criterion", ac_coverage: "acceptance_criterion",
     dependencies: "acceptance_criterion", deletion_proofs: "acceptance_criterion",
     executable_tasks: "acceptance_criterion",
-    stage_end_spec_analyze: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-code": Object.freeze({
     risk_tests_fresh: "test",
-    acceptance_criteria: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion",
+    acceptance_criteria: "acceptance_criterion",
     finding_dispositions: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
@@ -87,13 +84,22 @@ export const STAGE_PREDICATES = Object.freeze({
 // stages. They stay recorded and visible without becoming completion gates.
 // build-code keeps both dispositions and its final integration review in
 // STAGE_PREDICATES because that is the one user-defined implementation gate.
+//
+// `stage_end_spec_analyze` is advisory everywhere on purpose. Its only producer
+// is the optional host Stage Agent outcome, and
+// skills/workflowhub-host-protocol/SKILL.md fixes the boundary: "没有外部 Stage
+// Agent 时，标准 WorkflowHub 流程继续执行，并把 outcome 记为 unavailable 诊断，不把它变成
+// 阶段门禁" and "没有外部宿主 outcome 时，正式 run 不因缺少宿主而拒绝当前工作" and
+// "阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate". Keeping it
+// here as a gate made four of the five stages structurally impossible to finish
+// in any session that is not the external host. It stays published and visible
+// as an advisory fact so a real host run is still disclosed.
 export const STAGE_ADVISORY_PREDICATES = Object.freeze({
-  "make-decision": Object.freeze({ direction_review: "review", detail_review: "review", finding_dispositions: "acceptance_criterion" }),
-  "build-spec": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion" }),
-  "build-plan": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion" }),
-  "build-code": Object.freeze({}),
-  // wh-review's verify-code result is advice only. The required code_review
-  // remains owned by the dsh stage outcome and its bound quality_review ref.
+  "make-decision": Object.freeze({ direction_review: "review", detail_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
+  "build-spec": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
+  "build-plan": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
+  "build-code": Object.freeze({ stage_end_spec_analyze: "acceptance_criterion" }),
+  // wh-review's verify-code result is advice only.
   "verify-code": Object.freeze({ independent_review: "review" }),
 });
 
@@ -326,9 +332,15 @@ export function deriveStageCompletion(stage, observations = [], {
     }
   }
   const missing = Object.keys(requirements).filter((subject) => !satisfied.has(subject));
+  // ADR-0026 fixes this boundary: the stage-outcome projection "不写入质量谓词、
+  // 不生成 missing、不选择 winner，也不替代 current quality evidence … 不能把它重新当作
+  // quality completion gate". An absent or conflicting host outcome is therefore an
+  // independent execution disclosure, never a quality predicate: it must not appear
+  // in `missing`, must not change `status`, and must not be counted as a conflict of
+  // the stage's own facts. Callers still disclose it through `outcome_disclosure`
+  // here plus their own `execution_outcome` / `stage_outcome_diagnostic` surfaces.
   const stageOutcomeMissing = requireStageOutcome && !["completed", "conflict"].includes(stageOutcomeStatus);
   const stageOutcomeConflict = requireStageOutcome && stageOutcomeStatus === "conflict";
-  if (stageOutcomeMissing) missing.push("stage_outcome");
   const predicates = Object.fromEntries(Object.keys(requirements).map((subject) => [
     subject, Object.freeze({
       kind: requirements[subject],
@@ -336,20 +348,15 @@ export function deriveStageCompletion(stage, observations = [], {
       fact_ref: satisfied.get(subject)?.fact?.ref ?? null,
     }),
   ]));
-  if (requireStageOutcome) {
-    predicates.stage_outcome = Object.freeze({
-      kind: "stage_outcome",
-      status: stageOutcomeConflict ? "conflict" : stageOutcomeMissing ? "missing" : "satisfied",
-      fact_ref: null,
-    });
-  }
   const result = Object.freeze({
     stage,
-    status: missing.length === 0 && conflicts.size === 0 && !stageOutcomeConflict ? "completed" : "in_progress",
+    status: missing.length === 0 && conflicts.size === 0 ? "completed" : "in_progress",
     predicates: Object.freeze(predicates),
     fact_refs: Object.freeze([...satisfied.values()].map((entry) => entry.fact.ref).sort()),
     missing: Object.freeze(missing),
-    ...(stageOutcomeConflict ? { conflicts: Object.freeze(["stage_outcome"]) } : {}),
+    ...(requireStageOutcome
+      ? { outcome_disclosure: Object.freeze({ status: stageOutcomeConflict ? "conflict" : stageOutcomeMissing ? "unavailable" : "completed" }) }
+      : {}),
   });
   DERIVED.add(result);
   return result;
@@ -592,7 +599,7 @@ function recordedStageStatus(row) {
   }
   const failed = (Array.isArray(row?.evidence?.value) ? row.evidence.value : [])
     .filter((entry) => entry !== null && typeof entry === "object" && Number.isInteger(entry.exit_code) && entry.exit_code !== 0);
-  if (layer === "completed" && failed.length > 0) {
+  if (failed.length > 0) {
     return Object.freeze({
       status: "incomplete",
       reason: recordReason("execution_record_row_records_failed_command", `the ${stage} stage row records a command exiting non-zero: ${failed.map((entry) => `${entry.command ?? "unnamed command"} (exit ${entry.exit_code})`).join(", ")}`),
@@ -653,6 +660,21 @@ export function deriveExecutionOutcomes({
       }
       const recorded = recordedStageStatus(selection.row);
       const row = selection.row;
+      // Read-side provenance disclosure (task II D-009 removed the invalidation
+      // gate deliberately; this does not bring it back). A frozen row may
+      // legitimately describe an older snapshot or material revision. Reading it
+      // back is still allowed, but the staleness must be observable instead of
+      // silently accepted: surface a read-only provenance disclosure whenever
+      // the row's recorded provenance differs from the current one. The status
+      // projection itself is unchanged.
+      const rowSnapshot = typeof row.snapshot_tree?.value === "string" ? row.snapshot_tree.value
+        : typeof row.snapshot_tree === "string" ? row.snapshot_tree : null;
+      const rowRevision = typeof row.material_revision?.value === "string" ? row.material_revision.value
+        : typeof row.material_revision === "string" ? row.material_revision
+        : typeof row.material_digest?.value === "string" ? row.material_digest.value : null;
+      const currentRevisionHex = typeof materialRevision === "string" ? materialRevision.replace(/^revision-/, "") : null;
+      const provenanceStale = (snapshotTree !== undefined && rowSnapshot !== null && rowSnapshot !== snapshotTree)
+        || (currentRevisionHex !== null && rowRevision !== null && rowRevision !== currentRevisionHex);
       return [stage, Object.freeze({
         blocking: false,
         attempt_count: 1,
@@ -665,6 +687,15 @@ export function deriveExecutionOutcomes({
           created_at: typeof row.created_at === "string" ? row.created_at : null,
           layer_states: Object.freeze({ ...(row.layer_states ?? {}) }),
         }),
+        ...(provenanceStale ? {
+          provenance: Object.freeze({
+            status: "stale",
+            row_snapshot_tree: rowSnapshot,
+            current_snapshot_tree: snapshotTree ?? null,
+            row_material_revision: rowRevision,
+            current_material_revision: materialRevision ?? null,
+          }),
+        } : {}),
         ...(recorded.reason === null ? {} : {
           diagnostic: Object.freeze({
             kind: "degraded",

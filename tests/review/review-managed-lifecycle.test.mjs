@@ -206,7 +206,8 @@ describe("managed review lifecycle boundary", () => {
     const second = await recordSimpleReviewRequest({ task, kernel, request: request(), runRound, resolveRouteIdentity: () => { throw new Error("route unavailable"); } });
     expect(calls).toBe(0);
     expect(first).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch" });
-    expect(second.reused).toBe(true);
+    expect(second.reused).not.toBe(true);
+    expect(second).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch" });
   });
 
   it("records an unavailable attempt when the authenticated source drifts and retains completed members", async () => {

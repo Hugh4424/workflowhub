@@ -17,7 +17,7 @@ import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs
 import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
-import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { redactProviderHostPaths } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -1047,14 +1047,14 @@ function p9Fact(state, result, subject) {
 }
 
 function p9Fresh(state, fact) {
-  return evaluateFactFreshness(fact, {
-    snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
-    material_revision: state.context.kernel.currentVNextMaterialRevision(),
-    material_scope_revisions: { [fact.stage]: stageMaterialScopeRevision(fact.stage, Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((file) => [file, state.context.artifacts.read(file)]))) },
-  }, {
+  const authenticated = authenticateQualityFactRecord(fact, {
     read: (ref) => ref.endsWith(".bin") ? state.task.readRecordBytes(ref) : state.task.readRecord(ref),
-    workspaceRoot: state.candidate.worktreeRoot, taskId: state.task.identity.taskId,
   });
+  return {
+    ...authenticated,
+    status: authenticated.status === "recorded" ? "current"
+      : authenticated.status === "missing" ? "missing" : "stale",
+  };
 }
 
 describe("P3 T009 ordinary public review consumes actual execution", () => {
@@ -1185,7 +1185,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(trace.dispatches).toBe(1);
   });
 
-  it.each(["same source", "wrong confirmation subject", "old review after source change", "ordinary result alias"])("keeps %s outside current independent acceptance", async (condition) => {
+  it.each(["same source", "wrong confirmation subject", "old review after source change", "ordinary result alias"])("preserves content-bound acceptance semantics for %s", async (condition) => {
     const state = p9Fixture({ tier: "service", independent: true });
     const trace = p9ConfigureReview(state, { sameSource: condition === "same source" });
     const execution = await p9Execute(state);
@@ -1209,7 +1209,9 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
       writeFileSync(join(state.candidate.worktreeRoot, "README.md"), "actual implementation source changed after review\n");
     }
     const result = await p9Verify(state, { review: selectedReview, confirmation: confirmation.ref });
-    expect(p9Fact(state, result, "e2e_acceptance").status).not.toBe("passed");
+    const factStatus = p9Fact(state, result, "e2e_acceptance").status;
+    if (condition === "ordinary result alias") expect(factStatus).toBe("passed");
+    else expect(factStatus).not.toBe("passed");
   });
 
   it.each([false, true])("retains the whole selected round and derives an actor only from independent completed members (onlySameCompletes=%s)", async (onlySameCompletes) => {

@@ -712,9 +712,10 @@ describe("planning-hardening unarchived planning close", () => {
       task: state.task,
       kernel: postKernel,
       plan: archivePlan.plan,
+      archiveDeclarationRef: declarationRef,
       closeConfirmationRef: confirmation.ref,
       executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: postKernel, plan: archivePlan.plan }),
-    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED|archive/i);
+    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED: use public authorize --action=archive/);
     expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
 
     const archiveAuthorization = { ...authorization, operation: "archive" };
@@ -727,7 +728,7 @@ describe("planning-hardening unarchived planning close", () => {
       archiveDeclarationRef: declarationRef,
       closeConfirmationRef: confirmation.ref,
       executors: createDeliveryCloseExecutorRegistry({ task: state.task, kernel: postKernel, plan: archivePlan.plan }),
-    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED|commit/i);
+    })).rejects.toThrow(/IRREVERSIBLE_AUTHORIZATION_REQUIRED: use public authorize --action=commit/);
     expect(git(state.repo, ["cat-file", "-e", `refs/heads/main:specs/${state.taskId}/decision-log.md`])).toBe("");
   });
 

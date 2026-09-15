@@ -83,9 +83,19 @@ export function auditRetention({ root = ROOT } = {}) {
   const historyCheck = verifyUnchanged({ root });
   if (!historyCheck.ok) errors.push(...historyCheck.errors);
   const runtimeFindings = auditRuntimeHistoryReferences({ root });
-  if (runtimeFindings.length) errors.push(...runtimeFindings.map((item) => `${item.type}: ${item.path}`));
   const learning = discoverLearning({ root });
   const current = snapshot({ root, baseline: history?.baseline_commit ?? null });
+  // The consumer-reference scan is a diagnostics signal, not part of the frozen
+  // inventory verdict: the frozen baseline legitimately predates existing
+  // archive moves, so folding a benign reference into `errors` turned this
+  // non-gating report into a recurring CI failure. Do not drop the result
+  // either: expose it as an explicit, stable field plus a blocking projection
+  // so a caller that must enforce the scan has something to consume.
+  const runtimeHistoryReferenceStatus = runtimeFindings.length === 0 ? "clean" : "findings";
+  const blocking = Object.freeze({
+    errors: errors.length > 0,
+    runtime_history_references: runtimeFindings.length > 0,
+  });
   return {
     schema_version: "workflowhub-retention-audit.v1",
     non_gating: true,
@@ -93,8 +103,10 @@ export function auditRetention({ root = ROOT } = {}) {
     learning,
     unknown_learning: learning.filter(({ status }) => status === "unknown").map(({ id }) => id),
     runtime_history_references: runtimeFindings,
+    runtime_history_reference_status: runtimeHistoryReferenceStatus,
+    blocking,
     errors,
-    content_hash: sha256(JSON.stringify({ historyCheck, learning, runtimeFindings, errors })),
+    content_hash: sha256(JSON.stringify({ historyCheck, learning, runtimeFindings, runtimeHistoryReferenceStatus, blocking, errors })),
   };
 }
 

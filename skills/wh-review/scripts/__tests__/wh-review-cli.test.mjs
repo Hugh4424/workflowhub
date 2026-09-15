@@ -664,7 +664,11 @@ describe("wh-review production CLI", () => {
       let calls = 0;
       const request = { stage: "build-code", host_provider: "codex", materials: { raw: "sink fixture" } };
       const runRound = async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 10)); return { status: "unavailable", authoritative: true, error_code: "MATERIAL_INCOMPLETE" }; };
-      const [first, second] = await Promise.all([runReviewRecovery(request, { runRound }), runReviewRecovery(request, { runRound })]);
+      const resolveRouteIdentity = () => ({ route_identity: null });
+      const [first, second] = await Promise.all([
+        runReviewRecovery(request, { runRound, resolveRouteIdentity }),
+        runReviewRecovery(request, { runRound, resolveRouteIdentity }),
+      ]);
       expect(calls).toBe(1);
       expect(first).toMatchObject({ authoritative: false, reused: false });
       expect(first).toMatchObject({ error_code: "MATERIAL_INCOMPLETE" });
@@ -690,8 +694,9 @@ describe("wh-review production CLI", () => {
       calls += 1;
       return { status: "unavailable", error_code: "AUTH" };
     };
-    const first = await runReviewRecovery({ ...request, materials: { raw: "first" } }, { runRound });
-    const second = await runReviewRecovery({ ...request, materials: { raw: "second" } }, { runRound });
+    const resolveRouteIdentity = () => ({ route_identity: null });
+    const first = await runReviewRecovery({ ...request, materials: { raw: "first" } }, { runRound, resolveRouteIdentity });
+    const second = await runReviewRecovery({ ...request, materials: { raw: "second" } }, { runRound, resolveRouteIdentity });
     expect(calls).toBe(2);
     expect(first.reused).toBe(false);
     expect(second.reused).toBe(false);

@@ -90,11 +90,20 @@ function jsonRun(command, argv, options) {
 }
 
 function git(repo, argv, timeoutMs) { return run("git", argv, { cwd: repo, timeoutMs }); }
-function verifyMainSnapshot(repo, mainCommit, timeoutMs) {
+function resolveMainRef(repo, timeoutMs) {
+  for (const ref of ["main", "origin/main"]) {
+    try {
+      const commit = git(repo, ["rev-parse", "--verify", `${ref}^{commit}`], timeoutMs).trim();
+      if (/^[0-9a-f]{40}$/i.test(commit)) return { ref, commit };
+    } catch {}
+  }
+  throw new SyncError("GIT_MAIN_UNREADABLE", "main 或 origin/main 快照无法解析为完整 commit OID");
+}
+function verifyMainSnapshot(repo, mainCommit, timeoutMs, mainRef = "main") {
   try {
-    const mainTree = git(repo, ["rev-parse", "main^{tree}"], timeoutMs).trim();
-    git(repo, ["ls-tree", "-r", "--full-tree", "main"], timeoutMs);
-    git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling", "main"], timeoutMs);
+    const mainTree = git(repo, ["rev-parse", `${mainRef}^{tree}`], timeoutMs).trim();
+    git(repo, ["ls-tree", "-r", "--full-tree", mainRef], timeoutMs);
+    git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling", mainRef], timeoutMs);
     return { main_commit: mainCommit, main_tree: mainTree };
   } catch (error) {
     throw new SyncError("GIT_MAIN_UNREADABLE", `main 快照无法完整读取：${error.message}`, error);
@@ -132,32 +141,32 @@ function multicaMutation(profile, workspace, argv, options = {}) {
 }
 function unwrap(value, key) { return value?.[key] ?? value?.data ?? value; }
 
-function mainBytes(repo, relativePath, timeoutMs) { return Buffer.from(git(repo, ["show", `main:${relativePath}`], timeoutMs)); }
-function mainText(repo, relativePath, timeoutMs) { return mainBytes(repo, relativePath, timeoutMs).toString("utf8"); }
-function mainPaths(repo, prefix, timeoutMs) {
-  return git(repo, ["ls-tree", "-r", "--name-only", "main", "--", prefix], timeoutMs).split("\n").map(value => value.trim()).filter(Boolean);
+function mainBytes(repo, relativePath, timeoutMs, mainRef = "main") { return Buffer.from(git(repo, ["show", `${mainRef}:${relativePath}`], timeoutMs)); }
+function mainText(repo, relativePath, timeoutMs, mainRef = "main") { return mainBytes(repo, relativePath, timeoutMs, mainRef).toString("utf8"); }
+function mainPaths(repo, prefix, timeoutMs, mainRef = "main") {
+  return git(repo, ["ls-tree", "-r", "--name-only", mainRef, "--", prefix], timeoutMs).split("\n").map(value => value.trim()).filter(Boolean);
 }
-function catalog(repo, timeoutMs) { return yaml.load(mainText(repo, "skills/catalog.yaml", timeoutMs)); }
-function catalogEntries(repo, timeoutMs) { return (catalog(repo, timeoutMs).skills ?? []).filter(entry => MANAGED_CATALOG_STATUSES.has(entry.status) && entry.path); }
-function catalogEntry(repo, name, timeoutMs) { return catalogEntries(repo, timeoutMs).find(entry => entry.name === name) ?? null; }
+function catalog(repo, timeoutMs, mainRef = "main") { return yaml.load(mainText(repo, "skills/catalog.yaml", timeoutMs, mainRef)); }
+function catalogEntries(repo, timeoutMs, mainRef = "main") { return (catalog(repo, timeoutMs, mainRef).skills ?? []).filter(entry => MANAGED_CATALOG_STATUSES.has(entry.status) && entry.path); }
+function catalogEntry(repo, name, timeoutMs, mainRef = "main") { return catalogEntries(repo, timeoutMs, mainRef).find(entry => entry.name === name) ?? null; }
 
-function managedSkillNames(repo, timeoutMs) {
-  const names = new Set(catalogEntries(repo, timeoutMs).map(entry => entry.name));
-  for (const stage of STAGES) for (const dependency of stageDependencies(repo, stage, timeoutMs)) names.add(dependency);
+function managedSkillNames(repo, timeoutMs, mainRef = "main") {
+  const names = new Set(catalogEntries(repo, timeoutMs, mainRef).map(entry => entry.name));
+  for (const stage of STAGES) for (const dependency of stageDependencies(repo, stage, timeoutMs, mainRef)) names.add(dependency);
   return [...names].sort();
 }
 
-function externalSkillNames(repo, timeoutMs) {
-  return new Set(catalogEntries(repo, timeoutMs).filter(entry => entry.status === "adopted").map(entry => entry.name));
+function externalSkillNames(repo, timeoutMs, mainRef = "main") {
+  return new Set(catalogEntries(repo, timeoutMs, mainRef).filter(entry => entry.status === "adopted").map(entry => entry.name));
 }
-function retiredSkillNames(repo, timeoutMs) {
-  return new Set((catalog(repo, timeoutMs).skills ?? []).filter(entry => entry.status === "absorbed").map(entry => entry.name));
+function retiredSkillNames(repo, timeoutMs, mainRef = "main") {
+  return new Set((catalog(repo, timeoutMs, mainRef).skills ?? []).filter(entry => entry.status === "absorbed").map(entry => entry.name));
 }
 
-function bundleFor(repo, name, timeoutMs) {
+function bundleFor(repo, name, timeoutMs, mainRef = "main") {
   const relativePath = `skills/${name}/skill-bundle.json`;
-  if (!mainPaths(repo, relativePath, timeoutMs).includes(relativePath)) return null;
-  return JSON.parse(mainText(repo, relativePath, timeoutMs));
+  if (!mainPaths(repo, relativePath, timeoutMs, mainRef).includes(relativePath)) return null;
+  return JSON.parse(mainText(repo, relativePath, timeoutMs, mainRef));
 }
 
 function bundlePaths(bundle) { return new Set((bundle?.files ?? []).map(entry => typeof entry === "string" ? entry : entry.path)); }
@@ -169,20 +178,20 @@ function supportPaths(bundle) {
   return paths;
 }
 
-function localSkillSnapshot(repo, name, timeoutMs) {
+function localSkillSnapshot(repo, name, timeoutMs, mainRef = "main") {
   const relativePath = `skills/${name}/SKILL.md`;
-  const localPathExists = mainPaths(repo, relativePath, timeoutMs).includes(relativePath);
+  const localPathExists = mainPaths(repo, relativePath, timeoutMs, mainRef).includes(relativePath);
   if (!localPathExists) return { kind: "skill", name, path: relativePath, local_status: "missing_main", primary_sha256: null, bundle: null, files: {} };
-  const bundle = bundleFor(repo, name, timeoutMs);
+  const bundle = bundleFor(repo, name, timeoutMs, mainRef);
   const files = {};
-  for (const file of supportPaths(bundle)) files[file] = sha(mainBytes(repo, `skills/${name}/${file}`, timeoutMs));
-  return { kind: "skill", name, path: relativePath, local_status: "present", catalog_status: catalogEntry(repo, name, timeoutMs)?.status ?? null, primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), bundle, files };
+  for (const file of supportPaths(bundle)) files[file] = sha(mainBytes(repo, `skills/${name}/${file}`, timeoutMs, mainRef));
+  return { kind: "skill", name, path: relativePath, local_status: "present", catalog_status: catalogEntry(repo, name, timeoutMs, mainRef)?.status ?? null, primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs, mainRef)), bundle, files };
 }
 
-function stageSnapshot(repo, stage, timeoutMs) {
+function stageSnapshot(repo, stage, timeoutMs, mainRef = "main") {
   const relativePath = `workflows/${stage}/SKILL.md`;
-  const files = Object.fromEntries(STAGE_SUPPORT_FILES.map(file => [file, sha(mainBytes(repo, `workflows/${stage}/${file}`, timeoutMs))]));
-  return { kind: "stage", name: stage, path: relativePath, local_status: "present", primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), files, bundle: null };
+  const files = Object.fromEntries(STAGE_SUPPORT_FILES.map(file => [file, sha(mainBytes(repo, `workflows/${stage}/${file}`, timeoutMs, mainRef))]));
+  return { kind: "stage", name: stage, path: relativePath, local_status: "present", primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs, mainRef)), files, bundle: null };
 }
 
 function localFilePath(item, file) {
@@ -193,17 +202,17 @@ function desiredSupportFiles(item) {
   return item.kind === "stage" ? Object.keys(item.files) : [...supportPaths(item.bundle)];
 }
 
-function stageDependencies(repo, stage, timeoutMs) {
-  const manifest = yaml.load(mainText(repo, `workflows/${stage}/skill-deps.yaml`, timeoutMs));
+function stageDependencies(repo, stage, timeoutMs, mainRef = "main") {
+  const manifest = yaml.load(mainText(repo, `workflows/${stage}/skill-deps.yaml`, timeoutMs, mainRef));
   return (manifest.skills ?? []).map(entry => entry.name);
 }
 
-function expectedAgentSkills(repo, name, timeoutMs) {
+function expectedAgentSkills(repo, name, timeoutMs, mainRef = "main") {
   const role = CORE_AGENTS[name];
   const names = new Set(["workflowhub-host-protocol"]);
   if (role?.stage) {
     names.add(role.stage);
-    for (const dependency of stageDependencies(repo, role.stage, timeoutMs)) names.add(dependency);
+    for (const dependency of stageDependencies(repo, role.stage, timeoutMs, mainRef)) names.add(dependency);
   }
   return [...names].sort();
 }
@@ -292,21 +301,21 @@ function snapshotHash(report) {
 function audit({ repo, profile, workspace, timeoutMs }) {
   const statusText = git(repo, ["status", "--porcelain"], timeoutMs);
   const branch = git(repo, ["branch", "--show-current"], timeoutMs).trim();
-  const mainCommit = git(repo, ["rev-parse", "main"], timeoutMs).trim();
-  const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs);
+  const { ref: mainRef, commit: mainCommit } = resolveMainRef(repo, timeoutMs);
+  const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs, mainRef);
   let originMain = null;
   try { originMain = git(repo, ["rev-parse", "origin/main"], timeoutMs).trim(); } catch {}
   const closure = closureCheck(repo, statusText, mainCommit, timeoutMs);
   const scopeFiles = ["skills/catalog.yaml", ...STAGES.flatMap(stage => STAGE_SUPPORT_FILES.map(file => `workflows/${stage}/${file}`))]
-    .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs)) }));
-  const externalNames = externalSkillNames(repo, timeoutMs);
-  const retiredNames = retiredSkillNames(repo, timeoutMs);
+    .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs, mainRef)) }));
+  const externalNames = externalSkillNames(repo, timeoutMs, mainRef);
+  const retiredNames = retiredSkillNames(repo, timeoutMs, mainRef);
   const listedSkills = listSkills(profile, workspace, timeoutMs);
   const onlineSkills = new Map(listedSkills.map(item => [item.name, item]));
   const skillReports = [];
-  const localNames = new Set([...STAGES, ...managedSkillNames(repo, timeoutMs)]);
+  const localNames = new Set([...STAGES, ...managedSkillNames(repo, timeoutMs, mainRef)]);
   for (const name of [...localNames].sort()) {
-    const local = STAGES.includes(name) ? stageSnapshot(repo, name, timeoutMs) : localSkillSnapshot(repo, name, timeoutMs);
+    const local = STAGES.includes(name) ? stageSnapshot(repo, name, timeoutMs, mainRef) : localSkillSnapshot(repo, name, timeoutMs, mainRef);
     const listed = onlineSkills.get(name);
     if (!listed) {
       skillReports.push({ ...local, status: externalNames.has(name) ? "external_unmanaged" : "missing_online", online_id: null, files: { missing: Object.keys(local.files), mismatched: [], extra: [], protected_extra: [] }, online_files: [] });
@@ -341,7 +350,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   const agentReports = [];
   for (const [name] of Object.entries(CORE_AGENTS)) {
     const agent = listedAgents.find(item => item.name === name);
-    const expected = expectedAgentSkills(repo, name, timeoutMs);
+    const expected = expectedAgentSkills(repo, name, timeoutMs, mainRef);
     if (!agent) { agentReports.push({ name, status: "cannot_confirm", expected_skills: expected, binding: { expected, actual: [], missing: expected, unexpected: [], duplicates: [] } }); continue; }
     const binding = bindingIssues(expected, agent.skills ?? []);
     const issues = promptIssues(agent.instructions ?? "");
@@ -456,12 +465,12 @@ function apply({ report, expectedSnapshot, timeoutMs }) {
   if (report.agents.some(item => item.status === "cannot_confirm")) throw new SyncError("AGENT_UNAVAILABLE", "核心 Agent 无法确认，停止同步");
 
   const actions = [];
-  const externalNames = externalSkillNames(report.repo, timeoutMs);
+  const externalNames = externalSkillNames(report.repo, timeoutMs, report.summary.main_commit);
   const retiredNames = new Set(report.retired_online_skills ?? []);
   const byName = new Map(listSkills(report.profile, report.workspace, timeoutMs).map(item => [item.name, item]));
   for (const item of report.skills) {
     if (externalNames.has(item.name)) continue;
-    const content = mainBytes(report.repo, item.path, timeoutMs);
+    const content = mainBytes(report.repo, item.path, timeoutMs, report.summary.main_commit);
     let online = byName.get(item.name);
     const desiredFiles = Object.fromEntries(desiredSupportFiles(item).map(file => [file, true]));
     if (!online) {
@@ -477,7 +486,7 @@ function apply({ report, expectedSnapshot, timeoutMs }) {
     const needsAllFiles = !item.online_id;
     const filesToUpsert = needsAllFiles ? Object.keys(desiredFiles) : [...new Set([...item.files.missing, ...item.files.mismatched])];
     for (const file of filesToUpsert) {
-      const bytes = mainBytes(report.repo, localFilePath(item, file), timeoutMs);
+      const bytes = mainBytes(report.repo, localFilePath(item, file), timeoutMs, report.summary.main_commit);
       const expected = sha(bytes);
       multicaMutation(report.profile, report.workspace, ["skill", "files", "upsert", online.id, "--path", file, "--content-stdin", "--output", "json"], { input: bytes, timeoutMs });
       assertSkillFileReadback(report.profile, report.workspace, online, item, file, expected, timeoutMs);

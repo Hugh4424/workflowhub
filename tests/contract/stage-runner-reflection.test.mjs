@@ -201,7 +201,8 @@ describe("stage-runner reflection transfer matrix", () => {
     const before = state.context.artifacts.read("tasks.md");
     state.context.artifacts.writeAtomic("tasks.md", `${before}\n\n### 执行状态填写区\n- stage outcome 已写回\n`);
 
-    expect(authenticateStageOutcomeForProjection(state.context, "build-code", outcome.ref)).toBeNull();
+    const authenticated = authenticateStageOutcomeForProjection(state.context, "build-code", outcome.ref);
+    expect(authenticated).toMatchObject({ ref: outcome.ref, value: { status: "incomplete" } });
     const execution = deriveExecutionOutcomes({
       task_id: state.task.identity.taskId,
       read: state.task.readRecord,
@@ -211,7 +212,12 @@ describe("stage-runner reflection transfer matrix", () => {
       snapshot_root: state.context.candidateWorkspace.worktreeRoot,
       authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(state.context, stage, ref),
     });
-    expect(execution["build-code"]).toMatchObject({ status: "unavailable", attempt_count: 0, completed_attempt_count: 0, refs: [] });
+    expect(execution["build-code"]).toMatchObject({
+      status: "incomplete",
+      attempt_count: 1,
+      completed_attempt_count: 0,
+      refs: [outcome.ref],
+    });
   });
 
   it("preserves the injected executor path and publishes a fixed judgment", async () => {

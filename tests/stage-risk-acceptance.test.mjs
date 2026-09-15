@@ -297,7 +297,7 @@ describe("current quality boundary", () => {
   });
 
   it("keeps the 22-clause constitution and its checklist synchronized", () => {
-    expect(constitution).toMatch(/Version:\s*1\.8\.0\b/);
+    expect(constitution).toContain("Version: 1.9.0");
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect(checklist).toMatch(/\*\*条目数\*\*：22/);

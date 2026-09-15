@@ -9,7 +9,7 @@
 - **Stop conditions**: fixture/environment failures, hidden fallback parser, semantic review judgment, sixth conjunct, new control plane, or unrelated stage edits.
 - **Expected stage-end summary**: actual P3 changed files, exact RED/GREEN exits/oracle, AC coverage and limits, phase review fact/disposition, T007 evidence status, and any unresolved runtime/manual gaps.
 
-## Execution facts
+## Execution facts (detailed)
 
 - **Routing**: `feature` remains the selected tier; the phase changes one runtime feature domain and its serialized contract consumers, without a cross-endpoint/database/auth/deployment seam. Backend-testing scenarios are the existing five-conjunct, stale-binding, retry-sibling, and true-conflict paths in the exact command.
 - **Review policy**: P3 implementation review is recorded through the public phase review route after GREEN; provider/manual quality remains advisory and may be unavailable.

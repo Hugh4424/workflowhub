@@ -246,7 +246,8 @@ function policyFacts(attempt, fallbackMinimumReviewers) {
   const remainingAttempts = [...attempt.provider_attempts];
   for (const provider of requested) {
     const index = remainingAttempts.findIndex((item) => item.provider === provider
-      && sourceIdentityOf(item, { requireIdentity: true, requireSourceId: true, requireConfigId: true }) !== null);
+      && (item.status !== "completed"
+        || sourceIdentityOf(item, { requireIdentity: true, requireSourceId: true, requireConfigId: true }) !== null));
     if (index < 0) invalid("review provider broker identity is missing");
     remainingAttempts.splice(index, 1);
   }

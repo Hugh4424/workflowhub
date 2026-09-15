@@ -768,6 +768,45 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
 });
 
 describe("vNext official stage completion", () => {
+  it("keeps a historical stage outcome readable after material edits while current authentication stays strict", () => {
+    const state = fixture("historical-stage-outcome-after-material-edit");
+    const context = contextFor("build-code", state);
+    const outcome = stageOutcome(state, "build-code", {
+      attemptId: "historical-build-code-attempt",
+      workflowRunId: context.workflowRunId,
+    });
+    const refsBeforeEdit = state.task.listCanonicalStageOutcomeRefs("build-code");
+    expect(authenticateStageOutcomeForProjection(context, "build-code", outcome.ref)).toMatchObject({
+      ref: outcome.ref,
+      value: { status: "completed", material_revision: outcome.value.material_revision },
+    });
+
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    artifacts.writeAtomic("spec.md", `${artifacts.read("spec.md")}\\nHistorical projection edit after publication.\\n`);
+    expect(state.kernel.currentVNextMaterialRevision()).not.toBe(outcome.value.material_revision);
+
+    const projected = authenticateStageOutcomeForProjection(context, "build-code", outcome.ref);
+    expect(projected).toMatchObject({
+      ref: outcome.ref,
+      sha256: outcome.sha256,
+      value: { status: "completed", material_revision: outcome.value.material_revision },
+    });
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: state.task.identity.taskId,
+      read: state.task.readRecord,
+      stage_outcome_refs: { "build-code": [outcome.ref] },
+      snapshot_tree: state.kernel.currentVNextSnapshot().tree,
+      material_revision: state.kernel.currentVNextMaterialRevision(),
+      material_scope_revisions: stageMaterialScopeRevisions(Object.fromEntries(MATERIALS.map((name) => [name, artifacts.read(name)]))),
+      snapshot_root: state.candidate.worktreeRoot,
+      authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(context, stage, ref),
+    });
+    expect(statuses["build-code"]).toBe("completed");
+    expect(state.task.listCanonicalStageOutcomeRefs("build-code")).toEqual(refsBeforeEdit);
+
+    expect(() => authenticateCurrentBuildCodeStageOutcome(context)).toThrow(/material|current|stale/i);
+  });
+
   it("authenticates exactly one current completed build-code outcome for wh-review", () => {
     const state = fixture("current-build-code-review-subject");
     const context = contextFor("build-code", state);
@@ -2093,11 +2132,16 @@ describe("vNext official stage completion", () => {
     expect(result).toMatchObject({ stage: "build-spec", status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result.completion).toMatchObject({
       status: "in_progress",
-      missing: expect.arrayContaining(["clarify", "stage_end_spec_analyze"]),
+      missing: expect.arrayContaining(["clarify"]),
     });
+    expect(result.completion.missing).not.toContain("stage_end_spec_analyze");
+    expect(result.quality_advisories ?? []).toContain("stage-end-spec-analyze:unavailable");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(5);
+    expect(result.quality_fact_refs).toHaveLength(4);
+    expect(result.quality_advisory_fact_refs).toHaveLength(3);
+    expect(result.quality_advisory_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .some((fact) => fact.subject === "stage_end_spec_analyze")).toBe(true);
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
@@ -2134,8 +2178,11 @@ describe("vNext official stage completion", () => {
         { ref: confirmationRef, sha256: createHash("sha256").update(confirmationRaw).digest("hex") },
       ],
     }));
-    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
-    expect(result.completion).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["stage_end_spec_analyze"]) });
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "passed" });
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result.quality_advisories ?? []).toContain("stage-end-spec-analyze:unavailable");
+    expect(result.quality_advisory_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .some((fact) => fact.subject === "stage_end_spec_analyze")).toBe(true);
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
   });
@@ -2230,7 +2277,7 @@ describe("vNext official stage completion", () => {
     expect(result.quality_advisories).toContain("finding_dispositions:missing");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(5);
+    expect(result.quality_fact_refs).toHaveLength(4);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(qualityFacts.find((fact) => fact.subject === "finding_dispositions")).toMatchObject({ status: "missing" });

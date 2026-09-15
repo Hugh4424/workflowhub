@@ -14,6 +14,8 @@ import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { completeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
@@ -125,6 +127,52 @@ function reflectionExecutorFactory({ confirmationRef }) {
   };
 }
 
+function importProvenance(task, attemptRef, resultRef, reportRef) {
+  const attemptRaw = task.readRecord(attemptRef);
+  const attempt = JSON.parse(attemptRaw);
+  const resultRaw = task.readRecord(resultRef);
+  const result = JSON.parse(resultRaw);
+  const provider_outputs = attempt.provider_attempts.map((member) => {
+    const outputRaw = member.output_ref === null ? null : task.readRecord(member.output_ref);
+    return {
+      provider: member.provider,
+      status: member.status,
+      identity: member.identity,
+      output_ref: member.output_ref,
+      output_sha256: outputRaw === null ? null : sha256(outputRaw),
+      raw_output_ref: member.raw_output_ref ?? null,
+      raw_output_sha256: member.raw_output_ref === null || member.raw_output_ref === undefined
+        ? null : sha256(JSON.stringify(member.raw_output_ref)),
+    };
+  });
+  return {
+    request_key: attempt.request_key,
+    attempt_ref: attemptRef,
+    attempt_sha256: sha256(attemptRaw),
+    result_ref: resultRef,
+    result_sha256: sha256(resultRaw),
+    report_ref: reportRef,
+    report_sha256: sha256(task.readRecord(reportRef)),
+    task_id: attempt.task_id,
+    stage: attempt.stage,
+    review_track: attempt.review_track ?? null,
+    review_kind: attempt.review_kind ?? null,
+    subject_kind: attempt.subject_kind,
+    phase_id: attempt.phase_id ?? null,
+    review_scope: attempt.review_scope ?? null,
+    base_tree: attempt.base_tree,
+    candidate_tree: attempt.candidate_tree,
+    material_id: attempt.material_id,
+    material_revision: attempt.material_revision,
+    snapshot_tree: attempt.snapshot_tree,
+    source: attempt.source,
+    authenticated_evidence_sha256: attempt.authenticated_evidence_sha256 ?? null,
+    route_identity: attempt.closure_manifest?.route_identity ?? null,
+    policy_snapshot_hash: attempt.policy_snapshot_hash ?? null,
+    provider_outputs,
+  };
+}
+
 describe("stage-reflection real official task path", () => {
   it("binds review-record output to the authenticated current snapshot and materials", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-record-real-")));
@@ -152,15 +200,28 @@ describe("stage-reflection real official task path", () => {
       await invoke(["artifact", "--stage=build-plan", "--project=ReviewProducer", "--task=current-identity", "--name=plan.md", `--input=${materialInputs["plan.md"]}`]);
       await invoke(["artifact", "--stage=build-plan", "--project=ReviewProducer", "--task=current-identity", "--name=tasks.md", `--input=${materialInputs["tasks.md"]}`]);
 
-      const inputPath = writeInput(root, "review-result.json", JSON.stringify({
-        result: {
+      const task = openTask(bootstrapped.task_path, "ReviewProducer", "current-identity");
+      const workspace = openCurrentTaskWorkspace(task);
+      const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+      const kernel = createTaskKernel(task, { workspace, artifacts });
+      const reviewRequest = {
+        stage: "verify-code",
+        host_provider: "codex/luna",
+        materials: { implementation: "review producer fixture" },
+      };
+      const recordedReview = await recordSimpleReviewRequest({
+        task,
+        kernel,
+        request: reviewRequest,
+        resolveRouteIdentity: () => ({ route_identity: "a".repeat(64) }),
+        runRound: async (request) => ({
           status: "available",
-          stage: "verify-code",
+          stage: request.stage,
           review_track: null,
           review_kind: null,
-          material_id: "1".repeat(64),
+          material_id: createSimpleReviewPacket(request).material_id,
           runtime_id: "review-producer-test",
-          outcome: "clean",
+          outcome: "completed",
           provider_results: [{
             provider: "codex/luna",
             status: "completed",
@@ -171,15 +232,14 @@ describe("stage-reflection real official task path", () => {
             evidence_anchor_valid: [],
           }],
           findings: [],
-        },
-      }));
+        }),
+      });
+      const canonicalReview = JSON.parse(task.readRecord(recordedReview.result_ref));
+      const provenance = importProvenance(task, recordedReview.attempt_ref, recordedReview.result_ref, recordedReview.report_ref);
+      const inputPath = writeInput(root, "review-result.json", JSON.stringify({ result: canonicalReview, provenance }));
       const response = await invoke(["review-record", "--stage=verify-code", "--project=ReviewProducer", "--task=current-identity", `--input=${inputPath}`]);
       expect(response).toMatchObject({ status: "recorded" });
 
-      const task = openTask(bootstrapped.task_path, "ReviewProducer", "current-identity");
-      const workspace = openCurrentTaskWorkspace(task);
-      const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-      const kernel = createTaskKernel(task, { workspace, artifacts });
       const snapshot = kernel.currentVNextSnapshot();
       const materialRevision = kernel.currentVNextMaterialRevision();
       const attempt = JSON.parse(task.readRecord(response.attempt_ref));
@@ -188,8 +248,8 @@ describe("stage-reflection real official task path", () => {
       validateSchema("result", result);
       expect(attempt.snapshot_tree).toBe(snapshot.tree);
       expect(result.snapshot_tree).toBe(snapshot.tree);
-      expect(attempt.material_id).toBe("1".repeat(64));
-      expect(result.material_id).toBe("1".repeat(64));
+      expect(attempt.material_id).toBe(canonicalReview.material_id);
+      expect(result.material_id).toBe(canonicalReview.material_id);
       expect(attempt.material_revision).toBe(materialRevision);
       expect(result.material_revision).toBe(materialRevision);
       expect(result.source).toEqual({

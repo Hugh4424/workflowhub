@@ -1143,7 +1143,8 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, reco
     if (!recordContext || typeof recordContext !== "object" || !recordContext.task || !recordContext.kernel) {
       throw new TypeError("recordContext requires the authenticated task and kernel");
     }
-    return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound, resolveRouteIdentity });
+    return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound,
+      materialIdForRequest: (value) => createSimpleReviewPacket(value).material_id, resolveRouteIdentity });
   }
   return runBareReview(request, runRound, resolveRouteIdentity, identity);
 }

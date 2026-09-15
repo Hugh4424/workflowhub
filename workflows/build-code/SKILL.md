@@ -232,11 +232,14 @@ coverage, upstream alignment, repairs made here, remaining risks, and the next
 stage boundary.
 
 After the phase facts are recorded, a phase may be committed only when the
-user has separately authorized the irreversible operation via
-`authorize --op=commit`. The phase
+user has separately authorized the irreversible operation. The public form is
+`node tools/cli/stage-runtime.mjs authorize --action=commit`; the normal
+`task-close close` action is the user-facing alternative and internally writes
+the per-operation authorizations required by the frozen close plan. A phase
 commit is a Git delivery fact and a useful review anchor; it is never required
-to start, continue, test, repair, or hand off the same task. Without that
-authorization, review the current working-tree change and leave it uncommitted.
+to start, continue, test, repair, or hand off the same task. Missing delivery
+authorization means `delivery pending`, not a build-code entry, continuation,
+testing, repair, or handoff blocker.
 A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
 Never require a provider pass.
 

@@ -37,7 +37,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-spec")).toEqual([
       "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
       "ui-project-init", "design-source-readiness", "frontend-prototype-render",
-      "plan-design-review", "wh-review", "spec-analyze", "stage-reflection",
+      "plan-design-review", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
     expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
       "conditional-spec-research", "spec-clarify", "spec-specify",
@@ -62,7 +62,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps Talk and Grill owned exclusively by make-decision", () => {
     expect(names("make-decision")).toEqual([
-      "talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review", "spec-analyze", "stage-reflection",
+      "talk-with-zhipeng", "grill-with-docs", "decision-log", "deep-research", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
     expect(stepSlugs("make-decision")).toEqual(expect.arrayContaining([
       "talk-round-1", "talk-round-2", "talk-round-3", "grill-with-docs",
@@ -80,7 +80,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
       "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
       "testing-system-blueprint",
       "frontend-component-quality",
-      "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review", "stage-reflection",
+      "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review", "stage-reflection", "stage-handoff",
     ]);
     expect(deps("build-plan").find(({ name }) => name === "spec-research"))
       .toMatchObject({ execution: "independent", trigger: "real_research_question", owner: "stage" });
@@ -147,7 +147,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "frontend-component-quality",
-      "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection",
+      "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
     expect(stepSlugs("build-code")).toContain("inspect-and-route-actual-tests");
     expect(stepSlugs("build-code")).toContain("invoke-concrete-testing-skill");
@@ -194,7 +194,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps verify-code focused on current implementation code review", () => {
     const verify = read("workflows/verify-code/SKILL.md");
-    expect(verify).toMatch(/只审查代码，不做材料审计、AC 覆盖审计或证据树审计/);
+    expect(verify).toContain("对上游材料本身，本阶段只审查代码及其对当前实现的影响；不重新检查其完整性，也不列 AC 逐条结论。");
     expect(verify).toMatch(/真实入口、真实 consumer/);
     expect(verify).toMatch(/生命周期、并发、取消/);
     expect(verify).toMatch(/权限、安全边界/);

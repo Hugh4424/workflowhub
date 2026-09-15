@@ -26,6 +26,15 @@ const workflowStages = [
 
 function listFiles(directory, predicate) {
   const absoluteDirectory = join(repoRoot, directory);
+  if (!existsSync(absoluteDirectory)) {
+    // T45 retired the GitHub-hosted workflow, so `.github/workflows` is the only
+    // surface directory allowed to be absent: it contributes no files rather than
+    // failing. Every other surface directory must fail loud, otherwise deleting
+    // `core/`, `scripts/`, `metrics/` or `workflows/` would silently shrink this
+    // scan to an empty set and pass.
+    if (directory === ".github/workflows") return [];
+    throw new Error(`host-independence surface directory is missing: ${directory}`);
+  }
   return readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
     const absolutePath = join(absoluteDirectory, entry.name);
     if (entry.isDirectory()) {

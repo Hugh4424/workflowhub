@@ -9,7 +9,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import { buildRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const BASE = "35a6fb6f0bc0987644cbf903d915eff063879581";
+// Freeze the retained-document comparison at the task's implementation base;
+// the earlier T1 archive is intentionally not the baseline because T2 was
+// archived before this task started.
+const BASE = "c33acd3b36d59ea37c97e3784706a8a57fd6f0b7";
 const TEMP_ROOTS = [];
 const PRODUCTION_OBJECT_GRAPH = [
   "runtime/evidence/quality-store.mjs",

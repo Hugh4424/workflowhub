@@ -1,17 +1,20 @@
 # Findings & Decisions
 
 ## Requirements
+
 - 用户要求继续同一任务，严格执行 WorkflowHub `build-spec` 和 `build-plan` 全部步骤，直到两个阶段完成。
 - 顺序不可倒置：build-plan 当前因 `spec.md` 缺失而 `continuation_allowed=false`。
 - build-spec 当前缺：`zero_major_ambiguities`、`clarify`、`stage_end_spec_analyze`、`stage_outcome`。
 - build-plan 当前缺：`fr_coverage`、`ac_coverage`、`dependencies`、`deletion_proofs`、`executable_tasks`、`stage_end_spec_analyze`、`human_confirmation`、`stage_outcome`。
 
 ## Manifest Facts
+
 - build-spec：15 步，最后 reflection 非阻塞；唯一独立 review 在 step 11；step 3 只在存在 material ambiguity 时执行一批独立问题；UI steps 7–9 对 non-UI 明确记 N/A。
 - build-plan：13 步，最后 reflection 非阻塞；step 9 独立 review；step 11 必须在 finding 处置和最后 authored revision 后跑 current five-input strict analyzer；step 12 必须先普通话 handoff，再用用户真实回复发布 human-confirmation.v3。
 - 两阶段 review unavailable/partial 必须如实记录，不能伪造成空成功。
 
 ## Repository Constraints
+
 - 仅四份当前材料是工作真相：decision-log/spec/plan/tasks；task store 只放执行证据，不能新增 gate。
 - 质量裁决需独立来源；主 agent 负责处置 findings，不可自审自判。
 - 新生产文件/命令/schema/持久对象需登记 owner/consumer/替代关系/删除条件。
@@ -19,6 +22,7 @@
 - 当前 scope 为 non-UI；build-spec UI steps 7–9 应记录 not_applicable。
 
 ## Build-spec Discovery
+
 - `spec.md` 新输出必须遵循 `spec-content.v3`：13 个固定二级章节、SCN/PFACT/FR/AC 卡、唯一 `### 明确不做`；表最多 5 列；不得含工程路径/代码符号/精确命令。
 - 每个 AC 必须用无缩进且严格顺序的四段：`验证：`、`通过：`、`失败：`、`证据：`；每段非空。
 - `validateSpecClarifyAndDirectionFidelity` 要求无材料歧义时显式写一行 `spec-clarify trigger=false reason=<非空> open_direction_changing_questions=0`。
@@ -28,6 +32,7 @@
 - 条件研究已启动，问题集中在现有 outline/requirement framework、review material、completion/analyzer、host-session source 的真实契约；这是规格精确性所需，不重复 make-decision 深度调研。
 
 ## Technical Decisions
+
 | Decision | Rationale |
 |----------|-----------|
 | build-spec 不先写 plan/tasks | 避免越阶段；manifest 要先冻结 spec 并通过阶段末分析 |
@@ -37,6 +42,7 @@
 | D-029 的宿主无关适配差异不重问用户 | cli-parity 强制 bridge 宿主无关只改变工程分层，不改变已批准 opt-in/机械筛选/失败不伪造语义；实际路径留 build-plan |
 
 ## Pending Spec Repairs (apply only after frozen review settles)
+
 1. RQ-05 uses non-enumerable family ranges (`FR-OUTLINE-001～FR-GOV-001`); enumerate all FR/AC IDs explicitly.
 2. Source header/Clarify line references upstream `AC-08`; current spec canonical ACs are `AC-SOURCE-001/002`. Rephrase as upstream AC-08 → current AC-SOURCE mapping, avoiding dangling local ID.
 3. FR-CLOSE-001 exhaustive conjunction omits current detail-review result and applicable user-consumption result although FR-REVIEW/AC-REVIEW say all three consumers are mandatory. Add both to authoritative conjunction.
@@ -44,6 +50,7 @@
 5. Source failure must be one unambiguous state: `unavailable`; empty projection is internal absence representation, never successful empty result.
 
 ## Issues Encountered
+
 | Issue | Resolution |
 |-------|------------|
 | `workflows/{...}` glob 没结果 | 直接读明确存在的两个 manifest |
@@ -52,6 +59,7 @@
 | formal review 运行中发现 5 个 trace/semantic gap | 遵守冻结纪律，先记录到 planning；审查结束后与正式 findings 一并修复，不中途改材料 |
 
 ## Main Merge Reconciliation (2026-09-12)
+
 - 当前任务分支 HEAD=`548c45f5`；main=`35a6fb6f`，main 已含任务Ⅰ merge `9f9d0c44` 与 archive `35a6fb6f`。
 - 当前工作区有本任务四材料（untracked）以及 A2 的 `wh-review-cli.mjs` + 测试改动（tracked）；合并前必须完整 stash（含 untracked）。
 - `HEAD..main` 涉及 146 文件、+12345/-3601；任务Ⅰ大量修改当前计划会触及的 runtime/close/review/material/status 文件，合并后需按真实 HEAD 重做 anchor/已实现项扫描。
@@ -63,6 +71,7 @@
 - 用户对 post-merge 两项冲突的真实裁决：①接受任务Ⅰ已冻结的 K2 判别字段 `record_kind`，不在 T2 新增迁移/兼容改名；②仍物理删除 `runtime/schemas/quality-verify.v1.json`，因此 T2 必须扩大删除证明范围，同步 Runner 发布消费者与架构登记，并保留重新确认事实。
 
 ## Resources
+
 - `workflows/build-spec/steps.json`
 - `workflows/build-plan/steps.json`
 - `specs/workflowhub-make-decision-hardening/decision-log.md`

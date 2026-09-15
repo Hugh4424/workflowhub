@@ -3207,6 +3207,61 @@
       "content_change": "test-only Vitest JSON reporter adapter with explicit selector mapping, cross-pair AC-CLOSE-002 coverage, raw child output, and D029 qualitative unavailable facts"
     },
     {
+      "source": "runtime/review/review-input-bounds.mjs",
+      "destination": "runtime/review/review-input-bounds.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-packet-identity.mjs and wh-review bounded provider-input projection",
+      "delete_condition": "remove only when runtime and skill consumers use an independently audited bounded-input implementation",
+      "content_change": "make bounded review diff and material projection a runtime-owned implementation; keep the skill path as a self-contained parity copy for clean release portability",
+      "bytes_after": 11417,
+      "sha256_after": "c882ab9d8dfe6c90e2d545e282da093145baf0d8d2a312f3cafe3e58d74cc105"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-input-bounds.mjs",
+      "destination": "skills/wh-review/scripts/review-input-bounds.mjs",
+      "status": "modify",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "clean release skill bundle consumers that cannot import repository runtime paths",
+      "delete_condition": "remove when the skill bundle declares and distributes a reviewed runtime dependency without reducing clean-release portability",
+      "content_change": "replace the non-portable runtime re-export with a self-contained implementation kept byte-identical to the runtime owner",
+      "bytes_after": 11417,
+      "sha256_after": "c882ab9d8dfe6c90e2d545e282da093145baf0d8d2a312f3cafe3e58d74cc105"
+    },
+    {
+      "source": "tests/contract/review-input-bounds-portability.test.mjs",
+      "destination": "tests/contract/review-input-bounds-portability.test.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "clean release portability regression for runtime/skill bounds parity and manifest binding",
+      "delete_condition": "remove only when an equivalent clean-release regression preserves the same independent parity and manifest checks",
+      "content_change": "build a clean release, import the installed skill-local bounds implementation, compare it with runtime behavior, and verify its manifest hash",
+      "bytes_after": 2340,
+      "sha256_after": "f1ed7bf560b857f0c152c77cc3de9a3e2cd5c885d380d6fa492c74f7e3e63491"
+    },
+    {
+      "source": "runtime/review/review-packet-identity.mjs",
+      "destination": "runtime/review/review-packet-identity.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-record-route.mjs, runtime/evidence/freshness.mjs, and wh-review packet construction",
+      "delete_condition": "remove only when all canonical review readers share an independently audited neutral packet-identity implementation",
+      "content_change": "move packet material identity and host-path redaction out of the wh-review skill so runtime readers do not depend on a skill implementation",
+      "bytes_after": 5467,
+      "sha256_after": "398a5c65737ab3a65b954e8eeea9c07a95d3e8be6947580afdc45647f29e1e28"
+    },
+    {
+      "source": "runtime/review/review-route-identity.mjs",
+      "destination": "runtime/review/review-route-identity.mjs",
+      "status": "add",
+      "owner": "workflowhub mechanism simplification T3 build-code",
+      "consumer": "runtime/review/review-record-route.mjs and the wh-review trusted-route adapter",
+      "delete_condition": "remove only when canonical recording and the trusted-route adapter share an independently audited route-identity implementation",
+      "content_change": "move trusted route identity shaping into runtime while allowing the skill to inject its trusted config, route, and provider selectors",
+      "bytes_after": 2970,
+      "sha256_after": "8bdfd13eb09d59fa145e117beaa5f1cd9c33e5f462c46e308edecfc7b6a3417c"
+    },
+    {
       "source": "runtime/task/task-index.mjs",
       "destination": null,
       "status": "deleted-final-cleanup",

@@ -89,6 +89,34 @@ describe("governance diagnostics are non-gating", () => {
       expect(audit.runtime_history_references).toEqual(expect.arrayContaining([
         expect.objectContaining({ path: "runtime/history-reader.mjs", type: "historical_inventory_reference" }),
       ]));
+      // A non-empty runtime-reference scan must stay consumable even though it
+      // is deliberately not folded into `errors` (the frozen baseline predates
+      // existing archive moves, so that projection caused recurring CI drift).
+      expect(audit.runtime_history_reference_status).toBe("findings");
+      expect(audit.blocking).toEqual({ errors: true, runtime_history_references: true });
+      expect(audit.errors.some((error) => error.includes("runtime/history-reader.mjs"))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a clean runtime-reference status when the scan finds nothing", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "workflowhub-retention-clean-"));
+    try {
+      for (const relative of [
+        "docs/architecture/history-inventory.json",
+        "docs/architecture/retention-manifest.json",
+        "docs/architecture/deletion-plan.json",
+      ]) {
+        const source = resolve(process.cwd(), relative);
+        const target = resolve(root, relative);
+        mkdirSync(resolve(target, ".."), { recursive: true });
+        cpSync(source, target, { recursive: false });
+      }
+      const audit = auditRetention({ root });
+      expect(audit.runtime_history_references).toEqual([]);
+      expect(audit.runtime_history_reference_status).toBe("clean");
+      expect(audit.blocking.runtime_history_references).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

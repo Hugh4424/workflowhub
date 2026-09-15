@@ -264,17 +264,35 @@ describe("stage result reading is redirected to the frozen execution-record row"
     expect(execution.diagnostic.reason).toContain("facts.jsonl");
   });
 
-  it("treats a row outside the current snapshot or material revision as stale, never as completed", () => {
+  it("keeps the current row authoritative when its snapshot/material fields describe older provenance", () => {
     const state = fixture("ac011-row-stale");
     writeRow(state, { layerState: "completed", snapshotTree: { value: "b".repeat(40), reason: "recorded against an older snapshot" } });
     const staleSnapshot = projectionInput(state, { readTaskFacts: recordReader(state) });
-    expect(deriveStageOutcomeStatuses(staleSnapshot)[STAGE]).toBe("unavailable");
-    expect(deriveExecutionOutcomes(staleSnapshot)[STAGE].diagnostic).toMatchObject({ code: "execution_record_row_snapshot_stale" });
+    expect(deriveStageOutcomeStatuses(staleSnapshot)[STAGE]).toBe("completed");
+    expect(deriveExecutionOutcomes(staleSnapshot)[STAGE]).toMatchObject({ status: "completed" });
+    expect(deriveExecutionOutcomes(staleSnapshot)[STAGE].diagnostic).toBeUndefined();
+    // Stale provenance stays readable (task II D-009 removed the invalidation
+    // gate) but must be disclosed instead of silently accepted.
+    expect(deriveExecutionOutcomes(staleSnapshot)[STAGE].provenance).toMatchObject({
+      status: "stale",
+      row_snapshot_tree: "b".repeat(40),
+      current_snapshot_tree: staleSnapshot.snapshot_tree,
+    });
 
     writeRow(state, { layerState: "completed", materialDigest: { value: "c".repeat(64) } });
     const staleMaterial = projectionInput(state, { readTaskFacts: recordReader(state) });
-    expect(deriveStageOutcomeStatuses(staleMaterial)[STAGE]).toBe("unavailable");
-    expect(deriveExecutionOutcomes(staleMaterial)[STAGE].diagnostic).toMatchObject({ code: "execution_record_row_material_stale" });
+    expect(deriveStageOutcomeStatuses(staleMaterial)[STAGE]).toBe("completed");
+    expect(deriveExecutionOutcomes(staleMaterial)[STAGE]).toMatchObject({ status: "completed" });
+    expect(deriveExecutionOutcomes(staleMaterial)[STAGE].diagnostic).toBeUndefined();
+    expect(deriveExecutionOutcomes(staleMaterial)[STAGE].provenance).toMatchObject({
+      status: "stale",
+      row_material_revision: "c".repeat(64),
+    });
+
+    writeRow(state, { layerState: "completed" });
+    const current = projectionInput(state, { readTaskFacts: recordReader(state) });
+    expect(deriveExecutionOutcomes(current)[STAGE]).toMatchObject({ status: "completed" });
+    expect(deriveExecutionOutcomes(current)[STAGE].provenance).toBeUndefined();
   });
 
   it("reports two rows for one stage as an explicit conflict instead of picking one", () => {
@@ -360,8 +378,13 @@ describe("the real status entry point reads the current row", () => {
     const second = runStatus();
     expect(second.execution_outcome).toMatchObject({ status: "incomplete", attempt_count: 1, completed_attempt_count: 0 });
     expect(second.execution_outcome.record.source).toBe("stage-end:build-code-retry");
-    expect(second.quality_predicates.stage_outcome.status).toBe("missing");
-    expect(second.product_release_status).toBe("not_released");
+    // ADR-0026: the absent current outcome is disclosed by the execution layer and must
+    // not be re-published as a quality predicate.
+    expect(second.quality_predicates).not.toHaveProperty("stage_outcome");
+    // vNext no longer exposes a product-release projection or status group;
+    // the row-derived execution and quality layers are the public result.
+    expect(second).not.toHaveProperty("product_release_status");
+    expect(second).not.toHaveProperty("product_release");
   });
 
   it("keeps a row-less store honest end to end instead of inventing completion", () => {
@@ -375,7 +398,9 @@ describe("the real status entry point reads the current row", () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.execution_outcome).toMatchObject({ status: "unavailable", attempt_count: 0, refs: [] });
     expect(parsed.execution_outcome.diagnostic.code).toBe("execution_record_row_missing");
-    expect(parsed.quality_missing).toContain("stage_outcome");
+    // The row-less store stays honest through the execution disclosure; it must not be
+    // rewritten into a quality predicate or a quality `missing` entry (ADR-0026).
+    expect(parsed.quality_missing).not.toContain("stage_outcome");
     expect(readFileSync(join(state.task.taskPath, "facts.jsonl"), "utf8")).toBe("");
   });
 });

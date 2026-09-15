@@ -43,6 +43,7 @@
     },
     "attempt_ref": { "type": "string", "minLength": 1 },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
+    "result_ref": { "type": "string", "pattern": "^quality/reviews/results/[A-Za-z0-9._-]+\\.json$" },
     "reuse": {
       "type": "object",
       "required": ["source_result_ref", "source_result_hash", "reason"],

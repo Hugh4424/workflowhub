@@ -40,8 +40,7 @@ JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers
 verify-code 审查当前实现，并在同一次常规独审中复核本次逐项验收结果、执行原件和冻结材料。上游材料的撰写与修订仍由原 stage 负责。
 
 当前 task 的以下四份材料存在且可读，就直接开始或继续验收：
-`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`。旧事实只作背景，不是
-工作许可证，也不能冻结同 task 修复。
+`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`。旧事实只作背景，不是工作许可证，也不能冻结同 task 修复。
 
 它检查当前实现是否有会影响交付的代码问题：
 
@@ -91,7 +90,7 @@ verify-code does not rewrite either project standard or invent a browser pass.
 1. `dsh-code-review`：一次代码审查调用，内部包含 correctness、lifecycle、security、consumer fit、简化、变更文档和 prose 检查；
 2. `wh-review`：按受信配置发起一次异源 findings 审查，保留真实 provider、model、session、transport status、findings、error 和 provenance。
 
-provider 只能返回 `findings`。一次审查结束后不为得到空 findings、provider pass 或补齐证据再次调用；unavailable 如实记录，不能算 `pass`，不改写为空 findings。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，并把当前阶段结果记为 `resolved`；不把修复前的 review 改写成当前 `clean`，也不因为没有 `clean` 标签再开一轮审查。
+provider 只能返回 `findings`。一次审查结束后不为得到空 findings、provider pass 或补齐证据再次调用；`unavailable` 绝不是 `pass`，不改写为空 findings。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，并把当前阶段结果记为 `resolved`；不把修复前的 review 改写成当前 `clean`，也不因为没有 `clean` 标签再开一轮审查。
 
 review 结果只是质量事实，不是继续工作的许可证。缺质量事实只限制完成声明，不限制继续验收和修复；发现代码 finding 就回同一 task 修复，不新建任务。
 
@@ -132,5 +131,5 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 
 用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
 
-不要求用户重复 Talk/Grill，消费现有真实执行证据；用户确认仅沿上述既有验收确认语义，不重复确认代码审查结论。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。
+不再要求用户重复 Talk/Grill 或重复确认，消费现有真实执行证据；用户确认仅沿上述既有验收确认语义，不重复确认代码审查结论。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。
 对上游材料本身，本阶段只审查代码及其对当前实现的影响；不重新检查其完整性，也不列 AC 逐条结论。不要要求用户补交 verify-code 证据，不把交接确认当作代码 review 的证据门禁。

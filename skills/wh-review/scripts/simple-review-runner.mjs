@@ -13,6 +13,8 @@ import { materialAllowlistForRule, materialForbiddenMessage, redactProviderHostP
   REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { reviewPacketMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
+import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
@@ -79,6 +81,8 @@ const FOCUS = Object.freeze({
   "make-decision/detail": "Check scope, complete user flow, pages, data states, success and failure boundaries, acceptance, non-goals, deferred work, risks, and unnecessary complexity.",
   "build-spec": "Check requirement coverage, user journey, states, failure recovery, testable acceptance, and scope.",
   "build-plan": "Check dependencies, implementation order, real consumers, verification, recovery, and unnecessary work.",
+  "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
+  "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
   "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "verify-code": "Check only the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. Do not report T010 status, AC coverage, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
   build_prd: "Review only the complete PRD materials (decision log, PRD, task map, design facts, quality facts, and declared supporting facts) for coverage, task ownership, handoff, acceptance, and necessity. This is report-only advice for the non-formal build-prd surface; do not treat it as a formal stage, verdict, completion, or release authorization.",
@@ -133,15 +137,24 @@ function providerSelectionShape(selection) {
   }
   const identities = Array.isArray(selection) ? undefined : (selection?.provider_identities ?? selection?.providerIdentities);
   if (identities === undefined || identities === null) return { providers };
-  if (!identities || typeof identities !== "object" || Array.isArray(identities)) {
+  if (!plainRecord(identities)) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities are invalid");
+  }
+  const identityKeys = Object.keys(identities).sort();
+  if (identityKeys.join("\\u0000") !== [...providers].sort().join("\\u0000")) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities do not match providers");
   }
   return {
     providers,
-    provider_identities: Object.fromEntries(Object.entries(identities).map(([provider, identity]) => [
-      provider,
-      identity && typeof identity === "object" ? { ...identity } : identity,
-    ])),
+    provider_identities: Object.fromEntries(providers.map((provider) => {
+      const identity = identities[provider];
+      exactKeys(identity, ["source_id", "config_id"], `provider identity ${provider}`);
+      if (typeof identity.source_id !== "string" || identity.source_id.trim() === ""
+          || typeof identity.config_id !== "string" || identity.config_id.trim() === "") {
+        throw new TypeError(`PROVIDER_SELECTION_INVALID: provider identity ${provider} is invalid`);
+      }
+      return [provider, { source_id: identity.source_id, config_id: identity.config_id }];
+    })),
   };
 }
 
@@ -189,19 +202,11 @@ export function validateProviderResultsAgainstSelection(providerResults, selecti
 // Caller fields never attest provider routing; this narrow read-only helper is
 // shared by the task record route and the bare CLI.
 export function resolveSimpleReviewRouteIdentity(input, dependencies = {}) {
-  const identity = reviewIdentityFromInput(input);
-  const track = identity.reviewTrack;
-  const scope = identity.reviewScope;
-  const kind = identity.reviewKind;
-  const host = input.host_provider ?? input.hostProvider;
-  if (typeof host !== "string" || !host.trim()) throw new TypeError("host_provider is required for trusted route identity");
-  const trusted = (dependencies.loadConfig ?? loadTrustedThirdReviewConfig)({ requestedStage: input.stage, requestedTrack: track, requestedReviewKind: kind });
-  const route = (dependencies.resolveRoute ?? resolveTrustedReviewRoute)(trusted.whReview, input.stage, track, kind, scope);
-  if (!route) throw new Error("ROUTE_UNAVAILABLE: no trusted review route");
-  const selection = providerSelectionShape((dependencies.selectProviders ?? selectTrustedReviewProviderSelection)(trusted.config, host, route));
-  const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === "object"
-    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
-  return Object.freeze({ route_identity: hash(JSON.stringify(stable({ stage: input.stage, review_track: track, review_scope: scope, review_kind: kind, host_provider: host, route, selection }))), provider_selection: selection });
+  return resolveReviewRouteIdentity(input, {
+    loadConfig: dependencies.loadConfig ?? loadTrustedThirdReviewConfig,
+    resolveRoute: dependencies.resolveRoute ?? resolveTrustedReviewRoute,
+    selectProviders: dependencies.selectProviders ?? selectTrustedReviewProviderSelection,
+  });
 }
 
 export function reviewSubjectFields(input) {
@@ -228,18 +233,25 @@ function instructions(input) {
   if (identity?.reviewKind === "build_prd") {
     return canonicalReviewInstructionsFor("build-prd", null, false, null, "build_prd");
   }
+  // Never render a caller-authored instruction source. When the runner owns the
+  // bundle this is enforced as a preflight rejection; when the host supplies an
+  // already-built bundle the host's fixed template governs, so this helper only
+  // needs to stay deterministic.
   const name = surface(input);
-  const contract = input.stage === "make-decision"
-    ? [
-      "Read and apply the governed make-decision review contract below; it is part of this review's instruction source.",
-      "The provider protocol is findings-only: findings:[] is not checked_no_gap, completion, approval, or proof that every OI was covered. Do not invent checked_no_gap or a verdict.",
-      MAKE_DECISION_CONTRACT,
-    ]
-    : [];
+  const focus = identity?.stage === "make-decision"
+    ? FOCUS[name]
+    : identity?.stage === "build-code"
+      ? FOCUS[`build-code/${identity.reviewScope ?? "phase"}`] ?? FOCUS["build-code"]
+      : FOCUS[name] ?? FOCUS[identity?.stage];
+  if (!focus) throw new TypeError(`MATERIAL_INCOMPLETE: review instructions are unavailable for ${name}`);
   return [
     `Review surface: ${name}.`,
-    FOCUS[name] ?? "Review the supplied current-stage material for concrete delivery risks.",
-    ...contract,
+    focus,
+    ...(identity?.stage === "make-decision" ? [
+      "Read and apply the governed make-decision review contract below; it is part of this review's instruction source.",
+      "The provider protocol is findings-only: findings:[] is not checked_no_gap, completion, approval, or proof that every OI was covered. Do not invent checked_no_gap or a verdict.",
+      "For make-decision, keep findings-only advice separate from stage completion: direction must preserve one reconstruct -> reveal -> challenge flow with current selection hidden until reveal; detail must not substitute for direction or invent OI answers.",
+    ] : []),
     "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.",
     "Report only concrete findings that could change delivery. Merge duplicate root causes. Findings may be empty, but empty findings do not mean completion or approval.",
   ].join("\n");
@@ -248,7 +260,7 @@ function instructions(input) {
 function materialBytes(value) {
   if (Buffer.isBuffer(value)) return value;
   if (typeof value === "string") return Buffer.from(value, "utf8");
-  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+  return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
 }
 
 const AUTHENTICATED_EVIDENCE_PATH = "authenticated-evidence.json";
@@ -383,22 +395,21 @@ function rebuildSerializedPacket(packet) {
   return rebuilt;
 }
 
+// Authenticated evidence has exactly one canonical byte form for the whole
+// review path (runtime packet identity, this runner, and the record route).
+// Deriving it locally with a second redactor made a path-bearing evidence value
+// hash differently from the value the recorder authenticated.
 function authenticatedEvidenceFields(input) {
   if (input?.authenticated_evidence === undefined) return {};
-  const value = input.authenticated_evidence;
-  if (!value || typeof value !== "object" || Array.isArray(value) || Buffer.isBuffer(value)) {
-    throw new TypeError("authenticated_evidence must be a non-empty JSON object");
-  }
-  const normalized = redactProviderHostPaths(value);
-  const bytes = Buffer.from(`${canonicalJson(normalized)}\n`, "utf8");
+  const bytes = canonicalAuthenticatedEvidenceBytes(input.authenticated_evidence);
   return {
-    authenticated_evidence: normalized,
+    authenticated_evidence: JSON.parse(bytes.toString("utf8")),
     authenticated_evidence_sha256: hash(bytes),
   };
 }
 
 function authenticatedEvidenceBytes(value) {
-  return Buffer.from(`${canonicalJson(redactProviderHostPaths(value))}\n`, "utf8");
+  return canonicalAuthenticatedEvidenceBytes(value);
 }
 
 function safeName(key, index, value) {
@@ -422,9 +433,13 @@ function buildBundle(attachmentRoot, input) {
   // JSON material) must never reach the provider; keep the bundle bytes and
   // the material identity computed over the same redacted values.
   write("review-instructions.md", Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8"));
-  Object.entries(input.materials ?? {}).forEach(([key, value], index) => {
+  let materialIndex = 0;
+  assertRedactableMaterials(input.materials);
+  Object.entries(input.materials ?? {}).forEach(([key, value]) => {
+    if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
-    write(safeName(key, index, redacted), materialBytes(redacted));
+    write(safeName(key, materialIndex, redacted), materialBytes(redacted));
+    materialIndex += 1;
   });
   if (input.authenticated_evidence !== undefined) {
     write(AUTHENTICATED_EVIDENCE_PATH, authenticatedEvidenceBytes(input.authenticated_evidence));
@@ -478,38 +493,22 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
 }
 
 function materialIdForInput(input) {
-  // Mirror buildBundle exactly: the provider-visible identity is computed over
-  // host-path-redacted values, never over raw caller bytes.
-  // verify-code may receive a large authenticated diff. The provider sees the
-  // bounded projection, so every caller that derives material_id (including
-  // the record route and unavailable results) must derive it from that same
-  // projection. If projection cannot be formed, retain the raw identity so
-  // the explicit MATERIAL_TOO_LARGE fact remains recordable against the
-  // authenticated request.
-  let packetMaterials = input.materials;
-  if (input.stage === "verify-code") {
-    try { packetMaterials = compactVerifyCodeMaterials(input.materials).materials; }
-    catch { packetMaterials = input.materials; }
+  return reviewPacketMaterialId(input, { instructionText: instructions, compactMaterials: compactVerifyCodeMaterials });
+}
+
+// The host-path redaction boundary is text/JSON-only: redactProviderHostPaths
+// returns Buffer values unchanged, while the bundle writer forwards their bytes
+// verbatim. A binary material could therefore carry an absolute host path to
+// the provider unredacted. Fail closed instead of shipping bytes the boundary
+// cannot inspect.
+function assertRedactableMaterials(materials) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) return;
+  for (const [key, value] of Object.entries(materials)) {
+    if (key === "review_instructions") continue;
+    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+      throw new TypeError(`MATERIAL_FORBIDDEN: binary material ${key} cannot cross the host-path redaction boundary`);
+    }
   }
-  const instructionBytes = Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8");
-  const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length }];
-  entries[0].sha256 = hash(instructionBytes);
-  Object.entries(packetMaterials ?? {}).forEach(([key, value], index) => {
-    const redacted = redactProviderHostPaths(value);
-    const bytes = materialBytes(redacted);
-    entries.push({ path: safeName(key, index, redacted), bytes: bytes.length, sha256: hash(bytes) });
-  });
-  if (input.authenticated_evidence !== undefined) {
-    const bytes = authenticatedEvidenceBytes(input.authenticated_evidence);
-    entries.push({ path: AUTHENTICATED_EVIDENCE_PATH, bytes: bytes.length, sha256: hash(bytes) });
-  }
-  const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
-  entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
-  const canonicalEntries = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH].includes(entry.path))
-    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
-    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
-  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
 }
 
 export function createSimpleReviewPacket(input) {
@@ -517,6 +516,7 @@ export function createSimpleReviewPacket(input) {
   const identity = reviewIdentityFromInput(input);
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
   validateDirectPacketMaterials(identity, input.materials);
+  assertRedactableMaterials(input.materials);
   let packetMaterials = input.materials;
   if (input.stage === "verify-code") {
     try { packetMaterials = compactVerifyCodeMaterials(input.materials).materials; }
@@ -605,13 +605,18 @@ function pairFields(pair) {
 }
 
 function unavailableResult(input, error, pair = null, extra = {}) {
+  // An invalid identity cannot produce an authenticated packet id.  The
+  // invalid-identity preflight passes material_id=null explicitly; all other
+  // unavailable paths still compute the id and therefore fail closed on
+  // malformed material or instruction inputs.
+  const materialId = Object.hasOwn(extra, "material_id") ? extra.material_id : materialIdForInput(input);
   return {
     status: "unavailable",
     stage: input.stage,
     ...reviewSubjectFields(input),
     review_track: input.review_track ?? input.reviewTrack ?? null,
     review_kind: input.review_kind ?? input.reviewKind ?? null,
-    material_id: materialIdForInput(input),
+    material_id: materialId,
     ...authenticatedEvidenceFields(input),
     ...pairFields(pair),
     runtime_id: null,
@@ -640,12 +645,13 @@ function preflightDiagnostic({ field, expected, actual, nextAction }) {
   };
 }
 
-function blockedPreflight(input, code, message, diagnostic, pair = null) {
+function blockedPreflight(input, code, message, diagnostic, pair = null, extra = {}) {
   const error = { code, message: redactHostPaths(message), diagnostic };
   return unavailableResult(input, error, pair, {
     dispatch_state: "blocked_before_dispatch",
     provider_results: [],
     findings: [],
+    ...extra,
   });
 }
 
@@ -679,6 +685,9 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
 }
 
 function validateDirectPacketMaterials(identity, materials) {
+  if (identity.reviewKind !== "build_prd" && Object.prototype.hasOwnProperty.call(materials, "review_instructions")) {
+    throw new TypeError("MATERIAL_FORBIDDEN: review_instructions is runner-generated");
+  }
   if (identity.reviewKind !== "build_prd") return;
   const rule = reviewRuleFor("build-prd");
   const invalid = runMaterialAllowlistPreflight(
@@ -710,7 +719,18 @@ function shouldRunMaterialPreflight(input, rule) {
   return Object.keys(materials).some((key) => allowlist.known.includes(key));
 }
 
-function runStaticPreflight(input, { route, providerSelection }, pair = null) {
+// A caller may not author the provider instruction source for a formal stage.
+// It is generated by the runner from the review identity; only the non-stage
+// build-prd surface declares review_instructions as one of its own materials.
+function rejectCallerInstructions(materials, { allowDeclaredInstructions = false } = {}) {
+  if (allowDeclaredInstructions) return;
+  if (materials && typeof materials === "object" && !Array.isArray(materials)
+      && Object.prototype.hasOwnProperty.call(materials, "review_instructions")) {
+    throw new TypeError("MATERIAL_FORBIDDEN: review_instructions is runner-generated");
+  }
+}
+
+function runStaticPreflight(input, { route, providerSelection, runnerOwnsBundle = true }, pair = null) {
   let rule;
   try {
     rule = staticReviewRule(input);
@@ -721,6 +741,27 @@ function runStaticPreflight(input, { route, providerSelection }, pair = null) {
       actual: input.stage,
       nextAction: "use a configured review surface and retry",
     }), pair);
+  }
+  try {
+    // Only the bundle-owning path may reject a caller-authored instruction
+    // source: there the runner renders review-instructions.md itself. A
+    // host-supplied bundle has already validated its fixed stage template
+    // through buildReviewMaterials, so its material contract governs.
+    rejectCallerInstructions(input.materials, {
+      allowDeclaredInstructions: !runnerOwnsBundle
+        || input.stage === "build-prd" || input.review_kind === "build_prd" || input.reviewKind === "build_prd",
+    });
+  } catch (error) {
+    // The caller-supplied instruction source is exactly what a packet identity
+    // would be computed from, so a rejected instruction field has no
+    // authenticated material identity. Record that absence explicitly instead
+    // of re-deriving an identity from rejected bytes.
+    return blockedPreflight(input, "MATERIAL_FORBIDDEN", error.message, preflightDiagnostic({
+      field: "review_instructions",
+      expected: "runner-generated instruction source",
+      actual: "caller-supplied",
+      nextAction: "remove review_instructions and retry",
+    }), pair, { material_id: null });
   }
   if (!route || !Array.isArray(route.initial) || route.initial.length === 0) {
     return blockedPreflight(input, "ROUTE_UNAVAILABLE", "review route has no initial provider", preflightDiagnostic({
@@ -891,7 +932,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         review_scope: input.review_scope ?? input.reviewScope ?? null,
       }),
       next_action: "use the non-stage build-prd sentinel or a formal stage review kind",
-    }, pair);
+    }, pair, { material_id: null });
   }
   const canonicalInput = {
     ...input,
@@ -914,6 +955,18 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     }
     const preflight = runMaterialAllowlistPreflight(canonicalInput, rule, pair);
     if (preflight) return preflight;
+  }
+  try {
+    // Reject binary materials before route resolution so a material set the
+    // redaction boundary cannot inspect never reaches config, broker, or lock.
+    assertRedactableMaterials(canonicalInput.materials);
+  } catch (error) {
+    return blockedPreflight(canonicalInput, "MATERIAL_FORBIDDEN", error.message, preflightDiagnostic({
+      field: "materials",
+      expected: "text or JSON provider material",
+      actual: "binary",
+      nextAction: "supply text or JSON materials and retry",
+    }), pair, { material_id: null });
   }
   let reviewInput = canonicalInput;
   if (canonicalInput.stage === "verify-code") {
@@ -977,7 +1030,11 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       nextAction: "repair the provider route and retry",
     }), pair);
   }
-  const preflight = runStaticPreflight(callerOwnedPreflightInput(canonicalInput), { route, providerSelection }, pair);
+  const preflight = runStaticPreflight(
+    callerOwnedPreflightInput(canonicalInput),
+    { route, providerSelection, runnerOwnsBundle: typeof dependencies.buildBundle !== "function" },
+    pair,
+  );
   if (preflight) return preflight;
   const selectedProviders = providerSelection.providers;
   const selectedIdentities = providerSelection.provider_identities ?? null;
@@ -1048,6 +1105,11 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           materials: bundle,
           prompt,
           reviewMode: route.mode,
+          // The managed and unmanaged transports must expose the same provider
+          // contract: a direction review is one request carrying its ordered
+          // reconstruct -> reveal -> challenge flow. Omitting it here would let
+          // the unmanaged path silently downgrade the governed flow.
+          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
           strictProtocol: false,
           ...pairFields(pair),
         });

@@ -20,11 +20,13 @@ function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function lifecycle() {
-  const cardRef = "conversation/talk/card-1";
-  const replyRef = "host-message://reply/talk-1";
+function lifecycle(interactionType = "talk", round = 1) {
+  const cardRef = `conversation/${interactionType}/card-${round}`;
+  const replyRef = `host-message://reply/${interactionType}-${round}`;
+  const questionId = `${interactionType}-scope-${round}`;
   const question = {
-    question_id: "scope",
+    question_id: questionId,
+    ...(interactionType === "grill" ? { frontier_id: questionId } : {}),
     axis: "scope",
     independent: true,
     options: [
@@ -34,14 +36,17 @@ function lifecycle() {
     recommended_option: 2,
     recommendation_reason: "当前事实支持",
   };
-  const card = { card_ref: cardRef, card_hash: hash(cardRef), round: 1 };
+  const card = { card_ref: cardRef, card_hash: hash(cardRef), round };
   const reply = { ...card, source: "user", reply_ref: replyRef, reply_hash: hash(replyRef) };
   return {
-    interaction_type: "talk",
+    interaction_type: interactionType,
     events: [
       { event: "ask", ...card, questions: [question] },
       { event: "wait", ...card, status: "waiting-for-user" },
-      { event: "reply", ...reply, answers: [{ question_id: "scope", number: 2 }], remaining_question_ids: [], re_ranked: true },
+      { event: "reply", ...reply,
+        answers: [{ [interactionType === "grill" ? "frontier_id" : "question_id"]: questionId, number: 2 }],
+        ...(interactionType === "grill" ? { remaining_frontier_ids: [] } : { remaining_question_ids: [] }),
+        re_ranked: true },
       { event: "resume", ...reply, status: "resumed" },
     ],
   };
@@ -98,8 +103,8 @@ function draft(state) {
     original_requirement: { ref: requirement.ref, hash: requirement.sha256 },
     decision: { ref: decisionRef, hash: decisionHash, revision: state.kernel.currentVNextMaterialRevision() },
     confirmation: { ref: confirmation.ref, hash: confirmation.hash, result: "accepted" },
-    talk: { status: "completed", round_count: 1, lifecycle_rounds: [lifecycle()] },
-    grill: { status: "completed", summary: "范围冲突已处理" },
+    talk: { status: "completed", round_count: 1, lifecycle_rounds: [lifecycle("talk", 1)] },
+    grill: { status: "completed", summary: "范围冲突已处理", lifecycle_rounds: [lifecycle("grill", 1)] },
     advice: { status: "unavailable", reason: "本次没有可用的独立建议运输" },
   };
 }
@@ -246,7 +251,7 @@ describe("P2 formal wiring contract", () => {
     expect(replay.ref).toBe(first.ref);
     expect(replay.idempotent).toBe(true);
     const reordered = draft(state);
-    reordered.grill = { summary: reordered.grill.summary, status: reordered.grill.status };
+    reordered.grill = { lifecycle_rounds: reordered.grill.lifecycle_rounds, summary: reordered.grill.summary, status: reordered.grill.status };
     const reorderedReplay = state.kernel.completeMakeDecisionInteractionPublication(reordered);
     expect(reorderedReplay.ref).toBe(first.ref);
     expect(reorderedReplay.idempotent).toBe(true);

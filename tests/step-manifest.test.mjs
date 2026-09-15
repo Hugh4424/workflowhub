@@ -178,7 +178,7 @@ describe("canonical step manifest", () => {
   it("uses runtime canonical namespaces for the manifests owned by this change", () => {
     const ownedStages = ["make-decision", "build-spec", "build-code", "verify-code"];
     const canonical = {
-      research: "quality/tests/",
+      research: "quality/evidence/research/<sha256>.json",
       review: "quality/reviews/results/",
       quality_facts: "quality/facts/",
       confirmation: "quality/confirmations/",
