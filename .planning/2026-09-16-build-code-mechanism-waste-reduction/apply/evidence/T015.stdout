@@ -1,0 +1,9 @@
+command: npx vitest run tests/contract/make-decision-interaction-publication.test.mjs tests/contract/stage-handoff.test.mjs tests/contract/build-reflection-page.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+test_files: 2 failed, 1 passed
+tests: 3 failed, 59 passed
+oracle: ORACLE-RUNTIME-HANDOFF
+failures:
+- missing-input diagnosis API was absent
+- tools/host/workflowhub-local-stage-runner.mjs was absent
+- six reflection blocks were not exposed by the runtime status reader

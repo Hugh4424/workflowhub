@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SHA256_HEX_CASE_INSENSITIVE } from "../../../runtime/evidence/canonical-utils.mjs";
+import { parseReviewerOutput } from "./review-output.mjs";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
@@ -20,6 +21,18 @@ const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
 const EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS = REVIEW_BROKER_TIMEOUT_FROM_ENV ?? DEFAULT_REVIEW_BROKER_TIMEOUT_MS;
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
+
+function validateMinimumHeterologous(minimumHeterologous, minimum_heterologous) {
+  if (minimumHeterologous !== undefined && minimum_heterologous !== undefined
+      && minimumHeterologous !== minimum_heterologous) {
+    throw failure("THRESHOLD_INVALID", "minimum_heterologous aliases disagree");
+  }
+  const value = minimumHeterologous === undefined ? minimum_heterologous : minimumHeterologous;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw failure("THRESHOLD_INVALID", "minimum_heterologous must be an explicit positive integer");
+  }
+  return value;
+}
 
 // Only structural path fields and broker error metadata are checked. Issue,
 // recommendation, and provider output prose remain opaque reviewer text.
@@ -117,6 +130,12 @@ function exactKeys(value, expected, label) {
 const v3MemberFields = ["attempts", "continuable", "deadline_ms", "error", "identity", "material", "output", "provenance", "recovery", "result_protocol", "session_id", "status", "timing", "usage"];
 const v3GroupFields = ["host_provider", "material_id", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const v3AttemptFields = ["attempt_id", "completed_at_ms", "duration_ms", "error", "kind", "provider_retry_count", "session_id", "started_at_ms", "status"];
+const v3MemberStates = new Set(["running", "completed", "failed", "cancelled"]);
+const v3PublicationStates = new Set(["not_published", "initial_published", "late_open", "late_closed"]);
+const v3ExtendedGroupFields = [...v3GroupFields, "initial_result_ref", "publication", "supplements"];
+const v3SupplementFields = ["arrival_at", "arrival_elapsed_ms", "findings", "initial_result_ref", "provider", "supplement_id", "window_status"];
+const v3SupplementFieldsWithIdentity = [...v3SupplementFields, "identity"];
+const LATE_SUPPLEMENT_WINDOW_MS = 600000;
 const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
@@ -159,6 +178,81 @@ function validateV3Sha256(value, label) {
   return value;
 }
 
+function validateV3Publication(value, label = "v3 publication") {
+  exactKeys(value, ["append_window", "published_at", "published_at_least_sources", "running_member_count", "status"], label);
+  if (!v3PublicationStates.has(value.status)) throw failure("PROTOCOL_INCOMPATIBLE", `${label}.status is invalid`);
+  if (!(value.published_at === null || (Number.isSafeInteger(value.published_at) && value.published_at >= 0))) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.published_at is invalid`);
+  }
+  if (!Number.isSafeInteger(value.published_at_least_sources) || value.published_at_least_sources < 0) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.published_at_least_sources is invalid`);
+  }
+  if (!Number.isSafeInteger(value.running_member_count) || value.running_member_count < 0) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.running_member_count is invalid`);
+  }
+  if (value.status === "not_published" && value.published_at !== null) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.not_published cannot have published_at`);
+  }
+  if (value.status !== "not_published" && !Number.isSafeInteger(value.published_at)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label} published state requires published_at`);
+  }
+  if (value.append_window === null && value.status === "not_published") {
+    return Object.freeze({ ...value });
+  }
+  exactKeys(value.append_window, ["duration_ms", "ends_at", "starts_at"], `${label}.append_window`);
+  const window = value.append_window;
+  if (![window.starts_at, window.ends_at, window.duration_ms].every((item) => Number.isSafeInteger(item) && item >= 0)
+      || window.duration_ms !== LATE_SUPPLEMENT_WINDOW_MS
+      || value.published_at === null
+      || window.starts_at !== value.published_at
+      || window.ends_at !== window.starts_at + LATE_SUPPLEMENT_WINDOW_MS) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.append_window is invalid`);
+  }
+  return Object.freeze({ ...value, append_window: Object.freeze({ ...window }) });
+}
+
+function validateV3Supplement(value, publication, label = "v3 supplement") {
+  exactKeys(value, Object.hasOwn(value ?? {}, "identity") ? v3SupplementFieldsWithIdentity : v3SupplementFields, label);
+  validateV3String(value.supplement_id, `${label}.supplement_id`, { publicMetadata: true });
+  validateV3String(value.initial_result_ref, `${label}.initial_result_ref`, { publicMetadata: true });
+  validateV3String(value.provider, `${label}.provider`, { publicMetadata: true });
+  if (!Number.isSafeInteger(value.arrival_at) || value.arrival_at < 0
+      || !Number.isSafeInteger(value.arrival_elapsed_ms) || value.arrival_elapsed_ms < 0
+      || !Array.isArray(value.findings)
+      || !["in_window", "over_window_unjudged"].includes(value.window_status)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  }
+  if (publication?.published_at !== null && Number.isSafeInteger(publication?.published_at)
+      && value.arrival_elapsed_ms !== value.arrival_at - publication.published_at) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.arrival_elapsed_ms is not bound to published_at`);
+  }
+  const expectedWindowStatus = value.arrival_elapsed_ms < LATE_SUPPLEMENT_WINDOW_MS ? "in_window" : "over_window_unjudged";
+  if (value.window_status !== expectedWindowStatus) throw failure("PROTOCOL_INCOMPATIBLE", `${label}.window_status is invalid`);
+  try {
+    // A supplement is another provider output, not an opaque metadata array.
+    // Validate its findings through the same findings-only parser used for the
+    // initial result before the runner adds trusted provider attribution.
+    parseReviewerOutput(JSON.stringify({ findings: value.findings }), { requireEvidence: true });
+  } catch (error) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.findings are invalid: ${error.message}`);
+  }
+  let identity;
+  if (Object.hasOwn(value, "identity")) {
+    identity = value.identity;
+    exactKeys(identity, ["adapter", "config_id", "model", "provider", "source_id"], `${label}.identity`);
+    validateV3String(identity.provider, `${label}.identity.provider`, { publicMetadata: true });
+    validateV3String(identity.adapter, `${label}.identity.adapter`, { publicMetadata: true });
+    validateV3String(identity.source_id, `${label}.identity.source_id`, { publicMetadata: true });
+    validateV3String(identity.config_id, `${label}.identity.config_id`, { publicMetadata: true });
+    if (identity.model !== null) validateV3String(identity.model, `${label}.identity.model`, { publicMetadata: true });
+  }
+  return Object.freeze({
+    ...value,
+    ...(identity ? { identity: Object.freeze({ ...identity }) } : {}),
+    findings: structuredClone(value.findings),
+  });
+}
+
 function validateV3Usage(value, label = "v3 usage") {
   if (value === null) return null;
   const visit = (current, path, allowDecimal = false) => {
@@ -189,9 +283,9 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
       || (semanticHash !== null && value.material.semantic_hash !== semanticHash)) {
     throw failure("MATERIAL_INCOMPLETE", "3rd-review v3 result is bound to different semantic material identity");
   }
-  if (!["completed", "failed", "cancelled"].includes(value.status)) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 provider status is invalid");
-  if (value.status === "completed" && value.error !== null) throw failure("PROTOCOL_INCOMPATIBLE", "completed v3 provider result must not contain an error");
-  if (value.status !== "completed" && value.error === null) throw failure("PROTOCOL_INCOMPATIBLE", "failed v3 provider result must contain an error");
+  if (!v3MemberStates.has(value.status)) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 provider status is invalid");
+  if (["running", "completed"].includes(value.status) && value.error !== null) throw failure("PROTOCOL_INCOMPATIBLE", `${value.status} v3 provider result must not contain an error`);
+  if (["failed", "cancelled"].includes(value.status) && value.error === null) throw failure("PROTOCOL_INCOMPATIBLE", `${value.status} v3 provider result must contain an error`);
   const error = validateV3Error(value.error, "v3 error");
   const identity = value.identity;
   if (!identity) throw failure("PROTOCOL_INCOMPATIBLE", "v3 identity is invalid");
@@ -218,16 +312,24 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   if (!Array.isArray(value.attempts)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempts must be an array");
   for (const attempt of value.attempts) {
     exactKeys(attempt, v3AttemptFields, "v3 attempt");
-    if (!Number.isSafeInteger(attempt.provider_retry_count) || attempt.provider_retry_count < 0 || !["completed", "failed", "cancelled"].includes(attempt.status)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt is invalid");
+    if (!Number.isSafeInteger(attempt.provider_retry_count) || attempt.provider_retry_count < 0 || !v3MemberStates.has(attempt.status)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt is invalid");
     validateV3String(attempt.attempt_id, "v3 attempt.attempt_id", { publicMetadata: true });
     validateV3String(attempt.kind, "v3 attempt.kind", { publicMetadata: true });
     if (attempt.session_id !== null) validateV3String(attempt.session_id, "v3 attempt.session_id", { publicMetadata: true });
-    validateV3Error(attempt.error, "v3 attempt error");
+    const attemptError = validateV3Error(attempt.error, "v3 attempt error");
+    if (["running", "completed"].includes(attempt.status) && attemptError !== null) throw failure("PROTOCOL_INCOMPATIBLE", `${attempt.status} v3 attempt must not contain an error`);
+    if (["failed", "cancelled"].includes(attempt.status) && attemptError === null) throw failure("PROTOCOL_INCOMPATIBLE", `${attempt.status} v3 attempt must contain an error`);
     validateV3Timing(attempt, "v3 attempt");
   }
   exactKeys(value.timing, ["completed_at_ms", "duration_ms", "started_at_ms"], "v3 timing");
   if (!value.timing || Object.keys(value.timing).sort().join("\0") !== ["completed_at_ms", "duration_ms", "started_at_ms"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 timing is invalid");
   validateV3Timing(value.timing, "v3");
+  if (value.status === "running" && (value.output !== null || value.timing.completed_at_ms !== null || value.timing.duration_ms !== null)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "running v3 provider result must not carry terminal output or timing");
+  }
+  if (value.status !== "running" && value.attempts.some((attempt) => attempt.status === "running")) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "terminal v3 provider result must not carry a running attempt");
+  }
   if (value.deadline_ms !== null || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
   if (value.output !== null) {
     validateV3String(value.output, "v3 output");
@@ -249,8 +351,34 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   });
 }
 
+function validateV3PublicationEnvelope(value, members, hasPublicationExtension, label) {
+  const runningCount = members.filter((member) => member.status === "running").length;
+  if (runningCount > 0 && !hasPublicationExtension) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label} running members require the publication envelope`);
+  }
+  if (runningCount > 0 && value.outcome !== "partial") {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label} running members require partial group outcome`);
+  }
+  if (!hasPublicationExtension) return null;
+  const publication = validateV3Publication(value.publication, `${label}.publication`);
+  if (publication.running_member_count !== runningCount) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label}.publication.running_member_count does not match provider members`);
+  }
+  if (publication.status === "not_published") {
+    if (value.initial_result_ref !== null) throw failure("PROTOCOL_INCOMPATIBLE", `${label}.initial_result_ref must be null before initial publication`);
+  } else {
+    validateV3String(value.initial_result_ref, `${label}.initial_result_ref`, { publicMetadata: true });
+  }
+  if (!Array.isArray(value.supplements)) throw failure("PROTOCOL_INCOMPATIBLE", `${label}.supplements must be an array`);
+  const supplements = value.supplements.map((item, index) => validateV3Supplement(item, publication, `${label} supplement ${index}`));
+  return { publication, supplements };
+}
+
 function validateV3Group(value, { hostProvider, providers, materialId, contractId = null, contractHash = null, semanticHash = null }) {
-  exactKeys(value, v3GroupFields, "3rd-review v3 public group");
+  const hasPublicationExtension = Object.hasOwn(value ?? {}, "initial_result_ref")
+    || Object.hasOwn(value ?? {}, "publication")
+    || Object.hasOwn(value ?? {}, "supplements");
+  exactKeys(value, hasPublicationExtension ? v3ExtendedGroupFields : v3GroupFields, "3rd-review v3 public group");
   if (value.version !== protocol || value.host_provider !== hostProvider || value.material_id !== materialId || !["completed", "partial", "unavailable", "cancelled"].includes(value.outcome) || !Number.isSafeInteger(value.round) || value.round < 1 || typeof value.runtime_id !== "string" || !Array.isArray(value.providers) || value.providers.length === 0) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 public group is invalid");
   if (containsPrivatePath(value.runtime_id)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review v3 group runtime_id contains a private path");
   if (!(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0))) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 selected_tier is invalid");
@@ -262,7 +390,15 @@ function validateV3Group(value, { hostProvider, providers, materialId, contractI
     return member;
   });
   if (received.size !== providers.size || [...providers].some((provider) => !received.has(provider))) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 omitted configured provider result(s)");
-  return Object.freeze({ ...value, providers: Object.freeze(members) });
+  const extension = validateV3PublicationEnvelope(value, members, hasPublicationExtension, "3rd-review v3 public group");
+  if (!extension) return Object.freeze({ ...value, providers: Object.freeze(members) });
+  return Object.freeze({
+    ...value,
+    providers: Object.freeze(members),
+    initial_result_ref: value.initial_result_ref,
+    publication: extension.publication,
+    supplements: Object.freeze(extension.supplements),
+  });
 }
 
 function validateDirectionFlow(value) {
@@ -369,7 +505,10 @@ function validateManagedMember(value, provider, runtimeId, materialId) {
 // with "unsupported fields" after the provider had already been dispatched.
 // Only the field sets differ here; every managed binding check is preserved.
 function validateManagedV3Group(value, { hostProvider, providers, runtimeId, materialId }) {
-  exactKeys(value, v3GroupFields, "3rd-review managed v3 group");
+  const hasPublicationExtension = Object.hasOwn(value ?? {}, "initial_result_ref")
+    || Object.hasOwn(value ?? {}, "publication")
+    || Object.hasOwn(value ?? {}, "supplements");
+  exactKeys(value, hasPublicationExtension ? v3ExtendedGroupFields : v3GroupFields, "3rd-review managed v3 group");
   if (value.host_provider !== hostProvider || value.runtime_id !== runtimeId || value.material_id !== materialId
       || !managedV3Outcomes.has(value.outcome)
       || !Number.isSafeInteger(value.round) || value.round < 1
@@ -397,7 +536,15 @@ function validateManagedV3Group(value, { hostProvider, providers, runtimeId, mat
     return validateV3Member(member, providers, materialId, runtimeId);
   });
   if (seen.size !== providers.size) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed v3 group omitted a configured provider");
-  return Object.freeze({ ...value, providers: Object.freeze(members) });
+  const extension = validateV3PublicationEnvelope(value, members, hasPublicationExtension, "3rd-review managed v3 group");
+  if (!extension) return Object.freeze({ ...value, providers: Object.freeze(members) });
+  return Object.freeze({
+    ...value,
+    providers: Object.freeze(members),
+    initial_result_ref: value.initial_result_ref,
+    publication: extension.publication,
+    supplements: Object.freeze(extension.supplements),
+  });
 }
 
 function validateManagedGroup(value, { hostProvider, providers, runtimeId, materialId }) {
@@ -491,6 +638,74 @@ function parsePublicRun(wire) {
   return result;
 }
 
+export function registerReviewSupplement(initialResult, supplement) {
+  if (!initialResult || typeof initialResult !== "object" || Array.isArray(initialResult)
+      || !supplement || typeof supplement !== "object" || Array.isArray(supplement)) {
+    throw failure("SUPPLEMENT_INVALID", "initial result and supplement must be objects");
+  }
+  const initialResultRef = initialResult.initial_result_ref ?? initialResult.result_ref ?? initialResult.resultRef;
+  validateV3String(initialResultRef, "initial result reference", { publicMetadata: true });
+  const publication = initialResult.publication;
+  const publishedAt = publication?.published_at ?? initialResult.published_at;
+  if (!Number.isSafeInteger(publishedAt) || publishedAt < 0) {
+    throw failure("SUPPLEMENT_INVALID", "initial result published_at is required");
+  }
+  validateV3String(supplement.supplement_id, "supplement_id", { publicMetadata: true });
+  validateV3String(supplement.initial_result_ref, "supplement.initial_result_ref", { publicMetadata: true });
+  validateV3String(supplement.provider, "supplement.provider", { publicMetadata: true });
+  if (supplement.initial_result_ref !== initialResultRef
+      || !Number.isSafeInteger(supplement.arrival_at) || supplement.arrival_at < publishedAt
+      || !Array.isArray(supplement.findings)) {
+    throw failure("SUPPLEMENT_INVALID", "supplement is not bound to the initial result and publication clock");
+  }
+  let normalizedFindings;
+  try {
+    normalizedFindings = parseReviewerOutput(JSON.stringify({ findings: supplement.findings }), { requireEvidence: true }).findings
+      .map((finding) => ({ ...finding, provider: supplement.provider }));
+  } catch (error) {
+    throw failure("SUPPLEMENT_INVALID", `supplement findings are invalid: ${error.message}`);
+  }
+  const arrivalElapsedMs = supplement.arrival_at - publishedAt;
+  const windowStatus = arrivalElapsedMs < LATE_SUPPLEMENT_WINDOW_MS ? "in_window" : "over_window_unjudged";
+  if (supplement.arrival_elapsed_ms !== undefined && supplement.arrival_elapsed_ms !== arrivalElapsedMs) {
+    throw failure("SUPPLEMENT_INVALID", "supplement arrival_elapsed_ms is invalid");
+  }
+  if (supplement.window_status !== undefined && supplement.window_status !== windowStatus) {
+    throw failure("SUPPLEMENT_INVALID", "supplement window_status is invalid");
+  }
+  const existing = initialResult.supplements ?? [];
+  if (!Array.isArray(existing)) throw failure("SUPPLEMENT_INVALID", "initial result supplements must be an array");
+  const duplicate = existing.find((item) => item?.supplement_id === supplement.supplement_id);
+  if (duplicate) {
+    const same = duplicate.initial_result_ref === supplement.initial_result_ref
+      && duplicate.provider === supplement.provider
+      && duplicate.arrival_at === supplement.arrival_at
+      && JSON.stringify(duplicate.findings) === JSON.stringify(normalizedFindings);
+    if (!same) throw failure("SUPPLEMENT_CONFLICT", "supplement_id is already bound to different bytes");
+    return initialResult;
+  }
+  const record = Object.freeze({
+    supplement_id: supplement.supplement_id,
+    initial_result_ref: initialResultRef,
+    provider: supplement.provider,
+    arrival_at: supplement.arrival_at,
+    arrival_elapsed_ms: arrivalElapsedMs,
+    window_status: windowStatus,
+    ...(supplement.identity ? { identity: Object.freeze(structuredClone(supplement.identity)) } : {}),
+    findings: Object.freeze(structuredClone(normalizedFindings)),
+  });
+  const findings = Array.isArray(initialResult.findings) ? [...initialResult.findings] : [];
+  if (windowStatus === "in_window") {
+    findings.push(...structuredClone(normalizedFindings));
+  }
+  return Object.freeze({
+    ...initialResult,
+    initial_result_ref: initialResultRef,
+    findings: Object.freeze(findings),
+    supplements: Object.freeze([...existing, record]),
+  });
+}
+
 export class ReviewProviderClient {
   constructor({ command = null, config = null, invoke = null, timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
@@ -499,7 +714,7 @@ export class ReviewProviderClient {
     this.timeoutMs = timeoutMs;
   }
 
-  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null } = {}) {
+  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous } = {}) {
     if (!(typeof requestId === "string" && requestId.trim() !== "" && !containsPrivatePath(requestId)
         && typeof hostProvider === "string" && hostProvider.trim() !== ""
         && Array.isArray(providers) && providers.length > 0
@@ -509,6 +724,7 @@ export class ReviewProviderClient {
     if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
       throw new TypeError("providers must be a unique non-empty string array");
     }
+    const minimum = validateMinimumHeterologous(minimumHeterologous, minimum_heterologous);
     if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
     if (reviewFlow && reviewMode !== "single_round") throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 requires single_round review mode");
     const entries = (materials.deliveryManifest ?? materials.manifest ?? []).map(({ path, bytes, sha256 }) => ({
@@ -526,6 +742,7 @@ export class ReviewProviderClient {
       // started_at_ms null, duration_ms null).
       required_result_protocol: protocol,
       provider_allowlist: [...providers],
+      minimum_heterologous: minimum,
       prompt,
       deadline_ms: null,
       ...(reviewMode ? { review_mode: reviewMode } : {}),
@@ -583,9 +800,10 @@ export class ReviewProviderClient {
     });
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true } = {}) {
+  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true, minimumHeterologous, minimum_heterologous } = {}) {
     if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
+    const minimum = validateMinimumHeterologous(minimumHeterologous, minimum_heterologous);
     if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
     if (reviewFlow && reviewMode !== "single_round") throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 requires single_round review mode");
     // A v3 provider group may contain profiles with different attachment
@@ -611,6 +829,7 @@ export class ReviewProviderClient {
       host_provider: hostProvider,
       required_result_protocol: protocol,
       provider_allowlist: [...providers],
+      minimum_heterologous: minimum,
       prompt,
       // A public WorkflowHub request never supplies a wall-clock deadline.
       // The broker owns health/liveness termination and may only expose a
@@ -634,6 +853,9 @@ export class ReviewProviderClient {
           outcome: typeof result.outcome === "string" ? result.outcome : null,
           round: Number.isSafeInteger(result.round) ? result.round : null,
           selectedTier: Number.isSafeInteger(result.selected_tier) ? result.selected_tier : null,
+          ...(Object.hasOwn(result, "initial_result_ref") ? { initial_result_ref: result.initial_result_ref } : {}),
+          ...(result.publication ? { publication: result.publication } : {}),
+          ...(Array.isArray(result.supplements) ? { supplements: result.supplements } : {}),
           providers: Object.freeze(Array.isArray(result.providers) ? result.providers.map((item) => Object.freeze({
             ...item,
             provider: item?.identity?.provider ?? item?.provider ?? "unknown",
@@ -657,6 +879,9 @@ export class ReviewProviderClient {
         round: validated.round,
         selectedTier: validated.selected_tier,
         providers: validated.providers,
+        ...(Object.hasOwn(validated, "initial_result_ref") ? { initial_result_ref: validated.initial_result_ref } : {}),
+        ...(validated.publication ? { publication: validated.publication } : {}),
+        ...(validated.supplements ? { supplements: validated.supplements } : {}),
         ...(wire?.timedOut ? { transport_timeout: Object.freeze({
           code: "PROCESS_TIMEOUT", exit_code: wire.exitCode ?? null, signal: wire.signal ?? null,
         }) } : {}),

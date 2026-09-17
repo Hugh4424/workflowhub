@@ -10,7 +10,7 @@ import { authenticateWriteBoundary } from "../../runtime/evidence/write-boundary
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { deriveCurrentStatusDomains } from "./stage-runtime.mjs";
+import { assertTaskWriteIdentity, deriveCurrentStatusDomains } from "./stage-runtime.mjs";
 import {
   closePlanHash,
   closeDelivery,
@@ -82,10 +82,10 @@ function context(values, { workspaceRequired = true, postConfirmation = false } 
   const unboundKernel = createTaskKernel(task);
   const effectiveWorkspaceRequired = workspaceRequired
     && !(postConfirmation && isPostCleanupArchivePlanRecord(task, values["plan-hash"]));
-  if (!effectiveWorkspaceRequired) return { task, workspace: null, kernel: unboundKernel, taskPathSource: pathResolution.source };
+  if (!effectiveWorkspaceRequired) return { task, workspace: null, kernel: unboundKernel, taskPathSource: pathResolution.source, resolvedTaskPath: pathResolution.taskPath };
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
   const workspace = openCurrentTaskWorkspace(task);
-  return { task, workspace, kernel: createTaskKernel(task, { workspace }), taskPathSource: pathResolution.source };
+  return { task, workspace, kernel: createTaskKernel(task, { workspace }), taskPathSource: pathResolution.source, resolvedTaskPath: pathResolution.taskPath };
 }
 
 function annotatePathSource(result, taskPathSource) {
@@ -234,14 +234,27 @@ async function main() {
   // remaining branch-cleanup step without reopening the deleted Workspace.
   const workspaceRequired = !new Set(["status", "complete", "execute", "manual-close"]).has(command)
     && postArchive === null;
-  const { task, workspace, kernel, taskPathSource } = context(values, { workspaceRequired, postConfirmation: command === "confirm" });
-  if (command !== "status") authenticateWriteBoundary({
-    task,
-    stage: "verify-code",
-    operation: `close.${command}`,
-    runnerRoot: RUNNER_ROOT,
-    ...(workspace === null ? {} : { workspace }),
-  });
+  const { task, workspace, kernel, taskPathSource, resolvedTaskPath } = context(values, { workspaceRequired, postConfirmation: command === "confirm" });
+  if (command !== "status") {
+    assertTaskWriteIdentity({
+      task,
+      project: values.project,
+      taskId: values.task,
+      taskPath: resolvedTaskPath,
+      workspace,
+      cwd: process.cwd(),
+      env: process.env,
+      checkCwd: workspace !== null,
+      requireWorkspace: workspace !== null,
+    });
+    authenticateWriteBoundary({
+      task,
+      stage: "verify-code",
+      operation: `close.${command}`,
+      runnerRoot: RUNNER_ROOT,
+      ...(workspace === null ? {} : { workspace }),
+    });
+  }
   if (command === "close") {
     if (postArchive) {
       const result = await closeDelivery({

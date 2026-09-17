@@ -69,8 +69,8 @@
     },
     {
       "path": "tools/host/workflowhub-stage-agent-bridge.mjs",
-      "disposition": "KEEP",
-      "reason": "private external-host consumer for the canonical Stage Agent outcome adapter"
+      "disposition": "KEEP-LEGACY-READONLY",
+      "reason": "historical stage-outcome provenance and compatibility tests only; current WorkflowHub runs do not call the bridge"
     },
     {
       "path": "runtime/review/stage-review-disposition.mjs",

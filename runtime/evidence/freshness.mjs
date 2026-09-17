@@ -4,7 +4,7 @@ import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { CLOSE_PLAN_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
+import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
@@ -192,8 +192,10 @@ export function authenticateStageReviewResult(result, { taskId, read }) {
  * Owner: verify-code outcome producer. Consumers: those three boundaries.
  * Retain until the existing disposition contract is replaced; no new store.
  */
-export function authenticateCodeReviewRepairs({ review, result, taskId, snapshotTree, materialRevision, workspaceRoot, read }) {
-  const findings = canonicalReviewFindings(review).filter(isActionableSeriousFinding);
+export function authenticateCodeReviewRepairs({ review, result, taskId, snapshotTree, materialRevision, workspaceRoot, read, includeNonblocking = false }) {
+  const findings = canonicalReviewFindings(review).filter((finding) => (
+    includeNonblocking ? typeof finding?.id === "string" : isActionableSeriousFinding(finding)
+  ));
   if (findings.length === 0) return result?.status === "unavailable" ? "unavailable" : "clean";
   if (result?.status !== "findings" || !Array.isArray(result.repairs)) return "findings";
   if (review.task_id !== taskId || review.stage !== "verify-code" || review.material_revision !== materialRevision
@@ -398,6 +400,20 @@ function authenticateBrowserAcceptance(value, fact, scenario, read, dependencies
 }
 
 function authenticateExecutionActor(binding, fact, read, dependencies, key) {
+  if (binding?.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND) {
+    const expectedRunId = `vnext-${sha256(`${fact.task_id}\0build-code`).slice(0, 32)}`;
+    if (binding.task_id !== fact.task_id || binding.stage !== "build-code"
+        || binding.snapshot_tree !== fact.snapshot_tree
+        || binding.material_revision !== fact.material_revision
+        || typeof binding.attempt_id !== "string" || !binding.attempt_id.trim()
+        || binding.run_id !== expectedRunId) throw new Error("current-session acceptance execution binding is not current");
+    dependencies[`${key}:current-session`] = "current";
+    return {
+      source_kind: "workflowhub-session",
+      source_id: WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID,
+      run_id: binding.run_id,
+    };
+  }
   if (!binding || !SHA256_HEX.test(binding.stage_outcome_hash ?? "")
       || binding.stage_outcome_ref !== `quality/evidence/stage-outcomes/build-code/${binding.stage_outcome_hash}.json`) throw new Error("nested acceptance execution stage outcome binding is invalid");
   const outcomeKey = `${key}:stage-outcome`;
@@ -440,14 +456,28 @@ function sameActor(left, right) {
   return left?.source_kind === right?.source_kind && left?.source_id === right?.source_id && left?.run_id === right?.run_id;
 }
 
+function sameExecutionBinding(left, right) {
+  if (!left || !right) return false;
+  if (left.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND || right.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND) {
+    return left.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND
+      && right.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND
+      && left.task_id === right.task_id
+      && left.stage === right.stage
+      && left.attempt_id === right.attempt_id
+      && left.run_id === right.run_id
+      && left.snapshot_tree === right.snapshot_tree
+      && left.material_revision === right.material_revision;
+  }
+  return left.stage_outcome_ref === right.stage_outcome_ref && left.stage_outcome_hash === right.stage_outcome_hash;
+}
+
 function authenticateExecutionLeaf(value, fact, read, dependencies, key, scenario = null, aggregateBinding = null) {
   validateAcceptanceExecutionEvidence(value);
   if (value.task_id !== fact.task_id || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree) throw new Error("nested per-AC execution provenance mismatch");
   const subject = value.subject_fact, execution = subject.execution;
   if (scenario && (["tier", "source", "sample", "scenario"].some((field) => execution[field] !== scenario[field])
       || !scenario.acceptance_criterion_ids?.includes(value.subject))) throw new Error("nested per-AC scenario mismatch");
-  if (aggregateBinding && (subject.execution_binding.stage_outcome_ref !== aggregateBinding.stage_outcome_ref
-      || subject.execution_binding.stage_outcome_hash !== aggregateBinding.stage_outcome_hash)) throw new Error("nested per-AC actor is from another execution");
+  if (aggregateBinding && !sameExecutionBinding(subject.execution_binding, aggregateBinding)) throw new Error("nested per-AC actor is from another execution");
   const actor = authenticateExecutionActor(subject.execution_binding, fact, read, dependencies, key);
   if (!sameActor(actor, subject.executor_actor)) throw new Error("nested per-AC actor does not match its producer proof");
   let stdout;
@@ -514,6 +544,13 @@ function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, k
   return actor;
 }
 
+// One full aggregate authenticator is shared by review material, E2E
+// verification, and later freshness consumers. A wrapper/binding-only check
+// must not admit a foreign task, forged actor, or missing per-AC leaf.
+export function authenticateAcceptanceExecutionAggregate(value, fact, read, dependencies = {}, key = "acceptance-execution") {
+  return authenticateE2eExecutionStageQuality(value, fact, read, dependencies, key);
+}
+
 function authenticateE2eAcceptanceStageQuality(value, fact, read, dependencies, key) {
   if (!value || value.schema_version !== "stage-quality-evidence.v1" || value.task_id !== fact.task_id
       || value.stage !== "verify-code" || value.subject !== "e2e_acceptance" || value.status !== "passed"
@@ -551,6 +588,30 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       && (fact.subject === "same_build_integration_review"
         || value.review_kind === "mini_task.implementation");
     const reviewStage = crossStageReview ? "build-code" : fact.stage;
+    // Material revision is provenance, not a validity switch for recorded
+    // stage/phase reviews. Only the verify-code terminal code review retains
+    // a current snapshot guard; build-code integration and all other review
+    // facts remain readable when their source material or ordinary snapshot
+    // moves. E2E/acceptance execution paths have their own stricter bindings.
+    const requiresCurrentCodeSnapshot = fact.stage === "verify-code"
+      && fact.subject === "code_review"
+      && !crossStageReview;
+    // The stage runner writes this immutable marker when a predicate has no
+    // canonical handler evidence. It is itself the truthful evidence for a
+    // `missing` fact; do not route it through the review/test/acceptance
+    // evidence validators, which would incorrectly turn the current missing
+    // observation into a stale fact and let an older green observation win.
+    if (value.schema_version === "stage-quality-missing.v1") {
+      if (fact.status !== "missing"
+          || value.task_id !== fact.task_id
+          || value.stage !== fact.stage
+          || value.subject !== fact.subject
+          || value.snapshot_tree !== fact.snapshot_tree) {
+        throw new Error("stage-quality-missing evidence does not bind the missing quality fact");
+      }
+      dependencies[key] = "current";
+      return;
+    }
     if (evidence.evidence_type === "test_receipt") {
       if (fact.stage === "verify-code" && fact.subject === "full_tests_fresh") {
         validateCanonicalFullTestReceipt(value, { taskId: fact.task_id, snapshotTree: fact.snapshot_tree, requirePassed: false });
@@ -585,7 +646,9 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       }
       if (value.version === "wh-review-attempt.v1") {
         validateSchema("attempt", value);
-        if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree || value.terminal_status !== "unavailable" || fact.status !== "unavailable") {
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage
+            || (requiresCurrentCodeSnapshot && value.snapshot_tree !== fact.snapshot_tree)
+            || value.terminal_status !== "unavailable" || fact.status !== "unavailable") {
           throw new Error("unavailable review provenance mismatch");
         }
       } else {
@@ -594,8 +657,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
           && fact.subject === "code_review"
           && fact.review_status === "resolved";
         if (value.task_id !== fact.task_id || value.stage !== reviewStage
-            || (value.material_revision !== undefined && value.material_revision !== fact.material_revision)
-            || (!allowMaterialOnlySnapshot && !repairedReview && value.snapshot_tree !== fact.snapshot_tree)) {
+            || (!allowMaterialOnlySnapshot && !repairedReview && requiresCurrentCodeSnapshot && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
         // review_kind is optional for the five formal stages.  Older and
@@ -624,11 +686,17 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
         if (Object.hasOwn(value, "verdict")) throw new Error("current review result must not expose reviewer verdict");
         if (fact.status !== "recorded") throw new Error("review result requires a recorded review fact");
         const hasActionableFinding = canonicalReviewFindings(value).some(isActionableSeriousFinding);
+        const hasReportableFinding = canonicalReviewFindings(value).some((finding) => typeof finding?.id === "string");
         if (fact.stage === "verify-code" && fact.subject === "code_review"
             && hasActionableFinding && !repairedReview) {
           throw new Error("verify-code code_review has actionable serious findings");
         }
-        if (repairedReview && !hasActionableFinding) throw new Error("resolved verify-code review must retain its actionable findings");
+        // A resolved current-session repair may close a nonblocking finding as
+        // well as a serious one. The writer authenticates every reportable
+        // finding when it records `review_status=resolved`; the read-back
+        // consumer must preserve that same disposition instead of requiring a
+        // serious finding that the immutable provider result never had.
+        if (repairedReview && !hasReportableFinding) throw new Error("resolved verify-code review must retain its reportable findings");
       }
     } else if (evidence.evidence_type === "acceptance_evidence") {
       const acceptance = validateAcceptanceEvidence(value);

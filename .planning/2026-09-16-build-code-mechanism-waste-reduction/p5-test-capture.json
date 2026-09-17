@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/contract/write-identity-workspace.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/build-code-p5-write-identity.json",
+  "output_ref": "quality/tests/output/build-code-p5-write-identity.output"
+}

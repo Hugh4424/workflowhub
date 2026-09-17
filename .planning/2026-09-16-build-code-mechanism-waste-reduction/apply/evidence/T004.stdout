@@ -1,0 +1,9 @@
+T004 GREEN evidence
+
+command: npx vitest run tests/contract/review-budget-deletion.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+result: 1 file, 3 tests passed; covers unchanged/material/snapshot reuse, null/declined/invalid retry shapes, verify current-snapshot retry requirement, judged retry idempotence.
+namespace_regression: npx vitest run tests/contract/review-budget-namespace.test.mjs --poolOptions.forks.singleFork --no-fileParallelism; exit_code 0; 9 tests passed.
+canonical_receipt: quality/tests/build-code-p2-review-deletion-v4.json
+canonical_receipt_hash: 1ebaf1e21339db0434f13b6ad68cc78fae4eccf0d438a5ed6e800590f6267f85
+P1_evidence_receipt: quality/tests/build-code-p1-material-change-v2.json sha256 c90010a072f0395014d56ced51e97c09cab8c1ecd672040534f5120d94ef15e6

@@ -11,7 +11,10 @@
     "providers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/member" } },
     "round": { "type": "integer", "minimum": 1 },
     "runtime_id": { "type": "string", "minLength": 1 },
-    "selected_tier": { "type": ["integer", "null"], "minimum": 0 }
+    "selected_tier": { "type": ["integer", "null"], "minimum": 0 },
+    "initial_result_ref": { "type": ["string", "null"], "minLength": 1 },
+    "publication": { "$ref": "#/$defs/publication" },
+    "supplements": { "type": "array", "items": { "$ref": "#/$defs/supplement" } }
   },
   "additionalProperties": false,
   "$defs": {
@@ -78,7 +81,7 @@
         },
         "result_protocol": { "const": "workflowhub-result.v3" },
         "session_id": { "type": ["string", "null"], "minLength": 1 },
-        "status": { "enum": ["completed", "failed", "cancelled"] },
+        "status": { "enum": ["running", "completed", "failed", "cancelled"] },
         "timing": {
           "type": "object",
           "required": ["completed_at_ms", "duration_ms", "started_at_ms"],
@@ -105,7 +108,7 @@
         "provider_retry_count": { "type": "integer", "minimum": 0 },
         "session_id": { "type": ["string", "null"], "minLength": 1 },
         "started_at_ms": { "type": ["integer", "null"], "minimum": 0 },
-        "status": { "enum": ["completed", "failed", "cancelled"] }
+        "status": { "enum": ["running", "completed", "failed", "cancelled"] }
       },
       "additionalProperties": false
     },
@@ -126,6 +129,59 @@
       "minProperties": 1,
       "properties": { "cost": { "$ref": "#/$defs/cost_usage_value" } },
       "additionalProperties": { "$ref": "#/$defs/usage_value" }
+    },
+    "publication": {
+      "type": "object",
+      "required": ["append_window", "published_at", "published_at_least_sources", "running_member_count", "status"],
+      "properties": {
+        "status": { "enum": ["not_published", "initial_published", "late_open", "late_closed"] },
+        "published_at": { "type": ["integer", "null"], "minimum": 0 },
+        "published_at_least_sources": { "type": "integer", "minimum": 0 },
+        "running_member_count": { "type": "integer", "minimum": 0 },
+        "append_window": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["duration_ms", "ends_at", "starts_at"],
+              "properties": {
+                "starts_at": { "type": "integer", "minimum": 0 },
+                "ends_at": { "type": "integer", "minimum": 0 },
+                "duration_ms": { "const": 600000 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "supplement": {
+      "type": "object",
+      "required": ["arrival_at", "arrival_elapsed_ms", "findings", "initial_result_ref", "provider", "supplement_id", "window_status"],
+      "properties": {
+        "supplement_id": { "type": "string", "minLength": 1 },
+        "initial_result_ref": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "arrival_at": { "type": "integer", "minimum": 0 },
+        "arrival_elapsed_ms": { "type": "integer", "minimum": 0 },
+        "window_status": { "enum": ["in_window", "over_window_unjudged"] },
+        "findings": { "type": "array", "items": { "type": "object" } },
+        "identity": { "$ref": "#/$defs/identity" }
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "required": ["adapter", "config_id", "model", "provider", "source_id"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "adapter": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "config_id": { "type": "string", "minLength": 1 },
+        "model": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
     }
   }
 }

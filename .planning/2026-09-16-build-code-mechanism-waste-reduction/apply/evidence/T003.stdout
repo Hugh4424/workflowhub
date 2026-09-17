@@ -1,0 +1,5 @@
+T003 RED evidence (captured during build-code execution)
+
+command: npx vitest run tests/contract/review-budget-deletion.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+target failures: production route still exposed budget history symbols and the no-basis retry response was not implemented; the test setup and fixture ran successfully.

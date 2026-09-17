@@ -1,0 +1,9 @@
+command: npx vitest run tests/contract/review-material-change-redispatch.test.mjs tests/contract/review-budget-deletion.test.mjs tests/contract/external-threshold-contract.test.mjs tests/contract/external-supplement-window.test.mjs tests/contract/write-identity-workspace.test.mjs tests/contract/acceptance-single-writer-empty-values.test.mjs tests/contract/close-remote-branch-cleanup.test.mjs tests/contract/make-decision-interaction-publication.test.mjs tests/contract/stage-handoff.test.mjs tests/contract/build-reflection-page.test.mjs tests/contract/five-stage-spec-analyze-wiring.test.mjs tests/contract/review-materials-contract.test.mjs tests/contract/close-sidecar-and-archive.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+initial_attempt: exit 1; 12 files passed, 163/164 tests passed; one review-materials fixture omitted the now-required explicit minimum_heterologous and failed before provider validation
+repair: added minimum_heterologous=1 to the existing file-only broker fixture; focused review-materials contract exit 0, 43/43
+final_attempt: exit 0; 13 files passed, 164/164 tests passed; duration 327.35s
+oracle: ORACLE-FINAL
+facts:
+- review validity, budget deletion, eligible-model threshold, running/publication, supplement window, write identity, acceptance single-writer, remote cleanup, interaction publication, handoff/reflection compatibility, material contracts, and close sidecar/archive seams all passed their named target tests
+- final aggregate is deterministic targeted coverage only; no unbounded full regression was run
+- external 3rd-review formal acceptance/commit/push/close remains outside this task and unknown

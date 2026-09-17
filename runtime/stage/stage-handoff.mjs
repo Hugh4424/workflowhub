@@ -85,7 +85,7 @@ function outcomeCounts(outcomeValue) {
 
 function deriveProgressLines(outcomeValue) {
   if (!outcomeValue || typeof outcomeValue !== "object") {
-    return ["- 当前没有可读的 authenticated stage outcome，进度保持 unknown。"];
+    return ["- execution: 当前阶段由 WorkflowHub 当前会话直接执行；本次未使用外部 stage outcome。"];
   }
   const counts = outcomeCounts(outcomeValue);
   const status = outcomeValue.status ?? "unknown";
@@ -402,6 +402,24 @@ function currentHandoffOutcome(task, raw, stage, runId) {
   return matches[0];
 }
 
+function currentHandoffIdentity(task, raw, stage) {
+  if (raw === null) return null;
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(raw);
+  if (!frontmatter) fail("stage handoff current frontmatter is missing");
+  let header;
+  try { header = yaml.load(frontmatter[1], { schema: yaml.JSON_SCHEMA }); }
+  catch (error) { fail(`stage handoff current frontmatter is invalid: ${error.message}`); }
+  if (header?.schema !== SCHEMA || header.task !== task.identity.taskId || header.stage !== stage
+      || typeof header.snapshot_tree !== "string" || header.snapshot_tree.trim() === ""
+      || !/^revision-[a-f0-9]{64}$/.test(header.material_scope_revision ?? "")) {
+    fail("stage handoff current identity is invalid");
+  }
+  return { value: {
+    snapshot_tree: header.snapshot_tree,
+    material_scope_revision: header.material_scope_revision,
+  } };
+}
+
 export function publishStageHandoff({
   task,
   kernel,
@@ -416,6 +434,8 @@ export function publishStageHandoff({
   diagnostic = null,
   stageOutcome = null,
   stageReflection = null,
+  worktree = null,
+  branch = null,
   sourceRefs = [],
   materials = null,
   nextAction = null,
@@ -427,33 +447,36 @@ export function publishStageHandoff({
   if (taskId !== task.identity.taskId) fail("stage handoff task identity mismatch");
   const currentSnapshot = kernel.currentVNextSnapshot();
   if (snapshotTree !== currentSnapshot.tree) fail("stage handoff snapshot is not current");
-  if (!stageOutcome || typeof stageOutcome.ref !== "string" || typeof stageOutcome.sha256 !== "string") {
-    fail("stage handoff requires an authenticated stage outcome source");
-  }
-  const outcomeMatch = STAGE_OUTCOME_REF.exec(stageOutcome.ref);
-  if (!outcomeMatch || outcomeMatch[1] !== stage || outcomeMatch[2] !== stageOutcome.sha256) {
-    fail("stage handoff outcome source ref is not canonical for the current stage");
-  }
-  const outcomeRaw = task.readRecord(stageOutcome.ref);
-  if (sha256(outcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source hash mismatch");
-  let outcomeValue;
-  try { outcomeValue = JSON.parse(outcomeRaw); }
-  catch (error) { fail(`stage handoff outcome source is not valid JSON: ${error.message}`); }
-  if (outcomeValue?.schema_version !== "workflowhub-stage-outcomes.v1"
-      || typeof outcomeValue.attempt_id !== "string" || outcomeValue.attempt_id.trim() === ""
-      || !outcomeValue.producer || typeof outcomeValue.producer !== "object"
-      || typeof outcomeValue.producer.source_id !== "string" || outcomeValue.producer.source_id.trim() === ""
-      || typeof outcomeValue.producer.agent_run_id !== "string" || outcomeValue.producer.agent_run_id.trim() === "") {
-    fail("stage handoff outcome source producer or schema is not authenticated");
-  }
-  if (typeof kernel.deriveStageWorkflowRunId === "function"
-      && outcomeValue.run_id !== kernel.deriveStageWorkflowRunId(stage)) {
-    fail("stage handoff outcome source workflow run identity mismatch");
-  }
-  if (outcomeValue.task_id !== taskId || outcomeValue.stage !== stage
-      || outcomeValue.snapshot_tree !== snapshotTree
-      || outcomeValue.material_scope_revision !== materialScopeRevision) {
-    fail("stage handoff outcome source does not bind the current identity");
+  const currentMaterialRevision = kernel.currentVNextMaterialRevision();
+  let outcomeValue = null;
+  if (stageOutcome !== null && stageOutcome !== undefined) {
+    if (typeof stageOutcome !== "object" || typeof stageOutcome.ref !== "string" || typeof stageOutcome.sha256 !== "string") {
+      fail("stage handoff stage outcome source must be an object when supplied");
+    }
+    const outcomeMatch = STAGE_OUTCOME_REF.exec(stageOutcome.ref);
+    if (!outcomeMatch || outcomeMatch[1] !== stage || outcomeMatch[2] !== stageOutcome.sha256) {
+      fail("stage handoff outcome source ref is not canonical for the current stage");
+    }
+    const outcomeRaw = task.readRecord(stageOutcome.ref);
+    if (sha256(outcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source hash mismatch");
+    try { outcomeValue = JSON.parse(outcomeRaw); }
+    catch (error) { fail(`stage handoff outcome source is not valid JSON: ${error.message}`); }
+    if (outcomeValue?.schema_version !== "workflowhub-stage-outcomes.v1"
+        || typeof outcomeValue.attempt_id !== "string" || outcomeValue.attempt_id.trim() === ""
+        || !outcomeValue.producer || typeof outcomeValue.producer !== "object"
+        || typeof outcomeValue.producer.source_id !== "string" || outcomeValue.producer.source_id.trim() === ""
+        || typeof outcomeValue.producer.agent_run_id !== "string" || outcomeValue.producer.agent_run_id.trim() === "") {
+      fail("stage handoff outcome source producer or schema is not authenticated");
+    }
+    if (typeof kernel.deriveStageWorkflowRunId === "function"
+        && outcomeValue.run_id !== kernel.deriveStageWorkflowRunId(stage)) {
+      fail("stage handoff outcome source workflow run identity mismatch");
+    }
+    if (outcomeValue.task_id !== taskId || outcomeValue.stage !== stage
+        || outcomeValue.snapshot_tree !== snapshotTree
+        || outcomeValue.material_scope_revision !== materialScopeRevision) {
+      fail("stage handoff outcome source does not bind the current identity");
+    }
   }
   const ref = stageHandoffRef(stage);
   const absolutePath = resolve(task.taskPath, ...ref.split("/"));
@@ -495,15 +518,20 @@ export function publishStageHandoff({
       try { reflection = JSON.parse(raw); }
       catch (error) { fail(`stage handoff reflection source is not valid JSON: ${error.message}`); }
       if (reflection?.schema_version === "stage-reflection.v1") {
+        const localIdentity = reflection.identity;
         if (reflection.record_kind !== "judgment" || reflection.status !== "failed"
             || reflection.task_id !== taskId || reflection.stage !== stage
             || !reflection.error || typeof reflection.error.summary !== "string"
-            || reflection.source?.ref !== stageOutcome.ref
-            || reflection.source?.sha256 !== stageOutcome.sha256
             || reflection.identity?.task_id !== taskId
-            || reflection.identity?.attempt !== outcomeValue.attempt_id
+            || (worktree !== null && reflection.identity?.worktree !== worktree)
+            || (branch !== null && reflection.identity?.branch !== branch)
             || reflection.identity?.snapshot_tree !== snapshotTree
-            || ![materialScopeRevision, outcomeValue.material_revision].includes(reflection.identity?.material_revision)) {
+            || ![materialScopeRevision, currentMaterialRevision, outcomeValue?.material_revision].includes(reflection.identity?.material_revision)
+            || (stageOutcome
+              ? reflection.source?.ref !== stageOutcome.ref
+                || reflection.source?.sha256 !== stageOutcome.sha256
+                || localIdentity?.attempt !== outcomeValue.attempt_id
+              : reflection.source !== undefined)) {
           fail("stage handoff reflection failure source is not authenticated");
         }
       } else if (reflection?.schema_version === "stage-reflection.v2") {
@@ -518,9 +546,11 @@ export function publishStageHandoff({
         if (reflection.record_kind !== "judgment"
             || reflection.task_id !== taskId || reflection.stage !== stage
             || reflection.identity?.task_id !== taskId
-            || reflection.identity?.attempt !== outcomeValue.attempt_id
+            || (worktree !== null && reflection.identity?.worktree !== worktree)
+            || (branch !== null && reflection.identity?.branch !== branch)
+            || (stageOutcome && reflection.identity?.attempt !== outcomeValue.attempt_id)
             || reflection.identity?.snapshot_tree !== snapshotTree
-            || ![materialScopeRevision, outcomeValue.material_revision].includes(reflection.identity?.material_revision)
+            || ![materialScopeRevision, currentMaterialRevision, outcomeValue?.material_revision].includes(reflection.identity?.material_revision)
             || typeof executorSource !== "string" || executorSource.trim() === ""
             || typeof executorAttempt !== "string" || executorAttempt.trim() === ""
             || !Number.isFinite(Date.parse(executorStarted)) || !Number.isFinite(Date.parse(executorCompleted))
@@ -528,8 +558,10 @@ export function publishStageHandoff({
             || !SHA256_HEX.test(executorOutputHash ?? "")
             || !SHA256_HEX.test(executor?.output_hash ?? "")
             || executor.output_hash !== executorOutputHash
-            || reflection.executor?.attempt_id !== outcomeValue.attempt_id
-            || outcomeRefs.length !== 1 || outcomeRefs[0] !== stageOutcome.ref) {
+            || (stageOutcome
+              ? reflection.executor?.attempt_id !== outcomeValue.attempt_id
+                || outcomeRefs.length !== 1 || outcomeRefs[0] !== stageOutcome.ref
+              : outcomeRefs.length !== 0)) {
           fail("stage handoff reflection source does not bind the current identity");
         }
       } else {
@@ -552,26 +584,30 @@ export function publishStageHandoff({
       fail("stage handoff material scope is not current");
     }
     if (materials && artifacts) materialSourceRefs(materials, artifacts);
-    const lockedOutcomeRaw = task.readRecord(stageOutcome.ref);
-    if (sha256(lockedOutcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source changed before current write");
-    let lockedOutcome;
-    try { lockedOutcome = JSON.parse(lockedOutcomeRaw); }
-    catch (error) { fail(`stage handoff outcome source is not valid JSON: ${error.message}`); }
-    if (lockedOutcome?.task_id !== taskId || lockedOutcome.stage !== stage
-        || lockedOutcome.snapshot_tree !== snapshotTree
-        || lockedOutcome.material_scope_revision !== materialScopeRevision
-        || lockedOutcome.attempt_id !== outcomeValue.attempt_id) {
-      fail("stage handoff outcome source is no longer current");
+    let lockedOutcome = null;
+    if (stageOutcome) {
+      const lockedOutcomeRaw = task.readRecord(stageOutcome.ref);
+      if (sha256(lockedOutcomeRaw) !== stageOutcome.sha256) fail("stage handoff outcome source changed before current write");
+      try { lockedOutcome = JSON.parse(lockedOutcomeRaw); }
+      catch (error) { fail(`stage handoff outcome source is not valid JSON: ${error.message}`); }
+      if (lockedOutcome?.task_id !== taskId || lockedOutcome.stage !== stage
+          || lockedOutcome.snapshot_tree !== snapshotTree
+          || lockedOutcome.material_scope_revision !== materialScopeRevision
+          || lockedOutcome.attempt_id !== outcomeValue.attempt_id) {
+        fail("stage handoff outcome source is no longer current");
+      }
     }
     let existingRaw = null;
     try { existingRaw = task.readRecord(ref); } catch (error) { if (error?.code !== "ENOENT") throw error; }
-    const existingOutcome = currentHandoffOutcome(task, existingRaw, stage, lockedOutcome.run_id);
+    const existingOutcome = stageOutcome
+      ? currentHandoffOutcome(task, existingRaw, stage, lockedOutcome.run_id)
+      : currentHandoffIdentity(task, existingRaw, stage);
     // The authenticated current view is stale when either materials or the
     // implementation snapshot changed. Opaque attempts need no invented order.
     const existingIsStale = existingOutcome
       && (existingOutcome.value.material_scope_revision !== materialScopeRevision
         || existingOutcome.value.snapshot_tree !== lockedSnapshot.tree);
-    if (existingOutcome && !existingIsStale && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
+    if (stageOutcome && existingOutcome && !existingIsStale && existingOutcome.value.attempt_id !== outcomeValue.attempt_id) {
       const ordering = compareAttempts(outcomeValue.attempt_id, existingOutcome.value.attempt_id);
       // A retry id is not an ordering authority.  If chronology cannot be
       // authenticated, preserve the already-current projection instead of

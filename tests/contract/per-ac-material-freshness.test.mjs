@@ -84,4 +84,32 @@ describe("per-AC immutable material binding contract [C5]", () => {
     const { evidenceRaw } = factFixture();
     expect(sha256(`${evidenceRaw}tampered`)).not.toBe(sha256(evidenceRaw));
   });
+
+  it("authenticates a stage-quality-missing marker as the current missing fact", () => {
+    const markerRaw = `${JSON.stringify({
+      schema_version: "stage-quality-missing.v1",
+      task_id: "freshness-task",
+      stage: "verify-code",
+      subject: "code_review",
+      status: "missing",
+      snapshot_tree: snapshot,
+      reason: "dsh executor unavailable",
+    }, null, 2)}\n`;
+    const fact = createQualityFact({
+      taskId: "freshness-task",
+      stage: "verify-code",
+      materialRevision,
+      snapshotTree: snapshot,
+      kind: "review",
+      status: "missing",
+      subject: "code_review",
+      evidence: [{ ref: "quality/evidence/stage-quality-missing/verify-code/code_review.json", sha256: sha256(markerRaw), evidence_type: "review_result" }],
+    });
+    const records = new Map([
+      [fact.ref, fact.raw],
+      ["quality/evidence/stage-quality-missing/verify-code/code_review.json", markerRaw],
+    ]);
+    expect(authenticateQualityFactRecord({ ref: fact.ref, sha256: fact.sha256 }, { read: (ref) => records.get(ref) }))
+      .toMatchObject({ status: "recorded", authenticated: true });
+  });
 });

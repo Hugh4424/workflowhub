@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/contract/review-budget-deletion.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/build-code-p2-review-deletion-v4.json",
+  "output_ref": "quality/tests/output/build-code-p2-review-deletion-v4.output"
+}

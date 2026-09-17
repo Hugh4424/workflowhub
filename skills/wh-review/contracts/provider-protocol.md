@@ -60,9 +60,13 @@ WorkflowHub 把本 stage 配置的完整 candidate profile 列表交给 3rd-revi
 另一个已配置 profile。不同附件能力的 profile 在默认 `negotiated` delivery 下仍进入同一
 个 broker group；每个配置 profile 都必须有一条公共结果。WorkflowHub 不实现 advisory lock、process
 flight、polling、poll interval、session lifecycle 或额外 timeout；这些 provider lifecycle
-事实由 3rd-review broker 负责。`run` 阻塞到 broker 返回 terminal group；exit code `3`
-的 stdout 仍是合法的 unavailable terminal group，必须按公开协议读取，不能丢弃或改写为空
-findings。被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没有 finding 或悄悄丢弃。
+事实由 3rd-review broker 负责。普通 `run` 返回一个公开 v3 group snapshot：无运行成员时
+它是 terminal group；为兑现 D-008，达到发布阈值前或初始结论仍有成员运行时，也可以
+返回带 publication envelope 的 partial snapshot。此时 `running` 只表示成员尚未终止，
+不能被当作 completed、failed 或取消，也不能把该 snapshot 记录成 terminal provider
+attempt。exit code `3` 的 stdout 仍是合法的 unavailable terminal group，必须按公开协议
+读取，不能丢弃或改写为空 findings。被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成
+没有 finding 或悄悄丢弃。
 
 这是一次 reviewer group 的一次 public request。WorkflowHub 不在外层追加 retry、
 格式纠正、换 provider、同源兜底或 continuation。broker 可以在这一次 request 内部
@@ -130,7 +134,15 @@ reveal 边界之后才呈现 `current_selection`；最终返回一个 provider r
 
 规则：
 
-- provider member 的 `status` 只能是 `completed`、`failed` 或 `cancelled`；group 的 `outcome` 才是 `completed`、`partial`、`unavailable` 或 `cancelled`。
+- terminal provider member 的 `status` 是 `completed`、`failed` 或 `cancelled`；公开进行中
+  snapshot 允许 `running`，但必须带 `publication`，且 group `outcome` 为 `partial`。
+  `publication.running_member_count` 必须等于真实 running member 数；running member 不得
+  带 terminal output 或完成 timing。group 的 `outcome` 是 `completed`、`partial`、
+  `unavailable` 或 `cancelled`。
+- 扩展结果仍属于同一 v3 合同：`initial_result_ref`、`publication`、`supplements` 必须
+  成组出现。未发布初始结论时 `initial_result_ref=null`、`publication.status=not_published`；
+  已发布时必须有公共初始引用。每个 supplement 的 findings 使用本合同的 findings-only
+  schema，并由 WorkflowHub 在绑定可信 provider 选择后再次校验材料锚点。
 - `session_id`、`output` 可以为空。
 - `error` 只能是 `null` 或 `{ "code": "...", "message": "..." }`。
 - WorkflowHub 严格校验 v3 的 `identity`、`material`、`timing`、`usage`、`recovery`、`runtime/session` 和公共结果结构；绝不读取 broker private runtime、raw output 或 session 文件。

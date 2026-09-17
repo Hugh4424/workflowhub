@@ -100,10 +100,8 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("makes comments result explanations rather than a process index or gate", () => {
     const protocol = read("skills/workflowhub-host-protocol/SKILL.md");
-    expect(protocol).toContain("Issue 评论只向人说明进展与结果");
     expect(protocol).toContain("评论是给人看的通知，不是第二套状态机");
-    expect(protocol).toContain("不要求 receipt、评论模板或过程索引");
-    expect(protocol).toContain("不要要求下游评论重复或证明上游的 Talk、Grill、调研与 review 过程");
+    expect(protocol).toMatch(/不要\s+要求评论重复或证明 Talk、Grill、调研、review、session 或 stage outcome 过程/);
     expect(protocol).toContain("`unavailable` 可以成为真实质量事实，但不是工作 gate");
   });
 
@@ -124,8 +122,8 @@ describe("D-015 stage routing and concrete testing contract", () => {
       expect(JSON.stringify(steps(stage))).not.toContain("invocation_key");
     }
     const protocol = read("skills/workflowhub-host-protocol/SKILL.md");
-    expect(protocol).toContain("每个 Stage Agent 直接读取并执行 `workflows/<stage>/SKILL.md`");
-    expect(protocol).toContain("直接读取该阶段 `skill-deps.yaml` 声明的 portable skill package");
+    expect(protocol).toContain("当前 WorkflowHub 会话在认证 task worktree 中读取并执行对应的");
+    expect(protocol).toContain("`workflows/<stage>/SKILL.md` 和 `skill-deps.yaml`");
   });
 
   it("starts downstream stages from the current four-material handoff", () => {
@@ -160,7 +158,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("declares real build-code route facts while quality limits completion", () => {
     const buildCodeSteps = steps("build-code");
     expect(buildCodeSteps.find((step) => step.step_slug === "inspect-and-route-actual-tests")
-      .completion_evidence.map(({ kind }) => kind)).toEqual(["changed_files", "test_routing", "stage_outcome"]);
+      .completion_evidence.map(({ kind }) => kind)).toEqual(["changed_files", "test_routing"]);
     expect(buildCodeSteps.find((step) => step.step_slug === "run-tests")
       .completion_evidence.map(({ kind }) => kind)).toContain("test");
     expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").observable_result)
@@ -177,13 +175,11 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(stepSlugs("build-code").indexOf("stage-end-spec-analyze")).toBeGreaterThan(stepSlugs("build-code").indexOf("final-integration-review"));
   });
 
-  it("declares a stage-outcome evidence binding on every step", () => {
+  it("does not make an external stage outcome part of any active step contract", () => {
     for (const stage of STAGES) {
       for (const step of steps(stage)) {
         const outcome = step.completion_evidence.find(({ kind }) => kind === "stage_outcome");
-        expect(outcome, `${stage}/${step.step_slug} must declare stage outcome evidence`).toMatchObject({
-          uri_or_path: `quality/evidence/stage-outcomes/${stage}/<sha256>.json`,
-        });
+        expect(outcome, `${stage}/${step.step_slug} must not require external stage outcome evidence`).toBeUndefined();
       }
     }
   });
@@ -205,8 +201,8 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("uses four-material readiness while real quality facts limit only completion", () => {
     const protocol = read("skills/workflowhub-host-protocol/SKILL.md");
     expect(protocol).toContain("`build-code`：四材料可读即可在任务 worktree 实现、测试和修复");
-    expect(protocol).toContain("`verify-code`：四材料可读即可做当前实现的代码、consumer、生命周期、安全和失败边界 review；不做逐 AC 或 evidence tree 审计。");
+    expect(protocol).toContain("`verify-code`：四材料可读即可审查当前实现");
     expect(protocol).toContain("材料存在只证明可以工作，不证明质量完成");
-    expect(protocol).toContain("不能阻止同一 task 修复");
+    expect(protocol).toMatch(/不阻止同一 task\s+修复/);
   });
 });

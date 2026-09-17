@@ -13,13 +13,7 @@ import { validateReportableFindingDispositions } from "../../runtime/review/stag
 import { officialStageHandler } from "../../runtime/stage/stage-handlers.mjs";
 import { separateAttemptFindingFacts, validateFindingDispositionState } from "../../runtime/stage/completion-predicates.mjs";
 import { deriveContextProxyMetrics, validateReviewAttemptObservation } from "../../runtime/evidence/stage-content-evidence.mjs";
-// FR-C4-002 moved the round-frequency decision table to its only remaining
-// caller, the review route; the policy and its reported fields are unchanged.
-// The public entry `recordSimpleReviewRequest` is the host request path that
-// consumes the same table, so this block drives it here as well as the extracted
-// decision table; tests/review/review-record-route.test.mjs keeps its own
-// independent public-entry coverage.
-import { evaluateReviewRound, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import {
   classifyFinding,
@@ -32,16 +26,6 @@ import {
 
 const current = Object.freeze({ material_revision: "revision-current", snapshot_tree: "tree-current" });
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-const boundAttempt = (kind, suffix, extra = {}) => ({
-  kind,
-  material_revision: "rev-1",
-  status: "executed",
-  attempt_id: `attempt-${suffix}`,
-  attempt_ref: `quality/reviews/attempts/attempt-${suffix}/attempt.json`,
-  attempt_hash: "a".repeat(64),
-  ...extra,
-});
-
 function frozenDecision(overrides = {}) {
   return {
     approval_binding: {
@@ -349,7 +333,7 @@ describe("Phase 2 needs_human and attempt separation contracts", () => {
   });
 });
 
-describe("Phase 3 review round policy contracts", () => {
+describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
   // The public-entry assertion below needs the same real vnext task store the
   // review route tests use. The fixture is local to this block so the shared
   // Phase 1 / Phase 2 / Phase 4 / T001 / P1 sections stay untouched.
@@ -413,51 +397,98 @@ describe("Phase 3 review round policy contracts", () => {
     };
   }
 
-  it("T009 rejects an unchanged initial review and keeps the phase budget separate", () => {
-    const attempts = [boundAttempt("initial", "initial")];
-    expect(evaluateReviewRound({ material_revision: "rev-1", attempts, request: { kind: "initial", changed: false } })).toMatchObject({
-      ok: false,
-      status: "incomplete",
-      reason: "budget_exceeded",
-      attempt_created: false,
+  it("reuses material changes without auto-dispatch and accepts one explicit retry", async () => {
+    const { task, kernel } = makeReviewTask();
+    let dispatches = 0;
+    const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
+    const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+
+    const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound, resolveRouteIdentity });
+    const changed = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...firstRequest, materials: { implementation: "after" } },
+      runRound,
+      resolveRouteIdentity,
     });
-    expect(evaluateReviewRound({ material_revision: "rev-1", attempts, request: { kind: "phase", phase_id: "P3", changed: false } })).toMatchObject({
-      ok: true,
-      status: "ready",
-      budget_scope: "phase",
+    expect(dispatches).toBe(1);
+    expect(changed).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    expect(first).not.toHaveProperty("review_budget");
+    expect(changed).not.toHaveProperty("review_budget");
+
+    const retryRequest = {
+      ...firstRequest,
+      materials: { implementation: "after" },
+      retry: { requested: true, basis: "material_changed", reason: "review input changed" },
+    };
+    const retried = await recordSimpleReviewRequest({ task, kernel, request: retryRequest, runRound, resolveRouteIdentity });
+    const repeated = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...retryRequest, retry: { ...retryRequest.retry, reason: "same retry, different wording" } },
+      runRound,
+      resolveRouteIdentity,
     });
+    expect(dispatches).toBe(2);
+    expect(retried).toMatchObject({ status: "recorded", reused: false, retry: { requested: true, admitted: true } });
+    expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, attempt_ref: retried.attempt_ref, result_ref: retried.result_ref });
   });
 
-  it("T010 exhausts the focused round without creating a narrow-diff budget kind", () => {
-    const attempts = [
-      boundAttempt("initial", "initial"),
-      boundAttempt("focused", "focused", { changed: true }),
-    ];
-    expect(evaluateReviewRound({
-      material_revision: "rev-1",
-      attempts,
-      request: { kind: "focused", changed: true },
-    })).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
-    expect(evaluateReviewRound({
-      material_revision: "rev-1",
-      attempts,
-      request: { kind: "narrow_diff", changed: true },
-    })).toMatchObject({ ok: false, reason: "budget_input_invalid", errors: ["review_kind_invalid"] });
+  it("does not trust caller-only retry, budget, or narrow-diff fields", async () => {
+    const { task, kernel } = makeReviewTask();
+    let dispatches = 0;
+    const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
+    const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound, resolveRouteIdentity });
+
+    const denied = await recordSimpleReviewRequest({
+      task, kernel,
+      request: {
+        ...firstRequest,
+        materials: { implementation: "after" },
+        changed: true,
+        budget: { remaining: 99 },
+        retry: { requested: true, reason: "please try again" },
+      },
+      runRound,
+      resolveRouteIdentity,
+    });
+    const narrowDiff = await recordSimpleReviewRequest({
+      task, kernel,
+      request: {
+        ...firstRequest,
+        materials: { implementation: "third" },
+        retry: { requested: true, basis: "narrow_diff", reason: "only a narrow diff changed" },
+      },
+      runRound,
+      resolveRouteIdentity,
+    });
+    expect(dispatches).toBe(1);
+    for (const result of [denied, narrowDiff]) {
+      expect(result).toMatchObject({
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: { code: "REVIEW_RETRY_NOT_ADMITTED" },
+        retry: { requested: true, admitted: false },
+      });
+    }
   });
 
-  it("rejects review budget entries that are not bound to canonical attempt records", () => {
-    expect(evaluateReviewRound({
-      material_revision: "rev-1",
-      attempts: [{ kind: "initial", material_revision: "rev-1", status: "executed" }],
-      request: { kind: "initial" },
-    })).toMatchObject({ ok: false, reason: "budget_input_invalid", errors: expect.arrayContaining(["attempt_1_id_missing", "attempt_1_ref_invalid", "attempt_1_hash_invalid"]) });
-    const currentAttempt = boundAttempt("initial", "canonical");
-    expect(evaluateReviewRound({
-      material_revision: "rev-1",
-      attempts: [],
-      canonical_attempts: [currentAttempt],
-      request: { kind: "initial" },
-    })).toMatchObject({ ok: false, reason: "budget_input_invalid", errors: expect.arrayContaining(["attempt_history_incomplete"]) });
+  it("keeps phase review lineage separate from the integration review lineage", async () => {
+    const { task, kernel } = makeReviewTask();
+    let dispatches = 0;
+    const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
+    const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
+    const p1 = { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1", materials: { implementation: "phase one" } };
+    const p2 = { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P2", materials: { implementation: "phase two" } };
+    const firstP1 = await recordSimpleReviewRequest({ task, kernel, request: p1, runRound, resolveRouteIdentity });
+    const firstP2 = await recordSimpleReviewRequest({ task, kernel, request: p2, runRound, resolveRouteIdentity });
+    const repeatedP1 = await recordSimpleReviewRequest({ task, kernel, request: { ...p1, materials: { implementation: "phase one revised" } }, runRound, resolveRouteIdentity });
+    expect(dispatches).toBe(2);
+    expect(firstP2.attempt_ref).not.toBe(firstP1.attempt_ref);
+    expect(repeatedP1).toMatchObject({ status: "recorded", reused: true, attempt_ref: firstP1.attempt_ref });
   });
 
   it("T011 records missing provider usage as unavailable and never as zero", () => {
@@ -500,57 +531,6 @@ describe("Phase 3 review round policy contracts", () => {
     })).toMatchObject({ status: "incomplete", errors: expect.arrayContaining(["packet[0]_material_revision_mismatch"]) });
   });
 
-  // decision-log §16.21 第 3.2 条: the extracted decision table is not enough on
-  // its own — the same policy must stay observable through the public host entry
-  // `recordSimpleReviewRequest`. This drives that entry and asserts the three
-  // observable policy outcomes: the first round records, an identical request
-  // reuses the immutable refs with zero extra dispatch, and a request that
-  // cannot start another round is refused before dispatch.
-  it("drives the same review round policy through the public recordSimpleReviewRequest entry", async () => {
-    const { task, kernel } = makeReviewTask();
-    let dispatches = 0;
-    const runRound = async (input) => {
-      dispatches += 1;
-      return availableReviewResult(input);
-    };
-    // Only the fixture dependency is simulated; production still resolves host configuration.
-    const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
-    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "public entry bytes" } };
-
-    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound, resolveRouteIdentity });
-    expect(first).toMatchObject({ status: "recorded", reused: false });
-    expect(first.review_budget).toMatchObject({ ok: true, route: "initial_review" });
-    expect(first.review_budget.counts.initial).toBe(0);
-
-    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound, resolveRouteIdentity });
-    expect(second).toMatchObject({
-      status: "recorded",
-      reused: true,
-      attempt_ref: first.attempt_ref,
-      result_ref: first.result_ref,
-    });
-    // The reused round still exposes the same policy decision table: the round
-    // is already consumed by the first dispatch, so the reported budget is the
-    // exhausted initial allowance rather than a second grant.
-    expect(second.review_budget).toMatchObject({ ok: false, route: "ask_user", reason: "budget_exceeded" });
-    expect(second.review_budget.counts).toMatchObject({ initial: 1 });
-    expect(dispatches, "an identical public request reuses the recorded round instead of dispatching again").toBe(1);
-
-    // The reviewed input is a reuse precondition, not a five-dimensional dedup
-    // dimension: the same task-material revision is not sufficient once the bytes the
-    // reviewer actually saw have changed, so the request falls through to the round
-    // budget instead of being answered with the immutable old result.
-    const refusedChangedMaterial = await recordSimpleReviewRequest({
-      task,
-      kernel,
-      request: { ...request, materials: { implementation: "different bytes at the same revision" } },
-      runRound,
-      resolveRouteIdentity,
-    });
-    expect(refusedChangedMaterial).not.toMatchObject({ reused: true, attempt_ref: first.attempt_ref });
-    expect(refusedChangedMaterial.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
-    expect(dispatches, "a changed-material request must not reach a second provider round").toBe(1);
-  });
 });
 
 describe("Phase 4 unified fallback protocol [P4]", () => {

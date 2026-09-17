@@ -94,11 +94,28 @@ function findingSignature(finding) {
  * non-actionable advice are deliberately not treated as clean findings.
  */
 export function actionableSeriousFindings(result) {
-  const findings = Array.isArray(result?.findings)
-    ? result.findings
-    : Array.isArray(result?.adjudication?.clusters) ? result.adjudication.clusters : [];
-  return findings.filter((finding) => finding?.disposition === "actionable" && ["major", "blocking"].includes(finding?.severity));
+  const findings = [
+    ...(Array.isArray(result?.findings) ? result.findings : []),
+    ...(Array.isArray(result?.adjudication?.clusters) ? result.adjudication.clusters : []),
+  ];
+  const seen = new Set();
+  return findings.filter((finding) => {
+    if (finding?.disposition !== "actionable" || !["major", "blocking"].includes(finding?.severity)) return false;
+    const signature = findingSignature(finding);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
 }
+
+function isTrustedTerminalSemanticResult(result) {
+  if (!result || !["available", "available-with-failures"].includes(result.status)) return false;
+  // runSimpleReview returns the public \`available\` status after it has
+  // consumed the broker's terminal lifecycle. Canonical result projections
+  // may additionally carry terminal_status; when present it must agree.
+  return result.terminal_status === undefined || result.terminal_status === "semantic";
+}
+
 /**
  * Return a review-cycle fact without creating a loop controller or persisted
  * state. Callers may use it to decide whether the current review is advice,
@@ -108,7 +125,7 @@ export function reviewCycleDecision({ stage, result, previousResult = null, actu
   if (stage !== "build-code") {
     return Object.freeze({ stage, status: "advice_only", action: "stop", reason: "non_build_code_advice_only", important_findings: [] });
   }
-  if (!result || result.status === "unavailable" || result.terminal_status === "unavailable") {
+  if (!isTrustedTerminalSemanticResult(result)) {
     return Object.freeze({ stage, status: "incomplete", action: "stop", reason: "provider_no_trusted_terminal_result", important_findings: [] });
   }
   if (!Array.isArray(result.findings) && !Array.isArray(result?.adjudication?.clusters)) {

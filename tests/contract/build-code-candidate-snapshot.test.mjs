@@ -130,4 +130,5 @@ describe("build-code candidate snapshot compatibility", () => {
     expect(result.facts.tests.exit_code).toBe(0);
     expect(result.facts.changed).toEqual(expect.arrayContaining(changed));
   });
+
 });

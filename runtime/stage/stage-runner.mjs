@@ -16,7 +16,7 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
+import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
@@ -347,58 +347,6 @@ function currentMaterialBinding(ctx) {
   };
 }
 
-// A handler or publication failure can happen before an external Stage Agent
-// outcome exists. Preserve a canonical, current failure source for the
-// non-blocking reflection path instead of manufacturing a judgment without a
-// source. This envelope is deliberately marked failed and remains invalid for
-// completion consumers until a real stage outcome is published; it only gives
-// reflection/handoff a verifiable task/stage/attempt/current binding.
-function publishFailureStageOutcome(ctx, error, attemptId = null) {
-  const snapshot = ctx.kernel.currentVNextSnapshot({ fresh: true });
-  const materials = currentMaterialBinding(ctx);
-  const attempt = typeof attemptId === "string" && attemptId.trim() !== ""
-    ? attemptId
-    : `${ctx.stage}-failure-${randomUUID()}`;
-  const workflowRunId = ctx.workflowRunId ?? ctx.kernel.deriveStageWorkflowRunId(ctx.stage);
-  const producer = {
-    kind: "workflowhub-session",
-    host: process.env.HOSTNAME || "workflowhub-session",
-    source_id: `workflowhub-session/${ctx.identity.taskId}`,
-    source_family: "workflowhub-session",
-    source_ref: `session:${ctx.identity.taskId}`,
-    session_id: `workflowhub:${ctx.identity.taskId}`,
-    agent_run_id: workflowRunId,
-  };
-  const value = {
-    schema_version: "workflowhub-stage-outcomes.v1",
-    task_id: ctx.identity.taskId,
-    stage: ctx.stage,
-    run_id: workflowRunId,
-    attempt_id: attempt,
-    status: "failed",
-    producer,
-    snapshot_tree: snapshot.tree,
-    material_revision: materials.revision,
-    material_hashes: materials.hashes,
-    material_scope: materials.material_scope,
-    material_scope_revision: materials.material_scope_revision,
-    material_scope_hashes: materials.material_scope_hashes,
-    steps_manifest_ref: `workflows/${ctx.stage}/steps.json`,
-    steps_manifest_hash: createHash("sha256").update(readFileSync(join(REPOSITORY_ROOT, `workflows/${ctx.stage}/steps.json`))).digest("hex"),
-    skills_manifest_ref: `workflows/${ctx.stage}/skill-deps.yaml`,
-    skills_manifest_hash: createHash("sha256").update(readFileSync(join(REPOSITORY_ROOT, `workflows/${ctx.stage}/skill-deps.yaml`))).digest("hex"),
-    failure: {
-      code: typeof error?.code === "string" && error.code.trim() !== "" ? error.code : "STAGE_EXECUTION_FAILED",
-      summary: error instanceof Error ? error.message : String(error ?? "stage execution failed"),
-    },
-  };
-  const raw = `${JSON.stringify(value, null, 2)}\n`;
-  const sha256 = createHash("sha256").update(raw).digest("hex");
-  const ref = `quality/evidence/stage-outcomes/${ctx.stage}/${sha256}.json`;
-  const publication = ctx.kernel.publishCanonicalRecord(ref, raw);
-  return Object.freeze({ ref, sha256: publication.sha256 ?? sha256, value: Object.freeze(value) });
-}
-
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -726,7 +674,7 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
 
 function authenticateStageOutcome(ctx, stage, input, expectedBinding = null, { projection = false } = {}) {
   const ref = input?.receipts?.stage_outcomes;
-  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the current WorkflowHub session`);
+  if (typeof ref !== "string") throw outcomeError(`${stage} legacy stage-outcome reader requires an explicit receipts.stage_outcomes reference`);
   const match = STAGE_OUTCOME_REF.exec(ref);
   if (!match || match[1] !== stage) throw outcomeError(`stage outcome ref must be content-addressed for ${stage}`);
   let raw;
@@ -911,16 +859,18 @@ export function authenticateCurrentBuildCodeStageOutcome(context = {}, options =
 }
 
 /**
- * An external Stage Agent outcome is diagnostic execution evidence, not a
- * permission to run the current WorkflowHub handler. A missing or invalid
- * handoff remains visible as an unavailable diagnostic so the normal stage can
- * continue with its own authenticated receipts; structural event and bridge
- * inputs still fail before they can write current facts.
+ * A legacy external Stage Agent outcome is optional diagnostic execution
+ * evidence, not permission to run the current WorkflowHub handler. The normal
+ * current-session path has no outcome input at all. If an old caller supplies
+ * one, authenticate it and retain any failure as provenance without allowing
+ * it to become a current-stage prerequisite.
  */
 function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
   const supplied = input?.receipts?.stage_outcomes;
   if (supplied === undefined) {
-    return Object.freeze({ value: null, diagnostic: { status: "unavailable", reason: "stage_outcome_missing" } });
+    // A normal WorkflowHub run is produced by the current session itself. No
+    // host envelope is created just to explain that no host envelope exists.
+    return Object.freeze({ value: null, diagnostic: null });
   }
   try {
     return Object.freeze({ value: authenticateStageOutcome(ctx, stage, input, expectedBinding), diagnostic: null });
@@ -1137,6 +1087,7 @@ export async function runStageEndReflection(context, {
   stageStatus = "completed",
   execute,
   judgment = null,
+  attemptId = null,
   observation = null,
   stageOutcome = null,
   failureStageOutcome = null,
@@ -1157,6 +1108,8 @@ export async function runStageEndReflection(context, {
   const observedAt = reflectionTimestamp(now);
   const generated = reflectionTimestamp(generatedAt ?? observedAt);
   const handoffStageOutcome = stageOutcome ?? failureStageOutcome;
+  const currentReflectionSnapshot = ctx.kernel.currentVNextSnapshot();
+  const currentReflectionMaterialRevision = ctx.kernel.currentVNextMaterialRevision();
 
   /**
    * Write this stage end's one row into the single execution record. The row is
@@ -1315,6 +1268,16 @@ export async function runStageEndReflection(context, {
         diagnostic: stageOutcomeDiagnostic,
         stageOutcome: handoffStageOutcome,
         stageReflection: reflectionResultValue,
+        worktree: (ctx.candidateWorkspace ?? ctx.workspace)?.worktreeRoot ?? null,
+        branch: (() => {
+          const workspace = ctx.candidateWorkspace ?? ctx.workspace;
+          if (typeof workspace?.branch === "string" && workspace.branch.trim() !== "") return workspace.branch;
+          if (typeof workspace?.worktreeRoot !== "string" || workspace.worktreeRoot.trim() === "") return null;
+          return execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+            cwd: workspace.worktreeRoot,
+            encoding: "utf8",
+          }).trim();
+        })(),
         materials,
         // The next action is derived from the stage chain and the stage status
         // inside the handoff renderer; a hardcoded "continue the current stage"
@@ -1367,8 +1330,8 @@ export async function runStageEndReflection(context, {
         stageStatus,
         stageOutcome,
         worktree: workspace?.worktreeRoot ?? null,
-        materialRevision: stageOutcome?.value?.material_revision ?? null,
-        snapshotTree: stageOutcome?.value?.snapshot_tree ?? null,
+        materialRevision: stageOutcome?.value?.material_revision ?? currentReflectionMaterialRevision,
+        snapshotTree: stageOutcome?.value?.snapshot_tree ?? currentReflectionSnapshot.tree,
       });
       executed = normalized;
     } catch (error) {
@@ -1394,9 +1357,9 @@ export async function runStageEndReflection(context, {
               encoding: "utf8",
             }).trim();
           })(),
-          attempt: stageOutcome?.value?.attempt_id ?? null,
-          snapshot_tree: stageOutcome?.value?.snapshot_tree ?? null,
-          material_revision: stageOutcome?.value?.material_revision ?? null,
+          attempt: stageOutcome?.value?.attempt_id ?? attemptId ?? null,
+          snapshot_tree: stageOutcome?.value?.snapshot_tree ?? currentReflectionSnapshot.tree,
+          material_revision: stageOutcome?.value?.material_revision ?? currentReflectionMaterialRevision,
         }),
         step: Object.freeze({ ...declaredStep }),
       }, timeoutMs);
@@ -1411,15 +1374,12 @@ export async function runStageEndReflection(context, {
     // durable empty judgment record; only a missing executor is unavailable.
     if (judgment !== null) {
       try {
-        let failureSource = handoffStageOutcome;
-        if (failureSource === null || failureSource === undefined) {
-          failureSource = publishFailureStageOutcome(ctx, executionError);
-        }
         const failure = publishStageReflectionExecutionFailure(ctx, {
           stageStatus,
           generatedAt: generated,
           error: executionError,
-          stageOutcome: failureSource,
+          stageOutcome: handoffStageOutcome,
+          attemptId,
         });
         return withHandoff({ ...failure, prelude });
       } catch (failureError) {
@@ -1437,20 +1397,12 @@ export async function runStageEndReflection(context, {
       }
     }
     try {
-      let failureSource = handoffStageOutcome;
-      if (failureSource === null || failureSource === undefined) {
-        try {
-          failureSource = publishFailureStageOutcome(ctx, executionError);
-        } catch (failureSourceError) {
-          failureSource = null;
-          executionError = new Error(`${executionError.message}; failure source unavailable: ${failureSourceError instanceof Error ? failureSourceError.message : String(failureSourceError)}`);
-        }
-      }
       const failure = publishStageReflectionExecutionFailure(ctx, {
         stageStatus,
         generatedAt: generated,
         error: executionError,
-        stageOutcome: failureSource,
+        stageOutcome: handoffStageOutcome,
+        attemptId,
       });
       return withHandoff({ ...failure, prelude });
     } catch (failureError) {
@@ -1478,15 +1430,12 @@ export async function runStageEndReflection(context, {
       value = reflectionRecord(ctx, stage, stageStatus, generated, executedValue);
     } catch (error) {
       try {
-        let failureSource = handoffStageOutcome;
-        if (failureSource === null || failureSource === undefined) {
-          failureSource = publishFailureStageOutcome(ctx, error);
-        }
         const failure = publishStageReflectionExecutionFailure(ctx, {
           stageStatus,
           generatedAt: generated,
           error,
-          stageOutcome: failureSource,
+          stageOutcome: handoffStageOutcome,
+          attemptId,
         });
         return withHandoff({ ...failure, prelude });
       } catch (failureError) {
@@ -1662,6 +1611,16 @@ function evidenceCandidate(result, kind, subject, stage) {
   }
   const directRef = subjectFact?.receipt_ref ?? subjectFact?.result_ref ?? subjectFact?.attempt_ref ?? subjectFact?.confirmation_ref;
   const directHash = subjectFact?.receipt_hash ?? subjectFact?.result_hash ?? subjectFact?.attempt_hash ?? subjectFact?.confirmation_hash;
+  // verify-code has two intentionally separate review consumers. If the
+  // canonical dsh-code-review slot is missing/unavailable, an advisory
+  // wh-review in `facts.review` or generic evidence_refs must not be promoted
+  // into the gating `code_review` subject. A real unavailable attempt may
+  // still bind through its own attempt_ref/hash above.
+  if (kind === "review" && stage === "verify-code" && subject === "code_review"
+      && (!subjectFact || ["missing", "unavailable"].includes(subjectFact.status))
+      && !(typeof directRef === "string" && typeof directHash === "string")) {
+    return null;
+  }
   if (typeof directRef === "string" && typeof directHash === "string") {
     if (/^(?:receipts|reviews|evidence\/confirmations)\//.test(directRef)) {
       throw new Error(`vNext evidence must use quality namespace; legacy projection is retired: ${directRef}`);
@@ -1686,7 +1645,7 @@ export function acceptanceResultForSubjectStatus(status) {
   if (status === "passed") return "pass";
   if (status === "failed") return "fail";
   if (status === "inconclusive") return "inconclusive";
-  if (status === "deferred" || status === "missing") return "deferred";
+  if (status === "deferred" || status === "missing" || status === "not_applicable") return "deferred";
   throw new Error(`unsupported acceptance subject status: ${status}`);
 }
 
@@ -1731,19 +1690,23 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
   return candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
-function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } = {}) {
-  if (!candidate) return { status: "missing" };
+function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, snapshotTree = null } = {}) {
+  if (!candidate) return { status: "missing", evidence_valid: false };
   let record;
   let raw;
   try {
     raw = task.readRecord(candidate.ref);
-    if (candidate.sha256 && createHash("sha256").update(raw).digest("hex") !== candidate.sha256) return { status: "missing" };
+    if (candidate.sha256 && createHash("sha256").update(raw).digest("hex") !== candidate.sha256) return { status: "missing", evidence_valid: false };
     record = JSON.parse(raw);
   } catch {
     // Only a canonical wh-review attempt with terminal_status=unavailable is
     // an unavailable review fact. A missing or malformed record is missing
     // evidence, not a transport result that may be disclosed as unavailable.
-    return { status: "missing" };
+    return { status: "missing", evidence_valid: false };
+  }
+  if (stage === "verify-code" && subject === "code_review"
+      && snapshotTree !== null && record.snapshot_tree !== snapshotTree) {
+    return { status: "missing", evidence_valid: false };
   }
   if (/^quality\/reviews\/results\//.test(candidate.ref)) {
     if (record?.version === "wh-review-result.v1"
@@ -1753,6 +1716,9 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } 
       && record.adjudication?.version === "wh-review-adjudication.v1") {
       if (stage === "verify-code" && ["code_review", "independent_review"].includes(subject)) {
         try {
+          if (subject === "code_review" && snapshotTree !== null && record.snapshot_tree !== snapshotTree) {
+            throw new Error("verify-code review result is bound to an older code snapshot");
+          }
           // An empty findings array is only meaningful after the immutable
           // attempt, terminal provider members, provider outputs, and
           // aggregation have all been authenticated. Do not let a copied or
@@ -1761,30 +1727,30 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } 
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
           return subject === "code_review"
             ? hasSeriousFinding
-              ? { status: "missing", review_status: "findings" }
-              : { status: "recorded", review_status: "clean" }
-            : { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean" };
+              ? { status: "missing", review_status: "findings", evidence_valid: true }
+              : { status: "recorded", review_status: "clean", evidence_valid: true }
+            : { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean", evidence_valid: true };
         } catch {
-          return { status: "missing" };
+          return { status: "missing", evidence_valid: false };
         }
       }
       if (stage === "build-code" && subject === "integration_review") {
         try {
           authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
-          return { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean" };
+          return { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean", evidence_valid: true };
         } catch {
-          return { status: "missing" };
+          return { status: "missing", evidence_valid: false };
         }
       }
-      return { status: "recorded" };
+      return { status: "recorded", evidence_valid: true };
     }
-    return { status: "missing" };
+    return { status: "missing", evidence_valid: false };
   }
   if (/^quality\/reviews\/attempts\//.test(candidate.ref) && record?.terminal_status === "unavailable") {
-    return { status: "unavailable" };
+    return { status: "unavailable", evidence_valid: true };
   }
-  return { status: "missing" };
+  return { status: "missing", evidence_valid: false };
 }
 
 function testEvidenceStatus(task, candidate, { stage, subject } = {}) {
@@ -1845,7 +1811,11 @@ function assertVNextSourceStable(ctx, expectedSnapshot) {
 function publishAcceptanceQualityFact(ctx, snapshot, {
   subject,
   status,
+  subjectStatus = status,
   detail,
+  evidenceState,
+  notApplicableReason,
+  reviewFindings,
   evidenceRefs = [],
   dispositionItems,
   sourceReviewRefs,
@@ -1862,13 +1832,16 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
     task_id: ctx.identity.taskId,
     stage: ctx.stage,
     subject,
-    status,
+    status: subjectStatus,
     snapshot_tree: snapshot.tree,
     material_revision: ctx.kernel.currentVNextMaterialRevision(),
     subject_fact: {
-      status,
+      status: subjectStatus,
       detail: detail ?? "stage did not provide a subject-specific completion fact",
       evidence_refs: subjectEvidence,
+      ...(evidenceState === undefined ? {} : { evidence_state: evidenceState }),
+      ...(notApplicableReason === undefined ? {} : { not_applicable_reason: notApplicableReason }),
+      ...(Array.isArray(reviewFindings) ? { review_findings: [...reviewFindings] } : {}),
       ...(dispositionItems ? {
         disposition_items: dispositionItems ?? [],
         source_review_refs: sourceReviewRefs ?? [],
@@ -1888,10 +1861,10 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   const acceptanceValue = {
     schema_version: "acceptance-evidence.v1",
     acceptance_criterion_id: subject,
-    result: acceptanceResultForSubjectStatus(status),
+    result: acceptanceResultForSubjectStatus(subjectStatus),
     refs: [{ ref: evidenceRef, sha256: evidenceHash }],
     snapshot_tree: snapshot.tree,
-    summary: { actual_outcome: status, evidence_type: "stage quality fact" },
+    summary: { actual_outcome: evidenceState ?? status, evidence_type: "stage quality fact" },
     freshness: {
       status: "current",
       evaluated_at: effectiveRecordedAt,
@@ -1919,10 +1892,9 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
 }
 
 function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null) {
-  // Published for gating and advisory membership alike: the subject is advisory
-  // everywhere because its only producer is the optional host Stage Agent
-  // outcome (see STAGE_ADVISORY_PREDICATES). Publishing it keeps a real host run
-  // disclosed instead of silently dropping the fact.
+  // Published for gating and advisory membership alike. The current session is
+  // the producer; absent analyzer material stays a truthful missing fact and
+  // never becomes an external-agent prerequisite.
   const gating = Object.prototype.hasOwnProperty.call(STAGE_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze");
   const advisory = Object.prototype.hasOwnProperty.call(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze");
   if (!gating && !advisory) return null;
@@ -2357,15 +2329,38 @@ const result = await module[name](JSON.parse(input));
 process.stdout.write(JSON.stringify(result));
 `;
 
-async function executePrivateAcceptance(ctx, scenario, binding, authenticatedStageOutcome, signal) {
+async function executePrivateAcceptance(ctx, scenario, binding, signal, legacyStageOutcome = null) {
   if (!scenario.execution) return unavailableAcceptanceScenario(scenario, `${scenario.tier} acceptance execution requires explicit execution`);
-  const currentOutcome = authenticatedStageOutcome?.value;
-  if (!currentOutcome?.value) return unavailableAcceptanceScenario(scenario, "acceptance execution has no authenticated producer");
-  let producer;
-  try { producer = validateStageOutcomeProducer(currentOutcome.value, "build-code", { requireSource: true }); }
-  catch (error) { return unavailableAcceptanceScenario(scenario, error.message); }
-  const executorActor = Object.freeze({ source_kind: producer.kind, source_id: producer.sourceId, run_id: producer.agentRunId });
-  const executionBinding = { stage_outcome_ref: currentOutcome.ref, stage_outcome_hash: currentOutcome.sha256 };
+  if (legacyStageOutcome?.value) {
+    const outcome = legacyStageOutcome.value;
+    let producer;
+    try { producer = validateStageOutcomeProducer(outcome.value, "build-code", { requireSource: true }); }
+    catch (error) { return unavailableAcceptanceScenario(scenario, error.message); }
+    const executorActor = Object.freeze({ source_kind: producer.kind, source_id: producer.sourceId, run_id: producer.agentRunId });
+    const executionBinding = Object.freeze({ stage_outcome_ref: outcome.ref, stage_outcome_hash: outcome.sha256 });
+    return executeAcceptanceCommandOrService(ctx, scenario, binding, executionBinding, executorActor, signal);
+  }
+  if (typeof binding.attempt_id !== "string" || binding.attempt_id.trim() === "") {
+    return unavailableAcceptanceScenario(scenario, "acceptance execution has no current WorkflowHub attempt binding");
+  }
+  const executionBinding = Object.freeze({
+    kind: WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND,
+    task_id: binding.task_id,
+    stage: binding.stage,
+    attempt_id: binding.attempt_id,
+    run_id: ctx.workflowRunId,
+    snapshot_tree: binding.snapshot_tree,
+    material_revision: binding.material_revision,
+  });
+  const executorActor = Object.freeze({
+    source_kind: "workflowhub-session",
+    source_id: WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID,
+    run_id: ctx.workflowRunId,
+  });
+  return executeAcceptanceCommandOrService(ctx, scenario, binding, executionBinding, executorActor, signal);
+}
+
+async function executeAcceptanceCommandOrService(ctx, scenario, binding, executionBinding, executorActor, signal) {
   const ids = binding.acceptance_criterion_ids;
   if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) return unavailableAcceptanceScenario(scenario, "acceptance scenario requires unique declared ACs");
   const declared = scenario.execution;
@@ -2444,7 +2439,7 @@ async function executePrivateAcceptance(ctx, scenario, binding, authenticatedSta
     executor: "workspace-command", ...(passed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
 }
 
-async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, authenticatedStageOutcome = null, signal = undefined) {
+async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, signal = undefined, authenticatedStageOutcome = null) {
   if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)) throw new TypeError("acceptance scenario must be an object");
   const snapshot = ctx.kernel.currentVNextSnapshot();
   const materialRevision = ctx.kernel.currentVNextMaterialRevision();
@@ -2457,10 +2452,11 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
   if (!new Set(["browser", "service", "command"]).has(scenario.tier)) throw new Error("acceptance scenario tier is unsupported");
   const binding = Object.freeze({
     task_id: ctx.identity.taskId, stage: "build-code", material_revision: materialRevision, snapshot_tree: snapshot.tree,
+    attempt_id: attemptId,
     source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: scenario.tier,
     acceptance_criterion_ids: Object.freeze([...(scenario.acceptance_criterion_ids ?? [])]),
   });
-  if (scenario.tier !== "browser") return executePrivateAcceptance(ctx, scenario, binding, authenticatedStageOutcome, signal);
+  if (scenario.tier !== "browser") return executePrivateAcceptance(ctx, scenario, binding, signal, authenticatedStageOutcome);
   if (typeof publication.runControlledUiQa !== "function") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no controlled QA adapter");
   if (typeof attemptId !== "string" || attemptId.trim() === "") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no current attempt binding");
   const acceptanceScenario = Object.freeze({ source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: "browser" });
@@ -2501,7 +2497,7 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
   }
 }
 
-function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, publicationTimestamp, { requireStageOutcome = false } = {}) {
+function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, publicationTimestamp) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
   // second coordination control plane, not a source-of-truth requirement.
@@ -2573,7 +2569,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
         })()
         : result.facts?.completion_subjects?.[subject]
       : null;
-    let review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
+    let review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject, snapshotTree: snapshot.tree }) : null;
     // A canonical dsh review may have inspected the pre-repair snapshot.  The
     // authenticated stage outcome can still close the current review when it
     // explicitly records every actionable finding as fixed/rejected.  Keep
@@ -2581,8 +2577,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     // disposition changes to `resolved`.
     if (kind === "review" && ctx.stage === "verify-code" && subject === "code_review"
         && candidate !== null && result.code_review_resolution === "resolved"
-        && typeof result.stage_outcome_ref === "string" && typeof result.stage_outcome_hash === "string") {
-      review = { status: "recorded", review_status: "resolved" };
+        && (typeof result.stage_outcome_ref === "string"
+          || result.current_review_repair?.status === "resolved")) {
+      review = { status: "recorded", review_status: "resolved", evidence_valid: true };
     }
     if (kind === "review" && review?.review_status) reviewStatuses.set(subject, review.review_status);
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
@@ -2610,9 +2607,10 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
       qualityAdvisories.push(`${subject}:${status}`);
     }
     const evidenceType = { test: "test_receipt", review: "review_result", acceptance_criterion: "acceptance_evidence", confirmation: "human_confirmation" }[kind];
-    let factEvidenceRef = kind === "acceptance_criterion" ? undefined : candidate?.ref;
-    let factEvidenceHash = kind === "acceptance_criterion" ? undefined : candidate?.sha256;
-    const factEvidence = kind === "acceptance_criterion" ? [] : candidate ? [candidate] : [];
+    const usableCandidate = kind === "review" && review?.evidence_valid === false ? null : candidate;
+    let factEvidenceRef = kind === "acceptance_criterion" ? undefined : usableCandidate?.ref;
+    let factEvidenceHash = kind === "acceptance_criterion" ? undefined : usableCandidate?.sha256;
+    const factEvidence = kind === "acceptance_criterion" ? [] : usableCandidate ? [usableCandidate] : [];
     let acceptanceFact = null;
     if (kind === "acceptance_criterion") {
       const subjectEvidence = Array.isArray(acceptanceSubject?.evidence_refs)
@@ -2630,9 +2628,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
         } : {}),
         ...(subject === "acceptance_execution" ? {
           executionItems: acceptanceSubject?.execution_items ?? [],
-          executionBinding: typeof result.stage_outcome_ref === "string" && typeof result.stage_outcome_hash === "string"
-            ? { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash }
-            : null,
+          executionBinding: acceptanceSubject?.execution_binding ?? null,
         } : {}),
         recordedAt: publicationTimestamp,
       });
@@ -2661,7 +2657,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
       : (new Set(["passed", "failed", "unavailable", "missing"]).has(status) ? status : "missing");
     const resolvedReviewAuthorization = kind === "review"
       && reviewStatuses.get(subject) === "resolved"
-      ? { resolved_review: { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash } }
+      ? result.current_review_repair?.status === "resolved"
+        ? { resolved_review: { current_session: result.current_review_repair } }
+        : { resolved_review: { stage_outcome_ref: result.stage_outcome_ref, stage_outcome_hash: result.stage_outcome_hash } }
       : undefined;
     const fact = kind === "acceptance_criterion"
       ? acceptanceFact.fact
@@ -2696,11 +2694,24 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
           return value.subject === subject ? [validateAcceptanceExecutionEvidence(value)] : [];
         });
       const status = actualLeaves.some((value) => value.status === "failed") ? "failed"
-        : item.status === "covered" ? "passed" : "missing";
+        : item.status === "covered" || item.status === "not_applicable" ? "passed" : "missing";
+      const subjectStatus = item.status === "not_applicable" ? "not_applicable" : status;
+      const evidenceState = item.evidence_state
+        ?? (item.status === "unknown" && (!item.evidence_refs || item.evidence_refs.length === 0)
+          ? "unknown_empty_evidence"
+          : item.status === "not_applicable" ? "not_applicable" : undefined);
       const leaf = publishAcceptanceQualityFact(ctx, snapshot, {
         subject,
         status,
-        detail: item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
+        subjectStatus,
+        evidenceState,
+        ...(item.status === "not_applicable" ? { notApplicableReason: item.not_applicable_reason } : {}),
+        ...(item.evidence_state === "zero_review_findings" ? { reviewFindings: item.review_findings ?? [] } : {}),
+        detail: item.not_applicable_reason
+          ? `not_applicable: ${item.not_applicable_reason}`
+          : item.evidence_state === "zero_review_findings"
+            ? "related review completed with zero findings; no AC execution proof was inferred"
+            : item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
         evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
         ...(actualLeaves.length === 1 ? { executionEvidence: actualLeaves[0] } : {}),
         recordedAt: publicationTimestamp,
@@ -2724,8 +2735,6 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx));
   const completion = deriveStageCompletion(ctx.stage, observations, {
-    requireStageOutcome,
-    stageOutcomeStatus: result.stage_outcome_status,
     requireOutline: ctx.stage === "make-decision" && ctx.manifest?.record_model === "vnext-single-write",
   });
   for (const binding of result.skill_consumer_bindings ?? []) {
@@ -2764,10 +2773,13 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     quality_advisory_fact_refs: Object.freeze(qualityAdvisoryFactRefs),
     ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
     ...(Array.isArray(result.skill_consumer_bindings) ? { skill_consumer_bindings: Object.freeze([...result.skill_consumer_bindings]) } : {}),
-    stage_outcome_ref: typeof result.stage_outcome_ref === "string" ? result.stage_outcome_ref : null,
-    stage_outcome_hash: typeof result.stage_outcome_hash === "string" ? result.stage_outcome_hash : null,
-    stage_outcome_status: typeof result.stage_outcome_status === "string" ? result.stage_outcome_status : "unavailable",
+    ...(result.interaction_publication ? {
+      interaction_publication: Object.freeze({ ...result.interaction_publication }),
+    } : {}),
     ...(typeof result.stage_outcome_ref === "string" ? {
+      stage_outcome_ref: result.stage_outcome_ref,
+      stage_outcome_hash: result.stage_outcome_hash,
+      stage_outcome_status: result.stage_outcome_status,
       step_outcomes: Object.freeze([...(result.step_outcomes ?? [])]),
       skill_outcomes: Object.freeze([...(result.skill_outcomes ?? [])]),
       spec_analyze: result.spec_analyze,
@@ -2862,19 +2874,6 @@ export async function runStage(stage, context, handler, publication = {}, intern
       const diagnostic = stageFailureDiagnostic(error, "stage_handler_failed", stage);
       const availabilityReason = stageReflectionAvailabilityReason(error);
       let failureStageOutcome = reflectionInput?.stageOutcome ?? null;
-      if (failureStageOutcome === null && availabilityReason === null) {
-        try {
-          failureStageOutcome = publishFailureStageOutcome(ctx, error, internal?.attemptId ?? null);
-        } catch (failureSourceError) {
-          // Keep the original handler error authoritative. Reflection will
-          // remain failed/unavailable if a current failure source cannot be
-          // published (for example after a preflight filesystem failure).
-          failureStageOutcome = null;
-          diagnostic.failure_source_error = failureSourceError instanceof Error
-            ? failureSourceError.message
-            : String(failureSourceError);
-        }
-      }
       const reflection = await scheduleReflection({
         stageStatus: "failed",
         ...(availabilityReason === null ? {} : {
@@ -2882,6 +2881,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
           reasonCode: availabilityReason,
         }),
         ...(failureStageOutcome === null ? {} : { failureStageOutcome }),
+        ...(failureStageOutcome === null && internal?.attemptId !== undefined ? { attemptId: internal.attemptId } : {}),
         stageOutcomeDiagnostic: diagnostic,
         observation: `stage ${stage} ended with handler failure: ${diagnostic.error_summary}`,
       });
@@ -2901,9 +2901,7 @@ export async function runStage(stage, context, handler, publication = {}, intern
     if (publicationPromise !== null) return publicationPromise;
     const attempt = Promise.resolve()
       .then(() => {
-        const publishOperation = () => publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials, publicationTimestamp, {
-          requireStageOutcome: internal?.requireStageOutcome === true,
-        });
+        const publishOperation = () => publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials, publicationTimestamp);
         return typeof ctx.kernel.withAuthenticatedOperation === "function"
           ? ctx.kernel.withAuthenticatedOperation(publishOperation)
           : publishOperation();
@@ -3008,6 +3006,9 @@ export async function runStage(stage, context, handler, publication = {}, intern
 // identity; do not require the old Git snapshot/blob to still be available.
 function readDecisionFreezeSources(ctx, input) {
   const refs = outcomeObject(input, "decision freeze input");
+  if (Object.hasOwn(refs, "stage_outcome_ref")) {
+    throw outcomeError("decision freeze stage_outcome_ref is retired; current freeze uses confirmation and quality facts");
+  }
   const readHashed = (ref, pattern, label) => {
     const match = typeof ref === "string" ? pattern.exec(ref) : null;
     if (!match) throw outcomeError(`${label} ref is not canonical`);
@@ -3052,51 +3053,12 @@ function readDecisionFreezeSources(ctx, input) {
     throw outcomeError("decision freeze quality fact does not bind the approved confirmation and decision scope");
   }
 
-  const outcome = readHashed(refs.stage_outcome_ref, /^quality\/evidence\/stage-outcomes\/make-decision\/([a-f0-9]{64})\.json$/, "decision freeze stage outcome");
-  const value = outcome.value;
-  if (value.schema_version !== "workflowhub-stage-outcomes.v1" || value.task_id !== ctx.identity.taskId || value.stage !== "make-decision"
-      || value.run_id !== ctx.kernel.deriveStageWorkflowRunId("make-decision")
-      || !STAGE_OUTCOME_STATUSES.has(value.status) || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
-      || !sameJson(value.material_scope, fact.material_scope) || value.material_scope_revision !== fact.material_scope_revision) {
-    throw outcomeError("decision freeze approval outcome identity does not match the approved fact");
-  }
-  outcomeText(value.attempt_id, "decision freeze approval attempt_id");
-  validateStageOutcomeProducer(value, "make-decision");
-  if (confirmation.value.attempt_ref !== undefined && confirmation.value.attempt_ref !== value.attempt_id) {
-    throw outcomeError("decision freeze confirmation attempt identity mismatch");
-  }
-  if (!Array.isArray(value.step_outcomes)) throw outcomeError("decision freeze approval steps are missing");
-  const approvals = value.step_outcomes.filter((entry) => entry?.step_slug === "approve-decision");
-  if (approvals.length !== 1 || approvals[0].status !== "completed" || !Array.isArray(approvals[0].evidence_refs) || approvals[0].evidence_refs.length === 0) {
-    throw outcomeError("decision freeze requires one completed approve-decision step with original proof");
-  }
-  const step = approvals[0];
-  const binding = { taskId: ctx.identity.taskId, stage: "make-decision", attemptId: value.attempt_id,
-    snapshotTree: value.snapshot_tree, materialRevision: value.material_revision, producerIdentity: value.producer,
-    subjectKind: "step", subjectId: "approve-decision", outcomeStatus: "completed", resultSummary: step.result_summary,
-    allowLegacyApprovalProof: true };
-  // Envelope input/output refs alone can be rehashed independently of the
-  // proof. The actual approval evidence must name this confirmation.
-  let linked = false;
-  for (const [index, reference] of step.evidence_refs.entries()) {
-    const proofRef = outcomeEvidence(ctx, reference, `decision freeze approve-decision proof[${index}]`, binding);
-    const proof = JSON.parse(ctx.task.readRecord(proofRef.ref));
-    // A legacy proof can authenticate the explicit approval it actually
-    // recorded; missing producer_identity never becomes actor authority.
-    if (proof.host_evidence?.source_ref === confirmation.ref || proof.host_evidence?.confirmation_ref === confirmation.ref) linked = true;
-    if (proof.host_evidence?.kind === "workflowhub-session-lifecycle"
-        && (proof.host_evidence.source_ref !== value.producer.source_ref
-          || (proof.host_evidence.session_id !== undefined && proof.host_evidence.session_id !== value.producer.session_id))) {
-      throw outcomeError("decision freeze historical lifecycle source identity mismatch");
-    }
-  }
-  if (!linked) throw outcomeError("decision freeze approve-decision step does not reference the same confirmation");
   const dir = ctx.artifacts ?? ArtifactDir.open((ctx.candidateWorkspace ?? ctx.workspace).worktreeRoot, ctx.task);
   const currentDecisionScopeRevision = materialRevisionFromValues([["decision-log.md", dir.read("decision-log.md")]]);
   const approved = Object.freeze({ status: "accepted", material_revision: fact.material_revision,
     snapshot_tree: fact.snapshot_tree, material_scope: Object.freeze([...fact.material_scope]), material_scope_revision: fact.material_scope_revision });
   return Object.freeze({ approval_binding: approved, final_confirmation: approved, step_11: approved,
-    currentDecisionScopeRevision, evidence_refs: Object.freeze([confirmation.ref, refs.quality_fact_ref, outcome.ref]) });
+    currentDecisionScopeRevision, evidence_refs: Object.freeze([confirmation.ref, refs.quality_fact_ref]) });
 }
 
 function officialWorkerContext(ctx, publication = {}, invocation = {}, authenticatedRequirementContext = null, authenticatedStageOutcome = null, reflectionScheduler = null, signal = undefined) {
@@ -3209,7 +3171,7 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       ? { runControlledUiQa: publication.runControlledUiQa }
       : {}),
     ...(ctx.stage === "build-code" ? {
-      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, authenticatedStageOutcome, signal),
+      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, signal, authenticatedStageOutcome),
     } : {}),
     ...(ctx.stage === "verify-code" ? {
       readE2eAcceptanceEvidence: () => readCurrentE2eAcceptanceEvidence(ctx, invocation.receipts),
@@ -3288,14 +3250,59 @@ export function verifyOfficialEvidence(ctx, result) {
   return result;
 }
 
-function discloseResolvedCodeReview(result, stageOutcome) {
-  if (stageOutcome?.value?.code_review_resolution !== "resolved") return result;
+function authenticateCurrentCodeReviewRepairs(ctx, input, snapshot, materialRevision) {
+  const repairs = input?.code_review_repairs;
+  if (repairs === undefined) return null;
+  if (ctx.stage !== "verify-code") throw new Error("code_review_repairs are only valid for verify-code");
+  if (!Array.isArray(repairs) || repairs.length === 0) {
+    throw new Error("verify-code code_review_repairs must be a non-empty array");
+  }
+  const reviewRef = input.receipts?.quality_review;
+  if (!REVIEW_RESULT_REF.test(reviewRef ?? "")) {
+    throw new Error("verify-code code_review_repairs require a canonical quality_review result");
+  }
+  let raw;
+  try { raw = ctx.task.readRecord(reviewRef); }
+  catch (error) { throw new Error(`verify-code repair review is unavailable: ${error.message}`); }
+  const reviewHash = createHash("sha256").update(raw).digest("hex");
+  let review;
+  try { review = JSON.parse(raw); }
+  catch { throw new Error("verify-code repair review must be valid JSON"); }
+  try { validateSchema("result", review); }
+  catch (error) { throw new Error(`verify-code repair review is invalid: ${error.message}`); }
+  if (!Array.isArray(review.findings) || review.findings.length === 0) throw new Error("verify-code repair review must contain findings");
+  const resolution = authenticateCodeReviewRepairs({
+    review,
+    result: { status: "findings", findings: review.findings, repairs: structuredClone(repairs) },
+    taskId: ctx.identity.taskId,
+    snapshotTree: snapshot.tree,
+    materialRevision,
+    workspaceRoot: ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot,
+    read: ctx.task.readRecord,
+    includeNonblocking: true,
+  });
+  if (resolution !== "resolved") throw new Error(`verify-code repair evidence is ${resolution}, not resolved`);
+  return Object.freeze({
+    status: "resolved",
+    review_ref: reviewRef,
+    review_hash: reviewHash,
+    source_snapshot_tree: review.snapshot_tree,
+    repairs: Object.freeze(structuredClone(repairs)),
+  });
+}
+
+function discloseResolvedCodeReview(result, stageOutcome, currentReviewRepair = null) {
+  const resolved = stageOutcome?.value?.code_review_resolution === "resolved"
+    || currentReviewRepair?.status === "resolved";
+  if (!resolved) return result;
   const missingItems = Array.isArray(result?.missing_items)
     ? result.missing_items.filter((item) => typeof item !== "string" || !RESOLVED_CODE_REVIEW_MISSING.test(item))
     : result?.missing_items;
   const completionSubjects = result?.facts?.completion_subjects;
   return {
     ...result,
+    code_review_resolution: "resolved",
+    ...(currentReviewRepair ? { current_review_repair: currentReviewRepair } : {}),
     ...(Array.isArray(result?.missing_items) ? { missing_items: missingItems } : {}),
     facts: {
       ...(result?.facts ?? {}),
@@ -3362,6 +3369,7 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
   const observed = reviewEvidenceStatus(ctx.task, evidence, {
     stage: "verify-code",
     subject: intent.subject === "code_review" ? "independent_review" : intent.subject,
+    snapshotTree: snapshot.tree,
   });
   const validRecorded = observed.status === "recorded";
   if (intent.status === "recorded" && !validRecorded) throw new Error("review fact intent recorded status is not authenticated");
@@ -3388,7 +3396,7 @@ export function publishReviewFactIntent({ context, intent, receiptRef = null } =
   });
 }
 
-/** Official stage-runtime handoff for a previously recorded stage outcome. */
+/** Legacy compatibility handoff for a previously recorded stage outcome. */
 export async function publishOfficialStageOutcome({ context, outcome, stage, attemptId, receipts = {} } = {}) {
   if (!context || typeof context !== "object") throw new TypeError("WorkflowHub session context is required");
   if (!outcome || typeof outcome.ref !== "string") throw new TypeError("stage outcome is required");
@@ -3397,17 +3405,24 @@ export async function publishOfficialStageOutcome({ context, outcome, stage, att
   const quality = await runOfficialStage(stage, context, {
     attempt_id: attemptId,
     receipts: { ...receipts, stage_outcomes: outcome.ref },
-  });
+  }, undefined, { allowLegacyStageOutcome: true });
   return Object.freeze({ outcome, quality });
 }
 
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
-export function runOfficialStage(stage, context, invocation, publication, { requireStageOutcome = false, signal } = {}) {
+export function runOfficialStage(stage, context, invocation, publication, { signal, allowLegacyStageOutcome = false } = {}) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
   const handlerInput = structuredClone(input);
   const stageReflectionInput = {};
+  let interactionPublication = null;
+  // Direct callers of this low-level export may still replay an explicitly
+  // supplied historical outcome. The public CLI rejects that field before it
+  // reaches this function, so this compatibility branch cannot become the
+  // current WorkflowHub run path.
+  const useLegacyStageOutcome = allowLegacyStageOutcome
+    || Object.hasOwn(input.receipts ?? {}, "stage_outcomes");
   // attempt_id is a runtime binding claim, not a stage-handler input. Keep it
   // visible to outcome authentication while keeping the handler contract
   // limited to receipts and quality disclosures.
@@ -3420,27 +3435,36 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
     stage,
     ctx,
     async (worker, _upstream, preflight) => {
-      const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
-      if (requireStageOutcome && !stageOutcome.value) {
-        const reason = stageOutcome.diagnostic?.reason ?? "stage_outcome_unavailable";
-        throw outcomeError(`${stage} requires a current authenticated Stage Agent outcome (${reason})`);
-      }
-      const stageOutcomeStatus = stageOutcome.value?.value?.status ?? stageOutcome.diagnostic?.status ?? "unavailable";
+      const stageOutcome = useLegacyStageOutcome
+        ? readOptionalStageOutcome(ctx, stage, input, preflight)
+        : Object.freeze({ value: null, diagnostic: null });
+      const currentReviewRepair = stage === "verify-code"
+        ? authenticateCurrentCodeReviewRepairs(ctx, handlerInput, preflight.snapshot, preflight.materials.revision)
+        : null;
+      const stageOutcomeStatus = stageOutcome.value?.value?.status ?? null;
       Object.assign(stageReflectionInput, {
-        stageStatus: stageOutcomeStatus === "completed" ? "completed" : "failed",
+        // Stage status describes whether the current WorkflowHub session
+        // reached handler/publication successfully.  An optional host outcome
+        // is not an execution result for this run: its absence must never turn
+        // a successful local stage into a failed stage row.
+        stageStatus: "completed",
         // Keep the authenticated envelope (ref/hash plus value) through the
         // reflection boundary.  runStageReflection and stage-handoff both
         // re-check the immutable source binding; passing only value would
         // erase the canonical ref/hash and make every sibling look foreign.
         stageOutcome: stageOutcome.value,
         stageOutcomeDiagnostic: stageOutcome.diagnostic,
-        observation: `official ${stage} stage ended; stage outcome status ${stageOutcomeStatus}`,
+        attemptId: input.attempt_id ?? null,
+        observation: stageOutcomeStatus === null
+          ? `official ${stage} stage executed by the current WorkflowHub session`
+          : `official ${stage} stage ended; legacy outcome status ${stageOutcomeStatus}`,
         ...(input.stage_reflection === undefined ? {} : { judgment: structuredClone(input.stage_reflection) }),
       });
-      // A missing/invalid host outcome is a quality fact, not a work permit.
+      // A legacy host outcome is optional diagnostic input, not a work permit.
       // Keep its diagnostic on the returned result and let the current stage
       // continue with its own authenticated receipts.
       if (stage === "build-code"
+          && ctx.manifest?.record_model !== "vnext-single-write"
           && handlerInput.acceptance_coverage === undefined
           && Array.isArray(stageOutcome.value?.spec_analyze?.packet?.acceptance_coverage)
           && stageOutcome.value.spec_analyze.packet.acceptance_coverage.length > 0) {
@@ -3455,6 +3479,19 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
               : [],
           })),
         };
+      }
+      if (stage === "make-decision" && Object.hasOwn(handlerInput, "interaction_aggregate")) {
+        const receipts = handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)
+          ? handlerInput.receipts
+          : {};
+        if (receipts.interaction !== undefined) {
+          throw new Error("interaction_aggregate cannot be combined with caller-supplied receipts.interaction");
+        }
+        interactionPublication = ctx.kernel.completeMakeDecisionInteractionPublication({
+          aggregate: handlerInput.interaction_aggregate,
+        });
+        handlerInput.receipts = { ...receipts, interaction: interactionPublication.ref };
+        delete handlerInput.interaction_aggregate;
       }
       if (stage === "verify-code") {
         const receipts = handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)
@@ -3551,7 +3588,7 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
       const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection, signal);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
-      const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome);
+      const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome, currentReviewRepair);
       // The concrete reflection is published only after the stage result has
       // crossed the single write boundary. Keep an internal result marker so
       // the authenticated stage-outcome consumer binding can observe that the
@@ -3604,13 +3641,21 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
           code_review_resolution: stageOutcome.value.code_review_resolution ?? null,
         } : {}),
         ...(stageOutcome.diagnostic ? { stage_outcome_diagnostic: stageOutcome.diagnostic } : {}),
+        ...(interactionPublication ? {
+          interaction_publication: {
+            ref: interactionPublication.ref,
+            hash: interactionPublication.hash,
+            idempotent: interactionPublication.idempotent === true,
+          },
+        } : {}),
       };
     },
     publication,
     {
     stageReflectionInput,
       attemptId: input.attempt_id,
-      requireStageOutcome,
+      // Stage completion is derived from current quality facts. A host outcome
+      // is never a required input to the official current-session run.
       stageReflection: {
         ...(typeof publication?.runStageReflection === "function" ? { execute: publication.runStageReflection } : {}),
       },

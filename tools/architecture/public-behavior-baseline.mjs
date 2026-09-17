@@ -132,12 +132,15 @@ function prepareIsolatedCase(root, behavior, variant = "default") {
     `--task=${task}`,
     `--target-repo=${repo}`,
   ], { cwd: root, env: isolatedChildEnv(env), encoding: "utf8" });
-  const taskPath = JSON.parse(bootstrap).task_path;
-  return { caseRoot, repo, env, project: "Baseline", task, taskPath };
+  const bootstrapValue = JSON.parse(bootstrap);
+  const taskPath = bootstrapValue.task_path;
+  const worktreeRoot = bootstrapValue.workspace?.worktree_root;
+  if (typeof worktreeRoot !== "string" || worktreeRoot.trim() === "") throw new Error("public behavior bootstrap did not return workspace.worktree_root");
+  return { caseRoot, repo, env, project: "Baseline", task, taskPath, worktreeRoot };
 }
 
 function setupAction(root, state, args) {
-  return runCli(root, args, { env: state.env });
+  return runCli(root, args, { env: state.env, cwd: state.worktreeRoot });
 }
 
 function requireSuccessfulSetup(result, label) {
@@ -244,7 +247,7 @@ function collectCase(root, behavior, variant = "default", { stageOutcomeWriter =
     if (behavior === "verify") args.push(`--input=${inputPath}`);
     if (behavior === "confirm") args.push("--decision=accepted", `--reply-text=fixture confirmation ${variant}`, "--step-slug=approve-decision");
     if (behavior === "authorize") args.push(`--subject-ref=${state.confirmationRef}`);
-    const result = runCli(root, args, { env: state.env });
+    const result = runCli(root, args, { env: state.env, cwd: state.worktreeRoot });
     const writeSet = listFiles(state.taskPath);
     const input = inputPath
       ? { ref: relative(state.caseRoot, inputPath), sha256: sha256(readFileSync(inputPath)) }

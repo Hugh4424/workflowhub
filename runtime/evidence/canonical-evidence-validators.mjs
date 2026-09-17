@@ -10,6 +10,8 @@ const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\
 const FULL_TEST_COMMAND = "npm test";
 const IMPLEMENTATION_DIFF_REF = /^quality\/evidence\/implementation\/[a-f0-9]{64}\.diff$/;
 export const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
+export const WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID = "workflowhub-current-session";
+export const WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND = "workflowhub-current-session";
 export const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
 export const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 export const CLOSE_PLAN_REF = /^operations\/close\/plans\/([a-f0-9]{64})\/plan\.json$/;
@@ -123,11 +125,30 @@ export function validateAcceptanceExecutionEvidence(value) {
       || typeof execution.export_name !== "string" || !execution.export_name.trim()
       || !HASH.test(execution.module_sha256 ?? "") || !Object.hasOwn(execution, "input")) throw new Error("acceptance service identity is invalid");
   const binding = subject.execution_binding;
-  if (!binding || !HASH.test(binding.stage_outcome_hash ?? "")
-      || binding.stage_outcome_ref !== `quality/evidence/stage-outcomes/build-code/${binding.stage_outcome_hash}.json`) throw new Error("acceptance execution stage outcome binding is invalid");
+  const currentSessionBinding = binding?.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND;
+  const legacyStageOutcomeBinding = binding && !currentSessionBinding
+    && HASH.test(binding.stage_outcome_hash ?? "")
+    && binding.stage_outcome_ref === `quality/evidence/stage-outcomes/build-code/${binding.stage_outcome_hash}.json`;
+  if (!currentSessionBinding && !legacyStageOutcomeBinding) throw new Error("acceptance execution binding is invalid");
+  if (currentSessionBinding && (binding.task_id !== value.task_id
+      || binding.stage !== "build-code"
+      || binding.snapshot_tree !== value.snapshot_tree
+      || binding.material_revision !== value.material_revision
+      || typeof binding.attempt_id !== "string" || !binding.attempt_id.trim()
+      || binding.run_id !== `vnext-${hashText(`${value.task_id}\0build-code`).slice(0, 32)}`)) {
+    throw new Error("current-session acceptance execution binding is not current");
+  }
   const actor = subject.executor_actor;
-  if (!actor || !new Set(["stage-agent", "workflowhub-session"]).has(actor.source_kind)
-      || typeof actor.source_id !== "string" || !actor.source_id.trim() || typeof actor.run_id !== "string" || !actor.run_id.trim()) throw new Error("acceptance execution actor is unavailable");
+  if (!actor || typeof actor.source_id !== "string" || !actor.source_id.trim() || typeof actor.run_id !== "string" || !actor.run_id.trim()) {
+    throw new Error("acceptance execution actor is unavailable");
+  }
+  if (currentSessionBinding) {
+    if (actor.source_kind !== "workflowhub-session"
+        || actor.source_id !== WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID
+        || actor.run_id !== binding.run_id) throw new Error("current-session acceptance execution actor is invalid");
+  } else if (!new Set(["stage-agent", "workflowhub-session"]).has(actor.source_kind)) {
+    throw new Error("acceptance execution actor is invalid");
+  }
   const seen = new Set();
   for (const assertion of subject.assertions) {
     if (!assertion || typeof assertion.id !== "string" || !assertion.id.trim() || seen.has(assertion.id)

@@ -12,6 +12,7 @@ import { officialStageHandler } from "../../runtime/stage/stage-handlers.mjs";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { prepareTaskWorkspace, openAcceptedWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeCanonicalStageMaterials } from "../helpers/stage-outcome.mjs";
+import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
 const roots = [];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -188,6 +189,41 @@ describe("build-code diff evidence capture point", () => {
     expect(second).toMatchObject({ ref: first.ref, sha256: first.sha256 });
     expect(state.task.readRecord(first.value.diff_ref)).toBe(state.task.readRecord(second.value.diff_ref));
     expect(existsSync(join(state.task.taskPath, "locks", "implementation-capture.execution.lock"))).toBe(false);
+  });
+
+  it("retains an authenticated review but refuses to certify mixed implementation, test, and review snapshots", async () => {
+    const state = fixture("build-code-cross-snapshot");
+    writeFileSync(join(state.workspace.worktreeRoot, "new.txt"), "current bytes\n");
+    const implementation = writeOfficialComponentReceipt({
+      task: state.task,
+      workspace: state.workspace,
+      stage: "build-code",
+      component: "implementation",
+      payload: {},
+    });
+    const testsRef = publishTestReceipt(state.task, implementation.value, "cross-snapshot-tests");
+    const review = writeFormalReviewFixture({
+      task: state.task,
+      stage: "build-code",
+      snapshotTree: "a".repeat(40),
+      materialRevision: `revision-${"a".repeat(64)}`,
+      subjectKind: "worktree",
+      phaseId: null,
+      reviewScope: "integration",
+      provider: "kimi/coding",
+    });
+    const result = await officialStageHandler("build-code")(workerFor(state), {
+      receipts: { implementation: implementation.ref, tests: testsRef, review: review.resultRef },
+    });
+    expect(result.facts.review).toMatchObject({ status: "recorded", snapshot_tree: "a".repeat(40) });
+    expect(result.facts.phase_completion).toMatchObject({
+      status: "completed",
+      formal_record_status: {
+        status: "unavailable",
+        reason: "implementation, tests, and review facts use different snapshots; current completion was not certified",
+      },
+    });
+    expect(result.completion.facts.result).not.toBe("passed");
   });
 
   it("preflights both immutable targets so an interrupted conflict leaves no half diff", () => {

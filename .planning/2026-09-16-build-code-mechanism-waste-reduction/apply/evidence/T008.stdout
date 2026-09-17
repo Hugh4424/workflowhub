@@ -1,0 +1,6 @@
+command: npx vitest run tests/contract/external-supplement-window.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+oracle: GREEN — existing workflowhub-result.v3 now carries publication metadata; in-window arrival_elapsed_ms 599999 appends findings; exact 600000 is over_window_unjudged and does not enter aggregation; initial bytes remain unchanged and duplicate registration is idempotent.
+summary: 1 file passed, 3 tests passed.
+current_receipt: quality/tests/build-code-p4-external-supplement-v2.json
+current_receipt_hash: dded4081cfe562c9e2cd93ca516dffeb228b20723adb840cccc71e0652a161a8

@@ -304,10 +304,13 @@ function route(value, label) {
   const initial = profileList(value.initial, label + ".initial");
   const closure = value.closure === undefined ? null : profileList(value.closure, label + ".closure");
   if (mode !== "adaptive" && closure !== null) throw new Error(label + ".closure is supported only for adaptive");
-  if (value.minimum_heterologous !== undefined && (!Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1)) throw new Error(label + ".minimum_heterologous must be a positive integer");
+  if (!Object.hasOwn(value, "minimum_heterologous")
+      || !Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1) {
+    throw new Error(label + ".minimum_heterologous must be an explicit positive integer");
+  }
   return {
     initial, ...(closure ? { closure } : {}), mode,
-    ...(value.minimum_heterologous ? { minimum_heterologous: value.minimum_heterologous } : {}),
+    minimum_heterologous: value.minimum_heterologous,
   };
 }
 
@@ -717,13 +720,23 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
     // configured profile. Adapter-level deduplication is only retained for
     // the legacy fallback tier, never for a declared review surface.
     const selected = configuredRoute ? enabledHeterologous : highestPriorityProfilesByAdapter(enabledHeterologous);
-    const minimum = profileSet === "closure" ? 1 : (configuredRoute?.minimum_heterologous ?? 1);
-    const distinctAdapters = new Set(selected.map((provider) => adapterOf(provider, "3rd-review provider"))).size;
-    if (configuredRoute && distinctAdapters < minimum) throw new Error("wh_review route has insufficient enabled heterologous providers");
+    const minimum = configuredRoute ? configuredRoute.minimum_heterologous : 1;
+    if (configuredRoute && (!Number.isSafeInteger(minimum) || minimum < 1)) {
+      throw new Error("wh_review route minimum_heterologous must be an explicit positive integer");
+    }
     // Explicit routes are already validated as fully enabled. Legacy tiers
     // must not leak disabled fallbacks into the broker allowlist or dispatch
     // group merely because another member of the tier is eligible.
     const dispatchProfiles = configuredRoute ? [...tier] : tier.filter((provider) => config.providers[provider]?.enabled === true);
+    const providerModels = Object.fromEntries(dispatchProfiles.map((provider) => [provider, brokerModelIdentity(config, provider)]));
+    const selectedModels = selected.map((provider) => providerModels[provider]).filter((model) => typeof model === "string" && model.length > 0);
+    if (configuredRoute && selectedModels.length !== selected.length) {
+      throw new Error("wh_review route has provider(s) without an underlying model identity");
+    }
+    const distinctModels = new Set(selectedModels).size;
+    if (configuredRoute && distinctModels < minimum) {
+      throw new Error("wh_review route has insufficient distinct underlying model identities");
+    }
     if (selected.length > 0) return {
       // This is the complete candidate group that must reach 3rd-review.
       // eligibleProfiles is local quorum accounting only; it never chooses
@@ -736,6 +749,7 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
         source_id: brokerSourceId(provider, config.providers[provider]),
         config_id: brokerConfigId(provider, config.providers[provider]),
       })]))),
+      provider_models: Object.freeze(Object.fromEntries(dispatchProfiles.map((provider) => [provider, brokerModelIdentity(config, provider)]))),
       sameSourceExcluded,
       effectiveProfiles: selected.map((provider) => effectiveProfile(config, provider)),
     };

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "stage": "verify-code",
+    "host_provider": "dsh",
+    "subject_kind": "worktree",
+    "retry": {
+      "requested": true,
+      "basis": "material_changed",
+      "reason": "The current-session verify-code review route was repaired to capture the authenticated worktree diff; the prior review is bound to an older snapshot."
+    },
+    "materials": {
+      "changed_files": "Current authenticated worktree diff from baseline c5abe9eff99c4432e677d8a30bdfff94d6209690. Key active-path files: runtime/stage/stage-runner.mjs; runtime/stage/stage-handlers.mjs; runtime/stage/stage-reflect.mjs; runtime/stage/stage-handoff.mjs; runtime/evidence/canonical-evidence-validators.mjs; runtime/evidence/freshness.mjs; runtime/review/review-record-route.mjs; tools/cli/stage-runtime.mjs; skills/wh-review/scripts/wh-review-cli.mjs; active workflow manifests and contract tests.",
+      "implementation_assessment": "The current WorkflowHub session is the only active stage producer. Public run rejects receipts.stage_outcomes before any current write; build-code acceptance evidence uses a runtime-owned current-session binding; review-record and private wh-review E2E consume the current acceptance aggregate; reflection and handoff validate current task/worktree/branch/snapshot/material identity. Historical stage-outcome/bridge code remains only behind explicit compatibility paths.",
+      "test_context": "Targeted checks already passed: no-external-stage-agent and stage routing/quality regression 23/23; stage-runner reflection 22/22; stage-handoff 35/35; current-session acceptance focused 3 passed/41 skipped; current-path e2e smoke 3/3 and historical boundary 6/6; review-record-route 97/97 plus wh-review 34/34 plus no-external 3/3; syntax, JSON/YAML parsing, bundle closure, and git diff --check passed. No full regression; task is non-UI.",
+      "open_risks": "Legacy compatibility functions still mention stage_outcome and bridge symbols, but public current run rejects those inputs and active manifests no longer declare them. The current build-code acceptance_execution quality fact is incomplete because the declared final aggregate command emits non-JSON stdout; this is an existing quality/material fact, not a reason to treat missing external outcome as a code gate. No browser surface.",
+      "architect_assessment": "Main-agent first pass: no actionable implementation finding identified in the active current-session producer, public rejection boundary, current acceptance binding, review-record consumer, or reflection/handoff identity checks. Review should specifically attack accidental legacy-path reachability, stale current-session binding acceptance, and failure propagation."
+    }
+  }
+}

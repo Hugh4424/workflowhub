@@ -1,113 +1,113 @@
 ---
 name: workflowhub-host-protocol
-description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任务事实和完成结论分开。
+description: 规定当前 WorkflowHub 会话如何直接执行五阶段，并把调度、任务事实和完成结论分开。
 ---
 
 # WorkflowHub 宿主协议
 
 ## 唯一主路径
 
-1. 工头为当前根任务创建或复用五个阶段 Issue：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`。
-2. 每个 Stage Agent 直接读取并执行 `workflows/<stage>/SKILL.md`，再直接读取该阶段 `skill-deps.yaml` 声明的 portable skill package。
-3. 阶段之间只通过当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 传递工作真相。
-4. 测试、review 和 verify 写真实质量事实；Issue 评论只向人说明进展与结果。
-5. 工头根据真实阶段结果唤醒下游。WorkflowHub 不启动模型、Codex、Stage Skill 或 host bridge。
+1. 当前 WorkflowHub 会话在认证 task worktree 中读取并执行对应的
+   `workflows/<stage>/SKILL.md` 和 `skill-deps.yaml`。
+2. 阶段之间只通过当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 传递工作真相。
+3. 测试、review、verify、handoff 和 reflection 只写真实事实；它们不替代四份材料，
+   也不授予继续工作的权限。
+4. 当前会话通过既有 public `stage-runtime run --action=execute` 发布阶段事实；
+   `status` 只读回当前材料、阶段行和质量事实。
 
-不得把 `doctor → invoke → receipt → publication → status`、Runner、TaskHandle、receipt、snapshot、invocation outcome、comment 或 handoff proof 变成开始或继续工作的许可证。
+当前阶段执行不需要外部 Stage Agent、bridge、host session、transcript 或
+`stage_outcome`。这些对象不属于当前 vNext 阶段入口的前置条件。质量事实缺失时降低
+完成声明为 `unknown`、`unavailable` 或 `incomplete`，但同一 task 仍可继续诊断、修复和
+重跑；真正的产品选择和不可逆交付授权才需要用户介入。
 
-每次阶段调用都必须有可验证的显式任务身份：公共入口接受成对的 `--project` 与 `--task`，或从已认证 task worktree 取得身份；宿主桥接则必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 与 `agent_run_id`。旧 session/env 字段、cwd 猜测和 transcript 扫描都不是身份来源。
+每次阶段调用都必须有可验证的任务身份：公共入口接受成对的 `--project` 与 `--task`，
+或从已认证 task worktree 取得身份。身份检查只保护当前写入边界，不把 host 身份、旧
+session、cwd 猜测或 transcript 扫描变成新的状态来源。
+
+不得把 `doctor → invoke → receipt → publication → status`、Runner、TaskHandle、receipt、
+snapshot、comment 或 handoff proof 变成开始或继续工作的许可证。
 
 ## 任务与 worktree
 
-- WorkflowHub 运行仓与业务仓分开。只使用项目登记资源或宿主明确注入的绝对路径，不扫描目录、不猜路径、不从旧记录回退。
-- `build-code` 开始改代码前必须确认任务 worktree 与 main 隔离。路径或身份错误时拒绝那次事实写入，并在同一任务修正；不要转去 main，也不要创建 successor、recovery、rebind 或 continuation task。
-- 旧 task、receipt、review、snapshot 和 runner 记录只读。它们缺失、过期或失败不影响同一 task 继续读材料、改材料、改代码和跑测试。
-- `task.json`、task root 固定布局和当前 writer 决定事实可写范围。hash、schema、task/worktree 身份错误必须 fail-loud；失败只拒绝该次事实写入，不冻结工作。
-- commit、push、merge、archive、cleanup 和 Multica 同步分别需要明确授权，不能从阶段完成或用户对方案的确认中推断。
+- WorkflowHub 运行仓与业务仓分开。只使用项目登记资源或认证 task worktree 的绝对路径，
+  不扫描目录、不猜路径、不从旧记录回退。
+- `build-code` 开始改代码前确认任务 worktree 与 main 隔离；路径或身份错误只拒绝那次
+  写入，并在同一 task 修复，不创建 successor、recovery、rebind 或 continuation task。
+- 旧 task、receipt、review、snapshot、stage outcome 和 runner 记录只读。它们缺失、过期
+  或失败不影响同一 task 继续读材料、改材料、改代码和跑定向测试。
+- `task.json`、固定 task 布局和当前 writer 决定事实可写范围。hash、schema、task/worktree
+  身份错误必须 fail-loud；失败只拒绝该次事实写入，不冻结工作。
+- commit、push、merge、archive、cleanup 和外部系统同步分别需要明确授权，不能从阶段
+  完成或用户对方案的确认中推断。
 
 ## 阶段职责
 
-- `make-decision`：独占 Talk、Clarify、必要调研和 Grill，维护 `decision-log.md`。
-- `build-spec`：读取 decision，维护 `spec.md`；只处理规格歧义，不重做产品方向 Talk/Grill。
-- `build-plan`：读取 decision/spec，研究代码库，维护 `plan.md`、`tasks.md`；不 Talk、不 Grill、不执行 RED/GREEN。
+- `make-decision`：独占 Talk、必要调研和 Grill，维护 `decision-log.md`。
+- `build-spec`：读取 decision，维护 `spec.md`，只处理规格歧义。
+- `build-plan`：读取 decision/spec，维护 `plan.md`、`tasks.md`，不执行代码。
 - `build-code`：四材料可读即可在任务 worktree 实现、测试和修复。
-- `verify-code`：四材料可读即可做当前实现的代码、consumer、生命周期、安全和失败边界 review；不做逐 AC 或 evidence tree 审计。
+- `verify-code`：四材料可读即可审查当前实现的真实入口、consumer、生命周期、安全和
+  失败边界；不做逐 AC 或 evidence tree 审计。
 
-任何阶段都可以继续修复自己的材料或代码。缺测试、逐 AC、finding 处置或交接时，只能把完成状态记为 `incomplete` 或真实 `unavailable`，不能假绿，也不能阻止同一 task 修复。`build-code` 之外的异源 review 只是建议事实：必须照实记录，不把 unavailable 追成 pass，也不把它当阶段完成门槛。
+任何阶段都可以继续修复自己的材料或代码。缺测试、finding 处置、reflection 或交接时，
+只能把完成状态记为 `incomplete` 或真实 `unavailable`，不能假绿；缺失事实不阻止同一 task 修复。
+外部审查服务只是独立质量事实；provider 不可用不阻止不依赖它的工作。
 
-## 宿主调度
+## 当前事实链
 
-- 工头是唯一阶段推进者；Stage Agent 只完成自己的阶段并把结果交回工头，不直接启动下游。
-- 新 Stage Issue 的 description 用大白话写：背景、当前目标、已知输入、预期产物、完成标准、交接对象。内部路径、hash 和 task id 不进入公开评论。
-- Stage Agent 开始时把当前 Issue 设为 `in_progress` 并回读；结束时先写结果卡，再由工头更新状态和唤醒下游。
-- 下游的正常唤醒只依赖上游已形成当前材料和工头的宿主调度，不要求 receipt、评论模板或过程索引。
-- 无 Agent、无 active/pending/running run 且不存在明确的人类等待时，工头在同一 Stage Issue 唯一重入队；先确认 worktree 隔离并保留用户改动，不创建替代任务。
-- 等待用户仅限真正需要用户选择的产品方向。工具、provider、路径、运行时和事实写入问题由 Agent 先诊断、修复或记录真实 `unavailable`，不能伪装成用户问题。
+1. 用 `stage-runtime.mjs doctor`、`status` 查看能力和四材料状态；辅助能力缺失只记录
+   事实，不暂停同一 task。
+2. 需要异源审查时调用现有 `wh-review` 入口。复用和 freshness 按当前 review 合同判断；
+   `unavailable` 保留原始原因，不追成 pass。
+3. 当前会话直接读取阶段技能，使用现有官方 handler 和 TaskKernel writer 写当前质量
+   facts、测试证据、handoff 或 reflection。没有对应事实时明确记录缺口。
+4. 用 `stage-runtime.mjs run --action=execute` 发布阶段事实，用 `reflect` 发布可选的
+   当前会话复盘，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。
+   它们分别更新事实，不创建 successor、recovery、continuation 或额外控制面。
 
-## 当前 vNext 事实链
+### 当前会话执行边界
 
-这条链只负责把真实事实写入当前 task；它不是开始工作、继续工作或宣称完成的门禁：
+当前 WorkflowHub 会话是正式阶段执行者。它可以直接读当前材料、调用官方 handler、执行声明的定向
+测试和 review，并把实际结果写入当前 task。阶段行的 `stage-end:<stage>` 事实表示这次
+WorkflowHub handler/publication 是否成功；没有外部 outcome 不会把成功阶段变成失败。
 
-1. 用 `tools/cli/stage-runtime.mjs doctor`、`status` 查看当前能力和四材料状态；缺失的辅助能力只记录事实，不暂停同一 task。
-2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；`make-decision`、`build-spec`、`build-plan` 每个 review surface 只记录一次 semantic advice，已有结果不再发起新的 broker 请求。`build-code`/`verify-code` 仍按当前 snapshot 的 freshness 和 focused-review 规则执行。`unavailable` 没有 advice，可在修复缺失路由或材料后重试；结果照实记录，继续不依赖审查的工作。
-3. `build-code` 通过 workflow 的 capture 脚本生成测试事实；`verify-code` 只写当前代码 review fact；需要落盘时统一由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录，宿主不手写替代 receipt。
-4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
+阶段末 reflection 是非阻断判断。当前会话如有 judgment 就以当前 task/worktree、当前
+snapshot 和材料 revision 直接绑定并发布；没有 judgment 或 reflection executor 时记录
+`unavailable(executor_absent)`，不伪造执行者、时间、hash 或旧来源，也不阻止阶段推进。
 
-### Stage Agent outcome producer
+阶段末 handoff 是非权威 current view。它直接读取当前四份材料和当前阶段事实；正常时序
+尚未产生的后续材料写 `not_applicable`，当前阶段应有却不可读的材料保持真实失败。
 
-每个外部 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。没有外部 Stage Agent 时，标准 WorkflowHub 流程继续执行，并把 outcome 记为 `unavailable` 诊断，不把它变成阶段门禁。
+### 历史兼容边界
 
-- 记录只能通过现有 `TaskKernel.publishCanonicalRecord` 写入
-  `quality/evidence/stage-outcomes/<stage>/<sha256>.json`，不得新增 ledger、receipt 系统或 writer。
-- 记录包含 `workflowhub-stage-outcomes.v1`、task/stage/attempt 身份、当前 snapshot tree、四份当前材料的 revision/hash、steps/skills manifest ref/hash，以及按 manifest 原顺序逐项列出的 step/skill outcome。
-- 每个 step/skill 的 `evidence_refs` 必须指向结构化的
-  `workflowhub-stage-outcome-evidence.v1` 记录，并绑定同一 task、stage、snapshot、material revision、具体 step/skill、状态和实际结果摘要；不能用一份通用 proof 冒充所有产物。
-- step 的状态只能是 `completed`、`skipped`、`incomplete`、`unavailable`；跳过/失败/未知必须保留原因，耗时/token 拿不到就写 `unavailable`，不补零。
-- 如果外部宿主真实生成了 outcome，把内容寻址 ref 放进 `tools/cli/stage-runtime.mjs run` 的
-  `receipts.stage_outcomes`，runtime 会对它做完整认证；已提供但缺失、错绑或不匹配时正式
-  run 明确失败。没有外部宿主 outcome 时，正式 run 不因缺少宿主而拒绝当前工作，monitoring
-  必须保留 `unavailable` 执行事实；不能把 caller 自报的 facts 当执行证明。
-- 阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate、工作就绪、Git 或 close 状态。
-
-### 外部宿主接线（可选）
-
-这不是“测试里调用一下 adapter”就算接通。只有确实采用外部宿主时，生产宿主才需要在同一个真实任务上做到下面几件事。WorkflowHub 标准流程不要求 Multica，也不从当前任务启动或推断任何外部宿主：
-
-1. 用一份显式绑定文件按宿主自己的任务 ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用宿主 claim ID 替代；`attempt_id` 与 `agent_run_id` 都必须是当前尝试的稳定非空标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
-2. Agent 结束后，宿主用 WorkflowHub 私有桥接入口提交一个显式 `session` 或 `unavailable` 结果，并交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。桥接不接受历史 `execution` 或质量 receipt；缺文件、身份不符、缺 `agent_run_id`、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。
-
-   如果宿主有真实 session/memory reflection executor，必须在同一 outcome 发布之后、正式
-   `run` 之前生成一个独立 `stage_reflection` sibling。它必须是
-   `stage-reflection.v2` judgment，带 `executor.source_id`、`executor.attempt_id`、
-   `executor.started_at`、`executor.completed_at`、`output_hash`，并在
-   `identity` 中绑定当前 task/worktree/branch/attempt/snapshot/material；至少一条、且
-   只能一条 judgment evidence ref 指向本次 canonical stage outcome。宿主把原始 JSON
-   作为 `run` input 的 `stage_reflection` 字段提交。WorkflowHub 只校验绑定并在 stage
-   publication 后消费它，不把 sibling 交给 stage handler，也不在 runtime 合成判断。
-3. 宿主绑定属于配置事实，不属于四份当前材料，也不创建第二套 WorkflowHub 状态机。桥接入口只校验并转发已提交的结构化结果，不启动 Agent、不读取 transcript、不扫描目录、不补零成本；正式 run 仍由 WorkflowHub 公共入口完成。
+旧的 `quality/evidence/stage-outcomes/**` 文件及其 bridge/adapter 代码只为历史事实读取、
+迁移和兼容测试保留。它们不是当前阶段 producer，不是 current run 输入，不是质量 receipt，
+也不是开始、继续、reflection、handoff 或 close 的门。任何“先补外部 Stage Agent outcome
+再正式 run”的恢复建议都是错误归因；应回到当前 task 直接执行 public run 并查看真正的
+handler、材料、review 或测试错误。
 
 ## 评论
 
-评论是给人看的通知，不是第二套状态机。只发四类短卡：
-
-1. **进度卡**：正在做什么、关键发现、下一步、是否需要用户。
-2. **问题卡**：问题、已做诊断、修复动作、当前影响和下一步；需要上游材料时真实 @ 上游。
-3. **用户决策卡**：只在必须由用户选择时给 2–3 个互斥选项、结果、风险和推荐项，并使用真实 member mention。
-4. **完成卡**：本阶段做了什么、怎么做、实际效果、未解决风险和下一步。
-
-不要要求下游评论重复或证明上游的 Talk、Grill、调研与 review 过程。它们的有效结论进入四材料；当前阶段只说明与自己交付有关的整体方案和真实质量结果。没有正式事实时写 `unavailable` 或 `incomplete`，不能从旧评论、附件或 provider `pass` 推断完成。
+评论是给人看的通知，不是第二套状态机。只发进度、问题、用户决策和完成四类短卡；不要
+要求评论重复或证明 Talk、Grill、调研、review、session 或 stage outcome 过程。没有正式
+事实时写 `unavailable` 或 `incomplete`，不能从旧评论、附件或 provider `pass` 推断完成。
 
 ## review 与完成
 
-- Stage Agent 直接调用 `wh-review`；provider、model 和 deadline 由 3rd-review 的受信配置与 broker 管理，WorkflowHub 不另建 polling、lock、timeout 或 bridge。
+- `wh-review` 是独立质量建议；provider、model、deadline 和原始失败由既有 review 合同管理。
 - 原始 provider 输出、失败和 provenance 必须保留。`unavailable` 可以成为真实质量事实，但不是工作 gate，也不能写成 `pass`。
-- 每个 finding 都由主 Agent 判断并记录处置；有效 finding 修复后只做风险相关复核，不开启无上限 review loop。
-- `done` 只表示交付、风险相关测试、逐 AC、review 事实或真实 `unavailable`、finding 处置和大白话交接都已形成。材料存在只证明可以工作，不证明质量完成。
+- 每个 finding 由当前会话判断并记录处置；有效 finding 在当前 task 修复后只做风险相关
+  复核，不开启无上限 review loop。
+- `done` 只表示实际交付、相关测试、review 事实或真实 `unavailable`、finding 处置和
+  大白话交接已经形成。材料存在只证明可以工作，不证明质量完成；Git、release、physical
+  close 仍分别记录。
 
 ## 问题恢复
 
-1. 能安全自行修复就直接修复、测试、回读，并在下一张卡说明。
-2. 需要上游当前材料时，在上游 Issue 真实 @ 对应 Agent；工头在原 Issue 恢复接力。
-3. provider 或工具失败时保留原始错误，同一 task 继续不依赖该事实的工作；允许在输入未变化且错误具备可恢复性时做一次明确重试，不能改 provider/model 伪造恢复。
-4. 路径互斥属于短暂等待；释放后继续。同一 issue 不并发重复重入队。
-5. verify-code 给出真实结论后，工头回读五个直接阶段 Issue；未完成就恢复原 Issue，不创建 generation 或替代链。
+1. 能安全自行修复就直接修复、测试、回读，并说明当前影响。
+2. 缺当前材料时在同一 task 修复材料 owner 的内容；不创建替代 task。
+3. provider 或工具失败时保留原始错误，同一 task 继续不依赖该事实的工作；只在输入未变且
+   错误可恢复时做一次明确重试。
+4. 路径互斥属于短暂等待；释放后继续。同一 task 不并发重复执行。
+5. verify-code 给出真实结论后，按授权范围分别处理修复、交付和 close；不得把未完成的
+   质量事实包装成 release 或物理关闭。

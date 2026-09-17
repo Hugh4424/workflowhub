@@ -1,0 +1,8 @@
+T002 GREEN evidence
+
+command: npx vitest run tests/contract/review-material-change-redispatch.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+result: 1 file, 2 tests passed
+canonical_receipt: quality/tests/build-code-p1-review-material-change.json
+canonical_receipt_hash: cdc840a9f66b75f82adb6060e3bd4809ce15d9847f9528f934b3cbe139edf9c4
+adjacent_regression: review-budget-namespace, per-ac-material-freshness, freshness-removal-preservation; 3 files, 17 tests passed, exit_code 0

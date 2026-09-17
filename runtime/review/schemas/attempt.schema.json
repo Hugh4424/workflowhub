@@ -214,7 +214,7 @@
             },
             "additionalProperties": false
           },
-          "status": { "enum": ["completed", "failed", "cancelled"] },
+          "status": { "enum": ["running", "completed", "failed", "cancelled"] },
           "session_id": { "type": ["string", "null"] },
           "runtime_id": { "type": ["string", "null"] },
           "session_artifact_path": { "type": ["string", "null"] },

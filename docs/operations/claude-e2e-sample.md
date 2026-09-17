@@ -1,8 +1,8 @@
 # Claude outcome-packet 样例
 
-## 样例边界
+## 历史兼容样例边界
 
-Claude 不把 transcript 交给 WorkflowHub 反查。宿主将当前任务的结构化执行结果提交给现有 `workflowhub-stage-agent-bridge.mjs`，bridge 校验身份和绑定后生成 `workflowhub-stage-outcomes.v1`；公共 `stage-runtime run --action=execute` 只消费 `outcome_ref`。
+该文件只保留旧 Claude host packet 的回放样例，不是当前 WorkflowHub 执行说明。当前阶段由认证 WorkflowHub 会话直接读取材料、执行 handler 并通过 `stage-runtime run --action=execute` 发布事实；不需要外部 Stage Agent、bridge、transcript 或 stage outcome。下方 packet、bridge 和 outcome 只用于历史兼容测试，不能作为当前 task 的恢复步骤或推进前置。
 
 样例输入的最小结构如下：
 
@@ -75,4 +75,4 @@ recovery mechanism.
 - 2026-09-05 再次执行 90 秒上限的真实只读 Claude CLI 探针；进程全程无 stdout，最终由本地超时终止，exit `124`，仍没有确认仓内命令执行。该次记为 `unavailable`，不改变真实 Claude 阶段样例缺失的结论。
 - 因此该文件仍是可重放的结构化样例，不是 Claude 真实运行通过证明，Claude E2E 验收状态保持 `incomplete`。
 
-当宿主拿不到执行结果时，提交同一身份下的 `unavailable` 对象和明确 reason；不能省略结果，也不能用历史 JSONL 补齐当前事实。
+当宿主拿不到执行结果时，提交同一身份下的 `unavailable` 对象和明确 reason；不能省略结果，也不能用历史 JSONL 补齐当前事实。当前阶段缺料不能写成成功；仅对既有清单中可确认属于后续阶段的材料返回 `not_applicable`，未知材料名仍是非零 invalid/unknown 诊断。

@@ -28,6 +28,7 @@ export const PHYSICAL_DELIVERY_FACTS = Object.freeze([
   "worktree_cleanup",
   "formal_cleanup_safe",
   "branch_cleanup",
+  "remote_branch_cleanup",
 ]);
 
 const FAILED_STEP_STATUSES = new Set(["failed", "error", "record_failed"]);
@@ -160,7 +161,12 @@ export function derivePhysicalDeliveryStatus(input = {}) {
     });
   }
 
-  const missingFacts = PHYSICAL_DELIVERY_FACTS.filter((name) => facts[name] !== true);
+  // The remote branch fact was added after the original close projection.
+  // Historical callers without that field remain readable; current close
+  // readbacks always declare it and therefore cannot silently omit it.
+  const missingFacts = PHYSICAL_DELIVERY_FACTS
+    .filter((name) => name !== "remote_branch_cleanup" || Object.prototype.hasOwnProperty.call(facts, name))
+    .filter((name) => facts[name] !== true);
   const cleanupRemoved = cleanup?.flags?.includes("removed");
 
   // A recovered plan may retain an immutable failed step for audit while its
@@ -185,6 +191,7 @@ export function derivePhysicalDeliveryStatus(input = {}) {
     return result("incomplete", {
       plan_hash: planHash,
       failed_steps: failedSteps,
+      missing_facts: missingFacts,
       next_action: "沿用同一 close plan，先读回失败步骤的现场状态，再补做未完成动作。",
     });
   }
@@ -221,6 +228,7 @@ function closeView(input) {
     plan: clone(plan),
     step_records: Object.freeze(stepRecords),
     completed: completions.length === 0 ? null : completions.length === 1 ? completions[0] : Object.freeze(completions),
+    known_gaps: Object.freeze(clone(close.known_gaps) ?? []),
   });
 }
 

@@ -103,16 +103,15 @@ new stage, public command, fifth material, independent state machine, or gate.
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
-`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
-“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
 `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
 不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用本次 `make-decision` 的 canonical stage outcome，去重后唯一；writer 重读并认证该原件，派生真实 executor、run、attempt、材料与 snapshot 身份。缺来源或判断时保留 `unavailable`，不借用旧运行身份。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 引用本次 `make-decision` 当前可复核的阶段行、质量事实或测试；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 task/worktree/branch/attempt/material/snapshot 身份。缺来源或判断时保留 `unavailable(executor_absent)`，不借用旧运行身份且不阻断同 task 修复。
 
 六个结构化区块是 `what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；条目绑定真实 `evidence_refs` 与 `confidence`。已检查未观察到写 `none_observed`，无法判断写 `unknown` 与 `unknown_reason`，不适用写 `not_applicable` 与理由。
 
@@ -155,7 +154,9 @@ the error, fix the binding or content, and continue in the same task.
 
 本阶段只消费当前原始需求和已存在的材料，不把未来 `spec.md`、`plan.md` 或 `tasks.md` 当方向确认前置。验收在这里明确用户场景、数据来源、成功 oracle 和失败条件；实际 command/service 执行由后续 build-code 负责，同次独立复核与用户确认由 verify-code 消费，方向审查不替代它们。
 
-真实 Stage Agent 通过现有 bridge 显式提交 project/task/stage/attempt/run 身份与 `session` 或 `unavailable`。正式 `run` 使用 bridge 返回的 `quality/evidence/stage-outcomes/make-decision/<sha256>.json`；保留原件 hash、producer 与失败事实，不从旧 session/env 或 transcript 猜本次执行。
+当前 WorkflowHub 会话直接读取并维护 `decision-log.md`，通过现有 `run` 发布当前阶段事实；
+不需要外部 Stage Agent、bridge、session 或 stage outcome。旧 outcome 只作为历史 provenance
+读取，不能成为当前阶段或复盘的前置条件。
 
 方向、细节审查仍各走原有角色和顺序。既有 `review --action=record` 的 `request` 路径执行并记录一次审查；保留实际返回的 `attempt_ref`、可空的 `result_ref` 和 `report_ref`，再分别通过 `receipts.direction_review`、`receipts.detail_review` 交给 `stage-handlers#safeReviewFacts`。result 可用时引用实际 canonical result，只有 unavailable attempt 时引用该 attempt，不拼造 UUID/hash 路径或空结果。保留每个角色的真实语义、provider、transport、错误与 provenance；`recorded` 只证明记录完成。当前材料或 route 改变后按既有预算处理，不为 clean 标签重派。usage/timing 从已认证 attempt 的 `provider_attempts[].execution` 读取；缺失为 unavailable，真实零值仍为零。
 
@@ -297,15 +298,17 @@ its existing runtime validator is owned by the later build-spec handoff. In
 this stage that slot is not a make-decision Clarify execution or confirmation;
 Only the current build-spec Clarify outcome proves that activity; this compatibility slot does not.
 
-After the user confirms the final current decision, the current WorkflowHub session directly
-assembles exactly one immutable interaction aggregate with these fields. This
-aggregate is an existing quality fact consumed by the declared make-decision
-detail-review/quality-fact contract; its owner is make-decision. The consumer,
-owner, test, and retirement condition are recorded in the existing
-`decision-log` catalog entry. It is not one of the four materials, not a status
-machine, and not a permission to start or continue work. If it is missing or unavailable, the
-formal completion claim stays incomplete while the same task can continue to
-repair the decision and its facts.
+After the user confirms the final current decision, the current WorkflowHub session assembles
+exactly one interaction aggregate with these fields and submits it through the existing
+`stage-runtime run --action=execute` make-decision path as `interaction_aggregate`. The official
+stage handler and existing `TaskKernel` interaction publisher are the sole product writer: the
+session must not write `quality/evidence/interactions/<sha256>.json` directly. This aggregate is
+an existing quality fact consumed by the declared make-decision detail-review/quality-fact
+contract; its owner is make-decision. The consumer, owner, test, and retirement condition are
+recorded in the existing `decision-log` catalog entry. It is not one of the four materials, not a
+status machine, and not a permission to start or continue work. If it is missing or unavailable,
+the formal completion claim stays incomplete while the same task can continue to repair the
+decision and its facts.
 
 ```json
 {
@@ -342,10 +345,11 @@ repair the decision and its facts.
 
 `round_count` is the actual number of completed Talk rounds: it is `3` when
 the conditional Talk round 4 is not triggered and `4` when a direction-level
-or acceptance-impacting dispute requires it. Serialize the aggregate once,
-hash those exact bytes with SHA-256, and write it
-directly to `quality/evidence/interactions/<sha256>.json`. The path hash must
-match the stored bytes. Bind only the current task, `make-decision` stage,
+or acceptance-impacting dispute requires it. Serialize the aggregate once and
+pass the exact bytes through the official publisher, which hashes them and
+writes the immutable record to `quality/evidence/interactions/<sha256>.json`.
+The path hash must match the stored bytes. Bind only the current task,
+`make-decision` stage,
 current material context, and user-confirmed decision. `lifecycle_rounds` 只保留
 当前会话用于验证 round、card、reply 和顺序的最小结构化事实；正式 handler 会在
 接受 aggregate 前逐轮调用现有 lifecycle validator。它仍是 aggregate 内的一部分，

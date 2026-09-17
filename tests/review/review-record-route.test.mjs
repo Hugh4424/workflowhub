@@ -320,9 +320,9 @@ describe("review flow task record", () => {
     expect(() => recordTaskBoundE2eReviewResult({ result: { ...baseResult(), review_kind: null, reviewKind: "build_prd" } })).toThrow(/review_kind\/reviewKind disagree/);
   });
 
-  it("rejects a runner result whose stage/track/kind identity does not match the request", async () => {
+  it("records an unavailable attempt when a runner result stage/track/kind identity does not match", async () => {
     const { task, kernel } = makeTask();
-    await expect(recordSimpleReviewRequest({
+    const recorded = await recordSimpleReviewRequest({
       task,
       kernel,
       request: { stage: "build-code", materials: { implementation: "identity-bound" } },
@@ -331,16 +331,21 @@ describe("review flow task record", () => {
         stage: "verify-code",
         material_id: createSimpleReviewPacket(request).material_id,
       }),
-    })).rejects.toThrow(/stage\/track\/kind does not match/);
+    });
+    expect(recorded).toMatchObject({ status: "recorded", result_ref: null, dispatch_state: "dispatched" });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      error: { code: "REVIEW_EXECUTION_FAILED" },
+    });
   });
 
   it.each([
     [{ review_scope: "phase" }, { reviewScope: "integration" }],
     [{ reviewScope: "integration" }, { review_scope: "phase" }],
-  ])("rejects result scope drift instead of overwriting the request (%o -> %o)", async (requestIdentity, resultIdentity) => {
+  ])("records result scope drift as unavailable instead of overwriting the request (%o -> %o)", async (requestIdentity, resultIdentity) => {
     const { task, kernel } = makeTask();
     const requestScope = requestIdentity.review_scope ?? requestIdentity.reviewScope;
-    await expect(recordSimpleReviewRequest({
+    const recorded = await recordSimpleReviewRequest({
       task,
       kernel,
       request: { stage: "build-code", ...requestIdentity,
@@ -351,8 +356,12 @@ describe("review flow task record", () => {
         ...resultIdentity,
         material_id: createSimpleReviewPacket(request).material_id,
       }),
-    })).rejects.toThrow("review result review_scope does not match its request");
-    expect(task.listCanonicalReviewAttemptRefs()).toHaveLength(0);
+    });
+    expect(recorded).toMatchObject({ status: "recorded", result_ref: null, dispatch_state: "dispatched" });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      error: { code: "REVIEW_EXECUTION_FAILED" },
+    });
   });
 
   it("runs one authenticated request, records the result, and reuses the immutable refs without a second dispatch", async () => {
@@ -458,7 +467,7 @@ describe("review flow task record", () => {
   // The same five-dimensional review identity reads back the prior result after
   // the reviewed material bytes change; the current-status consumer handles
   // material-specific authority separately.
-  it("refuses to reuse a recorded review once the reviewed material bytes change", async () => {
+  it("reuses a recorded review after the submitted material bytes change", async () => {
     const { task, kernel } = makeTask();
     let dispatches = 0;
     const runRound = async (input) => {
@@ -477,11 +486,14 @@ describe("review flow task record", () => {
       runRound,
     });
 
-    // Reading an attempt back as the current review requires that the reviewed input
-    // did not move on, even when the four task materials keep the same revision. A
-    // result recorded for different bytes must never be returned as the current review.
-    expect(changed).not.toMatchObject({ reused: true });
-    expect(changed.attempt_ref).not.toBe(first.attempt_ref);
+    expect(changed).toMatchObject({
+      status: "recorded",
+      reused: true,
+      dispatch_state: "reused",
+      attempt_ref: first.attempt_ref,
+      result_ref: first.result_ref,
+    });
+    expect(dispatches).toBe(1);
   });
 
   it("five-dimensional identity and review_result_ref readback", async () => {
@@ -608,23 +620,27 @@ describe("review flow task record", () => {
     expect(attempt.error.code).toBe("REVIEW_ALL_PROVIDERS_FAILED");
   });
 
-  it("rejects a runner result whose material fingerprint is not the requested material", async () => {
+  it("records an unavailable attempt when a runner result material fingerprint is not requested", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", materials: { implementation: "requested" } };
-    await expect(recordSimpleReviewRequest({
+    const recorded = await recordSimpleReviewRequest({
       task, kernel, request,
       materialIdForRequest: (value) => createSimpleReviewPacket(value).material_id,
       runRound: async () => ({ ...baseResult(), material_id: createSimpleReviewPacket({ stage: "build-code", materials: { implementation: "other" } }).material_id }),
-    })).rejects.toMatchObject({ code: "REVIEW_MATERIAL_MISMATCH" });
+    });
+    expect(recorded).toMatchObject({ status: "recorded", result_ref: null, dispatch_state: "dispatched" });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({ error: { code: "REVIEW_MATERIAL_MISMATCH" } });
   });
 
-  it("binds an explicitly supplied material fingerprint without trusting the runner", async () => {
+  it("records an unavailable attempt for an explicit material fingerprint mismatch", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", material_id: "a".repeat(64), materials: { implementation: "requested" } };
-    await expect(recordSimpleReviewRequest({
+    const recorded = await recordSimpleReviewRequest({
       task, kernel, request,
       runRound: async () => ({ ...baseResult(), material_id: "b".repeat(64) }),
-    })).rejects.toMatchObject({ code: "REVIEW_MATERIAL_MISMATCH" });
+    });
+    expect(recorded).toMatchObject({ status: "recorded", result_ref: null, dispatch_state: "dispatched" });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({ error: { code: "REVIEW_MATERIAL_MISMATCH" } });
   });
 });
 
@@ -939,7 +955,7 @@ describe("T005 request reuse and phase metadata", () => {
     expect(next).toMatchObject({ reused: true, result_ref: first.result_ref });
   });
 
-  it("does not retry a failed prior review with changed material when trusted transport budget is unknown", async () => {
+  it("reuses a failed prior review after a material-only request change", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "original" } };
     let calls = 0;
@@ -947,10 +963,16 @@ describe("T005 request reuse and phase metadata", () => {
       calls += 1;
       return { ...baseResult(), status: "unavailable", provider_results: [], findings: [], error: { code: "PROCESS_DEAD", message: "transport ended" }, material_id: createSimpleReviewPacket(input).material_id };
     };
-    await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
     const next = await recordSimpleReviewRequest({ task, kernel, request: { ...request, materials: { implementation: "changed" } }, runRound });
-    expect(calls, "T005: changed material does not prove remaining transport retry budget").toBe(1);
-    expect(JSON.stringify(next)).toMatch(/unavailable|unknown|budget/i);
+    expect(calls).toBe(1);
+    expect(next).toMatchObject({
+      status: "recorded",
+      reused: true,
+      dispatch_state: "reused",
+      attempt_ref: first.attempt_ref,
+      result_ref: null,
+    });
   });
 
   it("binds request phase metadata through the canonical attempt and result", async () => {
@@ -1089,357 +1111,146 @@ describe("T006 paired unavailable and output integrity", () => {
 });
 
 
-describe("T006 trusted review-round budget from actual task history", () => {
-  function runnerCounter({ failFirst = true } = {}) {
-    let calls = 0;
-    return {
-      get calls() { return calls; },
-      runRound: async (request) => {
-        calls += 1;
-        const result = { ...baseResult(), material_id: createSimpleReviewPacket(request).material_id };
-        if (failFirst && calls === 1) Object.assign(result, { status: "unavailable", provider_results: [], findings: [], error: { code: "PROCESS_DEAD", message: "real fixture attempt failed" } });
-        return result;
-      },
-    };
-  }
-  async function deniedOrRecorded(input) {
-    try { return await recordSimpleReviewRequest(input); }
-    catch (error) { return { error: { code: error.code, message: error.message } }; }
-  }
-  function request() {
-    return { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "budget fixture" } };
+describe("T006 explicit retry and current snapshot semantics", () => {
+  function request(material = "review fixture") {
+    return { stage: "build-code", host_provider: "codex/luna", materials: { implementation: material } };
   }
 
-  it("allows one focused review after a real material repair and exhausts it within the same revision", async () => {
-    const { task, kernel, artifacts, candidateWorkspace } = makeTask();
-    const input = request();
-    const runner = runnerCounter();
-    const first = await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls).toBe(1);
-    const revisionBefore = kernel.currentVNextMaterialRevision();
-    artifacts.writeAtomic("spec.md", "# Real current specification repair\n");
-    expect(kernel.currentVNextMaterialRevision()).not.toBe(revisionBefore);
-    const second = await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls, "T006: authenticated material repair permits one existing focused review round").toBe(2);
-    expect(second.result_ref).not.toBeNull();
-    expect(task.readRecord(second.report_ref)).toMatch(/budget_context/);
-    expect(task.readRecord(second.report_ref)).toMatch(/focused/);
-    const repairedRevision = kernel.currentVNextMaterialRevision();
-    writeFileSync(join(candidateWorkspace.worktreeRoot, "budget-code.mjs"), "export const repaired = true;\n");
-    expect(kernel.currentVNextMaterialRevision()).toBe(repairedRevision);
-    const denied = await deniedOrRecorded({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls, "T006: a second code change does not reset the focused round allowance").toBe(2);
-    expect(JSON.stringify(denied)).toMatch(/budget|exhausted|unavailable/i);
-    expect(task.readRecord(first.report_ref)).toMatch(/budget_context/);
-  });
-
-  it("cannot turn request-only edits or self-reported budget into a real repair", async () => {
+  it("does not redispatch when only submitted material bytes change", async () => {
     const { task, kernel } = makeTask();
-    const runner = runnerCounter();
-    const input = request();
-    await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    const revision = kernel.currentVNextMaterialRevision();
-    const denied = await deniedOrRecorded({ task, kernel, request: { ...input, materials: { implementation: "caller changed these bytes only" }, changed: true, budget: { remaining: 99 } }, runRound: runner.runRound });
-    expect(kernel.currentVNextMaterialRevision()).toBe(revision);
-    expect(runner.calls).toBe(1);
-    expect(JSON.stringify(denied)).toMatch(/budget|repair|unavailable|host.owned/i);
+    let calls = 0;
+    const runRound = async (input) => { calls += 1; return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id }; };
+    const first = await recordSimpleReviewRequest({ task, kernel, request: request("A"), runRound });
+    const repeated = await recordSimpleReviewRequest({ task, kernel, request: request("B"), runRound });
+    expect(calls).toBe(1);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref });
   });
 
-  it.each(["missing", "corrupt"])("keeps budget unknown when necessary prior report is %s", async (fault) => {
-    const { task, kernel, artifacts } = makeTask();
-    const runner = runnerCounter();
-    const input = request();
-    const first = await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    if (fault === "missing") rmSync(task.recordPath(first.report_ref));
-    else writeFileSync(task.recordPath(first.report_ref), "corrupt budget provenance");
-    artifacts.writeAtomic("spec.md", "# Real repair with unavailable budget history\n");
-    const denied = await deniedOrRecorded({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls).toBe(1);
-    expect(JSON.stringify(denied)).toMatch(/budget|unknown|incomplete|unavailable/i);
-  });
-
-  it("does not reset a phase allowance on code-only edits but permits one review for a new actual material revision", async () => {
-    const { task, kernel, artifacts, candidateWorkspace } = makeTask();
-    const input = { ...request(), subject_kind: "phase", phase_id: "P2", review_scope: "phase" };
-    const runner = runnerCounter();
-    await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    const revision = kernel.currentVNextMaterialRevision();
-    writeFileSync(join(candidateWorkspace.worktreeRoot, "phase-code.mjs"), "export const changed = true;\n");
-    expect(kernel.currentVNextMaterialRevision()).toBe(revision);
-    await deniedOrRecorded({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls).toBe(1);
-    artifacts.writeAtomic("spec.md", "# Material revision with a verified phase repair\n");
-    const next = await recordSimpleReviewRequest({ task, kernel, request: input, runRound: runner.runRound });
-    expect(runner.calls, "T006: phase budget is scoped to the actual material revision").toBe(2);
-    expect(next.result_ref).not.toBeNull();
-    expect(task.readRecord(next.report_ref)).toMatch(/budget_context/);
-  });
-
-  it("allows one ordinary verify-code focused review after an authenticated code snapshot repair", async () => {
-    const { task, kernel, candidateWorkspace } = makeTask();
+  it("admits an explicit material retry and reuses its exact retry head", async () => {
+    const { task, kernel } = makeTask();
     let calls = 0;
     const runRound = async (input) => {
       calls += 1;
-      return {
-        ...baseResult(),
-        stage: "verify-code",
-        findings: [],
-        provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })),
-        material_id: createSimpleReviewPacket(input).material_id,
-      };
+      return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
     };
-    const firstRequest = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "before repair" } };
-    await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
-    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair.mjs"), "export const repaired = true;\n");
-
-    const secondRequest = { ...firstRequest, materials: { implementation: "after repair" } };
-    const second = await recordSimpleReviewRequest({ task, kernel, request: secondRequest, runRound });
-    expect(calls).toBe(2);
-    expect(second.result_ref).not.toBeNull();
-    expect(task.readRecord(second.report_ref)).toMatch(/focused/);
-
-    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair-2.mjs"), "export const repairedAgain = true;\n");
-    const denied = await recordSimpleReviewRequest({
-      task,
-      kernel,
-      request: { ...firstRequest, materials: { implementation: "second repair" } },
+    const first = await recordSimpleReviewRequest({ task, kernel, request: request("A"), runRound });
+    const retryRequest = { ...request("B"), retry: { requested: true, basis: "material_changed", reason: "review input changed" } };
+    const retried = await recordSimpleReviewRequest({ task, kernel, request: retryRequest, runRound });
+    const repeated = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...retryRequest, retry: { ...retryRequest.retry, reason: "same retry, different wording" } },
       runRound,
     });
     expect(calls).toBe(2);
-    expect(JSON.stringify(denied)).toMatch(/budget|exhausted|unavailable/i);
+    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { requested: true, admitted: true } });
+    expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: retried.attempt_ref, result_ref: retried.result_ref });
   });
 
-  it("does not reuse an authenticated verify-code result across a moved code snapshot", async () => {
-    // Regression guard for the reuse gate: an authenticated (semantic) result
-    // must not make a prior attempt reusable once the reviewed code snapshot
-    // moved, or the one focused re-review FR-C4-003 permits for an ordinary
-    // verify-code repair could never run.
+  it("requires an accepted basis instead of trusting caller-only retry fields", async () => {
+    const { task, kernel } = makeTask();
+    let calls = 0;
+    const runRound = async (input) => { calls += 1; return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id }; };
+    await recordSimpleReviewRequest({ task, kernel, request: request("A"), runRound });
+    const denied = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...request("B"), retry: { requested: true, reason: "please try again" }, changed: true, budget: { remaining: 99 } },
+      runRound,
+    });
+    expect(calls).toBe(1);
+    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { admitted: false } });
+  });
+
+  it("requires an explicit retry after a verify-code snapshot moves", async () => {
     const { task, kernel, candidateWorkspace } = makeTask();
     let calls = 0;
     const runRound = async (input) => {
       calls += 1;
-      return {
-        ...baseResult(),
-        stage: "verify-code",
-        findings: [],
-        provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })),
-        material_id: createSimpleReviewPacket(input).material_id,
-      };
+      return { ...baseResult(), stage: "verify-code", findings: [], provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })), material_id: createSimpleReviewPacket(input).material_id };
     };
-    const request = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "semantic baseline" } };
-    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    const firstRequest = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair.mjs"), "export const repaired = true;\n");
+    const blocked = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
     expect(calls).toBe(1);
-    expect(first.result_ref).not.toBeNull();
-
-    // The code snapshot moves while the reviewed request bytes stay the same.
-    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-semantic-repair.mjs"), "export const repaired = true;\n");
-    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
-    expect(calls, "a moved code snapshot must not reuse an authenticated prior result").toBe(2);
-    expect(second.result_ref).not.toBeNull();
+    expect(blocked).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED" } });
+    const retryRequest = { ...firstRequest, materials: { implementation: "after" }, retry: { requested: true, basis: "material_changed", reason: "current code snapshot changed" } };
+    const retried = await recordSimpleReviewRequest({ task, kernel, request: retryRequest, runRound });
+    expect(calls).toBe(2);
+    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { admitted: true } });
+    expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair-2.mjs"), "export const repairedAgain = true;\n");
+    const blockedAgain = await recordSimpleReviewRequest({ task, kernel, request: { ...firstRequest, materials: { implementation: "third" } }, runRound });
+    expect(calls).toBe(2);
+    expect(blockedAgain).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED" } });
   });
 });
 
-describe("T014 authenticated route-repair review budget", () => {
+describe("T014 explicit retry and route identity", () => {
   const route = (value) => () => ({ route_identity: value.repeat(64) });
-  const request = () => ({ stage: "build-code", host_provider: "codex/luna", materials: { implementation: "route repair fixture" } });
-  const providerFailure = (input) => {
-    const result = { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
-    result.status = "unavailable";
-    result.outcome = "unavailable";
-    result.findings = [];
-    result.provider_results = result.provider_results.map((member) => ({
+  const request = (material = "route retry fixture") => ({ stage: "build-code", host_provider: "codex/luna", materials: { implementation: material } });
+  const providerFailure = (input) => ({
+    ...baseResult(),
+    status: "unavailable",
+    outcome: "unavailable",
+    findings: [],
+    material_id: createSimpleReviewPacket(input).material_id,
+    provider_results: baseResult().provider_results.map((member) => ({
       ...member,
       status: "failed",
       error: { code: "PROCESS_DEAD", message: "selected provider route failed" },
       evidence_anchor_valid: [],
-    }));
-    result.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "all selected providers failed" };
-    return result;
-  };
+    })),
+    error: { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "all selected providers failed" },
+  });
 
-  it("permits exactly one same-revision retry after a canonical provider failure and changed host route identity", async () => {
+  it("requires an explicit provider-changed retry and makes it idempotent", async () => {
     const { task, kernel } = makeTask();
     const input = request();
     let calls = 0;
-    const runRound = async (received) => {
-      calls += 1;
-      return calls === 1
-        ? providerFailure(received)
-        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
-    };
-
+    const runRound = async (received) => { calls += 1; return calls === 1 ? providerFailure(received) : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id }; };
     const first = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    expect(JSON.parse(task.readRecord(first.attempt_ref)).provider_attempts).toMatchObject([{ status: "failed" }]);
-
-    const repaired = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(2);
-    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
-    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
-
-    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("c") });
-    expect(calls).toBe(2);
-    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" }, review_budget: { counts: { route_repair: 1 } } });
-  });
-
-  it.each(["successful", "failed"])("ignores a %s old-revision attempt when repairing the latest current-revision provider failure", async (oldOutcome) => {
-    const { task, kernel, artifacts } = makeTask();
-    const oldInput = { ...request(), materials: { implementation: `old revision ${oldOutcome}` } };
-    const currentInput = request();
-    let calls = 0;
-    const runRound = async (received) => {
-      calls += 1;
-      if (received.materials.implementation === oldInput.materials.implementation) {
-        return oldOutcome === "failed"
-          ? providerFailure(received)
-          : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
-      }
-      return calls === 2
-        ? providerFailure(received)
-        : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
-    };
-
-    await recordRequest({ task, kernel, request: oldInput, runRound, resolveRouteIdentity: route("c") });
-    artifacts.writeAtomic("spec.md", `# Current revision after old ${oldOutcome} review\n`);
-    const currentFailure = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("a") });
-    expect(task.readRecord(currentFailure.report_ref)).toContain('"kind": "focused"');
-
-    const repaired = await recordRequest({ task, kernel, request: currentInput, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(3);
-    expect(repaired.review_budget).toMatchObject({ ok: true, route: "route_repair_review", counts: { route_repair: 0 } });
-    expect(task.readRecord(repaired.report_ref)).toContain('"kind": "route_repair"');
-  });
-
-  it.each([
-    ["zero provider attempts", (result) => ({ ...result, provider_results: [], error: { code: "REVIEW_STATUS_UNAVAILABLE", message: "status unavailable" } })],
-    ["protocol failure", (result) => ({ ...result, error: { code: "PROTOCOL_INCOMPATIBLE", message: "protocol mismatch" } })],
-    ["semantic output", (result) => ({ ...result, status: "available-with-failures", outcome: "partial", findings: baseResult().findings,
-      provider_results: baseResult().provider_results, error: { code: "REVIEW_QUORUM_INCOMPLETE", message: "partial result" } })],
-  ])("does not grant route-repair budget for %s", async (_name, mutate) => {
-    const { task, kernel } = makeTask();
-    const input = request();
-    let calls = 0;
-    const runRound = async (received) => {
-      calls += 1;
-      const failed = providerFailure(received);
-      return calls === 1 ? mutate(failed) : { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id };
-    };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    const denied = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("b") });
+    const unchanged = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
     expect(calls).toBe(1);
-    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
+    expect(unchanged).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref });
+    const retryRequest = { ...input, retry: { requested: true, basis: "provider_changed", reason: "trusted provider route changed" } };
+    const retried = await recordRequest({ task, kernel, request: retryRequest, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(2);
+    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { requested: true, admitted: true } });
+    const repeated = await recordRequest({ task, kernel, request: { ...retryRequest, retry: { ...retryRequest.retry, reason: "same route change, different wording" } }, runRound, resolveRouteIdentity: route("b") });
+    expect(calls).toBe(2);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: retried.attempt_ref });
   });
 
-  it("does not grant route-repair budget when the host route identity did not change", async () => {
+  it("does not admit provider_changed retry when the trusted route is unchanged", async () => {
     const { task, kernel } = makeTask();
     const input = request();
     let calls = 0;
     const runRound = async (received) => { calls += 1; return providerFailure(received); };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    const reused = await recordRequest({ task, kernel, request: { ...input, route_repaired: true }, runRound, resolveRouteIdentity: route("a") });
+    const first = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
+    const denied = await recordRequest({ task, kernel, request: { ...input, retry: { requested: true, basis: "provider_changed", reason: "route was not actually changed" } }, runRound, resolveRouteIdentity: route("a") });
     expect(calls).toBe(1);
-    expect(reused.reused).toBe(true);
-    expect(reused.review_budget.ok).toBe(false);
+    expect(denied).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { admitted: false } });
+    expect(denied).not.toHaveProperty("attempt_ref");
+    expect(first.attempt_ref).toBeTruthy();
   });
 
-  it.each(["materials", "snapshot"])("does not treat a route change plus changed %s as route repair", async (changed) => {
-    const { task, kernel, candidateWorkspace } = makeTask();
-    const input = request();
-    let calls = 0;
-    const runRound = async (received) => { calls += 1; return providerFailure(received); };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    if (changed === "snapshot") writeFileSync(join(candidateWorkspace.worktreeRoot, "route-repair-code.mjs"), "export const changed = true;\n");
-    const nextRequest = changed === "materials" ? { ...input, materials: { implementation: "different review packet" } } : input;
-    const denied = await recordRequest({ task, kernel, request: nextRequest, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(1);
-    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
-    expect(denied.review_budget.route).not.toBe("route_repair_review");
-  });
-
-  it("starts a separate initial budget for a changed review subject instead of route repair", async () => {
-    const { task, kernel } = makeTask();
-    const input = { ...request(), subject: { component: "runtime/review" } };
-    let calls = 0;
-    const runRound = async (received) => { calls += 1; return providerFailure(received); };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    const denied = await recordRequest({ task, kernel,
-      request: { ...input, subject: { component: "runtime/evidence" } }, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(2);
-    expect(denied).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
-    expect(denied.review_budget.route).not.toBe("route_repair_review");
-  });
-
-  it("rejects a generic aggregate failure whose provider member has an excluded protocol error", async () => {
+  it("uses source_recovered retry to dispatch after a blocked route preflight", async () => {
     const { task, kernel } = makeTask();
     const input = request();
     let calls = 0;
-    const runRound = async (received) => {
-      calls += 1;
-      const failed = providerFailure(received);
-      failed.provider_results[0].error = { code: "PROTOCOL_INCOMPATIBLE", message: "member protocol mismatch" };
-      return failed;
-    };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(1);
-    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
-  });
-
-  it("rejects route repair when either failed member of a paired review has an excluded error", async () => {
-    const { task, kernel } = makeTask();
-    const input = { stage: "make-decision", review_track: "detail", host_provider: "codex/luna", materials: { decision: "paired route repair" } };
-    let calls = 0;
-    const runRound = async (received) => {
-      calls += 1;
-      const raw = pairedResult({ redAvailable: false, blueAvailable: false });
-      raw.material_id = createSimpleReviewPacket(received).material_id;
-      for (const role of ["red", "blue"]) raw.role_results[role].material_id = raw.material_id;
-      raw.role_results.blue.provider_results[0].error = { code: "REVIEW_MATERIAL_MISMATCH", message: "blue member material mismatch" };
-      raw.role_results.blue.error = { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "generic paired failure" };
-      return raw;
-    };
-    await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("a") });
-    const denied = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: route("b") });
-    expect(calls).toBe(1);
-    expect(denied.review_budget).toMatchObject({ ok: false, reason: "route_repair_provider_failure_ineligible" });
-  });
-
-  it("keeps a canonical attempt without authenticated route identity ineligible", async () => {
-    const { task, kernel } = makeTask();
-    const input = request();
-    const failed = providerFailure(input);
-    recordSimpleReviewResult({ task, kernel, result: failed });
-    let calls = 0;
-    const denied = await recordRequest({ task, kernel, request: input,
-      runRound: async () => { calls += 1; return baseResult(); }, resolveRouteIdentity: route("b") });
+    const runRound = async (received) => { calls += 1; return { ...baseResult(), material_id: createSimpleReviewPacket(received).material_id }; };
+    const unavailable = await recordRequest({ task, kernel, request: input, runRound, resolveRouteIdentity: () => { throw new Error("host route unavailable"); } });
     expect(calls).toBe(0);
-    expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED" } });
-  });
-});
-
-describe("T006 paired budget counts", () => {
-  it("counts the two role attempts as one initial round when refusing an unproven retry", async () => {
-    const { task, kernel } = makeTask();
-    const request = { stage: "make-decision", review_track: "detail", host_provider: "codex/luna", materials: { decision: "pair budget source" } };
-    let calls = 0;
-    const runRound = async (input) => {
-      calls += 1;
-      const raw = pairedResult({ redAvailable: false, blueAvailable: false });
-      raw.material_id = createSimpleReviewPacket(input).material_id;
-      for (const role of ["red", "blue"]) raw.role_results[role].material_id = raw.material_id;
-      return raw;
-    };
-    await recordSimpleReviewRequest({ task, kernel, request, runRound });
-    const denied = await recordSimpleReviewRequest({ task, kernel, request: { ...request, materials: { decision: "request-only pair change" } }, runRound });
+    const retry = { ...input, retry: { requested: true, basis: "source_recovered", reason: "trusted route became available" } };
+    const recovered = await recordRequest({ task, kernel, request: retry, runRound, resolveRouteIdentity: route("a") });
     expect(calls).toBe(1);
-    expect(denied.review_budget.counts.initial).toBe(1);
+    expect(recovered).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { admitted: true } });
+    expect(unavailable.attempt_ref).not.toBe(recovered.attempt_ref);
   });
 });
 
-describe("T006 reviewed reuse and historical budget integrity", () => {
+describe("T006 reviewed reuse and historical review integrity", () => {
   const input = () => ({ stage: "build-code", materials: { implementation: "stable reviewed source" } });
   function countedRunner() {
     let calls = 0;
@@ -1464,7 +1275,7 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     await expect(recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound })).rejects.toMatchObject({ code: "REVIEW_RECORD_INCOMPLETE" });
     expect(runner.calls).toBe(1);
   });
-  it("allows the first actual dispatch after host route preflight repair", async () => {
+  it("requires an explicit source_recovered retry after host route preflight repair", async () => {
     const { task, kernel } = makeTask();
     const runner = countedRunner();
     const request = input();
@@ -1473,8 +1284,14 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(runner.calls).toBe(0);
     expect(JSON.parse(task.readRecord(first.attempt_ref)).dispatch_state).toBe("blocked_before_dispatch");
     const next = await recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound });
+    expect(runner.calls).toBe(0);
+    expect(next).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref });
+    const retry = await recordSimpleReviewRequest({ task, kernel,
+      request: { ...request, retry: { requested: true, basis: "source_recovered", reason: "host route became available" } },
+      runRound: runner.runRound });
     expect(runner.calls).toBe(1);
-    expect(next.result_ref).toBeTruthy();
+    expect(retry.result_ref).toBeTruthy();
+    expect(retry.retry).toMatchObject({ requested: true, admitted: true, basis: "source_recovered" });
     expect(task.readRecord(first.report_ref)).toContain("host route not configured");
   });
 
@@ -1504,7 +1321,7 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(second.attempt_ref).not.toBe(first.attempt_ref);
   });
 
-  it("does not consume a review round when material bounds stop dispatch before any provider attempt", async () => {
+  it("reuses a dispatched unavailable transport fact without an implicit retry", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bounded review fixture" } };
     let calls = 0;
@@ -1523,9 +1340,8 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
     expect(first.dispatch_state).toBe("dispatched");
     const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
-    expect(calls).toBe(2);
-    expect(second.result_ref).toBeTruthy();
-    expect(second.review_budget.counts.initial).toBe(0);
+    expect(calls).toBe(1);
+    expect(second).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: null });
   });
   it("reuses original semantic refs across task-only revision changes for the same reviewed materials", async () => {
     const { task, kernel, artifacts } = makeTask();
@@ -1541,13 +1357,13 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(next).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
     expect(task.readRecord(first.attempt_ref)).toBe(original);
   });
-  it("keeps historical budget integrity when an earlier writer predates the result_ref binding", async () => {
+  it("keeps historical review integrity when an earlier writer predates the result_ref binding", async () => {
     const { task, kernel, artifacts } = makeTask();
     const runner = countedRunner();
     const request = input();
     const first = await recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound });
     // An earlier writer published the same authenticated binding without the
-    // optional result_ref pointer. Budget reconstruction must still verify that
+    // optional result_ref pointer. History reconstruction must still verify that
     // immutable history instead of failing closed on the added pointer alone.
     for (const ref of [first.attempt_ref, first.result_ref]) {
       const value = JSON.parse(task.readRecord(ref));
@@ -1556,11 +1372,11 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     }
     artifacts.writeAtomic("tasks.md", "# Task bookkeeping after a recorded review\n");
     const next = await recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound });
-    expect(next.error?.code).not.toBe("REVIEW_RETRY_BUDGET_UNKNOWN");
+    expect(next.error?.code).not.toBe("REVIEW_HISTORY_UNAVAILABLE");
     expect(next).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref });
     expect(runner.calls).toBe(1);
   });
-  it.each([false, true])("validates old writer unavailable reports before phase review (tamper=%s)", async (tamper) => {
+  it("ignores malformed historical review bytes from another phase namespace", async () => {
     const { task, kernel } = makeTask();
     const prior = recordSimpleReviewResult({ task, kernel, result: { ...baseResult(), status: "unavailable", provider_results: [], findings: [],
       subject_kind: "phase", phase_id: "P1", review_scope: "phase", error: { code: "PROCESS_TIMEOUT", message: "original provider timeout" } } });
@@ -1573,14 +1389,13 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
       `task_id: ${old.task_id}`, `stage: ${old.stage}`, `attempt_id: ${id}`, `snapshot_tree: ${old.snapshot_tree}`,
       `material_id: ${old.material_id}`, "dispatch_state: dispatched", `error: ${JSON.stringify(old.error)}`, ""].join("\n");
     task.writeRecordAtomic(ref, JSON.stringify(old));
-    task.writeRecordAtomic(old.report_ref, tamper ? report.replace("original provider timeout", "forged timeout") : report);
+    task.writeRecordAtomic(old.report_ref, report.replace("original provider timeout", "forged timeout"));
     rmSync(task.recordPath(prior.attempt_ref).replace(/\/attempt\.json$/, ""), { recursive: true });
     rmSync(task.recordPath(prior.report_ref));
     const runner = countedRunner();
     const result = await recordSimpleReviewRequest({ task, kernel, request: { ...input(), subject_kind: "phase", phase_id: "P2", review_scope: "phase" }, runRound: runner.runRound });
-    expect(runner.calls).toBe(tamper ? 0 : 1);
-    if (tamper) expect(result.error.code).toBe("REVIEW_RETRY_BUDGET_UNKNOWN");
-    else expect(result.result_ref).toBeTruthy();
+    expect(runner.calls).toBe(1);
+    expect(result.result_ref).toBeTruthy();
   });
 });
 

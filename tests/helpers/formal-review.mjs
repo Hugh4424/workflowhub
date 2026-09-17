@@ -16,7 +16,10 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
   const reviewRoot = task.manifest.record_model === "vnext-single-write" ? "quality/reviews" : "reviews";
   const attemptRef = `${reviewRoot}/attempts/${attemptId}/attempt.json`;
-  const outputRef = `${reviewRoot}/attempts/${attemptId}/providers/${provider}.output.json`;
+  const providerRefName = task.manifest.record_model === "vnext-single-write"
+    ? `${Buffer.from(provider, "utf8").toString("base64url")}-0`
+    : provider;
+  const outputRef = `${reviewRoot}/attempts/${attemptId}/providers/${providerRefName}.output.json`;
   const resultRef = `${reviewRoot}/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
   const source = { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree };
   const finding = {

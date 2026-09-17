@@ -554,6 +554,9 @@ function validateIntegrationFreshTests({ task, source, materials }) {
     if (typeof evidence.reason !== "string" || evidence.reason.trim() === "") {
       throw new Error("MATERIAL_INCOMPLETE: missing integration test evidence requires a reason");
     }
+    if (evidence.snapshot_tree !== source.snapshotTree) {
+      throw new Error("MATERIAL_INCOMPLETE: unavailable integration test evidence must bind the current snapshot");
+    }
     return;
   }
   if (evidence.status !== undefined && evidence.status !== "passed") {
@@ -1923,6 +1926,7 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
       schema_version: "wh-review-test-summary.v1",
       status: "unavailable",
       reason: evidence.reason,
+      snapshot_tree: sourceSnapshotTree,
       raw_output_included: false,
     }, null, 2)}\n`, "utf8"));
     return;
@@ -1974,6 +1978,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       ...materials,
       test_evidence: {
         status: "unavailable",
+        snapshot_tree: source.snapshotTree,
         reason: "current integration test receipt was not provided; semantic review proceeds and formal close remains incomplete",
       },
     };

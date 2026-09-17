@@ -138,7 +138,7 @@ export function runInstalledFiveStageTask({ runtime, targetRoot, taskPath, workt
   }
   const stages = STAGES.map((stage) => {
     const execution = run(process.execPath, [runtime, "run", "--action=execute", `--stage=${stage}`,
-      `--project=${project}`, `--task=${task}`], { cwd: targetRoot, env });
+      `--project=${project}`, `--task=${task}`], { cwd: worktreeRoot, env });
     if (execution.status !== 0) {
       const detail = String(execution.stderr ?? execution.stdout ?? "").trim().slice(0, 1000);
       throw new Error(`installed ${stage} exited with ${execution.status}${detail ? `: ${detail}` : ""}`);
@@ -248,7 +248,7 @@ export async function cleanInstall({ packageRoot = ROOT, verifyRunner = true, ve
       }
       if (verifyMulticaLayout) {
         const doctor = run(process.execPath, [runtime, "doctor", "--action=workspace", "--stage=make-decision",
-          "--project=CleanInstall", "--task=release-smoke"], { cwd: targetRoot, env });
+          "--project=CleanInstall", "--task=release-smoke"], { cwd: worktreeRoot, env });
         layout = { bootstrap_exit: bootstrap.status, doctor_exit: doctor.status, target_git: true };
       }
       if (verifyFiveStageTask) {

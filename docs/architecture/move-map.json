@@ -1646,11 +1646,11 @@
     {
       "source": "tools/host/workflowhub-stage-agent-bridge.mjs",
       "destination": "tools/host/workflowhub-stage-agent-bridge.mjs",
-      "status": "add",
-      "owner": "WorkflowHub host boundary",
-      "consumer": "explicit external Stage Agent host integration only",
-      "delete_condition": "remove when the host protocol has one approved canonical result adapter",
-      "content_change": "private stdin bridge that authenticates the explicit task/workspace and forwards one already-produced Stage Agent outcome"
+      "status": "retain-legacy-readonly",
+      "owner": "WorkflowHub compatibility reader",
+      "consumer": "historical replay, migration readers, and compatibility tests only; no active public stage run",
+      "delete_condition": "remove after historical readers and compatibility tests are retired by an approved migration; never restore as a current-stage prerequisite",
+      "content_change": "legacy stdin bridge retained only for explicit historical outcome packets; current WorkflowHub sessions execute and publish directly"
     },
     {
       "source": "runtime/schemas/monitoring-fact.v1.json",
@@ -2071,7 +2071,7 @@
       "owner": "wh-review skill CLI",
       "consumer": "wh-review detail track and make-decision review preflight",
       "delete_condition": "revert only when the detail-track vNext material revision can be read without a workspace kernel",
-      "content_change": "resolveTrustedReviewSubject passes readOnly:true for make-decision to bind the current workspace kernel"
+      "content_change": "resolveTrustedReviewSubject passes readOnly:true for make-decision; task-bound verify-code review consumes the current acceptance aggregate/current-session binding and never requires a host outcome"
     },
     {
       "source": "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",
@@ -2098,7 +2098,7 @@
       "owner": "wh-review skill bundle manifest",
       "consumer": "skill catalog closure and distribution release",
       "delete_condition": "revert only when the readOnly binding change to wh-review-cli is removed",
-      "content_change": "update sha256 for scripts/wh-review-cli.mjs after readOnly binding fix"
+      "content_change": "update sha256 for scripts/wh-review-cli.mjs after readOnly binding and current-session execution-source fixes"
     },
     {
       "source": "skills/catalog.yaml",
@@ -3343,6 +3343,15 @@
       "content_change": "C6 removal of quality/verify.v1 object graph, product_release and status_groups; immutable archive/research references unchanged",
       "bytes_before": 1455,
       "sha256_before": "1629345410d8f4edd8254d7cc3314e95f5226af1341b910fcae725dc12eb994d"
+    },
+    {
+      "source": "tests/contract/no-external-stage-agent-gate.test.mjs",
+      "destination": "tests/contract/no-external-stage-agent-gate.test.mjs",
+      "status": "add",
+      "owner": "current WorkflowHub stage execution contract",
+      "consumer": "targeted regression for current-session execution without external Stage Agent, bridge, or stage outcome",
+      "delete_condition": "remove only when an approved replacement proves the same no-external-gate invariant",
+      "content_change": "active manifests, public stage runner, and reflection path remain independent of external stage outcome"
     }
   ]
 }

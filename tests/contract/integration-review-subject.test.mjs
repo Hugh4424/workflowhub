@@ -180,6 +180,23 @@ describe("integration review subject current-material boundary", () => {
     expect(subject.ac_trace.entries[0].coverage_reason).toMatch(/explicit|test/i);
   });
 
+  it("ignores raw test-output refs when binding structured task evidence", () => {
+    const f = fixture({
+      tasks: "# tasks\n\n### T002 — GREEN\n- **status**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/tests/T002.json`; `quality/tests/output/green.output`\n- **执行事实**：GREEN receipt recorded.\n",
+    });
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+
+    expect(subject.formal_record_status.status).toBe("available");
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("covered");
+    expect(subject.ac_trace.entries[0].test).toEqual([{ receipt_ref: "quality/tests/T002.json", receipt_hash: expect.any(String) }]);
+  });
+
   it("includes named and typed acceptance IDs, including AC-E2E-001", () => {
     const f = fixture();
     f.artifacts.read = (name) => name === "spec.md" ? "# spec\n\nAC-001 AC-SOURCE-001 AC-E2E-001\n" : ({

@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/contract/no-external-stage-agent-gate.test.mjs --poolOptions.forks.singleFork --no-fileParallelism && npx vitest run tests/e2e/vnext-five-stage-current.test.mjs -t 'resolves repaired findings from the current WorkflowHub session without a stage outcome' --poolOptions.forks.singleFork --no-fileParallelism && npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t 'keeps the current stage runnable without an upstream host outcome|retired nested stage outcome|runtime-owned current-session binding|authenticates the complete current aggregate' --poolOptions.forks.singleFork --no-fileParallelism && npx vitest run tests/contract/close-remote-branch-cleanup.test.mjs -t 'read-only close status|absent remote target' --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/verify-code-current-review-repair-v5.json",
+  "output_ref": "quality/tests/output/verify-code-current-review-repair-v5.output"
+}

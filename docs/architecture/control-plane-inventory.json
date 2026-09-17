@@ -39,15 +39,15 @@
       "evidence": "tests/contract/execution-outcome.test.mjs"
     },
     {
-      "id": "review-budget-namespace",
-      "producer": "runtime/review/review-record-route.mjs#readCanonicalBudgetHistory",
-      "consumer": "recordSimpleReviewRequest budget decision",
+      "id": "review-result-deduplication",
+      "producer": "runtime/review/review-record-route.mjs#readCanonicalReviewHistory + #findReusableReview",
+      "consumer": "recordSimpleReviewRequest canonical result reuse",
       "owner": "review route",
-      "effect": "stage-scoped budget history classification",
+      "effect": "immutable same-track review result reference prevents accidental repeat dispatch",
       "disposition": "retain",
       "replacement": null,
-      "delete_condition": "经过审查的 namespace reader 替代",
-      "evidence": "tests/contract/review-budget-namespace.test.mjs"
+      "delete_condition": "经过审查的 canonical review reference reader 替代且同轨道复用语义不变",
+      "evidence": "tests/contract/review-budget-deletion.test.mjs"
     },
     {
       "id": "review-packet-identity",
@@ -125,6 +125,17 @@
       "replacement": "K2 root-cause refs and current-close-projection",
       "delete_condition": "restore only with a new decision and current consumer proof",
       "evidence": "C6/T54-T55 structured proof"
+    },
+    {
+      "id": "stage-agent-outcome-legacy",
+      "producer": "tools/host/workflowhub-stage-agent-bridge.mjs and historical stage-outcome records",
+      "consumer": "historical replay, migration readers, and compatibility tests only; no active public stage run",
+      "owner": "workflowhub stage-runtime compatibility",
+      "effect": "read-only provenance for old externally produced stage outcomes",
+      "disposition": "legacy_read_only",
+      "replacement": "current WorkflowHub session + current stage row + named quality facts",
+      "delete_condition": "remove after historical readers and compatibility tests are retired by an approved migration; it must never return to the active run path",
+      "evidence": "tests/contract/no-external-stage-agent-gate.test.mjs"
     }
   ],
   "skip_dispositions": [

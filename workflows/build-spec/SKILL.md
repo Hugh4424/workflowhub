@@ -43,30 +43,29 @@ The current `spec.md` remains the single revision target; never create a
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
-`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
-“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
 `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
 不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用本次 `build-spec` 的 canonical stage outcome，去重后唯一；writer 重读并认证该原件，派生真实 executor、run、attempt、材料与 snapshot 身份。缺来源或判断时保留 `unavailable`，不借用旧运行身份。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 引用本次 `build-spec` 当前可复核的阶段行、质量事实或测试；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 task/worktree/branch/attempt/material/snapshot 身份。缺来源或判断时保留 `unavailable(executor_absent)`，不借用旧运行身份且不阻断同 task 修复。
 
 六个结构化区块是 `what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；条目绑定真实 `evidence_refs` 与 `confidence`。已检查未观察到写 `none_observed`，无法判断写 `unknown` 与 `unknown_reason`，不适用写 `not_applicable` 与理由。
 
 消费实际返回的 `ref`、`sha256`：新原件为 `quality/stage-reflection/build-spec/<reflection_key>.json`，`reflection_key` 是语义身份，`sha256` 是原件 bytes hash，两者不能互换。同一运行、来源、材料与判断 A 重试 A 时复用首次原件和时间；新运行或新判断 B 生成新 ref，A 保持不变。失败/缺失仍写其真实状态，不通过删字段、扫描 latest 或读取旧固定 `<stage>.json` 冒充本次完成；旧原件只读保留。
 
-验证由 `validate-stage-reflection.mjs` 完成；它内部调用 `deriveConsumptionEdges`，不是技能单独运行消费边工具。较早 subject 的 `output_refs` 只有与较晚 subject 的 `input_refs` 同值时才形成边；任一 stage outcome 或声明 output 缺失时扫描不完整，`coverage_status` 为 `partial`，消费保持 unknown，不能推出 `zero_consumption_proof`。完整扫描、近 30 天 output 且 consumer 全为零，再加人工 rejected 或同一步骤两次介入，才保留 `remove_candidate`；否则是 `needs_evidence`。验证或发布失败时保留实际错误与 unavailable；同一来源重试仍消费原有公开入口，不生成替代记录。
+验证由 `validate-stage-reflection.mjs` 完成；它内部调用 `deriveConsumptionEdges`，不是技能单独运行消费边工具。较早 subject 的 `output_refs` 只有与较晚 subject 的 `input_refs` 同值时才形成边；来源或声明 output 缺失时扫描不完整，`coverage_status` 为 `partial`，消费保持 unknown，不能推出 `zero_consumption_proof`。完整扫描、近 30 天 output 且 consumer 全为零，再加人工 rejected 或同一步骤两次介入，才保留 `remove_candidate`；否则是 `needs_evidence`。验证或发布失败时保留实际错误与 unavailable；同一来源重试仍消费原有公开入口，不生成替代记录。
 
-当 `spec-clarify trigger=true` 时，spec-analyze 输入携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。由本次显式 session/Stage Agent outcome 认证 `ask -> wait -> user reply -> resume` 及匹配的 card、reply、hash；当前 Clarify receipt 进入 `receipts.clarify`，由 `stage-handlers#clarifyFacts` 消费。缺答复、身份漂移、partial、withdrawn 或中断保留对应事实，不能从旧 transcript/env 补答复、重绑旧确认或把 trigger=false 当作已完成。
+当 `spec-clarify trigger=true` 时，spec-analyze 输入携带当前 `snapshot_tree`、`material_revision` 和真实 `lifecycle_rounds`。由当前 WorkflowHub 会话认证 `ask -> wait -> user reply -> resume` 及匹配的 card、reply、hash；当前 Clarify receipt 进入 `receipts.clarify`，由 `stage-handlers#clarifyFacts` 消费。缺答复、身份漂移、partial、withdrawn 或中断保留对应事实，不能从旧 transcript/env 补答复、重绑旧确认或把 trigger=false 当作已完成。
 
 ## 当前 producer、审查与验收引用
 
 本阶段只细化当前决策与规格；未来 `plan.md`、`tasks.md` 的完备性不成为写规格的前置。AC 保留场景、数据来源、可判真 oracle 和失败条件。实际 command/service 验收由 build-code 的现有执行器产生原件，verify-code 消费同次独立 review 与真实用户确认；规格审查与 AC 文本都不替代执行证据。
 
-真实 Stage Agent 经现有 bridge 显式提交 project/task/stage/attempt/run 身份及 `session` 或 `unavailable`，正式 `run` 消费实际返回的 `quality/evidence/stage-outcomes/build-spec/<sha256>.json`。保留 producer/hash 与失败事实，不推断旧会话身份。
+当前 WorkflowHub 会话直接执行规格阶段并通过现有 `run` 发布事实；不需要外部 Stage Agent、bridge、session 或 stage outcome。旧 outcome 只作历史 provenance 读取，不能成为规格写入或复盘的前置条件。
 
 通过既有 `review --action=record` 的 `request` 路径审查当前规格，保留实际 `attempt_ref`、可空的 `result_ref`、`report_ref`，并把 canonical result 或 unavailable attempt 的实际 ref 放入 `receipts.review`，由 `stage-handlers#safeReviewFacts` 认证。保留每个角色的语义、provider、transport、错误与 provenance；不得把记录成功、空 findings、partial 或 unavailable 当作规格通过，也不为 clean 标签重复整轮审查。usage/timing 只回读已认证 attempt 的 `provider_attempts[].execution`，缺失保留 unavailable，实际零值仍为零。
 
@@ -239,7 +238,7 @@ gap plainly.
 ## Findings 处置对话分工
 
 build-spec 审查产生的争议 findings 处置对话=复用 spec-clarify。它仍然只处理
-当前规格中的材料歧义和 finding 决定轴，沿用既有 stage outcome 侧校验、真实
+当前规格中的材料歧义和 finding 决定轴，沿用既有当前事实校验、真实
 `ask -> wait -> user reply -> resume` 生命周期和交互 receipt；答复回写 finding
 时保留 `source=user_reply` 与 `evidence_ref=reply_ref`。不新增对话技能、状态机、
 stage 或 gate。

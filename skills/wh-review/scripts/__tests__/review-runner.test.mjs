@@ -198,13 +198,28 @@ describe("current wh-review helpers", () => {
 
   it("limits serious-finding continuation to one focused review after a real repair", () => {
     const finding = { id: "F-serious", severity: "major", disposition: "actionable", path: "a.js", line: 1, issue: "unsafe branch" };
-    const result = { findings: [finding], adjudication: { clusters: [finding] } };
+    const result = { status: "available", terminal_status: "semantic", findings: [finding], adjudication: { clusters: [finding] } };
     expect(actionableSeriousFindings(result)).toEqual([finding]);
     expect(reviewCycleDecision({ stage: "build-code", result })).toMatchObject({ status: "needs_human", action: "stop" });
     expect(reviewCycleDecision({ stage: "build-code", result, actualRepair: true })).toMatchObject({ status: "focused_review_required", action: "review_once" });
     expect(reviewCycleDecision({ stage: "build-code", result, previousResult: result, actualRepair: true })).toMatchObject({ status: "needs_human", reason: "same_important_finding_repeated_after_focused_review" });
-    expect(reviewCycleDecision({ stage: "build-code", result: { findings: [], adjudication: { clusters: [] } } })).toMatchObject({ status: "clean_current_review", action: "stop" });
+    expect(reviewCycleDecision({ stage: "build-code", result: { status: "available", terminal_status: "semantic", findings: [], adjudication: { clusters: [] } } })).toMatchObject({ status: "clean_current_review", action: "stop" });
+    expect(reviewCycleDecision({
+      stage: "build-code",
+      result: {
+        status: "available",
+        terminal_status: "semantic",
+        findings: [],
+        adjudication: { clusters: [{ id: "F-serious", disposition: "actionable", severity: "major", path: "x", issue: "serious" }] },
+      },
+    })).toMatchObject({ status: "needs_human", action: "stop" });
     expect(reviewCycleDecision({ stage: "build-code", result: { status: "unavailable" } })).toMatchObject({ status: "incomplete", action: "stop" });
+    for (const status of ["partial", "running", "failed"]) {
+      expect(reviewCycleDecision({ stage: "build-code", result: { status, findings: [], adjudication: { clusters: [] } } }))
+        .toMatchObject({ status: "incomplete", action: "stop", reason: "provider_no_trusted_terminal_result" });
+    }
+    expect(reviewCycleDecision({ stage: "build-code", result: { status: "available", terminal_status: "failed", findings: [] } }))
+      .toMatchObject({ status: "incomplete", action: "stop" });
   });
 
   it("rejects malformed, aliased, and build-prd identities before finalization checks", () => {
@@ -305,13 +320,19 @@ describe("current wh-review helpers", () => {
         stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-        selectProviders: () => ({ providers: ["other/model"] }),
+        resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => ({
+          providers: ["other/model"],
+          provider_identities: { "other/model": { source_id: "other-source", config_id: "other-config" } },
+          provider_models: { "other/model": "other-model" },
+        }),
         client: {
           async runGroup() {
             calls.push(true);
             return { runtimeId: "runtime-1", outcome: "unavailable", providers: [{
-              provider: "other/model", status: "failed", identity: { provider: "other/model" }, session_id: null,
+              provider: "other/model", status: "failed", identity: {
+                provider: "other/model", adapter: "other", source_id: "other-source", config_id: "other-config", model: "other-model",
+              }, session_id: null,
               error: { code: "RATE_LIMITED", message: "retry budget exhausted" }, timing: null, usage: null,
             }] };
           },

@@ -1,0 +1,10 @@
+command: npx vitest run tests/contract/make-decision-interaction-publication.test.mjs tests/contract/stage-handoff.test.mjs tests/contract/build-reflection-page.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+test_files: 3 passed
+tests: 62 passed
+oracle: ORACLE-RUNTIME-HANDOFF
+facts:
+- local outcome wrapper forwards explicit packet to the existing canonical bridge and reads back unavailable outcome
+- future materials are not_applicable with material_category=future, exit_code=0, and non-failure signature
+- caller_not_provided, provided_but_invalid, and host_cannot_provide remain distinct
+- all six reflection blocks are preserved by the runtime status reader
