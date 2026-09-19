@@ -49,6 +49,40 @@ function containsPrivatePath(value) {
   return typeof value === "string" && (fileUri.test(value) || opaqueUrl.test(value) || absoluteWindowsPath.test(value) || windowsDrivePrefix.test(value) || windowsRootPath.test(value) || privateUnixPath.test(value) || dotPath.test(value));
 }
 
+function containsBrokerPath(value) {
+  return typeof value === "string" && (fileUri.test(value) || absoluteWindowsPath.test(value) || windowsDrivePrefix.test(value) || windowsRootPath.test(value) || privateUnixPath.test(value) || dotPath.test(value));
+}
+
+const providerErrorFields = new Set(["cause_code", "code", "message", "parse_error", "truncated"]);
+const brokerHostPath = /\/(?:Users|home|private|workspace|srv|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library|secret|data)\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/g;
+
+function redactBrokerErrorMessage(value) {
+  const redacted = value.replace(brokerHostPath, "<host-path-redacted>");
+  return containsPrivatePath(redacted) ? "<host-path-redacted>" : redacted;
+}
+
+function safeProviderErrorFacts(value, label, { allowUnknown = false } = {}) {
+  if (!allowUnknown && Object.keys(value).some((key) => !providerErrorFields.has(key))) {
+    throw failure("PROTOCOL_INCOMPATIBLE", `${label} has unsupported fields`);
+  }
+  const facts = {};
+  for (const field of ["cause_code", "parse_error"]) {
+    if (!Object.hasOwn(value, field)) continue;
+    if (typeof value[field] !== "string" || value[field].trim().length === 0) {
+      throw failure("PROTOCOL_INCOMPATIBLE", `${label}.${field} is invalid`);
+    }
+    if (containsPrivatePath(value[field])) {
+      throw failure("PUBLIC_RESULT_INVALID", `${label}.${field} contains a private path`);
+    }
+    facts[field] = value[field];
+  }
+  if (Object.hasOwn(value, "truncated")) {
+    if (typeof value.truncated !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", `${label}.truncated is invalid`);
+    facts.truncated = value.truncated;
+  }
+  return facts;
+}
+
 function digest(value) {
   return createHash("sha256").update(String(value ?? ""), "utf8").digest("hex");
 }
@@ -76,9 +110,10 @@ function contractFailure(error, wire) {
 function safeBrokerError(value) {
   const error = value?.error ?? value;
   if (!error || typeof error !== "object" || Array.isArray(error) || typeof error.code !== "string" || typeof error.message !== "string") return null;
-  if (containsPrivatePath(error.code) || containsPrivatePath(error.message)) throw failure("PUBLIC_RESULT_INVALID", "broker error contains a private path");
-  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(error.code) || error.message.length === 0 || containsPrivatePath(error.message)) return null;
-  return failure(error.code, error.message);
+  if (containsPrivatePath(error.code)) throw failure("PUBLIC_RESULT_INVALID", "broker error code contains a private path");
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(error.code) || error.message.length === 0) return null;
+  const facts = safeProviderErrorFacts(error, "broker error", { allowUnknown: true });
+  return Object.assign(failure(error.code, redactBrokerErrorMessage(error.message)), facts);
 }
 
 function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
@@ -130,6 +165,9 @@ function exactKeys(value, expected, label) {
 const v3MemberFields = ["attempts", "continuable", "deadline_ms", "error", "identity", "material", "output", "provenance", "recovery", "result_protocol", "session_id", "status", "timing", "usage"];
 const v3GroupFields = ["host_provider", "material_id", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const v3AttemptFields = ["attempt_id", "completed_at_ms", "duration_ms", "error", "kind", "provider_retry_count", "session_id", "started_at_ms", "status"];
+const v3OptionalAttemptFields = ["process_outcome", "parse_outcome"];
+const processOutcomes = new Set(["ok", "exit_nonzero", "timeout", "launch_failure"]);
+const parseOutcomes = new Set(["ok", "invalid", "empty_output"]);
 const v3MemberStates = new Set(["running", "completed", "failed", "cancelled"]);
 const v3PublicationStates = new Set(["not_published", "initial_published", "late_open", "late_closed"]);
 const v3ExtendedGroupFields = [...v3GroupFields, "initial_result_ref", "publication", "supplements"];
@@ -139,6 +177,7 @@ const LATE_SUPPLEMENT_WINDOW_MS = 600000;
 const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
+const managedHealthMemberFields = ["status", "error", "last_progress_at_ms"];
 const managedOutcomes = new Set(["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"]);
 // workflowhub-result.v3 has its own terminal outcome set (3rd-review
 // lib/workflowhub-result-v3.mjs `outcomes`). It is not a superset of the v2 set:
@@ -149,10 +188,9 @@ const managedV3Outcomes = new Set(["completed", "partial", "unavailable", "cance
 function validateV3Error(value, label) {
   if (value === null) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.code !== "string" || typeof value.message !== "string") throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
-  if (Object.keys(value).sort().join("\0") !== ["code", "message"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", `${label} has unsupported fields`);
   if (value.code.length === 0 || value.message.length === 0) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
   if (containsPrivatePath(value.code) || containsPrivatePath(value.message)) throw failure("PUBLIC_RESULT_INVALID", `${label} contains a private path`);
-  return { code: value.code, message: value.message };
+  return { code: value.code, message: value.message, ...safeProviderErrorFacts(value, label) };
 }
 
 function validateV3Timing(value, label) {
@@ -311,7 +349,11 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   if (!recovery || ["provider_internal_retry_count", "fresh_execution_retry_count", "same_session_repair_count"].some((key) => !Number.isSafeInteger(recovery[key]) || recovery[key] < 0)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 recovery counters are invalid");
   if (!Array.isArray(value.attempts)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempts must be an array");
   for (const attempt of value.attempts) {
-    exactKeys(attempt, v3AttemptFields, "v3 attempt");
+    const attemptKeys = Object.keys(attempt);
+    if (!v3AttemptFields.every((field) => Object.hasOwn(attempt, field))
+        || attemptKeys.some((field) => !v3AttemptFields.includes(field) && !v3OptionalAttemptFields.includes(field))) {
+      throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt has unsupported fields");
+    }
     if (!Number.isSafeInteger(attempt.provider_retry_count) || attempt.provider_retry_count < 0 || !v3MemberStates.has(attempt.status)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt is invalid");
     validateV3String(attempt.attempt_id, "v3 attempt.attempt_id", { publicMetadata: true });
     validateV3String(attempt.kind, "v3 attempt.kind", { publicMetadata: true });
@@ -320,6 +362,14 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
     if (["running", "completed"].includes(attempt.status) && attemptError !== null) throw failure("PROTOCOL_INCOMPATIBLE", `${attempt.status} v3 attempt must not contain an error`);
     if (["failed", "cancelled"].includes(attempt.status) && attemptError === null) throw failure("PROTOCOL_INCOMPATIBLE", `${attempt.status} v3 attempt must contain an error`);
     validateV3Timing(attempt, "v3 attempt");
+    if (Object.hasOwn(attempt, "process_outcome") && attempt.process_outcome !== null
+        && (!processOutcomes.has(attempt.process_outcome) || containsPrivatePath(attempt.process_outcome))) {
+      throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt.process_outcome is invalid");
+    }
+    if (Object.hasOwn(attempt, "parse_outcome") && attempt.parse_outcome !== null
+        && (!parseOutcomes.has(attempt.parse_outcome) || containsPrivatePath(attempt.parse_outcome))) {
+      throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempt.parse_outcome is invalid");
+    }
   }
   exactKeys(value.timing, ["completed_at_ms", "duration_ms", "started_at_ms"], "v3 timing");
   if (!value.timing || Object.keys(value.timing).sort().join("\0") !== ["completed_at_ms", "duration_ms", "started_at_ms"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 timing is invalid");
@@ -336,9 +386,11 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   }
   if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id", { publicMetadata: true });
   const usage = validateV3Usage(value.usage);
+  const latestAttempt = value.attempts.at(-1) ?? null;
   return Object.freeze({
     ...value,
     provider: identity.provider,
+    error,
     unavailable_diagnostics: error,
     raw_output_ref: null,
     execution: Object.freeze({
@@ -347,6 +399,8 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
       retry: Object.freeze({ count: recovery.provider_internal_retry_count, progress_events: 0 }), runtime_id: runtimeId,
       deadline_ms: value.deadline_ms,
       recovery: Object.freeze({ ...recovery }),
+      ...(latestAttempt?.process_outcome === undefined ? {} : { process_outcome: latestAttempt.process_outcome }),
+      ...(latestAttempt?.parse_outcome === undefined ? {} : { parse_outcome: latestAttempt.parse_outcome }),
     }),
   });
 }
@@ -564,6 +618,52 @@ function validateManagedGroup(value, { hostProvider, providers, runtimeId, mater
   return Object.freeze({ ...value, providers: Object.freeze(members) });
 }
 
+function validateManagedHealthProviders(value, providers) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed health providers map is invalid");
+  }
+  const providerIds = Object.keys(value);
+  if (providerIds.length !== providers.size || providerIds.some((provider) => !providers.has(provider))) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed health providers map does not match the configured providers");
+  }
+  const normalized = Object.fromEntries([...providers].map((provider) => {
+    const member = value[provider];
+    if (!member || typeof member !== "object" || Array.isArray(member)
+        || managedHealthMemberFields.some((field) => !Object.hasOwn(member, field))) {
+      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
+    }
+    if (Object.hasOwn(member, "provider") && member.provider !== provider) {
+      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
+    }
+    if (!v3MemberStates.has(member.status)) {
+      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} status is invalid`);
+    }
+    let error = null;
+    if (member.error !== null) {
+      if (!member.error || typeof member.error !== "object" || Array.isArray(member.error)) {
+        throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} error is invalid`);
+      }
+      const code = validateV3String(member.error.code, `managed health provider ${provider} error.code`, { publicMetadata: true });
+      for (const field of Object.values(member.error)) {
+        if (typeof field === "string" && containsPrivatePath(field)) {
+          throw failure("PUBLIC_RESULT_INVALID", `managed health provider ${provider} error contains a private path`);
+        }
+      }
+      error = Object.freeze({ code });
+    }
+    if (!(member.last_progress_at_ms === null
+        || (Number.isSafeInteger(member.last_progress_at_ms) && member.last_progress_at_ms >= 0))) {
+      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} last_progress_at_ms is invalid`);
+    }
+    return [provider, Object.freeze({
+      status: member.status,
+      error,
+      last_progress_at_ms: member.last_progress_at_ms,
+    })];
+  }));
+  return Object.freeze(normalized);
+}
+
 function parseManagedEnvelope(wire, context) {
   if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review managed lifecycle exceeded the local broker timeout");
   let result;
@@ -590,15 +690,26 @@ function parseManagedEnvelope(wire, context) {
       || containsPrivatePath(result.request_id) || containsPrivatePath(result.runtime_id)) {
     throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed lifecycle envelope is invalid");
   }
-  const expectedKeys = result.state === "terminal"
-    ? ["group", "material_id", "request_id", "runtime_id", "state", "version"]
-    : ["material_id", "request_id", "runtime_id", "state", "version"];
-  exactKeys(result, expectedKeys, "3rd-review managed lifecycle envelope");
   if (result.state === "terminal") {
+    exactKeys(result, ["group", "material_id", "request_id", "runtime_id", "state", "version"], "3rd-review managed lifecycle envelope");
     return Object.freeze({ ...result, group: validateManagedGroup(result.group, { ...context, runtimeId: result.runtime_id }) });
   }
   if (Object.hasOwn(result, "group")) throw failure("PROTOCOL_INCOMPATIBLE", "non-terminal managed lifecycle envelope contains a group");
-  return Object.freeze(result);
+  if (!Object.hasOwn(result, "providers")) return Object.freeze({
+    version: result.version,
+    request_id: result.request_id,
+    runtime_id: result.runtime_id,
+    state: result.state,
+    material_id: result.material_id,
+  });
+  return Object.freeze({
+    version: result.version,
+    request_id: result.request_id,
+    runtime_id: result.runtime_id,
+    state: result.state,
+    material_id: result.material_id,
+    providers: validateManagedHealthProviders(result.providers, context.providers),
+  });
 }
 
 function parsePublicRun(wire) {
@@ -716,7 +827,7 @@ export class ReviewProviderClient {
 
   async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous } = {}) {
     if (!(typeof requestId === "string" && requestId.trim() !== "" && !containsPrivatePath(requestId)
-        && typeof hostProvider === "string" && hostProvider.trim() !== ""
+        && typeof hostProvider === "string" && hostProvider.trim() !== "" && !containsPrivatePath(hostProvider)
         && Array.isArray(providers) && providers.length > 0
         && materials?.bundleRoot && materials?.materialId && prompt)) {
       throw new TypeError("requestId, hostProvider, providers, materials, and prompt are required");
@@ -762,9 +873,13 @@ export class ReviewProviderClient {
     });
   }
 
-  async statusManaged({ runtimeId, requestId = null, hostProvider, providers, materials } = {}) {
-    if (!(typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)
-        && typeof hostProvider === "string" && hostProvider.trim() !== ""
+  async statusManaged({ runtimeId = null, requestId = null, hostProvider, providers, materials } = {}) {
+    if (typeof hostProvider === "string" && containsPrivatePath(hostProvider)) {
+      throw failure("PUBLIC_RESULT_INVALID", "hostProvider contains a private path");
+    }
+    if (!(((runtimeId === null && this.command === null)
+        || (typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)))
+        && typeof hostProvider === "string" && hostProvider.trim() !== "" && !containsPrivatePath(hostProvider)
         && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {
       throw new TypeError("runtimeId, hostProvider, providers, and materials are required");
     }
@@ -782,6 +897,9 @@ export class ReviewProviderClient {
   }
 
   async cancelManaged({ runtimeId, requestId = null, hostProvider, providers, materials } = {}) {
+    if (typeof hostProvider === "string" && containsPrivatePath(hostProvider)) {
+      throw failure("PUBLIC_RESULT_INVALID", "hostProvider contains a private path");
+    }
     if (!(typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)
         && typeof hostProvider === "string" && hostProvider.trim() !== ""
         && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {

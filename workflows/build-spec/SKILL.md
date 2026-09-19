@@ -41,6 +41,7 @@ The current `spec.md` remains the single revision target; never create a
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
@@ -205,6 +206,13 @@ real cause. Durable findings belong in the relevant spec section, not a second
 research authority.
 
 The specification must make these items explicit when applicable:
+
+Once `freeze-spec` and `review-frozen-spec` are complete, do not rewrite
+decision-log.md. A specification ambiguity after that freeze is routed by the
+existing `fallback_protocol` back to `make-decision`; it is not silently repaired
+by changing the accepted direction in this stage.
+freeze-spec / review-frozen-spec 之后不得改写 decision-log.md；规格歧义按
+fallback protocol 路由回 make-decision。
 
 1. quick-read goal, user outcome, scope, urgency, and business impact;
 2. non-goals and deferred work, each linked to a current decision/source;

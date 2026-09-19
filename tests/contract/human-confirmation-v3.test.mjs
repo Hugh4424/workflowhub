@@ -13,6 +13,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { runStage } from "../../runtime/stage/stage-runner.mjs";
 import { validateHumanConfirmation } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { writeCanonicalStageMaterials } from "../helpers/stage-outcome.mjs";
 
@@ -314,6 +315,72 @@ describe("T004 confirmation binding protections", () => {
     writeFileSync(task.recordPath(first.ref), JSON.stringify(altered));
     expect(() => kernel.publishHumanConfirmation("make-decision", directionInput)).toThrow(/hash|canonical|identity|corrupt/i);
     expect(readdirSync(join(task.taskPath, "quality/confirmations"))).toHaveLength(1);
+  });
+});
+
+describe("P7 AC-REBIND-004 confirmation read-side symmetry", () => {
+  const completionSubjects = Object.fromEntries([
+    "scope", "non_goals", "risks", "ui_applicability", "requirement_coverage",
+    "goal_achievement", "acceptance_clarity", "solution_convergence", "plain_language_card", "outline_closed",
+  ].map((subject) => [subject, { status: "passed", evidence_refs: [], detail: `fixture ${subject}` }]));
+
+  async function runCurrentConfirmation(state) {
+    const result = await runStage("make-decision", {
+      stage: "make-decision",
+      task: state.task,
+      kernel: state.kernel,
+      identity: state.task.identity,
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+      manifest: state.task.manifest,
+      candidateWorkspace: state.candidate,
+      artifacts: state.artifacts,
+    }, async () => ({ facts: { completion_subjects: completionSubjects } }));
+    const fact = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((value) => value.kind === "confirmation" && value.subject === "human_confirmation");
+    return { result, fact };
+  }
+
+  it("keeps the same confirmation for execution-only tasks writes and non-material snapshots, but not decision changes", async () => {
+    const cases = [
+      {
+        name: "tasks.md execution status",
+        reusable: true,
+      },
+      {
+        name: "non-material snapshot",
+        reusable: true,
+      },
+      {
+        name: "decision-log substantive change",
+        reusable: false,
+      },
+    ];
+
+    for (const scenario of cases) {
+      const state = fixture();
+      let first;
+      // The execution-only case needs its task-card section present before the
+      // confirmation is bound; D4 is explicitly authorized by D-026 and must
+      // not be mistaken for a general material-integrity relaxation.
+      if (scenario.name === "tasks.md execution status") {
+        const initial = `${state.artifacts.read("tasks.md")}\n### 执行状态填写区\n- status: pending\n`;
+        state.artifacts.writeAtomic("tasks.md", initial);
+        first = state.kernel.publishHumanConfirmation("make-decision", directionInput);
+        state.artifacts.writeAtomic("tasks.md", state.artifacts.read("tasks.md").replace("status: pending", "status: completed"));
+      } else {
+        first = state.kernel.publishHumanConfirmation("make-decision", directionInput);
+        if (scenario.name === "non-material snapshot") {
+          writeFileSync(join(state.candidate.worktreeRoot, "README.md"), "non-material snapshot change\n");
+        } else {
+          state.artifacts.writeAtomic("decision-log.md", `${state.artifacts.read("decision-log.md")}\n实质方向改变。\n`);
+        }
+      }
+      const { fact } = await runCurrentConfirmation(state);
+      expect(fact, scenario.name).toBeDefined();
+      expect(fact.status, `${scenario.name}: currentConfirmationCandidate status`).toBe(scenario.reusable ? "passed" : "missing");
+      if (scenario.reusable) expect(fact.evidence[0].ref, scenario.name).toBe(first.ref);
+    }
   });
 });
 

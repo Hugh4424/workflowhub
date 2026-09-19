@@ -60,6 +60,9 @@ export function compactReviewDiff(diff, { budgetBytes = TASK_BOUND_DIFF_BUDGET_B
   let remaining = budgetBytes;
   const implementationCandidates = candidates.filter((entry) => entry.kind === "implementation");
   const testCandidates = candidates.filter((entry) => entry.kind === "test");
+  const requiredEntries = [implementationCandidates[0], testCandidates[0]].filter(Boolean);
+  const truncationMarker = (entry) => "\n\n# WH_REVIEW_TRUNCATED_SECTION path=" + entry.path + " full_bytes=" + entry.bytes + "\n";
+  const truncationMarkerBytes = (entry) => Buffer.byteLength(truncationMarker(entry), "utf8");
   const mandatory = [];
   if (implementationCandidates.length > 0 && testCandidates.length > 0) {
     const implementation = implementationCandidates.find((entry) => testCandidates.some((test) => entry.bytes + test.bytes <= budgetBytes));
@@ -75,24 +78,36 @@ export function compactReviewDiff(diff, { budgetBytes = TASK_BOUND_DIFF_BUDGET_B
   }
   for (const entry of candidates) {
     if (included.includes(entry)) continue;
-    if (entry.bytes <= remaining) {
+    const reservedForOtherKinds = requiredEntries
+      .filter((required) => required.kind !== entry.kind && !included.some((selected) => selected.kind === required.kind))
+      .reduce((sum, required) => sum + truncationMarkerBytes(required), 0);
+    if (entry.bytes <= remaining - reservedForOtherKinds) {
       included.push(entry);
       remaining -= entry.bytes;
     }
   }
-  for (const kind of ["implementation", "test"]) {
-    if (!sections.some((entry) => entry.kind === kind) || included.some((entry) => entry.kind === kind)) continue;
-    const candidate = sections.find((entry) => entry.kind === kind);
-    if (!candidate || remaining < 1024) continue;
-    const marker = "\n\n# WH_REVIEW_TRUNCATED_SECTION path=" + candidate.path + " full_bytes=" + candidate.bytes + "\n";
-    const markerBytes = Buffer.byteLength(marker, "utf8");
-    const prefix = Buffer.from(candidate.section, "utf8").subarray(0, Math.max(0, remaining - markerBytes));
-    const section = prefix.toString("utf8") + marker;
+  const missing = requiredEntries.filter((entry) => !included.some((selected) => selected.kind === entry.kind));
+  for (let index = 0; index < missing.length; index += 1) {
+    const candidate = missing[index];
+    const remainingCandidates = missing.slice(index);
+    const marker = truncationMarker(candidate);
+    const markerBytes = truncationMarkerBytes(candidate);
+    const reservedMarkerBytes = remainingCandidates.reduce((sum, entry) => sum + truncationMarkerBytes(entry), 0);
+    if (remaining < reservedMarkerBytes) break;
+    const allocation = markerBytes + Math.floor((remaining - reservedMarkerBytes) / remainingCandidates.length);
+    const source = Buffer.from(candidate.section, "utf8");
+    const prefixBytes = Math.min(source.length, Math.max(0, allocation - markerBytes));
+    let safePrefixBytes = prefixBytes;
+    while (safePrefixBytes > 0 && (source[safePrefixBytes] & 0xc0) === 0x80) safePrefixBytes -= 1;
+    const section = source.length <= prefixBytes ? candidate.section : source.subarray(0, safePrefixBytes).toString("utf8") + marker;
     included.push({ ...candidate, section, bytes: Buffer.byteLength(section, "utf8") });
     remaining = Math.max(0, remaining - Buffer.byteLength(section, "utf8"));
   }
   if (!included.some((entry) => entry.kind === "implementation")) {
     throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code implementation diff exceeds the bounded provider budget"), { code: "MATERIAL_TOO_LARGE" });
+  }
+  if (testCandidates.length > 0 && !included.some((entry) => entry.kind === "test")) {
+    throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code implementation/test diff exceeds the bounded provider budget"), { code: "MATERIAL_TOO_LARGE" });
   }
   const includedPaths = new Set(included.map((entry) => entry.path));
   const bounded = included.map((entry) => entry.section).join("");

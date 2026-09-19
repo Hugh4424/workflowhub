@@ -9,6 +9,7 @@ import {
   rehydrateProviderInput,
   serializeProviderInput,
 } from "../simple-review-runner.mjs";
+import { redactProviderHostPaths } from "../review-materials.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -64,6 +65,18 @@ describe("simple review material host-path redaction", () => {
     } finally {
       restored.materials.dispose();
     }
+  });
+
+  it("preserves CJK prose and DEF-01 tokens after a redacted host path", () => {
+    const input = "来源 /Users/Hugh/notes.md，取消理由：DEF-01；DEF-01";
+    const redacted = redactProviderHostPaths(input);
+    const tokenCount = (value) => (value.match(/DEF-01/g) ?? []).length;
+
+    expect(redacted).toContain("<host-path-redacted>");
+    expect(redacted).not.toContain("/Users/Hugh/");
+    expect(redacted).toContain("取消理由：");
+    expect(tokenCount(input)).toBe(2);
+    expect(tokenCount(redacted)).toBe(2);
   });
 
   it("computes the material identity over redacted provider-visible bytes only", () => {

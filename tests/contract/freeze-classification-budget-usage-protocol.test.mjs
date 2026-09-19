@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -288,6 +288,39 @@ describe("Phase 1 freeze and classification contracts", () => {
       items: [{ status: "incomplete", classification: "direction_change" }],
     });
     expect(oldResult.facts.finding_dispositions.routing.items[0].errors.join("; ")).toMatch(/material_revision/);
+  });
+});
+
+describe("P7 AC-REBIND-001..003 freeze and confirmation text contracts", () => {
+  const readProjectFile = (relativePath) => readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
+
+  it("AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections", () => {
+    const skill = readProjectFile("workflows/make-decision/SKILL.md");
+    const decisionLog = readProjectFile("specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md");
+    expect(skill).toMatch(/step 1[–-]10 写材料/);
+    expect(skill).toMatch(/step 11[–-]14 只落 task store/);
+    for (const heading of [
+      "## 阶段步骤登记",
+      "## 阶段收口状态",
+      "## 阶段事实",
+      "## 阶段末 spec-analyze（step 12）",
+    ]) expect((decisionLog.match(new RegExp(`^${heading}$`, "gmu")) ?? [])).toHaveLength(0);
+  });
+
+  it("AC-REBIND-002 routes post-freeze specification ambiguity back to make-decision", () => {
+    for (const path of ["workflows/build-spec/SKILL.md", "docs/standard-workflow.md"]) {
+      const text = readProjectFile(path);
+      expect(text, path).toMatch(/freeze-spec[\s\S]*?review-frozen-spec[\s\S]*?不得改写 decision-log\.md/);
+      expect(text, path).toMatch(/规格歧义[\s\S]*?fallback[\s\S]*?make-decision/);
+    }
+  });
+
+  it("AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area", () => {
+    const buildPlan = readProjectFile("workflows/build-plan/SKILL.md");
+    const standard = readProjectFile("docs/standard-workflow.md");
+    expect(buildPlan).toMatch(/确认后唯一可写区是 tasks\.md 的执行状态填写区/);
+    expect(buildPlan).toMatch(/plan\.md 语义段不得再改/);
+    expect(standard).toMatch(/build-plan step 12[\s\S]*?人工确认/);
   });
 });
 

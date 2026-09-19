@@ -1744,7 +1744,12 @@ function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execut
     items: acceptedCriterionIds.map((acceptance_criterion_id) => {
       const current = leaves.filter(({ value }) => value.subject === acceptance_criterion_id);
       const allRequiredScenarios = (execution.items ?? []).filter((item) => item.acceptance_criterion_ids?.includes(acceptance_criterion_id));
-      const passed = current.length > 0 && allRequiredScenarios.length > 0 && allRequiredScenarios.every((item) => item.status === "executed")
+      // A command/service scenario is an aggregate execution, but its leaves
+      // are criterion-specific. One failed assertion must not turn sibling
+      // passed leaves into `missing`; the leaf status is the authority for
+      // the AC, while an unavailable/failed scenario still cannot create a
+      // passed leaf because the executor would not have published one.
+      const passed = current.length > 0 && allRequiredScenarios.length > 0
         && current.every(({ value }) => value.status === "passed");
       return { acceptance_criterion_id, status: passed ? "covered" : current.length ? "missing" : "unknown",
         evidence_refs: current.map(({ reference }) => reference) };

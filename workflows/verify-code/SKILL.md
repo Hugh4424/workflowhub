@@ -16,6 +16,7 @@ owner；环境不可用只记录 attempt。错配只让正式完成事实保持 
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
@@ -121,6 +122,7 @@ build-code 的执行与测试原件作为本次独立复核输入，由既有 ru
 - `failed`：代码本身有明确失败，回同一 task 修复。
 
 `incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
+当 `work_status=ready` 而质量事实为 `in_progress`、`incomplete` 或 `unavailable` 时，继续下一项安全复核或修复；不等待 provider 自行恢复，不为同一 subject/身份重复 review。只有真实代码、材料、provider route 或 source 变化后，才按现有 retry policy 做受影响的 focused review。
 
 ## Preflight self-check
 

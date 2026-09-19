@@ -155,6 +155,24 @@ const serviceScenario = JSON.stringify([{
   sample: "account-123",
   scenario: "customer changes an irreversible setting",
   tier: "service",
+  execution: {
+    module_ref: "tests/accept-service.mjs",
+    export_name: "accept",
+    input: { sample: "account-123" },
+    timeout_ms: 5000,
+  },
+}]);
+
+const commandScenario = JSON.stringify([{
+  source: "fixture/command-records.json",
+  sample: "account-123",
+  scenario: "command reports the persisted setting",
+  tier: "command",
+  execution: {
+    command: "node",
+    args: ["tests/accept-command.mjs"],
+    timeout_ms: 5000,
+  },
 }]);
 
 const highRiskNonUiTasks = `# Tasks
@@ -196,6 +214,12 @@ const browserAndServiceScenario = JSON.stringify([
     sample: "account-123",
     scenario: "service persists the same user change",
     tier: "service",
+    execution: {
+      module_ref: "tests/accept-service.mjs",
+      export_name: "accept",
+      input: { sample: "account-123" },
+      timeout_ms: 5000,
+    },
   },
 ]);
 
@@ -295,6 +319,39 @@ describe("plan acceptance-task delivery contract", () => {
 
   it("rejects an unsupported acceptance tier", () => {
     expect(validate(replaceAcceptanceData(validTasks, scenario.replace("\"tier\":\"browser\"", "\"tier\":\"manual\""))).ok).toBe(false);
+  });
+
+  it.each([
+    ["command", commandScenario],
+    ["service", serviceScenario],
+  ])("requires typed execution data for %s acceptance", (tier, data) => {
+    const parsed = JSON.parse(data);
+    delete parsed[0].execution;
+    const missingExecution = JSON.stringify(parsed);
+    const tasks = notRequiredNonUiTasks.replace(serviceScenario, tier === "command" ? commandScenario : serviceScenario)
+      .replace(tier === "command" ? commandScenario : serviceScenario, missingExecution);
+
+    expect(validate(tasks)).toMatchObject({ ok: false });
+    expect(projectAcceptanceExecutionData(tasks, { decisionLog: decisionLogWithUiApplicability("non_ui"), spec })).toMatchObject({
+      status: "unavailable",
+      eligible_for_pass: false,
+      errors: expect.arrayContaining([expect.stringContaining("execution is required")]),
+    });
+  });
+
+  it("keeps browser acceptance on the browser-QA contract and rejects an inline command", () => {
+    const browserWithExecution = JSON.stringify([{
+      ...JSON.parse(scenario)[0],
+      execution: { command: "node", args: [], timeout_ms: 5000 },
+    }]);
+    const tasks = replaceAcceptanceData(validTasks, browserWithExecution);
+
+    expect(validate(tasks)).toMatchObject({ ok: false });
+    expect(projectAcceptanceExecutionData(tasks, { decisionLog, spec })).toMatchObject({
+      status: "unavailable",
+      eligible_for_pass: false,
+      errors: expect.arrayContaining([expect.stringContaining("not allowed for browser")]),
+    });
   });
 
   it("requires typed high-risk decision refs and projects the declared service tier", () => {

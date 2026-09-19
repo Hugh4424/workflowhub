@@ -58,3 +58,37 @@ test("compactVerifyCodeMaterials bounds nested current materials alongside execu
   expect(result.materials.runtime_current_materials["decision-log.md"]).toContain("full_sha256=");
   expect(result.materials.runtime_current_materials["tasks.md"]).toContain("full_sha256=");
 });
+
+test("compactReviewDiff retains implementation and test sections under the truncation budget", () => {
+  const full = section("runtime/review.mjs", 200 * 1024)
+    + section("tests/review.test.mjs", 200 * 1024)
+    + section("README.md", 80 * 1024);
+  const result = compactReviewDiff(full);
+
+  expect(result.index.mode).toBe("bounded");
+  expect(result.index.included_paths).toEqual(expect.arrayContaining([
+    "runtime/review.mjs",
+    "tests/review.test.mjs",
+  ]));
+  expect(result.diff).toContain("diff --git a/runtime/review.mjs b/runtime/review.mjs");
+  expect(result.diff).toContain("diff --git a/tests/review.test.mjs b/tests/review.test.mjs");
+  expect(result.diff).toContain("WH_REVIEW_TRUNCATED_SECTION");
+  expect(Buffer.byteLength(result.diff, "utf8")).toBeLessThanOrEqual(150 * 1024);
+});
+
+test("compactVerifyCodeMaterials carries both implementation and test coverage into the bounded diff", () => {
+  const full = section("runtime/review.mjs", 200 * 1024)
+    + section("tests/review.test.mjs", 200 * 1024)
+    + section("README.md", 80 * 1024);
+  const result = compactVerifyCodeMaterials({ "implementation-diff.patch": full });
+  const bounded = result.materials["implementation-diff.patch"];
+
+  expect(result.diff).toMatchObject({ mode: "bounded" });
+  expect(result.diff.included_paths).toEqual(expect.arrayContaining([
+    "runtime/review.mjs",
+    "tests/review.test.mjs",
+  ]));
+  expect(bounded).toContain("diff --git a/runtime/review.mjs b/runtime/review.mjs");
+  expect(bounded).toContain("diff --git a/tests/review.test.mjs b/tests/review.test.mjs");
+  expect(Buffer.byteLength(bounded, "utf8")).toBeLessThanOrEqual(150 * 1024);
+});

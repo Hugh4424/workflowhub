@@ -21,6 +21,7 @@ per-AC evidence, independent review, and explicit finding disposition.
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
@@ -239,6 +240,7 @@ A current Phase review is required as a recorded quality fact. Its findings and 
 Never require a provider pass.
 
 `unavailable` is never `pass` and never a work blocker.
+When status reports `work_status=ready` with `quality_status=in_progress|incomplete|unavailable`, continue the next safe implementation or focused verification action; do not wait for a provider or rerun an unchanged review. A new focused review is allowed only after the reviewed subject or its authenticated material/provider/source basis actually changes.
 
 ## Preflight self-check
 

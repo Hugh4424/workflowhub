@@ -57,6 +57,7 @@ test("client marks every attachment for codex always_embed delivery", async () =
     providers: ["codex/luna"],
     materials: { ...materials(), deliveryManifest: [{ path: "subject.md", bytes: 12, sha256: "a".repeat(64) }] },
     attachmentDelivery: "always_embed",
+    minimumHeterologous: 1,
     prompt: "review",
   });
   expect(calls[0].attachmentDelivery).toBe("always_embed");
@@ -69,7 +70,7 @@ test("client defaults to negotiated delivery so each provider gets its supported
     calls.push(value);
     return { exitCode: 0, stdout: `${JSON.stringify(group(["codex/luna"]))}\n`, stderr: "" };
   } });
-  await client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review" });
+  await client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(calls[0].attachmentDelivery).toBe("negotiated");
   expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
 });
@@ -86,7 +87,7 @@ test("client rejects direction-flow metadata outside the public contract", async
     ],
     output: { one_provider_result: true, one_logical_fact: true, leaked_path: "/private/review.json" },
   };
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review", reviewFlow: flow }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), minimumHeterologous: 1, prompt: "review", reviewFlow: flow }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -100,6 +101,7 @@ test("client negotiates attachment delivery for mixed provider groups", async ()
     hostProvider: "codex/terra",
     providers: ["kimi/coding", "antigravity/flash", "codex/luna"],
     materials: { ...materials(), deliveryManifest: [{ path: "subject.md", bytes: 12, sha256: "a".repeat(64) }] },
+    minimumHeterologous: 1,
     prompt: "review",
   });
   expect(calls[0].attachmentDelivery).toBe("negotiated");
@@ -112,7 +114,7 @@ test("client negotiates workflowhub-result.v3 and preserves one member per confi
     calls.push(value);
     return { exitCode: 0, stdout: `${JSON.stringify(group())}\n`, stderr: "" };
   } });
-  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), prompt: "review" });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(calls).toHaveLength(1);
   expect(calls[0].request.required_result_protocol).toBe("workflowhub-result.v3");
   expect(calls[0].attachmentDelivery).toBe("negotiated");
@@ -124,11 +126,47 @@ test("client negotiates workflowhub-result.v3 and preserves one member per confi
   expect(result.providers[0].execution.recovery).toEqual(result.providers[0].recovery);
 });
 
+test("client safely consumes optional process and parse outcomes from v3 attempts", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].attempts[0].process_outcome = "timeout";
+  value.providers[0].attempts[0].parse_outcome = "empty_output";
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 3, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
+
+  expect(result.providers[0].execution).toMatchObject({ process_outcome: "timeout", parse_outcome: "empty_output" });
+  expect(result.providers[0].execution).not.toHaveProperty("attempts");
+});
+
+test("client accepts the producer's explicit null outcome values", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].attempts[0].process_outcome = null;
+  value.providers[0].attempts[0].parse_outcome = null;
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
+
+  expect(result.providers[0].execution).toMatchObject({ process_outcome: null, parse_outcome: null });
+});
+
+test("client rejects unknown or path-bearing v3 attempt outcome fields", async () => {
+  for (const mutate of [
+    (value) => { value.providers[0].attempts[0].future_outcome = "ignored"; },
+    (value) => { value.providers[0].attempts[0].process_outcome = "/private/process.log"; },
+  ]) {
+    const value = group(["opencode/v4flash"]);
+    mutate(value);
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 3, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
+      .rejects.toMatchObject({ code: expect.stringMatching(/PROTOCOL_INCOMPATIBLE|PUBLIC_RESULT_INVALID/) });
+  }
+});
+
 test("client rejects a positive provider deadline in a public v3 result", async () => {
   const value = group(["opencode/v4flash"]);
   value.providers[0].deadline_ms = 5_000;
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -141,7 +179,7 @@ test("client rejects private paths hidden in structured broker metadata", async 
     const value = group(["opencode/v4flash"]);
     mutate(value);
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .rejects.toMatchObject({ code: expect.stringMatching(/PUBLIC_RESULT_INVALID|PROTOCOL_INCOMPATIBLE/) });
   }
 });
@@ -158,7 +196,7 @@ test("client leaves reviewer output grammar to the canonical runner", async () =
     const value = group(["opencode/v4flash"]);
     value.providers[0].output = output;
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .resolves.toMatchObject({ outcome: "completed", providers: [{ status: "completed", error: null }] });
   }
 });
@@ -169,7 +207,7 @@ test("client preserves terminal JSON after prose for runner normalization", asyn
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
 
   const result = await client.runGroup({
-    hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), prompt: "review",
+    hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), minimumHeterologous: 1, prompt: "review",
   });
 
   expect(result.outcome).toBe("completed");
@@ -187,6 +225,7 @@ test("client rejects a direction flow that exposes the choice before the reveal 
     hostProvider: "codex/terra",
     providers: ["opencode/v4flash"],
     materials: materials(),
+    minimumHeterologous: 1,
     prompt: "review",
     reviewMode: "single_round",
     reviewFlow: {
@@ -215,7 +254,7 @@ test("client rejects direction flow without the single_round mode", async () => 
     output: { one_provider_result: true, one_logical_fact: true },
   };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review", reviewFlow }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review", reviewFlow }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -231,7 +270,7 @@ test("client rejects private paths in direction-flow metadata before protocol va
     output: { one_provider_result: true, one_logical_fact: true },
   };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review", reviewMode: "single_round", reviewFlow }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review", reviewMode: "single_round", reviewFlow }))
     .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
 });
 
@@ -245,7 +284,7 @@ test("client preserves numeric nested usage telemetry", async () => {
     cost: { input: 0.0000014, output: 0.00058156, total: 0.0005908448 },
   };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(result.providers[0].usage).toEqual(value.providers[0].usage);
 });
 
@@ -253,7 +292,7 @@ test("client rejects decimal token usage while accepting provider cost decimals"
   const value = group(["opencode/v4flash"]);
   value.providers[0].usage = { total: 14.5 };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -261,7 +300,7 @@ test("client preserves non-negative decimal cost telemetry only at usage.cost", 
   const value = group(["opencode/v4flash"]);
   value.providers[0].usage = { input: 10, output: 4, cost: 0.125 };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(result.providers[0].usage).toEqual(value.providers[0].usage);
 });
 
@@ -270,7 +309,7 @@ test("client rejects malformed usage telemetry instead of accepting it as cost e
     const value = group(["opencode/v4flash"]);
     value.providers[0].usage = usage;
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
   }
 });
@@ -281,7 +320,7 @@ test("client preserves the v3 group terminal facts beside provider members", asy
   partial.round = 2;
   partial.selected_tier = 1;
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 3, stdout: `${JSON.stringify(partial)}\n`, stderr: "" }) });
-  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(result).toMatchObject({ runtimeId: "runtime-v3", outcome: "partial", round: 2, selectedTier: 1 });
 });
 
@@ -289,7 +328,7 @@ test("client rejects a mixed-version group instead of silently converting it", a
   const bad = group(["opencode/v4flash"]);
   bad.providers[0].result_protocol = "workflowhub-result.v2";
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(bad)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -306,7 +345,7 @@ test("client rejects a legacy group instead of silently converting it for the v3
     }],
   };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(legacy)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -315,7 +354,7 @@ test("client rejects a blank broker source identity", async () => {
     const bad = group(["opencode/v4flash"]);
     bad.providers[0].identity.source_id = sourceId;
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(bad)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
   }
 });
@@ -324,7 +363,7 @@ test("client rejects impossible v3 timing before accepting provider output", asy
   const bad = group(["opencode/v4flash"]);
   bad.providers[0].timing.completed_at_ms = 9;
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(bad)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
@@ -334,15 +373,25 @@ test("client preserves a broker public error instead of flattening it into proto
     stdout: "",
     stderr: JSON.stringify({ error: { code: "REQUEST_INVALID", message: "provider_allowlist is invalid" } }),
   }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toThrow("REQUEST_INVALID: provider_allowlist is invalid");
+});
+
+test("client redacts an opaque private URI in a broker public error message", async () => {
+  const client = new ReviewProviderClient({ invoke: async () => ({
+    exitCode: 2,
+    stdout: "",
+    stderr: JSON.stringify({ error: { code: "REQUEST_INVALID", message: "opaque:private-provider-session" } }),
+  }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
+    .rejects.toThrow("REQUEST_INVALID: <host-path-redacted>");
 });
 
 test("client reports a non-json broker exit with hashes, without exposing stream contents", async () => {
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 2, stdout: "not-json", stderr: "broker failed" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toThrow(/stdout_sha256=[a-f0-9]{64}; stderr_sha256=[a-f0-9]{64}/);
 });
 
@@ -350,13 +399,13 @@ test("client does not accept a JSON-looking group on stderr as the public result
   const client = new ReviewProviderClient({ invoke: async () => ({
     exitCode: 0, stdout: "", stderr: `${JSON.stringify(group(["opencode/v4flash"]))}\n`,
   }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
 test("client classifies a spawn failure separately from a malformed public result", async () => {
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: null, stdout: "", stderr: "", spawnError: { code: "ENOENT" } }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "BROKER_SPAWN_FAILED" });
 });
 
@@ -365,7 +414,7 @@ test("client leaves opaque reviewer finding paths to the canonical runner", asyn
     const value = group(["opencode/v4flash"]);
     value.providers[0].output = JSON.stringify({ findings: [majorFinding({ path, issue: "review subject", recommendation: "keep semantic text unchanged" })] });
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .resolves.toMatchObject({ outcome: "completed", providers: [{ status: "completed", error: null }] });
   }
 });
@@ -380,13 +429,13 @@ test("client rejects private paths in broker metadata but leaves reviewer prose 
     const value = group(["opencode/v4flash"]);
     mutate(value);
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
   }
   const prose = group(["opencode/v4flash"]);
   prose.providers[0].output = JSON.stringify({ findings: [majorFinding({ issue: "prose mentions /private/example without exposing it as metadata", recommendation: "keep prose" })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(prose)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
 });
 
@@ -394,7 +443,7 @@ test("client leaves private paths inside a fenced reviewer result to the canonic
   const fenced = group(["opencode/v4flash"]);
   fenced.providers[0].output = "```json\n{" + JSON.stringify({ findings: [majorFinding({ path: "/private/fenced-review.md", issue: "issue", recommendation: "recommendation" })]}).slice(1) + "\n```";
   const fencedClient = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(fenced)}\n`, stderr: "" }) });
-  await expect(fencedClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(fencedClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .resolves.toMatchObject({ outcome: "completed", providers: [{ status: "completed", error: null }] });
 });
 
@@ -406,7 +455,7 @@ test("client rejects a private path in broker error metadata", async () => {
   badCode.providers[0].attempts[0].status = "failed";
   badCode.providers[0].attempts[0].error = badCode.providers[0].error;
   const codeClient = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(badCode)}\n`, stderr: "" }) });
-  await expect(codeClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(codeClient.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
 });
 
@@ -416,7 +465,7 @@ test("client allows slash notation that follows a Unicode word", async () => {
     path: "requirements/open_risks.json", issue: "代码/AC/oracle/接口变化需要重新绑定事实", recommendation: "补齐当前事实",
   })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
 });
 
@@ -426,7 +475,7 @@ test("client allows provider-relative API routes", async () => {
     path: "/api/items/:id", issue: "保持既有 API 语义", recommendation: "保留当前路由契约",
   })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
 });
 
@@ -441,7 +490,7 @@ test("client accepts truthful null deadline and timing for an unavailable provid
   provider.timing = { started_at_ms: null, completed_at_ms: null, duration_ms: null };
   value.outcome = "unavailable";
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 3, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" });
   expect(result.providers[0].execution.deadline_ms).toBeNull();
   expect(result.providers[0].timing).toEqual({ started_at_ms: null, completed_at_ms: null, duration_ms: null });
 });
@@ -457,7 +506,7 @@ test("client rejects inconsistent duration and malformed structural fields", asy
     const value = group(["opencode/v4flash"]);
     mutate(value);
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
       .rejects.toMatchObject({ code: expect.stringMatching(/PROTOCOL_INCOMPATIBLE|PUBLIC_RESULT_INVALID/) });
   }
 });
@@ -466,6 +515,67 @@ test("client preserves file URI notation inside review content", async () => {
   const value = group(["opencode/v4flash"]);
   value.providers[0].output = JSON.stringify({ findings: [majorFinding({ path: "requirements/review.json", issue: "quoted file://host/private/review.json in prose", recommendation: "keep prose" })] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
-  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), minimumHeterologous: 1, prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
+});
+
+test("client consumes non-terminal provider health facts and tolerates additive envelope keys", async () => {
+  const envelope = {
+    version: "workflowhub-run.v1",
+    request_id: "request-id",
+    runtime_id: "runtime-v3",
+    state: "running",
+    material_id: "material-id",
+    providers: {
+      "opencode/v4flash": { status: "failed", error: { code: "PROCESS_STALLED" }, last_progress_at_ms: 120 },
+      "codex/luna": { status: "running", error: null, last_progress_at_ms: 240 },
+    },
+    future_optional_field: true,
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(envelope)}\n`, stderr: "" }) });
+  const result = await client.statusManaged({
+    requestId: "request-id",
+    runtimeId: "runtime-v3",
+    hostProvider: "codex/terra",
+    providers: ["opencode/v4flash", "codex/luna"],
+    materials: materials(),
+  });
+
+  expect(result).toMatchObject({
+    state: "running",
+    providers: {
+      "opencode/v4flash": { status: "failed", error: { code: "PROCESS_STALLED" }, last_progress_at_ms: 120 },
+      "codex/luna": { status: "running", error: null, last_progress_at_ms: 240 },
+    },
+  });
+});
+
+test("client projects non-terminal envelopes without providers to the canonical five fields", async () => {
+  const envelope = {
+    version: "workflowhub-run.v1",
+    request_id: "request-id",
+    runtime_id: "runtime-v3",
+    state: "running",
+    material_id: "material-id",
+    future_optional_field: true,
+    additive_unknown_key: "must-not-cross-trust-boundary",
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(envelope)}\n`, stderr: "" }) });
+  const result = await client.statusManaged({
+    requestId: "request-id",
+    runtimeId: "runtime-v3",
+    hostProvider: "codex/terra",
+    providers: ["opencode/v4flash"],
+    materials: materials(),
+  });
+
+  expect(result).toEqual({
+    version: "workflowhub-run.v1",
+    request_id: "request-id",
+    runtime_id: "runtime-v3",
+    state: "running",
+    material_id: "material-id",
+  });
+  expect(Object.keys(result).sort()).toEqual(["material_id", "request_id", "runtime_id", "state", "version"]);
+  expect(Object.isFrozen(result)).toBe(true);
 });

@@ -192,7 +192,9 @@ build-spec 只消费已确认的方向和真实事实，不再替用户补产品
 9. `review-frozen-spec`：对当前 spec 做一次 advice review，保存真实 provenance。
 10. `main-agent-disposes-findings`：在本 stage 修复有效规格问题，记录其他 finding 的理由。
 11. `stage-end-spec-analyze`：检查原始需求、decision-log、spec 语义、用户流程和证据。
-12. `publish-spec-result`：交接规格和六项大白话摘要。
+12. `publish-spec-result`：交接规格和六项大白话摘要。`freeze-spec` 与
+    `review-frozen-spec` 之后不得改写 decision-log.md；规格歧义按
+    `fallback_protocol` 路由回 `make-decision`。
 
 ### 产物、完成与失败边界
 
@@ -236,7 +238,9 @@ build-plan 以 `spec.md` 为原材料设计实现边界、测试 oracle 和 phas
 11. `final-spec-analyze`：这是 build-plan 的历史兼容名称，语义上就是 stage-end
     `spec-analyze`；它检查原始需求、decision-log、spec、plan、tasks、所有 DEFER/OPEN 和
     每个 task oracle 的真实语义与证据。
-12. `publish-plan-result`：交接 plan、tasks 和六项摘要。
+12. `publish-plan-result`：交接 plan、tasks 和六项摘要。build-plan step 12
+    必须先取得人工确认；确认后只允许写 `tasks.md` 执行状态填写区，不能
+    改写 `plan.md` 语义段。
 
 ### 产物、完成与失败边界
 

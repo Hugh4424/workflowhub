@@ -42,7 +42,7 @@ const tasks = `# Tasks
 - **acceptance_role**：acceptance
 - **e2e_scope**：ui
 - **AC**：AC-EXE-001
-- **acceptance_data**：\`[{"source":"qa/browser","sample":"real page fixture","scenario":"user saves settings","tier":"browser"},{"source":"service/api","sample":"real request","scenario":"service persists settings","tier":"service"},{"source":"command/cli","sample":"real task store","scenario":"command verifies evidence","tier":"command"}]\`
+- **acceptance_data**：\`[{"source":"qa/browser","sample":"real page fixture","scenario":"user saves settings","tier":"browser"},{"source":"service/api","sample":"real request","scenario":"service persists settings","tier":"service","execution":{"module_ref":"tests/accept-service.mjs","export_name":"accept","input":{"sample":"real request"},"timeout_ms":5000}},{"source":"command/cli","sample":"real task store","scenario":"command verifies evidence","tier":"command","execution":{"command":"node","args":["tests/accept-command.mjs"],"timeout_ms":5000}}]\`
 `;
 
 const invalidDeclaredTasks = `# Tasks
@@ -803,6 +803,20 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(observed.argv).toEqual(["$(not-a-shell); literal"]);
     expect(result.quality_status).toBe("incomplete");
     expect(JSON.stringify(records)).not.toContain('"run_id":"p9-attempt-A"');
+  });
+
+  it("does not let one failed AC assertion hide a passed sibling leaf", async () => {
+    const rows = p9Rows();
+    rows[1] = {
+      ...rows[1],
+      assertions: [{ id: "failed-sibling-only", expected: "persisted", actual: "not-persisted" }],
+    };
+    const state = p9Fixture({ rows });
+    const result = await p9Execute(state);
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({ status: "missing", execution_items: [{ status: "failed" }] });
+    const records = p9PerAc(state, result).records.sort((left, right) => left.subject.localeCompare(right.subject));
+    expect(records.map(({ subject_fact }) => subject_fact.status)).toEqual(["passed", "failed"]);
   });
 
   it("executes command ACs with a runtime-owned current-session binding when no stage outcome is supplied", async () => {

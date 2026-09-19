@@ -6482,6 +6482,49 @@ function taskFieldText(value) {
   return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1").trim();
 }
 
+function concreteAcceptanceText(value) {
+  return typeof value === "string"
+    && value.trim() !== ""
+    && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+}
+
+function acceptanceExecutionErrors(scenario, label) {
+  const tier = taskFieldText(scenario?.tier).toLowerCase();
+  if (tier === "browser") {
+    return scenario?.execution === undefined
+      ? []
+      : [`${label}.execution is not allowed for browser; use the browser-QA contract`];
+  }
+  if (tier !== "command" && tier !== "service") return [];
+  const execution = scenario?.execution;
+  if (!execution || typeof execution !== "object" || Array.isArray(execution)) {
+    return [`${label}.execution is required for ${tier}`];
+  }
+  const keys = tier === "command"
+    ? ["command", "args", "timeout_ms"]
+    : ["module_ref", "export_name", "input", "timeout_ms"];
+  if (Object.keys(execution).some((key) => !keys.includes(key))
+      || keys.some((key) => !Object.hasOwn(execution, key))
+      || !Number.isSafeInteger(execution.timeout_ms)
+      || execution.timeout_ms <= 0) {
+    return [`${label}.execution is invalid for ${tier}`];
+  }
+  if (tier === "command"
+      && (!concreteAcceptanceText(execution.command)
+        || !Array.isArray(execution.args)
+        || execution.args.some((arg) => typeof arg !== "string"))) {
+    return [`${label}.execution is invalid for command`];
+  }
+  if (tier === "service"
+      && (!concreteAcceptanceText(execution.module_ref)
+        || execution.module_ref.startsWith("/")
+        || execution.module_ref.split(/[\\/]/).includes("..")
+        || !concreteAcceptanceText(execution.export_name))) {
+    return [`${label}.execution is invalid for service`];
+  }
+  return [];
+}
+
 function parseE2eDecisionRefs(value, { knownDecisionRefs = null } = {}) {
   const raw = taskFieldText(value);
   if (raw === "") return { refs: [], errors: ["e2e_decision_refs is required for high_risk_user_visible"] };
@@ -6745,9 +6788,7 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionL
   const deliveryRows = rows.filter((row) => hasField(row, "acceptance_role")
     || hasField(row, "acceptance_data") || e2eFields.some((field) => hasField(row, field)));
   if (deliveryRows.length > 0) {
-    const concreteText = (value) => typeof value === "string"
-      && value.trim() !== ""
-      && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+    const concreteText = concreteAcceptanceText;
     const acceptanceRows = rows.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "acceptance");
     if (acceptanceRows.length === 0) errors.push("delivery contract requires an explicit acceptance_role=acceptance task");
     const finalAcceptance = acceptanceRows.at(-1);
@@ -6783,6 +6824,9 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionL
         }
         if (concreteText(scenario?.tier) && !["browser", "service", "command"].includes(scenario.tier.trim())) {
           errors.push(`${row.id} acceptance_data[${index}].tier is unsupported`);
+        }
+        if (["browser", "service", "command"].includes(taskFieldText(scenario?.tier).toLowerCase())) {
+          errors.push(...acceptanceExecutionErrors(scenario, `${row.id} acceptance_data[${index}]`));
         }
       }
       if (row.id === finalAcceptance?.id && (requiresTypedE2e || e2eFields.some((field) => hasField(row, field)))) {
@@ -6882,21 +6926,10 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
         errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].tier is unsupported`);
         continue;
       }
-      if (scenario.execution !== undefined) {
-        const execution = scenario.execution;
-        const keys = tier === "command" ? ["command", "args", "timeout_ms"] : ["module_ref", "export_name", "input", "timeout_ms"];
-        const valid = execution && typeof execution === "object" && !Array.isArray(execution)
-          && tier !== "browser" && Object.keys(execution).every((key) => keys.includes(key))
-          && keys.every((key) => Object.hasOwn(execution, key))
-          && Number.isSafeInteger(execution.timeout_ms) && execution.timeout_ms > 0
-          && (tier === "command"
-            ? concrete(execution.command) && Array.isArray(execution.args) && execution.args.every((arg) => typeof arg === "string")
-            : concrete(execution.module_ref) && !execution.module_ref.startsWith("/")
-              && !execution.module_ref.split(/[\\/]/).includes("..") && concrete(execution.export_name));
-        if (!valid) {
-          errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].execution is invalid for ${tier}`);
-          continue;
-        }
+      const executionErrors = acceptanceExecutionErrors(scenario, `${row.heading_id ?? "acceptance task"} acceptance_data[${index}]`);
+      if (executionErrors.length > 0) {
+        errors.push(...executionErrors);
+        continue;
       }
       scenarios.push(Object.freeze({
         task_id: row.heading_id,

@@ -103,6 +103,57 @@ function contentHash(text) {
 }
 
 describe("review record route", () => {
+  it("writes provider process and parse outcomes through the canonical attempt readback", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(),
+      status: "available-with-failures",
+      outcome: "unavailable",
+      provider_results: [{
+        ...baseResult().provider_results[0],
+        status: "failed",
+        error: { code: "PROCESS_TIMEOUT", message: "provider timed out" },
+        execution: { process_outcome: "timeout", parse_outcome: "empty_output" },
+      }],
+      findings: [],
+    };
+
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+
+    validateSchema("attempt", attempt);
+    expect(attempt.provider_attempts[0]).toMatchObject({
+      status: "failed",
+      process_outcome: "timeout",
+      parse_outcome: "empty_output",
+      error: { code: "PROCESS_TIMEOUT" },
+    });
+  });
+
+  it("preserves explicit null producer outcomes without replacing the error fallback", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(),
+      status: "available-with-failures",
+      provider_results: [{
+        ...baseResult().provider_results[0],
+        status: "failed",
+        error: { code: "PROCESS_DEAD", message: "provider exited" },
+        execution: { process_outcome: null, parse_outcome: null },
+      }],
+      findings: [],
+    };
+
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+
+    expect(attempt.provider_attempts[0]).toMatchObject({
+      process_outcome: null,
+      parse_outcome: null,
+      error: { code: "PROCESS_DEAD" },
+    });
+  });
+
   it("persists an available simple review result", async () => {
     const { task, kernel } = makeTask();
     const result = baseResult();
@@ -1343,6 +1394,43 @@ describe("T006 reviewed reuse and historical review integrity", () => {
     expect(calls).toBe(1);
     expect(second).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: null });
   });
+
+  it("does not reuse a zero-member REVIEW_WAIT_EXCEEDED fact and admits judged retry", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bounded review fixture" } };
+    let calls = 0;
+    const runRound = async (prepared) => {
+      calls += 1;
+      if (calls <= 2) {
+        return {
+          status: "unavailable", stage: "build-code", review_track: null, review_kind: null,
+          material_id: createSimpleReviewPacket(prepared).material_id, runtime_id: null,
+          outcome: "unavailable", provider_results: [], findings: [],
+          error: { code: "REVIEW_WAIT_EXCEEDED", message: "managed review wait exceeded the bounded caller wait" },
+        };
+      }
+      return { ...baseResult(), material_id: createSimpleReviewPacket(prepared).material_id };
+    };
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(first.dispatch_state).toBe("dispatched");
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(second.reused).not.toBe(true);
+    expect(second).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
+
+    const retry = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: {
+        ...request,
+        materials: { implementation: "bounded review fixture after judged retry" },
+        retry: { requested: true, basis: "material_changed", reason: "review input was materially changed" },
+      },
+      runRound,
+    });
+    expect(calls).toBe(3);
+    expect(retry.retry).toMatchObject({ requested: true, admitted: true, basis: "material_changed" });
+    expect(retry.result_ref).toBeTruthy();
+  });
   it("reuses original semantic refs across task-only revision changes for the same reviewed materials", async () => {
     const { task, kernel, artifacts } = makeTask();
     const runner = countedRunner();
@@ -1396,6 +1484,61 @@ describe("T006 reviewed reuse and historical review integrity", () => {
     const result = await recordSimpleReviewRequest({ task, kernel, request: { ...input(), subject_kind: "phase", phase_id: "P2", review_scope: "phase" }, runRound: runner.runRound });
     expect(runner.calls).toBe(1);
     expect(result.result_ref).toBeTruthy();
+  });
+});
+
+describe("T005 managed source/material drift", () => {
+  it("stops polling on material identity drift, records the failed attempt, and detaches without cancelling", async () => {
+    const { task, kernel, artifacts } = makeTask();
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "review-record-source-material-drift-")));
+    roots.push(attachmentRoot);
+    const provider = "other/model";
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "source drift during wait" } };
+    const calls = [];
+    const runRound = (input) => runSimpleReview(input, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [provider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({
+        providers: [provider],
+        provider_identities: { [provider]: { source_id: "trusted-source", config_id: "trusted-config" } },
+        provider_models: { [provider]: "trusted-model" },
+      }),
+      client: {
+        async startManaged(value) {
+          calls.push("start");
+          return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: "runtime-source-drift", state: "running", material_id: value.materials.materialId };
+        },
+        async statusManaged(value) {
+          calls.push("status");
+          artifacts.writeAtomic("spec.md", "source/material revision drifted while waiting\n");
+          return {
+            version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: "runtime-source-drift",
+            state: "running", material_id: "f".repeat(64),
+            providers: { [provider]: { provider, status: "running", session_id: "session-source-drift", last_progress_at_ms: 11, error: null } },
+          };
+        },
+        async cancelManaged() {
+          calls.push("cancel");
+          throw new Error("source drift must detach the live session instead of cancelling it");
+        },
+      },
+      managedTerminalWaitMs: 0,
+      managedStatusPollMs: 0,
+    });
+
+    const refs = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(calls).toEqual(["start", "status"]);
+    expect(calls).not.toContain("cancel");
+    expect(refs).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", result_ref: null });
+    expect(attempt).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "dispatched",
+      error: { code: "REVIEW_SOURCE_DRIFT" },
+      provider_attempts: [{ session_id: "session-source-drift", runtime_id: "runtime-source-drift" }],
+    });
+    expect(attempt.error.message).toMatch(/source|material|revision|drift/i);
+    expect(task.readRecord(refs.report_ref)).toContain("REVIEW_SOURCE_DRIFT");
   });
 });
 

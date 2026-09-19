@@ -75,7 +75,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "5926c35181a68516423139c10ad5431ee729f009be7f99566e2f174f1de5b418"
+      "sha256": "c06a5200485289a6ff9f8a4a9095951ecaa34038f350fed1c1d84fc6d29d34a1"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -87,11 +87,11 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "cf2efeea74fbc5089cb62154e726f82ee7ff338fcc0eb5cccdc7395c1158b9f5"
+      "sha256": "a2eea1c722a2511ebfd96cf9093760989d005109a151aca260840ddc6ade891e"
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "aee8d0c053aeb0b43b2e539c182222e8a62715c0198c1b2399c6180c2564c1ac"
+      "sha256": "2ad1d00e428a47baf9a7116bfa6f2c841e612b6c96742b94d0e81221300c4a98"
     },
     {
       "path": "scripts/review-runner.mjs",
@@ -111,15 +111,15 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "1338b0d106322f25bafa5a620e17c2193d8a42a38f0bbf0ef1026a1c61dd4d03"
+      "sha256": "353ed37cd83ee0fec1e1b56383158f87e3eb3e273e895c27030f8d6c7483ed44"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "0bb04ac18fe7ab7da5016845f6347e22a2ba8877af38369a0c5bf488ca06bf80"
+      "sha256": "593d3a0b64cff63216a2c4870c27d915777825a4c613fc3ccc369b989d7359ee"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "1b60f3914fe718ec73488ad7d662d95c550691faae6365328534a13836ca01f1"
+      "sha256": "698fe261bfd012a9e6172f43e37b4e293ab795df7728ba61a76e5adf1c871751"
     },
     {
       "path": "stage-skill-plan.json",
@@ -127,7 +127,7 @@
     },
     {
       "path": "scripts/review-input-bounds.mjs",
-      "sha256": "c882ab9d8dfe6c90e2d545e282da093145baf0d8d2a312f3cafe3e58d74cc105"
+      "sha256": "859b2a437407239e792a6a1ffbeedacdff5a1445934a2dbc3cb52ff17a289eeb"
     }
   ]
 }

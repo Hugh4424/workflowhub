@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -18,7 +18,7 @@ const packet = createSimpleReviewPacket({ stage: "verify-code", materials, authe
 const materialId = packet.material_id;
 const evidenceHash = packet.authenticated_evidence_sha256;
 const roots = [];
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+afterEach(() => { vi.useRealTimers(); while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 function reviewResult(request, overrides = {}) {
   return {
@@ -125,6 +125,32 @@ function managedWire(state, { requestId = managedRequestId, runtimeId = managedR
   };
   if (state === "terminal") value.group = managedGroup(outcome, member);
   return { exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" };
+}
+
+function managedHealthEnvelope({ requestId = managedRequestId, runtimeId = managedRuntime, envelopeMaterialId = materialId } = {}) {
+  return {
+    version: "workflowhub-run.v1",
+    request_id: requestId,
+    runtime_id: runtimeId,
+    state: "running",
+    material_id: envelopeMaterialId,
+    providers: {
+      [managedProvider]: {
+        provider: managedProvider,
+        tier: 0,
+        status: "failed",
+        started_at_ms: 10,
+        completed_at_ms: 20,
+        process_alive_at_ms: 20,
+        last_progress_at_ms: 1_234,
+        duration_ms: 10,
+        retry_count: 0,
+        progress_events: 1,
+        error: { code: "PROVIDER_PRINT_TIMEOUT" },
+      },
+    },
+    ignored_fact: "not part of the managed envelope contract",
+  };
 }
 
 // workflowhub-result.v3 managed group/member shape, copied from the broker's
@@ -367,6 +393,69 @@ describe("managed review lifecycle boundary", () => {
     expect(calls.map(({ command }) => command)).toEqual(["start", "status"]);
   });
 
+  it("exposes non-terminal member health facts while ignoring unrelated envelope keys", async () => {
+    const client = new ReviewProviderClient({
+      invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(managedHealthEnvelope())}\n`, stderr: "" }),
+    });
+
+    const status = await client.statusManaged(managedContext());
+    expect(status).toMatchObject({
+      version: "workflowhub-run.v1",
+      request_id: managedRequestId,
+      runtime_id: managedRuntime,
+      state: "running",
+      material_id: materialId,
+      providers: {
+        [managedProvider]: {
+          status: "failed",
+          error: { code: "PROVIDER_PRINT_TIMEOUT" },
+          last_progress_at_ms: 1_234,
+        },
+      },
+    });
+    expect(status.ignored_fact).toBeUndefined();
+  });
+
+  it("consumes a failed non-terminal member immediately without waiting or cancelling", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-member-health-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const client = {
+      async startManaged(value) {
+        calls.push("start");
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged(value) {
+        calls.push("status");
+        return managedHealthEnvelope({ requestId: value.requestId, runtimeId: managedRuntime, envelopeMaterialId: value.materials.materialId });
+      },
+      async cancelManaged() { calls.push("cancel"); throw new Error("member health facts must not cancel the managed runtime"); },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed member health bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      }, provider_models: { [managedProvider]: "review-model" } }),
+      client,
+      managedTerminalWaitMs: 0,
+      managedStatusPollMs: 0,
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider_results: [{
+        status: "failed",
+        error: { code: "PROVIDER_PRINT_TIMEOUT" },
+        last_progress_at_ms: 1_234,
+      }],
+    });
+    expect(calls).toEqual(["start", "status"]);
+  });
+
   it("keeps polling a live managed session by default without cancelling it", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-live-session-")));
     roots.push(attachmentRoot);
@@ -466,6 +555,49 @@ describe("managed review lifecycle boundary", () => {
     expect(result).toMatchObject({ status: "unavailable", runtime_id: managedRuntime,
       error: { code: "REVIEW_WAIT_EXCEEDED" } });
     expect(calls).toEqual(["start", "status"]);
+  });
+
+  it("rechecks terminal state at the unchanged 20-minute boundary before returning", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-final-recheck-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    let polls = 0;
+    const client = {
+      async startManaged(value) {
+        calls.push("start");
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged(value) {
+        calls.push("status");
+        polls += 1;
+        if (polls === 1) {
+          vi.setSystemTime(1_200_000);
+          return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+            state: "running", material_id: value.materials.materialId };
+        }
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "terminal", material_id: value.materials.materialId, group: managedGroup("completed") };
+      },
+      async cancelManaged() { calls.push("cancel"); throw new Error("the final wait recheck must not cancel the broker"); },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed final recheck bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      }, provider_models: { [managedProvider]: "review-model" } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+
+    expect(result).toMatchObject({ status: "available", outcome: "completed" });
+    expect(calls).toEqual(["start", "status", "status"]);
+    expect(calls).not.toContain("cancel");
   });
 
   it("uses the managed V2 start/status/cancel public seam with exact envelopes", async () => {

@@ -31,6 +31,7 @@ continues without guessing.
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
@@ -108,6 +109,8 @@ for validation before claiming that build-plan itself is accepted. This
 confirmation does not turn confirmation into a machine work permit. Missing
 review facts do not block continued work: continue research, planning, or
 repair in this same task.
+确认后唯一可写区是 tasks.md 的执行状态填写区，plan.md 语义段不得再改。
+改变方向的规划歧义按现有 fallback protocol 路由回 `make-decision`。
 Do not implement code or execute RED/GREEN; plan the test scenarios, commands,
 expected outcomes, and evidence for `build-code` to execute later.
 
@@ -222,6 +225,15 @@ For every behavior change, design a RED/GREEN pair using the same executable
 non-zero assertion failure; GREEN expects `0` and keeps named negative behavior.
 `gate_cmd` names a test command only; it never decides whether an agent may
 start, continue, or publish work.
+
+The final aggregate remains one ordinary task card. Prefer a bounded command
+for the current task, reuse current canonical test receipts when they already
+cover the same scope, and do not add unrelated provider or cross-repository
+work merely for convenience. If a genuinely required cross-repository check is
+part of the AC, keep it explicit with its actual scope and limits. Splitting a
+long aggregate into ordinary tasks is optional plan authoring, not a runtime
+gate; a timeout remains `incomplete` and does not trigger an automatic full
+rerun.
 
 Each file appears in one phase boundary and each task file list is a subset of
 that phase. Parallel phases/tasks require independent inputs, dependencies, and

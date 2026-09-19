@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { MAX_REVIEWER_OUTPUT_BYTES, parseReviewerOutput } from "../review-output.mjs";
-import { aggregateProviderResults, classificationSummary, classifyAttempt, renderReviewReport, writeSemanticResult } from "../review-result.mjs";
+import { aggregateProviderResults, classificationSummary, classifyAttempt, classifyAttemptTaxonomy, renderReviewReport, writeSemanticResult } from "../review-result.mjs";
 import { actionableSeriousFindings, findReusableReviewResult, recordMissingRouteUnavailable, reviewCycleDecision, verifyFinalSubject } from "../review-runner.mjs";
 import { createSimpleReviewPacket, dispatchFrozenProviderInput, runSimpleReview, serializeProviderInput } from "../simple-review-runner.mjs";
 import { createTask } from "../../../../runtime/task/task-handle.mjs";
@@ -96,6 +96,20 @@ describe("current wh-review helpers", () => {
     expect(classifyAttempt(failed)).toBe("OUTPUT_INVALID");
     expect(classificationSummary({ provider_attempts: [completed, failed] })).toMatchObject({
       attempt: { completed: 1, OUTPUT_INVALID: 1 }, failed_duration_ms: 20, quality_denominator: 1,
+    });
+  });
+
+  it("consumes process and parse outcomes before falling back to error/status", () => {
+    expect(classifyAttemptTaxonomy({
+      status: "failed", error: { code: "PROCESS_DEAD" },
+      process_outcome: "timeout", parse_outcome: "empty_output",
+    })).toMatchObject({ code: "PROCESS_TIMEOUT", category: "process_failure" });
+    expect(classifyAttemptTaxonomy({
+      status: "failed", error: { code: "PROCESS_DEAD" },
+      process_outcome: "ok", parse_outcome: "invalid",
+    })).toMatchObject({ code: "PROVIDER_OUTPUT_INVALID", category: "parse_failure" });
+    expect(classifyAttemptTaxonomy({ status: "failed", error: { code: "PROCESS_DEAD" } })).toMatchObject({
+      code: "PROCESS_DEAD", category: "unknown",
     });
   });
 

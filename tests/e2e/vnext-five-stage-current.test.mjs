@@ -894,6 +894,100 @@ describe("current vNext five-stage runtime", () => {
     expect(result.completion.status).toBe("completed");
   });
 
+  it("binds each make-decision review fact to its own track and keeps missing tracks fail-closed", async () => {
+    const state = fixture("make-decision-review-fact-binding");
+    const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    const direction = writeFormalReviewFixture({
+      task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction",
+    });
+    const detail = writeFormalReviewFixture({
+      task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail",
+    });
+    const runTrack = (receiptName, resultRef) => runOfficialStage(
+      "make-decision",
+      context("make-decision", state),
+      { receipts: { [receiptName]: resultRef } },
+    );
+    const factFor = (result, subject) => result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.kind === "review" && fact.subject === subject);
+
+    const directionOnly = await runTrack("direction_review", direction.resultRef);
+    const detailAfterDirection = factFor(directionOnly, "detail_review");
+    expect(factFor(directionOnly, "direction_review")).toMatchObject({
+      status: "recorded",
+      evidence: [{ ref: direction.resultRef }],
+    });
+    expect(detailAfterDirection).toMatchObject({ status: "missing" });
+    expect(detailAfterDirection.evidence.map(({ ref }) => ref)).not.toContain(direction.resultRef);
+
+    const detailOnly = await runTrack("detail_review", detail.resultRef);
+    const directionAfterDetail = factFor(detailOnly, "direction_review");
+    expect(factFor(detailOnly, "detail_review")).toMatchObject({
+      status: "recorded",
+      evidence: [{ ref: detail.resultRef }],
+    });
+    expect(directionAfterDetail).toMatchObject({ status: "missing" });
+    expect(directionAfterDetail.evidence.map(({ ref }) => ref)).not.toContain(detail.resultRef);
+
+    const reviewFacts = state.task.listCanonicalQualityFactRefs()
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .filter((fact) => fact.kind === "review" && ["direction_review", "detail_review"].includes(fact.subject));
+    const recordedReviewResultRefs = (subject) => [...new Set(reviewFacts
+      .filter((fact) => fact.subject === subject && fact.status === "recorded")
+      .flatMap((fact) => fact.evidence?.map(({ ref }) => ref) ?? [])
+      .filter((ref) => ref.startsWith("quality/reviews/results/")))];
+    expect(recordedReviewResultRefs("direction_review")).toEqual([direction.resultRef]);
+    expect(recordedReviewResultRefs("detail_review")).toEqual([detail.resultRef]);
+  });
+
+  it("rejects cross-track and non-result make-decision review bindings", async () => {
+    const cases = [
+      ["cross-track result", (direction, detail, hash) => ({
+        direction: { result_ref: detail.resultRef, result_hash: hash(detail.resultRef), snapshot_tree: direction.snapshotTree },
+        detail: { result_ref: detail.resultRef, result_hash: hash(detail.resultRef), snapshot_tree: detail.snapshotTree },
+      })],
+      ["attempt fallback", (direction, detail, hash) => ({
+        direction: { attempt_ref: direction.resultRef, attempt_hash: hash(direction.resultRef), snapshot_tree: direction.snapshotTree },
+        detail: { result_ref: detail.resultRef, result_hash: hash(detail.resultRef), snapshot_tree: detail.snapshotTree },
+      })],
+      ["confirmation fallback", (direction, detail, hash) => ({
+        direction: { confirmation_ref: direction.resultRef, confirmation_hash: hash(direction.resultRef), snapshot_tree: direction.snapshotTree },
+        detail: { result_ref: detail.resultRef, result_hash: hash(detail.resultRef), snapshot_tree: detail.snapshotTree },
+      })],
+    ];
+
+    for (const [label, makeReviews] of cases) {
+      const state = fixture(`make-decision-review-negative-${label.replaceAll(" ", "-")}`);
+      const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+      const direction = writeFormalReviewFixture({
+        task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction",
+      });
+      const detail = writeFormalReviewFixture({
+        task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail",
+      });
+      const reviews = makeReviews({ ...direction, snapshotTree: snapshot.tree }, { ...detail, snapshotTree: snapshot.tree }, (ref) => sha256(state.task.readRecord(ref)));
+      const result = await runStage("make-decision", context("make-decision", state), async () => {
+        const currentEvidence = evidence(state, "make-decision");
+        return {
+          ...currentEvidence,
+          facts: {
+            ...currentEvidence.facts,
+            completion_subjects: { ...currentEvidence.facts.completion_subjects, ...completeConvergenceFacts() },
+            reviews,
+          },
+        };
+      });
+      const factFor = (subject) => result.quality_fact_refs
+        .map((ref) => JSON.parse(state.task.readRecord(ref)))
+        .find((fact) => fact.kind === "review" && fact.subject === subject);
+      const directionFact = factFor("direction_review");
+      expect(directionFact, label).toMatchObject({ status: "missing" });
+      expect(directionFact.evidence.map(({ ref }) => ref).some((ref) => ref.startsWith("quality/reviews/results/"))).toBe(false);
+      expect(factFor("detail_review"), label).toMatchObject({ status: "recorded" });
+    }
+  });
+
   it("validates publication options before invoking the stage handler", async () => {
     const state = fixture("publication-preflight-before-handler");
     let invoked = false;

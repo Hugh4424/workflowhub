@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertFresh, authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
 const materialRevision = `revision-${"a".repeat(64)}`;
@@ -44,10 +44,8 @@ describe("per-AC immutable material binding contract [C5]", () => {
 
     expect(fact.value.material_revision).toBe(materialRevision);
     expect(fact.value.material_revision).not.toBe(editedMaterialRevision);
-    expect(assertFresh({ ref: fact.ref, sha256: fact.sha256, snapshot_tree: snapshot }, {
-      read,
-      snapshotTree: snapshot,
-    })).toBe(true);
+    expect(authenticateQualityFactRecord({ ref: fact.ref, sha256: fact.sha256 }, { read }))
+      .toMatchObject({ status: "recorded", authenticated: true });
   });
 
   it("does not treat a material edit as a reason to rewrite or rerun the existing fact", () => {
@@ -73,11 +71,8 @@ describe("per-AC immutable material binding contract [C5]", () => {
     const { fact, read } = factFixture();
     const changedRead = (ref) => ref === fact.ref ? `${fact.raw}tampered` : read(ref);
 
-    expect(() => assertFresh({
-      ref: fact.ref,
-      sha256: fact.sha256,
-      snapshot_tree: snapshot,
-    }, { read: changedRead, snapshotTree: snapshot })).toThrow(/hash changed/);
+    expect(authenticateQualityFactRecord({ ref: fact.ref, sha256: fact.sha256 }, { read: changedRead }))
+      .toMatchObject({ status: "unavailable", authenticated: false });
   });
 
   it("keeps a nested evidence byte mutation distinguishable from the original binding", () => {

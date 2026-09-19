@@ -198,12 +198,30 @@ const ATTEMPT_CLASS_CODES = new Set([
   "GROUP_OUTCOME_UNAVAILABLE",
 ]);
 
+const PROCESS_OUTCOME_CLASSIFICATION = Object.freeze({
+  exit_nonzero: "PROCESS_EXIT_NONZERO",
+  timeout: "PROCESS_TIMEOUT",
+  launch_failure: "BROKER_SPAWN_FAILED",
+});
+const PARSE_OUTCOME_CLASSIFICATION = Object.freeze({
+  invalid: "PROVIDER_OUTPUT_INVALID",
+  empty_output: "PROVIDER_NO_TERMINAL_RESULT",
+});
+
 export function classifyAttempt(providerAttempt) {
   const taxonomy = classifyAttemptTaxonomy(providerAttempt);
   return taxonomy.category === "unknown" ? "UNKNOWN" : taxonomy.code;
 }
 
 export function classifyAttemptTaxonomy(providerAttempt) {
+  const processOutcome = providerAttempt?.process_outcome;
+  if (processOutcome && processOutcome !== "ok" && PROCESS_OUTCOME_CLASSIFICATION[processOutcome]) {
+    return Object.freeze({ code: PROCESS_OUTCOME_CLASSIFICATION[processOutcome], category: "process_failure" });
+  }
+  const parseOutcome = providerAttempt?.parse_outcome;
+  if (parseOutcome && parseOutcome !== "ok" && PARSE_OUTCOME_CLASSIFICATION[parseOutcome]) {
+    return Object.freeze({ code: PARSE_OUTCOME_CLASSIFICATION[parseOutcome], category: "parse_failure" });
+  }
   const rawCode = providerAttempt?.error?.code ?? (providerAttempt?.status === "completed" ? "completed" : null);
   const code = typeof rawCode === "string" && rawCode.length > 0 ? rawCode : "UNKNOWN";
   return Object.freeze({ code, category: FAILURE_CATEGORIES[code] ?? "unknown" });
