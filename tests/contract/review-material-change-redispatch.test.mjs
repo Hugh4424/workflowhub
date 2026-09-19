@@ -111,7 +111,7 @@ describe("review material change reuse contract", () => {
     }, { instructionText: "transport instructions" })).not.toBe(materialId);
   });
 
-  it("keeps the recorded fact and canonical refs when only submitted material bytes change", async () => {
+  it("redispatches a new canonical attempt on changed material and reuses identical material", async () => {
     const state = fixture();
     let dispatches = 0;
     const runRound = async (input) => {
@@ -130,6 +130,12 @@ describe("review material change reuse contract", () => {
       resolveRouteIdentity: route,
       runRound,
     });
+    expect(first).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(dispatches).toBe(1);
+
+    // D-007 with CONTEXT.md:412 ("大纲变更后旧方向审查结果作废"): the recorded
+    // review belongs to the earlier material, so changed material must be
+    // dispatched again instead of reading back the old conclusion.
     const after = await recordSimpleReviewRequest({
       task: state.task,
       kernel: state.kernel,
@@ -138,17 +144,33 @@ describe("review material change reuse contract", () => {
       runRound,
     });
 
-    expect(dispatches).toBe(1);
-    expect(after).toMatchObject({
+    expect(dispatches).toBe(2);
+    expect(after).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(after.attempt_ref).not.toBe(first.attempt_ref);
+    expect(after.result_ref).not.toBe(first.result_ref);
+    expect(after.report_ref).not.toBe(first.report_ref);
+    expect(JSON.parse(state.task.readRecord(after.attempt_ref)).material_id)
+      .not.toBe(JSON.parse(state.task.readRecord(first.attempt_ref)).material_id);
+
+    // The unchanged material still reuses the immutable recorded refs.
+    const repeated = await recordSimpleReviewRequest({
+      task: state.task,
+      kernel: state.kernel,
+      request: { ...before, materials: { approved_spec: "material-after" } },
+      resolveRouteIdentity: route,
+      runRound,
+    });
+    expect(dispatches).toBe(2);
+    expect(repeated).toMatchObject({
       status: "recorded",
       reused: true,
       dispatch_state: "reused",
-      attempt_ref: first.attempt_ref,
-      result_ref: first.result_ref,
-      report_ref: first.report_ref,
+      attempt_ref: after.attempt_ref,
+      result_ref: after.result_ref,
+      report_ref: after.report_ref,
     });
-    expect(state.task.readRecord(first.attempt_ref)).toBe(state.task.readRecord(after.attempt_ref));
-    expect(state.task.readRecord(first.result_ref)).toBe(state.task.readRecord(after.result_ref));
+    expect(state.task.readRecord(after.attempt_ref)).toBe(state.task.readRecord(repeated.attempt_ref));
+    expect(state.task.readRecord(after.result_ref)).toBe(state.task.readRecord(repeated.result_ref));
   });
 
   it("does not redispatch a blocked quorum result for the same review fingerprint", async () => {

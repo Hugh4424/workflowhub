@@ -430,7 +430,7 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
     };
   }
 
-  it("reuses material changes without auto-dispatch and accepts one explicit retry", async () => {
+  it("redispatches changed material and accepts one explicit retry", async () => {
     const { task, kernel } = makeReviewTask();
     let dispatches = 0;
     const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
@@ -444,8 +444,11 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
       runRound,
       resolveRouteIdentity,
     });
-    expect(dispatches).toBe(1);
-    expect(changed).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    // D-007 with CONTEXT.md:412: changed material dispatches its own attempt
+    // instead of reading back the earlier review.
+    expect(dispatches).toBe(2);
+    expect(changed).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(changed.attempt_ref).not.toBe(first.attempt_ref);
     expect(first).not.toHaveProperty("review_budget");
     expect(changed).not.toHaveProperty("review_budget");
 
@@ -461,9 +464,13 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
       runRound,
       resolveRouteIdentity,
     });
-    expect(dispatches).toBe(2);
+    // The admitted retry carries its own request key, so the already-recorded
+    // material-after dispatch does not satisfy it: one more attempt is
+    // dispatched, and the identical retry then reads that attempt back.
+    expect(dispatches).toBe(3);
     expect(retried).toMatchObject({ status: "recorded", reused: false, retry: { requested: true, admitted: true } });
     expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    expect(retried.attempt_ref).not.toBe(changed.attempt_ref);
     expect(repeated).toMatchObject({ status: "recorded", reused: true, attempt_ref: retried.attempt_ref, result_ref: retried.result_ref });
   });
 
@@ -519,9 +526,11 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
     const firstP1 = await recordSimpleReviewRequest({ task, kernel, request: p1, runRound, resolveRouteIdentity });
     const firstP2 = await recordSimpleReviewRequest({ task, kernel, request: p2, runRound, resolveRouteIdentity });
     const repeatedP1 = await recordSimpleReviewRequest({ task, kernel, request: { ...p1, materials: { implementation: "phase one revised" } }, runRound, resolveRouteIdentity });
-    expect(dispatches).toBe(2);
+    expect(dispatches).toBe(3);
     expect(firstP2.attempt_ref).not.toBe(firstP1.attempt_ref);
-    expect(repeatedP1).toMatchObject({ status: "recorded", reused: true, attempt_ref: firstP1.attempt_ref });
+    expect(repeatedP1).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(repeatedP1.attempt_ref).not.toBe(firstP1.attempt_ref);
+    expect(repeatedP1.attempt_ref).not.toBe(firstP2.attempt_ref);
   });
 
   it("T011 records missing provider usage as unavailable and never as zero", () => {

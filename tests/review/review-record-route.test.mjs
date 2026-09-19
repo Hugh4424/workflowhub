@@ -640,11 +640,10 @@ describe("review flow task record", () => {
     expect(calls).toBe(2);
   });
 
-  // C5: material hash/revision is immutable provenance, not a dedup dimension.
-  // The same five-dimensional review identity reads back the prior result after
-  // the reviewed material bytes change; the current-status consumer handles
-  // material-specific authority separately.
-  it("reuses a recorded review after the submitted material bytes change", async () => {
+  // D-007 with CONTEXT.md:412: the five-dimensional tuple names which review
+  // this is, but changed submitted material is different review input, so the
+  // earlier result must not be read back. The identical material still reuses.
+  it("redispatches a recorded review when the submitted material bytes change", async () => {
     const { task, kernel } = makeTask();
     let dispatches = 0;
     const runRound = async (input) => {
@@ -654,7 +653,7 @@ describe("review flow task record", () => {
     const trustedRoute = () => ({ route_identity: "a".repeat(64) });
     const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "original reviewed bytes" } };
     const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, resolveRouteIdentity: trustedRoute, runRound });
-    expect(first).toMatchObject({ status: "recorded", reused: false });
+    expect(first).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
 
     const changed = await recordSimpleReviewRequest({
       task, kernel,
@@ -665,12 +664,27 @@ describe("review flow task record", () => {
 
     expect(changed).toMatchObject({
       status: "recorded",
+      reused: false,
+      dispatch_state: "dispatched",
+    });
+    expect(changed.attempt_ref).not.toBe(first.attempt_ref);
+    expect(changed.result_ref).not.toBe(first.result_ref);
+    expect(dispatches).toBe(2);
+
+    const repeated = await recordSimpleReviewRequest({
+      task, kernel,
+      request: { ...firstRequest, materials: { implementation: "changed reviewed bytes" } },
+      resolveRouteIdentity: trustedRoute,
+      runRound,
+    });
+    expect(dispatches).toBe(2);
+    expect(repeated).toMatchObject({
+      status: "recorded",
       reused: true,
       dispatch_state: "reused",
-      attempt_ref: first.attempt_ref,
-      result_ref: first.result_ref,
+      attempt_ref: changed.attempt_ref,
+      result_ref: changed.result_ref,
     });
-    expect(dispatches).toBe(1);
   });
 
   it("five-dimensional identity and review_result_ref readback", async () => {
@@ -1170,7 +1184,7 @@ describe("T005 request reuse and phase metadata", () => {
     expect(next).toMatchObject({ reused: true, result_ref: first.result_ref });
   });
 
-  it("reuses a failed prior review after a material-only request change", async () => {
+  it("redispatches a failed prior review when the request material changes", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "original" } };
     let calls = 0;
@@ -1180,12 +1194,23 @@ describe("T005 request reuse and phase metadata", () => {
     };
     const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
     const next = await recordSimpleReviewRequest({ task, kernel, request: { ...request, materials: { implementation: "changed" } }, runRound });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     expect(next).toMatchObject({
+      status: "recorded",
+      reused: false,
+      dispatch_state: "dispatched",
+      result_ref: null,
+    });
+    expect(next.attempt_ref).not.toBe(first.attempt_ref);
+
+    // The unchanged material still reuses the immutable transcript.
+    const repeated = await recordSimpleReviewRequest({ task, kernel, request: { ...request, materials: { implementation: "changed" } }, runRound });
+    expect(calls).toBe(2);
+    expect(repeated).toMatchObject({
       status: "recorded",
       reused: true,
       dispatch_state: "reused",
-      attempt_ref: first.attempt_ref,
+      attempt_ref: next.attempt_ref,
       result_ref: null,
     });
   });
@@ -1331,14 +1356,18 @@ describe("T006 explicit retry and current snapshot semantics", () => {
     return { stage: "build-code", host_provider: "codex/luna", materials: { implementation: material } };
   }
 
-  it("does not redispatch when only submitted material bytes change", async () => {
+  it("redispatches when the submitted material bytes change without a retry", async () => {
     const { task, kernel } = makeTask();
     let calls = 0;
     const runRound = async (input) => { calls += 1; return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id }; };
     const first = await recordSimpleReviewRequest({ task, kernel, request: request("A"), runRound });
+    const changed = await recordSimpleReviewRequest({ task, kernel, request: request("B"), runRound });
+    expect(calls).toBe(2);
+    expect(changed).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(changed.attempt_ref).not.toBe(first.attempt_ref);
     const repeated = await recordSimpleReviewRequest({ task, kernel, request: request("B"), runRound });
-    expect(calls).toBe(1);
-    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    expect(calls).toBe(2);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: changed.attempt_ref, result_ref: changed.result_ref });
   });
 
   it("admits an explicit material retry and reuses its exact retry head", async () => {

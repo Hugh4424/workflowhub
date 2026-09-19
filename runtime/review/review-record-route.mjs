@@ -515,7 +515,7 @@ function subjectMatchesAttempt(attempt, subject) {
     : actual === reviewSubjectHash(subject);
 }
 
-function findReusableReview({ history, request, routeIdentity = null, snapshotTree = null, requestKey = null, retry = null }) {
+function findReusableReview({ history, request, routeIdentity = null, snapshotTree = null, requestKey = null, retry = null, materialId = null }) {
   const requestOrigin = semanticOriginFromRecord(request);
   // An origin that cannot be reconstructed from the record fails closed: the
   // request is dispatched only when no authenticated reusable attempt exists
@@ -535,24 +535,40 @@ function findReusableReview({ history, request, routeIdentity = null, snapshotTr
     // host-classified scope/subject category of the authorized C4 definition;
     // it is never a material id, route identity, provider identity or evidence
     // hash, and it is not the K2 review_origin lifecycle value.
+    //
+    // The tuple names *which* canonical review this is. It deliberately does
+    // not name what was reviewed, so it is not by itself a sufficient reuse
+    // key: D-007 requires that a change to the submitted material must never
+    // read back the earlier review (CONTEXT.md:412, "大纲变更后旧方向审查结果
+    // 作废" -- after the outline changes the earlier direction review result is
+    // void). The recorded material identity is therefore a mandatory
+    // currentness precondition below, not a sixth dedup dimension.
     if (attempt.stage !== request.stage
         || (attempt.phase_id ?? null) !== requestPhaseId
         || (attempt.review_track ?? null) !== requestTrack
         || (attempt.review_kind ?? null) !== requestKind
         || semanticOriginFromRecord(attempt) !== requestOrigin) continue;
-    // The identity matched, so this entry is the same canonical review. The
-    // checks below are transport and integrity preconditions on the recorded
-    // attempt as a reuse target; they are deliberately not part of the key.
+    // D-007 material identity guard. The canonical attempt envelope persists
+    // `material_id`, so the submitted material of the current request must be
+    // byte-identical to the material of the recorded attempt before that
+    // attempt may be reused. Both sides must be provable: an unauthenticated
+    // current material id or a legacy attempt that predates material
+    // persistence stays fail-closed and is never reused.
+    if (!SHA256_HEX.test(materialId ?? "") || attempt.material_id !== materialId) continue;
+    // The identity matched, so this entry is the same canonical review of the
+    // same material. The checks below are transport and integrity
+    // preconditions on the recorded attempt as a reuse target; they are
+    // deliberately not part of the key.
     // The recorded route identity remains provenance. A route change does not
     // silently invalidate a historical review; an explicit judged retry gets
     // a distinct request key and is handled below.
     if (!subjectMatchesAttempt(attempt, request.subject)) continue;
     if ((attempt.authenticated_evidence_sha256 ?? null) !== authenticatedEvidenceHash(request.authenticated_evidence)) continue;
-    // Material revision and submitted material identity are provenance only.
-    // They are deliberately absent from the reuse key: editing review input
-    // must leave the immutable recorded fact readable and must not trigger a
-    // fresh dispatch. The one remaining currentness guard is the verify-code
-    // terminal review's authenticated code snapshot.
+    // `material_revision` (the specification bundle revision) stays provenance
+    // rather than a reuse-key dimension: the authenticated material identity
+    // above already decides whether the reviewed bytes are the same, and the
+    // remaining currentness guard is the verify-code terminal review's
+    // authenticated code snapshot.
     if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
     if (attempt.terminal_status === "unavailable"
         && attempt.error?.code === "REVIEW_WAIT_EXCEEDED"
@@ -978,6 +994,15 @@ function readCanonicalReviewHistory(task, scope = null) {
       [attempt.review_scope ?? (attempt.stage === "build-code" ? "integration" : null), scope.reviewScope],
     ];
     if (required.some(([actual, expected]) => actual !== expected)) return "foreign";
+    // The caller's currentness dimensions are part of the same namespace
+    // decision (D-007). A damaged record from another code snapshot or another
+    // material revision is provably not this request's namespace and must not
+    // block the current request, exactly like a foreign stage; CONTEXT.md:412
+    // makes a material change void the earlier review. The comparison is only
+    // applied when the caller supplied the dimension, so a missing scope value
+    // keeps the record unknown/fail-closed instead of silently foreign.
+    if (typeof scope.snapshotTree === "string" && attempt.snapshot_tree !== scope.snapshotTree) return "foreign";
+    if (typeof scope.materialRevision === "string" && attempt.material_revision !== scope.materialRevision) return "foreign";
     const actualSubjectHash = attemptSubjectHash(attempt);
     if (actualSubjectHash !== null && actualSubjectHash !== scope.subjectSha256) return "foreign";
     if (actualSubjectHash === null && scope.subjectSha256 !== reviewSubjectHash(null)) return "unknown";
@@ -1204,7 +1229,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     const retry = authenticateRetryDecision(retryRequest, {
       history, request, materialId, routeIdentity: routeIdentity ?? null, requestKey,
     });
-    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, snapshotTree: lockedIdentity.tree, requestKey, retry });
+    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, snapshotTree: lockedIdentity.tree, requestKey, retry, materialId });
     const retryResult = retry.requested ? {
       requested: true,
       admitted: retry.admitted,

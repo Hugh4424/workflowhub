@@ -99,7 +99,7 @@ describe("review budget deletion contract", () => {
     expect(adr).not.toMatch(/`validateReviewBudget`/);
   });
 
-  it("does not auto-dispatch on input or snapshot changes, while a judged retry is idempotent", async () => {
+  it("does not auto-dispatch on snapshot-only changes, redispatches changed material, and keeps a judged retry idempotent", async () => {
     const state = fixture();
     const baseRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
     let dispatches = 0;
@@ -125,10 +125,17 @@ describe("review budget deletion contract", () => {
     writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "ordinary code snapshot moved\n", "utf8");
     const snapshotChanged = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
 
-    expect(dispatches).toBe(1);
-    for (const value of [repeated, nullRetry, declinedRetry, materialChanged, snapshotChanged]) {
+    expect(dispatches).toBe(2);
+    for (const value of [repeated, nullRetry, declinedRetry, snapshotChanged]) {
       expect(value).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref, report_ref: first.report_ref });
     }
+    // D-007 with CONTEXT.md:412: changed material must not read back the earlier
+    // review; it dispatches its own canonical attempt. A code-snapshot-only move
+    // of build-code keeps its existing reuse behavior (snapshot currentness is
+    // only a hard guard for the verify-code terminal review).
+    expect(materialChanged).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(materialChanged.attempt_ref).not.toBe(first.attempt_ref);
+    expect(materialChanged.result_ref).not.toBe(first.result_ref);
     expect(invalidRetry).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_INVALID" }, retry: { requested: true, admitted: false } });
     expect(malformedRetry).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_INVALID" }, retry: { requested: true, admitted: false } });
 
@@ -139,7 +146,7 @@ describe("review budget deletion contract", () => {
       resolveRouteIdentity: route,
       runRound,
     });
-    expect(dispatches).toBe(1);
+    expect(dispatches).toBe(2);
     expect(unjustifiedRetry).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { requested: true, admitted: false } });
 
     const unboundProviderRetry = await recordSimpleReviewRequest({
@@ -149,7 +156,7 @@ describe("review budget deletion contract", () => {
       resolveRouteIdentity: route,
       runRound,
     });
-    expect(dispatches).toBe(1);
+    expect(dispatches).toBe(2);
     expect(unboundProviderRetry).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { requested: true, admitted: false } });
 
     const noReusableRetry = await recordSimpleReviewRequest({
@@ -163,7 +170,7 @@ describe("review budget deletion contract", () => {
       resolveRouteIdentity: route,
       runRound,
     });
-    expect(dispatches).toBe(1);
+    expect(dispatches).toBe(2);
     expect(noReusableRetry).toMatchObject({
       status: "unavailable",
       reused: false,
@@ -178,7 +185,10 @@ describe("review budget deletion contract", () => {
     routeIdentity = "b".repeat(64);
     const judgedRetryRequest = { ...baseRequest, retry: { requested: true, basis: "provider_changed", reason: "provider returned a new failure classification" } };
     const judgedRetry = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: judgedRetryRequest, resolveRouteIdentity: route, runRound });
-    expect(dispatches).toBe(2);
+    // The material change above already consumed the material-before attempt for
+    // this lineage head, so the admitted provider_changed retry dispatches a
+    // third canonical attempt under its own request key.
+    expect(dispatches).toBe(3);
     expect(judgedRetry).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { requested: true, admitted: true } });
     expect(judgedRetry.attempt_ref).not.toBe(first.attempt_ref);
     expect(judgedRetry.result_ref).not.toBe(first.result_ref);
@@ -190,7 +200,7 @@ describe("review budget deletion contract", () => {
       resolveRouteIdentity: route,
       runRound,
     });
-    expect(dispatches).toBe(2);
+    expect(dispatches).toBe(3);
     expect(idempotentJudgedRetry).toMatchObject({ reused: true, attempt_ref: judgedRetry.attempt_ref, result_ref: judgedRetry.result_ref, report_ref: judgedRetry.report_ref });
   });
 
