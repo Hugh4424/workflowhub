@@ -1,0 +1,9 @@
+{
+  "phase": "P4",
+  "planned_route": "feature",
+  "actual_route": "feature",
+  "concrete_skill": "backend-testing",
+  "reason": "Single WH managed lifecycle seam with injected client and existing Vitest lifecycle consumer.",
+  "changed_files": ["skills/wh-review/scripts/simple-review-runner.mjs", "tests/review/review-managed-lifecycle.test.mjs"],
+  "scope_limit": "source-drift cancellation only; wall-clock block untouched"
+}

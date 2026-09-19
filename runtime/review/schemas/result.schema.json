@@ -42,6 +42,7 @@
       "additionalProperties": true
     },
     "attempt_ref": { "type": "string", "minLength": 1 },
+    "discarded_facts": { "type": "array", "items": { "$ref": "#/$defs/discardedFact" } },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
     "result_ref": { "type": "string", "pattern": "^quality/reviews/results/[A-Za-z0-9._-]+\\.json$" },
     "reuse": {
@@ -82,8 +83,21 @@
     "providerOutput": {
       "type": "object", "required": ["findings"],
       "properties": {
-        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "discarded_facts": { "type": "array", "items": { "$ref": "#/$defs/discardedFact" } }
       },
+      "additionalProperties": false
+    },
+    "discardedFact": {
+      "type": "object",
+      "required": ["fact_kind", "reason"],
+      "properties": {
+        "fact_kind": { "type": "string", "minLength": 1 },
+        "finding_excerpt": { "type": "string" },
+        "dropped_key": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "anyOf": [{ "required": ["finding_excerpt"] }, { "required": ["dropped_key"] }],
       "additionalProperties": false
     },
     "finding": {

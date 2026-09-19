@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/material-workspace.test.mjs tests/contract/review-materials-contract.test.mjs skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs tests/review/review-record-route.test.mjs -t \"hard breaks|fenced code|unknown key|unknown-only|persists provider discard facts|persists an available simple review result\" --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/verify-code-repair-targeted.json",
+  "output_ref": "quality/tests/output/verify-code-repair-targeted.output",
+  "timeout_ms": 120000
+}

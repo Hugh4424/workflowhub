@@ -54,8 +54,11 @@ function findNestedFindings(value, seen = new Set()) {
   return MISSING_FINDINGS;
 }
 
-function freezeReview(findings) {
-  return Object.freeze({ findings: Object.freeze(findings) });
+function freezeReview(findings, discardedFacts = []) {
+  return Object.freeze({
+    findings: Object.freeze(findings),
+    ...(discardedFacts.length > 0 ? { discarded_facts: Object.freeze(discardedFacts) } : {}),
+  });
 }
 
 function validate(value, options) {
@@ -64,11 +67,19 @@ function validate(value, options) {
   if (findingsValue === MISSING_FINDINGS) invalid("provider output must contain findings");
   if (!Array.isArray(findingsValue)) invalid("findings must be an array");
   const findings = [];
+  const discardedFacts = [];
   findingsValue.forEach((finding, index) => {
+    if (finding && typeof finding === "object" && !Array.isArray(finding) && !severityAliases.has(finding.severity)) {
+      discardedFacts.push({
+        fact_kind: "unknown_severity_finding_dropped",
+        finding_excerpt: JSON.stringify({ severity: finding.severity ?? null, path: finding.path ?? null, line: finding.line ?? null, issue: finding.issue ?? null }),
+        reason: "unknown_severity",
+      });
+    }
     const normalized = validateFinding(finding, index, options);
     if (normalized) findings.push(normalized);
   });
-  return freezeReview(findings);
+  return freezeReview(findings, discardedFacts);
 }
 
 function jsonObjectStart(source, start) {
@@ -123,7 +134,7 @@ function validateCandidate(value, options, errors, label) {
 }
 
 function parseJsonl(raw, options, errors) {
-  let inFence = false; let validRows = 0; const findings = [];
+  let inFence = false; let validRows = 0; const findings = []; const discardedFacts = [];
   for (const line of raw.split(/\r?\n/)) {
     if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
     if (inFence || !line.trim()) continue;
@@ -136,8 +147,9 @@ function parseJsonl(raw, options, errors) {
     if (!parsed) continue;
     validRows += 1;
     findings.push(...parsed.findings);
+    discardedFacts.push(...(parsed.discarded_facts ?? []));
   }
-  return validRows > 0 ? freezeReview(findings) : null;
+  return validRows > 0 ? freezeReview(findings, discardedFacts) : null;
 }
 
 function parseUniqueFence(raw, options, errors) {

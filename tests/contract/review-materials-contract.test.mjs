@@ -72,6 +72,50 @@ afterEach(() => {
 });
 
 describe("current review material and capture contracts", () => {
+  it("RED: removes the dead phase delivery export while keeping the active inline limit", async () => {
+    const materials = await import("../../skills/wh-review/scripts/review-materials.mjs");
+    expect(materials).not.toHaveProperty("PHASE_DIFF_MAX_DELIVERY_BYTES");
+    expect(materials.PHASE_DIFF_INLINE_LIMIT_BYTES).toBe(288 * 1024);
+  });
+
+  it("RED: records and drops a near-miss material key while preserving true forbidden keys", async () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "phase.mjs"), "phase changed\n");
+    const receiptRef = "quality/tests/near-miss.json";
+    await runBuildCapture("true", receiptRef, {
+      task,
+      workspace,
+      outputRef: "quality/tests/output/near-miss.output",
+    });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, phaseId: "P3", includeDiff: true });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: task.identity.taskId,
+        stage: "build-code",
+        phaseId: "P3",
+        materials: {
+          approved_spec: "AC-1: the phase behavior is correct.",
+          acceptance_criteria: "AC-1: the phase behavior is correct.",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(task.readRecord(receiptRef)) },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
+          acceptance_criterias: "near miss should be dropped",
+        },
+      });
+      expect(bundle.discarded_facts).toEqual([{
+        fact_kind: "material_unknown_key_dropped",
+        dropped_key: "acceptance_criterias",
+        finding_excerpt: JSON.stringify({ dropped_key: "acceptance_criterias" }),
+        reason: "not_in_stage_material_allowlist",
+      }]);
+    } finally {
+      source.dispose();
+    }
+  });
+
   it("RED: binds direction to current questions-only OI and detail to terminal OI duties", () => {
     const matrix = JSON.parse(readRepo("runtime/review/stage-materials.json"));
     const direction = matrix.stages["make-decision"].tracks.direction;

@@ -131,6 +131,8 @@ describe("simple wh-review contracts", () => {
     expect(providerProtocol).toContain('"findings": []');
     expect(providerProtocol).toMatch(/不得输出 `verdict`、`summary`/);
     expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`/);
+    expect(providerProtocol).toMatch(/semantic provider-visible|语义[^\n]*provider 可见/i);
+    expect(providerProtocol).toContain("review-instructions.md");
     const e2e = readFileSync(join(root, "..", "docs", "wh-review-e2e.md"), "utf8");
     expect(e2e).toMatch(/source_repo/);
     expect(e2e).toMatch(/active_runners/);
@@ -392,7 +394,7 @@ describe("simple wh-review contracts", () => {
     }], selection)).toThrow(/uniquely bound/);
   });
 
-  it("RED: requires findings to anchor to submitted material and a real line", async () => {
+  it("drops findings that do not anchor to submitted material and records the discard", async () => {
     const bundleRoot = mkdtempSync(join(tmpdir(), "workflowhub-p4-anchor-red-"));
     temporaryRoots.push(bundleRoot);
     const submitted = "submitted line";
@@ -429,8 +431,10 @@ describe("simple wh-review contracts", () => {
         group: reviewGroup(selection, JSON.stringify({ findings: [finding] })),
       }));
       expect(result).toMatchObject({
-        status: "unavailable",
-        provider_results: [{ status: "failed", error: { code: "EVIDENCE_ANCHOR_INVALID" } }],
+        status: "available",
+        findings: [],
+        provider_results: [{ status: "completed", error: null }],
+        discarded_facts: [{ fact_kind: "unanchored_finding_dropped", reason: "evidence_anchor_invalid" }],
       });
     }
   });

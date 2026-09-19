@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/contract/review-material-change-redispatch.test.mjs",
+  "receipt_ref": "quality/tests/build-code-p1-t001-red.json",
+  "output_ref": "quality/tests/output/build-code-p1-t001-red.output"
+}

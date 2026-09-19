@@ -137,8 +137,16 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   // two profiles merely because they use the same CLI adapter; source/profile
   // identity is already carried by `provider` and is part of the contract.
   const byMember = new Map();
+  const validDiscardedFacts = (value) => value === undefined || (Array.isArray(value) && value.every((fact) => fact
+    && typeof fact === "object" && !Array.isArray(fact)
+    && typeof fact.fact_kind === "string" && fact.fact_kind.trim() !== ""
+    && ((typeof fact.finding_excerpt === "string" && fact.finding_excerpt.trim() !== "")
+      || (typeof fact.dropped_key === "string" && fact.dropped_key.trim() !== ""))
+    && typeof fact.reason === "string" && fact.reason.trim() !== ""));
   const canonicalReview = (review) => review && typeof review === "object" && !Array.isArray(review)
-    && Object.keys(review).length === 1 && Object.hasOwn(review, "findings") && Array.isArray(review.findings)
+    && Object.keys(review).every((key) => key === "findings" || key === "discarded_facts")
+    && Object.hasOwn(review, "findings") && Array.isArray(review.findings)
+    && validDiscardedFacts(review.discarded_facts)
     && review.findings.every((finding) => finding && typeof finding === "object" && !Array.isArray(finding)
       && ["blocking", "major", "minor"].includes(finding.severity)
       && typeof finding.path === "string" && finding.path.trim() !== ""

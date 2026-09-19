@@ -68,6 +68,40 @@ describe("review layering", () => {
       .toThrow(/OUTPUT_INVALID/);
   });
 
+  it("RED: records an explicit fact when an unknown severity finding is dropped", () => {
+    const parsed = parseCanonicalReviewerOutput(JSON.stringify({ findings: [{
+      severity: "unrecognized-severity",
+      path: "materials/subject.md",
+      line: 1,
+      issue: "unknown severity fixture",
+      recommendation: "retain a machine-readable discard fact",
+    }] }));
+    expect(parsed).toMatchObject({
+      findings: [],
+      discarded_facts: [{
+        fact_kind: "unknown_severity_finding_dropped",
+        finding_excerpt: expect.stringContaining("unrecognized-severity"),
+        reason: "unknown_severity",
+      }],
+    });
+  });
+
+  it("accepts a discarded fact that carries only a dropped key", () => {
+    const result = aggregateCanonicalProviderResults([{
+      provider: "codex/luna",
+      review: {
+        findings: [],
+        discarded_facts: [{
+          fact_kind: "unknown_material_key_dropped",
+          dropped_key: "typo_context",
+          reason: "unknown_material_key",
+        }],
+      },
+    }]);
+    expect(result.status).toBe("available");
+    expect(result.valid[0].review.discarded_facts[0]).toMatchObject({ dropped_key: "typo_context" });
+  });
+
   it("keeps serious finding evidence fields mandatory at the production parser boundary", () => {
     const finding = {
       severity: "major",

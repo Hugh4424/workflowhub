@@ -20,6 +20,15 @@ function sha256(bytes) {
 }
 
 describe("wh-review bounded-input bundle portability", () => {
+  it("RED: does not add a skill-only fail-closed guard for an omitted test candidate", async () => {
+    const isolated = mkdtempSync(join(tmpdir(), "workflowhub-wh-review-bounds-guard-"));
+    temporaryRoots.push(isolated);
+    const release = await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: join(isolated, "release") });
+    const skillPath = join(isolated, "release/skills/wh-review/scripts/review-input-bounds.mjs");
+    expect(release.files.some(({ path }) => path === "skills/wh-review/scripts/review-input-bounds.mjs")).toBe(true);
+    expect(readFileSync(skillPath, "utf8")).not.toContain("implementation/test diff exceeds the bounded provider budget");
+  }, 60_000);
+
   it("ships a self-contained skill-local bounds implementation", async () => {
     const isolated = mkdtempSync(join(tmpdir(), "workflowhub-wh-review-bounds-"));
     temporaryRoots.push(isolated);

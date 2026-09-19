@@ -11,6 +11,73 @@ const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
+function behaviorText(value) {
+  const rows = [];
+  let fence = null;
+  let indentedCode = false;
+  let outsideBlankRun = 0;
+  for (const line of String(value ?? "").replace(/\r\n?/g, "\n").split("\n")) {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (fence !== null) {
+      rows.push({ text: line, code: true });
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const indented = /^(?: {4}|\t)/.test(line);
+    if (indentedCode && (indented || line.trim() === "")) {
+      rows.push({ text: line, code: true });
+      continue;
+    }
+    if (indented) {
+      indentedCode = true;
+      rows.push({ text: line, code: true });
+      continue;
+    }
+    indentedCode = false;
+    if (marker) {
+      rows.push({ text: line.replace(/[ \t]+$/g, ""), code: false });
+      fence = { character: marker[1][0], length: marker[1].length };
+      outsideBlankRun = 0;
+      continue;
+    }
+    const trailing = line.match(/[ \t]+$/)?.[0] ?? "";
+    const hardBreak = trailing.length >= 2 && !/^\s{0,3}#{1,6}(?:\s|$)/.test(line);
+    const normalized = line.trim() === ""
+      ? ""
+      : hardBreak
+        ? `${line.slice(0, -trailing.length)}  `
+        : line.replace(/[ \t]+$/g, "");
+    if (normalized === "") {
+      outsideBlankRun += 1;
+      // Three or more newline bytes collapse to two: one blank row between
+      // neighboring prose lines. Fenced code rows are handled above and are
+      // never collapsed.
+      if (outsideBlankRun <= 1) rows.push({ text: "", code: false });
+      continue;
+    }
+    outsideBlankRun = 0;
+    rows.push({ text: normalized, code: false });
+  }
+  while (rows[0]?.code === false && rows[0].text === "") rows.shift();
+  while (rows.at(-1)?.code === false && rows.at(-1).text === "") rows.pop();
+  return rows.map(({ text }) => text).join("\n");
+}
+
+/**
+ * Keep the existing raw-byte digest as the governance/history identity while
+ * exposing a non-wire behavior projection for review consumers. Both axes are
+ * produced from the same authenticated four-material map.
+ */
+export function materialDigestAxes(files = {}) {
+  if (!files || typeof files !== "object" || Array.isArray(files)) throw new TypeError("material digest files must be an object");
+  const rawEntries = CURRENT_MATERIAL_FILES.map((file) => [file, files[file] ?? null]);
+  const behaviorEntries = rawEntries.map(([file, value]) => [file, value === null ? null : behaviorText(value)]);
+  return Object.freeze({
+    behavior: sha256(JSON.stringify(behaviorEntries)),
+    governance: sha256(JSON.stringify(rawEntries)),
+  });
+}
+
 function fsyncDirectory(path) {
   const fd = openSync(path, constants.O_RDONLY | DIRECTORY);
   try { fsyncSync(fd); } finally { closeSync(fd); }

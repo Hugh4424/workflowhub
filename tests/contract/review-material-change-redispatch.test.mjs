@@ -89,6 +89,28 @@ function reviewResult(input) {
 }
 
 describe("review material change reuse contract", () => {
+  it("uses the frozen semantic material vector shared with 3rd-review", () => {
+    const input = {
+      stage: "build-code",
+      review_scope: "phase",
+      materials: {
+        approved_spec: "same semantic bytes",
+        plan: { acceptance: ["identity", "negative"] },
+      },
+      authenticated_evidence: { audit_wrapper: "must not affect semantic identity" },
+    };
+    const materialId = reviewPacketMaterialId(input, { instructionText: "transport instructions" });
+
+    // Frozen output from 3rd-review/lib/attachments.mjs:18-26 over the two
+    // semantic files. review-instructions/authenticated-evidence/manifest are
+    // transport or audit wrappers and must not change this value.
+    expect(materialId).toBe("f9094a44095b62c99e78638473289a19b1ff96083cd10b2dd3cecd52cb60ba3a");
+    expect(reviewPacketMaterialId({
+      ...input,
+      materials: { ...input.materials, approved_spec: "changed semantic bytes" },
+    }, { instructionText: "transport instructions" })).not.toBe(materialId);
+  });
+
   it("keeps the recorded fact and canonical refs when only submitted material bytes change", async () => {
     const state = fixture();
     let dispatches = 0;
@@ -127,6 +149,34 @@ describe("review material change reuse contract", () => {
     });
     expect(state.task.readRecord(first.attempt_ref)).toBe(state.task.readRecord(after.attempt_ref));
     expect(state.task.readRecord(first.result_ref)).toBe(state.task.readRecord(after.result_ref));
+  });
+
+  it("does not redispatch a blocked quorum result for the same review fingerprint", async () => {
+    const state = fixture();
+    let dispatches = 0;
+    const request = {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { approved_spec: "quorum-shortfall" },
+    };
+    const runRound = async (input) => {
+      dispatches += 1;
+      return {
+        ...reviewResult(input),
+        status: "unavailable",
+        outcome: "unavailable",
+        dispatch_state: "blocked_before_dispatch",
+        runtime_id: null,
+        provider_results: [],
+        error: { code: "REVIEW_THRESHOLD_INVALID", message: "preflight quorum is unavailable" },
+      };
+    };
+    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route, runRound });
+    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route, runRound });
+
+    expect(dispatches).toBe(1);
+    expect(first).toMatchObject({ status: "recorded", reused: false, dispatch_state: "blocked_before_dispatch", result_ref: null });
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: null });
   });
 
   it("authenticates a recorded build-code review after its material revision moves", async () => {
