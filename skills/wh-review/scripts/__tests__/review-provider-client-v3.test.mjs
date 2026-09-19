@@ -550,6 +550,40 @@ test("client consumes non-terminal provider health facts and tolerates additive 
   });
 });
 
+// 3rd-review's managed health projection omits `error` when a member has no
+// error and reports `pending` before a provider has started
+// (lib/broker.mjs managedProviderPublic). Rejecting that shape made a healthy
+// running review look like an incompatible managed lifecycle envelope.
+test("client accepts the broker's pre-start health shape: pending member without an error key", async () => {
+  const envelope = {
+    version: "workflowhub-run.v1",
+    request_id: "request-id",
+    runtime_id: "runtime-v3",
+    state: "running",
+    material_id: "material-id",
+    providers: {
+      "opencode/v4flash": { status: "pending", last_progress_at_ms: null },
+      "codex/luna": { status: "running", error: { code: "PROCESS_STALLED" }, last_progress_at_ms: 240 },
+    },
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(envelope)}\n`, stderr: "" }) });
+  const result = await client.statusManaged({
+    requestId: "request-id",
+    runtimeId: "runtime-v3",
+    hostProvider: "codex/terra",
+    providers: ["opencode/v4flash", "codex/luna"],
+    materials: materials(),
+  });
+
+  expect(result).toMatchObject({
+    state: "running",
+    providers: {
+      "opencode/v4flash": { status: "pending", error: null, last_progress_at_ms: null },
+      "codex/luna": { status: "running", error: { code: "PROCESS_STALLED" }, last_progress_at_ms: 240 },
+    },
+  });
+});
+
 test("client projects non-terminal envelopes without providers to the canonical five fields", async () => {
   const envelope = {
     version: "workflowhub-run.v1",

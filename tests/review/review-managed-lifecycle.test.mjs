@@ -665,6 +665,63 @@ describe("managed review lifecycle boundary", () => {
     });
   });
 
+  // The rejected envelope must not erase the evidence that the start request was
+  // transmitted. Before this, the caller recorded `blocked_before_dispatch` with an
+  // empty provider inventory even though the broker had created a runtime and
+  // started providers, which is exactly the false fact that made a safe re-dispatch
+  // impossible to judge.
+  it("keeps the dispatched runtime and provider facts when the managed envelope is rejected", async () => {
+    const client = new ReviewProviderClient({
+      invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(managedHealthEnvelope({ envelopeMaterialId: "f".repeat(64) }))}\n`, stderr: "" }),
+    });
+
+    const error = await client.startManaged(managedContext()).catch((value) => value);
+    expect(error).toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+    expect(error.managed_observation).toMatchObject({
+      dispatch_state: "sent_unparsed",
+      request_id: managedRequestId,
+      runtime_id: managedRuntime,
+      state: "running",
+      version: "workflowhub-run.v1",
+      providers: [{ provider: managedProvider, status: "failed", error: { code: "PROVIDER_PRINT_TIMEOUT" } }],
+    });
+    expect(error.managed_observation.wire).toMatchObject({ exit_code: 0, timed_out: false });
+  });
+
+  it("does not claim a dispatch when the broker process never started", async () => {
+    const client = new ReviewProviderClient({
+      invoke: async () => ({ spawnError: new Error("spawn ENOENT"), stdout: "", stderr: "", exitCode: null }),
+    });
+
+    const error = await client.startManaged(managedContext()).catch((value) => value);
+    expect(error).toMatchObject({ code: "BROKER_SPAWN_FAILED" });
+    expect(error.managed_observation).toBeUndefined();
+  });
+
+  // End-to-end recording side of the observation repair: a review whose start
+  // request reached the broker but whose reply could not be parsed must be recorded
+  // as `sent_unparsed` with the runtime id and the provider inventory, not as
+  // `blocked_before_dispatch` with an empty attempt list.
+  it("records a transmitted-but-unparsed review as sent_unparsed with its provider inventory", async () => {
+    const { task, kernel } = fixture();
+    const result = await recordSimpleReviewRequest({
+      task, kernel, request: request(),
+      runRound: async (value) => reviewResult(value, {
+        dispatch_state: "sent_unparsed",
+        runtime_id: "runtime-managed",
+        provider_results: [{ provider: managedProvider, status: "running", error: null }],
+        error: { code: "PROTOCOL_INCOMPATIBLE", message: "3rd-review managed lifecycle envelope is invalid" },
+      }),
+      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
+    });
+
+    expect(result).toMatchObject({ status: "recorded", dispatch_state: "sent_unparsed" });
+    const attempt = JSON.parse(task.readRecord(result.attempt_ref));
+    expect(attempt.dispatch_state).toBe("sent_unparsed");
+    expect(attempt.provider_attempts.map((item) => item.provider)).toEqual([managedProvider]);
+    expect(attempt.provider_attempts[0]).toMatchObject({ runtime_id: "runtime-managed" });
+  });
+
   it("reuses the same deterministic request and runtime identity after an interrupted start", async () => {
     const calls = [];
     const client = new ReviewProviderClient({

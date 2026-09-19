@@ -9,11 +9,12 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
-import { materialAllowlistForRule, materialForbiddenMessage, redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor,
+import { materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
   REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
-import { reviewPacketMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
+import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialPath, redactProviderHostPaths } from "../../../runtime/review/provider-material-projection.mjs";
+import { reviewPacketMaterialId, deliveredMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
 import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
@@ -38,7 +39,13 @@ import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 // It is a total wait bound, NOT a stall detector: D-030③ forbids WorkflowHub
 // from inventing its own wall-clock stall verdict.
 const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 1_200_000;
-const DEFAULT_MANAGED_STATUS_POLL_MS = 1000;
+// Each managed status poll spawns a fresh 3rd-review CLI process, so the poll
+// interval is a direct CPU/process-churn knob: at 1s two paired roles spawn
+// ~2 processes per second for the whole terminal wait. 5s keeps terminal
+// detection within seconds of the provider's real finish while cutting process
+// churn ~5x. Callers can still override it per call via
+// `dependencies.managedStatusPollMs`.
+const DEFAULT_MANAGED_STATUS_POLL_MS = 5000;
 
 function redactHostPaths(value) {
   if (typeof value !== "string") return value;
@@ -314,8 +321,6 @@ function materialBytes(value) {
   return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
 }
 
-const AUTHENTICATED_EVIDENCE_PATH = "authenticated-evidence.json";
-
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -463,11 +468,6 @@ function authenticatedEvidenceBytes(value) {
   return canonicalAuthenticatedEvidenceBytes(value);
 }
 
-function safeName(key, index, value) {
-  const stem = String(key).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "") || `material_${index + 1}`;
-  return `materials/${String(index + 1).padStart(2, "0")}-${stem}${typeof value === "string" || Buffer.isBuffer(value) ? ".md" : ".json"}`;
-}
-
 function buildBundle(attachmentRoot, input) {
   const packetRoot = join(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
@@ -489,7 +489,7 @@ function buildBundle(attachmentRoot, input) {
   Object.entries(input.materials ?? {}).forEach(([key, value]) => {
     if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
-    write(safeName(key, materialIndex, redacted), materialBytes(redacted));
+    write(providerMaterialPath(key, materialIndex, redacted), materialBytes(redacted));
     materialIndex += 1;
   });
   if (input.authenticated_evidence !== undefined) {
@@ -507,6 +507,27 @@ function buildBundle(attachmentRoot, input) {
   // using a pre-manifest hash here would make a frozen input impossible to
   // rehydrate without changing its identity.
   const materialId = materialIdForInput(input);
+  // Fail before any provider is started when the declared identity does not
+  // describe the bytes that were actually written. Both values come from the same
+  // canonical implementation, so a difference means a naming, redaction or
+  // omission rule drifted apart again; dispatching would only earn an opaque
+  // `PROTOCOL_INCOMPATIBLE: 3rd-review managed lifecycle envelope is invalid`
+  // from the broker after the provider had already been spawned.
+  const deliveredId = deliveredMaterialId(entries);
+  if (deliveredId !== materialId) {
+    rmSync(bundleRoot, { recursive: true, force: true });
+    throw Object.assign(
+      new Error(`MATERIAL_IDENTITY_MISMATCH: declared review material identity ${materialId} does not match the delivered bundle bytes ${deliveredId}`),
+      {
+        code: "MATERIAL_IDENTITY_MISMATCH",
+        diagnostic: {
+          declared_material_id: materialId,
+          delivered_material_id: deliveredId,
+          delivered_paths: entries.map((entry) => entry.path),
+        },
+      },
+    );
+  }
   return {
     bundleRoot,
     attachmentRoot,
@@ -1359,7 +1380,10 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
           .map(([provider, item]) => publicProviderResult({ ...item, provider: item.provider ?? provider }, undefined, pair));
         return unavailableResult(input, normalizeProviderError(error), pair, {
-          dispatch_state: lifecycle ? "dispatched" : "blocked_before_dispatch",
+          // A transmitted request whose reply could not be parsed is neither
+          // "dispatched" nor "blocked_before_dispatch"; keep the transport's own
+          // classification when it reported one.
+          dispatch_state: observation?.dispatch_state ?? (lifecycle ? "dispatched" : "blocked_before_dispatch"),
           request_id: requestId,
           runtime_id: observation?.runtime_id ?? lifecycle?.runtime_id ?? null,
           minimum_heterologous: minimum,

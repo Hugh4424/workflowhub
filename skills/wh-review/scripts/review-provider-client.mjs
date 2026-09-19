@@ -91,6 +91,54 @@ function wireSummary(wire) {
   return `exit=${Number.isInteger(wire?.exitCode) ? wire.exitCode : "spawn_error"}; stdout_sha256=${digest(wire?.stdout)}; stderr_sha256=${digest(wire?.stderr)}`;
 }
 
+// What the broker actually returned, reduced to public-safe scalars.
+//
+// A rejected managed envelope used to lose every local trace of the run: the
+// caller recorded `blocked_before_dispatch` with an empty provider inventory even
+// though the start request had been transmitted and the broker had created a
+// runtime. Keep the runtime id, the reported state and the per-provider members so
+// the caller can record a truthful dispatched-but-unparsed fact. Only strings that
+// pass the private-path check are kept; hashes stand in for the raw wire.
+function managedEnvelopeObservation(result, wire) {
+  const publicString = (value) => (typeof value === "string" && value.length > 0 && !containsPrivatePath(value) ? value : null);
+  const memberObservation = (item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const provider = publicString(item.provider) ?? publicString(item.identity?.provider);
+    const code = item.error && typeof item.error === "object" && !Array.isArray(item.error) ? publicString(item.error.code) : null;
+    return Object.freeze({
+      provider,
+      status: publicString(item.status),
+      ...(code === null ? {} : { error: Object.freeze({ code }) }),
+      ...(Number.isSafeInteger(item.last_progress_at_ms) ? { last_progress_at_ms: item.last_progress_at_ms } : {}),
+    });
+  };
+  const members = result?.providers && typeof result.providers === "object" && !Array.isArray(result.providers)
+    ? Object.values(result.providers)
+    : Array.isArray(result?.group?.providers) ? result.group.providers : [];
+  return Object.freeze({
+    dispatch_state: "sent_unparsed",
+    request_id: publicString(result?.request_id),
+    runtime_id: publicString(result?.runtime_id),
+    state: typeof result?.state === "string" && managedStates.has(result.state) ? result.state : null,
+    version: publicString(result?.version),
+    providers: Object.freeze(members.map(memberObservation).filter(Boolean)),
+    wire: Object.freeze({
+      exit_code: Number.isInteger(wire?.exitCode) ? wire.exitCode : null,
+      timed_out: wire?.timedOut === true,
+      stdout_sha256: digest(wire?.stdout),
+      stderr_sha256: digest(wire?.stderr),
+    }),
+  });
+}
+
+// Attach the observation to a failure raised after the broker process ran. A
+// spawn failure is the only case where nothing was transmitted.
+function dispatchedFailure(code, message, result, wire) {
+  const error = failure(code, message);
+  if (!wire?.spawnError) error.managed_observation = managedEnvelopeObservation(result, wire);
+  return error;
+}
+
 function contractFailure(error, wire) {
   Object.defineProperty(error, "diagnostic", {
     value: Object.freeze({
@@ -177,7 +225,13 @@ const LATE_SUPPLEMENT_WINDOW_MS = 600000;
 const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
-const managedHealthMemberFields = ["status", "error", "last_progress_at_ms"];
+// 3rd-review's managed health projection (`lib/broker.mjs` managedProviderPublic)
+// omits `error` entirely when the member has no error, and reports `pending`
+// before a provider has started. Require only the fields the broker always
+// writes, and accept the pre-start state, so a broker-legal healthy reply is not
+// rejected as an incompatible envelope.
+const managedHealthRequiredFields = ["status", "last_progress_at_ms"];
+const managedHealthMemberStates = new Set(["pending", ...v3MemberStates]);
 const managedOutcomes = new Set(["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"]);
 // workflowhub-result.v3 has its own terminal outcome set (3rd-review
 // lib/workflowhub-result-v3.mjs `outcomes`). It is not a superset of the v2 set:
@@ -629,17 +683,17 @@ function validateManagedHealthProviders(value, providers) {
   const normalized = Object.fromEntries([...providers].map((provider) => {
     const member = value[provider];
     if (!member || typeof member !== "object" || Array.isArray(member)
-        || managedHealthMemberFields.some((field) => !Object.hasOwn(member, field))) {
+        || managedHealthRequiredFields.some((field) => !Object.hasOwn(member, field))) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
     }
     if (Object.hasOwn(member, "provider") && member.provider !== provider) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
     }
-    if (!v3MemberStates.has(member.status)) {
+    if (!managedHealthMemberStates.has(member.status)) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} status is invalid`);
     }
     let error = null;
-    if (member.error !== null) {
+    if (member.error !== undefined && member.error !== null) {
       if (!member.error || typeof member.error !== "object" || Array.isArray(member.error)) {
         throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} error is invalid`);
       }
@@ -678,17 +732,17 @@ function parseManagedEnvelope(wire, context) {
     } catch (error) {
       if (error?.code && error.code !== "SyntaxError") throw error;
     }
-    throw failure(wire?.spawnError ? "BROKER_SPAWN_FAILED" : "PROTOCOL_INCOMPATIBLE", `3rd-review managed lifecycle did not return JSON; ${wireSummary(wire)}`);
+    throw dispatchedFailure(wire?.spawnError ? "BROKER_SPAWN_FAILED" : "PROTOCOL_INCOMPATIBLE", `3rd-review managed lifecycle did not return JSON; ${wireSummary(wire)}`, null, wire);
   }
   const brokerError = safeBrokerError(result);
   if (brokerError) throw brokerError;
-  if (wire?.exitCode !== 0) throw failure("BROKER_EXIT_NONZERO", `3rd-review managed lifecycle exited without a public result; ${wireSummary(wire)}`);
+  if (wire?.exitCode !== 0) throw dispatchedFailure("BROKER_EXIT_NONZERO", `3rd-review managed lifecycle exited without a public result; ${wireSummary(wire)}`, result, wire);
   if (!result || result.version !== "workflowhub-run.v1" || typeof result.request_id !== "string" || typeof result.runtime_id !== "string"
       || !managedStates.has(result.state) || result.material_id !== context.materialId
       || (context.requestId !== null && result.request_id !== context.requestId)
       || (context.runtimeId !== null && result.runtime_id !== context.runtimeId)
       || containsPrivatePath(result.request_id) || containsPrivatePath(result.runtime_id)) {
-    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed lifecycle envelope is invalid");
+    throw dispatchedFailure("PROTOCOL_INCOMPATIBLE", "3rd-review managed lifecycle envelope is invalid", result, wire);
   }
   if (result.state === "terminal") {
     exactKeys(result, ["group", "material_id", "request_id", "runtime_id", "state", "version"], "3rd-review managed lifecycle envelope");

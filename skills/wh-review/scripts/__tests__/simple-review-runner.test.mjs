@@ -234,7 +234,13 @@ describe("simple material-only review", () => {
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
 
-  it("binds authenticated supplemental evidence without changing the base material identity", () => {
+  // Corrected contract: authenticated-evidence.json is provider-visible delivered
+  // material, so it belongs to the delivered material identity exactly as the
+  // broker's canonicalWorkflowHubMaterialId counts it. Previously the declared
+  // identity excluded it while the broker included it, so every packet carrying
+  // authenticated evidence was rejected as an invalid managed lifecycle envelope.
+  // The base/supplemental distinction is carried by authenticated_evidence_sha256.
+  it("includes authenticated supplemental evidence in the delivered material identity", () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-supplemental-")));
     roots.push(attachmentRoot);
     const base = { stage: "build-code", materials: { implementation: "current bytes" } };
@@ -246,8 +252,8 @@ describe("simple material-only review", () => {
       ...base,
       authenticated_evidence: { schema_version: "m401-trace.v1", material_id: "b".repeat(64), actual_result: "pass" },
     });
-    expect(packetA.material_id).toBe(createSimpleReviewPacket(base).material_id);
-    expect(packetB.material_id).toBe(packetA.material_id);
+    expect(packetA.material_id).not.toBe(createSimpleReviewPacket(base).material_id);
+    expect(packetB.material_id).not.toBe(packetA.material_id);
     expect(packetA.authenticated_evidence_sha256).not.toBe(packetB.authenticated_evidence_sha256);
 
     const bytes = serializeProviderInput({
@@ -259,6 +265,7 @@ describe("simple material-only review", () => {
     const restored = rehydrateProviderInput(bytes, attachmentRoot);
     try {
       expect(restored.materials.materialId).toBe(packetA.material_id);
+      expect(restored.materials).not.toHaveProperty("materialIdentityConflict");
       const evidencePath = join(restored.materials.bundleRoot, "authenticated-evidence.json");
       expect(readFileSync(evidencePath, "utf8")).toContain('"actual_result":"pass"');
       const manifest = JSON.parse(readFileSync(join(restored.materials.bundleRoot, "manifest.json"), "utf8"));

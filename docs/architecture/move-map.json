@@ -3352,6 +3352,83 @@
       "consumer": "targeted regression for current-session execution without external Stage Agent, bridge, or stage outcome",
       "delete_condition": "remove only when an approved replacement proves the same no-external-gate invariant",
       "content_change": "active manifests, public stage runner, and reflection path remain independent of external stage outcome"
+    },
+    {
+      "source": "runtime/review/provider-material-projection.mjs",
+      "destination": "runtime/review/provider-material-projection.mjs",
+      "status": "add",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "runtime/review/review-packet-identity.mjs (declared packet material identity) and skills/wh-review/scripts/{simple-review-runner,review-materials}.mjs (delivered bundle bytes and paths)",
+      "delete_condition": "remove only when one independently audited provider-material projection implementation with the same consumers exists elsewhere",
+      "content_change": "single owner for the two rules the declared identity and the delivered bytes must share: host-path redaction (was two divergent copies whose stop sets disagreed on CJK punctuation and fullwidth forms) and provider material paths (the numbered materials/09-direction_flow.json form is rejected by the broker direction check, so the flow is delivered as direction_flow.json)",
+      "bytes_after": 4393,
+      "sha256_after": "4916e5a46107d565f454fbc30081d0e3b19d8a21aac13ef7da408977b8ef46aa"
+    },
+    {
+      "source": "runtime/review/review-packet-identity.mjs",
+      "destination": "runtime/review/review-packet-identity.mjs",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "runtime/review/review-record-route.mjs and runtime/evidence/freshness.mjs packet identity",
+      "delete_condition": "remove the import when packet identity stops needing provider-material projection",
+      "content_change": "import the shared redaction and material-path rules instead of local copies; the local redactor consumed the text after a redacted path and the local path rule numbered the direction flow out of the broker's accepted name",
+      "bytes_after": 10407,
+      "sha256_after": "699113a85241a70e8edc3d12ef7fb22e692ae465d275a44b22846120145197f4"
+    },
+    {
+      "source": "skills/wh-review/scripts/simple-review-runner.mjs",
+      "destination": "skills/wh-review/scripts/simple-review-runner.mjs",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "managed review bundle bytes, manifest and material identity for every wh-review packet",
+      "delete_condition": "remove the import when bundle construction stops needing provider-material projection",
+      "content_change": "deliver the direction flow as direction_flow.json, take redaction and material paths from the runtime owner, self-check the declared identity, and record the transport's own dispatch classification",
+      "bytes_after": 89999,
+      "sha256_after": "13c554a67bf85821e8265740d0c5c1d0254cdc66d4a246e143bb4fbd923944f2"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-materials.mjs",
+      "destination": "skills/wh-review/scripts/review-materials.mjs",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "skill-local redaction callers and the wh-review skill bundle release",
+      "delete_condition": "remove the re-export when no skill-local caller imports redactProviderHostPaths",
+      "content_change": "re-export the runtime-owned host-path redactor instead of keeping a second implementation; refresh the declared skill-bundle hash",
+      "bytes_after": 133638,
+      "sha256_after": "99c61670d265f76fb5659344ec6ca298b35cd922adb6f739a86244705299635b"
+    },
+    {
+      "source": "runtime/review/review-record-route.mjs",
+      "destination": "runtime/review/review-record-route.mjs",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "runtime review recording and old-canonical-history validation",
+      "delete_condition": "keep the F7 change when the dispatch-state set is revised again",
+      "content_change": "accept and preserve sent_unparsed; document that a transmitted-but-unparsed review is not auto-recoverable through source_recovered",
+      "bytes_after": 118994,
+      "sha256_after": "216da817f5f632bd9cc253e4fd8ad25cec8c046eac9aac41a94af5a7f3c88611"
+    },
+    {
+      "source": "runtime/review/schemas/attempt.schema.json",
+      "destination": "runtime/review/schemas/attempt.schema.json",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "canonical review attempt schema validation",
+      "delete_condition": "remove the value when no producer emits sent_unparsed",
+      "content_change": "add sent_unparsed to the dispatch_state enum so a transmitted-but-unparsed attempt can be recorded truthfully",
+      "bytes_after": 19123,
+      "sha256_after": "25a03a60d84733e1889749a353d21dfd35c30762fffa710f3f7cec3a788e1535"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-provider-client.mjs",
+      "destination": "skills/wh-review/scripts/review-provider-client.mjs",
+      "status": "modify",
+      "owner": "review material identity repair (workflowhub-thin-core-rebuild-planning-20260919)",
+      "consumer": "managed review transport parsing and health projection",
+      "delete_condition": "keep while the broker emits error-less health members or a pre-start pending state",
+      "content_change": "accept the broker's real health shape (optional error, pending) and attach a public-safe managed_observation to a rejected managed envelope",
+      "bytes_after": 69153,
+      "sha256_after": "100d15ea73ea17966dfb852be313f630dff22b19b35a023999e34dbf0344b6db"
     }
   ]
 }

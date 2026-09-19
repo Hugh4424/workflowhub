@@ -486,6 +486,9 @@ function authenticateRetryDecision(retry, { history, request, materialId, routeI
       return currentRoute !== null && previousRoute !== null && previousRoute !== currentRoute;
     }
     if (retry.basis === "source_recovered") {
+      // Only a review that provably never reached the broker may be recovered this
+      // way. `sent_unparsed` means the request WAS transmitted and a remote runtime
+      // may exist, so it is deliberately not auto-recoverable here.
       return currentRoute !== null && previousRoute === null && attempt.dispatch_state === "blocked_before_dispatch";
     }
     return false;
@@ -698,7 +701,7 @@ function unavailableAfterDispatch({ request, result, materialId, error } = {}) {
     material_id: materialId,
     runtime_id: result?.runtime_id ?? null,
     outcome: "unavailable",
-    dispatch_state: result?.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+    dispatch_state: ["blocked_before_dispatch", "sent_unparsed"].includes(result?.dispatch_state) ? result.dispatch_state : "dispatched",
     provider_results: providerResults,
     findings: [],
     ...(request.authenticated_evidence === undefined ? {} : {
@@ -881,7 +884,7 @@ function readLegacyReviewAttempt(task, ref, raw, attempt, report) {
       || attempt.source.base_tree !== attempt.snapshot_tree
       || !["target_commit", "base_commit", "captured_head"].every((key) => GIT_OID.test(attempt.source[key] ?? ""))
       || !attempt.review_policy || policyHash(attempt.review_policy) !== attempt.policy_snapshot_hash
-      || !["dispatched", "blocked_before_dispatch"].includes(attempt.dispatch_state)) throw new Error("old canonical review source or policy is invalid");
+      || !["dispatched", "blocked_before_dispatch", "sent_unparsed"].includes(attempt.dispatch_state)) throw new Error("old canonical review source or policy is invalid");
   const attempted = attempt.provider_attempts.map((item) => item.provider);
   if (new Set(attempted).size !== attempted.length
       || canonicalJson([...attempted].sort()) !== canonicalJson([...(attempt.review_policy.requested_profiles ?? [])].sort())
@@ -1313,7 +1316,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           ...result,
           status: "unavailable",
           outcome: "unavailable",
-          dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+          dispatch_state: ["blocked_before_dispatch", "sent_unparsed"].includes(result.dispatch_state) ? result.dispatch_state : "dispatched",
           error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while dispatching; completed provider facts were retained without publishing a result" },
         };
       }
@@ -1339,7 +1342,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     return {
       status: "recorded",
       reused: false,
-      dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+      dispatch_state: ["blocked_before_dispatch", "sent_unparsed"].includes(result.dispatch_state) ? result.dispatch_state : "dispatched",
       ...refs,
       ...(retryResult ? { retry: retryResult } : {}),
       ...(result.dispatch_state === "blocked_before_dispatch" ? { error: result.error } : {}),
@@ -1484,7 +1487,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
     ...(closureManifest ? { closure_manifest: closureManifest } : {}),
     provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, outputRefs.get(item.provider) ?? null)),
     terminal_status: covered ? "semantic" : "unavailable",
-    dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+    dispatch_state: ["blocked_before_dispatch", "sent_unparsed"].includes(result.dispatch_state) ? result.dispatch_state : "dispatched",
     error: covered ? null : recordError(result.error, { code: completed.length ? "REVIEW_QUORUM_INCOMPLETE" : "REVIEW_ALL_PROVIDERS_FAILED", message: completed.length ? "semantic member outputs retained; independent review coverage is incomplete" : "all provider results failed" }),
     ...(!noDispatch ? { review_policy: policy.policy, policy_snapshot_hash: policy.policy_snapshot_hash } : {}), report_ref: reportRef,
   };
