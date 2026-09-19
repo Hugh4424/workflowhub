@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { isExecutionRecordOnlyMaterialDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
+import { redactProviderHostPaths } from "../../../runtime/review/provider-material-projection.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
 import { assertReviewIdentity, reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
@@ -418,22 +419,16 @@ export function validateDetailReviewInput({ materials, currentDecisionLog = null
   return true;
 }
 
-const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/g;
-
-function redactHostPathText(value) {
-  return value.replace(LOCAL_HOST_PATH, "<host-path-redacted>");
-}
-
 /**
  * Canonical source materials keep their original bytes for audit. The
  * provider packet is a derived view and must not expose local host paths.
+ *
+ * The redaction rule itself is owned by the runtime
+ * (`runtime/review/provider-material-projection.mjs`) so the delivered bytes and
+ * the material identity they are verified against cannot drift apart. It is
+ * re-exported here for the existing skill-local callers.
  */
-export function redactProviderHostPaths(value) {
-  if (typeof value === "string") return redactHostPathText(value);
-  if (Array.isArray(value)) return value.map((item) => redactProviderHostPaths(item));
-  if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, redactProviderHostPaths(child)]));
-}
+export { redactProviderHostPaths };
 
 function validateVerifyEvidenceRoots(stage, materials) {
   if (stage !== "verify-code") return;

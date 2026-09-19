@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
 
+import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialPath, redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
-
-const AUTHENTICATED_EVIDENCE_PATH = "authenticated-evidence.json";
-const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+/g;
 const REVIEW_FOCUS = Object.freeze({
   "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
   "make-decision/detail": "Check scope, complete user flow, pages, data states, success and failure boundaries, acceptance, non-goals, deferred work, risks, and unnecessary complexity.",
@@ -33,17 +31,6 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
-function redactHostPathText(value) {
-  return value.replace(LOCAL_HOST_PATH, "<host-path-redacted>");
-}
-
-function redactProviderHostPaths(value) {
-  if (typeof value === "string") return redactHostPathText(value);
-  if (Array.isArray(value)) return value.map((item) => redactProviderHostPaths(item));
-  if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, redactProviderHostPaths(child)]));
-}
-
 function materialBytes(value) {
   if (Buffer.isBuffer(value)) return value;
   if (typeof value === "string") return Buffer.from(value, "utf8");
@@ -70,11 +57,6 @@ export function authenticatedEvidenceBytes(value) {
 export function authenticatedEvidenceDigest(value) {
   const bytes = authenticatedEvidenceBytes(value);
   return bytes === null ? null : hash(bytes);
-}
-
-function safeName(key, index, value) {
-  const stem = String(key).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "") || `material_${index + 1}`;
-  return `materials/${String(index + 1).padStart(2, "0")}-${stem}${typeof value === "string" || Buffer.isBuffer(value) ? ".md" : ".json"}`;
 }
 
 function surface(input) {
@@ -140,7 +122,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
     if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
     const bytes = materialBytes(redacted);
-    entries.push({ path: safeName(key, materialIndex, redacted), bytes: bytes.length, sha256: hash(bytes) });
+    entries.push({ path: providerMaterialPath(key, materialIndex, redacted), bytes: bytes.length, sha256: hash(bytes) });
     materialIndex += 1;
   });
   if (input.authenticated_evidence !== undefined) {
@@ -151,6 +133,33 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
   const canonicalEntries = entries
     .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH, "review-instructions.md"].includes(entry.path))
+    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
+    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
+  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
+}
+
+/**
+ * Canonical identity of a delivered review bundle, mirroring the broker's
+ * `canonicalWorkflowHubMaterialId(files)` in `3rd-review/lib/attachments.mjs`.
+ *
+ * This is the single implementation behind both the declared packet identity
+ * (`reviewPacketMaterialId`) and the pre-dispatch self-check over the bytes that
+ * were actually written to the bundle. Two copies of this rule — or of the
+ * host-path redaction and material-path rules it depends on — are what let
+ * WorkflowHub declare an identity the broker could not reproduce.
+ *
+ * The exclusion set is exactly the broker's: only the transport wrappers
+ * `manifest.json` and `canonical-evidence.json` are excluded.
+ * `authenticated-evidence.json` is provider-visible delivered material and is
+ * therefore part of the identity. Excluding it here made every packet carrying
+ * bound authenticated evidence hash differently from the bytes a provider
+ * received, so such a packet could never match the broker envelope. Keeping the
+ * base material identity independent of supplemental evidence is the job of the
+ * separately recorded `authenticated_evidence_sha256`, not of this digest.
+ */
+export function deliveredMaterialId(entries) {
+  const canonicalEntries = entries
+    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
     .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
     .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
   return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));

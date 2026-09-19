@@ -548,7 +548,13 @@ describe("review flow task record", () => {
     expect(JSON.parse(task.readRecord(first.attempt_ref)).provider_attempts[0].execution.usage).toBeNull();
   });
 
-  it("binds authenticated supplemental evidence separately from the base material identity", async () => {
+  // Corrected contract: authenticated-evidence.json is provider-visible delivered
+  // material, so the recorded material identity counts it exactly as the broker's
+  // canonicalWorkflowHubMaterialId does. The earlier expectation that the recorded
+  // identity equal the evidence-free base identity could never match a real broker
+  // envelope. The base versus supplemental distinction is carried by the separate
+  // authenticated_evidence_sha256 (asserted below), not by the material identity.
+  it("records authenticated supplemental evidence in the delivered material identity", async () => {
     const { task, kernel } = makeTask();
     const request = {
       stage: "build-code",
@@ -572,7 +578,8 @@ describe("review flow task record", () => {
     const result = JSON.parse(task.readRecord(refs.result_ref));
     validateSchema("attempt", attempt);
     validateSchema("result", result);
-    expect(attempt.material_id).toBe(createSimpleReviewPacket({ stage: request.stage, materials: request.materials }).material_id);
+    expect(attempt.material_id).toBe(packet.material_id);
+    expect(attempt.material_id).not.toBe(createSimpleReviewPacket({ stage: request.stage, materials: request.materials }).material_id);
     expect(attempt.authenticated_evidence_sha256).toBe(packet.authenticated_evidence_sha256);
     expect(result.authenticated_evidence_sha256).toBe(packet.authenticated_evidence_sha256);
   });
