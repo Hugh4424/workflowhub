@@ -385,11 +385,11 @@ function shapeDiagnosticError(message, path, expected, actual, ErrorClass = Erro
 }
 
 function stageInputKeys(stage) {
-  if (stage === "build-code") return ["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply"];
+  if (stage === "build-code") return ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply"];
   if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
-    return ["receipts", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
+    return ["receipts", "attempt_id", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
   }
-  return ["receipts", "interaction_aggregate", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
+  return ["receipts", "attempt_id", "interaction_aggregate", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
 }
 
 export function validateStageInvocation(stage, input, {
@@ -425,6 +425,16 @@ export function validateStageInvocation(stage, input, {
     );
   }
   const normalized = { ...input, receipts: input.receipts === undefined ? {} : input.receipts };
+  if (normalized.attempt_id !== undefined
+      && (typeof normalized.attempt_id !== "string" || normalized.attempt_id.trim() === "")) {
+    throw shapeDiagnosticError(
+      `${stage} attempt_id must be a non-empty string when supplied`,
+      "attempt_id",
+      "non-empty string",
+      normalized.attempt_id,
+      TypeError,
+    );
+  }
   if (!normalized.receipts || typeof normalized.receipts !== "object" || Array.isArray(normalized.receipts)) {
     throw shapeDiagnosticError(`${stage} receipts must be an object`, "receipts", "object", normalized.receipts, TypeError);
   }
@@ -665,21 +675,33 @@ export function validateInteractionAggregateLifecycle(value) {
 function interactionAggregateFacts(worker, invocation, expected) {
   recordConsumerInvocation(worker, "stage-handlers#interactionAggregateFacts");
   const ref = text(object(invocation.receipts, "receipts").interaction, "interaction aggregate ref");
-  if (!validReceiptRef("interaction", ref)) throw materialIncomplete("make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
-  const record = object(worker.readReceipt(ref), "interaction aggregate record");
-  if (record.sha256 !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) throw new Error("interaction aggregate ref is not content-addressed to its immutable bytes");
-  const value = object(record.value, "interaction aggregate");
+  if (!validReceiptRef("interaction", ref)) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
+  let suppliedRecord;
+  try { suppliedRecord = worker.readReceipt(ref); }
+  catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) {
+      throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `make-decision interaction aggregate is unavailable or malformed: ${error.message}`);
+    }
+    throw error;
+  }
+  let record;
+  try { record = object(suppliedRecord, "interaction aggregate record"); }
+  catch (error) { throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message); }
+  if (record.sha256 !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate ref is not content-addressed to its immutable bytes");
+  let value;
+  try { value = object(record.value, "interaction aggregate"); }
+  catch (error) { throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message); }
   const currentContract = Object.hasOwn(value, "original_requirement")
     || Object.hasOwn(value, "decision")
     || Object.hasOwn(value, "confirmation");
   if (currentContract) {
     const validation = validateInteractionAggregateContract(value);
-    if (!validation.ok) throw materialIncomplete(`make-decision interaction aggregate is invalid: ${validation.errors.join("; ")}`);
+    if (!validation.ok) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `make-decision interaction aggregate is invalid: ${validation.errors.join("; ")}`);
     const decision = value.decision;
     if (value.snapshot_tree !== expected.snapshot_tree
         || decision.ref !== expected.decision_ref
         || decision.hash !== expected.decision_hash) {
-      throw new Error("interaction aggregate does not bind the current task and decision");
+      throw interactionAggregateDiagnosticError("aggregate_decision_unbound", "interaction aggregate does not bind the current task and decision");
     }
     return Object.freeze({
       ref,
@@ -689,26 +711,54 @@ function interactionAggregateFacts(worker, invocation, expected) {
   }
   const allowed = new Set(["schema_version", "task_id", "stage", "snapshot_tree", "talk", "clarify", "decision_ref", "decision_hash"]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new Error(`interaction aggregate has unknown fields: ${unknown.join(", ")}`);
+  if (unknown.length) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `interaction aggregate has unknown fields: ${unknown.join(", ")}`);
   if (value.schema_version !== "workflowhub-interaction-aggregate.v1"
       || value.task_id !== worker.identity.taskId || value.stage !== "make-decision"
       || !/^[a-f0-9]{40}$/.test(value.snapshot_tree ?? "")
       || value.decision_ref !== expected.decision_ref || value.decision_hash !== expected.decision_hash) {
-    throw new Error("interaction aggregate does not bind the current task and decision");
+    throw interactionAggregateDiagnosticError("aggregate_decision_unbound", "interaction aggregate does not bind the current task and decision");
   }
-  const talk = object(value.talk, "interaction aggregate talk");
-  const clarify = object(value.clarify, "interaction aggregate clarify");
+  let talk, clarify;
+  try {
+    talk = object(value.talk, "interaction aggregate talk");
+    clarify = object(value.clarify, "interaction aggregate clarify");
+  } catch (error) {
+    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message);
+  }
   if (talk.status !== "completed" || !Number.isSafeInteger(talk.round_count) || talk.round_count < 1
       || talk.architecture_direction_covered !== true || talk.user_outcome_covered !== true) {
-    throw new Error("interaction aggregate does not prove completed Talk coverage");
+    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate does not prove completed Talk coverage");
   }
   if (clarify.status !== "resolved" || clarify.open_direction_changing_questions !== 0
       || !new Set(["user_reply", "no_direction_changing_ambiguity"]).has(clarify.resolved_by)) {
-    throw new Error("interaction aggregate does not prove resolved Clarify");
+    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate does not prove resolved Clarify");
   }
   const lifecycle = validateInteractionAggregateLifecycle(value);
-  if (!lifecycle.ok) throw new Error(`interaction aggregate lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
+  if (!lifecycle.ok) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `interaction aggregate lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
   return Object.freeze({ ref, value: Object.freeze(value), evidence: Object.freeze({ ref, sha256: record.sha256 }) });
+}
+
+function unavailableMachineGateDiagnostic(id, error) {
+  const reason = error instanceof Error ? error.message : String(error);
+  return Object.freeze({ id, status: "invalid", reason });
+}
+
+function interactionAggregateDiagnosticError(id, message) {
+  const error = materialIncomplete(message);
+  Object.defineProperty(error, "machine_gate_diagnostic_id", {
+    value: id,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return error;
+}
+
+export function interactionAggregateMachineGateDiagnostic(error) {
+  const id = error?.machine_gate_diagnostic_id;
+  return new Set(["interaction_aggregate_unbound", "aggregate_decision_unbound"]).has(id)
+    ? unavailableMachineGateDiagnostic(id, error)
+    : null;
 }
 function assertCurrentNamespace(worker, ref) {
   if (/^(?:receipts|reviews)\//.test(ref)) {
@@ -2132,12 +2182,18 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
         || output.content_hash !== hashText(output.content)) {
       throw new Error(`review provider ${providerAttempt.provider} output provenance mismatch`);
     }
+    let review;
+    try { review = object(JSON.parse(output.content), `review provider ${providerAttempt.provider} canonical output`); }
+    catch (error) { throw new Error(`review provider ${providerAttempt.provider} canonical output is invalid: ${error.message}`); }
     providerOutputs.push({
       ref: providerAttempt.output_ref,
       provider: providerAttempt.provider,
       ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
       ...(output.evidence_anchor_valid === undefined ? {} : { evidenceAnchors: output.evidence_anchor_valid }),
-      review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
+      // `output.content` is already the authenticated canonical provider
+      // projection. Re-parsing it as raw provider prose drops retained
+      // discarded_facts and makes a valid canonical result unverifiable.
+      review,
     });
   }
   try {
@@ -3604,11 +3660,25 @@ HANDLERS.set("make-decision", async (worker, input) => {
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
-  const interaction = input.receipts.interaction === undefined ? null : interactionAggregateFacts(worker, input, {
-      snapshot_tree: snapshot.tree,
-      decision_ref: item.value.decision_ref,
-      decision_hash: item.value.decision_hash,
-    });
+  const machineGateDiagnostics = [];
+  let interaction = null;
+  if (input.receipts.interaction !== undefined) {
+    try {
+      interaction = interactionAggregateFacts(worker, input, {
+        snapshot_tree: snapshot.tree,
+        decision_ref: item.value.decision_ref,
+        decision_hash: item.value.decision_hash,
+      });
+    } catch (error) {
+      // A supplied interaction aggregate remains evidence of an invalid
+      // machine binding, never a reason to stop current-session work.  The
+      // handler continues without consuming it, and publication records the
+      // unavailable diagnostic as a content-addressed fact.
+      const diagnostic = interactionAggregateMachineGateDiagnostic(error);
+      if (diagnostic === null) throw error;
+      machineGateDiagnostics.push(diagnostic);
+    }
+  }
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision", reviewTrack: "direction" });
   const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision", reviewTrack: "detail" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
@@ -3648,6 +3718,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       ui_applicability: uiApplicability,
       direction_review_input: directionReviewInput,
       ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
+      ...(machineGateDiagnostics.length ? { machine_gate_diagnostics: machineGateDiagnostics } : {}),
       completion_subjects: {
         ui_applicability: subjectFact(
           uiApplicability.status === "recorded" ? "passed" : "missing",
@@ -3692,6 +3763,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
     missing_items: [...new Set([
       ...dispositions.missing_items,
       ...uiApplicability.missing_items,
+      ...machineGateDiagnostics.map(({ id, status, reason }) => `machine fact ${id} is ${status}: ${reason}`),
       ...(hasCurrentOutline ? convergence.outline.errors.map((error) => `outline_closed: ${error}`) : []),
     ])],
   }, {

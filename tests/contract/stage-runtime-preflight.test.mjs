@@ -197,6 +197,17 @@ describe("stage-runtime private run:preflight", () => {
     })).not.toThrow();
   });
 
+  it("accepts a runtime-owned attempt binding and rejects an empty one", () => {
+    expect(() => validateStageInvocation("build-code", {
+      receipts: {},
+      attempt_id: "current-session-build-code-attempt",
+    })).not.toThrow();
+    expect(() => validateStageInvocation("build-code", {
+      receipts: {},
+      attempt_id: "",
+    })).toThrow(/attempt_id.*non-empty string/i);
+  });
+
   it("rejects command/path, packet-budget, and missing capability facts before dispatch and retries after repair", async () => {
     const cases = [
       ["command", preflightPayload(), preflightServices({ command: [join(ROOT, "missing-command")] }), "command"],

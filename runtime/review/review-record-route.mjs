@@ -103,7 +103,7 @@ export function readAuthenticatedExecutionSource(task, selection, identity, mate
   return source;
 }
 
-function prepareExecutionReviewRequest(task, request, identity) {
+function prepareExecutionReviewRequest(task, request, identity, materialIdForRequest = null) {
   if (request.reviewed_execution === undefined) return { request, executionContext: null };
   if (request.stage !== "verify-code" || (request.review_kind ?? request.reviewKind ?? null) !== null) throw new Error("reviewed_execution is only supported by ordinary verify-code review");
   const workspace = openCurrentTaskWorkspace(task);
@@ -130,9 +130,12 @@ function prepareExecutionReviewRequest(task, request, identity) {
   } };
   const frozenMaterial = freezeReviewMaterial({ task, bytes: JSON.stringify(prepared) });
   const frozen = readFrozenReviewMaterial({ task, ...frozenMaterial });
+  if (frozen.status !== "recorded") throw new Error(`frozen review material is unavailable: ${frozen.diagnostic.reason}`);
   const frozenRequest = JSON.parse(frozen.bytes.toString("utf8"));
+  const providerMaterialId = reviewRequestMaterialId(frozenRequest, materialIdForRequest);
   const executionContext = Object.freeze({ frozen_material: frozenMaterial,
-    reviewed_execution: { ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor } });
+    reviewed_execution: { ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor },
+    provider_material_id: providerMaterialId });
   EXECUTION_CONTEXTS.add(executionContext);
   return { request: frozenRequest, executionContext };
 }
@@ -141,9 +144,10 @@ function executionBindingForResult(task, result, identity, context, { allowHisto
   if (context === null) return null;
   if (result.stage !== "verify-code") throw new Error("execution review context is restricted to verify-code");
   const frozen = readFrozenReviewMaterial({ task, ...context.frozen_material });
+  if (frozen.status !== "recorded") throw new Error(`frozen review material is unavailable: ${frozen.diagnostic.reason}`);
   if (frozen.provider_input_sha256 !== context.frozen_material.provider_input_sha256) throw new Error("frozen review original bytes hash mismatch");
   const request = JSON.parse(frozen.bytes.toString("utf8"));
-  const materialIdMatches = reviewPacketMaterialId(request) === result.material_id;
+  const materialIdMatches = context.provider_material_id === result.material_id;
   const preDispatchMaterialFailure = result.status === "unavailable"
     && result.error?.code === "REVIEW_INPUT_TOO_LARGE"
     && Array.isArray(result.provider_results) && result.provider_results.length === 0
@@ -163,7 +167,8 @@ function executionBindingForResult(task, result, identity, context, { allowHisto
   if (!provider) return null;
   const identityValue = normalizeIdentity(provider.identity, provider.provider);
   if (!identityValue || typeof result.runtime_id !== "string" || !result.runtime_id.trim()) return null;
-  return { ...context, reviewer_actor: { source_kind: "review_provider", source_id: identityValue.source_id, run_id: result.runtime_id } };
+  const { provider_material_id: _providerMaterialId, ...binding } = context;
+  return { ...binding, reviewer_actor: { source_kind: "review_provider", source_id: identityValue.source_id, run_id: result.runtime_id } };
 }
 
 function textHash(text) {
@@ -1125,7 +1130,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
   if (["e2e_binding", "confirmation", "confirmation_ref", "user_confirmation"].some((key) => Object.hasOwn(request, key))) throw new TypeError("execution review binding and future confirmation are host-owned");
   const before = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-  const executionPrepared = prepareExecutionReviewRequest(taskHandle, request, before);
+  const executionPrepared = prepareExecutionReviewRequest(taskHandle, request, before, materialIdForRequest);
   request = executionPrepared.request;
   const executionContext = executionPrepared.executionContext;
   const retryRequest = retryDecision(request);

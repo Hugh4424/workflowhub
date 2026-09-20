@@ -15,6 +15,7 @@ import { STAGE_PREDICATES, stageMaterialScopeRevision } from "../../runtime/stag
 import { projectAcceptanceExecutionData } from "../../runtime/stage/stage-content-contracts.mjs";
 import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs";
 import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { deriveAcceptanceExecutionAssertions } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
 import { authenticateAcceptanceExecutionAggregate, authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
@@ -849,6 +850,37 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(leaf.subject_fact.execution_binding).not.toHaveProperty("stage_outcome_hash");
   });
 
+  it("accepts nested numeric at-least assertions without weakening strict JSON comparison", async () => {
+    const strictRows = deriveAcceptanceExecutionAssertions(JSON.stringify({
+      entries: [{
+        acceptance_criterion_id: "AC-STRICT-001",
+        assertions: [{ id: "ordered-array", expected: [1, 2], actual: [2, 1] }],
+      }],
+    }), ["AC-STRICT-001"]);
+    expect(strictRows[0].assertions[0].result).toBe("failed");
+    const rows = p9Rows();
+    rows[0] = {
+      ...rows[0],
+      assertions: [{
+        id: "nested-at-least",
+        expected: { count: ">=1", ordered: [">=2", "literal"] },
+        actual: { count: 3, ordered: [2, "literal"] },
+      }],
+    };
+    const state = p9Fixture({ rows });
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: "p9-nested-at-least-attempt",
+      receipts: {},
+    });
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    const leafRef = aggregate.execution_items[0]?.evidence_refs?.[0]?.ref;
+    const leaf = typeof leafRef === "string" ? JSON.parse(state.task.readRecord(leafRef)) : null;
+    expect(aggregate, JSON.stringify({ result, leaf }, null, 2)).toMatchObject({
+      status: "passed",
+      execution_items: [{ status: "executed" }],
+    });
+  });
+
   it("authenticates the complete current aggregate before review consumers can use it", async () => {
     const state = p9Fixture();
     const result = await runOfficialStage("build-code", state.context, {
@@ -1104,7 +1136,7 @@ function p9ConfigureReview(state, { sameSource = false, mixedSources = false, on
 }
 
 async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
-  const { resultMutation = null, ...requestExtra } = extra;
+  const { resultMutation = null, providerOutput = null, ...requestExtra } = extra;
   const request = {
     stage: "verify-code", host_provider: "codex/host",
     materials: { implementation: "inspect actual local acceptance service implementation", tests: "two JSON oracle assertions" },
@@ -1133,7 +1165,9 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
             const failed = trace.onlySameCompletes && provider === "opencode/independent";
             return { provider, status: failed ? "failed" : "completed", identity: { provider, adapter: "opencode", model: selected.provider_models[provider], ...selected.provider_identities[provider] },
               error: failed ? { code: "PROCESS_FAILED", message: "actual independent fixture member failed" } : null,
-              output: failed ? null : JSON.stringify({ findings: [] }), timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null };
+              output: failed ? null : typeof providerOutput === "function"
+                ? providerOutput(provider)
+                : providerOutput ?? JSON.stringify({ findings: [] }), timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null };
           }),
         };
       } } });
@@ -1315,6 +1349,52 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     }
     expect(p9Fresh(state, fact).status).toBe("current");
     expect(trace.dispatches).toBe(1);
+  });
+
+  it("binds an execution review to the provider-projected material after host evidence is frozen", async () => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const trace = p9ConfigureReview(state);
+    const execution = await p9Execute(state);
+    const input = p9ExecutionInput(state, execution);
+
+    // These are the real verify-code contract keys. Recording adds host-only
+    // runtime_* evidence, which the provider projection deliberately omits.
+    // The result must bind to the projected bundle, not the broader frozen
+    // record used by host-side execution authentication.
+    const review = await p9PublicReview(state, trace, input, { materials: {
+      changed_files: "runtime/review/review-record-route.mjs",
+      implementation_assessment: "execution review binds its delivered bundle",
+      test_context: "focused contract regression",
+      open_risks: "none identified",
+    } });
+
+    expect(trace.rounds).toBe(1);
+    expect(trace.dispatches).toBe(1);
+    expect(trace.requestMaterials[0]).toHaveProperty("runtime_execution");
+    expect(typeof review.result_ref, JSON.stringify(review)).toBe("string");
+    expect(review.result_ref).toMatch(/^quality\/reviews\/results\//);
+    expect(JSON.parse(state.task.readRecord(review.result_ref)).material_id).toBe(trace.bundles[0].materialId);
+  });
+
+  it("reconsumes canonical provider output that retained a discarded unanchored finding", async () => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const trace = p9ConfigureReview(state);
+    const execution = await p9Execute(state);
+    const review = await p9PublicReview(state, trace, p9ExecutionInput(state, execution), {
+      providerOutput: (provider) => provider === "opencode/reviewer"
+        ? JSON.stringify({ findings: [{
+          severity: "minor", path: "outside-submitted-bundle.mjs", line: 1,
+          issue: "unanchored fixture finding", root_cause: "fixture", recommendation: "ignore",
+          evidence_kind: "direct", evidence: "outside submitted packet",
+        }] })
+        : JSON.stringify({ findings: [] }),
+    });
+
+    const stored = JSON.parse(state.task.readRecord(review.result_ref));
+    expect(stored.provider_results.some(({ output }) => output.discarded_facts?.length > 0)).toBe(true);
+    const verified = await p9Verify(state, { quality_review: review.result_ref });
+    expect(verified.stage).toBe("verify-code");
+    expect(JSON.stringify(verified)).not.toContain("review result canonical authentication failed");
   });
 
   it.each(["same source", "wrong confirmation subject", "old review after source change", "ordinary result alias"])("preserves content-bound acceptance semantics for %s", async (condition) => {

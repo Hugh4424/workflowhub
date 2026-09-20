@@ -617,6 +617,28 @@ function materialIdForInput(input) {
   return reviewPacketMaterialId(input, { instructionText: instructions, compactMaterials: compactVerifyCodeMaterials });
 }
 
+// The review record authenticates the exact provider bundle, while its frozen
+// host record also retains execution evidence that is intentionally not sent
+// to a provider. Keep this projection beside the dispatch path so both sides
+// calculate the same material identity without widening the stage allowlist.
+export function simpleReviewProviderMaterialId(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
+  const identity = reviewIdentityFromInput(input);
+  let providerInput = {
+    ...input,
+    stage: identity.stage,
+    review_track: identity.reviewTrack,
+    review_scope: identity.reviewScope,
+    review_kind: identity.reviewKind,
+  };
+  providerInput = projectRunnerMaterials(providerInput).input;
+  if (providerInput.stage === "verify-code") {
+    const projection = compactVerifyCodeMaterials(providerInput.materials);
+    if (projection.diff !== null) providerInput = { ...providerInput, materials: projection.materials };
+  }
+  return materialIdForInput(providerInput);
+}
+
 // The host-path redaction boundary is text/JSON-only: redactProviderHostPaths
 // returns Buffer values unchanged, while the bundle writer forwards their bytes
 // verbatim. A binary material could therefore carry an absolute host path to
@@ -1437,7 +1459,25 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           : source && typeof source === "object" ? Object.entries(source) : [];
         const providerResults = entries
           .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
-          .map(([provider, item]) => publicProviderResult({ ...item, provider: item.provider ?? provider }, undefined, pair));
+          .map(([provider, item]) => {
+            const expectedIdentity = selectedIdentities?.[provider];
+            const identity = expectedIdentity
+              ? { provider, adapter: providerAdapter(provider), ...expectedIdentity, model: selectedModels?.[provider] ?? null }
+              : item.identity;
+            const semantic = item.status === "completed" && (item.error === null || item.error === undefined);
+            return publicProviderResult({
+              ...item,
+              provider: item.provider ?? provider,
+              ...(identity ? { identity } : {}),
+              ...(semantic ? {
+                status: "failed",
+                error: {
+                  code: "PROVIDER_RESULT_INVALID",
+                  message: "managed review observation ended before a completed provider could be identity-authenticated",
+                },
+              } : {}),
+            }, undefined, pair);
+          });
         return unavailableResult(input, normalizeProviderError(error), pair, {
           // A transmitted request whose reply could not be parsed is neither
           // "dispatched" nor "blocked_before_dispatch"; keep the transport's own

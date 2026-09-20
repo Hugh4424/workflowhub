@@ -9,6 +9,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { importCanonicalReviewResult, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
 
 import {
@@ -16,7 +17,7 @@ import {
   bootstrapStage,
   prepareMakeDecisionWorkspace,
 } from "../../runtime/stage/stage-context.mjs";
-import { authenticateStageOutcomeForProjection, runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { authenticateStageOutcomeForProjection, runOfficialStage, runStageEndReflection } from "../../runtime/stage/stage-runner.mjs";
 import { validateStageInvocation } from "../../runtime/stage/stage-handlers.mjs";
 import { diagnoseMissingInput } from "../../runtime/stage/stage-handlers.mjs";
 import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
@@ -39,9 +40,21 @@ import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import {
+  assertNoTaskTypeArguments,
+  inspectTaskType,
+  isTypeRelatedStage,
+  readActivationCohort,
+  recordTypeAttempt,
+  validateStageForTopology,
+} from "../../runtime/task/task-topology.mjs";
+import {
+  projectPortableWorkflowStatus,
+  runPortableWorkflow,
+} from "../../runtime/task/portable-workflow-run.mjs";
 import { validateProjectName, validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
-import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { resolveSimpleReviewRouteIdentity, runSimpleReview, simpleReviewProviderMaterialId } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, reviewInstructionsFor } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -61,6 +74,73 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
 const WORKFLOW_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const PORTABLE_WORKFLOW_STAGE = "build-prd";
+
+function topologyRouteError(message, details = {}) {
+  const error = new Error(message);
+  error.code = "TASK_TOPOLOGY_INVALID";
+  Object.assign(error, details);
+  return error;
+}
+
+/**
+ * Read the sole human declaration and select the frozen topology. The public
+ * run entry authenticates its write identity before calling this function,
+ * because an unknown declaration can append an immutable attempt fact.
+ */
+export function resolveTaskTopologyRoute({ identity, stage, recordUnknownAttempt = true } = {}) {
+  const task = openTask(identity?.taskPath, identity?.project, identity?.task);
+  const workspace = openCurrentTaskWorkspace(task);
+  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+  let decisionLog = "";
+  let readError = null;
+  try {
+    decisionLog = artifacts.read("decision-log.md");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    readError = error;
+  }
+  const taskType = inspectTaskType(decisionLog);
+  if (taskType.status !== "known") {
+    let attempt = null;
+    let attemptError = null;
+    if (recordUnknownAttempt) {
+      try {
+        attempt = recordTypeAttempt({
+          task,
+          observed_kind: taskType.observed_kind,
+          observed_summary: readError?.message ?? taskType.reason,
+        });
+      } catch (error) {
+        attemptError = error;
+      }
+    }
+    throw topologyRouteError(
+      "任务类型无法识别，请在 make-decision 的任务身份段声明恰一条受控值标签",
+      { task_type: taskType, task_type_attempt: attempt, task_type_attempt_error: attemptError?.message ?? null },
+    );
+  }
+  const activationCohort = readActivationCohort(task.manifest);
+  const validation = validateStageForTopology({
+    task_type: taskType.task_type,
+    activation_cohort: activationCohort,
+    stage,
+  });
+  if (!validation.ok) {
+    throw topologyRouteError(
+      `阶段 ${stage} 不在任务类型 ${taskType.task_type} 的拓扑中；期望 ${validation.expected.join(" → ")}`,
+      { task_type: taskType, activation_cohort: activationCohort, topology: validation.expected },
+    );
+  }
+  return Object.freeze({
+    task,
+    workspace,
+    artifacts,
+    task_type: taskType.task_type,
+    activation_cohort: activationCohort,
+    topology: validation.expected,
+  });
+}
 
 export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = process.env) {
   const hasProject = typeof values.project === "string" && values.project.trim() !== "";
@@ -730,6 +810,7 @@ export function stageReflectionPublication(services = {}) {
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
+  assertNoTaskTypeArguments(values);
   if (command === "preflight" || (command === "run" && values.action === "preflight")) {
     const prefix = command === "run" ? "run:" : "";
     const allowed = new Set(command === "run" ? ["action", "stage", "input"] : ["stage", "input"]);
@@ -777,6 +858,71 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     expectedEpoch: launchEnv.WORKFLOWHUB_CUTOVER_EPOCH,
   });
   const identity = resolveWorkflowHubIdentity(values, cwd);
+  let topologyRoute = null;
+  if (isTypeRelatedStage(values.stage) && new Set(["run", "status", "doctor"]).has(command)) {
+    if (command === "run") {
+      // Every type-related run can publish stage facts or an unknown-type
+      // attempt. Authenticate before resolving a route with side effects.
+      const task = openTask(identity.taskPath, identity.project, identity.task);
+      const workspace = openCurrentTaskWorkspace(task);
+      assertTaskWriteIdentity({
+        task,
+        project: identity.project,
+        taskId: identity.task,
+        taskPath: identity.taskPath,
+        workspace,
+        cwd,
+        env: launchEnv,
+      });
+    }
+    topologyRoute = resolveTaskTopologyRoute({
+      identity,
+      stage: values.stage,
+      // Read-only status/doctor must not append a diagnostic attempt.
+      recordUnknownAttempt: command === "run",
+    });
+  }
+  if (values.stage === PORTABLE_WORKFLOW_STAGE && command === "status") {
+    const task = topologyRoute.task;
+    const workspace = topologyRoute.workspace;
+    const portable = projectPortableWorkflowStatus({ task });
+    return Object.freeze({
+      work_status: portable.state,
+      workflow: PORTABLE_WORKFLOW_STAGE,
+      portable_workflow: portable,
+      identity: Object.freeze({ task_id: task.identity.taskId, worktree_root: workspace.worktreeRoot }),
+    });
+  }
+  if (values.stage === PORTABLE_WORKFLOW_STAGE && command === "doctor") {
+    const task = topologyRoute.task;
+    const workspace = topologyRoute.workspace;
+    return Object.freeze({
+      stage: PORTABLE_WORKFLOW_STAGE,
+      task_id: task.identity.taskId,
+      worktree_root: workspace.worktreeRoot,
+      baseline_commit: workspace.baselineCommit,
+      portable_workflow: projectPortableWorkflowStatus({ task }),
+    });
+  }
+  if (command === "run" && values.stage === PORTABLE_WORKFLOW_STAGE) {
+    const portableInput = values.input === undefined
+      ? undefined
+      : readTaskBoundInput({ task: topologyRoute.task }, values.input);
+    const portable = runPortableWorkflow({
+      task: topologyRoute.task,
+      worktreeRoot: topologyRoute.workspace.worktreeRoot,
+      input: portableInput,
+      ...(values.now === undefined ? {} : { now: () => new Date(values.now) }),
+    });
+    return Object.freeze({
+      status: portable.state,
+      stage: PORTABLE_WORKFLOW_STAGE,
+      task_type: topologyRoute.task_type,
+      activation_cohort: topologyRoute.activation_cohort,
+      topology: topologyRoute.topology,
+      ...portable,
+    });
+  }
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
     projectName: identity.project,
@@ -1038,7 +1184,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
             ? services.materialIdForRequest
             : useTaskBoundBuildCodeBundle
               ? (request) => prepareBundle(request).materialId
-              : (request) => createSimpleReviewPacket(request).material_id,
+              : simpleReviewProviderMaterialId,
         })
         : importCanonicalReviewResult({
           task: context.task,
@@ -1058,6 +1204,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     if (!input || typeof input !== "object" || Array.isArray(input)) {
       throw new TypeError("reflect input must be a judgment object");
+    }
+    // An executed judgment must use the stage-end transaction, not only the
+    // immutable reflection writer.  The transaction puts the new immutable
+    // ref on the stage row (the status reader's sole carrier), preserving the
+    // review facts already recorded for that stage.  Availability disclosures
+    // retain their narrower writer because they have no judgment to project.
+    if (["ok", "degraded", "failed"].includes(input.status)) {
+      return runStageEndReflection(context, {
+        stageStatus: input.stage_status,
+        judgment: input,
+        attemptId: input.executor?.attempt_id ?? input.identity?.attempt ?? null,
+        ...(values.now === undefined ? {} : { now: values.now }),
+      });
     }
     return runStageReflection(context, {
       input,

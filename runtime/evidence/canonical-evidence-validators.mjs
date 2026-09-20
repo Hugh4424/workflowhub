@@ -16,6 +16,7 @@ export const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
 export const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 export const CLOSE_PLAN_REF = /^operations\/close\/plans\/([a-f0-9]{64})\/plan\.json$/;
 const SAFE_PATH = /^(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+))(?:\/(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+)))*$/;
+const NUMERIC_AT_LEAST = /^>=((?:0|[1-9]\d*)(?:\.\d+)?)$/;
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
 const qualityFactValidator = new Ajv2020({ allErrors: true, strict: false,
   formats: { "date-time": (value) => Number.isFinite(Date.parse(value)) },
@@ -31,6 +32,27 @@ function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
+}
+
+function acceptanceAssertionMatches(expected, actual) {
+  if (typeof expected === "string" && typeof actual === "number") {
+    const threshold = NUMERIC_AT_LEAST.exec(expected);
+    if (threshold) return Number.isFinite(actual) && actual >= Number(threshold[1]);
+  }
+  if (Array.isArray(expected) || Array.isArray(actual)) {
+    return Array.isArray(expected) && Array.isArray(actual)
+      && expected.length === actual.length
+      && expected.every((entry, index) => acceptanceAssertionMatches(entry, actual[index]));
+  }
+  if (expected && typeof expected === "object" || actual && typeof actual === "object") {
+    if (!expected || typeof expected !== "object" || Array.isArray(expected)
+        || !actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+    const expectedKeys = Object.keys(expected).sort(), actualKeys = Object.keys(actual).sort();
+    return expectedKeys.length === actualKeys.length
+      && expectedKeys.every((key, index) => key === actualKeys[index]
+        && acceptanceAssertionMatches(expected[key], actual[key]));
+  }
+  return canonicalJson(expected) === canonicalJson(actual);
 }
 
 /** Pure semantic checks shared by the host outcome reader and nested freshness. */
@@ -94,7 +116,7 @@ export function deriveAcceptanceExecutionAssertions(raw, criterionIds) {
           || !Object.hasOwn(assertion, "expected") || !Object.hasOwn(assertion, "actual")) throw new Error("acceptance execution assertion is incomplete or duplicate");
       assertions.add(assertion.id);
       return { id: assertion.id, expected: assertion.expected, actual: assertion.actual,
-        result: canonicalJson(assertion.expected) === canonicalJson(assertion.actual) ? "passed" : "failed" };
+        result: acceptanceAssertionMatches(assertion.expected, assertion.actual) ? "passed" : "failed" };
     }) };
   });
 }
@@ -153,7 +175,7 @@ export function validateAcceptanceExecutionEvidence(value) {
   for (const assertion of subject.assertions) {
     if (!assertion || typeof assertion.id !== "string" || !assertion.id.trim() || seen.has(assertion.id)
         || !Object.hasOwn(assertion, "expected") || !Object.hasOwn(assertion, "actual")
-        || assertion.result !== (canonicalJson(assertion.expected) === canonicalJson(assertion.actual) ? "passed" : "failed")) throw new Error("acceptance assertion result is not runtime-derived");
+        || assertion.result !== (acceptanceAssertionMatches(assertion.expected, assertion.actual) ? "passed" : "failed")) throw new Error("acceptance assertion result is not runtime-derived");
     seen.add(assertion.id);
   }
   if (subject.status === "passed" && (execution.exit_code !== 0 || execution.signal !== null

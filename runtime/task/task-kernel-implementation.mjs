@@ -683,31 +683,60 @@ export function buildTaskKernel(taskHandle, {
       throw error;
     }
   };
+  const machineGateError = (id, message) => {
+    const error = new Error(message);
+    Object.defineProperty(error, "machine_gate_diagnostic_id", {
+      value: id,
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+    return error;
+  };
   const prepareInteractionPublication = (input = {}) => {
     object(input, "make-decision interaction publication input");
     const candidateInput = input.aggregate && !input.schema_version ? input.aggregate : input;
-    object(candidateInput, "make-decision interaction aggregate");
+    try {
+      object(candidateInput, "make-decision interaction aggregate");
+    } catch (error) {
+      throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: ${error.message}`);
+    }
     const { revision, snapshot } = currentContext();
     if (candidateInput.snapshot_tree !== undefined && candidateInput.snapshot_tree !== snapshot.tree) {
-      throw new Error("make-decision interaction aggregate is stale relative to the current Workspace snapshot");
+      throw machineGateError("aggregate_snapshot_stale", "make-decision interaction aggregate is stale relative to the current Workspace snapshot");
     }
-    const decision = object(candidateInput.decision, "interaction aggregate decision");
+    let decision;
+    try {
+      decision = object(candidateInput.decision, "interaction aggregate decision");
+    } catch (error) {
+      throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: ${error.message}`);
+    }
     const currentDecisionRef = artifactDir().reference("decision-log.md");
     const currentDecisionRaw = artifactDir().read("decision-log.md");
     if (decision.ref !== currentDecisionRef || decision.hash !== hash(currentDecisionRaw)) {
-      throw new Error("make-decision interaction aggregate decision is not bound to the current decision-log.md");
+      throw machineGateError("aggregate_decision_unbound", "make-decision interaction aggregate decision is not bound to the current decision-log.md");
     }
     if (decision.revision !== revision.revision_id) {
-      throw new Error("make-decision interaction aggregate decision revision is stale");
+      throw machineGateError("aggregate_decision_revision_stale", "make-decision interaction aggregate decision revision is stale");
     }
-    const confirmation = readAcceptedHumanConfirmation(task, candidateInput.confirmation?.ref, "interaction aggregate confirmation");
+    let confirmation;
+    try {
+      confirmation = readAcceptedHumanConfirmation(task, candidateInput.confirmation?.ref, "interaction aggregate confirmation");
+    } catch (error) {
+      // A supplied confirmation binding is a machine fact, not an implicit
+      // work permit. Preserve ordinary storage/I/O failures for the caller,
+      // but project malformed, missing, or tampered confirmation bytes as the
+      // declared non-blocking diagnostic.
+      if (error?.code && error.code !== "ENOENT") throw error;
+      throw machineGateError("human_confirmation_hash_mismatch", `MATERIAL_INCOMPLETE: ${error.message}`);
+    }
     if (candidateInput.confirmation?.hash !== confirmation.sha256
         || candidateInput.confirmation?.result !== "accepted"
         || confirmation.value.stage !== "make-decision"
         || confirmation.value.subject_ref !== currentDecisionRef
         || confirmation.value.material_revision !== revision.revision_id
         || confirmation.value.snapshot_tree !== snapshot.tree) {
-      throw new Error("make-decision interaction aggregate confirmation does not bind the current decision and snapshot");
+      throw machineGateError("human_confirmation_hash_mismatch", "make-decision interaction aggregate confirmation does not bind the current decision and snapshot");
     }
     const requirement = object(candidateInput.original_requirement, "interaction aggregate original_requirement");
     const requirementRaw = readBoundRecord(requirement.ref, "interaction aggregate original_requirement");
@@ -725,7 +754,7 @@ export function buildTaskKernel(taskHandle, {
       generated_at: candidateInput.generated_at ?? now(),
     };
     const validation = validateInteractionAggregateContract(normalized);
-    if (!validation.ok) throw new Error(`MATERIAL_INCOMPLETE: interaction aggregate is invalid: ${validation.errors.join("; ")}`);
+    if (!validation.ok) throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: interaction aggregate is invalid: ${validation.errors.join("; ")}`);
     return deepFreeze(normalized);
   };
   const completeInteractionPublication = (input = {}) => {
@@ -775,6 +804,20 @@ export function buildTaskKernel(taskHandle, {
       quality_fact_hash: qualityFact.sha256,
       idempotent: false,
     });
+  };
+  const observeInteractionPublication = (input = {}) => {
+    try {
+      return Object.freeze({ status: "recorded", value: prepareInteractionPublication(input), diagnostic: null });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const id = error?.machine_gate_diagnostic_id;
+      if (typeof id !== "string" || id.trim() === "") throw error;
+      return Object.freeze({
+        status: "unavailable",
+        value: null,
+        diagnostic: Object.freeze({ id, status: "invalid", reason }),
+      });
+    }
   };
   const kernel = {
     task,
@@ -1087,6 +1130,7 @@ export function buildTaskKernel(taskHandle, {
       return Object.freeze({ ref: consumptionRef, hash: hash(raw), value: consumed });
     },
     prepareMakeDecisionInteractionPublication: prepareInteractionPublication,
+    observeMakeDecisionInteractionPublication: observeInteractionPublication,
     completeMakeDecisionInteractionPublication: completeInteractionPublication,
     completeMakeDecisionResearch(input = {}) {
       object(input, "make-decision research publication input");

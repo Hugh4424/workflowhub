@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { hostname } from "node:os";
+import { hostname, networkInterfaces } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 import { deriveTaskPath, validateProjectName, validateTaskId } from "../task/task-identity.mjs";
@@ -315,6 +315,71 @@ function clearStaleClaim(claimPath, taskPath, parent) {
   return true;
 }
 
+/**
+ * A macOS hostname can legitimately alternate between its short label and
+ * the corresponding mDNS `.local` name across terminal hosts.  Treat only
+ * that narrow pair as local; every other hostname remains remote and can
+ * never be reclaimed by PID liveness alone.
+ */
+export function sameLocalRecordLockHost(ownerHost, currentHost = hostname()) {
+  if (typeof ownerHost !== "string" || ownerHost.trim() === ""
+      || typeof currentHost !== "string" || currentHost.trim() === "") return false;
+  const owner = ownerHost.trim().toLowerCase();
+  const current = currentHost.trim().toLowerCase();
+  if (owner === current) return true;
+  const localAlias = (value) => {
+    if (value.endsWith(".local")) {
+      const shortName = value.slice(0, -".local".length);
+      return shortName !== "" && !shortName.includes(".")
+        ? { shortName, qualified: true }
+        : null;
+    }
+    return !value.includes(".") ? { shortName: value, qualified: false } : null;
+  };
+  const ownerAlias = localAlias(owner);
+  const currentAlias = localAlias(current);
+  return ownerAlias !== null && currentAlias !== null
+    && ownerAlias.shortName === currentAlias.shortName
+    && ownerAlias.qualified !== currentAlias.qualified;
+}
+
+const VOLATILE_INTERFACE = /^(?:lo\d*|utun\d*|awdl\d*|llw\d*|veth|docker|br-|virbr|gif\d*|stf\d*|anpi\d*|bridge\d*|tun\d*|tap\d*|wg\d*)/i;
+
+export function recordLockMachineId(interfaces = networkInterfaces()) {
+  const macs = Object.entries(interfaces ?? {})
+    .filter(([name]) => !VOLATILE_INTERFACE.test(name))
+    .flatMap(([, entries]) => Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry?.internal !== true)
+    .map((entry) => typeof entry?.mac === "string" ? entry.mac.toLowerCase() : "")
+    .filter((mac) => /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/.test(mac) && mac !== "00:00:00:00:00:00")
+    .sort();
+  return macs.length ? sha256(macs.join(",")) : null;
+}
+
+/**
+ * PID liveness can cross a short-host/.local spelling only when the lock also
+ * carries this machine's opaque network-instance digest. Older exact-host
+ * records stay recoverable; an old alias record deliberately fails closed.
+ */
+export function localRecordLockOwnerMatchesMachine(owner, {
+  currentHost = hostname(),
+  currentMachineId = recordLockMachineId(),
+} = {}) {
+  if (!owner || typeof owner !== "object" || Array.isArray(owner)
+      || typeof owner.host !== "string" || owner.host.trim() === ""
+      || typeof currentHost !== "string" || currentHost.trim() === "") return false;
+  const sameHost = owner.host.trim().toLowerCase() === currentHost.trim().toLowerCase();
+  // Preserve the prior exact-host recovery path. The fingerprint only
+  // narrows an alias crossing, where hostname text alone proves nothing on
+  // shared storage.
+  if (sameHost) return true;
+  const ownerMachineId = owner.machine_id;
+  if (ownerMachineId === undefined) return false;
+  if (!/^[a-f0-9]{64}$/.test(ownerMachineId) || !/^[a-f0-9]{64}$/.test(currentMachineId ?? "")) return false;
+  return (sameHost || sameLocalRecordLockHost(owner.host, currentHost))
+    && ownerMachineId === currentMachineId;
+}
+
 function lockOwnerDeadOrExpired(lockPath, taskRoot) {
   let owner;
   try { owner = JSON.parse(readRegularFileNoFollow(lockPath, "record lock", taskRoot)); }
@@ -322,7 +387,10 @@ function lockOwnerDeadOrExpired(lockPath, taskRoot) {
   const age = Date.now() - Date.parse(owner.started_at);
   // PID liveness is authoritative only on this host. Never steal a live local
   // lock by age, and never guess about a remote host without a lease service.
-  return owner.host === hostname() && !processAlive(owner.pid)
+  // A hostname alias alone is not a machine identity on shared storage. New
+  // alias records must carry the local machine digest; legacy records retain
+  // only their already-existing exact-host recovery behavior.
+  return localRecordLockOwnerMatchesMachine(owner) && !processAlive(owner.pid)
     && Number.isFinite(age) && age >= 0;
 }
 
@@ -345,6 +413,7 @@ function withRecordLockAt(taskRoot, relativePath, operation, options) {
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const nonce = randomUUID();
+  const machineId = recordLockMachineId();
   const started = Date.now();
   let fd;
   let owned = false;
@@ -352,7 +421,13 @@ function withRecordLockAt(taskRoot, relativePath, operation, options) {
     verifyDirectorySnapshot(ancestorSnapshot);
     try {
       fd = openSync(candidate, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600);
-      writeSync(fd, `${JSON.stringify({ pid: process.pid, host: hostname(), started_at: new Date().toISOString(), nonce })}\n`, null, "utf8");
+      writeSync(fd, `${JSON.stringify({
+        pid: process.pid,
+        host: hostname(),
+        ...(machineId === null ? {} : { machine_id: machineId }),
+        started_at: new Date().toISOString(),
+        nonce,
+      })}\n`, null, "utf8");
       fsyncSync(fd);
       closeSync(fd); fd = undefined;
       fsyncDirectory(parent);
