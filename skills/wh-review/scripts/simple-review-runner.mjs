@@ -503,17 +503,13 @@ function buildBundle(attachmentRoot, input) {
     throw Object.assign(new Error(`MATERIAL_TOO_LARGE: review bundle exceeds the ${Math.round(REVIEW_PACKET_MAX_DELIVERY_BYTES / 1024)} KiB provider delivery budget`), { code: "MATERIAL_TOO_LARGE" });
   }
   write("manifest.json", manifest);
-  // Keep the bundle identity identical to the frozen packet identity. The
-  // packet hash covers the canonical manifest entry as well as its contents;
-  // using a pre-manifest hash here would make a frozen input impossible to
-  // rehydrate without changing its identity.
+  // Single material identity over the delivered bundle. reviewPacketMaterialId and
+  // deliveredMaterialId share one canonicalBundleEntries rule, so the declared
+  // identity and the written bytes hash identically by construction. The self-check
+  // below stays as a fail-closed guard: if a future redaction/path/omission rule ever
+  // drifts, it must block dispatch BEFORE a provider is spawned (a drifted bundle would
+  // only earn an opaque broker error after the provider had started).
   const materialId = materialIdForInput(input);
-  // Fail before any provider is started when the declared identity does not
-  // describe the bytes that were actually written. Both values come from the same
-  // canonical implementation, so a difference means a naming, redaction or
-  // omission rule drifted apart again; dispatching would only earn an opaque
-  // `PROTOCOL_INCOMPATIBLE: 3rd-review managed lifecycle envelope is invalid`
-  // from the broker after the provider had already been spawned.
   const deliveredId = deliveredMaterialId(entries);
   if (deliveredId !== materialId) {
     rmSync(bundleRoot, { recursive: true, force: true });

@@ -131,11 +131,24 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   }
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
-  const canonicalEntries = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH, "review-instructions.md"].includes(entry.path))
+  return hash(Buffer.from(JSON.stringify(canonicalBundleEntries(entries)), "utf8"));
+}
+
+/**
+ * Canonical, broker-exact bundle-entry filter shared by the declared packet
+ * identity (`reviewPacketMaterialId`) and the delivered-bundle self-check
+ * (`deliveredMaterialId`). Single source of truth so the two can never drift
+ * apart again (a past merge re-split them, which made every dispatched review
+ * fail the pre-dispatch identity self-check). Only the transport wrappers
+ * `manifest.json` and `canonical-evidence.json` are excluded; provider-visible
+ * material such as `review-instructions.md` and `authenticated-evidence.json`
+ * is part of the identity.
+ */
+function canonicalBundleEntries(entries) {
+  return entries
+    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
     .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
     .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
-  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
 }
 
 /**
@@ -158,9 +171,5 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
  * separately recorded `authenticated_evidence_sha256`, not of this digest.
  */
 export function deliveredMaterialId(entries) {
-  const canonicalEntries = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
-    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
-    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
-  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
+  return hash(Buffer.from(JSON.stringify(canonicalBundleEntries(entries)), "utf8"));
 }
