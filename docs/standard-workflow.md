@@ -68,6 +68,10 @@ host、doctor、status、monitor、run、review、verify、confirm、authorize�
 修复；发现会改变产品方向的内容，停在当前 stage 取得必要的用户决定。不能把未解决的问题
 静默交给下游，也不能用下游补写前置决定。
 
+普通 step 完成后按 manifest 的 `depends_on` 向后续 step 前移。下游处置 finding 或修改产物，
+不自动重新执行已经真实完成的上游 step；review finding 与材料变化都不构成回跳理由。只有后来
+证明上游 step 本身未真实完成或执行错误时，才像修复其他普通 step 一样回到该 step 修复重做。
+
 ### review、测试和成本
 
 `wh-review` 是唯一的异源审查入口。审查 packet 只包含当前主题和真实证据；provider 的

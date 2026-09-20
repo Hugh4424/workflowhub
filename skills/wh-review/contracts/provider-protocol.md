@@ -71,9 +71,7 @@ attempt。exit code `3` 的 stdout 仍是合法的 unavailable terminal group，
 这是一次 reviewer group 的一次 public request。WorkflowHub 不在外层追加 retry、
 格式纠正、换 provider、同源兜底或 continuation。broker 可以在这一次 request 内部
 按自己的生命周期策略重试，但必须把次数和终态放进公开结果。terminal unavailable、
-材料拒绝和真实 semantic finding 都原样记录；它们不能被重放成“没有问题”。如果要
-再次审查，必须由上层因为真实材料/代码变化产生新的审查调用，不能为了拿到空 findings
-重复同一主题。
+材料拒绝和真实 semantic finding 都原样记录；它们不能被重放成“没有问题”。一次 review step 记录真实结果后由上层按 manifest 前移；finding 处置或材料/代码修改不自动产生新的审查调用，也不能为了拿到空 findings 重复同一主题。只有后来证明该 review step 本身未真实完成或执行错误，才按普通步骤修复重做。
 
 `make-decision.direction` 不再是例外：它也只发一个 public group request。请求必须携带
 `review_flow.version=direction-review.v1`、`public_request_count=1` 和
@@ -208,9 +206,7 @@ adapter 的多个 profile 不能互相凑出异源 quorum，adapter/source 只�
 这使具体、可复核证据可以由一个异源 reviewer 报告，同时不会把 transient model
 质量波动、品牌或成本当作裁决依据。
 
-每个冻结 snapshot 的每一轮 public request 只允许一次语义 findings 审查；不得用同一个
-snapshot 重放真实 finding。修改后生成新 snapshot 时，才开始一次新的初始审查；旧结果只作为历史质量事实。`build-code` 永远是完整 phase/integration
-审查，`verify-code` 只审查当前实现代码并记录代码 finding，不把测试、材料、AC 或其他证据重新设为本阶段门禁。response ledger、resolution record
+每个既有 review step 的 public request 只记录一次真实语义 findings 或失败事实。旧结果保留为历史质量事实；下游修改 snapshot 后处置 finding 并继续 manifest 后续步骤，不自动开始新的审查。`build-code` 的 phase/integration 是不同 scope 的既有独立 review step，`verify-code` 只审查当前实现代码并记录代码 finding，不把测试、材料、AC 或其他证据重新设为本阶段门禁。response ledger、resolution record
 和旧 namespace 不属于当前生产审查输入。
 
 不要求 reviewer 输出 checklist、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都保持为失败事实，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
@@ -233,8 +229,4 @@ broker 生命周期事实必须可回放；WorkflowHub 不增加第二层重试�
 `PROCESS_DEAD`、`SIGTERM`、timeout、路径错误、坏 JSON、协议错误和其他 transport failure
 只能保留为 `unavailable`/`incomplete` 事实，不能进入 findings、不能变成“没有重要问题”。
 
-build-code 的 review cycle 复用现有 `actionable` 和 `major|blocking` 分类：当前可信语义结果没有
-这类 finding 才是该 cycle 的 clean 结束；有重要 finding 时，只有真实修复或被审主题真实变化后
-才允许一次 focused review。相同 finding、没有实际变化或 provider 没有可信终态时停止自动继续，
-保留 `needs_human`、`unavailable` 或 `incomplete`。这不新增 loop controller、持久状态对象或
-WorkflowHub quality gate。
+build-code 仍保留 `actionable` 和 `major|blocking` 分类供下游处置。Phase 与 integration 是不同 scope 的既有独立 review step；每一步记录真实异源 advice 或真实失败事实后按 manifest 前移。后续修复与材料变化不自动回跳该 review step，也不要求 clean、空 findings 或 provider pass；未处置风险与 `unavailable`/`incomplete` 保持可见。

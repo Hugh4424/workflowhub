@@ -210,30 +210,20 @@ describe("current wh-review helpers", () => {
     expect(result).toMatchObject({ status: "unavailable", valid: [{ provider: "kimi" }] });
   });
 
-  it("limits serious-finding continuation to one focused review after a real repair", () => {
+  it("records one review step as advice and advances regardless of later repair", () => {
     const finding = { id: "F-serious", severity: "major", disposition: "actionable", path: "a.js", line: 1, issue: "unsafe branch" };
     const result = { status: "available", terminal_status: "semantic", findings: [finding], adjudication: { clusters: [finding] } };
     expect(actionableSeriousFindings(result)).toEqual([finding]);
-    expect(reviewCycleDecision({ stage: "build-code", result })).toMatchObject({ status: "needs_human", action: "stop" });
-    expect(reviewCycleDecision({ stage: "build-code", result, actualRepair: true })).toMatchObject({ status: "focused_review_required", action: "review_once" });
-    expect(reviewCycleDecision({ stage: "build-code", result, previousResult: result, actualRepair: true })).toMatchObject({ status: "needs_human", reason: "same_important_finding_repeated_after_focused_review" });
-    expect(reviewCycleDecision({ stage: "build-code", result: { status: "available", terminal_status: "semantic", findings: [], adjudication: { clusters: [] } } })).toMatchObject({ status: "clean_current_review", action: "stop" });
-    expect(reviewCycleDecision({
-      stage: "build-code",
-      result: {
-        status: "available",
-        terminal_status: "semantic",
-        findings: [],
-        adjudication: { clusters: [{ id: "F-serious", disposition: "actionable", severity: "major", path: "x", issue: "serious" }] },
-      },
-    })).toMatchObject({ status: "needs_human", action: "stop" });
-    expect(reviewCycleDecision({ stage: "build-code", result: { status: "unavailable" } })).toMatchObject({ status: "incomplete", action: "stop" });
+    expect(reviewCycleDecision({ stage: "build-code", result })).toMatchObject({ status: "advice_recorded", action: "advance", important_findings: [finding] });
+    expect(reviewCycleDecision({ stage: "build-code", result, actualRepair: true, subjectChanged: true })).toMatchObject({ status: "advice_recorded", action: "advance" });
+    expect(reviewCycleDecision({ stage: "build-code", result: { status: "available", terminal_status: "semantic", findings: [], adjudication: { clusters: [] } } })).toMatchObject({ status: "advice_recorded", action: "advance", important_findings: [] });
+    expect(reviewCycleDecision({ stage: "build-code", result: { status: "unavailable" } })).toMatchObject({ status: "incomplete", action: "advance" });
     for (const status of ["partial", "running", "failed"]) {
       expect(reviewCycleDecision({ stage: "build-code", result: { status, findings: [], adjudication: { clusters: [] } } }))
-        .toMatchObject({ status: "incomplete", action: "stop", reason: "provider_no_trusted_terminal_result" });
+        .toMatchObject({ status: "incomplete", action: "advance", reason: "provider_no_trusted_terminal_result" });
     }
     expect(reviewCycleDecision({ stage: "build-code", result: { status: "available", terminal_status: "failed", findings: [] } }))
-      .toMatchObject({ status: "incomplete", action: "stop" });
+      .toMatchObject({ status: "incomplete", action: "advance" });
   });
 
   it("rejects malformed, aliased, and build-prd identities before finalization checks", () => {

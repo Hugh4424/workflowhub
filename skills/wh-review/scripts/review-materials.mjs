@@ -1098,7 +1098,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : `${blind} ${reviewInstruction}`;
   const adviceBoundary = "Every stage produces heterologous advice as a quality fact only; this is advice only, not a completion license. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
   const buildCodeBoundary = stage === "build-code" && reviewKind === null
-    ? "For build-code, a review cycle is clean only when the current trusted semantic result has no actionable major or blocking finding. If one exists, allow one focused review only after an actual repair or subject change; repeated findings, no actual change, or no trusted terminal result stop automatic continuation and remain visible as needs_human, unavailable, or incomplete."
+    ? "For build-code, record this review's real findings and transport status as advice. Downstream finding disposition and repairs continue through the manifest; they do not dispatch this completed review step again or seek a clean/provider-pass result."
     : "";
   const miniImplementationBoundary = reviewKind === "mini_task.implementation"
     ? "For mini-task implementation, perform one implementation review. Allow one focused re-review only after an actual repair or subject change; repeated findings, an unchanged subject, or no trusted terminal result remain visible as needs_human, unavailable, or incomplete. Do not mechanically retry."

@@ -159,7 +159,7 @@ the error, fix the binding or content, and continue in the same task.
 不需要外部 Stage Agent、bridge、session 或 stage outcome。旧 outcome 只作为历史 provenance
 读取，不能成为当前阶段或复盘的前置条件。
 
-方向、细节审查仍各走原有角色和顺序。既有 `review --action=record` 的 `request` 路径执行并记录一次审查；保留实际返回的 `attempt_ref`、可空的 `result_ref` 和 `report_ref`，再分别通过 `receipts.direction_review`、`receipts.detail_review` 交给 `stage-handlers#safeReviewFacts`。result 可用时引用实际 canonical result，只有 unavailable attempt 时引用该 attempt，不拼造 UUID/hash 路径或空结果。保留每个角色的真实语义、provider、transport、错误与 provenance；`recorded` 只证明记录完成。当前材料或 route 改变后按既有预算处理，不为 clean 标签重派。usage/timing 从已认证 attempt 的 `provider_attempts[].execution` 读取；缺失为 unavailable，真实零值仍为零。
+方向、细节审查仍各走原有角色和顺序。既有 `review --action=record` 的 `request` 路径执行并记录一次审查；保留实际返回的 `attempt_ref`、可空的 `result_ref` 和 `report_ref`，再分别通过 `receipts.direction_review`、`receipts.detail_review` 交给 `stage-handlers#safeReviewFacts`。result 可用时引用实际 canonical result，只有 unavailable attempt 时引用该 attempt，不拼造 UUID/hash 路径或空结果。保留每个角色的真实语义、provider、transport、错误与 provenance；`recorded` 只证明记录完成。各 review step 记录真实 advice 后按 manifest 前移；后续材料或 route 改变不自动回跳，也不为 clean 标签重派。usage/timing 从已认证 attempt 的 `provider_attempts[].execution` 读取；缺失为 unavailable，真实零值仍为零。
 
 普通方向确认绑定 `decision-log.md` 批准内容范围；后续材料细化不使该批准失效，真正方向改变仍需新的真实答复。caller 从 canonical confirmation、quality fact 与真实 approve-decision outcome 认证同一来源；风险接受、close 和其他阶段仍保留各自严格身份绑定。
 

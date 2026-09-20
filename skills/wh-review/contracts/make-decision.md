@@ -15,11 +15,11 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 每次真正执行 `make-decision` 时，`direction` 和 `detail` 各执行一次当次输入的 red/blue pair；每个 role 只调用一次，不把 paired request 变成重试循环。
 旧结果只作为不可变历史保留，不自动复用，也不通过正文、版本、material_id 或
 semantic hash 判断“还是不是同一份”。同一次执行不为追求空 findings 重审。
-如果本次只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
+如果本次只有 `unavailable`，区分两种情况：pre-flight 失败（缺路由或必需材料导致 provider 未启动）意味着该步骤未真实完成，修复后按普通步骤重做；provider 已执行但返回 unavailable（超时、transport failure）则是已完成步骤的真实事实，记录后按 manifest 前移，不因后续材料补齐自动重派。
 
 缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 下
 `quality/reviews/attempts/*` 的不可变质量事实保留；它没有 findings，也不能写成
-“没有问题”。补齐后可在同一 track 重新调用，产生新的质量事实。direction/detail
+“没有问题”。pre-flight 材料缺失意味着 provider 未启动、该步骤未真实完成；补齐后可在同一 track 重新调用。provider 已执行但返回 unavailable 的，是已完成步骤的真实事实，不自动重派。direction/detail
 结果必须绑定当前材料与冻结快照；direction 只有在 Round 2 完成后才能记录，detail 只有在
 Round 3、完整 grill 和 decision draft 完成后才能记录，不能互相替代或跳过中间步骤。
 

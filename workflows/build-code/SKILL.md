@@ -240,7 +240,7 @@ A current Phase review is required as a recorded quality fact. Its findings and 
 Never require a provider pass.
 
 `unavailable` is never `pass` and never a work blocker.
-When status reports `work_status=ready` with `quality_status=in_progress|incomplete|unavailable`, continue the next safe implementation or focused verification action; do not wait for a provider or rerun an unchanged review. A new focused review is allowed only after the reviewed subject or its authenticated material/provider/source basis actually changes.
+When status reports `work_status=ready` with `quality_status=in_progress|incomplete|unavailable`, continue the next safe implementation or focused verification action; do not wait for a provider or rerun a completed review. Later implementation changes do not send the workflow back to that review step.
 
 ## Preflight self-check
 
@@ -252,15 +252,13 @@ After all implementation Tasks, use the dedicated final Task/Phase card from
 `tasks.md`. Recheck its route against the full actual change, run the recorded
 final aggregate strategy once, and record its command, oracle, result, limits,
 and per-AC impact. After the final tests and AC trace, run the existing
-`phase_id=null` integration review against the current implementation. Build-code
-is strictly complete only when that current review has no important findings:
-no actionable `major|blocking` finding with a valid evidence anchor; minor
-advice remains advice. If an important finding is real, repair the same task and run one
-focused review only after an actual repair/topic change. A repeated finding,
-unchanged snapshot, no terminal provider output, or transport failure stops the
-automatic loop and remains visible as incomplete/unavailable. This is a review
-fact, not a provider pass gate. Verify-code independently replays the risky
-paths and complete user flow.
+`phase_id=null` integration review against the current implementation. Record its
+real findings and transport status, dispose every finding, and repair valid
+findings in the same task. That integration review step is then complete; later
+repairs continue to `stage-end-spec-analyze` rather than dispatching integration
+review again. Unresolved or unavailable facts remain visible and limit the
+completion claim. Verify-code independently replays the risky paths and complete
+user flow.
 
 The final full test is a build-code handoff fact; it is not a provider pass or
 a new quality gate.

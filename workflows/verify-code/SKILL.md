@@ -122,7 +122,7 @@ build-code 的执行与测试原件作为本次独立复核输入，由既有 ru
 - `failed`：代码本身有明确失败，回同一 task 修复。
 
 `incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
-当 `work_status=ready` 而质量事实为 `in_progress`、`incomplete` 或 `unavailable` 时，继续下一项安全复核或修复；不等待 provider 自行恢复，不为同一 subject/身份重复 review。只有真实代码、材料、provider route 或 source 变化后，才按现有 retry policy 做受影响的 focused review。
+当 `work_status=ready` 而质量事实为 `in_progress`、`incomplete` 或 `unavailable` 时，继续下一项安全复核或修复；不等待 provider 自行恢复。每个既有 review step 记录真实 advice 或失败事实后按 manifest 前移，后续修复或材料变化不自动回跳；只有该 review step 本身未真实完成或执行错误才按普通步骤修复重做。
 
 ## Preflight self-check
 

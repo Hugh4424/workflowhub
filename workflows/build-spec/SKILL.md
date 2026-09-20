@@ -284,9 +284,11 @@ review or test result never changes product scope automatically.
 7. Use the review dependency declared in `skill-deps.yaml` against the current decision
    and specification. Keep provider/model/transport provenance and findings;
    the review contract returns findings, not a pass/revise permission.
-8. Dispose each finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
-   `needs_human`. Repair valid findings in this same task and keep unresolved
-   risk visible.
+8. Run `main-agent-disposes-findings`: dispose each finding as `fixed`,
+   `rejected_invalid`, `accepted_risk`, or `needs_human`. Repair valid findings
+   in this same task and keep unresolved risk visible. This is the downstream
+   disposition step after `review-frozen-spec`; editing `spec.md` here does not
+   dispatch that completed review step again.
 
 9. Run the final declared `stage-end-spec-analyze` step before publishing. It
    compares the original requirement and decision-log against the actual

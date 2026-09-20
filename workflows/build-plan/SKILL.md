@@ -76,7 +76,9 @@ result.
 Review is a quality fact, not a progression gate or permission to continue
 working. Missing or unavailable quality evidence lowers the completion claim;
 an unavailable review is never `pass` and does not block continued research,
-planning, or repair in this same task.
+planning, or repair in this same task. The declared review step records real
+advice and advances to finding disposition and final analysis; downstream edits
+do not dispatch that completed review step again.
 
 ### Stage-input packet and context facts
 

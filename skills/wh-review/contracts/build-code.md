@@ -136,9 +136,9 @@ provider 无法形成 semantic findings 时，认证的 `unavailable` attempt �
 `major|blocking` serious finding 时，按精确 finding/card/reply 绑定要求修复或显式接受
 风险；不为取得空 findings 无限重复审查。
 
-## Review cycle 终止边界
+## Review step 前移边界
 
-build-code 不要求 provider `pass`。Phase 和最终 integration 的 review cycle 只有在当前可信 semantic result 没有 `actionable` 的 `major|blocking` finding 时才算 clean；`minor`/`nonblocking_minor` 仍可作为 advice 保留。重要 finding 出现后，只有真实修复或被审主题真实变化才允许一次 focused review；同一 finding 再次出现、没有实际变化或 provider 没有可信终态时停止自动继续，保留 `needs_human`、`unavailable` 或 `incomplete`。这些是 review fact 和停止事实，不新增循环控制器、持久状态对象或新的质量 gate。
+build-code 不要求 provider `pass` 或空 findings。每个既有 Phase review 与最终 integration review 都是各自普通步骤：真实异源 advice 或真实 unavailable 事实记录后，该步骤完成并按 manifest 前移。下游逐条处置 finding、修复实现并重跑受影响检查；这些修改不自动回跳或再次派发已经完成的 review step。只有后来证明该 review step 本身未真实完成或执行错误，才按普通步骤修复重做。Phase 与 integration 是不同 scope 的既有独立 review step，不互相替代。
 
 ## 输出
 

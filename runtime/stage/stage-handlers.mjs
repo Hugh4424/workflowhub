@@ -4052,10 +4052,12 @@ HANDLERS.set("build-code", async (worker, input) => {
   if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
   for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
   const currentFactsSnapshot = currentSnapshotTree ?? null;
+  // The integration review's snapshot is provenance, not a freshness gate: it
+  // reviewed the code as of that snapshot, and later repairs do not invalidate
+  // it. Only implementation and test snapshots must match the current tree.
   const snapshotMismatch = currentFactsSnapshot === null
     || impl.value.snapshot_tree !== currentFactsSnapshot
-    || tests.facts.snapshot_tree !== currentFactsSnapshot
-    || review.facts.snapshot_tree !== currentFactsSnapshot;
+    || tests.facts.snapshot_tree !== currentFactsSnapshot;
   if (snapshotMismatch) {
     missingItems.push("implementation, tests, and review use different snapshots; current completion was not certified");
   }

@@ -117,34 +117,24 @@ function isTrustedTerminalSemanticResult(result) {
 }
 
 /**
- * Return a review-cycle fact without creating a loop controller or persisted
- * state. Callers may use it to decide whether the current review is advice,
- * needs human handling, or permits one focused review after real change.
+ * Return the recorded advice fact for one completed review step. Finding
+ * disposition and later subject changes belong to downstream workflow steps;
+ * they do not dispatch this review step again.
  */
-export function reviewCycleDecision({ stage, result, previousResult = null, actualRepair = false, subjectChanged = false } = {}) {
-  if (stage !== "build-code") {
-    return Object.freeze({ stage, status: "advice_only", action: "stop", reason: "non_build_code_advice_only", important_findings: [] });
-  }
+export function reviewCycleDecision({ stage, result } = {}) {
   if (!isTrustedTerminalSemanticResult(result)) {
-    return Object.freeze({ stage, status: "incomplete", action: "stop", reason: "provider_no_trusted_terminal_result", important_findings: [] });
+    return Object.freeze({ stage, status: "incomplete", action: "advance", reason: "provider_no_trusted_terminal_result", important_findings: [] });
   }
   if (!Array.isArray(result.findings) && !Array.isArray(result?.adjudication?.clusters)) {
-    return Object.freeze({ stage, status: "incomplete", action: "stop", reason: "semantic_review_result_required", important_findings: [] });
+    return Object.freeze({ stage, status: "incomplete", action: "advance", reason: "semantic_review_result_required", important_findings: [] });
   }
-  const importantFindings = actionableSeriousFindings(result);
-  if (importantFindings.length === 0) {
-    return Object.freeze({ stage, status: "clean_current_review", action: "stop", reason: "no_current_actionable_major_or_blocking_finding", important_findings: [] });
-  }
-  const changed = actualRepair === true || subjectChanged === true;
-  if (!changed) {
-    return Object.freeze({ stage, status: "needs_human", action: "stop", reason: "important_finding_without_actual_repair_or_subject_change", important_findings: importantFindings });
-  }
-  const previousImportant = new Set(actionableSeriousFindings(previousResult).map(findingSignature));
-  const repeated = importantFindings.filter((finding) => previousImportant.has(findingSignature(finding)));
-  if (repeated.length > 0) {
-    return Object.freeze({ stage, status: "needs_human", action: "stop", reason: "same_important_finding_repeated_after_focused_review", important_findings: importantFindings, repeated_findings: repeated });
-  }
-  return Object.freeze({ stage, status: "focused_review_required", action: "review_once", reason: "actual_repair_or_subject_change", important_findings: importantFindings });
+  return Object.freeze({
+    stage,
+    status: "advice_recorded",
+    action: "advance",
+    reason: "review_step_completed",
+    important_findings: actionableSeriousFindings(result),
+  });
 }
 function minimumReviewersForPolicy(policy, stage, reviewTrack, reviewScope = null) {
   return policy?.source === "wh_review.v2"

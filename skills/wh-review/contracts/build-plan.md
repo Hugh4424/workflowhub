@@ -14,7 +14,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 同一 task 的同一普通审查面只记录一次 semantic advice result；runner 仍完整校验首轮
 材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
-如果首轮只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
+如果首轮只有 `unavailable`，区分两种情况：pre-flight 失败（缺路由或必需材料导致 provider 未启动）意味着该步骤未真实完成，修复后按普通步骤重做；provider 已执行但返回 unavailable（超时、transport failure）则是已完成步骤的真实事实，记录后按 manifest 前移，不因后续材料补齐自动重派。
 
 `context_map` 和 `evidence_map` 是可选优化。提供时每张 map 都必须有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
@@ -26,15 +26,13 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 缺少任一必需材料时，本次 attempt 返回 `unavailable`，并写入
 `quality/reviews/attempts/*` 作为不可变质量事实；它没有 findings，也不能写成
-“没有问题”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
+“没有问题”。pre-flight 材料缺失意味着 provider 未启动、该步骤未真实完成；补齐后可重新调用。provider 已执行但返回 unavailable 的，是已完成步骤的真实事实，不自动重派。可选材料不存在时，
 `review-instructions.md` 必须说明未提供及原因。
 
 首轮 findings 是质量事实，不是 stage gate。主 agent 应直接修复；普通修复不做二审。
 外置审计记录若存在，缺失或不能验证时明确为
 `unverified`，不得声称已修复或通过。首轮 advice 事实保留，不循环也不阻断 stage 推进。
-若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
-新 attempt 的事实只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须
-在本阶段的人类确认摘要中显式展示。
+下游修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略时，继续后续 analyze/publish，不自动产生新的 review attempt。`accepted_risk` 仅记录，必须在本阶段的人类确认摘要中显式展示。
 
 每个 canonical/reportable finding（包括普通和严重）都必须有一个 disposition：`fixed`、
 `rejected_invalid`、`accepted_risk` 或 `needs_human`；没有可绑定 ledger 时显示
