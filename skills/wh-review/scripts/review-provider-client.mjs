@@ -8,17 +8,15 @@ import { parseReviewerOutput } from "./review-output.mjs";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
-// v4 3rd-review owns provider liveness and terminal state. WorkflowHub must
-// not add a second wall-clock deadline that kills a healthy provider midway
-// through a review. A timeout remains an explicit test/operator override.
-const DEFAULT_REVIEW_BROKER_TIMEOUT_MS = null;
+// A configured transport timeout remains available for an explicitly bounded
+// caller.  There is deliberately no implicit local deadline: the managed
+// broker owns provider lifetime and its terminal-wait policy.
 const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
   const raw = process.env.WH_REVIEW_BROKER_TIMEOUT_MS;
   if (raw === undefined) return null;
   const parsed = Number(raw);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 })();
-const EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS = REVIEW_BROKER_TIMEOUT_FROM_ENV ?? DEFAULT_REVIEW_BROKER_TIMEOUT_MS;
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
@@ -164,7 +162,20 @@ function safeBrokerError(value) {
   return Object.assign(failure(error.code, redactBrokerErrorMessage(error.message)), facts);
 }
 
-function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
+function assertReviewAbortSignal(signal) {
+  if (signal === null || signal === undefined) return null;
+  if (typeof signal !== "object" || typeof signal.aborted !== "boolean"
+      || typeof signal.addEventListener !== "function" || typeof signal.removeEventListener !== "function") {
+    throw new TypeError("review signal must be an AbortSignal");
+  }
+  return signal;
+}
+
+function execute(command, args, { timeoutMs = null, signal = null } = {}) {
+  signal = assertReviewAbortSignal(signal);
+  if (signal?.aborted) {
+    return Promise.resolve({ exitCode: null, stdout: "", stderr: "", spawnError: null, timedOut: false, cancelled: true });
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -173,7 +184,7 @@ function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS
       // path can reap the whole invocation on POSIX hosts.
       detached: process.platform !== "win32",
     });
-    let stdout = "", stderr = "", settled = false, timedOut = false, timeoutTimer = null, killTimer = null;
+    let stdout = "", stderr = "", settled = false, timedOut = false, cancelled = false, timeoutTimer = null, killTimer = null;
     const terminate = (signal) => {
       if (process.platform !== "win32" && Number.isInteger(child.pid)) {
         try { process.kill(-child.pid, signal); return; } catch { /* fall through to the direct child */ }
@@ -185,14 +196,15 @@ function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS
       settled = true;
       if (timeoutTimer !== null) clearTimeout(timeoutTimer);
       if (killTimer !== null) clearTimeout(killTimer);
+      signal?.removeEventListener("abort", onAbort);
       resolve(value);
     };
     child.stdout.on("data", (bytes) => { stdout += bytes; }); child.stderr.on("data", (bytes) => { stderr += bytes; });
     child.once("error", (error) => {
       if (settled) return;
-      finish({ exitCode: null, stdout, stderr, spawnError: { code: error?.code ?? "SPAWN_ERROR" }, timedOut });
+      finish({ exitCode: null, stdout, stderr, spawnError: { code: error?.code ?? "SPAWN_ERROR" }, timedOut, cancelled });
     });
-    child.once("close", (exitCode, signal) => finish({ exitCode, signal, stdout, stderr, timedOut }));
+    child.once("close", (exitCode, childSignal) => finish({ exitCode, signal: childSignal, stdout, stderr, timedOut, cancelled }));
     if (timeoutMs !== null) timeoutTimer = setTimeout(() => {
       if (settled) return;
       timedOut = true;
@@ -201,6 +213,15 @@ function execute(command, args, { timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS
         if (!settled) terminate("SIGKILL");
       }, 250);
     }, timeoutMs);
+    const onAbort = () => {
+      if (settled) return;
+      cancelled = true;
+      terminate("SIGTERM");
+      killTimer = setTimeout(() => {
+        if (!settled) terminate("SIGKILL");
+      }, 250);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -718,6 +739,7 @@ function validateManagedHealthProviders(value, providers) {
 }
 
 function parseManagedEnvelope(wire, context) {
+  if (wire?.cancelled) throw failure("PROCESS_CANCELLED", "3rd-review managed lifecycle was cancelled locally");
   if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review managed lifecycle exceeded the local broker timeout");
   let result;
   try { result = JSON.parse(wire?.stdout ?? ""); }
@@ -766,6 +788,7 @@ function parseManagedEnvelope(wire, context) {
 }
 
 function parsePublicRun(wire) {
+  if (wire?.cancelled) throw failure("PROCESS_CANCELLED", "3rd-review public run was cancelled locally");
   const timeout = () => failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
   let result = null;
   try { result = JSON.parse(wire?.stdout ?? ""); }
@@ -871,14 +894,14 @@ export function registerReviewSupplement(initialResult, supplement) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, timeoutMs = EFFECTIVE_REVIEW_BROKER_TIMEOUT_MS } = {}) {
+  constructor({ command = null, config = null, invoke = null, timeoutMs = REVIEW_BROKER_TIMEOUT_FROM_ENV } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)) throw new TypeError("timeoutMs must be null or a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
     this.timeoutMs = timeoutMs;
   }
 
-  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous } = {}) {
+  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
     if (!(typeof requestId === "string" && requestId.trim() !== "" && !containsPrivatePath(requestId)
         && typeof hostProvider === "string" && hostProvider.trim() !== "" && !containsPrivatePath(hostProvider)
         && Array.isArray(providers) && providers.length > 0
@@ -919,6 +942,7 @@ export class ReviewProviderClient {
     const wire = await this.invoke({
       command: "start", requestId, request, attachments,
       attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "negotiated",
+      ...(signal === null || signal === undefined ? {} : { signal }),
     });
     return parseManagedEnvelope(wire, {
       command: "start", requestId, runtimeId: null, materialId: materials.materialId,
@@ -926,7 +950,7 @@ export class ReviewProviderClient {
     });
   }
 
-  async statusManaged({ runtimeId = null, requestId = null, hostProvider, providers, materials } = {}) {
+  async statusManaged({ runtimeId = null, requestId = null, hostProvider, providers, materials, signal = null } = {}) {
     if (typeof hostProvider === "string" && containsPrivatePath(hostProvider)) {
       throw failure("PUBLIC_RESULT_INVALID", "hostProvider contains a private path");
     }
@@ -942,7 +966,7 @@ export class ReviewProviderClient {
     if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
       throw new TypeError("providers must be a unique non-empty string array");
     }
-    const wire = await this.invoke({ command: "status", runtimeId });
+    const wire = await this.invoke({ command: "status", runtimeId, ...(signal === null || signal === undefined ? {} : { signal }) });
     return parseManagedEnvelope(wire, {
       command: "status", requestId, runtimeId, materialId: materials.materialId,
       hostProvider, providers: new Set(providers),
@@ -971,7 +995,7 @@ export class ReviewProviderClient {
     });
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true, minimumHeterologous, minimum_heterologous } = {}) {
+  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
     if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
     const minimum = validateMinimumHeterologous(minimumHeterologous, minimum_heterologous);
@@ -1015,6 +1039,7 @@ export class ReviewProviderClient {
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
     const wire = await this.invoke({
       command: "run", request, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: effectiveAttachmentDelivery,
+      ...(signal === null || signal === undefined ? {} : { signal }),
     });
     const result = parsePublicRun(wire);
     if (result.version === protocol) {
@@ -1061,7 +1086,7 @@ export class ReviewProviderClient {
     throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review returned a legacy result; this WorkflowHub consumer requires workflowhub-result.v3");
   }
 
-  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null }) {
+  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null, signal = null }) {
     let temporary = null;
     try {
       temporary = mkdtempSync(join(tmpdir(), "wh-review-public-"));
@@ -1074,12 +1099,12 @@ export class ReviewProviderClient {
         if (typeof runtimeId !== "string" || runtimeId.trim() === "") throw failure("PROTOCOL_INCOMPATIBLE", `${command} requires a runtime id`);
         args = [...this.command.slice(1), command, `--config=${this.config}`, `--runtime-id=${runtimeId}`];
       } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported public broker command: ${command}`);
-      return await execute(this.command[0], args, { timeoutMs: this.timeoutMs });
+      return await execute(this.command[0], args, { timeoutMs: this.timeoutMs, signal });
     } catch (error) {
       // Local filesystem, spawn, and configuration failures can include host
       // paths. Preserve only a safe typed diagnostic; do not flatten every
       // invocation problem into a protocol mismatch.
-      if (error?.code === "PROCESS_TIMEOUT" || error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "MATERIAL_TOO_LARGE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
+      if (error?.code === "PROCESS_TIMEOUT" || error?.code === "PROCESS_CANCELLED" || error?.code === "PROTOCOL_INCOMPATIBLE" || error?.code === "PUBLIC_RESULT_INVALID" || error?.code === "MATERIAL_INCOMPLETE" || error?.code === "MATERIAL_TOO_LARGE" || error?.code === "BROKER_SPAWN_FAILED" || error?.code === "BROKER_EXIT_NONZERO") throw error;
       throw failure("BROKER_INVOCATION_FAILED", `3rd-review public ${command} could not be invoked`);
     } finally {
       if (temporary !== null) {

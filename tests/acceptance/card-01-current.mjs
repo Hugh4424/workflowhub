@@ -19,20 +19,20 @@ const ASSERTIONS = Object.freeze({
   "AC-PRD-001": { file: "tests/contract/portable-workflow-run.test.mjs", test: "loads exactly the six portable steps without importing the formal-stage validator" },
   "AC-PRD-002": { file: "tests/contract/portable-workflow-run.test.mjs", test: "records a succeeded terminal only when every portable step is complete" },
   "AC-PRD-003": { file: "tests/contract/portable-workflow-run.test.mjs", test: "preserves missing and malformed outcomes as failed terminal facts" },
-  "AC-FLOW-001": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "lets the real make-decision entry continue and publish the stale aggregate as an unavailable fact" },
-  "AC-FLOW-002": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "does not consume a missing supplied interaction receipt as a progress gate" },
-  "AC-FLOW-003": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "turns stale interaction aggregation into a retained diagnostic instead of a make-decision work permit" },
+  "AC-FLOW-001": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "rejects retired interaction_aggregate input before current make-decision can publish" },
+  "AC-FLOW-002": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "rejects retired receipts.interaction instead of consuming it as a progress input" },
+  "AC-FLOW-003": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "retires aggregate observation from the active task kernel while preserving historical record bytes" },
   "AC-GATE-001": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "freezes the plan's five families and eighteen concrete predicates, not a made-up count of twenty-four" },
   "AC-GATE-002": { file: "tests/contract/stage-runtime-reflect-entry.test.mjs", test: "writes an executed judgment through the stage-end row transaction and keeps confirmation distinct from irreversible authorization" },
-  "AC-GATE-003": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "does not downgrade a physically unreadable current material into a machine-binding diagnostic" },
-  "AC-GATE-004": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "retains a malformed interaction aggregate as an unbound diagnostic instead of throwing" },
+  "AC-GATE-003": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "does not downgrade a physically unreadable current material into an aggregate-derived diagnostic" },
+  "AC-GATE-004": { file: "tests/contract/zero-machine-gate-advancement.test.mjs", test: "does not expose aggregate-specific machine-gate diagnostic helpers in the active runtime" },
   "AC-STATE-001": { file: "tests/contract/portable-workflow-run.test.mjs", test: "uses the seven-value projection without making machine gaps blocked" },
   "AC-STATE-002": { file: "tests/contract/activation-cohort.test.mjs", test: "requires all three activation facts before selecting post" },
   "AC-STATE-003": { file: "tests/contract/portable-workflow-run.test.mjs", test: "appends a new terminal on re-entry and never starts a code-stage outcome" },
   "AC-IFACE-001": { file: "tests/contract/task-topology-projection.test.mjs", test: "drives planning build-prd status, doctor, and run through the public CLI entry" },
   "AC-IFACE-002": { file: "tests/contract/task-topology-projection.test.mjs", test: "authenticates public build-prd writes before an unknown type can append an attempt" },
   "AC-IFACE-003": { file: "tests/contract/task-topology-projection.test.mjs", test: "leaves parent and sibling fixture bytes untouched while a planning journey runs" },
-  "AC-REVIEW-001": { file: "tests/contract/review-step-forward-progress.test.mjs", test: "keeps every existing formal-stage review scope as an independent forward-only step" },
+  "AC-REVIEW-001": { file: "tests/contract/review-step-forward-progress.test.mjs", test: "keeps one current stage or phase review per declared scope and advances without task-level replay" },
 });
 
 const assertionIdentities = Object.values(ASSERTIONS).map(({ file, test }) => `${file}\u0000${test}`);
@@ -47,6 +47,9 @@ if (Object.keys(ASSERTIONS).length !== ACCEPTANCE_CRITERIA.length
 // Keep it in the final targeted command without claiming it as an AC oracle.
 const targetedTests = [...new Set([
   ...Object.values(ASSERTIONS).map(({ file }) => file),
+  "tests/stage-interaction-contract.test.mjs",
+  "tests/contract/make-decision-interaction-publication.test.mjs",
+  "tests/contract/decision-convergence-depth.test.mjs",
   "tests/contract/task-handle.test.mjs",
   "tests/contract/stage-runtime-reflect-entry.test.mjs",
 ])];

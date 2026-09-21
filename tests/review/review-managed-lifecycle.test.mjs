@@ -654,6 +654,46 @@ describe("managed review lifecycle boundary", () => {
     expect(calls).toEqual(["start", "status"]);
   });
 
+  it("lets the managed runner publish REVIEW_WAIT_EXCEEDED without the recorder aborting it", async () => {
+    const { task, kernel } = fixture();
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-recorder-timeout-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const running = (value) => ({ version: "workflowhub-run.v1", request_id: value.requestId,
+      runtime_id: managedRuntime, state: "running", material_id: value.materials.materialId });
+    const client = {
+      async startManaged(value) { calls.push("start"); return running(value); },
+      async statusManaged(value) { calls.push("status"); return running(value); },
+      async cancelManaged() { calls.push("cancel"); throw new Error("the recorder must not cancel a managed wait"); },
+    };
+    const recorded = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: request(),
+      reviewRoundTimeoutMs: null,
+      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
+      runRound: (value, { signal } = {}) => runSimpleReview(value, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+        resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+          [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+        }, provider_models: { [managedProvider]: "review-model" } }),
+        client,
+        signal,
+        managedTerminalWaitMs: 0,
+        managedStatusPollMs: 0,
+      }),
+    });
+
+    expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
+    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "dispatched",
+      error: { code: "REVIEW_WAIT_EXCEEDED" },
+    });
+    expect(calls).toEqual(["start", "status"]);
+  });
+
   it("rechecks terminal state at the unchanged 20-minute boundary before returning", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -1022,30 +1062,40 @@ describe("managed review lifecycle boundary", () => {
     expect(result.provider_results[0].error).toBeNull();
   });
 
-  it("blocks oversized verify-code input before any provider dispatch", async () => {
-    let calls = 0;
+  it("sends oversized verify-code input to the managed provider without a local size block", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-oversized-input-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    let providerInput = null;
     const result = await runSimpleReview({
       stage: "verify-code",
       host_provider: "codex",
       materials: { "implementation-diff.patch": "x".repeat(200 * 1024) },
     }, {
-      client: { async runGroup() { calls += 1; throw new Error("provider must not be called"); } },
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      }, provider_models: { [managedProvider]: "review-model" } }),
+      client: {
+        async runGroup(value) {
+          calls.push("runGroup");
+          providerInput = value;
+          throw Object.assign(new Error("input token limit exceeded"), { code: "INPUT_TOKEN_LIMIT" });
+        },
+      },
     });
 
     expect(result).toMatchObject({
       status: "unavailable",
-      dispatch_state: "blocked_before_dispatch",
+      dispatch_state: "dispatched",
       provider_results: [],
       findings: [],
-      error: {
-        code: "REVIEW_INPUT_TOO_LARGE",
-        diagnostic: {
-          field: "provider_input",
-          actual: "oversized",
-          next_action: "shrink the review closure and retry",
-        },
-      },
+      error: { code: "REVIEW_INPUT_TOO_LARGE", cause_code: "INPUT_TOKEN_LIMIT" },
     });
-    expect(calls).toBe(0);
+    expect(calls).toEqual(["runGroup"]);
+    expect(providerInput.materials.deliveryManifest).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: expect.stringContaining("implementation-diff.patch"), bytes: 200 * 1024 }),
+    ]));
   });
 });

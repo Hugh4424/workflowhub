@@ -342,8 +342,10 @@
         },
         "allOf": [{
           "if": { "type": "object", "properties": { "status": { "const": "completed" } }, "required": ["status"] },
-          "then": { "properties": { "error": { "type": "null" } } },
-          "else": { "properties": { "error": { "type": "object" } } }
+          "then": { "properties": { "error": { "type": "null" } } }
+        }, {
+          "if": { "type": "object", "properties": { "status": { "enum": ["failed", "cancelled"] } }, "required": ["status"] },
+          "then": { "properties": { "error": { "type": "object" } } }
         }],
         "additionalProperties": false
       }

@@ -17,7 +17,7 @@ const DECISION_ID = /^D-\d+$/;
 const REQUIREMENT_ID = /^R-\d+$/;
 
 function parseList(value) {
-  const match = /^\[([^\]]*)\]$/.exec(value.trim());
+  const match = /^\[([^\]]*)\]$/.exec(value.trim().replaceAll("［", "[").replaceAll("］", "]"));
   if (!match) return null;
   if (!match[1].trim()) return [];
   return match[1].split(",").map((item) => item.trim().replace(/^['"]|['"]$/g, ""));
@@ -64,6 +64,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
   const sections = decisionSections(markdown);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = [];
+  let recognizedFields = 0;
 
   if (sections.length === 0) {
     warnings.push(warning(
@@ -76,7 +77,8 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
 
   for (const { decision_id, body } of sections) {
     const values = Object.fromEntries(CHAIN_FIELDS.map((field) => {
-      const match = body.match(new RegExp(`^${field}:\\s*(.+)$`, "m"));
+      const match = body.match(new RegExp(`^\\s*(?:[-*+]\\s+)?${field}\\s*[:：]\\s*(.+?)\\s*$`, "m"));
+      if (match) recognizedFields += 1;
       return [field, match?.[1]?.trim() ?? null];
     }));
 
@@ -118,6 +120,8 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
   return {
     schema_version: "decision-log-chain-warning.v1",
     source_ref,
+    recognized_blocks: sections.length,
+    recognized_fields: recognizedFields,
     warnings,
     failures: [],
     exit_code: 0,

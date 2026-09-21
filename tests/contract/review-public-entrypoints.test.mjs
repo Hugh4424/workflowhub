@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { prepareTaskBoundBuildCodeReviewBundle, prepareTaskBoundIntegrationReviewBundle, stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
+import { prepareTaskBoundBuildCodeReviewBundle, prepareTaskBoundIntegrationReviewBundle, stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 import {
   importCanonicalReviewResult,
   recordSimpleReviewRequest,
@@ -149,7 +149,20 @@ describe("public review result entrypoint", () => {
     });
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({ type: "source", input: { includeDiff: true, taskId: fixture.task.identity.taskId } });
-    expect(calls[1]).toMatchObject({ type: "materials", input: { phaseId: "P1-S3", reviewScope: "phase", materials: request.materials } });
+    expect(calls[1]).toMatchObject({
+      type: "materials",
+      input: {
+        phaseId: "P1-S3",
+        reviewScope: "phase",
+        materials: {
+          ...request.materials,
+          // The task-bound provider packet must replace a caller-controlled
+          // instruction string with the runner's fixed scope instruction.
+          review_instructions: expect.stringMatching(/build-code|phase/i),
+        },
+      },
+    });
+    expect(calls[1].input.materials.review_instructions).not.toBe(request.materials.review_instructions);
     expect(sourceDisposed).toBe(true);
     expect(bundle.materialId).toBe("b".repeat(64));
     bundle.dispose();
@@ -179,6 +192,41 @@ describe("public review result entrypoint", () => {
     });
     expect(bundle.materialId).toBe("c".repeat(64));
     bundle.dispose();
+  });
+
+  it("prepares a complete task-bound provider bundle above 486777B without a local delivery cap", () => {
+    const fixture = makeTask();
+    const attachmentRoot = join(fixture.root, "review-data");
+    const spec = "x".repeat(486778);
+    let sourceDisposed = false;
+    const bundle = prepareTaskBoundBuildCodeReviewBundle({ task: fixture.task, workspace: fixture.candidateWorkspace }, {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      review_scope: "integration",
+      review_kind: "mini_task.design",
+      materials: {
+        raw_requirement: "原始需求",
+        decision_log: "## 原始需求\n\n原始需求\n\n## 决定\n\n采用完整输入。\n",
+        spec,
+        plan: "# Plan\n",
+        tasks: "# Tasks\n",
+      },
+    }, {
+      loadConfig: () => ({ attachmentRoot }),
+      captureSource: () => ({
+        targetCommit: "1".repeat(40), baseCommit: "2".repeat(40), baseTree: "3".repeat(40),
+        capturedHead: "4".repeat(40), snapshotTree: "5".repeat(40), changedFiles: [],
+        diffBytes: 0, diffSha256: "6".repeat(64), copyDiffTo: () => ({ bytes: 0, sha256: "6".repeat(64) }),
+        dispose() { sourceDisposed = true; },
+      }),
+    });
+    const entry = bundle.deliveryManifest.find(({ path }) => path === "requirements/spec.md");
+    expect(entry).toMatchObject({ bytes: Buffer.byteLength(spec), sha256: sha256(spec) });
+    expect(bundle.packetPlan.delivery_bytes).toBe(bundle.deliveryManifest.reduce((total, item) => total + item.bytes, 0));
+    expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(486777);
+    expect(sourceDisposed).toBe(true);
+    bundle.dispose();
+    expect(existsSync(bundle.bundleRoot)).toBe(false);
   });
 
   it("imports an existing immutable chain without dispatching or writing a second attempt", async () => {

@@ -1,18 +1,24 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
+import { publishStageHandoff } from "../../runtime/stage/stage-handoff.mjs";
+import { runStage } from "../../runtime/stage/stage-runner.mjs";
 
 const { captureReviewSource } = await import("../../skills/wh-review/scripts/review-source.mjs");
 const { verifyFinalSubject } = await import("../../skills/wh-review/scripts/review-runner.mjs");
 
-const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+const read = (...parts) => readFileSync(new URL(`../../${parts.join("/")}`, import.meta.url), "utf8");
 const tempRoots = [];
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 function repoFixture() {
-  const root = mkdtempSync(join(tmpdir(), "workflowhub-phase-subject-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-phase-subject-")));
   tempRoots.push(root);
   const repo = join(root, "repo");
   mkdirSync(repo);
@@ -75,12 +81,11 @@ describe("Phase quality and handoff contract", () => {
   it("preserves the four-material and task-card boundary", () => {
     const tasks = read("skills/spec-tasks/SKILL.md");
     const template = read("skills/spec-tasks/templates/tasks-template.md");
-    expect(tasks).toMatch(/current v3[\s\S]*design contract fields/);
-    expect(tasks).toMatch(/Do not add workflow summaries,[\s\S]*second\s+completion ledger/);
-    expect(template).toMatch(/paired_task/);
-    expect(template).toMatch(/gate_cmd/);
-    expect(template).toMatch(/oracle/);
-    expect(tasks).toMatch(/status value is\s+descriptive/);
+    expect(tasks).toMatch(/pure pointer index/);
+    expect(tasks).toMatch(/not a task-card generator[\s\S]*second engineering body/);
+    expect(template).toMatch(/Execution Index/);
+    expect(template).not.toMatch(/gate_cmd|expected_exit|\boracle\b/);
+    expect(tasks).toMatch(/Never copy phase prose[\s\S]*execution status/);
     expect(tasks).not.toMatch(/TaskKernel|WorkflowHub Stage Progress/i);
   });
 
@@ -147,5 +152,115 @@ describe("Phase quality and handoff contract", () => {
     } finally {
       current.dispose();
     }
+  });
+
+  it("T004 keeps finding dispositions on one stage row and renders the same row in the current handoff", () => {
+    const { root, repo } = repoFixture();
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "workflowhub", task_id: "handoff-dispositions",
+      created_at: "2026-09-21T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    } });
+    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+    const candidateWorkspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
+    const materials = {
+      "decision-log.md": "# Decision\n\n## 核心需求\n- retain a single writer.\n",
+      "spec.md": "# Spec\n\n## 速读卡\n- current handoff reads canonical facts.\n",
+      "plan.md": "# Plan\n\n## Phase 1\n- retain the stage row.\n",
+      "tasks.md": "# Tasks\n\n## Phase 1\n- T004\n",
+    };
+    for (const [name, value] of Object.entries(materials)) artifacts.writeAtomic(name, value);
+    const kernel = createTaskKernel(task, { candidateWorkspace, artifacts, now: () => "2026-09-21T00:00:00.000Z" });
+    const dispositions = [
+      { finding: "F-raw", disposition: "fixed", anchor: "quality/reviews/results/r.json#F-raw", elapsed_ms: 240 },
+      { finding: "F-human", disposition: "needs_human", owner: "product-owner", deadline: "2026-09-23T00:00:00.000Z", anchor: "quality/reviews/results/r.json#F-human", elapsed_ms: 240 },
+      { finding: "F-retry", disposition: "rejected_invalid", previous_cause: "missing material binding", cause: "authenticated material binding changed", retry: true, anchor: "quality/reviews/results/r.json#F-retry", elapsed_ms: 240 },
+    ];
+    writeStageRow(task.taskPath, {
+      record_kind: "stage", stage: "build-plan", source: "phase-quality-handoff",
+      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/r.json" },
+      finding_dispositions: dispositions,
+    });
+    const snapshot = kernel.currentVNextSnapshot();
+    const materialScopeRevision = kernel.currentVNextMaterialScopeRevision("build-plan");
+    const handoff = publishStageHandoff({
+      task, kernel, artifacts, taskId: task.identity.taskId, stage: "build-plan",
+      snapshotTree: snapshot.tree, materialScopeRevision, reflectionStatus: "unavailable", materials,
+    });
+    const row = readTaskFacts(task.taskPath).find((value) => value.record_kind === "stage" && value.stage === "build-plan");
+    expect(row.finding_dispositions).toEqual(dispositions);
+    const rendered = task.readRecord(handoff.ref);
+    expect(rendered).toContain("raw_finding_denominator: 3");
+    expect(rendered).toContain("valid_finding_numerator: 3");
+    expect(rendered).toContain("valid_anchor_numerator: 3");
+    expect(rendered).toContain("elapsed_ms: 240");
+    expect(rendered).toContain("F-human");
+    expect(rendered).toContain("product-owner");
+    expect(rendered).toContain("2026-09-23T00:00:00.000Z");
+    expect(rendered).toContain("changed-cause retry");
+
+    expect(() => writeStageRow(task.taskPath, {
+      record_kind: "stage", stage: "build-plan", source: "phase-quality-handoff-invalid-retry",
+      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/r.json" },
+      finding_dispositions: [{ finding: "F-invalid", disposition: "fixed", previous_cause: "same", cause: "same", retry: true }],
+    })).toThrow(/changed-cause retry/);
+    expect(readTaskFacts(task.taskPath).find((value) => value.stage === "build-plan").finding_dispositions).toEqual(dispositions);
+  });
+
+  it("T004 projects the real build-plan handler result into the row before its handoff reads it", async () => {
+    const { root, repo } = repoFixture();
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "workflowhub", task_id: "handoff-handler-projection",
+      created_at: "2026-09-21T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    } });
+    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+    const candidateWorkspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
+    const materials = {
+      "decision-log.md": "# Decision\n\n## 核心需求\n- retain a single writer.\n",
+      "spec.md": "# Spec\n\n## 速读卡\n- current handoff reads canonical facts.\n",
+      "plan.md": "# Plan\n\n## Phase 1\n- retain the stage row.\n",
+      "tasks.md": "# Tasks\n\n## Phase 1\n- T004\n",
+    };
+    for (const [name, value] of Object.entries(materials)) artifacts.writeAtomic(name, value);
+    const kernel = createTaskKernel(task, { candidateWorkspace, artifacts, now: () => "2026-09-21T00:00:00.000Z" });
+    const context = {
+      stage: "build-plan", task, kernel, identity: task.identity, manifest: task.manifest,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-plan"), candidateWorkspace, artifacts,
+    };
+    const result = await runStage("build-plan", context, async () => ({
+      facts: {
+        review: { status: "recorded", result_ref: "quality/reviews/results/handler-result.json" },
+        finding_dispositions: {
+          status: "recorded",
+          items: [
+            { finding_id: "F-handler-fixed", status: "fixed", anchor: "quality/reviews/results/handler-result.json#F-handler-fixed", elapsed_ms: 180 },
+            { finding_id: "F-handler-human", status: "needs_human", owner: "product-owner", deadline: "2026-09-23T00:00:00.000Z", anchor: "quality/reviews/results/handler-result.json#F-handler-human", elapsed_ms: 180 },
+            { finding_id: "F-handler-user", status: "user_decided", reply_ref: "quality/confirmations/handler-user-reply.json", anchor: "quality/reviews/results/handler-result.json#F-handler-user", elapsed_ms: 180 },
+            { finding_id: "F-handler-retry", status: "rejected_invalid", previous_cause: "old cause", cause: "new authenticated cause", retry: true, anchor: "quality/reviews/results/handler-result.json#F-handler-retry", elapsed_ms: 180 },
+          ],
+        },
+      },
+    }), {}, { stageReflection: {} });
+    expect(result.stage_reflection.stage_row_error).toBeUndefined();
+    expect(result.stage_handoff).toMatchObject({ status: "published", current: true });
+    const row = readTaskFacts(task.taskPath).find((value) => value.record_kind === "stage" && value.stage === "build-plan");
+    expect(row).toMatchObject({
+      review_origin: "conducted",
+      review_result_ref: { value: "quality/reviews/results/handler-result.json" },
+      finding_dispositions: [
+        { finding: "F-handler-fixed", disposition: "fixed", elapsed_ms: 180 },
+        { finding: "F-handler-human", disposition: "needs_human", owner: "product-owner", deadline: "2026-09-23T00:00:00.000Z" },
+        { finding: "F-handler-user", disposition: "user_decided", reply_ref: "quality/confirmations/handler-user-reply.json", elapsed_ms: 180 },
+        { finding: "F-handler-retry", disposition: "rejected_invalid", previous_cause: "old cause", cause: "new authenticated cause", retry: true },
+      ],
+    });
+    const handoff = task.readRecord(result.stage_handoff.ref);
+    expect(handoff).toContain("raw_finding_denominator: 4");
+    expect(handoff).toContain("F-handler-human");
+    expect(handoff).toContain("product-owner");
+    expect(handoff).toContain("F-handler-user");
+    expect(handoff).toContain("user reply=quality/confirmations/handler-user-reply.json");
+    expect(handoff).toContain("changed-cause retry");
   });
 });

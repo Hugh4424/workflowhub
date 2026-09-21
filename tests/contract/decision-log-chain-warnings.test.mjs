@@ -65,6 +65,22 @@ describe("decision-log chain warnings are observable but non-blocking", () => {
 });
 
 describe("planning-hardening decision-log chain disclosure", () => {
+  it("T005 recognizes all four fields in list-prefix/fullwidth-colon decision blocks", () => {
+    const markdown = Array.from({ length: 24 }, (_, index) => {
+      const id = String(index + 1).padStart(3, "0");
+      return [
+        `### D-${id}`,
+        "- module：coverage",
+        `- requirement_ids：[R-${id}]`,
+        "- derived_from：[]",
+        `- artifacts：[spec.md#FR-${id}]`,
+      ].join("\n");
+    }).join("\n\n");
+    const result = run(markdown);
+    expect(result).toMatchObject({ recognized_blocks: 24, recognized_fields: 96 });
+    expect(result.warnings).toEqual([]);
+  });
+
   it("planning-hardening AC-CHAIN-001 recognizes h3 and h4 decisions and preserves real missing-field warnings", () => {
     const h3 = run([
       "### D-101",

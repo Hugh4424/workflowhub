@@ -471,11 +471,9 @@ describe("spec-analyze completeness contract", () => {
     const steps = JSON.parse(readFileSync(new URL("../../workflows/build-plan/steps.json", import.meta.url), "utf8")).steps;
     const disposition = steps.find(({ step_slug }) => step_slug === "main-agent-disposes-findings");
     const analyze = steps.find(({ step_slug }) => step_slug === "final-spec-analyze");
-    const publish = steps.find(({ step_slug }) => step_slug === "publish-plan-result");
+    const publish = steps.find(({ step_slug }) => step_slug === "publish-result-and-confirm");
     expect(disposition).toBeDefined();
     expect(analyze).toMatchObject({ completion_evidence: expect.arrayContaining([
-      { kind: "plan", uri_or_path: "plan.md" },
-      { kind: "tasks", uri_or_path: "tasks.md" },
       { kind: "quality_facts", uri_or_path: "quality/facts/" },
     ]) });
     expect(publish).toBeDefined();
@@ -500,5 +498,14 @@ describe("spec-analyze completeness contract", () => {
     const verifySteps = JSON.parse(readFileSync(new URL("../../workflows/verify-code/steps.json", import.meta.url), "utf8")).steps;
     expect(verifySteps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze")).toBeUndefined();
     expect(verifySteps.find(({ step_slug }) => step_slug === "finalize-code-review")).toBeDefined();
+  });
+
+  it("T003 requires final build-plan analyze to preserve raw metrics and locate every self-check conclusion", () => {
+    const steps = JSON.parse(readFileSync(new URL("../../workflows/build-plan/steps.json", import.meta.url), "utf8")).steps;
+    const analyze = steps.find(({ step_slug }) => step_slug === "final-spec-analyze");
+    expect(analyze.completion_evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "review_metrics", uri_or_path: expect.stringMatching(/raw.*finding.*valid.*anchor.*elapsed/i) }),
+      expect.objectContaining({ kind: "self_check", uri_or_path: expect.stringMatching(/oracle.*provenance.*prewritten.*irreversible/i) }),
+    ]));
   });
 });

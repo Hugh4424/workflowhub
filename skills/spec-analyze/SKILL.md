@@ -38,6 +38,12 @@ profile again after the real change; the runtime only uses the truthful result
 to describe stage quality. `unavailable`, `material_incomplete`, and `inconsistent` are never
 `pass`, but they do not prevent same-task repair or invent a new task.
 
+For post-cohort build-plan, `draft_plan` is the single phase engineering
+authority and `draft_tasks` is a pure pointer execution index. The analyzer
+must reject a duplicated phase body, command/oracle/task-card procedure, or an
+active plan/tasks equality path in the index; it retains historical pre-cohort
+material as read-only input rather than deleting it.
+
 ## Input boundary
 
 Read only the current stage packet and the frozen skill bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet. The current profile also applies the stage-owned material contract: make-decision authenticates the raw-requirement projection, Talk/Clarify/Grill/confirmation facts; build-spec authenticates the structured spec and Clarify result; build-plan authenticates the existing plan/task contract; build-code authenticates the per-AC implementation-to-evidence chain. The current stage publication binds the packet and validator result to the current stage snapshot and material revision.
@@ -45,9 +51,9 @@ Read only the current stage packet and the frozen skill bundle. For build-plan, 
 ## Check
 
 1. Map every raw requirement/source ID from decision-log to the decision, spec, plan, task, FR/AC, and objective verification evidence that claims it.
-2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, plan, and tasks. For `make-decision`, separately assess requirement coverage, goal achievement, acceptance clarity, solution convergence, and the plain-language end card. For `build-spec`, compare the spec against the upstream decision-log for invented product direction and record whether Clarify was triggered or explicitly skipped with reason and zero open items.
+2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, phase authority, and pointer index. For `make-decision`, separately assess requirement coverage, goal achievement, acceptance clarity, solution convergence, and the plain-language end card. For `build-spec`, compare the spec against the upstream decision-log for invented product direction and record whether Clarify was triggered or explicitly skipped with reason and zero open items.
 3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
-4. Check every Phase, task, and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule.
+4. Check every phase authority and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule. The pointer index is checked only for authority ref, semantic anchor, write set, dependency, and consumer.
 5. For every `DEFER-*` and `OPEN-*` item visible in the source facts or current excerpts, require a downstream owner, trigger, handoff/consumer, and close/retain condition in `decision-log`-derived facts, `spec`, `plan`, and `tasks`. Missing any one is a real `deferred_open_handoff_gap` finding; do not invent a task or owner.
 6. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
 7. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent repairs valid findings in the current stage, reruns the affected profile, and only then declares the stage complete or hands off; the same task may continue writing and repairing its four materials while findings are being handled.

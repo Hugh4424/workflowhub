@@ -85,6 +85,25 @@ function contextFor(stage, state) {
   };
 }
 
+function dualPhaseFixtureErrors(value) {
+  const errors = [];
+  if (typeof value?.global_plan_ref !== "string" || value.global_plan_ref.trim() === "") {
+    errors.push("dual-phase fixture requires global_plan_ref");
+  }
+  if (!Array.isArray(value?.execution_index) || value.execution_index.length !== 2) {
+    errors.push("dual-phase fixture requires a compact two-entry execution_index");
+  }
+  const phases = Array.isArray(value?.phases) ? value.phases : [];
+  for (const phase of phases) {
+    const frozen = phase?.frozen_test;
+    if (typeof frozen?.ref !== "string" || !/^quality\/tests\/[A-Za-z0-9._-]+\.json$/.test(frozen.ref)
+        || !/^[a-f0-9]{64}$/i.test(frozen.sha256 ?? "")) {
+      errors.push(`dual-phase fixture ${phase?.phase_id ?? "<unknown>"} requires frozen_test ref/hash`);
+    }
+  }
+  return errors;
+}
+
 function publishReviewFixture(state) {
   const snapshot = state.candidate.captureSnapshot();
   const value = {
@@ -1802,34 +1821,10 @@ describe("vNext official stage completion", () => {
     const state = fixture("vnext-stage-run-no-monitoring-side-effect");
     initializeTaskStore(state.task.taskPath, { taskId: state.task.identity.taskId });
     const stateArtifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
-    stateArtifacts.writeAtomic("decision-log.md", completeCanonicalStageMaterials()["decision-log.md"]);
-    state.kernel.publishHumanConfirmation("make-decision", {
-      decision: "accepted",
-      subject_ref: "fixture/no-monitoring-side-effect-make-decision",
-      reply_text: "fixture confirmation for make-decision",
-      step_slug: "approve-decision",
-    });
-    const upstreamOutcome = writeStageOutcomeFixture({
-      task: state.task,
-      kernel: state.kernel,
-      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
-      candidateWorkspace: state.candidate,
-      stage: "make-decision",
-      attemptId: "attempt-no-monitoring-side-effect-upstream",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
-    });
-    await runOfficialStage("make-decision", contextFor("make-decision", state), { receipts: { stage_outcomes: upstreamOutcome.ref } });
-    const outcome = writeStageOutcomeFixture({
-      task: state.task,
-      kernel: state.kernel,
-      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
-      candidateWorkspace: state.candidate,
-      stage: "build-spec",
-      attemptId: "attempt-no-monitoring-side-effect",
-      status: "completed",
-    });
-    const inputPath = join(state.root, "no-monitoring-side-effect-input.json");
-    writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+    stateArtifacts.writeAtomic("decision-log.md", completeCanonicalStageMaterials()["decision-log.md"].replace(
+      "# Decision log\n",
+      "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n",
+    ));
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const env = { ...process.env, HOME: state.root, WORKFLOWHUB_TASK_DIR: state.root };
     delete env.CODEX_SESSION_ID;
@@ -1844,15 +1839,18 @@ describe("vNext official stage completion", () => {
       "--stage=build-spec",
       "--project=WorkflowHub",
       "--task=vnext-stage-run-no-monitoring-side-effect",
-      `--input=${inputPath}`,
-    ], { cwd: state.root, env, encoding: "utf8" });
+    ], { cwd: state.candidate.worktreeRoot, env, encoding: "utf8" });
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     const officialResult = JSON.parse(result.stdout);
     expect(officialResult).toMatchObject({
       stage: "build-spec",
-      stage_outcome_status: "completed",
-      stage_outcome_ref: outcome.ref,
+      status: "completed",
+      work_status: "ready",
+      quality_status: "incomplete",
     });
+    for (const field of ["stage_outcome_ref", "stage_outcome_hash", "stage_outcome_status", "stage_outcome_diagnostic"]) {
+      expect(officialResult).not.toHaveProperty(field);
+    }
     const factsPath = join(state.task.taskPath, "facts.jsonl");
     expect(existsSync(factsPath)).toBe(true);
     const taskFacts = readTaskFacts(state.task.taskPath);
@@ -2212,7 +2210,7 @@ describe("vNext official stage completion", () => {
     expect(result.quality_advisories).toContain("finding_dispositions:missing");
   });
 
-  it("stores make-decision interaction evidence in the content-addressed quality namespace", () => {
+  it("keeps historical interaction evidence readable without restoring an active writer", () => {
     const state = fixture("vnext-make-decision-content");
     const snapshot = state.candidate.captureSnapshot();
     const value = {
@@ -2230,6 +2228,8 @@ describe("vNext official stage completion", () => {
     state.kernel.publishCanonicalRecord(ref, raw);
     expect(JSON.parse(state.task.readRecord(ref))).toEqual(value);
     expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
+    expect(state.kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
+    expect(state.kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
   });
 
   it("review:unavailable stays visible without blocking the repository-owned build-spec run", async () => {
@@ -2282,6 +2282,52 @@ describe("vNext official stage completion", () => {
     expect(qualityFacts.find((fact) => fact.subject === "finding_dispositions")).toMatchObject({ status: "missing" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("keeps a pre-dispatch oversized review attempt unavailable without blocking the repository-owned build-spec run", async () => {
+    const state = fixture("vnext-official-oversized-review");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    appendNonUiApplicability(artifacts);
+    const snapshot = workspace.captureSnapshot?.() ?? state.candidate.captureSnapshot();
+    const attemptId = "vnext-official-oversized-build-spec";
+    const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+    const attempt = {
+      version: "wh-review-attempt.v1",
+      attempt_id: attemptId,
+      task_id: state.task.identity.taskId,
+      stage: "build-spec",
+      review_track: null,
+      source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
+      snapshot_tree: snapshot.tree,
+      material_id: "1".repeat(64),
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      provider_attempts: [],
+      terminal_status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      discarded_facts: [{
+        fact_kind: "review_input_too_large",
+        finding_excerpt: JSON.stringify({ delivery_bytes: 486777, delivery_limit_bytes: 307200, source_manifest: [] }),
+        reason: "complete_provider_packet_exceeds_delivery_limit",
+      }],
+      error: { code: "REVIEW_INPUT_TOO_LARGE", message: "complete review packet exceeds the provider delivery limit" },
+    };
+    kernel.publishCanonicalRecord(attemptRef, `${JSON.stringify(attempt, null, 2)}\n`);
+
+    const result = await runOfficialStage("build-spec", {
+      stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
+      workspace, artifacts,
+    }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
+
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "incomplete" });
+    expect(result.quality_advisories).toContain("independent_review:unavailable");
+    const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
+    expect(qualityFacts.find((fact) => fact.kind === "review").status).not.toBe("passed");
   });
 
   it("does not let a partial UI contract silently take the non-UI build-spec path", async () => {
@@ -2427,6 +2473,43 @@ describe("vNext official stage completion", () => {
       });
       expect(result.quality_fact_refs.length).toBeGreaterThan(0);
     }
+  });
+
+  it("T009 RED / T010 GREEN: records incomplete dual-phase fixture fields and accepts the complete handoff after two real entries", async () => {
+    const entries = [
+      { phase_id: "P1", state: fixture("vnext-dual-phase-entry-p1") },
+      { phase_id: "P2", state: fixture("vnext-dual-phase-entry-p2") },
+    ];
+    for (const entry of entries) {
+      const artifacts = ArtifactDir.open(entry.state.candidate.worktreeRoot, entry.state.task);
+      const result = await runOfficialStage("build-code", {
+        stage: "build-code", task: entry.state.task, kernel: entry.state.kernel, identity: entry.state.task.identity,
+        workflowRunId: entry.state.kernel.deriveStageWorkflowRunId("build-code"), manifest: entry.state.task.manifest,
+        candidateWorkspace: entry.state.candidate, artifacts,
+      }, { receipts: {} });
+      expect(result).toMatchObject({ stage: "build-code", work_status: "ready" });
+    }
+    const incomplete = {
+      phases: entries.map(({ phase_id }) => ({ phase_id })),
+    };
+    expect(dualPhaseFixtureErrors(incomplete)).toEqual([
+      "dual-phase fixture requires global_plan_ref",
+      "dual-phase fixture requires a compact two-entry execution_index",
+      "dual-phase fixture P1 requires frozen_test ref/hash",
+      "dual-phase fixture P2 requires frozen_test ref/hash",
+    ]);
+    const handoff = {
+      global_plan_ref: "plan.md#phase-map",
+      execution_index: [
+        { phase_id: "P1", task_ids: ["T001", "T002"] },
+        { phase_id: "P2", task_ids: ["T003", "T004"] },
+      ],
+      phases: [
+        { phase_id: "P1", frozen_test: { ref: "quality/tests/phase-p1.json", sha256: "a".repeat(64) } },
+        { phase_id: "P2", frozen_test: { ref: "quality/tests/phase-p2.json", sha256: "b".repeat(64) } },
+      ],
+    };
+    expect(dualPhaseFixtureErrors(handoff)).toEqual([]);
   });
 
   it("does not turn missing code review into a materials or evidence audit", async () => {

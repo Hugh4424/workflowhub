@@ -102,6 +102,81 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
 const FINDING_TERMINAL_STATUSES = new Set(["fixed", "rejected_invalid", "user_decided", "accepted_risk"]);
 const FINDING_NEXT_ACTIONS = new Set(["ask_user", "return_to_make_decision", "return_to_spec"]);
 const ATTEMPT_STATUSES = new Set(["executed", "failed", "unavailable"]);
+const STAGE_ROW_FINDING_DISPOSITIONS = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
+
+export const STAGE_ROW_FINDING_DISPOSITION_FIELDS = Object.freeze([
+  "finding", "disposition", "owner", "deadline", "anchor",
+  "previous_cause", "cause", "retry", "elapsed_ms", "reply_ref",
+]);
+
+function nonEmptyText(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+/**
+ * Derive the review-finding quality counters from the only persisted finding
+ * carrier: the current stage row. The raw denominator intentionally keeps
+ * malformed entries visible; valid numerators count only entries whose
+ * disposition can actually be acted on. `elapsed_ms` stays unknown when no
+ * elapsed fact was recorded instead of being inferred from wall-clock time.
+ */
+export function summarizeStageRowFindingDispositions(dispositions = []) {
+  const entries = Array.isArray(dispositions) ? dispositions : [];
+  const seen = new Set();
+  const elapsedValues = [];
+  let validFindingCount = 0;
+  let validAnchorCount = 0;
+  const items = entries.map((entry, index) => {
+    const errors = [];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      errors.push("finding_disposition_must_be_an_object");
+    } else {
+      const finding = entry.finding;
+      if (!nonEmptyText(finding)) errors.push("finding_disposition_requires_finding");
+      else if (seen.has(finding)) errors.push("finding_disposition_must_be_unique");
+      else seen.add(finding);
+      if (!STAGE_ROW_FINDING_DISPOSITIONS.has(entry.disposition)) errors.push("finding_disposition_is_invalid");
+      if (entry.disposition === "needs_human") {
+        if (!nonEmptyText(entry.owner)) errors.push("needs_human_requires_owner");
+        if (!nonEmptyText(entry.deadline) || !Number.isFinite(Date.parse(entry.deadline))) errors.push("needs_human_requires_deadline");
+      }
+      if (entry.disposition === "user_decided" && !nonEmptyText(entry.reply_ref)) {
+        errors.push("user_decided_requires_reply_ref");
+      }
+      if (entry.retry !== undefined && typeof entry.retry !== "boolean") errors.push("changed-cause retry must be boolean");
+      if (entry.retry === true) {
+        if (!nonEmptyText(entry.previous_cause) || !nonEmptyText(entry.cause) || entry.previous_cause === entry.cause) {
+          errors.push("changed-cause retry requires different causes");
+        }
+      }
+      if (entry.elapsed_ms !== undefined && (!Number.isFinite(entry.elapsed_ms) || entry.elapsed_ms < 0)) {
+        errors.push("elapsed_ms_must_be_a_non_negative_number");
+      }
+    }
+    const valid = errors.length === 0;
+    const anchored = valid && nonEmptyText(entry?.anchor);
+    if (valid) {
+      validFindingCount += 1;
+      if (anchored) validAnchorCount += 1;
+      if (Number.isFinite(entry.elapsed_ms)) elapsedValues.push(entry.elapsed_ms);
+    }
+    return Object.freeze({
+      ...(entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {}),
+      index,
+      valid,
+      anchor_valid: anchored,
+      errors: Object.freeze(errors),
+    });
+  });
+  return Object.freeze({
+    raw_finding_denominator: entries.length,
+    valid_finding_numerator: validFindingCount,
+    valid_anchor_numerator: validAnchorCount,
+    elapsed_ms: elapsedValues.length ? Math.max(...elapsedValues) : null,
+    items: Object.freeze(items),
+    errors: Object.freeze(items.flatMap((item) => item.errors.map((error) => `${item.finding ?? `#${item.index}`}:${error}`))),
+  });
+}
 
 /**
  * Validate the finding-level state machine without creating a new persisted

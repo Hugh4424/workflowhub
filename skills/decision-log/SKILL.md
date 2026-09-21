@@ -5,6 +5,16 @@ description: Convert supplied decision material into a structured downstream rec
 
 # Decision Log
 
+## Post-cohort authoring contract
+
+For post-cohort tasks, write one append-only ADR authority in `decision-log.md`:
+the raw-declaration layer, one current OI authority, a three-level trace
+`story/requirement → source/research → ADR`, and the terminal conclusion
+`confirmed|deferred|rejected`. Every correction appends a new ADR and a
+`supersedes` reference; it never rewrites an accepted source or decision.
+`build-plan` consumes only confirmed bindings. This is a material convention,
+not a new store, stage, or confirmation gate.
+
 Receive original requirement, confirmed direction, constraints, rejected
 alternatives, risks, and a controlled TaskHandle record callback from
 make-decision. Do not accept or derive any filesystem root or task path.

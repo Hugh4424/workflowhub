@@ -1,0 +1,411 @@
+{
+  "schema_version": "stage-reflection.v2",
+  "record_kind": "judgment",
+  "task_id": "workflowhub-thin-core-card-02-20260919",
+  "stage": "make-decision",
+  "stage_status": "completed",
+  "generated_at": "2026-09-20T16:27:16.194Z",
+  "status": "degraded",
+  "error": null,
+  "availability_fact": {
+    "stage": "make-decision",
+    "state": "unavailable",
+    "reason_code": "executor_absent",
+    "observed_at": "2026-09-20T16:27:16.194Z",
+    "task_identity": {
+      "task_id": "workflowhub-thin-core-card-02-20260919",
+      "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-02-20260919",
+      "branch": "task/workflowhub/workflowhub-thin-core-card-02-20260919",
+      "attempt": null,
+      "snapshot_tree": null,
+      "material_revision": null
+    }
+  },
+  "judgments": [
+    {
+      "subject_id": "independent-direction-review",
+      "subject_kind": "skill",
+      "classification": "keep",
+      "severity": "high",
+      "title": "独立方向审查不可删",
+      "reason": "两次独立审查真实走通（方向 24 findings：major 20 / minor 4 / blocking 0；细节 25 findings：major 17 / minor 7 / blocking 1），全部处置；方向审查的 F02/F06/F16 直接命中「纯新增」设计，是本阶段最有效的质量信号。",
+      "evidence_refs": [
+        "quality/reviews/direction-advice-report.md",
+        "quality/reviews/detail-advice-report.md",
+        "quality/evidence/decision-log-process.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "下一阶段再次使用独立审查时复核其 findings 是否被逐条处置。"
+    },
+    {
+      "subject_id": "stage-end-spec-analyze",
+      "subject_kind": "skill",
+      "classification": "keep",
+      "severity": "high",
+      "title": "阶段末语义一致性检查有效",
+      "reason": "独立上下文给出 inconsistent（非 pass），17 条 gap 全部带 8 字段，G-01 CRITICAL（精简时把 4 份权威清单误移出材料）被定位并修复，说明该检查能发现材料自身验收不可核对这类结构缺陷。",
+      "evidence_refs": [
+        "quality/evidence/stage-end-spec-analyze.md",
+        "quality/evidence/decision-log-process.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "下一次阶段末 spec-analyze 出现 CRITICAL 时复核修复是否闭合。"
+    },
+    {
+      "subject_id": "subagent-task-packaging",
+      "subject_kind": "step",
+      "classification": "optimize",
+      "severity": "medium",
+      "title": "子代理任务只应索要增量片段",
+      "reason": "多次把子代理任务写成「产出修复后的完整文件」，每次要求重新生成 2800+ 行 / 370KB+ 全文，单次耗时约 30 分钟；应在任务书写明「只产增量片段、主会话拼接」。",
+      "evidence_refs": [
+        "quality/evidence/decision-log-process.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "下一次向子代理派发大文件修改任务时复核是否仍要求完整文件。"
+    },
+    {
+      "subject_id": "detailed-review-formal-path",
+      "subject_kind": "step",
+      "classification": "needs_evidence",
+      "severity": "high",
+      "title": "细节审查正式 run 路径未验证",
+      "reason": "细节审查走 wh-review-cli.mjs 的 bare/diagnostic sink 路径，validateDetailReviewInput()（逐字匹配全文 + material revision 强制校验）只在 review-runner.mjs 正式路径被调用；材料全文 362477B > TASK_BOUND_PROVIDER_INPUT_MAX_BYTES 307200B，正式路径极可能判 MATERIAL_INCOMPLETE。",
+      "evidence_refs": [
+        "quality/reviews/detail-advice-report.md",
+        "quality/evidence/decision-log-process.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "适配合同（文档审查档）修好并跑通一次正式 run 路径时复核。"
+    },
+    {
+      "subject_id": "material-authority-layering",
+      "subject_kind": "step",
+      "classification": "optimize",
+      "severity": "medium",
+      "title": "权威层与过程层边界需一次判定",
+      "reason": "T-080 精简把 4 份权威清单误移出材料，导致材料自身验收（㈧㈨/S1）在材料内不可核对；修复依赖 17 条追加式更正行与移回动作，而非结构性判定「哪些节被权威引用」。",
+      "evidence_refs": [
+        "quality/evidence/stage-end-spec-analyze.md",
+        "quality/evidence/decision-log-process.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "下一次精简材料或移出小节时复核权威层引用面。"
+    },
+    {
+      "subject_id": "interaction-aggregate-deletion",
+      "subject_kind": "skill",
+      "classification": "keep",
+      "severity": "medium",
+      "title": "删除不合理阻塞的判断正确",
+      "reason": "T-083 把内容寻址的 interaction aggregate 纳入删除面后，收敛检查 S1–S8 与通过/失败条件 0 处提及 aggregate，完成条件不再依赖内容寻址回执；该机制本就命中 OI-013 删除面。",
+      "evidence_refs": [
+        "quality/evidence/decision-log-process.md",
+        "quality/evidence/stage-end-spec-analyze.md"
+      ],
+      "confidence": "high",
+      "next_review_trigger": "删除面落地（CARD-10 核对）时复核完成条件仍不依赖 aggregate。"
+    }
+  ],
+  "interventions": [],
+  "lessons_added": [],
+  "what_helped": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "两次真实独立审查（方向 24 / 细节 25 findings，全部处置）以异源异上下文产出，方向审查的「纯新增」质疑被材料自身的合并账（保留/合并/改造/删除/新建，净新增 0）证实，是本阶段最强的纠错来源。",
+        "evidence_refs": [
+          "quality/reviews/direction-advice-report.md",
+          "quality/reviews/detail-advice-report.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "用户关键纠偏 6 次均被材料逐条登记为裁决项，而不是被静默吸收；其中 T-074 直接否掉「独立当前状态投影 + 只消费 confirm 项」这一新控制面。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "stage-end-spec-analyze（独立上下文）给出 inconsistent（非 pass）并逐条列出 17 条 gap（CRITICAL 1 / HIGH 3 / MEDIUM 10 / LOW 3），随后逐条修复并重新宣称；未把失败改写成通过。",
+        "evidence_refs": [
+          "quality/evidence/stage-end-spec-analyze.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "两次审查的真实失败事实被保留而非掩盖：antigravity/flash 在方向与细节审查中均 AUTHENTICATION_FAILED，报告保留原码、未重分类为 provider 不可用。",
+        "evidence_refs": [
+          "quality/reviews/direction-advice-report.md",
+          "quality/reviews/detail-advice-report.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-080 把过程层移出材料（材料 3,160 → 1,638 行，随后材料现为 2,125 行），并做「原 2,600 条非空行全部出现于材料 ∪ 证据、未出现 0 条」的零丢失校验，使精炼有可复核的代价边界。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "阶段末 gap 修复只用 append-only 更正行与移回动作完成，未新增状态层、gate 或状态机（G-01 CRITICAL 与 G-03/G-04 HIGH 均按此闭合）。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/stage-end-spec-analyze.md"
+        ],
+        "confidence": "high"
+      }
+    ]
+  },
+  "what_to_improve": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "子代理任务书写法：把「产出修复后的完整文件」改成「只产增量片段 + 主会话拼接」；本阶段同类任务单次耗时约 30 分钟，根因是输出量而非分析量。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "材料精简前先做一次权威层引用面判定（哪些节被验收条件、D 块 artifacts 引用），否则精简会误移权威内容；本阶段因此产生 G-01 CRITICAL。",
+        "evidence_refs": [
+          "quality/evidence/stage-end-spec-analyze.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "细节审查正式 run 路径须补一次真实验证：输入上限（307200B）与「逐字匹配全文」的适配合同冲突未解决前，正式路径的证据面保持未完成登记。",
+        "evidence_refs": [
+          "quality/reviews/detail-advice-report.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "口径更正的使用密度偏高：本轮多处修复靠追加 `> 口径更正（Fx）` 行而非结构性消除新旧并存；应优先合并权威节，把更正行留给真正不可改的历史层。",
+        "evidence_refs": [
+          "quality/evidence/stage-end-spec-analyze.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "medium"
+      },
+      {
+        "summary": "跨卡写面动作（母 PRD 更新）成本高昂：两次尝试均被否决并回退（796 行、723 行两次恢复基线），应在动子代理之前先与用户确认写面边界。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      }
+    ]
+  },
+  "blockers": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "会话内不存在 quality/confirmations/ 目录，本次没有任何 human-confirmation.v3 原件可引用；介入原因只能用材料内的真实答复记录复述，5 次成功纠偏的置信度为 medium、放弃 PRD 更新为 high（有「两次恢复基线 + git status 干净」的可复核执行事实）。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "公共阶段末入口 `run --action=reflect` 在本会话未被调用/未验证：只在文件层面准备了 judgment JSON，复盘原件因此不能宣称已由正式 route 发布。",
+        "evidence_refs": [],
+        "confidence": "medium"
+      },
+      {
+        "summary": "T-083 已把 interaction aggregate 纳入删除面，但删除面实现跨 runtime/、tools/、workflows/ 三处尚未删除；在删除落地前，任何「以 aggregate 绑定完成」的旧描述仍会误导读材料的人。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "medium"
+      },
+      {
+        "summary": "细节审查的正式 run 路径未验证（bare/diagnostic sink 结果不构成正式路径会通过的证明）；适配合同未修前，大材料的正式审查路径不可用。",
+        "evidence_refs": [
+          "quality/reviews/detail-advice-report.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      }
+    ]
+  },
+  "intervention_reasons": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "T-036/T-043 纯新增质疑：用户原话「为什么会新增这么多标准和技能？不是应该替换合并原来的技能吗？怎么可能单纯新增？两个 stage 合并成 1 个，怎么可能纯新增？」→ 交付物由「8 个新技能」改为「13 步 build-plan + 6–8 个现有技能改造」，净新增 0。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-074 过度工程化质疑：用户原话「你这个是不是又是过度工程化的产物？逐项标记状态，build-plan 只消费 confirm 项，那和所有材料加哈希加 gate 加质量门禁有什么不同？」→ 不采纳审查建议的机制部分，改按「一事实一权威」用更正行收口，零新增状态层/gate/状态机。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-067 PRD 只能纯追加：用户原话「你写的太绝对了吧！对各个 card 的更新有点太离谱了……如果把原来的 PRD 毁了或遗失部分需求，那还不如别改了！」→ 中止首次范围重分配改写的子代理，PRD 恢复基线，方式改为纯追加登记。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-068 放弃 PRD 更新：用户原话「放弃 PRD 的更新，这些小补丁完全没必要更新到 main 的 prd 里去！」→ 取代 T-066/T-067，回到 T-003 口径（不回写母 PRD，只在本卡登记承接关系），母 PRD 零改动零丢失。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-080 decision-log 3000+ 行质疑：用户原话「3000 多行的 decision-log 合理吗？有按照最新的标准设计 decision-log 吗？如果缩减行数会导致信息丢失吗？」→ 方案 A：过程层 13 节 / 1,530 行移出材料，权威层全保留。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "T-083 interaction aggregate 彻底删除：用户原话「我不想修复这个问题，我想你把这个当做一个不合理的阻塞，彻底删除相关限制！这很明显不应该存在 workflowhub 里面」→ 纳入删除面，不按缺失披露、不伪造、不修复 host 接入。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/stage-end-spec-analyze.md"
+        ],
+        "confidence": "high"
+      }
+    ]
+  },
+  "what_to_simplify": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "把「子代理只产增量片段」固化为通用流程纪律（不新增控制面，只改任务书写法），可去掉每次大文件修改的全量重生成成本。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "把同一事实的权威位置判定收敛到一处：权威清单（A 类补回 / B 类排除 / 承接与不承接 / 收口自检）留材料、其余登记节留一份稿并以单一路径指针引用，避免 9 处悬空节引用复发。",
+        "evidence_refs": [
+          "quality/evidence/stage-end-spec-analyze.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "过程的「逐字层」与「指针层」可进一步物理分离（与 D-002 的 ADR 块 16 行 + 逐字层同法），减少不断追加更正行带来的阅读负担。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "medium"
+      },
+      {
+        "summary": "阶段末语义检查与阶段复盘记录的产物信息高度重叠（前者给 gap，后者给判断），可合并为一次独立检查产出两份消费面，避免维护两条落点。",
+        "evidence_refs": [
+          "quality/evidence/stage-end-spec-analyze.md",
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "medium"
+      }
+    ]
+  },
+  "simplifiable_now": {
+    "state": "observed",
+    "items": [
+      {
+        "summary": "立即生效：本卡后续与复用场景中，向子代理派发大文件修改任务时改为「只产增量片段」，主会话用脚本/edit 拼接；本阶段已实测其成本与结论边界，无需新机制、无需用户新决定。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "把「材料自身验收引用的清单」映射到一份材料文件 + 固定节名（本次已用 `## 收口清单与自检` 落地），即可消除 G-01 的 9 处悬空节引用，不需要新增门禁或 schema。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/stage-end-spec-analyze.md"
+        ],
+        "confidence": "high"
+      },
+      {
+        "summary": "把细节审查的「第四态」统一为 D-007④ 三态并补 owner/期限（G-04 已执行），避免下游读到两套处置枚举。",
+        "evidence_refs": [
+          "quality/evidence/decision-log-process.md",
+          "quality/evidence/stage-end-spec-analyze.md"
+        ],
+        "confidence": "medium"
+      },
+      {
+        "summary": "保留 unavailable / not_scheduled / degraded / unknown / not_applicable 的原样可见性，不把本轮 degraded 复盘改写为通过；该项已由 validator 的 annotations 与 missing_evidence_refs 自动呈现，无需人工改写。",
+        "evidence_refs": [],
+        "confidence": "medium"
+      }
+    ]
+  },
+  "status_matrix": {
+    "code": {
+      "state": "not_applicable",
+      "evidence_refs": []
+    },
+    "verify": {
+      "state": "not_applicable",
+      "evidence_refs": []
+    },
+    "physical_close": {
+      "state": "not_applicable",
+      "evidence_refs": []
+    },
+    "acceptance": {
+      "state": "not_applicable",
+      "evidence_refs": []
+    },
+    "release": {
+      "state": "not_applicable",
+      "evidence_refs": []
+    }
+  },
+  "identity": {
+    "task_id": "workflowhub-thin-core-card-02-20260919",
+    "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-02-20260919",
+    "branch": "task/workflowhub/workflowhub-thin-core-card-02-20260919",
+    "attempt": "current-session-make-decision-reflection",
+    "snapshot_tree": null,
+    "material_revision": null
+  },
+  "source_completeness": {
+    "compaction": true,
+    "truncation": false,
+    "visible_scope": "current session facts, quality/evidence + quality/reviews of the current task, and the recorded user replies inside the stage materials",
+    "unknown_reasons": [
+      "no human-confirmation.v3 original exists in this task (quality/confirmations/ is absent), so authentic reply_text/step_slug facts are unavailable",
+      "the authenticated run identity (run_id) and material revision were not supplied to this session, so the semantic reflection_key could not be derived",
+      "the repo's canonical stage-reflection publish route (`run --action=reflect`) was not invoked in this session, so no runtime binding exists for this record"
+    ]
+  },
+  "executor": {
+    "source_id": "workflowhub-current-session",
+    "source_family": "workflowhub-current-session",
+    "attempt_id": "current-session-make-decision-reflection",
+    "started_at": "2026-09-20T16:27:16.194Z",
+    "completed_at": "2026-09-20T16:27:16.194Z",
+    "output_hash": "cd89442c30e059c2838bc42bf9577b70835838fa624a2ed55028b4bb5c31f88c"
+  },
+  "output_hash": "cd89442c30e059c2838bc42bf9577b70835838fa624a2ed55028b4bb5c31f88c"
+}

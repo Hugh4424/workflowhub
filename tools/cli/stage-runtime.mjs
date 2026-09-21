@@ -76,6 +76,14 @@ const GIT_OID = /^[a-f0-9]{40,64}$/;
 const WORKFLOW_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const PORTABLE_WORKFLOW_STAGE = "build-prd";
 
+// The managed broker has its own terminal-wait policy and must not be aborted
+// by the recorder's short generic deadline. Test injections remain bounded so
+// a non-cooperating substitute cannot retain the task lock indefinitely.
+export function reviewRecordTimeoutForRunner({ managed = false } = {}) {
+  if (typeof managed !== "boolean") throw new TypeError("managed review runner flag must be boolean");
+  return managed ? null : undefined;
+}
+
 function topologyRouteError(message, details = {}) {
   const error = new Error(message);
   error.code = "TASK_TOPOLOGY_INVALID";
@@ -726,7 +734,7 @@ function runPreflight(stage, input, services = {}) {
     ["paths", Array.isArray(adapter.paths) && adapter.paths.length > 0 && adapter.paths.every((value) => typeof value === "string" && value.trim() !== "" && isAbsolute(value) && existsSync(value)), "existing absolute paths", adapter.paths ?? "missing"],
     ["host_provider", typeof adapter.host_provider === "string" && adapter.host_provider.trim() !== "", "configured host_provider", adapter.host_provider ?? "missing"],
     ["route", adapter.route && Array.isArray(adapter.route.providers) && adapter.route.providers.length > 0, "a resolvable non-empty provider route", adapter.route ?? "missing"],
-    ["packet.bytes", Number.isSafeInteger(adapter.packet?.bytes) && Number.isSafeInteger(adapter.packet?.limit_bytes) && adapter.packet.bytes >= 0 && adapter.packet.bytes <= adapter.packet.limit_bytes, "packet bytes at or below limit_bytes", adapter.packet?.bytes ?? "missing"],
+    ["packet.bytes", Number.isSafeInteger(adapter.packet?.bytes) && adapter.packet.bytes >= 0, "a non-negative packet byte count", adapter.packet?.bytes ?? "missing"],
     ["capabilities", adapter.capabilities && typeof adapter.capabilities === "object" && Object.keys(adapter.capabilities).length > 0 && Object.values(adapter.capabilities).every((value) => typeof value === "string" && value.trim() !== "" && value !== "unknown"), "configured non-unknown capability permissions", adapter.capabilities ?? "missing"],
   ];
   const failed = checks.find(([, ok]) => !ok);
@@ -1023,6 +1031,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       : Object.freeze({ status: "unavailable", ref: null, conclusion: null });
     return Object.freeze({
       ...progression,
+      // The formal stage set has five entries, but an ordinary task's actual
+      // route is cohort-selected. Surface that authenticated selection here so
+      // a caller never has to infer "pre" from the presence of build-spec.
+      ...(topologyRoute === null ? {} : {
+        task_type: topologyRoute.task_type,
+        activation_cohort: topologyRoute.activation_cohort,
+        topology: topologyRoute.topology,
+      }),
       quality_status: quality.status,
       quality_missing: quality.missing,
       quality_fact_refs: Object.freeze(observations.map(({ fact }) => fact.ref).sort()),
@@ -1137,9 +1153,12 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       }
       return preparedBundle;
     };
-    const runTaskBoundBuildCodeReview = async (request) => {
+    const runTaskBoundBuildCodeReview = async (request, { signal = null } = {}) => {
       const bundle = prepareBundle(request);
-      const result = await runSimpleReview(request, { buildBundle: () => bundle });
+      const result = await runSimpleReview(request, {
+        buildBundle: () => bundle,
+        ...(signal === null ? {} : { signal }),
+      });
       // The broker may echo a packet identity that does not match the
       // authenticated task-bound material bundle. Preserve that transport
       // failure as an unavailable review fact so the recorder can retain the
@@ -1179,12 +1198,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
             ? services.runReviewRound
             : useTaskBoundBuildCodeBundle
               ? runTaskBoundBuildCodeReview
-              : runSimpleReview,
+              : (request, options) => runSimpleReview(request, options),
           materialIdForRequest: typeof services.materialIdForRequest === "function"
             ? services.materialIdForRequest
             : useTaskBoundBuildCodeBundle
               ? (request) => prepareBundle(request).materialId
               : simpleReviewProviderMaterialId,
+          reviewRoundTimeoutMs: reviewRecordTimeoutForRunner({
+            managed: typeof services.runReviewRound !== "function",
+          }),
+          signal: services.reviewSignal ?? null,
         })
         : importCanonicalReviewResult({
           task: context.task,
@@ -1229,7 +1252,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     const allowedRunFields = new Set([
       "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
-      "fallback_protocol", "review_budget", "user_reply", "stage_reflection", "interaction_aggregate",
+      "fallback_protocol", "review_budget", "user_reply", "stage_reflection",
       ...(values.stage === "make-decision" ? ["research_report"] : []),
       ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),
       ...(values.stage === "verify-code" ? ["code_review_repairs"] : []),
@@ -1311,6 +1334,34 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   throw new Error(`unknown internal runtime operation: ${command}`);
 }
 
+export async function runReviewRecordWithSignalHandling(run, { signalProcess = process } = {}) {
+  if (typeof run !== "function") throw new TypeError("review record runner is required");
+  if (!signalProcess || typeof signalProcess.on !== "function" || typeof signalProcess.removeListener !== "function") {
+    throw new TypeError("signalProcess must support on/removeListener");
+  }
+  const controller = new AbortController();
+  let interruptedExitCode = null;
+  const interrupt = (name, exitCode) => () => {
+    if (controller.signal.aborted) return;
+    interruptedExitCode = exitCode;
+    controller.abort(Object.assign(new Error(`review record interrupted by ${name}`), { code: "REVIEW_CANCELLED" }));
+  };
+  const onSigterm = interrupt("SIGTERM", 143);
+  const onSigint = interrupt("SIGINT", 130);
+  // Keep both listeners installed until the canonical attempt settles. A
+  // second Ctrl-C/SIGTERM is intentionally idempotent, not permission for the
+  // process to bypass the record/lock cleanup half way through its flush.
+  signalProcess.on("SIGTERM", onSigterm);
+  signalProcess.on("SIGINT", onSigint);
+  try {
+    return await run(controller.signal);
+  } finally {
+    signalProcess.removeListener("SIGTERM", onSigterm);
+    signalProcess.removeListener("SIGINT", onSigint);
+    if (interruptedExitCode !== null) signalProcess.exitCode = interruptedExitCode;
+  }
+}
+
 export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   delegate = stageRuntimeMain,
   services = {},
@@ -1372,13 +1423,19 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     ...raw.filter((item) => item !== actionArgument),
     ...(behavior === "authorize" ? [`--operation=${action}`] : []),
   ];
-  return invokeRuntimeCommand(
+  const invoke = (reviewSignal = null) => invokeRuntimeCommand(
     behavior,
     Object.freeze({ action, argv: delegatedArgv }),
-    ({ argv: internalArgv }) => delegate(internalArgv, { services, cwd }),
+    ({ argv: internalArgv }) => delegate(internalArgv, {
+      services: reviewSignal === null ? services : { ...services, reviewSignal },
+      cwd,
+    }),
     { skillBundleContract, runnerContract },
     internalOperation,
   );
+  return publicRoute === "review:record"
+    ? runReviewRecordWithSignalHandling(invoke, { signalProcess: services.signalProcess ?? process })
+    : invoke();
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -1391,7 +1448,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       ? result.diagnostics
       : result;
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-    process.exitCode = stageRuntimeProcessExitCode(result);
+    process.exitCode ??= stageRuntimeProcessExitCode(result);
   }).catch((error) => {
     if (error?.preflight_protocol === true && error?.diagnostic) {
       process.stdout.write(`${JSON.stringify([error.diagnostic], null, 2)}\n`);
@@ -1399,6 +1456,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       return;
     }
     process.stderr.write(`${error?.stack ?? error}\n`);
-    process.exitCode = 1;
+    process.exitCode ??= 1;
   });
 }

@@ -1,6 +1,9 @@
 # WorkflowHub 标准执行流程
 
-这份文档是五个正式 stage 的人读规范。真正的执行顺序、依赖和 step 名称以对应的
+这份文档是五个正式 stage 的人读规范。正式集合不等于每个普通任务的实际路线：`pre` 走
+`make-decision → build-spec → build-plan → build-code → verify-code`，`post` 走
+`make-decision → build-plan → build-code → verify-code`；缺少冻结 cohort 的历史任务按 `pre` 读取。
+真正的执行顺序、依赖和 step 名称以对应的
 `workflows/*/steps.json` 为准；技能说明、handler 和本规范必须保持一致。文档本身不
 产生新的状态、权限、质量 gate 或交付许可证。
 
@@ -13,24 +16,24 @@
 2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
    真实暴露。
-3. `make-decision`、`build-spec`、`build-plan`、`build-code` 各自在本 stage 收尾调用
+3. `make-decision`、`build-spec`（仅 pre）、`build-plan`、`build-code` 各自在本 stage 收尾调用
    `spec-analyze`。它是这四个 stage 的唯一 stage-end 语义检查和质量事实契约 owner；
    `verify-code` 不调用它，改由 `dsh-code-review` 做当前实现的代码审查。现有 stage
    publication 是唯一写入路径，原子写入 `quality/facts` 与 acceptance evidence。
    `spec-analyze` 不直接改四份材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
    缺失或 `unavailable` 不等于通过，也不能阻止同 task 修复。
 
-## 五个 stage 的总览
+## 正式 stage 集合与 cohort 路线
 
 | stage | 主要输入 | 核心产物 | 下游直接消费 |
 | --- | --- | --- | --- |
-| `make-decision` | 原始需求、仓库事实 | `decision-log.md` | build-spec 的已确认方向 |
-| `build-spec` | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
-| `build-plan` | 原始需求、decision-log、spec | `plan.md`、`tasks.md` | build-code 的实施任务 |
+| `make-decision` | 原始需求、仓库事实 | `decision-log.md` | pre → build-spec；post → build-plan |
+| `build-spec`（pre/history） | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
+| `build-plan` | 原始需求、decision-log；pre 另读 spec | post 写 `spec.md`、`plan.md`、`tasks.md`；pre 写 plan/tasks | build-code 的实施任务 |
 | `build-code` | 四份材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
 | `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 自动记录结果；随后单独谈 close 授权 |
 
-每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
+`post` 不注册或执行 build-spec；它保留为 pre/history 的正式 stage，而不是死代码。每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
 `quality/reviews/results/` 或 `quality/reviews/attempts/`。旧 stage outcome 仅作历史兼容事实，当前阶段不依赖它。前四 stage 的 `spec-analyze` 结果由现有 stage
 publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
 什么，不会覆盖四份材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。

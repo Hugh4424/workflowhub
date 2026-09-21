@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../../runtime/evidence/canonical-receipt-writer.mjs";
-import { interactionAggregateMachineGateDiagnostic } from "../../runtime/stage/stage-handlers.mjs";
+import * as stageHandlers from "../../runtime/stage/stage-handlers.mjs";
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
@@ -59,7 +59,7 @@ afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, fo
 
 describe("CARD-01 zero machine gate advancement", () => {
   it("freezes the plan's five families and eighteen concrete predicates, not a made-up count of twenty-four", () => {
-    const plan = readFileSync("specs/workflowhub-thin-core-card-01-20260919/plan.md", "utf8");
+    const plan = readFileSync("specs/archive/workflowhub-thin-core-card-01-20260919/plan.md", "utf8");
     const predicateIds = [
       "outcome_receipt_hash_mismatch",
       "human_confirmation_hash_mismatch",
@@ -101,72 +101,30 @@ describe("CARD-01 zero machine gate advancement", () => {
     expect(observed).not.toHaveProperty("bytes");
   });
 
-  it("turns stale interaction aggregation into a retained diagnostic instead of a make-decision work permit", () => {
+  it("retires aggregate observation from the active task kernel while preserving historical record bytes", () => {
     const { kernel } = fixture();
-    const observed = kernel.observeMakeDecisionInteractionPublication({
-      snapshot_tree: "f".repeat(40),
-      decision: {},
-    });
-    expect(observed).toMatchObject({
-      status: "unavailable",
-      diagnostic: { id: "aggregate_snapshot_stale", status: "invalid" },
-    });
-    expect(observed.value).toBeNull();
+    expect(kernel.observeMakeDecisionInteractionPublication).toBeUndefined();
+    expect(kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
+    expect(kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
   });
 
-  it("retains a malformed interaction aggregate as an unbound diagnostic instead of throwing", () => {
-    const { kernel } = fixture();
-    const observed = kernel.observeMakeDecisionInteractionPublication({ aggregate: {} });
-    expect(observed).toMatchObject({
-      status: "unavailable",
-      diagnostic: { id: "interaction_aggregate_unbound", status: "invalid" },
-    });
-    expect(observed.value).toBeNull();
+  it("does not expose aggregate-specific machine-gate diagnostic helpers in the active runtime", () => {
+    expect(stageHandlers.interactionAggregateMachineGateDiagnostic).toBeUndefined();
   });
 
-  it("demotes only a structured interaction aggregate diagnostic", () => {
-    const declared = new Error("MATERIAL_INCOMPLETE: interaction aggregate is malformed");
-    Object.defineProperty(declared, "machine_gate_diagnostic_id", { value: "interaction_aggregate_unbound" });
-    expect(interactionAggregateMachineGateDiagnostic(declared)).toMatchObject({ id: "interaction_aggregate_unbound", status: "invalid" });
-    expect(interactionAggregateMachineGateDiagnostic(new Error("unexpected interaction aggregate storage failure"))).toBeNull();
-    expect(interactionAggregateMachineGateDiagnostic(Object.assign(new Error("missing record"), { code: "ENOENT" }))).toBeNull();
-  });
-
-  it("retains an invalid interaction confirmation binding as a machine diagnostic", () => {
-    const { kernel, artifacts } = fixture();
-    const snapshot = kernel.currentVNextSnapshot();
-    const revision = kernel.currentVNextMaterialRevision();
-    const decision = artifacts.read("decision-log.md");
-    const observed = kernel.observeMakeDecisionInteractionPublication({
-      snapshot_tree: snapshot.tree,
-      decision: {
-        ref: artifacts.reference("decision-log.md"),
-        hash: sha256(decision),
-        revision,
-      },
-      confirmation: {
-        ref: `quality/confirmations/${"a".repeat(64)}.json`,
-        hash: "a".repeat(64),
-        result: "accepted",
-      },
-    });
-    expect(observed).toMatchObject({
-      status: "unavailable",
-      diagnostic: { id: "human_confirmation_hash_mismatch", status: "invalid" },
-    });
-    expect(observed.value).toBeNull();
-  });
-
-  it("does not downgrade a physically unreadable current material into a machine-binding diagnostic", () => {
-    const { kernel, artifacts } = fixture();
-    rmSync(artifacts.path("decision-log.md"));
-    expect(() => kernel.observeMakeDecisionInteractionPublication({ snapshot_tree: kernel.currentVNextSnapshot().tree, decision: {} }))
-      .toThrow(/ENOENT|no such file|missing/i);
-  });
-
-  it("lets the real make-decision entry continue and publish the stale aggregate as an unavailable fact", async () => {
+  it("does not downgrade a physically unreadable current material into an aggregate-derived diagnostic", async () => {
     const { task, kernel, candidate, artifacts } = fixture();
-    const result = await runOfficialStage("make-decision", {
+    rmSync(artifacts.path("decision-log.md"));
+    await expect(runOfficialStage("make-decision", {
+      stage: "make-decision", task, kernel, identity: task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("make-decision"), manifest: task.manifest,
+      candidateWorkspace: candidate, artifacts,
+    }, {})).rejects.toThrow(/ENOENT|no such file|missing/i);
+  });
+
+  it("rejects retired interaction_aggregate input before current make-decision can publish", async () => {
+    const { task, kernel, candidate, artifacts } = fixture();
+    await expect(runOfficialStage("make-decision", {
       stage: "make-decision",
       task,
       kernel,
@@ -177,17 +135,12 @@ describe("CARD-01 zero machine gate advancement", () => {
       artifacts,
     }, {
       interaction_aggregate: { snapshot_tree: "f".repeat(40), decision: {} },
-    });
-    expect(result.stage).toBe("make-decision");
-    expect(result.machine_gate_diagnostic_refs).toHaveLength(1);
-    const [diagnostic] = result.machine_gate_diagnostic_refs.map(({ ref }) => JSON.parse(task.readRecord(ref)));
-    expect(diagnostic).toMatchObject({ id: "aggregate_snapshot_stale", status: "invalid" });
-    expect(result.quality_fact_refs.length).toBeGreaterThan(0);
+    })).rejects.toThrow(/interaction_aggregate|aggregate.*retired|unknown/i);
   });
 
-  it("does not consume a missing supplied interaction receipt as a progress gate", async () => {
+  it("rejects retired receipts.interaction instead of consuming it as a progress input", async () => {
     const { task, kernel, candidate, artifacts } = fixture();
-    const result = await runOfficialStage("make-decision", {
+    await expect(runOfficialStage("make-decision", {
       stage: "make-decision",
       task,
       kernel,
@@ -198,32 +151,7 @@ describe("CARD-01 zero machine gate advancement", () => {
       artifacts,
     }, {
       receipts: { interaction: `quality/evidence/interactions/${"0".repeat(64)}.json` },
-    });
-    const [diagnostic] = result.machine_gate_diagnostic_refs.map(({ ref }) => JSON.parse(task.readRecord(ref)));
-    expect(diagnostic).toMatchObject({ id: "interaction_aggregate_unbound", status: "invalid" });
-    expect(result.work_status).toBeTruthy();
-  });
-
-  it("demotes a top-level non-object supplied interaction receipt without masking real I/O failures", async () => {
-    const { task, kernel, candidate, artifacts } = fixture();
-    const raw = "null\n";
-    const ref = `quality/evidence/interactions/${sha256(raw)}.json`;
-    task.createRecordAtomic(ref, raw);
-    const result = await runOfficialStage("make-decision", {
-      stage: "make-decision",
-      task,
-      kernel,
-      identity: task.identity,
-      workflowRunId: kernel.deriveStageWorkflowRunId("make-decision"),
-      manifest: task.manifest,
-      candidateWorkspace: candidate,
-      artifacts,
-    }, {
-      receipts: { interaction: ref },
-    });
-    const [diagnostic] = result.machine_gate_diagnostic_refs.map(({ ref: diagnosticRef }) => JSON.parse(task.readRecord(diagnosticRef)));
-    expect(diagnostic).toMatchObject({ id: "interaction_aggregate_unbound", status: "invalid" });
-    expect(result.work_status).toBeTruthy();
+    })).rejects.toThrow(/receipts\.interaction|interaction.*retired|unexpected receipt fields:\s*interaction|unknown/i);
   });
 
   it("retains the real outline_closed=missing quality fact rather than changing it to passed", () => {

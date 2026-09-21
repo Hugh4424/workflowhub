@@ -23,6 +23,106 @@ const REVIEW_REPORT_REF = /^quality\/reviews\/reports\/[A-Za-z0-9][A-Za-z0-9._-]
 const REVIEW_PROVIDER_OUTPUT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/providers\/[A-Za-z0-9][A-Za-z0-9._-]*\.output\.json$/;
 const IN_PROCESS_REQUEST_LOCKS = new Map();
 const EXECUTION_CONTEXTS = new WeakSet();
+const DEFAULT_REVIEW_ROUND_TIMEOUT_MS = 65_000;
+// A dispatch that accepted AbortSignal must settle (and, for the bundled
+// provider client, reap its process group) before this task can admit another
+// request. A non-cooperating injected runner is recorded as sent_unparsed
+// after this bound rather than silently treated as stopped.
+const REVIEW_DISPATCH_CLEANUP_TIMEOUT_MS = 2_000;
+
+function assertReviewAbortSignal(signal) {
+  if (signal === null || signal === undefined) return null;
+  if (typeof signal !== "object" || typeof signal.aborted !== "boolean"
+      || typeof signal.addEventListener !== "function" || typeof signal.removeEventListener !== "function") {
+    throw new TypeError("review signal must be an AbortSignal");
+  }
+  return signal;
+}
+
+function reviewCancelledError(signal) {
+  const reason = signal?.reason;
+  const message = typeof reason?.message === "string" && reason.message.trim() !== ""
+    ? reason.message
+    : "review record was interrupted before a terminal review result";
+  const error = new Error(message);
+  // Preserve one public cancellation fact across the CLI, route, and provider
+  // seams. The provider client may use PROCESS_CANCELLED internally, but a
+  // canonical review attempt must never expose a host-process-only verdict.
+  error.code = "REVIEW_CANCELLED";
+  return error;
+}
+
+function executionPreparationError(error) {
+  const cause = typeof error?.code === "string" && error.code.trim() !== ""
+    ? error.code
+    : "UNKNOWN";
+  // This happens before a provider is contacted. Keep the causal message in
+  // the task-owned unavailable fact so a valid current execution can be
+  // repaired; collapsing every untyped error to UNKNOWN made the failure
+  // non-actionable. The error remains bounded to this authenticated
+  // pre-dispatch boundary and does not expose provider output.
+  const detail = typeof error?.message === "string" && error.message.trim() !== ""
+    ? error.message.trim()
+    : "preparation failed without a diagnostic message";
+  const typed = new Error(`reviewed execution could not be prepared from current authenticated records (${cause}): ${detail}`);
+  typed.code = "REVIEW_EXECUTION_PREPARATION_FAILED";
+  return typed;
+}
+
+function awaitReviewOperation(value, timeoutMs, code, message, signal = null, onTimeout = null) {
+  if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0)) {
+    throw new TypeError("review timeout must be null or a non-negative safe integer");
+  }
+  signal = assertReviewAbortSignal(signal);
+  if (onTimeout !== null && typeof onTimeout !== "function") throw new TypeError("review timeout handler must be a function");
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      callback(value);
+    };
+    const timer = timeoutMs === null ? null : setTimeout(() => {
+      const error = new Error(message);
+      error.code = code;
+      // A timeout must stop the local dispatch work before its task lock is
+      // released. Otherwise a broker CLI can survive the canonical timeout
+      // attempt and race a later request for the same material.
+      // The abort hook is defensive cleanup only. Even an unexpected cleanup
+      // failure must not throw out of the timer callback and strand this
+      // promise (and its task lock) without the canonical unavailable attempt.
+      try { onTimeout?.(error); } catch { /* the terminal timeout fact still wins */ }
+      finish(reject, error);
+    }, timeoutMs);
+    const onAbort = () => finish(reject, reviewCancelledError(signal));
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(value).then(
+      (result) => finish(resolve, result),
+      (error) => finish(reject, error),
+    );
+  });
+}
+
+function createReviewDispatchSignal(signal) {
+  signal = assertReviewAbortSignal(signal);
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(signal.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+  return {
+    signal: controller.signal,
+    abort(error) {
+      if (!controller.signal.aborted) controller.abort(error);
+    },
+    dispose() { signal?.removeEventListener("abort", abortFromCaller); },
+  };
+}
 
 function readExecutionSource(task, selection, identity, materials, { allowLegacy = false } = {}) {
   if (!selection || typeof selection !== "object" || Array.isArray(selection)
@@ -575,10 +675,10 @@ function findReusableReview({ history, request, routeIdentity = null, snapshotTr
     // remaining currentness guard is the verify-code terminal review's
     // authenticated code snapshot.
     if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
-    if (attempt.terminal_status === "unavailable"
-        && attempt.error?.code === "REVIEW_WAIT_EXCEEDED"
-        && Array.isArray(attempt.provider_attempts)
-        && attempt.provider_attempts.length === 0) continue;
+    // REVIEW_WAIT_EXCEEDED means the caller stopped waiting; it does not mean
+    // the managed broker/runtime stopped. Reuse its exact-material attempt so
+    // a later request cannot create a second live review merely because the
+    // first status observation had no provider inventory yet.
     if (retry?.admitted && attempt.request_key !== requestKey) continue;
     return entry.pairSummary ?? entry.prepared.refs;
   }
@@ -730,6 +830,44 @@ function unavailableAfterDispatch({ request, result, materialId, error } = {}) {
       authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
     }),
     error: reviewRequestError(error),
+  };
+}
+
+/**
+ * Every failure after the request identity and a task identity are known gets
+ * the same immutable unavailable attempt.  This deliberately covers route,
+ * retry, history, and source-drift failures before provider dispatch; only an
+ * inability to authenticate any task identity at all may return without an
+ * attempt.
+ */
+function recordUnavailableRequest({ task, kernel, request, identity, materialId, requestKey = null, closureManifest = null,
+  executionContext = null, error, dispatchState = "blocked_before_dispatch", retry = null } = {}) {
+  const result = unavailableAfterDispatch({
+    request,
+    materialId,
+    result: { dispatch_state: dispatchState },
+    error,
+  });
+  const refs = recordSimpleReviewResult({
+    task,
+    kernel,
+    request,
+    requestKey,
+    executionContext,
+    closureManifest,
+    identityOverride: identity,
+    result,
+  });
+  return {
+    // The attempt was persisted, but the requested semantic review remains
+    // unavailable. Keep the public outcome compatible with other
+    // blocked-before-dispatch replies while exposing its canonical refs.
+    status: "unavailable",
+    reused: false,
+    dispatch_state: result.dispatch_state,
+    ...refs,
+    ...(retry ? { retry } : {}),
+    error: result.error,
   };
 }
 
@@ -1117,7 +1255,8 @@ function readCanonicalReviewHistory(task, scope = null) {
  * inject a production-backed resolver directly.
  */
 export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null,
-  resolveRouteIdentity = resolveReviewRouteIdentity, routeDependencies = null } = {}) {
+  resolveRouteIdentity = resolveReviewRouteIdentity, routeDependencies = null,
+  reviewRoundTimeoutMs = DEFAULT_REVIEW_ROUND_TIMEOUT_MS, signal = null } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("review request must be an object");
   if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");
@@ -1128,75 +1267,104 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   }
   if (typeof request.stage !== "string" || request.stage.trim() === "") throw new TypeError("review request stage is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
+  if (reviewRoundTimeoutMs !== null && (!Number.isSafeInteger(reviewRoundTimeoutMs) || reviewRoundTimeoutMs < 0)) {
+    throw new TypeError("reviewRoundTimeoutMs must be null or a non-negative safe integer");
+  }
+  signal = assertReviewAbortSignal(signal);
   if (["e2e_binding", "confirmation", "confirmation_ref", "user_confirmation"].some((key) => Object.hasOwn(request, key))) throw new TypeError("execution review binding and future confirmation are host-owned");
   const before = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-  const executionPrepared = prepareExecutionReviewRequest(taskHandle, request, before, materialIdForRequest);
-  request = executionPrepared.request;
-  const executionContext = executionPrepared.executionContext;
-  const retryRequest = retryDecision(request);
-  if (retryRequest.invalid) {
-    return {
-      status: "unavailable",
-      reused: false,
-      dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_INVALID", message: retryRequest.error },
-      retry: { requested: true, admitted: false },
-    };
+  let executionContext = null;
+  let executionPreparationFailure = null;
+  try {
+    const executionPrepared = prepareExecutionReviewRequest(taskHandle, request, before, materialIdForRequest);
+    request = executionPrepared.request;
+    executionContext = executionPrepared.executionContext;
+  } catch (error) {
+    // A reviewed-execution projection is pre-dispatch work, but its failure is
+    // still a review fact. Keep the original request so the normal locked
+    // recorder can publish one canonical unavailable attempt rather than
+    // throwing after a route has been accepted with no original record.
+    executionPreparationFailure = executionPreparationError(error);
   }
-  const materialId = reviewRequestMaterialId(request, materialIdForRequest);
-  const authenticatedMaterialId = typeof materialIdForRequest === "function"
+  const retryRequest = retryDecision(request);
+  let materialId;
+  let materialPreparationError = null;
+  try {
+    materialId = reviewRequestMaterialId(request, materialIdForRequest);
+  } catch (error) {
+    materialPreparationError = error;
+    // The provider cannot be called without its authenticated material id, but
+    // the failed preflight itself must still become an immutable attempt.
+    materialId = textHash(canonicalJson({ request, material_preparation: "failed" }));
+  }
+  const authenticatedMaterialId = executionPreparationFailure === null && materialPreparationError === null && (typeof materialIdForRequest === "function"
     || (request.materials && typeof request.materials === "object" && !Array.isArray(request.materials))
-    ? materialId : null;
+    ? materialId : null);
   // Serialize concurrent reads and writes for the same authenticated task.
   const lockRef = "quality/reviews/request-locks/current-request.lock";
   const operation = async () => {
     let lockedIdentity;
     try { lockedIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
     catch (error) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      const requestKey = requestLockHash(request, materialId, "unavailable");
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: before, materialId, requestKey,
+        closureManifest: reviewClosure(request, before, materialId, requestKey, null), executionContext,
         error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
-      };
+      });
     }
+    let requestKey = requestLockHash(request, materialId, "unavailable");
+    let closure = reviewClosure(request, lockedIdentity, materialId, requestKey, null);
     if (!sameAuthenticatedReviewIdentity(before, lockedIdentity)) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed before the review lock was acquired" },
-      };
+      });
+    }
+    if (retryRequest.invalid) {
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
+        error: { code: "REVIEW_RETRY_INVALID", message: retryRequest.error },
+        retry: { requested: true, admitted: false },
+      });
     }
     // Resolve the trusted route again while the task lock is held. Route
     // resolution is allowed to observe configuration/provider state, and a
     // source edit during that await must be caught before any provider call.
-    const routeState = await resolveReviewRouteState({
-      request, executionContext, resolveRouteIdentity, routeDependencies,
-    });
+    let routeState;
+    if (executionPreparationFailure !== null || materialPreparationError !== null) {
+      routeState = Object.freeze({ routeIdentity: null, routeError: reviewRequestError(executionPreparationFailure ?? materialPreparationError) });
+    } else {
+      try {
+        routeState = await awaitReviewOperation(resolveReviewRouteState({
+          request, executionContext, resolveRouteIdentity, routeDependencies,
+        }), reviewRoundTimeoutMs, "REVIEW_ROUTE_RESOLUTION_TIMEOUT", `review route resolution exceeded ${reviewRoundTimeoutMs} ms`, signal);
+      } catch (error) {
+        routeState = Object.freeze({ routeIdentity: null, routeError: reviewRequestError(error) });
+      }
+    }
     const routeIdentity = routeState.routeIdentity;
     const routeError = routeState.routeError;
     let preDispatchIdentity;
     try { preDispatchIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
     catch (error) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
-      };
+      });
     }
     if (!sameAuthenticatedReviewIdentity(lockedIdentity, preDispatchIdentity)) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      lockedIdentity = preDispatchIdentity;
+      requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
+      closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while resolving the trusted review route" },
-      };
+      });
     }
     lockedIdentity = preDispatchIdentity;
-    const requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
-    const closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
+    requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
+    closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
     let history;
     try {
       history = readCanonicalReviewHistory(taskHandle, {
@@ -1228,8 +1396,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           throw error;
         }
       }
-      return { status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch",
-        error: { code: "REVIEW_HISTORY_UNAVAILABLE", message: `canonical review history is unavailable: ${error.message}` } };
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
+        error: { code: "REVIEW_HISTORY_UNAVAILABLE", message: `canonical review history is unavailable: ${error.message}` },
+      });
     }
     const retry = authenticateRetryDecision(retryRequest, {
       history, request, materialId, routeIdentity: routeIdentity ?? null, requestKey,
@@ -1242,16 +1412,14 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       ...(retry.admitted ? {} : { explanation: "no accepted material/provider/source-change basis; retry declined" }),
     } : null;
     if (retry.requested && !retry.admitted) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: {
           code: "REVIEW_RETRY_NOT_ADMITTED",
           message: "explicit review retry has no authenticated material, provider, or recovered-source change basis",
         },
-        ...(retryResult ? { retry: retryResult } : {}),
-      };
+        retry: retryResult,
+      });
     }
     if (reusable) {
       // Reuse is a read-only fast path, but it still crosses the same
@@ -1262,22 +1430,19 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       let current;
       try { current = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
       catch (error) {
-        return {
-          status: "unavailable",
-          reused: false,
-          dispatch_state: "blocked_before_dispatch",
+        return recordUnavailableRequest({
+          task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
           error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
-          ...(retryResult ? { retry: retryResult } : {}),
-        };
+          retry: retryResult,
+        });
       }
       if (!closureMatches(closure, current, materialId, request)) {
-        return {
-          status: "unavailable",
-          reused: false,
-          dispatch_state: "blocked_before_dispatch",
+        return recordUnavailableRequest({
+          task: taskHandle, kernel, request, identity: current, materialId, requestKey,
+          closureManifest: reviewClosure(request, current, materialId, requestKey, routeIdentity ?? null), executionContext,
           error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed before reusing the recorded result" },
-          ...(retryResult ? { retry: retryResult } : {}),
-        };
+          retry: retryResult,
+        });
       }
       return {
         status: "recorded", reused: true, dispatch_state: "reused", ...reusable,
@@ -1285,16 +1450,14 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       };
     }
     if (hasPriorVerifySnapshot(request, history, lockedIdentity.tree) && !retry.admitted) {
-      return {
-        status: "unavailable",
-        reused: false,
-        dispatch_state: "blocked_before_dispatch",
+      return recordUnavailableRequest({
+        task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: {
           code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED",
           message: "verify-code review belongs to an older code snapshot; an explicit judged retry is required",
         },
-        ...(retryResult ? { retry: retryResult } : {}),
-      };
+        retry: retryResult,
+      });
     }
     const dispatchRequest = { ...request };
     delete dispatchRequest.retry;
@@ -1313,7 +1476,54 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           dispatch_state: "blocked_before_dispatch",
           error: routeError,
         };
-      } else result = await runRound(structuredClone(dispatchRequest));
+      } else {
+        const dispatch = createReviewDispatchSignal(signal);
+        let settled = null;
+        try {
+          if (dispatch.signal.aborted) throw reviewCancelledError(dispatch.signal);
+          const round = Promise.resolve(runRound(structuredClone(dispatchRequest), { signal: dispatch.signal }));
+          // Handle both outcomes so a non-cooperating runner that settles
+          // after the timeout cannot produce an unhandled rejection.
+          settled = round.then(() => undefined, () => undefined);
+          // Managed 3rd-review owns its 20-minute terminal wait and explicitly
+          // records REVIEW_WAIT_EXCEEDED without cancelling a live provider.
+          // A null recorder deadline preserves that contract while retaining
+          // this route's caller-cancellation handling. Generic/injected
+          // runners still receive the bounded default below.
+          result = await awaitReviewOperation(
+            round,
+            reviewRoundTimeoutMs,
+            "REVIEW_EXECUTION_TIMEOUT",
+            `review round exceeded ${reviewRoundTimeoutMs} ms`,
+            signal,
+            (error) => dispatch.abort(error),
+          );
+        } catch (error) {
+          if (settled !== null && (error?.code === "REVIEW_EXECUTION_TIMEOUT" || error?.code === "REVIEW_CANCELLED")) {
+            try {
+              await awaitReviewOperation(
+                settled,
+                REVIEW_DISPATCH_CLEANUP_TIMEOUT_MS,
+                "REVIEW_DISPATCH_CLEANUP_TIMEOUT",
+                `review dispatch did not settle within ${REVIEW_DISPATCH_CLEANUP_TIMEOUT_MS} ms after cancellation`,
+              );
+            } catch (cleanupError) {
+              if (cleanupError?.code === "REVIEW_DISPATCH_CLEANUP_TIMEOUT") {
+                // Preserve the actual terminal cause (timeout/cancellation),
+                // but make the unacknowledged cleanup explicit. The immutable
+                // sent_unparsed attempt will be reused for this exact material
+                // so a second request cannot race the old dispatch.
+                error.dispatch_state = "sent_unparsed";
+                throw error;
+              }
+              throw cleanupError;
+            }
+          }
+          throw error;
+        } finally {
+          dispatch.dispose();
+        }
+      }
     } catch (error) {
       result = {
         status: "unavailable",
@@ -1326,6 +1536,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         provider_results: [],
         findings: [],
         error: reviewRequestError(error),
+        ...(error?.dispatch_state === "sent_unparsed" ? { dispatch_state: "sent_unparsed" } : {}),
       };
     }
     let closureCurrent = false;

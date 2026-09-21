@@ -302,14 +302,18 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
   };
 
-  it.each([
-    ["quality_review", "notes/review.json"],
-    ["stage_outcomes", "quality/evidence/stage-outcomes/verify-code/not-a-sha.json"],
-  ])("rejects a %s receipt outside its canonical namespace", async (kind, badRef) => {
+  it("rejects a quality_review receipt outside its canonical namespace", async () => {
     const worker = { stage: "verify-code", identity: { taskId: "task" }, readReceipt: () => ({ value: {}, sha256: "d".repeat(64) }) };
-    const receipts = { quality_review: "quality/reviews/results/quality.json", stage_outcomes: verifyStageOutcomeRef };
-    receipts[kind] = badRef;
-    await expect(officialStageHandler("verify-code")(worker, { receipts })).rejects.toThrow(/namespace|canonical|receipt.*ref/i);
+    await expect(officialStageHandler("verify-code")(worker, {
+      receipts: { quality_review: "notes/review.json" },
+    })).rejects.toThrow(/namespace|canonical|receipt.*ref/i);
+  });
+
+  it("rejects the retired stage_outcomes receipt before reading it", async () => {
+    const worker = { stage: "verify-code", identity: { taskId: "task" }, readReceipt: () => { throw new Error("retired receipt must not be read"); } };
+    await expect(officialStageHandler("verify-code")(worker, {
+      receipts: { stage_outcomes: "quality/evidence/stage-outcomes/verify-code/not-a-sha.json" },
+    })).rejects.toThrow(/unexpected receipt fields.*stage_outcomes/i);
   });
 
   it("requires receipt schema and producer provenance instead of accepting shape-only JSON", async () => {
@@ -1234,7 +1238,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT", "BROKER_EXIT_NONZERO", "REVIEW_STATUS_UNAVAILABLE"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
+  it.each(["PROCESS_TIMEOUT", "REVIEW_CANCELLED", "REVIEW_EXECUTION_TIMEOUT", "REVIEW_ROUTE_RESOLUTION_TIMEOUT", "BROKER_EXIT_NONZERO", "REVIEW_STATUS_UNAVAILABLE"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-group-timeout/attempt.json";
     const values = {
       [attemptRef]: {

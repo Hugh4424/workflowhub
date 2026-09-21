@@ -213,8 +213,21 @@ Review 通过既有入口产生 canonical attempt/result，consumer 使用实际
 
 [填写：本 Phase 的可观察结果。]
 
+### L0 — Goal
+
+[填写：本包为什么存在、用户或消费者能观察到什么。]
+
+### L1 — Contract
+
+[填写：可机检输入/输出、不变量、失败语义和 owner。]
+
+### L2 — Removable reference
+
+[填写：只帮助当前执行者的参考；删除它不得改变 L0/L1，写明退出条件。]
+
 ### Files
 
+- **write set**：[填写：本 Phase 精确文件集；不得用目录或 glob]
 - **NEW**：`[填写：精确路径 / N/A — reason]`
 - **MODIFY**：`[填写：精确路径]`
 - **DO NOT TOUCH**：`[填写：精确保护路径及理由]`

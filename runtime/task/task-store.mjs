@@ -2,6 +2,7 @@ import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdir
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { STAGE_ROW_FINDING_DISPOSITION_FIELDS, summarizeStageRowFindingDispositions } from "../stage/completion-predicates.mjs";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
@@ -226,7 +227,7 @@ export const STAGE_ROW_KEYS = Object.freeze([
 ]);
 export const LAYER_STATE_VALUES = Object.freeze(["completed", "unavailable", "incomplete", "partial"]);
 export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
-export const FINDING_DISPOSITIONS = Object.freeze(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
+export const FINDING_DISPOSITIONS = Object.freeze(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
 export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup"]);
 
 function recordError(message) { return new Error(`task record row is invalid: ${message}`); }
@@ -293,13 +294,25 @@ function validateLayerStates(value, label) {
 
 function validateFindingDispositions(value, label) {
   if (!Array.isArray(value)) throw recordError(`${label} must be an array`);
-  for (const entry of value) {
+  const allowedFields = new Set(STAGE_ROW_FINDING_DISPOSITION_FIELDS);
+  for (const [index, entry] of value.entries()) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw recordError(`${label} entries must be objects`);
-    if (Object.keys(entry).sort().join("\0") !== "disposition\0finding") throw recordError(`${label} entries must carry exactly finding and disposition`);
-    if (typeof entry.finding !== "string" || entry.finding.trim() === "") throw recordError(`${label} entries require a finding id`);
-    if (!FINDING_DISPOSITIONS.includes(entry.disposition)) throw recordError(`${label} disposition must be one of the four frozen values`);
+    const unknown = Object.keys(entry).filter((key) => !allowedFields.has(key));
+    if (unknown.length) throw recordError(`${label}[${index}] has unsupported fields: ${unknown.join(", ")}`);
   }
+  const summary = summarizeStageRowFindingDispositions(value);
+  if (summary.errors.length) throw recordError(`${label} ${summary.errors.join("; ")}`);
   return value;
+}
+
+/** Sole consumer: current stage-handoff rendering reads this same row; no second disposition object is written. */
+export function readCurrentStageFindingDispositionSummary(taskRoot, { taskId, stage } = {}) {
+  if (!STAGES.has(stage)) throw new TypeError("stage must be one of the five formal stages");
+  const identity = assertRoot(taskRoot, taskId);
+  const factsPath = safeRecordPath(identity.root, "facts.jsonl");
+  if (!existsSync(factsPath)) return null;
+  const row = readTaskFacts(identity.root).find((value) => value.record_kind === "stage" && value.stage === stage) ?? null;
+  return row === null ? null : summarizeStageRowFindingDispositions(row.finding_dispositions);
 }
 
 function validateStageRow(value, taskId) {

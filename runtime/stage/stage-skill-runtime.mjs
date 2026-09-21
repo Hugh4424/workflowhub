@@ -8,7 +8,6 @@ const IDENTITY_FIELDS = Object.freeze(["task_id", "stage", "workspace_path"]);
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const GENERIC_CONSUMER = /(?:executed|package|event|monitoring|generic|stage-outcome)/i;
 const FORMAL_CONSUMERS = new Set([
-  "stage-handlers#interactionAggregateFacts",
   "stage-handlers#clarifyFacts",
   "stage-handlers#testFacts",
   "stage-handlers#researchFacts",

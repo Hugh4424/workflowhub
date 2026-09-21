@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -282,6 +282,8 @@ describe("review record route", () => {
     expect(attempt.provider_attempts).toEqual(expect.arrayContaining([
       expect.objectContaining({ provider: "opencode/pax3.8", status: "running" }),
     ]));
+    // A live provider has no provider error merely because the aggregate wait ended.
+    validateSchema("attempt", attempt);
     const report = task.readRecord(refs.report_ref);
     expect(report).toContain('"coverage": "incomplete"');
   });
@@ -767,6 +769,207 @@ describe("review flow task record", () => {
     expect(dispatches).toBe(1);
     expect(new Set([first.attempt_ref, second.attempt_ref]).size).toBe(1);
     expect(new Set([first.result_ref, second.result_ref]).size).toBe(1);
+  });
+
+  it("records a canonical unavailable attempt when the dispatched round never settles", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "hung review bytes" } };
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      reviewRoundTimeoutMs: 0,
+      runRound: async () => new Promise(() => {}),
+    });
+
+    expect(refs).toMatchObject({ status: "recorded", result_ref: null });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.provider_attempts).toEqual([]);
+    expect(attempt.error).toMatchObject({ code: "REVIEW_EXECUTION_TIMEOUT" });
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+  });
+
+  it("lets a managed runner own its terminal wait without a recorder deadline", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "managed wait bytes" } };
+    let dispatchSignal = null;
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      reviewRoundTimeoutMs: null,
+      runRound: async (input, { signal } = {}) => {
+        dispatchSignal = signal;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { ...baseResult(), material_id: createSimpleReviewPacket(input).material_id };
+      },
+    });
+
+    expect(refs).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
+    expect(dispatchSignal).toBeInstanceOf(AbortSignal);
+    expect(dispatchSignal.aborted).toBe(false);
+  });
+
+  it("aborts local review dispatch before releasing a timed-out record lock", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "deadline-bound review bytes" } };
+    let dispatchSignal = null;
+    let replayDispatches = 0;
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      reviewRoundTimeoutMs: 0,
+      runRound: async (_input, { signal } = {}) => {
+        dispatchSignal = signal;
+        return new Promise(() => {});
+      },
+    });
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(dispatchSignal).toBeInstanceOf(AbortSignal);
+    expect(dispatchSignal.aborted).toBe(true);
+    expect(attempt.error).toMatchObject({ code: "REVIEW_EXECUTION_TIMEOUT" });
+    expect(attempt.dispatch_state).toBe("sent_unparsed");
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+
+    // An injected/non-cooperating runner has not acknowledged cancellation.
+    // The persisted sent_unparsed attempt therefore owns this exact material
+    // and prevents another dispatch from racing it after the lock is released.
+    const replay = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: async () => { replayDispatches += 1; throw new Error("must not dispatch while cleanup is unacknowledged"); },
+    });
+    expect(replay).toMatchObject({ status: "recorded", reused: true, attempt_ref: refs.attempt_ref });
+    expect(replayDispatches).toBe(0);
+  });
+
+  it("flushes one canonical unavailable attempt when the caller interrupts a live review", async () => {
+    const { task, kernel } = makeTask();
+    const controller = new AbortController();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "interrupted review bytes" } };
+    let receivedSignal = null;
+    let dispatches = 0;
+    let started;
+    const startedRound = new Promise((resolve) => { started = resolve; });
+    const pending = recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      signal: controller.signal,
+      reviewRoundTimeoutMs: 0,
+      runRound: async (_input, { signal } = {}) => {
+        dispatches += 1;
+        receivedSignal = signal;
+        started();
+        return new Promise(() => {});
+      },
+    });
+    await startedRound;
+    controller.abort(Object.assign(new Error("review record interrupted by SIGTERM"), { code: "REVIEW_CANCELLED" }));
+    const refs = await pending;
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal.aborted).toBe(true);
+    expect(refs).toMatchObject({ status: "recorded", result_ref: null });
+    expect(attempt.error).toMatchObject({ code: "REVIEW_CANCELLED" });
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+
+    const replay = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: async () => { dispatches += 1; throw new Error("a cancelled canonical attempt must be reused"); },
+    });
+    expect(replay).toMatchObject({ status: "recorded", reused: true, attempt_ref: refs.attempt_ref });
+    expect(dispatches).toBe(1);
+  });
+
+  it("records a canonical unavailable attempt when trusted route resolution never settles", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "hung route bytes" } };
+    let dispatches = 0;
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      reviewRoundTimeoutMs: 0,
+      resolveRouteIdentity: async () => new Promise(() => {}),
+      runRound: async () => { dispatches += 1; return baseResult(); },
+    });
+
+    expect(dispatches).toBe(0);
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.error).toMatchObject({ code: "REVIEW_ROUTE_RESOLUTION_TIMEOUT" });
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+  });
+
+  it("records a canonical unavailable attempt when authenticated review material cannot be prepared", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "stale receipt bytes" } };
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      materialIdForRequest: () => { throw Object.assign(new Error("test evidence is stale"), { code: "MATERIAL_INCOMPLETE" }); },
+      runRound: async () => { throw new Error("material failure must not dispatch"); },
+    });
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(refs).toMatchObject({ status: "recorded", result_ref: null });
+    expect(attempt.error).toMatchObject({ code: "MATERIAL_INCOMPLETE" });
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+  });
+
+  it("records a canonical unavailable attempt when reviewed execution preparation fails", async () => {
+    const { task, kernel } = makeTask();
+    const digest = "a".repeat(64);
+    const request = {
+      stage: "verify-code",
+      host_provider: "codex/luna",
+      materials: { implementation: "verify review bytes" },
+      reviewed_execution: {
+        quality_fact_ref: `quality/facts/${digest}.json`,
+        ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${digest}.json`,
+        sha256: digest,
+      },
+    };
+    let dispatches = 0;
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: async () => { dispatches += 1; throw new Error("execution preparation failure must not dispatch"); },
+    });
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(refs).toMatchObject({ status: "recorded", result_ref: null });
+    expect(attempt.error).toMatchObject({ code: "REVIEW_EXECUTION_PREPARATION_FAILED" });
+    expect(dispatches).toBe(0);
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
+  });
+
+  it("does not invoke a runner after the caller has already cancelled its review request", async () => {
+    const { task, kernel } = makeTask();
+    const controller = new AbortController();
+    controller.abort(Object.assign(new Error("review record interrupted by SIGTERM"), { code: "REVIEW_CANCELLED" }));
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "already cancelled review bytes" } };
+    let dispatches = 0;
+    const refs = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      signal: controller.signal,
+      runRound: async () => { dispatches += 1; throw new Error("cancelled request must not dispatch"); },
+    });
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.error).toMatchObject({ code: "REVIEW_CANCELLED" });
+    expect(dispatches).toBe(0);
+    expect(existsSync(task.recordPath("quality/reviews/request-locks/current-request.lock"))).toBe(false);
   });
 
   it("persists a blocked-before-dispatch result with no provider or semantic result", async () => {
@@ -1475,7 +1678,13 @@ describe("T014 explicit retry and route identity", () => {
     const denied = await recordRequest({ task, kernel, request: { ...input, retry: { requested: true, basis: "provider_changed", reason: "route was not actually changed" } }, runRound, resolveRouteIdentity: route("a") });
     expect(calls).toBe(1);
     expect(denied).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { admitted: false } });
-    expect(denied).not.toHaveProperty("attempt_ref");
+    expect(denied.attempt_ref).toMatch(/^quality\/reviews\/attempts\//);
+    expect(JSON.parse(task.readRecord(denied.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_NOT_ADMITTED" },
+      provider_attempts: [],
+    });
     expect(first.attempt_ref).toBeTruthy();
   });
 
@@ -1588,27 +1797,28 @@ describe("T006 reviewed reuse and historical review integrity", () => {
     expect(second).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: null });
   });
 
-  it("does not reuse a zero-member REVIEW_WAIT_EXCEEDED fact and admits judged retry", async () => {
+  it("reuses a zero-member REVIEW_WAIT_EXCEEDED fact and admits a materially changed retry", async () => {
     const { task, kernel } = makeTask();
     const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bounded review fixture" } };
     let calls = 0;
     const runRound = async (prepared) => {
       calls += 1;
-      if (calls <= 2) {
+      if (calls === 1) {
         return {
           status: "unavailable", stage: "build-code", review_track: null, review_kind: null,
-          material_id: createSimpleReviewPacket(prepared).material_id, runtime_id: null,
+          material_id: createSimpleReviewPacket(prepared).material_id, runtime_id: "managed-review-still-running",
           outcome: "unavailable", provider_results: [], findings: [],
+          dispatch_state: "sent_unparsed",
           error: { code: "REVIEW_WAIT_EXCEEDED", message: "managed review wait exceeded the bounded caller wait" },
         };
       }
       return { ...baseResult(), material_id: createSimpleReviewPacket(prepared).material_id };
     };
     const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
-    expect(first.dispatch_state).toBe("dispatched");
+    expect(first.dispatch_state).toBe("sent_unparsed");
     const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
-    expect(second.reused).not.toBe(true);
-    expect(second).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
+    expect(second).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: null });
+    expect(calls).toBe(1);
 
     const retry = await recordSimpleReviewRequest({
       task,
@@ -1620,7 +1830,7 @@ describe("T006 reviewed reuse and historical review integrity", () => {
       },
       runRound,
     });
-    expect(calls).toBe(3);
+    expect(calls).toBe(2);
     expect(retry.retry).toMatchObject({ requested: true, admitted: true, basis: "material_changed" });
     expect(retry.result_ref).toBeTruthy();
   });

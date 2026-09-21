@@ -129,6 +129,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["tools/cli/run-wh-review-audit-e2e.mjs", "explicit fake-broker test fixture"],
   ["tools/cli/run-wh-review-provider-smoke.mjs", "explicit provider smoke fixture"],
   ["tools/cli/smoke-local-skill-dispatch.mjs", "explicit local package verification fixture"],
+  ["skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs", "explicit local broker cancellation test fixture"],
   ["workflows/_spike/intake.mjs", "archived spike fixture"],
   ["workflows/_spike/design.mjs", "archived spike fixture"],
   ["workflows/_spike/design-variant.mjs", "archived spike fixture"],

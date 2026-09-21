@@ -19,14 +19,18 @@ import {
   validateDiffIndexBundle,
   phaseDiffDeliveryForPath,
   classifyReviewableCodePath,
-  selectBoundedVerifyCodeDiffPaths,
+  selectVerifyCodeDiffPaths,
   verifyCodeDiffDeliveryForPath,
   buildReviewMaterials,
   reviewInstructionsFor,
-  REVIEW_PACKET_MAX_DELIVERY_BYTES,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
+import {
+  createSimpleReviewPacket,
+  dispatchFrozenProviderInput,
+  serializeProviderInput,
+} from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const readRepo = (relativePath) => readFileSync(join(repoRoot, relativePath), "utf8");
@@ -434,56 +438,29 @@ describe("current review material and capture contracts", () => {
     expect(verifyCodeDiffDeliveryForPath("frontend/dist/app.min.js")).toBe("summary");
   });
 
-  it("selects a stable bounded set with implementation and test fallbacks", () => {
+  it("selects every reviewable implementation and test diff above 486777B", () => {
     const sections = [
-      { path: "tests/z.test.ts", bytes: Buffer.alloc(40) },
-      { path: "paperbuilder/application/core.py", bytes: Buffer.alloc(40) },
+      { path: "tests/z.test.ts", bytes: Buffer.alloc(260 * 1024) },
+      { path: "paperbuilder/application/core.py", bytes: Buffer.alloc(260 * 1024) },
+      { path: "frontend/src/secondary.ts", bytes: Buffer.alloc(80 * 1024) },
       { path: "vendor/generated.py", bytes: Buffer.alloc(1) },
-      { path: "skills/wh-review/scripts/review-materials.mjs", bytes: Buffer.alloc(30) },
+      { path: "README.md", bytes: Buffer.alloc(1) },
     ];
-    const selected = selectBoundedVerifyCodeDiffPaths(sections, new Set(), "verify-code", 161 * 1024, 80);
-    expect([...selected]).toEqual(["skills/wh-review/scripts/review-materials.mjs", "tests/z.test.ts"]);
-  });
-
-  it("orders priority candidates before implementation, test, and UTF-8 path", () => {
-    const sections = [
-      { path: "tests/contract/review-materials-contract.test.mjs", bytes: Buffer.alloc(40) },
-      { path: "z-project/src/app.ts", bytes: Buffer.alloc(40) },
-      { path: "a-project/src/app.py", bytes: Buffer.alloc(40) },
-    ];
-    const selected = selectBoundedVerifyCodeDiffPaths(sections, new Set(), "verify-code", 161 * 1024, 80);
-    expect([...selected]).toEqual(["tests/contract/review-materials-contract.test.mjs", "a-project/src/app.py"]);
-    expect([...selectBoundedVerifyCodeDiffPaths([...sections].reverse(), new Set(), "verify-code", 161 * 1024, 80)])
-      .toEqual([...selected]);
-    expect([...selectBoundedVerifyCodeDiffPaths([
-      { path: "😀-project/src/app.ts", bytes: Buffer.alloc(40) },
-      { path: "é-project/src/app.ts", bytes: Buffer.alloc(40) },
-    ], new Set(), "verify-code", 161 * 1024, 40)]).toEqual(["é-project/src/app.ts"]);
-  });
-
-  it("fails closed when a required implementation or test fallback cannot fit", () => {
-    expect(() => selectBoundedVerifyCodeDiffPaths([
-      { path: "frontend/src/app.ts", bytes: Buffer.alloc(81) },
-      { path: "tests/app.test.ts", bytes: Buffer.alloc(10) },
-    ], new Set(), "verify-code", 161 * 1024, 90)).toThrow(/implementation and test diff fallbacks exceed/);
-    expect(() => selectBoundedVerifyCodeDiffPaths([
-      { path: "frontend/src/app.ts", bytes: Buffer.alloc(91) },
-    ], new Set(), "verify-code", 161 * 1024, 90)).toThrow(/implementation diff fallback exceeds/);
-    expect(() => selectBoundedVerifyCodeDiffPaths([
-      { path: "frontend/src/app.ts", bytes: Buffer.alloc(1) },
-    ], new Set(), "verify-code", 161 * 1024, 0)).toThrow(/implementation diff fallback exceeds/);
-    const onlyTests = selectBoundedVerifyCodeDiffPaths([
-      { path: "tests/app.test.ts", bytes: Buffer.alloc(10) },
-    ], new Set(), "verify-code", 161 * 1024, 10);
-    expect([...onlyTests]).toEqual(["tests/app.test.ts"]);
+    expect(sections.reduce((total, section) => total + section.bytes.length, 0)).toBeGreaterThan(486777);
+    expect([...selectVerifyCodeDiffPaths(sections, "verify-code")]).toEqual([
+      "tests/z.test.ts",
+      "paperbuilder/application/core.py",
+      "frontend/src/secondary.ts",
+    ]);
+    expect(selectVerifyCodeDiffPaths(sections, "build-code")).toBeNull();
   });
 
   it("delivers external implementation and test shards with manifest and packet-plan bindings", async () => {
     const { root, task, workspace } = taskFixture();
     mkdirSync(join(workspace.worktreeRoot, "frontend", "src"), { recursive: true });
     mkdirSync(join(workspace.worktreeRoot, "tests"), { recursive: true });
-    writeFileSync(join(workspace.worktreeRoot, "frontend/src/app.ts"), `export const marker = "IMPLEMENTATION_MARKER";\n${"x".repeat(80 * 1024)}\n`);
-    writeFileSync(join(workspace.worktreeRoot, "tests/app.test.ts"), `test("marker", () => "TEST_MARKER");\n${"y".repeat(60 * 1024)}\n`);
+    writeFileSync(join(workspace.worktreeRoot, "frontend/src/app.ts"), `export const marker = "IMPLEMENTATION_MARKER";\n${"x".repeat(260 * 1024)}\n`);
+    writeFileSync(join(workspace.worktreeRoot, "tests/app.test.ts"), `test("marker", () => "TEST_MARKER");\n${"y".repeat(260 * 1024)}\n`);
     writeFileSync(join(workspace.worktreeRoot, "notes.md"), `notes\n${"n".repeat(40 * 1024)}\n`);
     const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
     try {
@@ -562,9 +539,28 @@ describe("current review material and capture contracts", () => {
           expect(sha256(bytes)).toBe(entry.sha256);
         }
         const diffIndex = JSON.parse(readFileSync(join(packetRoot, "diff-index.json"), "utf8"));
+        const attachedByDestination = new Map(attachments.entries.map((entry) => [entry.destination, entry]));
         const included = diffIndex.changes.flatMap(({ shards }) => shards).filter(({ delivery }) => delivery === "included");
         expect(included.length).toBeGreaterThanOrEqual(2);
-        expect(included.every(({ shard_id }) => readFileSync(join(packetRoot, "diff-shards", `${shard_id}.diff`), "utf8").includes("@@ -"))).toBe(true);
+        for (const shard of included) {
+          const destination = `diff-shards/${shard.shard_id}.diff`;
+          const attachment = attachedByDestination.get(destination);
+          expect(attachment).toMatchObject({ size: shard.bytes, sha256: shard.sha256 });
+          const bytes = readFileSync(join(packetRoot, destination));
+          expect(bytes.length).toBe(shard.bytes);
+          expect(sha256(bytes)).toBe(shard.sha256);
+        }
+        for (const change of diffIndex.changes) {
+          const shards = change.shards.filter(({ delivery }) => delivery === "included")
+            .sort((left, right) => left.offset - right.offset);
+          if (shards.length === 0) continue;
+          const bytes = Buffer.concat(shards.map(({ shard_id }) => readFileSync(join(packetRoot, "diff-shards", `${shard_id}.diff`))));
+          expect(bytes.toString("utf8")).toContain("@@ -");
+        }
+        const summaryDestinations = diffIndex.changes.flatMap(({ shards }) => shards)
+          .filter(({ delivery }) => delivery === "summary")
+          .map(({ shard_id }) => `diff-shards/${shard_id}.diff`);
+        expect(summaryDestinations.every((destination) => !attachedByDestination.has(destination))).toBe(true);
         const runtimeId = "fake-file-only-runtime";
         const output = JSON.stringify({ findings: [] });
         const error = null;
@@ -630,13 +626,10 @@ describe("current review material and capture contracts", () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ category: "generated:planning_artifacts" })]));
   });
 
-  it("rejects an oversized non-build-code packet before dispatch instead of silently truncating it", () => {
+  it("delivers a large non-build-code packet without truncating its provider material", () => {
     const { root, task } = taskFixture();
-    // Size against the shared ceiling so this test tracks the constant instead
-    // of drifting from it (the ceiling was raised 330 KiB -> 2 MiB on
-    // 2026-09-11 so a complete build-prd packet can be dispatched at all).
-    const oversized = "关键行为\n" + "x".repeat(REVIEW_PACKET_MAX_DELIVERY_BYTES + 64 * 1024);
-    expect(() => buildReviewMaterials({
+    const rawRequirement = "关键行为\n" + "x".repeat(486778);
+    const bundle = buildReviewMaterials({
       reviewDataRoot: root,
       attachmentRoot: root,
       source: sourceForPlanFixture,
@@ -644,14 +637,68 @@ describe("current review material and capture contracts", () => {
       taskId: task.identity.taskId,
       stage: "build-spec",
       materials: {
-        raw_requirement: oversized,
+        raw_requirement: rawRequirement,
         approved_decision: "采用当前方向。\n",
         draft_spec: "# Spec\nAC-01\n",
         review_instructions: reviewInstructionsFor("build-spec"),
       },
-    // Both enforcement sites report MATERIAL_TOO_LARGE with the ceiling derived
-    // from REVIEW_PACKET_MAX_DELIVERY_BYTES; assert the shape, not one wording.
-    })).toThrow(/MATERIAL_TOO_LARGE.*\d+ KiB/);
+    });
+    const entry = bundle.deliveryManifest.find(({ path }) => path === "requirements/raw_requirement.md");
+    expect(entry).toMatchObject({ bytes: Buffer.byteLength(rawRequirement), sha256: sha256(Buffer.from(rawRequirement)) });
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/raw_requirement.md"), "utf8")).toBe(rawRequirement);
+    expect(bundle.packetPlan.delivery_bytes).toBe(bundle.deliveryManifest.reduce((total, item) => total + item.bytes, 0));
+    expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(486777);
+  });
+
+  it("delivers a complete task-bound provider packet above 486777B without truncation", async () => {
+    const { task } = taskFixture();
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-large-provider-")));
+    roots.push(attachmentRoot);
+    const implementation = `task=${task.identity.taskId}\n${"x".repeat(486778)}`;
+    const implementationBytes = Buffer.from(implementation, "utf8");
+    const packet = createSimpleReviewPacket({
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { implementation },
+      authenticated_evidence: {
+        task_id: task.identity.taskId,
+        evidence_ref: "quality/tests/task-bound-large-provider.json",
+      },
+    });
+    const bytes = serializeProviderInput({
+      packet,
+      host_provider: "codex/luna",
+      providers: ["fixture/reviewer"],
+      review_mode: "single_round",
+      prompt: "fixture prompt",
+    });
+    let observed = null;
+    await dispatchFrozenProviderInput({
+      bytes,
+      attachmentRoot,
+      client: {
+        async runGroup({ materials }) {
+          const implementationEntry = materials.deliveryManifest.find(({ path }) => path === "materials/01-implementation.md");
+          observed = {
+            deliveryBytes: materials.deliveryManifest.reduce((total, entry) => total + entry.bytes, 0),
+            deliveryManifest: materials.deliveryManifest,
+            implementation: readFileSync(join(materials.bundleRoot, "materials/01-implementation.md"), "utf8"),
+            implementationEntry,
+            materialId: materials.materialId,
+          };
+          return { outcome: "unavailable", providers: [] };
+        },
+      },
+    });
+
+    expect(observed).not.toBeNull();
+    expect(observed.deliveryBytes).toBeGreaterThan(486777);
+    expect(observed.implementation).toBe(implementation);
+    expect(observed.implementationEntry).toMatchObject({
+      bytes: implementationBytes.length,
+      sha256: sha256(implementationBytes),
+    });
+    expect(observed.materialId).toBe(packet.material_id);
   });
 
   it("defines distinct mini-task design and implementation packet contracts", async () => {
@@ -755,10 +802,10 @@ describe("current review material and capture contracts", () => {
     const { root, task } = taskFixture();
     const fill = (size, prefix) => `${prefix}${"x".repeat(Math.max(0, size - Buffer.byteLength(prefix)))}`;
     const rawRequirement = fill(1552, "原始需求：");
-    const decisionLog = `## 原始需求\n\n${rawRequirement}\n\n## 决定\n\n${fill(17800, "决定：")}\n`;
-    const spec = fill(154435, "# Spec\n\n");
-    const plan = fill(85123, "# Plan\n\n");
-    const tasks = fill(68489, "# Tasks\n\n");
+    const decisionLog = `## 原始需求\n\n${rawRequirement}\n\n## 决定\n\n${fill(16000, "决定：")}\n`;
+    const spec = fill(130000, "# Spec\n\n");
+    const plan = fill(70000, "# Plan\n\n");
+    const tasks = fill(50000, "# Tasks\n\n");
     const bundle = buildReviewMaterials({
       reviewDataRoot: root,
       attachmentRoot: root,

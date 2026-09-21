@@ -1,0 +1,6 @@
+{
+  "routing_tier": "fullstack",
+  "routing_rationale": "File Boundary 跨 skills、workflows、config、runtime、tools、tests；虽为 non_ui 且无数据库、部署、前端改动，但同时改变 active stage protocol、CLI confirmation、runtime consumer 与 review packet，属于跨协议和多功能域行为变化，边界不能可靠收窄为单一 feature。",
+  "result": "pass",
+  "ts": "2026-09-20T17:23:36Z"
+}

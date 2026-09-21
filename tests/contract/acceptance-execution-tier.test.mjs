@@ -820,6 +820,47 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(records.map(({ subject_fact }) => subject_fact.status)).toEqual(["passed", "failed"]);
   });
 
+  it("keeps explicit deferred and unavailable AC outcomes out of coverage while an independent review receives the executed command evidence", async () => {
+    const rows = p9Rows();
+    rows[0] = {
+      ...rows[0],
+      outcome: "deferred",
+      owner: "CARD-10",
+      reason: "the real task E2E remains explicitly deferred",
+    };
+    rows[1] = {
+      ...rows[1],
+      outcome: "unavailable",
+      owner: "wh-review",
+      reason: "no current semantic provider result exists",
+    };
+    const state = p9Fixture({ rows });
+    const execution = await p9Execute(state);
+    const aggregate = acceptanceExecutionSubjectFact(state, execution);
+    expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    const { records } = p9PerAc(state, execution);
+    expect(records.map(({ subject_fact }) => subject_fact.status).sort()).toEqual(["deferred", "unavailable"]);
+    expect(records.map(({ subject_fact }) => subject_fact.outcome).sort()).toEqual(["deferred", "unavailable"]);
+    expect(p9Fact(state, execution, "acceptance_criteria").status).toBe("missing");
+
+    const trace = p9ConfigureReview(state);
+    const review = await p9PublicReview(state, trace, p9ExecutionInput(state, execution));
+    expect(trace.dispatches).toBe(1);
+    const providerStrings = [];
+    const collectProviderStrings = (value) => {
+      if (typeof value === "string") {
+        providerStrings.push(value);
+        try { const parsed = JSON.parse(value); if (parsed && typeof parsed === "object") collectProviderStrings(parsed); } catch { /* literal source */ }
+      } else if (Array.isArray(value)) value.forEach(collectProviderStrings);
+      else if (value && typeof value === "object") Object.values(value).forEach(collectProviderStrings);
+    };
+    Object.values(trace.bundles[0].bytes).forEach(collectProviderStrings);
+    for (const expected of ['"outcome":"deferred"', '"outcome":"unavailable"', "CARD-10", "no current semantic provider result exists"]) {
+      expect(providerStrings.some((bytes) => bytes.includes(expected)), "provider packet omitted " + expected).toBe(true);
+    }
+    expect(review.result_ref).toMatch(/^quality\/reviews\/results\//);
+  });
+
   it("executes command ACs with a runtime-owned current-session binding when no stage outcome is supplied", async () => {
     const state = p9Fixture();
     const attemptId = "p9-current-session-attempt";
@@ -1045,6 +1086,13 @@ describe("P3 T009 real command and service acceptance", () => {
     const { records } = p9PerAc(state, result);
     expect(records.length).toBeGreaterThan(0);
     expect(records.some(({ subject_fact }) => subject_fact.status === expectedStatus)).toBe(true);
+    for (const { subject_fact } of records) {
+      if (subject_fact.outcome === "achieved") continue;
+      expect(subject_fact).toMatchObject({
+        outcome_owner: state.task.identity.taskId,
+        outcome_reason: expect.stringContaining("acceptance execution"),
+      });
+    }
     expect(aggregate.status).not.toBe("passed");
   });
 

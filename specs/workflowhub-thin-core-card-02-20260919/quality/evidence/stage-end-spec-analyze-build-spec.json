@@ -1,0 +1,22 @@
+{
+  "schema_version": "workflowhub-spec-analyze-local-evidence.v1",
+  "stage": "build-spec",
+  "status": "consistent",
+  "publication_status": "unavailable",
+  "publication_reason": "current public run route does not accept or publish a caller-supplied current spec-analyze result",
+  "profile": "build-spec",
+  "strict_material_contracts": true,
+  "requirement_groups": 9,
+  "covered_groups": 9,
+  "findings": [],
+  "errors": [],
+  "summary": {
+    "stage_work": "build-spec 规格已按独立审查 findings 修复",
+    "requirement_coverage": "9/9 条当前原始需求组有语义和证据绑定；316 个已知单元仍只作为下界，不宣称全局无遗漏",
+    "upstream_alignment": "当前 strict material contract、AC 四段式、失败条件和 Clarify 方向保真均通过",
+    "current_stage_repairs": "补回 plan/tasks 双写删除、变更传播、四类权威事实、OI 生命周期、审查指标、coverage 负例和弱模型真实链路",
+    "remaining_risks": "真实多 phase 抽验和弱模型真实端到端执行仍按当前决定延期 CARD-10；正式 analyzer publication route unavailable",
+    "next_stage_boundary": "build-plan 可消费当前 spec；不得自行关闭延期项或猜产品方向"
+  },
+  "review_ref": "quality/reviews/results/build-spec-simple-e29afb2a-05a2-524f-a07c-edf27488512c.json"
+}

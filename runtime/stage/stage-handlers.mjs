@@ -18,7 +18,6 @@ import {
   validateAcceptanceDesignMinimum,
   validateExecutablePlanTaskMinimum,
   validateInteractionLifecycleSequence,
-  validateInteractionAggregateContract,
   validatePlanTaskContract,
   activeAcceptanceCriterionIds,
   validateProjectStandardSources,
@@ -205,7 +204,7 @@ const COMPLETION_COPY = Object.freeze({
   "verify-code": { objective: "对当前实现完成一次高质量代码审查", approach: "沿真实入口、consumer、生命周期、安全和失败边界检查代码", effect: "任务获得代码风险结论或回同一 task 修复", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
-  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
+  "make-decision": new Set(["decision", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
   "build-spec": new Set(["spec", "review", "research", "clarify", "risk_acceptance", "audit"]),
   "build-plan": new Set(["plan", "tasks", "research", "review", "risk_acceptance", "audit", "confirmation"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "ui_qa"]),
@@ -389,7 +388,7 @@ function stageInputKeys(stage) {
   if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
     return ["receipts", "attempt_id", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
   }
-  return ["receipts", "attempt_id", "interaction_aggregate", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
+  return ["receipts", "attempt_id", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
 }
 
 export function validateStageInvocation(stage, input, {
@@ -532,8 +531,8 @@ export function validateAcceptanceCoverageShape(value, {
       throw shapeDiagnosticError(`acceptance_coverage item is not an accepted criterion: ${id}`, `acceptance_coverage.items[${index}].acceptance_criterion_id`, [...declared], id);
     }
     declared.delete(id);
-    if (!["covered", "missing", "unknown", "not_applicable"].includes(item.status)) {
-      throw shapeDiagnosticError(`acceptance_coverage ${id} status must be covered, missing, unknown, or not_applicable`, `acceptance_coverage.items[${index}].status`, "covered|missing|unknown|not_applicable", item.status);
+    if (!["covered", "missing", "unknown", "not_applicable", "deferred", "unavailable"].includes(item.status)) {
+      throw shapeDiagnosticError(`acceptance_coverage ${id} status must be covered, missing, unknown, deferred, unavailable, or not_applicable`, `acceptance_coverage.items[${index}].status`, "covered|missing|unknown|deferred|unavailable|not_applicable", item.status);
     }
     if (!Array.isArray(item.evidence_refs)) {
       throw shapeDiagnosticError(`acceptance_coverage ${id} evidence_refs must be an array`, `acceptance_coverage.items[${index}].evidence_refs`, "array", item.evidence_refs, TypeError);
@@ -541,8 +540,12 @@ export function validateAcceptanceCoverageShape(value, {
     if (item.status === "covered" && item.evidence_refs.length === 0) {
       throw shapeDiagnosticError(`covered acceptance criterion requires evidence: ${id}`, `acceptance_coverage.items[${index}].evidence_refs`, "non-empty array", item.evidence_refs);
     }
-    if (item.status !== "covered" && item.evidence_refs.length !== 0) {
+    if (!["covered", "deferred", "unavailable"].includes(item.status) && item.evidence_refs.length !== 0) {
       throw shapeDiagnosticError(`non-covered acceptance criterion must not claim evidence: ${id}`, `acceptance_coverage.items[${index}].evidence_refs`, "empty array", item.evidence_refs);
+    }
+    if (["deferred", "unavailable"].includes(item.status)
+        && (item.evidence_refs.length === 0 || typeof item.reason !== "string" || !item.reason.trim())) {
+      throw shapeDiagnosticError(`${item.status} acceptance criterion requires evidence and reason: ${id}`, `acceptance_coverage.items[${index}]`, "evidence and reason", item);
     }
     if (item.status === "not_applicable"
         && (typeof item.not_applicable_reason !== "string" || item.not_applicable_reason.trim() === "")) {
@@ -647,119 +650,6 @@ function sectionHasContent(markdown, heading) {
   });
 }
 
-/**
- * Validate lifecycle details when the current aggregate carries them inline.
- * The details remain part of the existing content-addressed interaction
- * aggregate; no per-round writer or second interaction store is introduced.
- */
-export function validateInteractionAggregateLifecycle(value) {
-  const errors = [];
-  const talkRounds = value?.talk?.lifecycle_rounds;
-  if (!Array.isArray(talkRounds) || talkRounds.length === 0) {
-    errors.push("interaction aggregate talk.lifecycle_rounds must contain the real Talk rounds");
-  } else {
-    const result = validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: talkRounds });
-    if (!result.ok) errors.push(...result.errors);
-    if (Number.isSafeInteger(value.talk.round_count) && value.talk.round_count !== result.facts.rounds) {
-      errors.push("interaction aggregate Talk round_count does not match lifecycle rounds");
-    }
-  }
-  const clarifyRounds = value?.clarify?.lifecycle_rounds;
-  if (clarifyRounds !== undefined) {
-    const result = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: clarifyRounds });
-    if (!result.ok) errors.push(...result.errors.map((error) => `Clarify: ${error}`));
-  }
-  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
-}
-
-function interactionAggregateFacts(worker, invocation, expected) {
-  recordConsumerInvocation(worker, "stage-handlers#interactionAggregateFacts");
-  const ref = text(object(invocation.receipts, "receipts").interaction, "interaction aggregate ref");
-  if (!validReceiptRef("interaction", ref)) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
-  let suppliedRecord;
-  try { suppliedRecord = worker.readReceipt(ref); }
-  catch (error) {
-    if (error?.code === "ENOENT" || error instanceof SyntaxError) {
-      throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `make-decision interaction aggregate is unavailable or malformed: ${error.message}`);
-    }
-    throw error;
-  }
-  let record;
-  try { record = object(suppliedRecord, "interaction aggregate record"); }
-  catch (error) { throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message); }
-  if (record.sha256 !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate ref is not content-addressed to its immutable bytes");
-  let value;
-  try { value = object(record.value, "interaction aggregate"); }
-  catch (error) { throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message); }
-  const currentContract = Object.hasOwn(value, "original_requirement")
-    || Object.hasOwn(value, "decision")
-    || Object.hasOwn(value, "confirmation");
-  if (currentContract) {
-    const validation = validateInteractionAggregateContract(value);
-    if (!validation.ok) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `make-decision interaction aggregate is invalid: ${validation.errors.join("; ")}`);
-    const decision = value.decision;
-    if (value.snapshot_tree !== expected.snapshot_tree
-        || decision.ref !== expected.decision_ref
-        || decision.hash !== expected.decision_hash) {
-      throw interactionAggregateDiagnosticError("aggregate_decision_unbound", "interaction aggregate does not bind the current task and decision");
-    }
-    return Object.freeze({
-      ref,
-      value: Object.freeze(value),
-      evidence: Object.freeze({ ref, sha256: record.sha256 }),
-    });
-  }
-  const allowed = new Set(["schema_version", "task_id", "stage", "snapshot_tree", "talk", "clarify", "decision_ref", "decision_hash"]);
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `interaction aggregate has unknown fields: ${unknown.join(", ")}`);
-  if (value.schema_version !== "workflowhub-interaction-aggregate.v1"
-      || value.task_id !== worker.identity.taskId || value.stage !== "make-decision"
-      || !/^[a-f0-9]{40}$/.test(value.snapshot_tree ?? "")
-      || value.decision_ref !== expected.decision_ref || value.decision_hash !== expected.decision_hash) {
-    throw interactionAggregateDiagnosticError("aggregate_decision_unbound", "interaction aggregate does not bind the current task and decision");
-  }
-  let talk, clarify;
-  try {
-    talk = object(value.talk, "interaction aggregate talk");
-    clarify = object(value.clarify, "interaction aggregate clarify");
-  } catch (error) {
-    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", error.message);
-  }
-  if (talk.status !== "completed" || !Number.isSafeInteger(talk.round_count) || talk.round_count < 1
-      || talk.architecture_direction_covered !== true || talk.user_outcome_covered !== true) {
-    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate does not prove completed Talk coverage");
-  }
-  if (clarify.status !== "resolved" || clarify.open_direction_changing_questions !== 0
-      || !new Set(["user_reply", "no_direction_changing_ambiguity"]).has(clarify.resolved_by)) {
-    throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", "interaction aggregate does not prove resolved Clarify");
-  }
-  const lifecycle = validateInteractionAggregateLifecycle(value);
-  if (!lifecycle.ok) throw interactionAggregateDiagnosticError("interaction_aggregate_unbound", `interaction aggregate lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
-  return Object.freeze({ ref, value: Object.freeze(value), evidence: Object.freeze({ ref, sha256: record.sha256 }) });
-}
-
-function unavailableMachineGateDiagnostic(id, error) {
-  const reason = error instanceof Error ? error.message : String(error);
-  return Object.freeze({ id, status: "invalid", reason });
-}
-
-function interactionAggregateDiagnosticError(id, message) {
-  const error = materialIncomplete(message);
-  Object.defineProperty(error, "machine_gate_diagnostic_id", {
-    value: id,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-  return error;
-}
-
-export function interactionAggregateMachineGateDiagnostic(error) {
-  const id = error?.machine_gate_diagnostic_id;
-  return new Set(["interaction_aggregate_unbound", "aggregate_decision_unbound"]).has(id)
-    ? unavailableMachineGateDiagnostic(id, error)
-    : null;
-}
 function assertCurrentNamespace(worker, ref) {
   if (/^(?:receipts|reviews)\//.test(ref)) {
     throw new Error(`vNext record must use quality namespace; legacy projection is retired: ${ref}`);
@@ -1019,7 +909,7 @@ export function partitionVerifyReviewConclusions({ phaseReview = null, codeRevie
  * the questions-only OI projection already present in the review input.  The
  * helper returns facts only; it does not persist a second OI authority.
  */
-export function buildDirectionReviewInput({ decisionLog = "", directionReview = null, interactionAggregate = null } = {}) {
+export function buildDirectionReviewInput({ decisionLog = "", directionReview = null } = {}) {
   const review = directionReview && typeof directionReview === "object" && !Array.isArray(directionReview)
     ? directionReview
     : {};
@@ -1033,10 +923,7 @@ export function buildDirectionReviewInput({ decisionLog = "", directionReview = 
   const entries = outline.entries ?? outline.items ?? outline.ois ?? outline.records;
   const errors = [];
   if (!Array.isArray(entries) || entries.length === 0) errors.push("direction review OI snapshot is unavailable");
-  const currentOutline = analyzeDecisionOutline(String(decisionLog), {
-    directionReview: review,
-    interactionAggregate,
-  });
+  const currentOutline = analyzeDecisionOutline(String(decisionLog), { directionReview: review });
   const currentOiIds = new Set(currentOutline.oi_ids ?? []);
   const currentOiRecords = new Map((currentOutline.oi_records ?? []).map((record) => [record.oi_id, record]));
   if (currentOiIds.size === 0) errors.push("current decision-log OI authority is unavailable");
@@ -1080,33 +967,10 @@ export function buildDirectionReviewInput({ decisionLog = "", directionReview = 
   for (const oiId of currentOiIds) {
     if (!seenOiIds.has(oiId)) errors.push(`direction review OI snapshot is missing current OI ${oiId}`);
   }
-  const aggregateRef = interactionAggregate?.ref;
-  const aggregateHash = interactionAggregate?.evidence?.sha256 ?? interactionAggregate?.sha256;
-  const aggregateMatch = typeof aggregateRef === "string"
-    ? aggregateRef.match(/^quality\/evidence\/interactions\/([a-f0-9]{64})\.json$/)
-    : null;
-  const aggregateValue = interactionAggregate?.value;
-  let interactionBinding = { status: "unavailable", reason: "authenticated interaction aggregate ref/hash is unavailable" };
-  if (!aggregateMatch || aggregateHash !== aggregateMatch[1]
-      || interactionAggregate?.evidence?.ref !== aggregateRef
-      || !aggregateValue || typeof aggregateValue !== "object" || Array.isArray(aggregateValue)) {
-    errors.push("direction review interaction aggregate binding is unavailable");
-  } else {
-    const validation = validateInteractionAggregateContract(aggregateValue);
-    const decisionRevision = hashText(String(decisionLog));
-    if (!validation.ok) {
-      errors.push(`direction review interaction aggregate is not the official contract: ${validation.errors.join("; ")}`);
-    } else if (aggregateValue.decision?.hash !== decisionRevision) {
-      errors.push("direction review interaction aggregate does not bind the current decision-log bytes");
-    } else {
-      interactionBinding = { ref: aggregateRef, sha256: aggregateHash };
-    }
-  }
   return Object.freeze({
     direction_integrity_instruction: "Check direction integrity against the current decision-log OI snapshot; do not infer or alter a user's choice.",
     decision_revision: hashText(String(decisionLog)),
     oi_snapshot: Object.freeze(oiSnapshot),
-    interaction_aggregate: Object.freeze(interactionBinding),
     status: errors.length === 0 ? "ready" : "unavailable",
     ...(errors.length ? { errors: Object.freeze([...new Set(errors)]) } : {}),
   });
@@ -1799,10 +1663,21 @@ function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execut
       // passed leaves into `missing`; the leaf status is the authority for
       // the AC, while an unavailable/failed scenario still cannot create a
       // passed leaf because the executor would not have published one.
-      const passed = current.length > 0 && allRequiredScenarios.length > 0
-        && current.every(({ value }) => value.status === "passed");
-      return { acceptance_criterion_id, status: passed ? "covered" : current.length ? "missing" : "unknown",
-        evidence_refs: current.map(({ reference }) => reference) };
+      const statuses = current.map(({ value }) => value.status);
+      const evidence_refs = current.map(({ reference }) => reference);
+      const outcomeReason = current.map(({ value }) => value.subject_fact?.outcome_reason).find((reason) => typeof reason === "string" && reason.trim()) ?? null;
+      const status = current.length === 0 || allRequiredScenarios.length === 0 ? "unknown"
+        : statuses.every((value) => value === "passed") ? "covered"
+        : statuses.includes("failed") || statuses.includes("missing") ? "missing"
+        : statuses.includes("unavailable") ? "unavailable"
+        : statuses.includes("deferred") ? "deferred"
+        : "unknown";
+      return {
+        acceptance_criterion_id,
+        status,
+        evidence_refs: ["covered", "deferred", "unavailable"].includes(status) ? evidence_refs : [],
+        ...(["deferred", "unavailable"].includes(status) ? { reason: outcomeReason ?? `current acceptance execution is ${status}` } : {}),
+      };
     }),
   };
 }
@@ -2218,6 +2093,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   const groupTerminalWithoutProvider = new Set([
     "MATERIAL_INCOMPLETE",
     "MATERIAL_FORBIDDEN",
+    "REVIEW_INPUT_TOO_LARGE",
     "GROUP_OUTCOME_UNAVAILABLE",
     "PROCESS_TIMEOUT",
     "ROUTE_UNAVAILABLE",
@@ -2226,6 +2102,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     "REVIEW_BROKER_EXIT_NONZERO",
     "REVIEW_EXECUTION_TIMEOUT",
     "REVIEW_CANCELLED",
+    "REVIEW_ROUTE_RESOLUTION_TIMEOUT",
     // Managed start can succeed while the broker has not emitted a terminal
     // group event yet. That is a real dispatched transport fact, not a
     // provider-specific failure requiring fabricated provider attempts.
@@ -2233,6 +2110,10 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     "REVIEW_NO_SEMANTIC_RESULT",
     "REVIEW_PROVIDER_OUTPUT_INVALID",
     "PROTOCOL_INCOMPATIBLE",
+    // The review recorder validates reviewed_execution before any provider
+    // bundle is built. Its canonical pre-dispatch failure has no provider
+    // attempt by design and must remain consumable as an unavailable fact.
+    "REVIEW_EXECUTION_PREPARATION_FAILED",
   ]);
   if (attempt.provider_attempts.length === 0 && !groupTerminalWithoutProvider.has(attempt.error.code)) {
     throw new Error("review unavailable attempt must contain provider attempts");
@@ -2702,6 +2583,49 @@ function safeReviewFacts(worker, invocation, name = "review", expectedTrack, pro
     if (error?.code !== "MATERIAL_INCOMPLETE" && error?.code !== "ENOENT") throw error;
     return unavailableReviewFacts(worker, invocation, name, expectedTrack, producerStage, error);
   }
+}
+
+// Build-plan's review and report-only analysis deliberately share one
+// authenticated review read.  Keeping the derived counters beside that read
+// prevents a second consumer from silently observing different review bytes.
+function mergedReviewFacts(worker, invocation, {
+  materialOracle,
+  structural,
+  confirmation,
+} = {}) {
+  recordConsumerInvocation(worker, "stage-handlers#mergedReviewFacts");
+  const review = safeReviewFacts(worker, invocation);
+  const dispositions = findingDispositions([review], invocation, worker.currentMaterialRevision);
+  const findings = review.facts.status === "recorded"
+    ? canonicalReviewFindings(review.value).filter((finding) => typeof finding?.id === "string")
+    : [];
+  const routed = Array.isArray(dispositions.facts?.items) ? dispositions.facts.items : [];
+  const valid = routed.filter((item) => item?.status === "recorded");
+  const supplied = Array.isArray(invocation.finding_dispositions) ? invocation.finding_dispositions : [];
+  const elapsed = supplied.map((item) => item?.elapsed_ms).filter((value) => Number.isFinite(value) && value >= 0);
+  const hasAnchoredFinding = (finding) => {
+    const disposition = supplied.find((item) => item?.finding_id === finding.id) ?? {};
+    return [disposition.anchor, disposition.evidence_ref, finding.evidence_ref]
+      .some((value) => typeof value === "string" && value.trim() !== "")
+      || [disposition.evidence_refs, finding.evidence_refs]
+        .some((value) => Array.isArray(value) && value.some((ref) => typeof ref === "string" && ref.trim() !== ""));
+  };
+  return {
+    review,
+    dispositions,
+    review_analysis: {
+      raw_finding_denominator: findings.length,
+      valid_finding_numerator: valid.length,
+      valid_anchor_numerator: valid.filter((item) => findings.some((finding) => finding.id === item.finding_id && hasAnchoredFinding(finding))).length,
+      elapsed_ms: elapsed.length ? Math.max(...elapsed) : null,
+      self_checks: {
+        no_oracle: materialOracle?.ok === true,
+        no_provenance: review.facts.status === "recorded" || (review.facts.status === "unavailable" && Boolean(review.facts.attempt_ref)),
+        no_prewritten_test: structural?.facts?.command_oracle_checks?.valid === true,
+        no_irreversible_action_without_confirmation: confirmation === null || Boolean(confirmation?.evidence?.ref && confirmation?.evidence?.sha256),
+      },
+    },
+  };
 }
 
 function phaseReviewFacts(worker, invocation) {
@@ -3660,25 +3584,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
-  const machineGateDiagnostics = [];
-  let interaction = null;
-  if (input.receipts.interaction !== undefined) {
-    try {
-      interaction = interactionAggregateFacts(worker, input, {
-        snapshot_tree: snapshot.tree,
-        decision_ref: item.value.decision_ref,
-        decision_hash: item.value.decision_hash,
-      });
-    } catch (error) {
-      // A supplied interaction aggregate remains evidence of an invalid
-      // machine binding, never a reason to stop current-session work.  The
-      // handler continues without consuming it, and publication records the
-      // unavailable diagnostic as a content-addressed fact.
-      const diagnostic = interactionAggregateMachineGateDiagnostic(error);
-      if (diagnostic === null) throw error;
-      machineGateDiagnostics.push(diagnostic);
-    }
-  }
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision", reviewTrack: "direction" });
   const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision", reviewTrack: "detail" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
@@ -3688,7 +3593,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
     requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
     taskId: worker.identity.taskId,
     directionReview: direction.value ?? direction,
-    interactionAggregate: interaction,
     // The record-model boundary, not a marker string in user-authored
     // Markdown, decides whether this is a current task.  Current vNext
     // tasks must publish the outline subject even when it is missing; legacy
@@ -3698,7 +3602,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const directionReviewInput = buildDirectionReviewInput({
     decisionLog: currentDecisionLog,
     directionReview: direction.value ?? direction,
-    interactionAggregate: interaction,
   });
   const hasCurrentOutline = currentOnly;
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
@@ -3717,8 +3620,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
       audit_gaps: auditGaps,
       ui_applicability: uiApplicability,
       direction_review_input: directionReviewInput,
-      ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
-      ...(machineGateDiagnostics.length ? { machine_gate_diagnostics: machineGateDiagnostics } : {}),
       completion_subjects: {
         ui_applicability: subjectFact(
           uiApplicability.status === "recorded" ? "passed" : "missing",
@@ -3737,7 +3638,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
         plain_language_card: subjectFact(convergence.facts.plain_language_card, [specEvidence], convergence.facts.plain_language_card === "passed" ? "decision-log end card is in plain language" : convergence.errors.find((e) => e.includes("end card")) ?? "decision-log plain-language end card missing"),
         ...(hasCurrentOutline ? { outline_closed: subjectFact(
           convergence.facts.outline_closed,
-          [specEvidence, ...(direction.evidence ? [direction.evidence] : []), ...(interaction?.evidence ? [interaction.evidence] : [])],
+          [specEvidence, ...(direction.evidence ? [direction.evidence] : [])],
           convergence.facts.outline_closed === "passed"
             ? "current OI outline satisfies all five close conjuncts"
             : convergence.outline.errors[0] ?? "current OI outline is not closed",
@@ -3753,7 +3654,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
     },
     evidence_refs: [
       ...(item.evidence ? [item.evidence] : []),
-      ...(interaction ? [interaction.evidence] : []),
       ...(currentOnly ? [] : [{ ref: item.value.decision_ref, sha256: item.value.decision_hash }]),
       ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
       ...(direction.evidence ? [direction.evidence] : []), ...(detail.evidence ? [detail.evidence] : []), ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
@@ -3763,7 +3663,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
     missing_items: [...new Set([
       ...dispositions.missing_items,
       ...uiApplicability.missing_items,
-      ...machineGateDiagnostics.map(({ id, status, reason }) => `machine fact ${id} is ${status}: ${reason}`),
       ...(hasCurrentOutline ? convergence.outline.errors.map((error) => `outline_closed: ${error}`) : []),
     ])],
   }, {
@@ -3952,15 +3851,15 @@ HANDLERS.set("build-plan", async (worker, input) => {
     audit = null;
     auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
   }
-  const review = safeReviewFacts(worker, input);
   const confirmation = input.receipts?.confirmation === undefined
     ? null
     : confirmationFacts(worker, input, { requireV2: true });
   if (confirmation?.evidence) evidenceRefs.push(confirmation.evidence);
+  const mergedReview = mergedReviewFacts(worker, input, { materialOracle, structural, confirmation });
+  const { review, dispositions } = mergedReview;
   const result = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
   if (review.evidence) evidenceRefs.push(review.evidence);
   evidenceRefs.push(...(review.risk_evidence ?? []), ...result.evidence);
-  const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
   missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final plan review");
@@ -3990,6 +3889,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
       source_digest: before.source_digest,
       decision_freeze: decisionFreeze,
       material_oracle: materialOracle,
+      review_analysis: mergedReview.review_analysis,
       slice_advisory: sliceAdvisory,
       stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,

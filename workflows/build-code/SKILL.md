@@ -163,6 +163,7 @@ Submit each Phase review through existing public `review --action=record` with
 The existing request route owns dispatch, reuse and canonical recording;
 consume its returned result/attempt refs in the stage input. Preserve independent
 role results, coverage, member failures, usage/timing and record failures.
+This review record is no gate and creates no new stage or material.
 For final integration review use `review_scope=integration`, `subject_kind=worktree`
 and `phase_id=null` with the integration material profile. A result-only record
 is an import of existing evidence, never proof that a review was dispatched.
