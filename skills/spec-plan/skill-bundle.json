@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "11e1c0c5a77eadd761a61b58e5325875cc16386a107ae3df1ce51cda8a6308b4"
+      "sha256": "ef5ed76ba8cfdb3585334f940dc7c28b1d4ae63636bad684ec120e59b024e459"
     },
     {
-      "path": "templates/plan-template.md",
-      "sha256": "fdfa3d9cd0fc4851df7a5637d1fd975bdfdbb49070f5a735a54359ae2a913400"
+      "path": "templates/phase-template.md",
+      "sha256": "b5a4b739bcf61274e63cc35249dfdde989f884a635a5910931769a203747f753"
     }
   ],
   "sources": [

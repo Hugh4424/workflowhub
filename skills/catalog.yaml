@@ -283,15 +283,16 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: 446e23c031c5acafd7d6df1cc0da8e58632c01ece45015ee92ec4f02255cd4e2
-    last_reviewed_at: '2026-07-14'
+    local_bundle_hash: 31a47d46a9f528bffce38b455c68b6c3e922ae2a9a62529efe531a62128e7e0c
+    last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
-    purpose: 从自然语言生成可测试 spec
-    design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
+    purpose: 从已确认决策生成可测试产品规格与全局实现设计
+    design_idea: post spec 同时承载四件需求翻译和全局工程方案，Phase 只承载差异
     standalone: true
     used_by_stages:
       - build-spec
+      - build-plan
     upstream:
       - github_url: https://github.com/github/spec-kit
         commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
@@ -301,7 +302,7 @@ skills:
         review_outcome: accepted
         path: templates/commands/specify.md
         skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md
-    local_changes: 恢复为可搬运的内容合同和模板；post cohort 编排由 build-plan 负责，build-spec 只读，不新增第二 runtime
+    local_changes: post cohort 由 build-plan 写 spec.md 产品规格与全局实现设计，pre cohort 由 build-spec 读取旧材料；consumer 为 spec-plan、spec-analyze、build-code；owner 为 build-plan；测试为 post-cohort-spec-design-authority；当单一 spec 作者机制被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
@@ -331,12 +332,12 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 94a95f355dbe3d8434ed5ccedd6808fb869cda89763a9136af32335de93916a9
-    last_reviewed_at: '2026-07-14'
+    local_bundle_hash: bb470db067aaed87d6a04829882f79af5a49a414dd07f8c456046c1311fbd2f4
+    last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
-    purpose: 从 spec 生成实现 plan
-    design_idea: 技术上下文、宪法检查、接口和验证映射
+    purpose: 在 spec 中生成全局实现设计，并逐个生成独立 Phase 文件
+    design_idea: 全局设计留 spec，Phase 只写本包差异、精确边界、测试和 STOP
     standalone: true
     used_by_stages:
       - build-plan
@@ -357,18 +358,18 @@ skills:
         review_outcome: accepted
         path: skills/writing-plans/SKILL.md
         skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
-    local_changes: 恢复速读卡、技术锚点、reuse-extend-new、阶段交接、RED/GREEN、追溯映射和 F10 约束；不新增运行时状态或宿主交接字段；plan 字节幂等由 ArtifactDir.writeAtomic 和 core/__tests__/artifact-dir.test.mjs 负责，不恢复 retry_contract；若正式 writer 与该测试都移除时一并删除本说明
+    local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 作者机制被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: bf4ad825ce2cb0d1cea252b01bb2d182323252a6c1e538213b3d10b78e55b1f7
+    local_bundle_hash: 72f1e186546c6454a13d49f5807e01f9f33ca54d91e2ff9298643921d99b626b
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
-    purpose: 将 spec/plan 转成依赖排序任务
-    design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
+    purpose: 从独立 Phase 文件生成纯指针索引
+    design_idea: 索引只含路径、锚点、写集、依赖和 consumer
     standalone: true
     used_by_stages:
       - build-plan
@@ -389,14 +390,14 @@ skills:
         review_outcome: accepted
         path: skills/writing-plans/SKILL.md
         skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
-    local_changes: 恢复任务卡、阶段 Goal/Files/STOP/Done、RED/GREEN、最终聚合卡和双向追溯；状态仍只是 tasks.md 描述事实，不承载 runtime 状态机
+    local_changes: post cohort 只写 phases/index.md；旧 tasks 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 索引被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 685f2a0f3973f33c966f7437890f89f84c3ae23f76912bab628f1d0c41ad30fa
-    last_reviewed_at: '2026-07-14'
+    local_bundle_hash: f68f6c96a5ae75544af093689eb3d83712d35d3303a969336120944ec7451f20
+    last_reviewed_at: '2026-09-22'
     status: native
     metrics_enabled: true
     purpose: 前四 stage 收尾唯一语义检查与质量事实契约 owner
@@ -548,7 +549,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 29630c780367a1de355119b4305a7d1a494aec6f9a77197ba5d292526e866d62
+    local_bundle_hash: 9cb107b5517f0a6411043421cef1248ae14044aa596393bb2fafea1c91cf5096
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -819,7 +820,7 @@ skills:
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d2ffa5d6f6db9a4d2a16052b8685cb1fdc6a3db32d38b9abab35a2fc1c5c65bb
+    local_bundle_hash: d2015fb77961467dd4c41c46c40ccb547697b0d56ed9b93487f6d0d9b72a9b9a
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -844,7 +845,7 @@ skills:
   - name: testing-system-blueprint
     path: skills/testing-system-blueprint/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c59ba3c2def665e78aec7fe5fe70effa1b6531877dd83b3a39c192e3308aec2f
+    local_bundle_hash: bec99b795480ef3dd8546dea4e39df62dc886903a00dc8b3e973d575d3df1fd7
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true

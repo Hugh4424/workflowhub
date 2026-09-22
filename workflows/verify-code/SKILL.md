@@ -13,8 +13,8 @@ facts and keeps same-task repair available.
 ## 统一回退协议
 
 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
-`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
-`build-spec`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在
+pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
 ## 阶段末遗漏披露
@@ -43,8 +43,11 @@ JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers
 
 verify-code 审查当前实现，并在同一次常规独审中复核本次逐项验收结果、执行原件和冻结材料。上游材料的撰写与修订仍由原 stage 负责。
 
-当前 task 的以下四份材料存在且可读，就直接开始或继续验收：
-`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`。旧事实只作背景，不是工作许可证，也不能冻结同 task 修复。
+当前 task 的 cohort 材料存在且可读，就直接开始或继续验收：
+pre/history 为 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；
+post 为 `decision-log.md`、含全局实现设计的 `spec.md`、
+`phases/index.md` 与其引用的每个物理 `phases/P<n>.md`。索引只提供指针，
+不能代替 Phase 正文。旧事实只作背景，不是工作许可证，也不能冻结同 task 修复。
 
 它检查当前实现是否有会影响交付的代码问题：
 
@@ -54,12 +57,26 @@ verify-code 审查当前实现，并在同一次常规独审中复核本次逐�
 - 是否新增了重复控制面、无 consumer 的抽象或不必要的兼容分支；
 - 测试是否走真实入口、关键分支、外部状态和失败边界，而不是只让 mock 或绿色命令通过。
 
-四份当前材料由上游 stage 撰写；本阶段读取当前内容以核对实现意图及验收输入，不重演 Talk/Grill 或上游材料生成。完成声明必须对应真实当前执行、逐项结果和审查绑定；缺失或错绑事实保持 incomplete，只有疑点才复跑受影响检查。
+当前 cohort 材料由上游 stage 撰写；本阶段读取当前内容以核对实现意图及验收输入，不重演 Talk/Grill 或上游材料生成。完成声明必须对应真实当前执行、逐项结果和审查绑定；缺失或错绑事实保持 incomplete，只有疑点才复跑受影响检查。
 
 材料问题应在发现它的 stage 由 `spec-analyze` 和该 stage 自己修复；verify-code 发现材料疑点时只报告“上游材料风险”，不把它变成最后阶段的代码门禁。
 
-verify-code 不在 verify-code
-中改写材料，`tasks.md` 任务卡既有 `执行状态填写区` 除外。`spec.md` → build-spec；`plan.md`/`tasks.md` → build-plan。
+verify-code 不改写作者材料。pre/history 的 `spec.md` → build-spec，
+`plan.md`/`tasks.md` → build-plan；post 的 `spec.md` 与
+`phases/P<n>.md` → build-plan。post `phases/index.md` 由 build-plan 从
+Phase 头部再生，执行事实只进入现有 task facts/quality evidence。
+
+## 原始需求到实际结果抽查
+
+在本次常规代码审查中，对交付范围逐项抽查母 PRD/原始需求 →
+`decision-log.md` 的已确认裁决 → `spec.md` 的 FR/AC →
+各物理 `phases/P<n>.md` 的任务与 oracle → 当前实现、测试/质量证据。
+抽查以受影响需求、真实消费者、失败/恢复与跨 Phase 接口为重点；记录
+可追溯、语义偏离或 `missing`，附源锚点及实际证据引用。缺任一原始来源、
+Phase 正文或当前证据时不得由索引行、绿灯命令或旧 review 代填为通过。
+这是当前审查的事实核对，不是重演 build-plan 的规格完整性裁决，也不是
+新的验收 gate；不重写上游材料，不重复运行已执行测试。代码问题在同一 task
+修复，上游材料缺口交回 owner，质量缺口如实降低完成声明。
 
 ## Conditional UI consumer alignment
 
@@ -137,4 +154,4 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
 
 不再要求用户重复 Talk/Grill 或重复确认，消费现有真实执行证据；用户确认仅沿上述既有验收确认语义，不重复确认代码审查结论。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。
-对上游材料本身，本阶段只审查代码及其对当前实现的影响；不重新检查其完整性，也不列 AC 逐条结论。不要要求用户补交 verify-code 证据，不把交接确认当作代码 review 的证据门禁。
+对上游材料本身，本阶段不重新裁决其完整性；按上文抽查原始需求到实际结果的链路并披露 `missing`，不重列全量 AC 结论。不要要求用户补交 verify-code 证据，不把交接确认当作代码 review 的证据门禁。

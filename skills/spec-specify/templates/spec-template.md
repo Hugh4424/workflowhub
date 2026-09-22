@@ -1,12 +1,14 @@
 # 功能规格：[填写：功能名]
 
-> 基于已接受的需求来源。本文件只写产品问题、行为、边界和验收，不写文件路径、代码符号或工程命令。
+> 基于已接受的 PRD / decision-log。本文件承载产品行为与全局实现设计；
+> Phase 文件只写各包差异，索引只存指针。引用 PRD/decision 的稳定目标与裁决，
+> 不在本文件重写一份产品目标。
 
 > **叙事主干**连续说明问题、目标、取舍和机制。所有可判定验收正文只在 `Appendix A`；
 > 主干只保留稳定指针，避免双写。
 
 - **功能名**：[填写：面向用户的名称]
-- **来源**：[填写：accepted decision 或用户故事的精确引用]
+- **来源**：[填写：PRD/decision-log、accepted decision 或用户故事的精确引用]
 - **状态**：[填写：草稿 / 已接受 / 已替换]
 
 ## 速读卡（30 秒）
@@ -31,7 +33,7 @@
 每条 FR/AC 都必须能回到本表；scope revision 只追加受影响映射和 revision note，
 不另建需求账本。
 
-## 1. 问题与紧迫性
+## 1. 需求解释：问题与紧迫性
 
 [填写：从用户视角说明麻烦、现有方式为何不够，以及为什么现在必须处理。]
 
@@ -78,7 +80,7 @@
 
 > 这是 WorkflowHub 在 AgentHub 正文上的事实层。每条只选择一种状态，其他状态字段删除。
 
-- **PFACT-01**：[填写：影响需求或验收的产品、用户或流程事实]
+- **PFACT-001**：[填写：影响需求或验收的产品、用户或流程事实]
   - **status**：`verified` / `inferred` / `unknown` / `not_applicable`
   - **证据或来源**：[填写：verified 的 ref/hash/source ID，或 inferred 的来源和限制]
   - **owner、影响**：[填写：unknown 的负责人、影响和关联 OPEN/RISK ID]
@@ -167,22 +169,79 @@
 
 ## 测试标准
 
-每个行为切片在 `Appendix A` 指向同一 oracle、覆盖限制和预期证据类型；精确命令留给 phase。
+每个行为切片在 `Appendix A` 指向同一 oracle、覆盖限制和预期证据类型；
+实现设计节给出全局验证策略，精确命令留给各 Phase。
 
 ## 架构边界
 
-只声明产品边界、消费者和兼容性；代码符号、文件路径和工程实施方案只属于 phase 工程权威。
+区分产品边界与工程边界：写明真实消费者、接口及兼容责任；
+全局架构方案在下方「实现设计」维护，各 Phase 只承接自身差异。
+
+## 实现设计（全局权威）
+
+> `spec-plan` 在同一份 `spec.md` 内补齐已核实工程事实和方案。
+> 本节消费 PRD/decision-log，不再决定产品目标。每项缺失写
+> `unknown — owner / impact / next action`；不以猜测填空。
+
+### Code Anchors
+
+- **现状与目标差异**：[填写：已核实的现有行为、目标行为、真实消费者；证据路径/符号]
+- **读取顺序**：[填写：实现者先查的最小路径与符号，再查的邻接 consumer；无需全仓扫描]
+- **代码锚点**：[填写：每个被改接口的精确路径、符号、签名、schema 和证据；不存在时写 NEW + 目标 consumer]
+- **运行条件**：[填写：runtime 版本、相关依赖、存储/环境、当前测试入口；不涉及时 N/A — reason]
+
+### Interfaces and Failure Semantics
+
+- **选择的架构方案**：[填写：reuse / extend / new、理由、被放弃方案及取舍]
+- **模块职责**：[填写：每个 owner 消费什么、产出什么、不能裁决什么；跨模块链路用生产者 → consumer]
+- **接口与数据流**：[填写：输入、变换、输出、状态转换、持久化与兼容范围；含旧/新消费者]
+- **失败语义**：[填写：无效输入、缺失数据、异常、竞态、重试/恢复及可观察错误；不要默认为成功]
+- **新增控制面**：[填写：真实 consumer、owner、测试、删除条件；无则 N/A — reason]
+
+### 全局文件边界与依赖
+
+- **NEW**：[填写：精确新增路径或 N/A — reason]
+- **MODIFY**：[填写：精确修改路径或 N/A — reason]
+- **DO NOT TOUCH**：[填写：精确保护路径及原因]
+- **全局依赖**：[填写：Phase DAG 的生产者 → 消费者、串行原因、可并行条件；无则 N/A — reason]
+- **文件归属**：[填写：每个可修改文件归属唯一 Phase；重复写集写出拆分或串行合并理由]
+- **回滚与恢复**：[填写：触发、最小可逆动作、数据及兼容边界]
+
+### Requirement-to-Task Trace
+
+从当前 `decision-log.md` 的逐字声明层/明确原子条目逐条核对已确认 decision；
+上游 PRD 原件在适用时另作只读对照。不能只复述 decision 摘要，也不能由本规格
+或 analyzer 请求自报需求分母。先定位每个独立可验收的原始行为、量词、否定、
+先后、边界和失败条件，在本表给可回读 source ID/位置；原文字节 hash 和材料
+revision 由正式 analyzer 读取同一当前原件绑定，不在 spec 复制一份可漂移账本。
+缺原件标 `unknown — owner / impact / next action`，不得猜补。每个 in-scope source 必须连到
+FR、AC、物理 Phase 的 Task、同义正反 oracle；反向检查每个 Task 有来源、验收和
+真实 consumer。标为 deferred/non-goal 的来源保留决策理由，不伪装成已实现。
+ID、文件名或绿色测试名出现但没有具体行为、负例与原文强度对照，不算覆盖。
+
+| source / decision (decision-log ID/location; upstream ref if applicable) | original behavior/strength | FR / AC | Phase / task | positive + negative oracle / evidence | dependency / status |
+| --- | --- | --- | --- | --- | --- |
+| [填写：逐字 U/V/原子 ID、位置与 D ID；没有原件写 unknown] | [填写：原义约束，不复制长段原文] | [填写：FR/AC ID] | [填写：P/T ID] | [填写：正例、失败 oracle ID / 证据类型] | [填写：前置 Phase、未决 owner 或 none] |
+
+### Global Verification Strategy
+
+- **验证策略**：[填写：风险维度、test tier、测试技能、场景、真实输入/fixture、负例、证据位置与覆盖限制]
+- **RED/GREEN 设计**：[填写：每个行为变更共享 gate_cmd/oracle，RED 必须是目标断言失败，GREEN exit 0；命令正文由所属 Phase 定义]
+- **最终聚合**：[填写：跨 Phase 消费者与逐 AC 的实际验收路径；不在此宣称执行结果]
+- **不能证明的内容**：[填写：目标检查的覆盖上限、所需人工/外部证据及归属；无则 N/A — reason]
+
+每个 Phase `phases/P<n>.md` 指向本节和全局目标的稳定锚点，不复制全局设计；
+每个 Task 再写自己的第一步代码动作、同命令 RED/GREEN 和失败 oracle。
 
 ## Appendix A — 验收判据（唯一权威）
 
-- [ ] **AC-01**：[填写：一个可判真假的用户或业务结果]
-  - **需求**：[填写：FR ID]
-  - **验证方法**：[填写：人工步骤、测试层级或证据观察方式]
-  - **通过条件**：[填写：什么结果算通过]
-  - **失败条件**：[填写：什么结果说明未通过]
-  - **证据类型**：`test` / `evidence` / `manual`
+- [ ] **AC-DOMAIN-001**：[填写：一个可判真假的用户或业务结果；关联 FR ID]
+验证：[填写：人工步骤、测试层级或证据观察方式]
+通过：[填写：什么结果算通过]
+失败：[填写：什么结果说明未通过]
+证据：[填写：预期 test/evidence/manual 类型与可回读位置；不填执行结果]
 
-> 验收停留在产品层；精确命令和工程 oracle 留给 plan/tasks。
+> 验收判据停留在产品层；全局 oracle 映射见「验证策略与追溯」，精确命令留给所属 Phase。
 
 ## 12. 风险、未决与交接
 

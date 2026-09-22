@@ -1,6 +1,6 @@
 ---
 name: spec-specify
-description: Draft a specification from frozen decision material using controlled artifact callbacks.
+description: Draft the post-cohort product specification and global implementation-design scaffold in spec.md from frozen decisions.
 ---
 
 # Spec Specify
@@ -13,7 +13,13 @@ the exclusive authority for AC condition, behavior, measurable pass criterion,
 failure condition, and expected evidence; the narrative may point to it but
 must not duplicate those criteria. The four discoverable translations are
 requirement explanation, acceptance flow, test standard, and architecture
-boundary. This changes no pre-cohort material reader.
+boundary. This changes no pre-cohort material reader. For post-cohort work,
+`spec.md` is also the single global implementation design authority. The
+`spec-specify` step records the accepted requirement translation and design
+constraints; the later `spec-plan` step adds verified code anchors, chosen
+solution, global dependencies, file boundaries, and verification strategy to
+that same file before writing the independent Phase deltas. Neither step
+replaces the PRD or `decision-log.md` as the product-goal authority.
 
 Input is decision/scope content plus controlled `readArtifact(name)` and
 `writeArtifact(name, content)` callbacks supplied by the owning author stage:
@@ -32,8 +38,12 @@ reason and do not claim a context optimization.
 
 Use `templates/spec-template.md`. Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
-assumptions, risks, acceptance, business impact, regression paths, and explicit
-exclusions. Keep the quick-read section short; put narrative before trace fields.
+assumptions, risks, acceptance, business impact, regression paths, explicit
+exclusions, and the global implementation-design section. Keep the quick-read
+section short; put narrative before trace fields. Translate source requirements
+into four discoverable surfaces: requirement explanation, acceptance flow,
+test standard, and architecture boundary. Link each to source/decision IDs;
+do not rewrite the PRD goal or decision rationale.
 
 The template is the same content contract consumed by strict stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
@@ -51,11 +61,14 @@ expected evidence type or artifact only; verify-code supplies execution facts.
 
 ## Artifact responsibility
 
-`spec.md` is the single source of product and behavior truth: problem, scope,
-scenarios, PFACT, FR, AC, product-boundary contracts, impact, risks, and open
-questions. It names what users must observe, not how code will be changed.
-`plan.md` owns verified engineering facts and design decisions; `tasks.md` owns
-compact execution cards. Do not copy either artifact's authority into `spec.md`.
+For post-cohort work, `spec.md` owns product behavior **and global
+implementation design**: problem, scope, scenarios, PFACT, FR, AC,
+architecture solution, verified code anchors, interfaces, global write
+boundary, dependency graph, verification strategy, impact, risks, and open
+questions. The PRD/decision remain stable pointers for product goals and
+accepted choices. `phases/P<n>.md` owns each Phase's implementation delta;
+`phases/index.md` is pure pointers. Pre-cohort `plan.md`/`tasks.md` remain
+historical read-only material, not post-cohort output.
 
 Give every scenario, PFACT, FR, AC, risk, and open question a stable ID. New
 requirements use `FR-{DOMAIN}-{NNN}`; accept `FR-{NNN}` only when reading legacy
@@ -81,12 +94,14 @@ In the new content profile, the selected status field is exclusive: a PFACT
 must not retain evidence, inference, unknown, or not-applicable fields belonging
 to another status. Every unknown PFACT is bound to a RISK or OPEN card.
 
-Keep product facts in `spec.md` only. Do not add code paths, symbols, code
-anchors, engineering alternatives, implementation state machines, exact gate
-commands, or plan/task decisions. Keep explicit exclusions in one authoritative
-section and inherit each accepted upstream exclusion exactly once. Express
-default product constraints as FR/AC-linked obligations; leave engineering
-gates and exact test commands to plan/tasks.
+Keep product behavior, global engineering decisions, and their source bindings
+in distinct sections of `spec.md`. The global design section records verified
+code paths/symbols, alternatives and chosen architecture, interfaces, state
+and failure behavior, global dependencies, exact NEW/MODIFY/DO NOT TOUCH
+boundary, and source → FR → AC → Phase/task → oracle trace. It does not copy
+Phase procedures, commands, test evidence, or execution status. Keep explicit
+exclusions in one authoritative section and inherit each accepted upstream
+exclusion exactly once. Phase files own exact gate commands and local STOP.
 
 ## Decision-log mapping and scope revision
 
@@ -99,14 +114,15 @@ decision-log prose into `spec.md`, and an FR without a source binding is a new
 requirement that must return to `make-decision`.
 
 When make-decision authorizes a scope revision that changes product behavior,
-the owning spec-authoring stage re-reads the four current materials and updates
+the owning spec-authoring stage re-reads the current cohort materials and updates
 only affected FR/AC/source bindings plus the revision note. Preserve old facts
 as history; do not silently turn a task finding into an upstream decision or use
 `build-spec` to invent the missing choice. Build-code and verify-code report a
 material gap to this owner; they do not rewrite `spec.md` themselves.
 
-Include module, entity, data-lifecycle, and compatibility contracts only at the
-product boundary. For each conditional subsection, write either the applicable
+Include module, entity, data-lifecycle, and compatibility contracts at the
+product boundary, then add verified implementation interfaces separately.
+For each conditional subsection, write either the applicable
 contract or one `N/A — reason` line. Risks name affected IDs, trigger,
 consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
