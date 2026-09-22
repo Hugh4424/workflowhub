@@ -21,7 +21,6 @@ import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.m
 // their budget on transport/tool traversal before semantic review.
 const reviewRootFor = () => "quality/reviews";
 const providerOutputPrefixFor = (task, attemptId) => `${reviewRootFor(task)}/attempts/${attemptId}/providers/`;
-const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 function protocolFailure(message) {
   const error = new Error(`PROTOCOL_INCOMPATIBLE: ${message}`);
   error.code = "PROTOCOL_INCOMPATIBLE";

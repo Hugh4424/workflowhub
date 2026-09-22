@@ -23,7 +23,7 @@
     },
     {
       "path": "contracts/build-plan.md",
-      "sha256": "5c5a4d7f7b68847462fcf87e9015a082178d3cba20f07774c3a9452ac953566d"
+      "sha256": "dd6cb2ac90391169a612f20481544da8b33f57ec9491f9e46fb058b8b26847ab"
     },
     {
       "path": "contracts/build-spec.md",
@@ -75,7 +75,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "30a4879aeccbc8608afead5b2c03220e988cb11588216c94f1cbf3e297cf9fca"
+      "sha256": "f5def759198cbec61ed81775a236fd4a7774de883bbdac341b1f15664495568f"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -95,7 +95,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "b2b38a1b1adeeec1618819e301e2b2e461db2f1d8a1c5f6689bd69d766227850"
+      "sha256": "25ef2a3743d4b8a53a46b5375b7479e3a44e0cf4098b80a964a643c7362fd1f7"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -119,7 +119,7 @@
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "fae99ea65717b106df823cbdb61b2e023a31b7339df0f75490dc1f5ac4b2115f"
+      "sha256": "d3010f39c5484843f78724c286b2d5b6c4976766808fa2519ff7173046c815e7"
     },
     {
       "path": "stage-skill-plan.json",

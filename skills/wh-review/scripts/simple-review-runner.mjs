@@ -13,11 +13,12 @@ import { materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsF
   validateMaterialAllowlist } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
-import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialPath, redactProviderHostPaths } from "../../../runtime/review/provider-material-projection.mjs";
+import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths, reviewActivationCohort } from "../../../runtime/review/provider-material-projection.mjs";
 import { reviewPacketMaterialId, deliveredMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
 import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
+import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 
 // Managed review ownership lives in 3rd-review. WorkflowHub must keep polling
 // while the broker reports a live session.
@@ -375,7 +376,7 @@ const PROVIDER_INPUT_TOP_LEVEL_KEYS = Object.freeze([
 ]);
 const SIMPLE_PACKET_KEYS = new Set([
   "schema_version", "stage", "review_track", "review_scope", "review_kind", "material_id",
-  "materials", "authenticated_evidence", "authenticated_evidence_sha256",
+  "materials", "activation_cohort", "authenticated_evidence", "authenticated_evidence_sha256",
 ]);
 const SERIALIZED_MATERIAL_KEYS = new Set(["key", "value_kind", "content_base64", "sha256"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
@@ -478,6 +479,7 @@ function rebuildSerializedPacket(packet) {
     review_track: identity.reviewTrack,
     review_scope: identity.reviewScope,
     review_kind: identity.reviewKind,
+    ...(packet.activation_cohort === undefined ? {} : { activation_cohort: packet.activation_cohort }),
     materials,
     ...(packet.authenticated_evidence === undefined ? {} : { authenticated_evidence: packet.authenticated_evidence }),
   });
@@ -526,7 +528,7 @@ function buildBundle(attachmentRoot, input) {
   write("review-instructions.md", Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8"));
   let materialIndex = 0;
   assertRedactableMaterials(input.materials);
-  Object.entries(input.materials ?? {}).forEach(([key, value]) => {
+  providerMaterialEntries(input).forEach(([key, value]) => {
     if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
     write(providerMaterialPath(key, materialIndex, redacted), materialBytes(redacted));
@@ -696,6 +698,7 @@ export function createSimpleReviewPacket(input) {
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
   validateDirectPacketMaterials(identity, input.materials);
   assertRedactableMaterials(input.materials);
+  providerMaterialEntries(input);
   let packetMaterials = input.materials;
   if (input.stage === "verify-code") {
     try { packetMaterials = compactVerifyCodeMaterials(input.materials).materials; }
@@ -713,6 +716,7 @@ export function createSimpleReviewPacket(input) {
     review_scope: identity.reviewScope,
     review_kind: identity.reviewKind,
     material_id: materialIdForInput(input),
+    ...(reviewActivationCohort(input) === "post" ? { activation_cohort: "post" } : {}),
     materials: Object.freeze(materials.map(Object.freeze)),
     ...evidence,
   });
@@ -750,6 +754,7 @@ export function rehydrateProviderInput(bytes, attachmentRoot) {
       review_track: packet.review_track,
       review_scope: packet.review_scope,
       review_kind: packet.review_kind,
+      ...(packet.activation_cohort === undefined ? {} : { activation_cohort: packet.activation_cohort }),
       materials,
       ...(packet.authenticated_evidence === undefined ? {} : { authenticated_evidence: packet.authenticated_evidence }),
     });
@@ -872,7 +877,16 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
       expected: "non-empty caller material",
       actual: Object.hasOwn(materials, missing) ? "empty" : "missing",
       nextAction: "supply current material and retry",
-    }), pair);
+    }), pair, reviewActivationCohort(input) === "post" ? { material_id: null } : {});
+  }
+  if (reviewActivationCohort(input) === "post") {
+    try { providerMaterialEntries(input); }
+    catch (error) {
+      return blockedPreflight(input, "MATERIAL_INCOMPLETE", error.message, preflightDiagnostic({
+        field: "phase_authorities/phase_index", expected: "one physical Phase file per index row",
+        actual: "missing or inconsistent", nextAction: "repair Phase files and retry",
+      }), pair, { material_id: null });
+    }
   }
   return null;
 }
@@ -897,7 +911,9 @@ function staticReviewRule(input) {
   const stage = reviewKind === "build_prd" ? "build-prd" : reviewKind ?? input.stage;
   const track = reviewKind === null ? (input.review_track ?? input.reviewTrack ?? null) : null;
   const scope = reviewKind === null ? (input.review_scope ?? input.reviewScope ?? null) : null;
-  return reviewRuleFor(stage, track, scope);
+  return stage === "build-plan" && reviewActivationCohort(input) === "post"
+    ? stageMaterials.stages["build-plan"].profiles.post
+    : reviewRuleFor(stage, track, scope);
 }
 
 function projectRunnerMaterials(input) {

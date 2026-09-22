@@ -6,7 +6,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import yaml from "js-yaml";
 import { afterEach, describe, expect, it } from "vitest";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
-import { createSimpleReviewPacket, runSimpleReview, validateProviderResultsAgainstSelection } from "../simple-review-runner.mjs";
+import { createSimpleReviewPacket, rehydrateProviderInput, runSimpleReview, serializeProviderInput, validateProviderResultsAgainstSelection } from "../simple-review-runner.mjs";
 
 const root = join(import.meta.dirname, "..", "..", "..");
 const projectRoot = join(root, "..");
@@ -328,6 +328,74 @@ describe("simple wh-review contracts", () => {
     expect(calls).toEqual([]);
   });
 
+  it("seals post build-plan Phase files separately through the public packet", () => {
+    const attachmentRoot = mkdtempSync(join(tmpdir(), "workflowhub-post-phase-review-"));
+    temporaryRoots.push(attachmentRoot);
+    const materials = {
+      raw_requirement: "R-001 original result",
+      draft_spec: "# Spec\nFR-DEMO-001 and AC-DEMO-001",
+      acceptance_criteria: "AC-DEMO-001",
+      phase_index: "## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/demo.mjs | none | build-code |\n",
+      phase_authorities: { "phases/P1.md": "# Phase P1 — behavior\n\n## L0\nOutcome\n## L1\nContract\n## L2\nReference\n" },
+    };
+    const packet = createSimpleReviewPacket({ stage: "build-plan", activation_cohort: "post", materials });
+    expect(packet.activation_cohort).toBe("post");
+    const restored = rehydrateProviderInput(serializeProviderInput({
+      packet, hostProvider: "codex", providers: ["other/model"], reviewMode: "single_round",
+    }), attachmentRoot);
+    try {
+      expect(restored.materials.materialId).toBe(packet.material_id);
+      expect(restored.materials.deliveryManifest.map(({ path }) => path)).toContain("requirements/phases/P1.md");
+      expect(restored.materials.deliveryManifest.map(({ path }) => path)).not.toContain("materials/05-phase_authorities.json");
+      expect(readFileSync(join(restored.materials.bundleRoot, "requirements/phases/P1.md"), "utf8"))
+        .toBe(materials.phase_authorities["phases/P1.md"]);
+    } finally { restored.materials.dispose(); }
+    expect(() => createSimpleReviewPacket({
+      stage: "build-plan", activation_cohort: "post",
+      materials: { ...materials, phase_authorities: {} },
+    })).toThrow(/MATERIAL_INCOMPLETE.*Phase/i);
+  });
+
+  it("blocks post build-plan review before provider dispatch when a Phase is missing", async () => {
+    const selection = selectionFor(["other/model"]);
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "build-plan", activation_cohort: "post", host_provider: "codex", preflight: true,
+      materials: {
+        raw_requirement: "R-001", draft_spec: "# Spec", acceptance_criteria: "AC-001",
+        phase_index: "## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/demo.mjs | none | build-code |\n",
+        phase_authorities: {},
+      },
+    }, runnerDependencies({ selection, calls }));
+    expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", provider_attempts: 0, error: { code: "MATERIAL_INCOMPLETE" } });
+    expect(calls).toEqual([]);
+  });
+
+  it("dispatches the public post build-plan packet with real Phase paths", async () => {
+    const attachmentRoot = mkdtempSync(join(tmpdir(), "workflowhub-post-phase-dispatch-"));
+    temporaryRoots.push(attachmentRoot);
+    const selection = selectionFor(["other/model"]);
+    const dependencies = runnerDependencies({ selection, bundleRoot: attachmentRoot });
+    delete dependencies.buildBundle;
+    let delivered = [];
+    dependencies.client = { async runGroup(request) {
+      delivered = request.materials.deliveryManifest.map(({ path }) => path);
+      return reviewGroup(selection, JSON.stringify({ findings: [] }));
+    } };
+    const result = await runSimpleReview({
+      stage: "build-plan", activation_cohort: "post", host_provider: "codex",
+      materials: {
+        raw_requirement: "R-001", draft_spec: "# Spec", acceptance_criteria: "AC-001",
+        phase_index: "## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/demo.mjs | none | build-code |\n",
+        phase_authorities: { "phases/P1.md": "# Phase P1 — behavior\n## L0\nOutcome\n## L1\nContract\n## L2\nReference\n" },
+      },
+    }, dependencies);
+    expect(delivered).toContain("requirements/phases/P1.md");
+    expect(delivered).not.toEqual(expect.arrayContaining([expect.stringMatching(/phase_authorities\.json$/)]));
+    expect(result.status).toBe("available");
+    expect(result.material_id).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it("RED: rechecks quorum after preflight removes a provider", async () => {
     const blockedProvider = "antigravity/flash";
     const healthyProvider = "kimi/coding";
@@ -550,8 +618,9 @@ describe("simple wh-review contracts", () => {
     const stageDependencies = (stage) => yaml.load(
       readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
     ).skills;
-    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
-      .toMatchObject({ execution: "inline", trigger: "spec_ambiguity", owner: "stage" });
+    expect(stageDependencies("build-plan").find(({ name }) => name === "spec-clarify"))
+      .toMatchObject({ execution: "inline", trigger: "material_specification_ambiguity", owner: "stage" });
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify")).toBeUndefined();
     expect(stageDependencies("build-spec").find(({ name }) => name === "spec-research"))
       .toMatchObject({ execution: "independent", trigger: "conditional_research", owner: "stage" });
     expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
@@ -633,6 +702,13 @@ describe("simple wh-review contracts", () => {
     const validate = validator("stage-materials.schema.json");
     expect(validate(matrix), validate.errors).toBe(true);
     expect(matrix.stages["build-plan"].required).toEqual(expect.arrayContaining(["draft_tasks"]));
+    expect(matrix.stages["build-plan"].profiles.post.required)
+      .toEqual(expect.arrayContaining(["draft_spec", "phase_authorities", "phase_index"]));
+    expect(matrix.stages["build-plan"].profiles.post.forbidden)
+      .toEqual(expect.arrayContaining(["approved_spec", "draft_plan", "draft_tasks"]));
+    const missingPostPhase = structuredClone(matrix);
+    missingPostPhase.stages["build-plan"].profiles.post.required = missingPostPhase.stages["build-plan"].profiles.post.required.filter((key) => key !== "phase_authorities");
+    expect(validate(missingPostPhase)).toBe(false);
     const missingDraftTasks = structuredClone(matrix);
     missingDraftTasks.stages["build-plan"].required = missingDraftTasks.stages["build-plan"].required.filter((key) => key !== "draft_tasks");
     expect(validate(missingDraftTasks)).toBe(false);

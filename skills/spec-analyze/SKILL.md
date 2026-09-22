@@ -1,6 +1,6 @@
 ---
 name: spec-analyze
-description: Report-only packet lens for consistency between supplied specification, plan, and task excerpts.
+description: Report-only final consistency analysis from original requirements to current decision, spec, and cohort-specific plan/Phase materials.
 ---
 
 # spec-analyze
@@ -20,7 +20,10 @@ outcome, not a second workflow engine or a work-permission gate:
 
 - `make-decision`: original requirement + `decision-log.md`;
 - `build-spec`: the above + `spec.md`;
-- `build-plan`: the above + `plan.md` + `tasks.md`;
+- `build-plan`: pre-cohort uses the above + `plan.md` + `tasks.md`;
+  post-cohort uses the `decision-log.md` verbatim requirement layer, global product and
+  implementation `spec.md`, every independent `phases/P<n>.md`, and pure
+  pointer `phases/index.md`;
 - `build-code`: the above + implementation, tests, and acceptance evidence.
 
 The profile checks actual behavior meaning, state/scenario/boundary coverage,
@@ -38,25 +41,62 @@ profile again after the real change; the runtime only uses the truthful result
 to describe stage quality. `unavailable`, `material_incomplete`, and `inconsistent` are never
 `pass`, but they do not prevent same-task repair or invent a new task.
 
-For post-cohort build-plan, `draft_plan` is the single phase engineering
-authority and `draft_tasks` is a pure pointer execution index. The analyzer
-must reject a duplicated phase body, command/oracle/task-card procedure, or an
-active plan/tasks equality path in the index; it retains historical pre-cohort
-material as read-only input rather than deleting it.
+For post-cohort build-plan, `spec.md` owns global implementation design and
+each `phases/P<n>.md` is the sole authority for its own engineering delta.
+`phases/index.md` is a pure pointer execution index. Reject a duplicate Phase
+body, command/oracle/task-card procedure, an active `plan.md`/`tasks.md`
+writer or equality path, or a missing/unreferenced Phase. Retain historical
+pre-cohort material as read-only input.
 
 ## Input boundary
 
-Read only the current stage packet and the frozen skill bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet. The current profile also applies the stage-owned material contract: make-decision authenticates the raw-requirement projection, Talk/Clarify/Grill/confirmation facts; build-spec authenticates the structured spec and Clarify result; build-plan authenticates the existing plan/task contract; build-code authenticates the per-AC implementation-to-evidence chain. The current stage publication binds the packet and validator result to the current stage snapshot and material revision.
+Read only the current stage packet and frozen skill bundle. For post-cohort
+build-plan, its `planning_artifacts` projection must include the decision-log
+raw requirement index, `spec.md` product/implementation design and ACs, every
+independent Phase file, and the index. Missing required input is
+`material_incomplete`, not an empty plan or inferred Phase. The projection is
+review input, not a material writer. The current stage publication binds the
+result to its snapshot and material revision. Pre-cohort packets keep their
+historical `draft_plan`/`draft_tasks` names read-only.
+
+For the final post build-plan analysis, use the current authenticated worktree's
+`decision-log.md` **verbatim statement layer** as original-source authority.
+Read those bytes independently of `planning_artifacts` and the caller's
+`original_requirements`/`coverage` arrays. Preserve each statement's location,
+exact text and material revision; split explicit atomic items such as U-002
+without dropping qualifiers. Reconcile every extracted unit with the
+decision-log's `原始需求索引`, then decision, spec, Phase Task and oracle. The index
+is a mapping, not a self-declared denominator. No separate transcript export
+or manifest raw inventory is required. Missing verbatim material or an
+unmapped unit is `material_incomplete`/a named gap; an undecidable semantic
+split remains `unknown`, never silently `consistent`. See `packet-lens.md`.
 
 ## Check
 
-1. Map every raw requirement/source ID from decision-log to the decision, spec, plan, task, FR/AC, and objective verification evidence that claims it.
+1. Derive the source census independently from current decision-log verbatim
+   bytes and explicit atomic rows; compare its IDs/locations with the
+   decision index and packet's `original_requirements`/`coverage`. A missing
+   middle item fails even when the packet says 2/2.
+   Then map every source through the decision-log, `spec.md`, and each
+   `phases/P<n>.md` to FR/AC, Task, and normal/failure oracle/evidence.
 2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, phase authority, and pointer index. For `make-decision`, separately assess requirement coverage, goal achievement, acceptance clarity, solution convergence, and the plain-language end card. For `build-spec`, compare the spec against the upstream decision-log for invented product direction and record whether Clarify was triggered or explicitly skipped with reason and zero open items.
-3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
-4. Check every phase authority and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule. The pointer index is checked only for authority ref, semantic anchor, write set, dependency, and consumer.
-5. For every `DEFER-*` and `OPEN-*` item visible in the source facts or current excerpts, require a downstream owner, trigger, handoff/consumer, and close/retain condition in `decision-log`-derived facts, `spec`, `plan`, and `tasks`. Missing any one is a real `deferred_open_handoff_gap` finding; do not invent a task or owner.
+3. Compare behavior strength, not normalized-string containment: retain
+   quantifiers such as every/at least, negation, order, independent physical
+   artifact form, failure behavior and scope. A weaker target, misplaced AC,
+   empty Task action or oracle that cannot fail gets a source-anchored finding;
+   undecidable equivalence remains `unknown` for independent semantic review.
+   Find duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs,
+   missing source refs, and under-defined test strategy.
+4. Check each independent Phase authority and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule. Check `phases/index.md` only for authority ref, semantic anchor, write set, dependency, and consumer; require a bijection with Phase files and exact header agreement.
+5. For every `DEFER-*` and `OPEN-*` item visible in the source facts or current excerpts, require a downstream owner, trigger, handoff/consumer, and close/retain condition in `decision-log`-derived facts, `spec`, and the cohort's current engineering authority (pre: `plan.md`/`tasks.md`; post: owning `phases/P<n>.md` and pointer index). Missing any one is a real `deferred_open_handoff_gap` finding; do not invent a task or owner.
 6. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
 7. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent repairs valid findings in the current stage, reruns the affected profile, and only then declares the stage complete or hands off; the same task may continue writing and repairing its four materials while findings are being handled.
+8. At post build-plan step `final-spec-analyze`, run this profile after finding
+   disposition and the last material revision. Verify the actual skill outcome
+   and the existing stage-quality fact have the same task, stage, snapshot,
+   material revision and source hashes. A manifest/dependency declaration or
+   `wh-review` packet alone is not an invocation. Missing execution/publication
+   is `unavailable/missing`, not `consistent`; keep same-task repair possible.
 
 ## Result
 
@@ -97,7 +137,9 @@ continued repair in the same task.
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, `line_or_anchor`, `impact`, `suggested_correction`, and `disposition`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 
-The frozen packet identifies `spec.md`, `plan.md`, and `tasks.md` by logical name. This lens never locates, creates, or updates an artifact.
+The frozen packet identifies post-cohort `spec.md`, each `phases/P<n>.md`, and
+`phases/index.md` by logical name. This lens never locates, creates, or updates
+an artifact.
 
 ## Severity and metrics
 

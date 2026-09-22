@@ -1,6 +1,6 @@
 ---
 name: build-code
-description: Implement the current plan in the verified task worktree.
+description: Implement the current cohort's Phase contract in the verified task worktree.
 version: 2.2.0
 ---
 
@@ -9,8 +9,8 @@ version: 2.2.0
 ## 统一回退协议
 
 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
-`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
-`build-spec`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在
+pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
 ## Goal
@@ -49,31 +49,29 @@ real reason; quality facts remain separate from the permission to continue.
 
 ## Authority and entry
 
-Only these current materials define the work:
-
-- `decision-log.md`
-- `spec.md`
-- `plan.md`
-- `tasks.md`
-
-When all four are present and readable, continue the same task. Read them
-directly and take the next incomplete Task from `tasks.md`. Old reviews,
+Current materials are cohort-specific. For pre/history, read `decision-log.md`,
+`spec.md`, `plan.md`, and `tasks.md`. For post, read `decision-log.md`, the
+product/global-design `spec.md`, `phases/index.md`, and every physical
+`phases/P<n>.md` referenced by the index. The index is only navigation: take
+the next incomplete Phase task from its own file and current task facts, never
+from a copied index body or absent post `plan.md`/`tasks.md`. Old reviews,
 execution records, provider state, audit history, and other auxiliary objects
 are facts, not work permits. Missing, stale, failed, or unavailable auxiliary
 facts never require a new task and never freeze implementation or same-task
 repair.
 
 `make-decision` exclusively owns Talk, Grill, and `decision-log.md`.
-`build-spec` exclusively owns conditional specification research and
-`spec-clarify`. Build-code does not replay them or ask the user to reconstruct
+The owning spec-authoring stage owns specification research and
+`spec-clarify` (`build-spec` for pre/history; `build-plan` for post). Build-code does not replay them or ask the user to reconstruct
 the decision process. If implementation exposes a direction-changing gap, keep
 the same task and return that decision to `make-decision`. Build-code does not
-author or rewrite the four current materials: a correction to `spec.md` belongs
-to `build-spec`, while a correction to the authored parts of `plan.md` or
-`tasks.md` belongs to `build-plan`. The existing task card's
-`执行状态填写区` is the one same-task exception: the executor may update its
-`status` and append facts actually produced by the executor. This is task-fact
-recording, not a second material authoring path. Record the concrete material
+author or rewrite current authoring materials: a post `spec.md` or Phase
+correction belongs to `build-plan`; a pre `spec.md` correction belongs to
+`build-spec` and pre plan/tasks authoring to `build-plan`. For pre/history,
+the existing task card's `执行状态填写区` remains the same-task exception for
+actual executor facts. For post, execution status, commands, AC and review
+facts go to existing task facts/quality evidence; `phases/index.md` remains
+pure pointers and Phase design remains unchanged. Record the concrete material
 gap and continue safe code, task-fact, or quality-fact repair in the same task;
 do not silently change the material owner or invent a new task.
 
@@ -95,7 +93,7 @@ or auxiliary progress gate.
   path or require a particular provider CLI in this skill.
 
 If a dependency is unavailable, preserve that fact and use any safe repository
-test commands already specified in `tasks.md`. The missing dependency limits the
+test commands already specified in the owning pre task card or post Phase file. The missing dependency limits the
 quality or completion claim; it does not prohibit code or material repair.
 
 ## Conditional UI implementation handoff
@@ -170,8 +168,9 @@ is an import of existing evidence, never proof that a review was dispatched.
 
 ## Work loop
 
-1. Read all four materials and select the next incomplete Task. Write a small
-   Phase Card in that Task's working area: goal, exact allowed files and symbols,
+1. Read current cohort materials and the physical Phase authority, then select
+   the next incomplete Phase task from its task facts. Write a small
+   Phase Card in the task's working area: goal, exact allowed files and symbols,
    covered ACs, non-goals, compatibility boundary, predesigned test route, stop
    conditions, and expected stage-end summary. Completion: the change boundary
    and its ACs are explicit before editing.
@@ -207,8 +206,10 @@ is an import of existing evidence, never proof that a review was dispatched.
    the affected work complete. Completion: no finding is unexplained.
 7. End the Phase with a plain-language handoff: delivered behavior, actual test
    layer and result, AC limits, review fact, finding disposition, unresolved
-   risk, deferred work, and the next Task. In that Task card, update the one
-   `status` field in the unique completion area and append only facts actually produced to `执行事实`. A Task is
+   risk, deferred work, and the next Task. For pre/history, update the existing
+   task card's `执行状态填写区`; for post, record the same actual facts in existing
+   task facts/quality evidence without writing to the Phase authority or
+   pointer index. A Task is
    `completed` only when those facts cover its actual changes, commands/exits,
    affected AC results, evidence, review outcome, and handoff. Then continue
    with the next `pending` or `in_progress` Task; do not replay earlier Phases
@@ -219,11 +220,11 @@ range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
 
 Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
-step. It compares the original requirement and all four current materials with
+step. It compares the original requirement and current cohort materials with
 the actual implementation, tests, AC trace, review facts, and real user-result
 evidence. It checks actual semantics and evidence, not only IDs, paths, hashes,
 or files. Repair valid gaps in build-code when they belong to implementation or
-task facts; keep product/spec/plan ownership with its owning stage. Emit the
+task facts; keep product/spec/Phase ownership with its owning stage. Emit the
 shared six-part plain-language summary: current stage work, requirement
 coverage, upstream alignment, repairs made here, remaining risks, and the next
 stage boundary.
@@ -249,8 +250,8 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 
 ## Final aggregate
 
-After all implementation Tasks, use the dedicated final Task/Phase card from
-`tasks.md`. Recheck its route against the full actual change, run the recorded
+After all implementation Tasks, use the dedicated final task in the pre
+`tasks.md` or post physical Phase file. Recheck its route against the full actual change, run the recorded
 final aggregate strategy once, and record its command, oracle, result, limits,
 and per-AC impact. After the final tests and AC trace, run the existing
 `phase_id=null` integration review against the current implementation. Record its
@@ -290,7 +291,7 @@ AC limits, review findings/transport facts, finding disposition, unresolved risk
 and next Task.
 At the end, explain in plain language what changed, which evidence is current,
 what remains unknown, and what `verify-code` will check. Verify-code reads this
-summary and the four materials; it does not repeat Talk, Grill, or require a
+summary and current cohort materials; it does not repeat Talk, Grill, or require a
 process index.
 
 Do not expose internal execution machinery or duplicate completion views to the

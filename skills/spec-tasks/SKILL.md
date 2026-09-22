@@ -1,41 +1,12 @@
 ---
 name: spec-tasks
-description: Render the post-cohort execution index from the sole phase engineering authority.
+description: Render the post-cohort phases/index.md pointer index from independent Phase files.
 ---
 
 # Spec Tasks
 
-For post-cohort tasks, read the accepted `decision-log.md`, `spec.md`, and the
-phase engineering authority produced by `spec-plan`. Write only `tasks.md` as a
-pure pointer index. It is not a task-card generator, second engineering body,
-execution receipt, progress ledger, or completion authority.
+For post-cohort tasks, read `decision-log.md`, `spec.md`, and every current `phases/P<n>.md` from the frozen stage packet. Write only `phases/index.md` using `templates/index-template.md`. This is a pure pointer index, not a task card, Phase procedure, progress ledger, or completion authority. Existing pre-cohort `tasks.md` and archived cards remain read-only.
 
-## Authority boundary
+Render exactly one row per Phase. Each row contains its stable authority path, semantic anchor, exact write set, Phase dependency, and real downstream consumer. The row must match the Phase header. Do not copy its L0/L1/L2 body, commands, oracle, evidence path, task procedure, or execution status. An absent or ambiguous authority is `unavailable` with the Phase owner and next action; never synthesize a fallback body or dual-write `tasks.md`.
 
-- `decision-log.md` owns decisions, source declarations, and confirmed bindings.
-- `spec.md` owns product behavior and Appendix A acceptance criteria.
-- the phase engineering authority owns every L0/L1/L2 body, task procedure,
-  exact file boundary, command, oracle, evidence path, STOP, dependency, and
-  rollback decision.
-- `tasks.md` may contain only the authority ref, semantic anchor, write set,
-  dependency, and real consumer for each phase.
-
-Never copy phase prose, RED/GREEN cards, `gate_cmd`, `expected_exit`, `oracle`,
-`evidence_path`, a checklist, or an execution status into the index. A reader
-follows the stable authority ref and semantic anchor to consume that information.
-If the phase authority is missing or ambiguous, report `unavailable` with its
-owner; do not manufacture a second body or a compatibility dual write.
-
-## Rendering rules
-
-1. Emit the template's one execution-index table.
-2. Each row maps one phase identifier to one authority ref and semantic anchor.
-3. `write set` is the exact declared phase boundary, never a glob or copied
-   implementation narrative.
-4. `dependency` names only phase IDs; `consumer` names the real downstream
-   reader. Missing values use `N/A — reason`.
-5. Preserve historical pre-cohort cards as read-only input only; do not convert
-   them into active post-cohort output.
-
-Return the rendered row count and any unavailable authority reference. Do not
-run commands, create a control object, or write another material.
+Check that index Phase IDs and independent files form a bijection, dependency IDs resolve without cycles, and each write set matches its own Phase. Return row count and missing authorities. The index is regenerable from Phase files and cannot override them.

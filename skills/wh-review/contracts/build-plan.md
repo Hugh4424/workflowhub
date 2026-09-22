@@ -5,9 +5,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 ## 必需材料
 
 - `review-instructions.md`：stage、审查问题和输出格式。
-- 已批准 spec 和验收标准。
-- 待审 phase engineering authority，至少包含 L0/L1/L2、精确写集、依赖、禁改边界和验证方式。
-- 与 phase authority 对应的 `draft_tasks` 纯指针执行索引；它只交付 authority ref、语义锚点、写集、依赖和 consumer，不能成为第二份任务正文。
+- post（`activationCohort=post`）：原始需求、当前待审 `draft_spec`（产品规格与全局实现设计）、验收标准、`phase_index`，以及 `phase_authorities` 映射中的每个真实独立 `phases/P<n>.md` 文件。provider bundle 将各 Phase 作为各自的 `requirements/phases/P<n>.md` 交付，不拼成 `draft_plan` 或 `draft_tasks`。索引只交付 authority ref、语义锚点、写集、依赖和 consumer，不能成为第二份任务正文。
+- pre/history（`activationCohort=pre`）：原始需求、已批准 spec、验收标准、旧 `draft_plan` 与 `draft_tasks`；这些只读兼容输入不得冒充 post Phase 文件。
+- 每个 post Phase 至少说明 L0/L1/L2、精确写集、依赖、禁改边界和验证方式；缺索引引用的物理文件、空文件、错 ID 或未列入索引的文件均为 `MATERIAL_INCOMPLETE`，provider 不启动。
 - 可选的 `context_map` / `evidence_map` 优化；提供时仅交付 map 明确选择的模块边界、依赖、接口或测试约定片段。本阶段不得默认附带 diff 或完整当前文件，maps 缺失仍须调用 provider。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。

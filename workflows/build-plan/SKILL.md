@@ -9,7 +9,8 @@ version: 4.1.0
 ## Post-cohort 13-step contract
 
 For post-cohort work, this stage is the sole current authoring chain. It writes
-the product spec, one single phase engineering authority, and a pure pointer execution index;
+the product and implementation `spec.md`, independent `phases/P<n>.md` files,
+and a pure pointer `phases/index.md` execution index;
 `build-spec` remains readable only for pre-cohort and history. The
 ordered steps are `read-current-materials`, `conditional-spec-research`,
 `spec-clarify`, `spec-specify`, `conditional-ui-readiness`, `spec-plan`,
@@ -35,18 +36,20 @@ owner；环境不可用只记录 attempt。错配只让正式完成事实保持 
 
 ## Responsibility and authority
 
-For pre-cohort tasks, turn the current `decision-log.md` and `spec.md` into
-the current `plan.md` and `tasks.md`. For post-cohort tasks, this stage owns
-the current `spec.md`, `plan.md`, and `tasks.md`: `spec-specify` writes the
-specification first, then `spec-plan` writes the phase authority and
-`spec-tasks` renders its pointer index. In either cohort it does not change
-product direction or execute code.
-The four materials are the only current work truth. Old reviews, provider
+For pre-cohort tasks, retain the historical `plan.md`/`tasks.md` contract.
+For post-cohort tasks, this stage owns current `spec.md`, independent
+`phases/P<n>.md` files, and `phases/index.md`: `spec-specify` writes the
+product specification first, `spec-plan` adds implementation design to that
+same spec and authors each Phase file, then `spec-tasks` renders the pointer
+index. No post-cohort plan/tasks dual write occurs. In either cohort it does not change
+product direction or implement production code. For an applicable behavior test,
+post build-plan writes and executes the prewritten test to observe target RED.
+Those post-cohort materials are the current work truth. Old reviews, provider
 state, execution history, and audit facts may explain quality, but they do not
 replace the current decision/spec or freeze same-task planning and repair. A
 direction-changing gap is returned to `make-decision`; unaffected planning
 continues without guessing.
-四份当前材料统一落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
+当前材料统一落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不替代材料，也不新增 gate。
 `m15-retirement` 材料迁移与仓外 `Knowledge/Projects/workflowhub/tasks/Projects/`
 清理不属于本技能范围。
@@ -88,9 +91,11 @@ checks.
 
 `testing-system-blueprint` designs risks, scenarios, oracle, evidence path, and
 coverage limits. `test-routing-advisor` chooses the applicable concrete test
-skill. The concrete `backend-testing`, `frontend-testing`, and
-`fullstack-slice-testing` skills execute later in `build-code`; build-plan does
-not execute tests or claim test results.
+skill. For an applicable behavior change, the build-plan author writes a real
+test and executes its scoped command to establish target RED. Build-code uses
+the selected concrete `backend-testing`, `frontend-testing`, or
+`fullstack-slice-testing` skill to make that same test GREEN and check adjacent
+behavior; the planning RED is not a code implementation or a GREEN claim.
 
 An unavailable dependency or reviewer is recorded as an honest quality fact.
 It does not block writing or same-task repair and is never rewritten as a clean
@@ -110,8 +115,9 @@ Before `spec-plan` and `spec-tasks` execute, the host assembles one frozen
 `material_revision`, `snapshot_tree`, source digests, derived-file authority,
 and exact `packet_freeze_hash`. The inline skills and dispatched contexts read
 only this packet; the main session retains the packet reference, hash, binding,
-and a summary no longer than 500 characters. `plan.md` and `tasks.md` emit a
-regenerable `## 材料导航` section; it is not a fifth authority. Packet,
+and a summary no longer than 500 characters. `spec.md` carries global design;
+each Phase file is independent and `phases/index.md` is regenerable pointers.
+Packet,
 dispatch, or summary failure stays unavailable/degraded with owner and next
 action. Provider usage is recorded when present or marked unavailable, and the
 three character proxies (`full_reread_count`, `subagent_input_bytes`,
@@ -134,10 +140,12 @@ for validation before claiming that build-plan itself is accepted. This
 confirmation does not turn confirmation into a machine work permit. Missing
 review facts do not block continued work: continue research, planning, or
 repair in this same task.
-确认后唯一可写区是 tasks.md 的执行状态填写区，plan.md 语义段不得再改。
+确认后的实际执行事实写入既有 task facts/quality evidence；Phase 正文与索引不充当进度账。
 改变方向的规划歧义按现有 fallback protocol 路由回 `make-decision`。
-Do not implement code or execute RED/GREEN; plan the test scenarios, commands,
-expected outcomes, and evidence for `build-code` to execute later.
+Do not implement production code or claim GREEN here. Write and run applicable
+behavior tests for target RED; leave their implementation and same-oracle GREEN
+to `build-code`. Missing execution, review, confirmation, or formal stage facts
+stay missing; a planned command is not a test result.
 
 ## Conditional UI component-quality plan
 
@@ -191,34 +199,36 @@ not new workflow stages and not gates.
 2. Research only in proportion to implementation risk. Verify code anchors,
    existing consumers, interfaces, data changes, failure paths, ownership,
    testing conventions, and rollback options. Put durable conclusions in
-   `plan.md` or the affected task card.
+   `spec.md` implementation design or the affected Phase file.
 3. Choose the simplest adequate solution: reuse, then narrow extension, then
    new mechanism only with a real reason. Record complexity and F10 reasoning.
-4. Write `plan.md` with a quick-read card, technical context, code anchors,
-   module/interface/data contracts, exact NEW/MODIFY/DO NOT TOUCH boundary,
-   alternatives, dependencies, phases, rollback, test design, risks, deferred
-   work, and the single source → FR → AC → task → oracle map.
-5. Write `tasks.md` as an ordered acyclic set of executable cards using the
-   current `plan-task.v4` card contract fields (`ID`,
-   `Phase`, `goal`, `design_state`, `versioned_refs`, `source_refs / decision_refs`, `输入`, `依赖`, `并行`,
-   `FR`, `AC`, `动作`, `精确文件`, `boundary`, `输出`, `Knowledge`,
-   `verification_role`, `paired_task`, `gate_cmd`, `expected_exit`, `oracle`,
-   `evidence_path`, `STOP`, `recovery`, and `task risk`), followed by one
-   completion area containing `status`, actual changes, commands/exits,
-   evidence refs, covered ACs, review fact, completion time, and the human
-   readable `执行事实`. Every card also requires test tier/method, scenarios,
-   fixtures, and coverage limits; these remain in that same card as design
-   facts, not a second authority. The `source_refs / decision_refs` and
-   test-design fields are required companion facts inside the same card, not
-   additional runtime structural fields or a second authority. For every phase in
-   `plan.md`, put its required
-   `Goal`/`Files`/`Tasks`/`Verify`/`Knowledge`/`STOP`/`Done`/`Risks and rollback`
-   block before that phase's cards. Include one final aggregate verification
-   card; it is not a new public stage.
-6. Cross-check all four materials for omissions, contradictions, orphan tasks,
+4. Extend `spec.md` with implementation design: verified code anchors,
+   interfaces/data flow, exact global NEW/MODIFY/DO NOT TOUCH boundary,
+   alternatives, dependencies, rollback, risks, testing strategy, and the
+   single source → FR → AC → Phase/task → oracle map.
+5. Write one independent `phases/P<n>.md` per Phase. Each file has L0/L1/L2,
+   a stable pointer to the spec global goal, its own exact write set and
+   dependency, RED/GREEN tasks, test tier/skill/scenario/fixture, `gate_cmd`,
+   expected exits, oracle, evidence path, coverage limit, STOP, done evidence,
+   and rollback. Render `phases/index.md` as a pure pointer table: authority
+   path, semantic anchor, write set, dependency, consumer. The final aggregate
+   is an ordinary Phase task, not a new public stage.
+   Within this existing `spec-plan` step, build-plan writes each applicable
+   behavior test in the authenticated worktree before implementation and runs
+   its Task's exact `gate_cmd`. Capture the real command, exit, raw output/ref,
+   target failing assertion, test path and current material identity in existing
+   task facts/quality evidence. RED is valid only when the named target assertion
+   fails, not when collection, setup, environment, or configuration fails. Mark
+   that test and any scoring logic as DO NOT TOUCH for build-code. An explicit
+   test change request with reason and independent review is required before
+   changing the frozen oracle; preserve the previous bytes and RED evidence.
+   For pure documentation or exploratory work where a meaningful failing test
+   cannot be written, use G-2: add a falsifiable check, or record `N/A` with
+   a concrete reason, risk, objective alternative, and acceptance disclosure.
+6. Cross-check decision, spec, every Phase, and index for omissions, contradictions, orphan tasks,
    boundary widening, missing two-way traceability, and invalid commands.
-7. Trace every decision, FR, and AC into the plan/tasks before requesting one
-   independent findings review of the current plan/tasks through the declared
+7. Trace every decision, FR, and AC into spec/Phases before requesting one
+   independent findings review of the current materials through the declared
    `wh-review` adapter. Submit the real request through the existing `review`
    entry, retain its canonical `attempt_ref` and actual `result_ref`, and pass
    that explicit ref as `receipts.review` to the official build-plan handler.
@@ -233,11 +243,11 @@ not new workflow stages and not gates.
    Only concrete failure that has changed in the frozen material, provider
    route, or authenticated source may trigger a retry; never retry an
    unchanged request merely to obtain a cleaner label.
-8. After findings disposition and the last authored plan/tasks revision, actually
+8. After findings disposition and the last authored spec/Phase/index revision, actually
    invoke the existing `spec-analyze` lens once as the strict final
    cross-document check before `publish-plan-result` (the user may call this
    `speckit-analyze`). Its current packet must cover the raw requirement
-   source, decision-log-derived facts, spec, plan, tasks, flow/state/boundary/
+   source, decision-log-derived facts, spec, all Phase files, index, flow/state/boundary/
    non-goal coverage, every `DEFER-*`/`OPEN-*` owner/trigger/handoff/close
    condition, and every task oracle. Record the returned lens result in the
    existing quality-fact path; a prose claim that it ran is not execution
@@ -247,13 +257,19 @@ not new workflow stages and not gates.
 
 ## Plan and phase contract
 
-Every phase has `Goal`, exact `Files`, `Tasks`, `Verify`, `Knowledge`, `STOP`,
-`Done`, and `Risks and rollback`. Tasks are IDs and one-line outcomes in the
-plan; detailed commands and execution facts stay in `tasks.md`.
+Every Phase is an independent file with L0/L1/L2, exact write set and
+dependency, tasks, tests, STOP, done evidence, and rollback. Global solution
+and source-to-acceptance trace live in `spec.md`; execution facts live in task
+facts/quality evidence, not the pointer index.
 
-For every behavior change, design a RED/GREEN pair using the same executable
-`gate_cmd`, oracle identity, and task-relative evidence path. RED expects a
-non-zero assertion failure; GREEN expects `0` and keeps named negative behavior.
+For every applicable behavior change, build-plan authors the real test and
+observes target RED before freezing it. Build-code changes implementation only
+and uses the same executable `gate_cmd`, oracle identity, and test path for
+GREEN (`0`) while retaining named negative behavior. RED expects a non-zero
+target assertion failure, not setup or environment failure. If a meaningful
+RED is inapplicable, apply G-2 with the exact reason, risk, alternative check,
+and later acceptance disclosure; pure documentation does not need a ceremonial
+failing test. Do not call a merely designed test "prewritten" or "RED".
 `gate_cmd` names a test command only; it never decides whether an agent may
 start, continue, or publish work.
 
@@ -266,7 +282,7 @@ long aggregate into ordinary tasks is optional plan authoring, not a runtime
 gate; a timeout remains `incomplete` and does not trigger an automatic full
 rerun.
 
-Each file appears in one phase boundary and each task file list is a subset of
+Each implementation file appears in one Phase boundary and each task file list is a subset of
 that phase. Parallel phases/tasks require independent inputs, dependencies, and
 file ownership. Missing signatures, invalid commands, scope widening, or a new
 product decision is a STOP back to the owning material.
@@ -290,9 +306,6 @@ or clean up. After the user's actual reply, the current session must publish
 the existing `human-confirmation.v3` record through `confirm --action=decision` at
 `quality/confirmations/<sha256>.json`; the official build-plan handler consumes
 that ref and includes `facts.human_confirmation` plus its evidence in the
-existing completion. It may also append that reply to the final aggregate
-verification card's existing `执行事实` field in `tasks.md` as a labeled,
-append-only human-alignment fact; this does not change `status` or completion
-and cannot substitute for the confirmation record. Do not add a handoff field
-or a second record.
+existing completion. Do not append confirmation or execution status to the
+Phase index or duplicate the confirmation record.
 This stage does not create a new task to bypass a missing fact or finding.

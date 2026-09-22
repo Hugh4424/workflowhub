@@ -844,6 +844,12 @@ function deduplicateProviderMaterials(materials, rule) {
       kept[key] = value;
       continue;
     }
+    // Physical Phase authorities must stay separate even if another material
+    // happens to serialize to the same bytes as their path-to-content map.
+    if (key === "phase_authorities") {
+      kept[key] = value;
+      continue;
+    }
     const bytes = reviewMaterialBytes(key, value);
     const digest = sha256(bytes);
     const previous = seen.get(digest);
@@ -887,11 +893,15 @@ function compactMiniTaskDecisionLog(decisionLog) {
  * analyzer can prove source coverage without locating or writing a ledger.
  */
 export function buildPlanningArtifacts({
+  activationCohort = "pre",
   rawRequirementIndex = null,
   approvedSpec = null,
+  draftSpec = null,
   acceptanceCriteria = null,
   draftPlan = null,
   draftTasks = null,
+  phaseAuthorities = null,
+  phaseIndex = null,
   deferredItems = null,
   openItems = null,
 } = {}) {
@@ -899,18 +909,57 @@ export function buildPlanningArtifacts({
     ?? (rawRequirementIndex && typeof rawRequirementIndex === "object" ? rawRequirementIndex.deferred_items ?? null : null);
   const derivedOpenItems = openItems
     ?? (rawRequirementIndex && typeof rawRequirementIndex === "object" ? rawRequirementIndex.open_items ?? null : null);
-  return Object.freeze({
+  const common = {
     schema_version: "spec-analyze-planning-artifacts.v1",
     source_artifact: "decision-log",
     raw_requirement_index: rawRequirementIndex,
-    approved_spec: approvedSpec,
     acceptance_criteria: acceptanceCriteria,
-    draft_plan: draftPlan,
-    draft_tasks: draftTasks,
     ...(derivedDeferredItems === null ? {} : { deferred_items: derivedDeferredItems }),
     ...(derivedOpenItems === null ? {} : { open_items: derivedOpenItems }),
     finding_disposition: "pending_main_agent_review",
+  };
+  if (activationCohort === "post") return Object.freeze({
+    ...common,
+    schema_version: "spec-analyze-planning-artifacts.v2",
+    activation_cohort: "post",
+    draft_spec: draftSpec,
+    phase_authorities: phaseAuthorities,
+    phase_index: phaseIndex,
   });
+  if (activationCohort !== "pre") throw new Error(`MATERIAL_INCOMPLETE: invalid build-plan activation cohort ${activationCohort}`);
+  return Object.freeze({ ...common, approved_spec: approvedSpec, draft_plan: draftPlan, draft_tasks: draftTasks });
+}
+
+function validatePostReviewPhases(materials) {
+  const index = materials.phase_index;
+  const authorities = materials.phase_authorities;
+  if (typeof index !== "string" || !/^##\s+Execution Index\s*$/m.test(index)) {
+    throw new Error("MATERIAL_INCOMPLETE: phase_index requires an Execution Index");
+  }
+  if (!authorities || typeof authorities !== "object" || Array.isArray(authorities) || Object.getPrototypeOf(authorities) !== Object.prototype) {
+    throw new Error("MATERIAL_INCOMPLETE: phase_authorities must map independent Phase paths to bytes");
+  }
+  const section = index.split(/^##\s+Execution Index\s*$/m)[1].split(/^##\s+/m)[0];
+  const tableRows = section.split("\n").filter((line) => /^\|/.test(line.trim())
+    && !/^\|\s*(?:phase\b|[-: ]+\|)/i.test(line.trim()));
+  const refs = [...section.matchAll(/^\|\s*`?(P[1-9]\d*)`?\s*\|\s*`?(phases\/P[1-9]\d*\.md)`?\s*\|/gm)]
+    .map(([, id, path]) => ({ id, path }));
+  if (refs.length === 0 || refs.length !== tableRows.length) throw new Error("MATERIAL_INCOMPLETE: phase_index has missing or malformed Phase authority refs");
+  const seen = new Set();
+  for (const [position, { id, path }] of refs.entries()) {
+    const expected = `phases/P${position + 1}.md`;
+    if (id !== `P${position + 1}` || path !== expected || seen.has(path)) throw new Error(`MATERIAL_INCOMPLETE: phase_index requires unique contiguous ${expected}`);
+    seen.add(path);
+    const body = authorities[path];
+    if (!materialPresent(body)) throw new Error(`MATERIAL_INCOMPLETE: ${path} is missing or empty`);
+    if (!new RegExp(`^#\\s+Phase\\s+${id}\\b`, "m").test(materialBytes(body).toString("utf8"))) {
+      throw new Error(`MATERIAL_INCOMPLETE: ${path} does not declare ${id}`);
+    }
+  }
+  for (const path of Object.keys(authorities)) {
+    if (!/^phases\/P[1-9]\d*\.md$/.test(path) || !seen.has(path)) throw new Error(`MATERIAL_INCOMPLETE: unindexed or invalid Phase file ${path}`);
+  }
+  return refs;
 }
 
 const ruleFor = reviewRuleFor;
@@ -969,7 +1018,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
     return `Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, objective acceptance, and AC 可判断性与验收盲区. Explicitly check 横向第三路、隐藏前提、防虚假共识、纵向否定. Do not re-decide product direction or plan implementation work.${ordered}`;
   }
   if (stage === "build-plan") {
-    return `Focus on whether the plan and tasks execute the approved spec in dependency order, with real test or evidence oracles and no missing requirement. Do not add requirements or treat review as permission to proceed.${ordered}`;
+    return `For post, focus on whether the current draft spec and each independent Phase execute the accepted decision in dependency order, with real consumers and test or evidence oracles; the Phase index must remain pointers only. For pre/history, inspect the legacy approved spec, plan and tasks. Do not add requirements or treat review as permission to proceed.${ordered}`;
   }
   if (stage === "build-code" && reviewScope === "phase") {
     return `Focus on the complete current Phase diff, its direct consumers, tests, acceptance trace, and actionable major or blocking risks. Ignore unrelated history and do not require a provider pass.${ordered}`;
@@ -1647,6 +1696,9 @@ function packetAuthority(path, rule, { reviewScope = null } = {}) {
   if (path.startsWith("skills/")) return { authority: "review_lens", inclusion_reason: "declared_reviewer_lens" };
   if (path === "review-instructions.md") return { authority: "required", inclusion_reason: "fixed_stage_instructions" };
   if (path.startsWith("requirements/")) {
+    if (path.startsWith("requirements/phases/") && rule.required.includes("phase_authorities")) {
+      return { authority: "required", inclusion_reason: "independent_phase_authority" };
+    }
     const key = path.slice("requirements/".length).replace(/\.(?:md|json)$/, "");
     if (key === "ac_evidence_summary") return { authority: "evidence", inclusion_reason: "generated_per_ac_evidence_summary" };
     return rule.required.includes(key)
@@ -1686,7 +1738,7 @@ function isSummaryDiffShard(bundleRoot, path) {
 function packetEntries(bundleRoot, rule, { reviewScope = null } = {}) {
   return filesUnder(bundleRoot)
     // planning_artifacts is a stage-local spec-analyze projection. The same
-    // raw requirement/spec/plan/task bytes are already declared as the
+    // raw requirement/spec/Phase or legacy plan/task bytes are already declared as the
     // provider inputs, so sending this generated projection as a second copy
     // spends transport budget without adding a review angle. Keep the file in
     // the bundle for the inline spec-analyze consumer, but exclude it from the
@@ -1877,7 +1929,8 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
 
 export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, taskId, task, stage, phaseId = null,
   reviewTrack, reviewScope, reviewKind, review_track, review_scope, review_kind,
-  uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null } = {}) {
+  uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null,
+  activationCohort = "pre" } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
   const identity = reviewIdentityFromInput({ stage, review_track, reviewTrack, review_scope, reviewScope, review_kind, reviewKind });
   stage = identity.stage;
@@ -1886,7 +1939,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   reviewKind = identity.reviewKind;
   assertPlainMaterials(materials);
   const effectiveScope = reviewKind === null && stage === "build-code" ? (reviewScope ?? "phase") : null;
-  const rule = ruleForIdentity(stage, reviewTrack, effectiveScope, reviewKind);
+  if (stage === "build-plan" && !["pre", "post"].includes(activationCohort)) {
+    throw new Error(`MATERIAL_INCOMPLETE: invalid build-plan activation cohort ${activationCohort}`);
+  }
+  const rule = stage === "build-plan" && activationCohort === "post"
+    ? stageMaterials.stages["build-plan"].profiles.post
+    : ruleForIdentity(stage, reviewTrack, effectiveScope, reviewKind);
   if (stage === "build-code" && effectiveScope === "integration" && !Object.hasOwn(materials, "test_evidence")) {
     // Semantic integration review can still inspect the final implementation
     // when the host has no current test receipt. Keep the missing fact explicit
@@ -1902,6 +1960,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   const missingRequired = rule.required.filter((key) => !Object.prototype.hasOwnProperty.call(materials, key) || !materialPresent(materials[key]));
   if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
+  if (stage === "build-plan" && activationCohort === "post") validatePostReviewPhases(materials);
   const materialAllowlist = validateMaterialAllowlist(rule, materials);
   materials = materialAllowlist.materials;
   const discarded_facts = materialAllowlist.discarded_facts;
@@ -2022,11 +2081,15 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   if (stage === "build-plan") {
     const rawRequirement = materials.raw_requirement ?? null;
     providerMaterials.planning_artifacts = buildPlanningArtifacts({
+      activationCohort,
       rawRequirementIndex: rawRequirement,
       approvedSpec: materials.approved_spec ?? null,
+      draftSpec: materials.draft_spec ?? null,
       acceptanceCriteria: materials.acceptance_criteria ?? null,
       draftPlan: materials.draft_plan ?? null,
       draftTasks: materials.draft_tasks ?? null,
+      phaseAuthorities: materials.phase_authorities ?? null,
+      phaseIndex: materials.phase_index ?? null,
       deferredItems: rawRequirement && typeof rawRequirement === "object" ? rawRequirement.deferred_items ?? null : null,
       openItems: rawRequirement && typeof rawRequirement === "object" ? rawRequirement.open_items ?? null : null,
     });
@@ -2091,6 +2154,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
 
   for (const [key, value] of Object.entries(providerMaterials)) {
+    if (key === "phase_authorities") {
+      for (const [phasePath, phaseBytes] of Object.entries(value)) {
+        write(bundleRoot, `requirements/${phasePath}`, materialBytes(phaseBytes));
+      }
+      continue;
+    }
     const path = key === "review_instructions" ? "review-instructions.md" : providerMaterialPath(key, value);
     write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
