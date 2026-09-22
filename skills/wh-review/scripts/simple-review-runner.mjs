@@ -794,7 +794,11 @@ function unavailableResult(input, error, pair = null, extra = {}) {
   // invalid-identity preflight passes material_id=null explicitly; all other
   // unavailable paths still compute the id and therefore fail closed on
   // malformed material or instruction inputs.
-  const materialId = Object.hasOwn(extra, "material_id") ? extra.material_id : materialIdForInput(input);
+  let materialId = Object.hasOwn(extra, "material_id") ? extra.material_id : null;
+  if (!Object.hasOwn(extra, "material_id")) {
+    try { materialId = materialIdForInput(input); }
+    catch { materialId = null; }
+  }
   return {
     status: "unavailable",
     stage: input.stage,
