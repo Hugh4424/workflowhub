@@ -44,7 +44,7 @@ export function inspectOfficialInvocation(taskHandle, options = {}) {
     requireClean: false,
     bindTask: false,
   });
-  const snapshot = captureGitWorktreeSnapshot(runner.runner_root, task.identity.taskId);
+  const snapshot = captureGitWorktreeSnapshot(runner.runner_root, task.identity.taskId, task.manifest.activation_cohort ?? "pre");
   const source = {
     git_oid: runner.runner_oid,
     // This ephemeral tree contains tracked and untracked current files. It is

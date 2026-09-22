@@ -8,7 +8,7 @@
 
 - [ ] **F1 薄核心** — 判据：核心是否只做调度编排、重活下沉技能层（改动牵连面小）。→ [CONSTITUTION.md#f1-薄核心](CONSTITUTION.md#f1-薄核心)
 - [ ] **F2 窄契约** — 判据：模块间是否走窄而明确的接口、不暴露内部实现。→ [CONSTITUTION.md#f2-窄契约](CONSTITUTION.md#f2-窄契约)
-- [ ] **F3 四材料决定推进正式发布保持结构真实** — 判据：四材料是否只决定进入/继续；task/worktree/runtime 写边界、顺序和核心 publication 错误是否在写成功前 fail-loud。→ [CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实)
+- [ ] **F3 当前材料决定推进正式发布保持结构真实** — 判据：pre/history `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 与 post `decision-log.md`、`spec.md`、`phases/P<n>.md`、`phases/index.md` 是否各按 cohort 只决定进入/继续；task/worktree/runtime 写边界、顺序和核心 publication 错误是否在写成功前 fail-loud。→ [CONSTITUTION.md#f3-当前材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-当前材料决定推进正式发布保持结构真实)
 - [ ] **F4 质量靠异源审查与人，finding 不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
 - [ ] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。→ [CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
 - [ ] **F6 统一外置执行记录** — 判据：正式写入是否认证当次干净已提交内容，且未把 runner 永久绑定任务或把旧身份记录当准入 gate。→ [CONSTITUTION.md#f6-统一外置执行记录](CONSTITUTION.md#f6-统一外置执行记录)
@@ -21,7 +21,7 @@
 ## 质量原则（Q）
 
 - [ ] **Q1 质量事实不作准入证完成质量不降级** — 判据：finding 是否不阻止继续修复；测试、逐 AC、独立 review/真实 unavailable 和交接缺失时是否禁止报完成。→ [CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级](CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级)
-- [ ] **Q2 推进资格发布结构与完成判据分离** — 判据：四材料是否只证明可工作；结构错误是否拒绝 publication；完整质量工作是否才证明完成；不可逆操作是否独立授权。→ [CONSTITUTION.md#q2-推进资格发布结构与完成判据分离](CONSTITUTION.md#q2-推进资格发布结构与完成判据分离)
+- [ ] **Q2 推进资格发布结构与完成判据分离** — 判据：当前 cohort 材料（pre/history 为旧 `plan.md`/`tasks.md`，post 为 `spec.md` + `phases/P<n>.md` + `phases/index.md`）是否只证明可工作；结构错误是否拒绝 publication；完整质量工作是否才证明完成；不可逆操作是否独立授权。→ [CONSTITUTION.md#q2-推进资格发布结构与完成判据分离](CONSTITUTION.md#q2-推进资格发布结构与完成判据分离)
 - [ ] **Q3 异源审查加人工把关** — 判据：质量裁决是否异源独立；本地执行身份是否只证明结构事实、未冒充质量 verdict。→ [CONSTITUTION.md#q3-异源审查加人工把关](CONSTITUTION.md#q3-异源审查加人工把关)
 
 ## 技能原则（S）
@@ -47,6 +47,8 @@
 **治理同步记录（2026-09-09）**：在既有 F7 内补充 build-prd/spec-prd 最终展示稿确认的同版绑定与 post-second-call 边界；拒绝、未答、错版保持 draft，不新增第三次内容调用、formal stage、non-UI 日常确认或 gate；条目数仍为 22，未新增条款。
 
 **治理同步记录（2026-09-14）**：同步 Version 1.9.0 的治理实施边界、负向条款、控制面分类和默认不新增 hash 原则；保留 F1-F11、Q1-Q3、S1-S8 共 22 条原编号，不新增 checklist 条目或 public 流程节点。
+
+**治理同步记录（2026-09-22）**：Version 1.9.1 将 F3/Q2 的固定四材料口径改为 cohort 当前材料；pre/history 旧四材料只读兼容，post 使用 spec 与独立 Phase 文件/纯指针索引。22 条编号与 gate 边界不变。
 
 **治理同步记录（2026-08-30）**：F7 修订为三处正常确认加第四处限定确认（UI 设计确认）：仅 `ui_applicability=ui` 由 build-spec 展示原型后取得 `display_before_reply` 与 `human_approved` 确认事实；非 UI 和 build-code 不增加日常确认。条目数仍为 22，未新增条款。
 

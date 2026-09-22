@@ -1,6 +1,6 @@
 # Workflowhub 设计宪法
 
-Version: 1.9.0
+Version: 1.9.1
 
 > 本文件是 workflowhub 的设计宪法，是所有里程碑设计与实现的对照基准。
 > 分三组：框架原则（F）、质量原则（Q）、技能原则（S），共 22 条。
@@ -23,11 +23,11 @@ Version: 1.9.0
 - **正例**：一个技能只通过"输入文件 + 结果文件"与核心交互，内部怎么实现核心不关心。
 - **反例**：技能直接读写核心的内部状态，换个实现就把核心带崩。
 
-### F3 四材料决定推进，正式发布保持结构真实
+### F3 当前材料决定推进，正式发布保持结构真实
 
-- **定义**：进入或继续 build-code、verify-code 只要求当前 `decision-log.md`、`spec.md`、`plan.md` 与 `tasks.md` 存在且可读；accepted、收据、审查、确认和审计记录不是推进许可证。正式写边界和阶段完成是另外两条边界：task/worktree/runtime 身份、顺序与核心 publication 结构错误必须在写成功前 fail-loud。
+- **定义**：进入或继续 build-code、verify-code 只要求当前 cohort 的材料存在且可读：pre/history 为 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；post 为 `decision-log.md`、含全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。accepted、收据、审查、确认和审计记录不是推进许可证。正式写边界和阶段完成是另外两条边界：task/worktree/runtime 身份、顺序与核心 publication 结构错误必须在写成功前 fail-loud。
 - **最佳实践解释**：把“能继续工作”和“能发布成功、能宣称完成”分开。辅助审计缺失只记 `missing/unavailable`，但错绑事实不能当真，缺实际交付、测试、逐 AC 结果、独立审查事实或交接也不能报完成。
-- **正例**：旧 accepted 或 review 缺失时仍可按四份材料修复；发布 implementation 或 verification result 时，工作区错绑、快照不一致或核心结果不完整会明确失败。
+- **正例**：旧 accepted 或 review 缺失时仍可按本 cohort 当前材料修复；发布 implementation 或 verification result 时，工作区错绑、快照不一致或核心结果不完整会明确失败。
 - **反例**：为补审计记录停止编码或新建修复任务；或反过来把 automatic accepted、`live_plan_execution`、空 evidence 当作阶段完成。
 
 ### F4 质量靠异源审查与人，finding 不锁死修复
@@ -46,7 +46,7 @@ Version: 1.9.0
 
 ### F6 统一外置执行记录
 
-- **定义**：进度、指标、回溯信息统一写入任务外置记录；每次正式写入使用当次执行身份认证实际运行的干净已提交内容。任务本身不永久绑定某个 runner 路径或提交，缺旧身份记录不得阻止依据四材料继续工作。
+- **定义**：进度、指标、回溯信息统一写入任务外置记录；每次正式写入使用当次执行身份认证实际运行的干净已提交内容。任务本身不永久绑定某个 runner 路径或提交，缺旧身份记录不得阻止依据当前 cohort 材料继续工作。
 - **最佳实践解释**：任务身份回答“在做什么”，调用身份回答“这次由哪份已提交且干净的 WorkflowHub 执行”。两者分开记录，既能回溯，也不会因工具升级反复改任务身份。
 - **正例**：每次调用把 run、stage 和已核验的 WorkflowHub 提交写入 create-only 记录，任务清单只保存业务身份与执行模式。
 - **反例**：把某个临时 checkout 的绝对路径和 HEAD 永久写进任务清单，工具每更新一次就做一次 runner replacement。
@@ -55,14 +55,14 @@ Version: 1.9.0
 
 - **定义**：正常业务确认仍只保留 make-decision、build-plan、verify-code 三处，用于确认各自的方向、计划和验证结论；它们不是 build-code/verify-code 的进入许可证，也不得引发新任务或 reset。第四处限定确认是 UI 设计确认：仅当 `ui_applicability=ui` 时，build-spec 展示高保真原型后必须取得用户确认，才可把该原型作为进入 build-plan 的 UI 设计事实；owner 是 build-spec，非 UI 不触发，build-code 不增加日常确认。对于 build-prd 规划对象，spec-prd 先完成地图展示与真实核对，并绑定 `真实展示版本`，再复用同一条件 UI 链绑定设计版本；第二次内容调用后的最终确认（展示稿）必须绑定 decision/source/map/PRD 同版事实，拒绝、未答或错版保持草稿；这是规划内容顺序与事实绑定，不新增 gate、第三次内容调用或日常确认。commit、push、merge、archive、cleanup 等不可逆操作仍需独立授权，不能被阶段确认顺带授权。
 - **最佳实践解释**：允许先在同一任务继续补充或修复，同时保持方向、计划、UI 设计和验证结论由人确认；“可继续工作”“阶段已确认”“可执行不可逆操作”是三个不同命题。
-- **正例**：四材料齐全即可开始修复；UI 任务先展示高保真原型并取得用户确认，再把该确认写入 build-spec 的 UI 设计事实；非 UI 任务不增加确认；合并前再单独取得授权。
+- **正例**：本 cohort 当前材料齐全即可开始修复；UI 任务先展示高保真原型并取得用户确认，再把该确认写入对应 UI 设计事实；非 UI 任务不增加确认；合并前再单独取得授权。
 - **反例**：缺旧 confirmation 就拒绝编码；把非 UI 任务拉入设计确认；自动确认 UI 原型或 verify-code；或用阶段确认直接授权 merge/cleanup。
 
 ### F8 简单优先
 
 - **定义**：在能解决问题的前提下选更简单、依赖更少、隐含条件更少的方案；执行工具升级应由每次调用重新认证解决，不为正常升级维护永久 replacement 链。
 - **最佳实践解释**：简单方案更稳、更易懂、出错更早暴露。恢复机制只处理真正需要恢复的业务状态，不能把工具版本更新变成恢复平台。
-- **正例**：四材料允许继续修复；到正式写成功边界时复用一个窄 preflight 认证当前 task、worktree、runtime 和写集合，不建设 replacement 平台。
+- **正例**：当前 cohort 材料允许继续修复；到正式写成功边界时复用一个窄 preflight 认证当前 task、worktree、runtime 和写集合，不建设 replacement 平台。
 - **反例**：每改一行工具代码就复制新 runner、签发凭证、追加代次并改写任务清单，最终维护一条与业务无关的长链。
 
 ### F9 可证伪、不假绿
@@ -93,11 +93,11 @@ Version: 1.9.0
 - **定义**：质量事实自动采集并浮现，不作为开始或继续修复的许可证；但阶段必须真实完成其声明的测试、逐 AC 判断、独立审查（或真实 unavailable）和交接，缺项时不得宣称完成。已认证的 serious finding 按 F4 处置。
 - **最佳实践解释**：去掉“先补证据才能干活”的死锁，不等于删除质量工作。记录代替普遍阻断，完成判据防止假绿。
 - **正例**：审查失败后立即继续同任务修复；修复完成后只重跑受影响测试，并用当前证据更新 AC 与完成结论。
-- **反例**：一发现问题就新建任务；或只读四材料、跑几项局部测试便宣布 build-code/verify-code 完成。
+- **反例**：一发现问题就新建任务；或只读当前材料、跑几项局部测试便宣布 build-code/verify-code 完成。
 
 ### Q2 推进资格、发布结构与完成判据分离
 
-- **定义**：四材料可读是 build-code/verify-code 的进入与继续条件；accepted、receipt、review、provider、audit、checkpoint、历史 snapshot/generation 不是额外准入 gate。正式 publication 的结构真实性 fail-loud；阶段完成由核心交付、风险相关测试、逐 AC 结果、独立审查事实和人类交接共同证明；不可逆操作另行授权。
+- **定义**：当前 cohort 材料可读是 build-code/verify-code 的进入与继续条件；pre/history 保持旧四材料，post 使用 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md` 与 `phases/index.md`。accepted、receipt、review、provider、audit、checkpoint、历史 snapshot/generation 不是额外准入 gate。正式 publication 的结构真实性 fail-loud；阶段完成由核心交付、风险相关测试、逐 AC 结果、独立审查事实和人类交接共同证明；不可逆操作另行授权。
 - **最佳实践解释**：三种谓词分别回答“现在能否工作”“这次正式写入是否真实”“能否宣称阶段完成”，不能用其中一个替代另外两个。
 - **正例**：审计缺口显示为待补但修复继续；错绑 receipt 拒绝写成功；测试或 AC 缺失时保持进行中。
 - **反例**：旧 accepted 缺失就阻止修复；或 automatic accepted 存在就跳过实际验证。
@@ -207,15 +207,17 @@ Version: 1.9.0
 - **条目变更须同步**：任何对宪法条目的新增/改写/拆分/合并，必须同步更新——① 版本号；② 修订记录；③ 旧条目到新条目的映射；④ 检查清单条目数（须始终等于宪法条目数）。
 - **变更须可追溯**：变更须能追溯回需求权威源或新的批准记录。
 
-Version: 1.9.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-09-14
+Version: 1.9.1 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-09-22
 
 **修订记录**：
+
+- 1.9.1（2026-09-22）：将 F3、Q2 及其关联示例中的固定四材料表述修正为 cohort 当前材料：pre/history 保留旧四材料，post 使用 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md` 与纯指针 `phases/index.md`。22 条编号及原有推进/发布/完成三义、质量事实非许可证边界不变；不新增 gate 或控制面。来源：母 PRD 与 CARD-02 已确认决策及本次用户要求。
 
 - 1.9.0（2026-09-14）：同步既有 F/Q/S 条款对应的治理实施边界、负向条款和控制面分类；保留 22 条原有编号，不新增 public 流程节点，不把质量或辅助事实升级为推进许可证。默认不新增 hash，仅保留身份与完整性所需的绑定事实。来源：机制简化任务 C7 治理同步决定。
 
 - 2026-08-03（治理同步）：本次只同步执行规则、术语和人工交接材料，不新增、改写、拆分或合并宪法条款；Version 保持 1.5.0，checklist 仍为 21 条。
 
-**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。1.7.0 → 1.8.0 仍保留 22 条宪法条目和原编号；F7 补充 build-prd/spec-prd 第二次内容调用后的最终展示稿同版确认、拒绝/未答/错版保持草稿，且不新增第三次内容调用、formal stage 或 non-UI 日常确认。1.8.0 → 1.9.0 保留 22 条宪法条目和原编号；仅同步治理实施边界、负向条款和控制面分类，默认不新增 hash，不新增 public 流程节点。
+**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。1.6.0 → 1.7.0 保留 22 条宪法条目和原编号；F7 增加 `ui_applicability=ui` 时由 build-spec owner 执行的第四处限定设计确认，非 UI 和 build-code 不受影响。1.7.0 → 1.8.0 仍保留 22 条宪法条目和原编号；F7 补充 build-prd/spec-prd 第二次内容调用后的最终展示稿同版确认、拒绝/未答/错版保持草稿，且不新增第三次内容调用、formal stage 或 non-UI 日常确认。1.8.0 → 1.9.0 保留 22 条宪法条目和原编号；仅同步治理实施边界、负向条款和控制面分类，默认不新增 hash，不新增 public 流程节点。1.9.0 → 1.9.1 保留 22 条编号，F3/Q2 当前材料定义按 cohort 修正，不改变推进/发布/完成三义。
 
 - 1.8.0（2026-09-09）：在既有 F7 内明确 build-prd/spec-prd 的最终展示稿确认必须位于第二次内容调用之后，绑定 decision/source/map/PRD 同版事实；拒绝、未答、错版保持草稿，不新增第三次内容调用、formal stage 或 non-UI 日常确认。条目数仍为 22。来源：build-prd P2 独立复核修复。
 

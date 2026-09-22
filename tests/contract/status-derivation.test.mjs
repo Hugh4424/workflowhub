@@ -105,6 +105,66 @@ describe("C6 status root causes and named references", () => {
     }]);
   });
 
+  it("reports incomplete declared candidate delivery from the authenticated full report", () => {
+    const reportRef = "quality/evidence/research/" + "b".repeat(64) + ".json";
+    const roots = deriveStatusRootCauses({
+      quality: { missing: [], predicates: {} },
+      research: {
+        status: "completed",
+        report_ref: reportRef,
+        candidate_delivery: {
+          status: "incomplete",
+          full_report: { ref: reportRef, sha256: "b".repeat(64) },
+          missing_candidate_ids: ["route-one", "route-two"],
+        },
+      },
+    });
+    expect(roots).toEqual([{
+      root_cause_id: "research_candidate_delivery",
+      status: "actionable",
+      source: "research report",
+      refs: [reportRef],
+      details: ["candidate delivery incomplete:route-one,route-two"],
+    }]);
+  });
+
+  it("reports a missing user-visible candidate presentation without changing research status", () => {
+    const reportRef = "quality/evidence/research/" + "c".repeat(64) + ".json";
+    const roots = deriveStatusRootCauses({
+      quality: { missing: [], predicates: {} },
+      research: {
+        status: "completed",
+        report_ref: reportRef,
+        candidate_presentation: {
+          status: "incomplete",
+          reason: "candidate_presentation_missing",
+          full_report: { ref: reportRef, sha256: "c".repeat(64) },
+        },
+      },
+    });
+    expect(roots).toEqual([{
+      root_cause_id: "research_candidate_presentation",
+      status: "actionable",
+      source: "decision-log.md",
+      refs: [reportRef, "decision-log.md"],
+      details: ["candidate presentation incomplete:candidate_presentation_missing"],
+    }]);
+  });
+
+  it("reports an incomplete divergence outline as a decision-log root cause", () => {
+    const roots = deriveStatusRootCauses({
+      quality: { missing: [], predicates: {} },
+      divergenceOutline: { status: "incomplete", reason: "divergence_outline_incomplete" },
+    });
+    expect(roots).toEqual([{
+      root_cause_id: "decision_divergence_outline",
+      status: "actionable",
+      source: "decision-log.md",
+      refs: ["decision-log.md"],
+      details: ["divergence outline incomplete:divergence_outline_incomplete"],
+    }]);
+  });
+
   it("returns exactly K1 through K6 and classifies confirmation versus evidence refs", () => {
     const confirmation = "quality/confirmations/" + "a".repeat(64) + ".json";
     const authorization = "quality/authorizations/" + "b".repeat(64) + ".json";

@@ -397,7 +397,7 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
 function currentImplementationReceipt({ task, workspace, version }) {
   const safeTask = assertTaskHandle(task);
   const safeWorkspace = assertWorkspace(workspace);
-  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId, safeTask.manifest.activation_cohort ?? "pre");
   const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
   const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
   const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n")
@@ -485,7 +485,7 @@ export function writeCanonicalSpecClarifyReceipt({
       throw new Error(`spec-clarify transcript round ${index + 1} is not bound to the lifecycle and skill event`);
     }
   }
-  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId, safeTask.manifest.activation_cohort ?? "pre");
   if (snapshot.tree !== snapshotTree) throw new Error("spec-clarify transcript identity is stale for the current snapshot");
   const value = {
     schema_version: "workflowhub-receipt.v1",
@@ -515,9 +515,9 @@ export function writeCanonicalSpecClarifyReceipt({
 }
 
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
-export function captureWorkspaceSnapshot(workspace, taskId = null) {
+export function captureWorkspaceSnapshot(workspace, taskId = null, activationCohort = "pre") {
   const root = assertWorkspace(workspace).worktreeRoot;
-  return captureExecutionSnapshot(root, taskId);
+  return captureExecutionSnapshot(root, taskId, activationCohort);
 }
 
 /** Legacy component registry; vNext current materials are ArtifactDir-owned. */
@@ -733,7 +733,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         throw new TypeError(`test capture timeoutMs must be between 1 and ${MAX_TEST_CAPTURE_TIMEOUT_MS}ms`);
       }
       const capture = () => safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
-        const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+        const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId, safeTask.manifest.activation_cohort ?? "pre");
         const profileEvidence = authenticatedProfileEvidence({
           task: safeTask,
           snapshotTree: before.tree,
@@ -747,7 +747,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command], { timeoutMs, killProcessGroup: true });
         const completedAt = now();
         const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
-        const after = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
+        const after = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId, safeTask.manifest.activation_cohort ?? "pre");
         if (after.head !== headBefore || after.tree !== treeBefore || after.source_digest !== sourceDigestBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
         const timedOut = proc.error?.code === "ETIMEDOUT";
         const outputLimitExceeded = proc.error?.code === "ENOBUFS";

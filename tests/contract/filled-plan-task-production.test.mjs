@@ -80,7 +80,11 @@ function renderTasksTemplate() {
   tasks = tasks
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
     .replace("- **NEW**：`__TEMPLATE_FILL__`\n- **MODIFY**：`__TEMPLATE_FILL__`\n- **DO NOT TOUCH**：`__TEMPLATE_FILL__`", phaseFiles)
-    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`");
+    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
+    .replace(
+      /\| `P1` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \|/,
+      "| `P1` | `plan.md` | `phase-p1-contract` | `tests/demo.test.mjs`; `core/demo.mjs` | `none` | `build-code` |",
+    );
   return tasks.replaceAll(templateFiller, "verified contract fact");
 }
 
@@ -193,6 +197,33 @@ function dualPhasePlanFixtureErrors(value) {
 }
 
 describe("filled v3 planning sample", () => {
+  it("validates the pointer-only v4 plan and execution index without legacy task cards", () => {
+    const structural = validatePlanTaskContract({ spec, plan, tasks });
+    expect(structural.ok, structural.errors.join("; ")).toBe(true);
+    expect(structural.facts).toMatchObject({
+      template_version: "plan-task.v4",
+      phase_count: 1,
+      task_count: 3,
+      dependency_validation: { valid: true },
+      command_oracle_checks: { valid: true },
+    });
+    const executable = validateExecutablePlanTaskMinimum({ spec, plan, tasks });
+    expect(executable.ok, executable.errors.join("; ")).toBe(true);
+  });
+
+  it("projects Phase risk markers into pointer-only task rows for slice advisory", () => {
+    const markedPlan = plan.replace(
+      "### Risks and rollback\n\nverified contract fact",
+      '### Risks and rollback\n\nslice-advisory: reason="shared contract update"; impact="two files change atomically"; owner="P1"; recheck="after GREEN"',
+    );
+    const structural = validatePlanTaskContract({ spec, plan: markedPlan, tasks });
+    expect(structural.ok, structural.errors.join("; ")).toBe(true);
+    expect(structural.facts.slice_advisory).toMatchObject({
+      status: "within_budget",
+      marker_count: 3,
+    });
+  });
+
   it("renders the current pointer template and passes baseline validators through an explicit compatibility fixture", () => {
     const analysis = validateSpecAnalyzeCompleteness({ rawRequirementIndex, decisionLog: "R-001 D-001", spec, plan: legacyPlan, tasks: validatorTasks });
     expect(analysis.ok, analysis.errors.join("; ")).toBe(true);

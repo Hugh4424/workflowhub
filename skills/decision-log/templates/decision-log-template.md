@@ -85,9 +85,9 @@ impact_dimensions: [goal|scope|acceptance|ordinary_detail]
 requires_user_decision: true|false
 visible_group_id: <existing approve-decision group>
 batch_id: <optional alias for the same visible group>
-# 核心 OI 的确认凭证不写在这里：由 interaction aggregate 的 oi_dispositions
-# 单向绑回本 OI（task_id / outline_version / oi_id / 可见分组 / 所选处置）。
-# 旧记录里若已有 interaction_ref / interaction_hash，仍可读，但已不是凭证来源。
+# 核心 OI 的当前确认通过本文件的直接处置字段与既有 confirmation fact 绑定。
+# 不创建或消费 interaction aggregate；旧记录里的 interaction_ref / interaction_hash
+# 只读保留，不再是当前凭证来源或完成依赖。
 ```
 
 方向审查只消费当前 `convergence_outline` questions-only 投影（保留全部 OI
@@ -96,6 +96,50 @@ ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状�
 终态字段；既有 `approve-decision` 在同一次整体确认中按主题展示
 `visible_group_id|batch_id`、选项、后果和风险，并记录所选处置与交互凭证。三者
 职责不可互相替代，也不增加新的正常确认点。
+
+## 发散候选与可证伪大纲
+
+模糊需求在用户收敛前填写。表格是给用户读的形态；JSON 只把同一份表格与来源绑定给
+现有 reader，不创建候选库或完成门。
+
+| 角度 ID | 角度 | 来源 | 强度 |
+| --- | --- | --- | --- |
+| A-001 |  | internal/research source | low/medium/high |
+| A-002 |  | internal/research source | low/medium/high |
+
+| 候选 ID | 候选 | origin | angle/source |
+| --- | --- | --- | --- |
+| U-001 |  | user | 原话 source ID |
+| N-001 |  | internal/research | A-001 |
+
+| 假设 ID | 大纲版本 | 假设 | 状态 |
+| --- | --- | --- | --- |
+| H-001 | r0 |  | supported/falsified/unresolved |
+
+```json
+{
+  "schema_version": "workflowhub-decision-divergence.v1",
+  "oi_outline_version": "<current outline version>",
+  "intake": {
+    "raw_requirement": {"text":"<user wording>","attribution":"user_verbatim","source_id":"U-001"},
+    "pain_point": {"text":"<user wording>","attribution":"user_verbatim","source_id":"U-002"}
+  },
+  "angles": [
+    {"angle_id":"A-001","plain_language_angle":"","source":"internal analysis","strength":"medium"},
+    {"angle_id":"A-002","plain_language_angle":"","source":"research R-001","strength":"high"}
+  ],
+  "original_candidates": [
+    {"candidate_id":"U-001","text":"","source_id":"U-001","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}}
+  ],
+  "candidates": [
+    {"candidate_id":"U-001","text":"","origin":"user","source_ids":["U-001"],"strength":"direct","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}},
+    {"candidate_id":"N-001","text":"","origin":"internal","angle_id":"A-001","source_ids":["A-001"],"novelty_against":["U-001"],"changed_dimensions":["mechanism"],"strength":"medium","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}}
+  ],
+  "outlines": [
+    {"outline_version":"r0","status":"active","hypotheses":[{"hypothesis_id":"H-001","statement":"","status":"unresolved","falsifier":"","evidence_refs":["R-001"]}]}
+  ]
+}
+```
 
 ## 目标
 
@@ -154,9 +198,9 @@ derived_from: []
 artifacts: []
 ```
 
-## 三轮 talk
+## 动态 Talk 批次
 
-| talk_id | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
+| batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
 | --- | --- | --- | --- | --- | --- |
 | T-001 |  |  |  |  |  |
 
@@ -165,6 +209,35 @@ artifacts: []
 | research_id/source | 调研重点 | 关键事实 | 处理状态 | 关联 D |
 | --- | --- | --- | --- | --- |
 | F-001 |  |  |  |  |
+
+## 调研候选交付
+
+只有 `research-report.v1` 明确声明候选时填写。每条都是用户可见的大白话；全文只按 ref
+按需展开，不复制到主文。没有用户可见候选时，报告仍须写 `candidates: []`，本节说明不适用。
+
+完整报告：`quality/evidence/research/<sha256>.json`
+
+| 候选 ID | 大白话摘要 | 推荐/不推荐 | 理由 | 出处与全文 |
+| --- | --- | --- | --- | --- |
+| C-001 |  | recommended/not_recommended |  | source-ref；完整报告 ref |
+
+```json
+{
+  "schema_version": "workflowhub-research-candidate-delivery.v1",
+  "report_ref": "quality/evidence/research/<sha256>.json",
+  "report_sha256": "<sha256>",
+  "candidates": [
+    {
+      "candidate_id": "C-001",
+      "plain_language_summary": "",
+      "source_refs": ["source-ref"],
+      "evidence_refs": ["E-001"],
+      "recommendation": "recommended",
+      "recommendation_reason": ""
+    }
+  ]
+}
+```
 
 ## grill
 

@@ -15,7 +15,7 @@ import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-r
 import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../runtime/review/stage-review-disposition.mjs";
 import { ArtifactDir, artifactReference } from "./artifact-dir.mjs";
-import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace, materialFilesForCohort } from "../runtime/task/material-workspace.mjs";
 import { initializeTaskStore, readTaskFacts, writeStageRow } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
 import { STAGE_PREDICATES } from "../runtime/stage/completion-predicates.mjs";
@@ -978,7 +978,13 @@ function currentVerifyFacts(task, expected = {}) {
 
 function currentMaterialRevision(task, worktreeRoot) {
   const artifacts = ArtifactDir.open(worktreeRoot, task);
-  const values = CURRENT_MATERIAL_FILES.map((file) => [file, artifacts.read(file)]);
+  const activationCohort = task.manifest.activation_cohort ?? "pre";
+  const seedFiles = activationCohort === "post"
+    ? ["decision-log.md", "spec.md", "phases/index.md"]
+    : CURRENT_MATERIAL_FILES;
+  const seedMaterials = Object.fromEntries(seedFiles.map((file) => [file, artifacts.read(file)]));
+  const materialFiles = materialFilesForCohort(activationCohort, seedMaterials);
+  const values = materialFiles.map((file) => [file, seedMaterials[file] ?? artifacts.read(file)]);
   return materialRevisionFromValues(values);
 }
 

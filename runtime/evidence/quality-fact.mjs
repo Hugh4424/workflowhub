@@ -14,6 +14,13 @@ const EVIDENCE_TYPES = Object.freeze({
   coverage: "coverage_audit",
 });
 
+function validStageMaterialScope(stage, scope) {
+  if (JSON.stringify(scope) === JSON.stringify(STAGE_FACT_MATERIALS[stage])) return true;
+  if (!new Set(["build-plan", "build-code", "verify-code"]).has(stage)) return false;
+  if (scope.length < 4 || scope[0] !== "decision-log.md" || scope[1] !== "spec.md" || scope[2] !== "phases/index.md") return false;
+  return scope.slice(3).every((file, index) => file === `phases/P${index + 1}.md`);
+}
+
 /** Fields that define an immutable quality fact's content identity. */
 export function qualityFactIdentity(value) {
   return {
@@ -28,6 +35,7 @@ export function qualityFactIdentity(value) {
     ...(value?.review_status === undefined ? {} : { review_status: value.review_status }),
     subject: value?.subject,
     evidence: value?.evidence,
+    ...(value?.error === undefined ? {} : { error: value.error }),
   };
 }
 
@@ -35,15 +43,15 @@ export function qualityFactDigest(value) {
   return sha256(JSON.stringify(qualityFactIdentity(value)));
 }
 
-export function createQualityFact({ taskId, stage, materialRevision, materialScope, materialScopeRevision, snapshotTree, kind, status, reviewStatus, subject, evidence = [], recordedAt = new Date().toISOString() }) {
+export function createQualityFact({ taskId, stage, materialRevision, materialScope, materialScopeRevision, snapshotTree, kind, status, reviewStatus, subject, evidence = [], error, recordedAt = new Date().toISOString() }) {
   if (typeof taskId !== "string" || taskId.trim() === "" || !STAGES.has(stage)) throw new TypeError("quality fact identity is invalid");
   if (!/^revision-[a-f0-9]{64}$/.test(materialRevision ?? "") || typeof snapshotTree !== "string" || snapshotTree.trim() === "") throw new TypeError("quality fact material revision and snapshot tree are required");
   if (materialScope !== undefined || materialScopeRevision !== undefined) {
     if (!Array.isArray(materialScope) || materialScope.length === 0 || materialScope.some((file) => typeof file !== "string" || file.trim() === "")) {
       throw new TypeError("quality fact material scope is invalid");
     }
-    if (JSON.stringify(materialScope) !== JSON.stringify(STAGE_FACT_MATERIALS[stage])) {
-      throw new TypeError("quality fact material scope must match the fixed stage scope");
+    if (!validStageMaterialScope(stage, materialScope)) {
+      throw new TypeError("quality fact material scope must match the cohort stage scope");
     }
     if (!/^revision-[a-f0-9]{64}$/.test(materialScopeRevision ?? "")) throw new TypeError("quality fact material scope revision is invalid");
   }
@@ -56,6 +64,11 @@ export function createQualityFact({ taskId, stage, materialRevision, materialSco
       && (stage !== "verify-code" || subject !== "code_review")) {
     throw new TypeError("resolved quality fact reviewStatus is only valid for verify-code code_review");
   }
+  if (error !== undefined && (!error || typeof error !== "object" || Array.isArray(error)
+      || typeof error.code !== "string" || error.code.trim() === ""
+      || typeof error.message !== "string" || error.message.trim() === "")) {
+    throw new TypeError("quality fact error is invalid");
+  }
   if (!Array.isArray(evidence) || evidence.length === 0 || evidence.some((entry) =>
     !entry || typeof entry !== "object" || typeof entry.ref !== "string"
     || !SHA256_HEX.test(entry.sha256 ?? "") || entry.evidence_type !== EVIDENCE_TYPES[kind])) {
@@ -66,6 +79,7 @@ export function createQualityFact({ taskId, stage, materialRevision, materialSco
     task_id: taskId, stage, material_revision: materialRevision, snapshot_tree: snapshotTree,
     ...(materialScope === undefined ? {} : { material_scope: [...materialScope], material_scope_revision: materialScopeRevision }),
     kind, status, ...(reviewStatus === undefined ? {} : { review_status: reviewStatus }), subject, evidence,
+    ...(error === undefined ? {} : { error }),
   });
   const digest = qualityFactDigest(identity);
   const value = Object.freeze({ schema_version: "quality-fact.v1", fact_id: `quality-${digest}`, ...identity, recorded_at: recordedAt });

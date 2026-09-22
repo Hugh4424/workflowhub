@@ -72,6 +72,49 @@ export function redactProviderHostPaths(value) {
  */
 export function providerMaterialPath(key, index, value) {
   if (key === DIRECTION_FLOW_MATERIAL_KEY) return DIRECTION_FLOW_PATH;
+  if (/^phase_authority:phases\/P[1-9]\d*\.md$/.test(key)) return `requirements/${key.slice("phase_authority:".length)}`;
   const stem = String(key).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "") || `material_${index + 1}`;
   return `materials/${String(index + 1).padStart(2, "0")}-${stem}${typeof value === "string" || Buffer.isBuffer(value) ? ".md" : ".json"}`;
+}
+
+/** One cohort identity and one physical Phase expansion for packet and hash writers. */
+export function reviewActivationCohort(input) {
+  if (input?.stage !== "build-plan") return null;
+  const snake = input.activation_cohort;
+  const camel = input.activationCohort;
+  if (snake !== undefined && camel !== undefined && snake !== camel) throw new Error("MATERIAL_INCOMPLETE: conflicting activation cohort aliases");
+  const cohort = snake ?? camel ?? "pre";
+  if (!new Set(["pre", "post"]).has(cohort)) throw new Error(`MATERIAL_INCOMPLETE: invalid activation cohort ${cohort}`);
+  return cohort;
+}
+
+export function providerMaterialEntries(input) {
+  const materials = input?.materials;
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) throw new Error("MATERIAL_INCOMPLETE: materials must be an object");
+  if (reviewActivationCohort(input) !== "post") return Object.entries(materials);
+  const authorities = materials.phase_authorities;
+  const index = materials.phase_index;
+  if (!authorities || typeof authorities !== "object" || Array.isArray(authorities)
+      || Object.getPrototypeOf(authorities) !== Object.prototype || typeof index !== "string") {
+    throw new Error("MATERIAL_INCOMPLETE: post phase_authorities and phase_index are required");
+  }
+  const section = index.split(/^##\s+Execution Index\s*$/m)[1]?.split(/^##\s+/m)[0];
+  if (!section) throw new Error("MATERIAL_INCOMPLETE: post phase_index requires Execution Index");
+  const rows = section.split("\n").filter((line) => /^\|/.test(line.trim())
+    && !/^\|\s*(?:phase\b|[-: ]+\|)/i.test(line.trim()));
+  const refs = [...section.matchAll(/^\|\s*`?(P[1-9]\d*)`?\s*\|\s*`?(phases\/P[1-9]\d*\.md)`?\s*\|/gm)]
+    .map(([, id, path]) => ({ id, path }));
+  if (refs.length === 0 || refs.length !== rows.length || Object.keys(authorities).length !== refs.length) {
+    throw new Error("MATERIAL_INCOMPLETE: post phase index and physical files differ");
+  }
+  for (const [position, { id, path }] of refs.entries()) {
+    if (id !== `P${position + 1}` || path !== `phases/P${position + 1}.md`
+        || typeof authorities[path] !== "string" || authorities[path].trim() === ""
+        || !new RegExp(`^#\\s+Phase\\s+${id}\\b`, "m").test(authorities[path])) {
+      throw new Error(`MATERIAL_INCOMPLETE: ${path} is missing or invalid`);
+    }
+  }
+  return Object.entries(materials).flatMap(([key, value]) => key === "phase_authorities"
+    ? refs.map(({ path }) => [`phase_authority:${path}`, authorities[path]])
+    : [[key, value]]);
 }

@@ -20,7 +20,7 @@
 
 - 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
-- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) L310；本条是执行纪律，不是新的 stage、gate 或质量结论。
+- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
 ## 入口文件
 
@@ -41,7 +41,7 @@
 
 ## 当前治理边界
 
-- 当前工作真相只有认证 worktree `specs/<task-id>/` 下的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四份材料；外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、旧 receipt、旧 review、历史 snapshot 只读保留。`m15-retirement` 材料迁移及仓外 `~/Knowledge/Projects/workflowhub/tasks/Projects/` 清理不属于本任务范围。
+- 当前工作真相按 cohort 读取认证 worktree `specs/<task-id>/`：pre/history 保留 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四材料；post 使用 `decision-log.md`、承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。post 不生成 `plan.md/tasks.md` 双写。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、receipt、review、历史 snapshot 只读保留。
 - 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
 - provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
@@ -54,7 +54,7 @@
 
 ## vNext 永久实施边界
 
-- `make-decision` 只创建并维护四份当前材料；`build-spec`、`build-plan` 只细化同一份材料；`build-code`、`verify-code` 只消费同一份材料和 task facts。
+- post 的 `make-decision` 写 `decision-log.md`，`build-plan` 写 `spec.md`、各 `phases/P<n>.md` 和 `phases/index.md`；`build-code`、`verify-code` 消费这些当前材料和 task facts。pre/history 仍按旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
 - vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`index.json` 及必要的 `quality/evidence/`；C6 规定移除 active `quality/verify.v1` object graph、`product_release` 与 `status_groups`，不创建旧 accepted、run、receipt、review-flow 或 current projection。`specs/archive/**`、`docs/research/**` 只读保留。
 - 禁止 successor/predecessor、selector、snapshot lineage、phase trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。

@@ -14,7 +14,7 @@ import {
   validateAcceptanceCoverageShape,
   validateStageInvocation,
 } from "../../runtime/stage/stage-handlers.mjs";
-import { reviewRecordTimeoutForRunner, runReviewRecordWithSignalHandling, stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
+import { reviewRecordTimeoutForRunner, runReviewRecordWithSignalHandling, stageReflectionPublication, stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 
 const ROOT = realpathSync(join(fileURLToPath(new URL("../..", import.meta.url))));
 const RUNTIME = join(ROOT, "tools", "cli", "stage-runtime.mjs");
@@ -78,6 +78,23 @@ afterEach(() => {
 });
 
 describe("stage-runtime private run:preflight", () => {
+  it("forwards only an injected host spec-analyze executor through the existing run route", async () => {
+    const executor = vi.fn(async (request) => ({ source_ids: request.source_ids, status: "unknown" }));
+    const request = Object.freeze({ source_ids: ["U-001"], material_revision: "current-revision" });
+    const delegate = vi.fn(async (_argv, { services }) => {
+      const publication = stageReflectionPublication(services);
+      return publication.runSpecAnalyze(request);
+    });
+    const result = await stageRuntimeCliMain([
+      "run", "--action=execute", "--stage=build-plan", "--project=workflowhub", "--task=fixture",
+    ], { services: { specAnalyzeExecutor: executor }, delegate });
+    expect(result).toEqual({ source_ids: ["U-001"], status: "unknown" });
+    expect(executor).toHaveBeenCalledOnce();
+    expect(executor).toHaveBeenCalledWith(request);
+    expect(delegate).toHaveBeenCalledOnce();
+    expect(stageReflectionPublication({})).toEqual({});
+    expect(() => stageReflectionPublication({ specAnalyzeExecutor: true })).toThrow(/specAnalyzeExecutor must be a function/);
+  });
   it("leaves the managed review wait to the managed runner while injected rounds keep the recorder default", () => {
     expect(reviewRecordTimeoutForRunner({ managed: true })).toBeNull();
     expect(reviewRecordTimeoutForRunner({ managed: false })).toBeUndefined();

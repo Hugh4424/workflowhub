@@ -127,8 +127,8 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 16d256393b691c682f994d91035197701e58162bed647265c88df82356d84065
-    last_reviewed_at: "2026-07-14"
+    local_bundle_hash: 5134f714f3fb44c471ab1a94aa6070ea5ffab006417b25268b71c2399d5e3bbe
+    last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
     purpose: 生成下游唯一权威需求记录
@@ -136,15 +136,15 @@ skills:
     used_by_stages:
       - make-decision
     upstream: []
-    local_changes: workflowhub 原生实现；interaction aggregate 的唯一当前 consumer 是 make-decision detail-review/quality-fact contract，owner 是 make-decision，测试是 tests/stage-interaction-contract.test.mjs；consumer 被移除或替换且无其他引用时可删除该事实，不新增独立 runtime
+    local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime
     dependency_closure:
       - skills/decision-log
     update_policy: 随 stage 合同变更审查
   - name: deep-research
     path: skills/deep-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 644800f142afbcf923bbbc76abe9bc679630dbafbea7a245cb66099851b08460
-    last_reviewed_at: "2026-09-06"
+    local_bundle_hash: 1ad2a78c3ba470b010281803ecb0520a98e69d7fafdfb56fa32a37627625d59e
+    last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
     purpose: 为 make-decision 提供可复核的深度调研输入
@@ -152,7 +152,7 @@ skills:
     used_by_stages:
       - make-decision
     upstream: []
-    local_changes: workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；无工具时保留不合格事实，不新增 gate
+    local_changes: workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；候选交付从同一份报告派生并逐项要求摘要、来源、建议和理由；无工具或交付不全保留事实，不新增 gate
     dependency_closure:
       - skills/deep-research
     update_policy: 随 make-decision 调研契约、research-report.v1 与工具路由变更审查

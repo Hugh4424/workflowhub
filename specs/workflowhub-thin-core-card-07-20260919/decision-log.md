@@ -979,7 +979,7 @@ ois:
 ## UI applicability
 
 ```json
-{"result":"non_ui","sources":{"raw_requirement":"用户原始需求只涉及工作流语义、记录结构与交互节奏，未提出任何页面、交互或视觉要求（U-002 逐字）","project_inventory":"本仓为 Node CLI 与运行时项目，由 .mjs/.md/.json 构成，无前端框架、无路由表、无组件目录","planned_or_changed_frontend_fact":"本卡不计划也不涉及任何前端改动；母 PRD 判 ui_applicability=non_ui，并显式说明 CARD-07 为 R7 例外（工作流语义与记录结构，非展示层）"}}
+{"result":"non_ui","sources":{"raw_requirement":{"conclusion":"non_ui","reason":"用户原始需求只涉及工作流语义、记录结构与交互节奏，未提出任何页面、交互或视觉要求（U-002 逐字）。"},"project_inventory":{"conclusion":"non_ui","reason":"本仓为 Node CLI 与运行时项目，由 .mjs/.md/.json 构成，无前端框架、无路由表、无组件目录。"},"planned_or_changed_frontend_fact":{"conclusion":"non_ui","reason":"本卡不计划也不涉及任何前端改动；母 PRD 判 ui_applicability=non_ui，并显式说明 CARD-07 为 R7 例外（工作流语义与记录结构，非展示层）。"}}}
 ```
 
 ## Talk 记录

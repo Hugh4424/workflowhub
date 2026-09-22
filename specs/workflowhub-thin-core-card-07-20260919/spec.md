@@ -19,7 +19,7 @@
 
 ## 材料导航
 
-| 材料锚点 | 职责 | 使用时机 |
+| 章节 | 摘要 | 读取时机 |
 | --- | --- | --- |
 | `decision-log.md#u-004-card-02-合并后的阶段切换逐字` | 最新阶段方向与 cohort 授权 | build-plan 入口 |
 | `decision-log.md#需求大纲-v1模块台账` | 产品模块和未决范围 | spec 作者与审查 |
@@ -377,9 +377,16 @@
 | direction review | 未收敛选项空间与配置声明路由 → 挑战 findings 或真实 partial/unavailable；当前选择只在 reveal 后可见。 | 前置选择泄漏、错 provider、坏 packet、transport 失败各自保留原码；没有审查结果不自动变空 findings 或通过。 |
 | 收敛与确认 | 已知来源单元/OI/用户逐字答复 → append-only supersession、现行结论及显式用户确认。 | 漏一个已知单元、弱化限定词、双处置/无 owner、旧正文被覆盖或旧答复错绑均报告；缺质量不阻止同 task 修复，但不能宣称完成。 |
 | test/review/verify | build-plan 强方预写适用行为的可运行目标测试并记录目标 RED/保护边界 → build-code 只改实现取得同 oracle GREEN → verify-code 抽原始需求/真实消费者/证据。 | 目标测试尚未写成可运行原件或 RED 只是 setup 失败时标 `incomplete`；非行为/G-2 才能凭具体理由 N/A；实施者不得静默改断言，合法变更走显式请求+独立审查；缺执行、provider 或用户确认保留 `unavailable/incomplete`。 |
+| post build-code native acceptance | 当前索引 Phase 中唯一 `acceptance_role=acceptance` Task 的 typed `acceptance_data` → 既有私有 command/service runner → 既有逐 AC quality fact/evidence writer；owner=P1/T005，声明=P3/T016。 | 不再从 `tasks.md`、Phase `gate_cmd` 或退出码推导验收；缺失/重复/非法声明为 `unavailable`/`incomplete`，执行失败、超时、取消、清理失败和单 AC 缺证据保留原状态。 |
 | 原文→最终分析 | 认证 worktree 的当前 `decision-log.md` 逐字声明层/明确原子条目 → 独立提取的来源分母及索引反查 → 当前 spec/全部 Phase 的双向行为 trace → build-plan 最后 profile 结果 → 既有 quality fact；其 `stage-quality-evidence.v1.subject_fact.analysis_result` 保存原始诊断，由 stage status/readback 和 verify-code 消费。owner=现有 stage writer；若现有 analyzer 被审查后的替代实现取代，则同事务移除此字段。 | 逐字层缺失或无法提取报 `material_incomplete`；包内删项、量词/否定/物理形态弱化报具名 `inconsistent`；正式调用/发布缺失报 `unavailable/missing`。额外 manifest inventory/host transcript 非前置。 |
 
 ### Architecture Choices and Dependencies
+
+#### post build-code native acceptance contract
+
+post 不复活旧 `tasks.md` acceptance reader。当前索引列出的独立 Phase Task 中，最多且必须恰有一个 Task 声明 `acceptance_role=acceptance`；本任务由 P3/T016 承载最终逐 AC 矩阵。该卡的 `acceptance_data` 是 JSON 数组，每个 scenario 只允许 `source`、`sample`、`scenario`、`tier`、`execution` 五类字段：本 non-UI task 的 `tier` 为 `command` 或 `service`；command 的 execution 需要 `command`、字符串 `args`、正整数 `timeout_ms`，service 需要 worktree-relative `module_ref`、`export_name`、`input`、正整数 `timeout_ms`。AC 集合来自同一 Task 的 `Source / FR / AC`，不由 scenario 自报第二份分母。
+
+P1/T005 的 reader 从当前 `phases/index.md` 和每个物理 Phase 读取该 typed card，拒绝缺失、重复、越界、旧 tasks 来源、非法 tier/execution 或 AC 为空；合法声明归一化为现有私有 runner 所需的 task/stage/snapshot/material/attempt binding，并继续使用现有 `acceptance_execution` aggregate、逐 AC evidence 和 quality fact writer。`acceptance_data` 只声明要执行什么，不声明已通过；运行时必须比较实际 assertion，exit 0、`gate_cmd`、手写 `executed` 或计划文本均不能替代 per-AC evidence。当前 contract 缺失时保持 `unavailable/incomplete`，不阻止同 task 修复。
 
 #### 行为验收的可观察合同（先于 P2 的目标 RED）
 

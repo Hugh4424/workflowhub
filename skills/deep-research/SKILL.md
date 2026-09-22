@@ -66,11 +66,22 @@ canonical writer 发布后，只把返回的 ref 交给 stage handler，调用�
   "open_items": [],
   "coverage": {"dimensions":[],"first_party_ratio":null},
   "saturation": {"status":"saturated|timeboxed|not_saturated","reason":"..."},
+  "candidates": [{"candidate_id":"C-1","plain_language_summary":"...","source_refs":["..."],"recommendation":"recommended|not_recommended","recommendation_reason":"..."}],
   "tool_usage": [{"tool":"anysearch|web_fetch|subagent|glob|grep|read|git|ast-grep|none","question_id":"Q-1","queries":[],"attempts":[]}],
   "review": {"status":"pending|completed|unavailable","evidence_ref":null},
   "skip": null
 }
 ```
+
+Every completed report declares `candidates`, using `[]` only when no
+user-visible alternative exists. When research presents alternatives that the
+user can choose between, declare each one in `candidates`. A declared candidate
+is delivered only when it has a plain-language summary, source refs that each
+occur in both `sources` and `evidence`, a recommendation (including
+`not_recommended`), and a reason. The runtime derives the content-addressed
+full-report ref; do not write a self-referential report ref into the JSON. A
+missing candidate-set declaration or candidate fields remains an explicit
+incomplete delivery fact rather than a successful research summary.
 
 `first_party_ratio`、收敛率、OPEN 数和工具使用记录是事实维度，不是通过条件。
 缺省值使用 `not_applicable` 或 `null` 并说明原因；报告不完整时保留

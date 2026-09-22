@@ -13,6 +13,31 @@ const MATERIALS = {
   implementation: "实现了当前阶段行为",
 };
 
+const STRUCTURED_DECISION_LOG = [
+  "## 核心需求",
+  "用户要求完整覆盖并减少无谓阻塞。",
+  "## 核心目标",
+  "确认达成完整覆盖。",
+  "## 范围",
+  "当前五阶段的需求覆盖和执行边界。",
+  "## 验收标准",
+  "可验证的通过与失败条件。",
+  "## 决定",
+  "D-001 采用五阶段检查。",
+  "## 开放问题",
+  "未决项保留给下一阶段，不伪造通过。",
+  "## 来源与决策映射",
+  "| 需求 | 决定 | 处置 |",
+  "| --- | --- | --- |",
+  "| R-001 | D-001 | covered |",
+].join("\n");
+
+const STRUCTURED_SPEC = [
+  "## 当前规格",
+  "FR-001 需求覆盖；AC-001 有真实证据。",
+  "spec-clarify trigger=false reason=当前材料已回答方向问题 open_direction_changing_questions=0",
+].join("\n");
+
   const EVIDENCE = [
   ...["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace", "review", "runtime", "delivery"]
     .map((ref) => ({ ref, kind: ref, status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40), ...(ref === "tests" ? { test_result: { command: "true", expected_exit: 0, actual_exit: 0, oracle: "ORACLE-001", actual_outcome: "当前结果" } } : {}) })),
@@ -66,7 +91,6 @@ describe("authoring-stage spec-analyze profiles", () => {
     const { readFile } = await import("node:fs/promises");
     const source = await readFile(new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url), "utf8");
     expect(source).toMatch(/validateInteractionLifecycleSequence/);
-    expect(source).toMatch(/interactionAggregateFacts[\s\S]*validateInteractionAggregateLifecycle/);
   });
 
   it("defines cumulative inputs and evidence for the four authoring stages", () => {
@@ -187,7 +211,14 @@ describe("authoring-stage spec-analyze profiles", () => {
 
   it("returns a six-part plain-language summary only after semantic and evidence checks", () => {
     for (const stage of Object.keys(contracts.STAGE_SPEC_ANALYZE_PROFILES)) {
-      const result = contracts.validateStageSpecAnalyzeProfile({ stage, packet: packet() });
+      const result = contracts.validateStageSpecAnalyzeProfile({
+        stage,
+        packet: packet({ materials: {
+          ...MATERIALS,
+          decision_log: STRUCTURED_DECISION_LOG,
+          spec: STRUCTURED_SPEC,
+        } }),
+      });
       expect(result, `${stage}: ${result?.errors?.join("; ")}`).toMatchObject({ ok: true, status: "consistent" });
       expect(Object.keys(result.summary)).toEqual([
         "stage_work", "requirement_coverage", "upstream_alignment",
@@ -205,8 +236,8 @@ describe("authoring-stage spec-analyze profiles", () => {
       packet: packet({ materials: { ...MATERIALS, ...materialOverrides } }),
     });
     expect(result).toMatchObject({
-      ok: true,
-      status: "consistent",
+      ok: false,
+      status: "inconsistent",
       facts: { spec_analyze: { status: "skipped", reason: expect.any(String) } },
     });
   });

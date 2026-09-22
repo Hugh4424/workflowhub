@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialPath, redactProviderHostPaths } from "./provider-material-projection.mjs";
+import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 const REVIEW_FOCUS = Object.freeze({
@@ -118,7 +118,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   const instructionBytes = Buffer.from(`${redactProviderHostPaths(instruction)}\n`, "utf8");
   const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length, sha256: hash(instructionBytes) }];
   let materialIndex = 0;
-  Object.entries(packetMaterials ?? {}).forEach(([key, value]) => {
+  providerMaterialEntries({ ...input, materials: packetMaterials }).forEach(([key, value]) => {
     if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
     const bytes = materialBytes(redacted);

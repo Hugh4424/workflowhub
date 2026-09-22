@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { materialFilesForCohort } from "../task/material-workspace.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const DERIVED = new WeakSet();
@@ -17,6 +18,18 @@ export const STAGE_MATERIALS = Object.freeze({
   "verify-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
 });
 
+export function stageMaterialsForProgress(stage, { activationCohort = "pre", materials = {} } = {}) {
+  if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+  if (!new Set(["pre", "post"]).has(activationCohort)) throw new TypeError("activation cohort must be pre or post");
+  if (stage === "build-plan" && activationCohort === "post") {
+    return Object.freeze(["decision-log.md"]);
+  }
+  if (activationCohort === "post" && (stage === "build-code" || stage === "verify-code")) {
+    return materialFilesForCohort("post", materials);
+  }
+  return STAGE_MATERIALS[stage];
+}
+
 // Quality facts are produced after a stage has written its own material. Keep
 // the four current materials as the only authority, but bind each fact to the
 // smallest fixed scope that can affect that stage. This prevents a later
@@ -31,19 +44,27 @@ export const STAGE_FACT_MATERIALS = Object.freeze({
   "verify-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
 });
 
-export function stageMaterialScopeRevision(stage, materials = {}) {
+export function stageFactMaterialFiles(stage, materials = {}, { activationCohort = "pre" } = {}) {
   const files = STAGE_FACT_MATERIALS[stage];
   if (!files) throw new TypeError(`unsupported stage: ${stage}`);
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
     throw new TypeError("stage material scope requires a material map");
   }
-  return materialRevisionFromValues(files.map((file) => [file, materials[file] ?? null]));
+  if (activationCohort !== "pre" && activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
+  return activationCohort === "post" && ["build-plan", "build-code", "verify-code"].includes(stage)
+    ? materialFilesForCohort("post", materials)
+    : files;
 }
 
-export function stageMaterialScopeRevisions(materials = {}) {
+export function stageMaterialScopeRevision(stage, materials = {}, options = {}) {
+  const scoped = stageFactMaterialFiles(stage, materials, options);
+  return materialRevisionFromValues(scoped.map((file) => [file, materials[file] ?? null]));
+}
+
+export function stageMaterialScopeRevisions(materials = {}, options = {}) {
   return Object.freeze(Object.fromEntries(Object.keys(STAGE_FACT_MATERIALS).map((stage) => [
     stage,
-    stageMaterialScopeRevision(stage, materials),
+    stageMaterialScopeRevision(stage, materials, options),
   ])));
 }
 
@@ -57,7 +78,6 @@ export const STAGE_PREDICATES = Object.freeze({
     acceptance_clarity: "acceptance_criterion",
     solution_convergence: "acceptance_criterion",
     plain_language_card: "acceptance_criterion",
-    outline_closed: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
@@ -317,20 +337,13 @@ function selectLatestAcceptanceCandidates(candidates) {
 export function deriveStageCompletion(stage, observations = [], {
   requireStageOutcome = false,
   stageOutcomeStatus = null,
-  // vNext current tasks opt into the outline contract explicitly at the
-  // caller boundary.  Leaving this unset keeps immutable legacy projections
-  // readable while avoiding a marker-string bypass for current tasks.
+  // Kept only as an ignored compatibility argument for legacy callers.
+  // `outline_closed` is historical diagnostic data, never a current
+  // completion predicate for either cohort.
   requireOutline = null,
 } = {}) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
-  const outlineObserved = observations.some((observation) => {
-    const fact = observation?.fact?.value ?? observation?.fact;
-    return fact?.stage === stage
-      && fact.kind === "acceptance_criterion"
-      && fact.subject === "outline_closed";
-  });
-  const outlineRequired = stage === "make-decision" && (requireOutline === true || (requireOutline === null && outlineObserved));
   const requirements = {
     ...STAGE_PREDICATES[stage],
     // UI applicability is a new conditional subject. Current make-decision
@@ -342,12 +355,6 @@ export function deriveStageCompletion(stage, observations = [], {
         && fact.kind === "acceptance_criterion"
         && fact.subject === "ui_applicability";
     }) ? { ui_applicability: undefined } : {}),
-    // Pre-outline historical tasks have no `outline_closed` fact at all. Do
-    // not reinterpret those immutable records as a failed current attempt;
-    // once the current OI authority is present the handler always publishes
-    // the subject and it becomes a mandatory predicate, including a current
-    // missing fact with an explicit stage-quality-missing evidence leaf.
-    ...(stage === "make-decision" && !outlineRequired ? { outline_closed: undefined } : {}),
     // UI design is conditional. The official build-spec handler reads the
     // current decision-log UI fact and only publishes this subject for that
     // logged UI branch; quality facts do not duplicate applicability data.
@@ -372,7 +379,6 @@ export function deriveStageCompletion(stage, observations = [], {
     }) ? { e2e_acceptance: "acceptance_criterion" } : {}),
   };
   if (requirements.ui_applicability === undefined) delete requirements.ui_applicability;
-  if (requirements.outline_closed === undefined) delete requirements.outline_closed;
   const satisfied = new Map();
   const conflicts = new Set();
   const candidates = new Map();
@@ -979,10 +985,10 @@ export function deriveStageOutcomeStatuses({
 // more work on the current materials. This result must never claim that the
 // stage itself is complete; deriveStageCompletion is the only quality
 // completion derivation.
-export function deriveStageProgress(stage, observations = [], materials = null) {
+export function deriveStageProgress(stage, observations = [], materials = null, { activationCohort = "pre" } = {}) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("progress observations must be an array");
-  const materialNames = STAGE_MATERIALS[stage];
+  const materialNames = stageMaterialsForProgress(stage, { activationCohort, materials });
   const missingMaterials = materials === null
     ? materialNames
     : materialNames.filter((name) => typeof materials?.[name] !== "string" || materials[name].trim() === "");
@@ -991,7 +997,7 @@ export function deriveStageProgress(stage, observations = [], materials = null) 
     stage,
     work_status: ready ? "ready" : "blocked_by_missing_material",
     continuation_allowed: ready,
-    work_authority: "current-four-materials-and-plan-tasks",
+    work_authority: activationCohort === "post" ? "current-spec-and-indexed-phases" : "current-four-materials-and-plan-tasks",
     readiness_source: "current-material-presence",
     required_materials: Object.freeze([...materialNames]),
     missing_materials: Object.freeze([...missingMaterials]),

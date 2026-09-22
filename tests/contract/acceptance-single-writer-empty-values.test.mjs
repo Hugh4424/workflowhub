@@ -206,28 +206,12 @@ describe("P6 acceptance single writer and empty-value contract", () => {
     expect(result.quality_status).toBe("incomplete");
   });
 
-  it("publishes interaction once through the kernel and lets outline_closed consume it", async () => {
+  it("publishes current decision facts without accepting an aggregate or publishing outline_closed", async () => {
     const state = fixture();
-    const aggregate = interactionAggregate(state);
-    const first = await runOfficialStage("make-decision", contextFor(state), { interaction_aggregate: aggregate });
-    const second = await runOfficialStage("make-decision", contextFor(state), { interaction_aggregate: aggregate });
-    expect(first.interaction_publication).toMatchObject({ idempotent: false });
-    expect(second.interaction_publication).toMatchObject({ idempotent: true });
-
-    const interactionRefs = state.task.listCanonicalQualityFactRefs().flatMap((ref) => {
-      const fact = JSON.parse(state.task.readRecord(ref));
-      return fact.subject === "talk_clarify" ? [fact.evidence[0]?.ref] : [];
-    }).filter(Boolean);
-    expect(new Set(interactionRefs)).toHaveLength(1);
-    expect(interactionRefs[0]).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
-    const talkFact = qualityFacts(state).find((fact) => fact.subject === "talk_clarify");
-    expect(talkFact).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
-    const outlineFact = qualityFacts(state).find((fact) => fact.subject === "outline_closed");
-    expect(outlineFact).toBeDefined();
-    const acceptance = JSON.parse(state.task.readRecord(outlineFact.evidence[0].ref));
-    const stageEvidence = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
-    expect(stageEvidence.subject_fact.evidence_refs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ref: interactionRefs[0] }),
-    ]));
+    const result = await runOfficialStage("make-decision", contextFor(state), { receipts: {} });
+    expect(result).not.toHaveProperty("interaction_publication");
+    const retiredSubjects = qualityFacts(state)
+      .filter((fact) => ["talk_clarify", "outline_closed", "interaction_aggregate"].includes(fact.subject));
+    expect(retiredSubjects).toEqual([]);
   });
 });

@@ -7,7 +7,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
-import { publishStageHandoff } from "../../runtime/stage/stage-handoff.mjs";
+import { publishStageHandoff, renderStageHandoff } from "../../runtime/stage/stage-handoff.mjs";
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 
 const { captureReviewSource } = await import("../../skills/wh-review/scripts/review-source.mjs");
@@ -37,6 +37,27 @@ afterEach(() => {
 });
 
 describe("Phase quality and handoff contract", () => {
+  it("renders post-cohort handoff pointers without resurrecting plan/tasks", () => {
+    const rendered = renderStageHandoff({
+      taskId: "post-handoff-fixture",
+      stage: "build-code",
+      snapshotTree: "a".repeat(40),
+      materialScopeRevision: `revision-${"b".repeat(64)}`,
+      reflectionStatus: "unavailable",
+      materials: {
+        "decision-log.md": "# Decision\n\n## 目标\n- keep the current direction.\n",
+        "spec.md": "# Spec\n\n## 速读卡\n- use the current implementation design.\n",
+        "phases/index.md": "# Phase index\n\n| P1 | phases/P1.md |\n",
+        "phases/P1.md": "# Phase P1\n\n- first implementation task.\n",
+      },
+    });
+    expect(rendered).toContain("非权威 current handoff，只以当前 cohort 材料和正式质量原件为准");
+    expect(rendered).toContain("`phases/index.md`");
+    expect(rendered).toContain("`phases/P1.md`");
+    expect(rendered).not.toContain("以 plan.md / tasks.md 为准");
+    expect(rendered).not.toContain("- `plan.md`\n- `tasks.md`");
+  });
+
   it("keeps blueprint design in build-plan before stateless routing", () => {
     const deps = read("workflows/build-plan/skill-deps.yaml");
     const steps = JSON.parse(read("workflows/build-plan/steps.json"));
@@ -49,7 +70,7 @@ describe("Phase quality and handoff contract", () => {
     expect(slugs.indexOf("test-routing-advisor")).toBeGreaterThan(slugs.indexOf("testing-system-blueprint"));
     expect(slugs).not.toContain("grill-with-docs");
     expect(read("workflows/build-plan/SKILL.md")).toMatch(/Do not run Talk, Clarify, or Grill/);
-    expect(read("workflows/build-plan/SKILL.md")).toMatch(/Do not implement code or execute RED\/GREEN/);
+    expect(read("workflows/build-plan/SKILL.md")).toMatch(/build-plan writes each applicable[\s\S]*behavior test[\s\S]*target assertion[\s\S]*DO NOT TOUCH/i);
   });
 
   it("keeps blueprint advisory and concrete testing single-choice in build-code", () => {
@@ -78,14 +99,14 @@ describe("Phase quality and handoff contract", () => {
     expect(runner).not.toMatch(/phase-gate/);
   });
 
-  it("preserves the four-material and task-card boundary", () => {
+  it("keeps the post Phase index pointer-only", () => {
     const tasks = read("skills/spec-tasks/SKILL.md");
-    const template = read("skills/spec-tasks/templates/tasks-template.md");
+    const template = read("skills/spec-tasks/templates/index-template.md");
     expect(tasks).toMatch(/pure pointer index/);
-    expect(tasks).toMatch(/not a task-card generator[\s\S]*second engineering body/);
+    expect(tasks).toMatch(/not a task card, Phase procedure, progress ledger, or completion authority/);
     expect(template).toMatch(/Execution Index/);
     expect(template).not.toMatch(/gate_cmd|expected_exit|\boracle\b/);
-    expect(tasks).toMatch(/Never copy phase prose[\s\S]*execution status/);
+    expect(tasks).toMatch(/Do not copy its L0\/L1\/L2 body[\s\S]*execution status/);
     expect(tasks).not.toMatch(/TaskKernel|WorkflowHub Stage Progress/i);
   });
 

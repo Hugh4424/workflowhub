@@ -154,9 +154,9 @@ describe("CARD-01 zero machine gate advancement", () => {
     })).rejects.toThrow(/receipts\.interaction|interaction.*retired|unexpected receipt fields:\s*interaction|unknown/i);
   });
 
-  it("retains the real outline_closed=missing quality fact rather than changing it to passed", () => {
+  it("does not publish outline_closed as a current completion subject", () => {
     const source = readFileSync("runtime/stage/stage-handlers.mjs", "utf8");
-    expect(source).toMatch(/outline_closed:\s*subjectFact\(\s*convergence\.facts\.outline_closed/s);
-    expect(source).not.toMatch(/outline_closed:\s*subjectFact\(\s*["']passed["']/s);
+    expect(source).not.toMatch(/outline_closed:\s*subjectFact\(/s);
+    expect(source).toMatch(/requireOutline:\s*false/s);
   });
 });

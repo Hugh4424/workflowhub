@@ -52,21 +52,23 @@ describe("P1 stage order and real host interaction contract", () => {
     expect(() => validateStageAgentInteractionRounds({ interaction_type: "talk", rounds: [first, duplicate] })).toThrow(/duplicate|started more than once|invalid/i);
   });
 
-  it("requires every Talk round to use the real ask-wait-reply-resume seam", () => {
+  it("requires every dynamic Talk batch to use the real ask-wait-reply-resume seam", () => {
     const makeDecision = read("workflows", "make-decision", "SKILL.md");
-    expect(makeDecision).toMatch(/Talk round 1[\s\S]{0,240}real[\s\S]*ask[\s\S]*wait[\s\S]*user reply[\s\S]*resume/i);
-    expect(makeDecision).toMatch(/Talk round 2[\s\S]{0,240}real[\s\S]*ask[\s\S]*wait[\s\S]*user reply[\s\S]*resume/i);
-    expect(makeDecision).toMatch(/Talk round 3[\s\S]{0,240}real[\s\S]*ask[\s\S]*wait[\s\S]*user reply[\s\S]*resume/i);
+    expect(makeDecision).toMatch(/dynamic Talk batch/i);
+    expect(makeDecision).toMatch(/ask[\s\S]*wait[\s\S]*user reply[\s\S]*resume/i);
+    expect(makeDecision).toMatch(/zero, one, or multiple questions|零、一个或多个/i);
+    expect(makeDecision).toMatch(/re-?rank|重排/i);
   });
 
-  it("keeps the fixed advice and Grill order while Clarify stays in build-spec", () => {
+  it("keeps the advice, outline, Grill and dynamic module order while Clarify stays in build-spec", () => {
     const makeSteps = readJson("workflows", "make-decision", "steps.json").steps;
     const buildSpecSteps = readJson("workflows", "build-spec", "steps.json").steps;
     const order = (slug) => makeSteps.find((step) => step.step_slug === slug).order;
-    expect(order("talk-round-2")).toBeLessThan(order("direction-advice"));
-    expect(order("direction-advice")).toBeLessThan(order("talk-round-3"));
-    expect(order("talk-round-3")).toBeLessThan(order("grill-with-docs"));
-    expect(order("grill-with-docs")).toBeLessThan(order("detail-advice"));
+    expect(order("research-and-diverge")).toBeLessThan(order("direction-advice"));
+    expect(order("direction-advice")).toBeLessThan(order("outline-talk"));
+    expect(order("outline-talk")).toBeLessThan(order("grill-with-docs"));
+    expect(order("grill-with-docs")).toBeLessThan(order("module-convergence"));
+    expect(order("module-convergence")).toBeLessThan(order("detail-advice"));
     expect(buildSpecSteps.find((step) => step.step_slug === "spec-clarify").observable_result)
       .toMatch(/real ask.*wait.*matching user reply.*resume/i);
     expect(read("workflows", "build-spec", "SKILL.md"))
@@ -102,7 +104,7 @@ describe("P1 stage order and real host interaction contract", () => {
     expect(review).toMatchObject({ owner: "wh-review" });
     expect(review.observable_result).toMatch(/single[ -]packet[\s\S]*review[\s\S]*analyze/i);
     expect(dispose.observable_result).toMatch(/owner[\s\S]*(?:deadline|due)[\s\S]*finding/i);
-    expect(analyze.observable_result).toMatch(/no oracle[\s\S]*no provenance[\s\S]*prewritten test[\s\S]*irreversible/i);
+    expect(analyze.observable_result).toMatch(/authenticated raw requirements[\s\S]*Missing original source[\s\S]*unavailable/i);
     expect(review.order).toBeLessThan(dispose.order);
     expect(dispose.order).toBeLessThan(analyze.order);
   });

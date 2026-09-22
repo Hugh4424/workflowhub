@@ -61,6 +61,28 @@ and, when evidence is still missing, the declarative marker
 `evidence_status: pending` plus `evidence_owner` and `next_review_trigger`.
 Never turn a pending marker into a confirmed fact by omission.
 
+### Divergence and falsifiable outline
+
+For a vague requirement, write one `## 发散候选与可证伪大纲` section in this same
+decision-log before user convergence. It has user-visible tables for at least
+two angles, every original and generated candidate, and every hypothesis. Its
+`workflowhub-decision-divergence.v1` JSON binding preserves only what the
+reader needs: two user-verbatim intake fields with source IDs; each original
+candidate and its four-part semantic basis; each candidate's controlled origin
+(`user|internal|research`), angle, source IDs, novelty comparison and changed
+semantic dimensions; and 3–5 evidence-bound/falsifiable hypotheses per outline
+version. Every original candidate must appear again as a `user` candidate with
+the same source and semantic basis. A non-user candidate names its generating
+angle and the original candidates it differs from; a renamed string is not a
+new direction.
+
+When more than half of an outline version's hypotheses are falsified, mark it
+`abandoned`, record `superseded_by`, and write one active replacement with
+`redraw_of` and the falsification IDs that caused it. Bind the active version
+to the current OI outline version. This is a pure read-side diagnostic over the
+one decision-log, not a candidate store, completion gate, or replacement for
+real user discussion and research.
+
 ### One current OI authority
 
 Before research or Talk expands the log, create exactly one current OI outline
@@ -81,15 +103,11 @@ renamed to hide the gap is invalid. A legal OI record keeps the exact fields
 `not_applicable`. Terminal records additionally keep
 `selected_disposition`, `impact_dimensions`, and
 `requires_user_decision`. User-facing grouping keeps `visible_group_id` or
-`batch_id`. Core confirmation proof flows **one way**: the content-addressed
-interaction aggregate's `oi_dispositions` binds each core OI's `task_id`,
-`outline_version`, `oi_id`, visible group, and `selected_disposition`. The OI
-record deliberately does **not** embed the aggregate's ref/hash: the record
-lives inside `decision-log.md`, so embedding the address of the aggregate that
-must bind that same file's post-write bytes is a content self-reference with no
-fixed point. Legacy records that still carry `interaction_ref` /
-`interaction_hash` remain readable; those fields are simply no longer the
-proof source.
+`batch_id`. Current confirmation proof binds the direct decision-log OI fields
+to the existing confirmation fact; it does not create or consume an interaction
+aggregate. Legacy records that still carry `interaction_ref` /
+`interaction_hash` remain readable historical material only and are no longer
+a proof source or completion dependency.
 
 The direction reviewer consumes only the current `convergence_outline`
 questions-only projection: all current IDs, categories, questions/known
@@ -98,9 +116,9 @@ status is `open`, and terminal answers, dispositions, conclusions, evidence,
 and proposed solutions are removed. The detail reviewer consumes the current
 OI terminal records and checks each OI; it cannot substitute for direction
 coverage. Existing `approve-decision` consumes the grouped plain-language
-options and writes the selected disposition and proof into the existing
-interaction aggregate. These are three responsibilities over one OI source,
-not three authorities and not an extra confirmation point. A changed
+options and writes the selected disposition into the current decision-log with
+its existing confirmation fact. These are three responsibilities over one OI
+source, not three authorities and not an extra confirmation point. A changed
 `outline_version` invalidates older consumer results.
 
 ### Decision chain and module grouping
@@ -135,6 +153,18 @@ The document must contain `原始需求`, `调研重点`, `Talk`, `Grill`, `D*` 
 success/failure boundaries, review disposition, risks, deferred handoff, and
 stage-end plain-language summaries. Each source row records `source_id`, exact
 source reference or an explicit missing-reference fact, and its consequence.
+
+When a completed research report declares candidates, add exactly one
+`## 调研候选交付` section in the same decision-log. It is a user-visible table
+with candidate ID, plain-language summary, recommendation or rejection,
+reason, source refs, and the content-addressed full-report ref. Immediately
+after the table, place the `workflowhub-research-candidate-delivery.v1` JSON
+binding in a `json` fence. Its `report_ref`, `report_sha256`, and each
+candidate's `candidate_id`, summary, source refs, evidence refs,
+recommendation, and reason must match the report exactly. This is one readable
+material and one reader contract, not a new receipt, store, gate, or authority.
+Use an empty `candidates` list only when the report explicitly says that no
+user-visible alternative exists; unavailable research remains unavailable.
 
 Each `decision-entry.v1` must keep the following compact fields: question and
 final option, recommendation, plain-language meaning, decision, source type

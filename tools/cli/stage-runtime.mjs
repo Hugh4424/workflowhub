@@ -30,10 +30,16 @@ import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-cod
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
 import { deriveExecutionOutcomes, deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
-import { validatePlanTaskContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import {
+  deriveDecisionDivergenceOutline,
+  deriveDecisionLogOriginalSourceCensus,
+  validatePlanTaskContract,
+  validatePostPhaseContract,
+  validateStageSpecAnalyzeProfile,
+} from "../../runtime/stage/stage-content-contracts.mjs";
 import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
-import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort } from "../../runtime/task/material-workspace.mjs";
 // The two stage-result projections read their current result from the frozen
 // stage row of the single execution record, never from stage-outcome bytes.
 import { readTaskFacts } from "../../runtime/task/task-store.mjs";
@@ -64,6 +70,14 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
+const POST_PHASE_ARTIFACT = /^phases\/P[1-9][0-9]*\.md$/;
+
+function isDesignArtifact(stage, name, activationCohort = "pre") {
+  if (stage === "build-plan" && activationCohort === "post") {
+    return name === "spec.md" || name === "phases/index.md" || POST_PHASE_ARTIFACT.test(name ?? "");
+  }
+  return DESIGN_ARTIFACTS[stage]?.has(name) ?? false;
+}
 
 export function stageRuntimeProcessExitCode(result) {
   const stageRowWriteFailed = typeof result?.stage_row_error === "string"
@@ -500,7 +514,6 @@ function collectCurrentQualityFactObservations({ context, stage = null }) {
  * Directory contents never decide which reference is current: K1-K3 are
  * fixed names, and K4-K6 are names carried by the frozen facts row.
  */
-const STATUS_MATERIAL_REFS = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 export const REFLECTION_CONCLUSION_FIELDS = Object.freeze([
   "what_helped",
   "what_to_improve",
@@ -576,7 +589,8 @@ export function diagnoseStageInput(options = {}) {
   return diagnoseMissingInput(options);
 }
 
-export function deriveNamedStatusRefs({ facts = [] } = {}) {
+export function deriveNamedStatusRefs({ facts = [], activationCohort = "pre", materials = {} } = {}) {
+  const materialRefs = materialFilesForCohort(activationCohort, materials);
   const K4 = new Set();
   const K5 = new Set();
   for (const row of facts) {
@@ -588,14 +602,14 @@ export function deriveNamedStatusRefs({ facts = [] } = {}) {
   return Object.freeze([
     Object.freeze({ class: "K1", name: "task.json", refs: Object.freeze(["task.json"]), source: "task.json" }),
     Object.freeze({ class: "K2", name: "facts.jsonl", refs: Object.freeze(["facts.jsonl"]), source: "facts.jsonl" }),
-    Object.freeze({ class: "K3", name: "current materials", refs: Object.freeze([...STATUS_MATERIAL_REFS]), source: "authenticated worktree" }),
+    Object.freeze({ class: "K3", name: "current materials", refs: Object.freeze([...materialRefs]), source: "authenticated worktree" }),
     Object.freeze({ class: "K4", name: "named confirmations and authorizations", refs: Object.freeze([...K4].sort()), source: "facts.jsonl" }),
     Object.freeze({ class: "K5", name: "named evidence references", refs: Object.freeze([...K5].sort()), source: "facts.jsonl or close-action row" }),
-    Object.freeze({ class: "K6", name: "material diff inputs", refs: Object.freeze(STATUS_MATERIAL_REFS.map((file) => `${file}:HEAD-diff`)), source: "git diff" }),
+    Object.freeze({ class: "K6", name: "material diff inputs", refs: Object.freeze(materialRefs.map((file) => `${file}:HEAD-diff`)), source: "git diff" }),
   ]);
 }
 
-export function deriveStatusRootCauses({ quality = null, research = null, sliceAdvisory = null, stale = null } = {}) {
+export function deriveStatusRootCauses({ quality = null, research = null, divergenceOutline = null, sliceAdvisory = null, stale = null, activationCohort = "pre", materials = {} } = {}) {
   const causes = new Map();
   const add = (id, status, source, refs = [], detail = null) => {
     const rootCauseId = statusRootCauseId(id);
@@ -612,8 +626,25 @@ export function deriveStatusRootCauses({ quality = null, research = null, sliceA
   if (["unavailable", "unknown", "incomplete"].includes(research?.status)) {
     add("research", research.status, "research report", [research.report_ref].filter(Boolean), `research:${research.status}`);
   }
+  if (research?.candidate_delivery?.status === "incomplete") {
+    const delivery = research.candidate_delivery;
+    const ref = delivery.full_report?.ref ?? research.report_ref;
+    const ids = delivery.missing_candidate_ids?.join(",") || "unknown";
+    add("research_candidate_delivery", "actionable", "research report", [ref].filter(Boolean), `candidate delivery incomplete:${ids}`);
+  }
+  if (research?.candidate_presentation?.status === "incomplete") {
+    const presentation = research.candidate_presentation;
+    const ref = presentation.full_report?.ref ?? research.report_ref;
+    add("research_candidate_presentation", "actionable", "decision-log.md", [ref, "decision-log.md"].filter(Boolean), `candidate presentation incomplete:${presentation.reason ?? "unknown"}`);
+  }
+  if (divergenceOutline?.status === "incomplete") {
+    add("decision_divergence_outline", "actionable", "decision-log.md", ["decision-log.md"], `divergence outline incomplete:${divergenceOutline.reason ?? "unknown"}`);
+  }
   if (sliceAdvisory?.status === "unexplained_overage" || sliceAdvisory?.diagnostics?.length) {
-    add("slice_advisory", "advisory", "plan.md", ["plan.md"], "slice advisory requires operator review");
+    const refs = activationCohort === "post"
+      ? materialFilesForCohort("post", materials).filter((file) => file.startsWith("phases/"))
+      : ["plan.md"];
+    add("slice_advisory", "advisory", refs[0], refs, "slice advisory requires operator review");
   }
   if (stale?.status === "stale") {
     add("stale", "stale", stale.source ?? "named material diff", [stale.source].filter(Boolean), stale.detail ?? "current target advanced");
@@ -626,6 +657,40 @@ export function deriveStatusRootCauses({ quality = null, research = null, sliceA
     refs: Object.freeze(cause.refs),
     details: Object.freeze(cause.details),
   })));
+}
+
+function postPhaseSliceAdvisory(materials) {
+  const files = materialFilesForCohort("post", materials).filter((file) => POST_PHASE_ARTIFACT.test(file));
+  const validation = validatePostPhaseContract({
+    spec: materials["spec.md"],
+    index: materials["phases/index.md"],
+    phases: Object.fromEntries(files.map((file) => [file, materials[file]])),
+  });
+  const details = [];
+  const owners = new Map();
+  for (const phase of validation.facts?.phase_rows ?? []) {
+    if (new Set(phase.write_set).size > 10) {
+      details.push(Object.freeze({ signal: "SIG-FILES", phase: phase.id, file_count: new Set(phase.write_set).size, explained: false }));
+    }
+    for (const file of phase.write_set) owners.set(file, [...(owners.get(file) ?? []), phase.id]);
+  }
+  for (const [file, phases] of owners) {
+    if (new Set(phases).size > 1) details.push(Object.freeze({ signal: "SIG-CROSS-PHASE", file, phases: Object.freeze([...new Set(phases)]), explained: false }));
+  }
+  const signals = [...new Set(details.map((detail) => detail.signal))];
+  return Object.freeze({
+    status: validation.ok ? signals.length ? "unexplained_overage" : "within_budget" : "unavailable",
+    signals: Object.freeze(signals),
+    explained_signals: Object.freeze([]),
+    unexplained_signals: Object.freeze(signals),
+    signal_details: Object.freeze(details),
+    markers: Object.freeze([]),
+    marker_count: 0,
+    diagnostics: Object.freeze([
+      ...validation.errors,
+      ...details.map((detail) => `${detail.signal} overage is not explained in ${detail.phase ?? detail.phases?.join(", ")}`),
+    ]),
+  });
 }
 
 /**
@@ -644,20 +709,23 @@ export function deriveCurrentStatusDomains(context, {
     throw new TypeError("current status domain derivation requires an authenticated context, snapshot, material revision, and materials");
   }
   const observations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage });
-  const quality = deriveStageCompletion(stage, observations, {
-    requireOutline: stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
-  });
+  const quality = deriveStageCompletion(stage, observations);
   const facts = canonicalTaskFacts(context);
+  const divergenceOutline = deriveDecisionDivergenceOutline(materials["decision-log.md"]);
+  const activationCohort = context.manifest?.activation_cohort ?? "pre";
+  const materialRefs = materialFilesForCohort(activationCohort, materials);
   const stageReflection = readStageReflectionConclusion(context, stage, facts);
   return Object.freeze({
-    work_progress: deriveStageProgress(stage, observations, materials),
+    work_progress: deriveStageProgress(stage, observations, materials, {
+      activationCohort: context.manifest?.activation_cohort ?? "pre",
+    }),
     stage_quality: quality,
-    root_causes: deriveStatusRootCauses({ quality, stale }),
-    named_refs: deriveNamedStatusRefs({ facts }),
+    root_causes: deriveStatusRootCauses({ quality, divergenceOutline, stale, activationCohort, materials }),
+    named_refs: deriveNamedStatusRefs({ facts, activationCohort, materials }),
     stage_reflection: stageReflection,
     status_matrix: stageReflection.status_matrix ?? null,
     identity: Object.freeze({ task_id: context.identity.taskId, material_revision: materialRevision, snapshot_tree: currentSnapshot.tree }),
-    source_completeness: Object.freeze({ task_json: true, facts_jsonl: facts.length > 0, materials: STATUS_MATERIAL_REFS.every((file) => typeof materials[file] === "string") }),
+    source_completeness: Object.freeze({ task_json: true, facts_jsonl: facts.length > 0, materials: materialRefs.every((file) => typeof materials[file] === "string") }),
   });
 }
 
@@ -805,14 +873,157 @@ export function stageReflectionPublication(services = {}) {
   if (!services || typeof services !== "object" || Array.isArray(services)) {
     throw new TypeError("stage-runtime services must be an object");
   }
-  if (services.stageReflectionExecutor === undefined && services.runControlledUiQa === undefined) return Object.freeze({});
-  if (typeof services.stageReflectionExecutor !== "function") {
-    if (services.stageReflectionExecutor === undefined) return Object.freeze({ runControlledUiQa: services.runControlledUiQa });
+  if (services.stageReflectionExecutor !== undefined && typeof services.stageReflectionExecutor !== "function") {
     throw new TypeError("services.stageReflectionExecutor must be a function");
+  }
+  if (services.specAnalyzeExecutor !== undefined && typeof services.specAnalyzeExecutor !== "function") {
+    throw new TypeError("services.specAnalyzeExecutor must be a function");
   }
   return Object.freeze({
     ...(services.stageReflectionExecutor ? { runStageReflection: services.stageReflectionExecutor } : {}),
     ...(services.runControlledUiQa ? { runControlledUiQa: services.runControlledUiQa } : {}),
+    ...(services.specAnalyzeExecutor ? { runSpecAnalyze: services.specAnalyzeExecutor } : {}),
+  });
+}
+
+/**
+ * Execute the bundled report-only spec-analyze lens in the current session.
+ * The stage runner still owns identity validation and publication; this is
+ * only the private executor seam that the public CLI must provide.
+ */
+export async function defaultSpecAnalyzeExecutor(request) {
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    throw new TypeError("spec-analyze executor request must be an object");
+  }
+  const materials = request.materials;
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
+    throw new TypeError("spec-analyze executor request requires materials");
+  }
+  const decisionLog = typeof materials.decision_log === "string" ? materials.decision_log : "";
+  const spec = typeof materials.spec === "string" ? materials.spec : "";
+  const phaseIndex = typeof materials.phase_index === "string" ? materials.phase_index : "";
+  const phases = materials.phases && typeof materials.phases === "object" && !Array.isArray(materials.phases)
+    ? Object.fromEntries(Object.entries(materials.phases).filter(([name, value]) => /^phases\/P\d+\.md$/.test(name) && typeof value === "string"))
+    : {};
+  if (request.stage === "build-code") {
+    if (!request.packet || typeof request.packet !== "object" || Array.isArray(request.packet)) {
+      throw new TypeError("build-code spec-analyze executor request requires packet");
+    }
+    const sourceCensus = deriveDecisionLogOriginalSourceCensus(decisionLog);
+    const profile = validateStageSpecAnalyzeProfile({
+      stage: "build-code",
+      packet: request.packet,
+      strict_material_contracts: true,
+      identity: {
+        task_id: request.task_id,
+        stage: "build-code",
+        material_revision: request.material_revision,
+        snapshot_tree: request.snapshot_tree,
+        activation_cohort: "post",
+      },
+      authenticatedSourceCensus: sourceCensus,
+    });
+    const status = new Set(["inconsistent", "material_incomplete", "unavailable", "unknown"]).has(profile.status)
+      ? profile.status
+      : "unknown";
+    const errors = [...(profile.errors ?? [])];
+    if (profile.status === "consistent") errors.push("portable lens consistency requires an independently authenticated semantic result");
+    const skillBundleSha256 = sha256(readFileSync(resolve(RUNNER_ROOT, "skills/spec-analyze/skill-bundle.json")));
+    return Object.freeze({
+      schema_version: "workflowhub-spec-analyze-lens-result.v1",
+      task_id: request.task_id,
+      stage: "build-code",
+      step_slug: "stage-end-spec-analyze",
+      skill_id: "spec-analyze",
+      snapshot_tree: request.snapshot_tree,
+      material_revision: request.material_revision,
+      source_content_sha256: sha256(decisionLog),
+      skill_bundle_sha256: skillBundleSha256,
+      source_ids: Object.freeze(sourceCensus.entries.map(({ id }) => id)),
+      result: Object.freeze({
+        status,
+        facts: Object.freeze({ ...(profile.facts ?? {}), executor: "workflowhub-current-session" }),
+        errors: Object.freeze(errors),
+        findings: Object.freeze([...(profile.findings ?? [])]),
+        summary: profile.summary ?? null,
+      }),
+    });
+  }
+  const sourceCensus = deriveDecisionLogOriginalSourceCensus(decisionLog);
+  const sourceEntries = sourceCensus.entries ?? [];
+  const phaseText = Object.values(phases).join("\n");
+  const coverage = sourceEntries.map((entry) => {
+    const traceIds = [entry.id, ...(sourceCensus.index_entries ?? [])
+      .filter((row) => row.source_refs.includes(entry.id))
+      .map((row) => row.id)];
+    const inSpec = traceIds.some((id) => new RegExp(`\\b${id}\\b`).test(spec));
+    const inPhase = traceIds.some((id) => new RegExp(`\\b${id}\\b`).test(phaseText));
+    return {
+      requirement_id: entry.id,
+      status: inSpec && inPhase ? "partial" : "missing",
+      expected_behavior: entry.summary,
+      actual_behavior: "",
+      semantic_status: "unverified",
+      artifact_refs: ["spec", "phases"],
+      evidence_refs: [],
+      scenario_refs: [],
+      oracle_refs: [],
+    };
+  });
+  const boundEvidence = (ref, value) => typeof value === "string" && value.length > 0
+    ? { ref, kind: ref, status: "fresh", hash: sha256(value), snapshot_tree: request.snapshot_tree }
+    : null;
+  const evidence = [
+    boundEvidence("decision-log", decisionLog),
+    boundEvidence("spec", spec),
+    boundEvidence("phase-index", phaseIndex),
+    ...Object.entries(phases).map(([ref, value]) => boundEvidence(ref, value)),
+  ].filter(Boolean);
+  const packet = {
+    activation_cohort: "post",
+    materials: { decision_log: decisionLog, spec, phase_index: phaseIndex, phases },
+    original_requirements: sourceEntries.map(({ id, summary }) => ({ id, summary })),
+    coverage,
+    evidence,
+  };
+  const identity = {
+    task_id: request.task_id,
+    stage: "build-plan",
+    material_revision: request.material_revision,
+    snapshot_tree: request.snapshot_tree,
+    activation_cohort: "post",
+  };
+  const profile = validateStageSpecAnalyzeProfile({
+    stage: "build-plan",
+    packet,
+    strict_material_contracts: true,
+    identity,
+    authenticatedSourceCensus: sourceCensus,
+  });
+  const status = new Set(["inconsistent", "material_incomplete", "unavailable", "unknown"]).has(profile.status)
+    ? profile.status
+    : "unknown";
+  const errors = [...(profile.errors ?? [])];
+  if (profile.status === "consistent") errors.push("portable lens consistency requires an independently authenticated semantic result");
+  const skillBundleSha256 = sha256(readFileSync(resolve(RUNNER_ROOT, "skills/spec-analyze/skill-bundle.json")));
+  return Object.freeze({
+    schema_version: "workflowhub-spec-analyze-lens-result.v1",
+    task_id: request.task_id,
+    stage: "build-plan",
+    step_slug: "final-spec-analyze",
+    skill_id: "spec-analyze",
+    snapshot_tree: request.snapshot_tree,
+    material_revision: request.material_revision,
+    source_content_sha256: sha256(decisionLog),
+    skill_bundle_sha256: skillBundleSha256,
+    source_ids: Object.freeze(sourceEntries.map(({ id }) => id)),
+    result: Object.freeze({
+      status,
+      facts: Object.freeze({ ...(profile.facts ?? {}), executor: "workflowhub-current-session" }),
+      errors: Object.freeze(errors),
+      findings: Object.freeze([...(profile.findings ?? [])]),
+      summary: profile.summary ?? null,
+    }),
   });
 }
 
@@ -954,26 +1165,33 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     let current = null;
     let materialRevision = null;
     const materials = {};
-    for (const file of CURRENT_MATERIAL_FILES) {
+    const activationCohort = context.manifest?.activation_cohort ?? "pre";
+    const baseMaterialFiles = activationCohort === "post"
+      ? ["decision-log.md", "spec.md", "phases/index.md"]
+      : CURRENT_MATERIAL_FILES;
+    const readMaterial = (file) => {
       if (!context.artifacts) {
         materials[file] = null;
-        continue;
+        return;
       }
       try { materials[file] = context.artifacts.read(file); }
       catch (error) {
         if (error?.code === "ENOENT") materials[file] = null;
         else throw error;
       }
+    };
+    for (const file of baseMaterialFiles) readMaterial(file);
+    const materialFiles = materialFilesForCohort(activationCohort, materials);
+    for (const file of materialFiles) if (!(file in materials)) readMaterial(file);
+    if (activationCohort === "post") {
+      const missingMaterials = materialFiles.filter((file) => typeof materials[file] !== "string" || materials[file].trim() === "");
+      if (missingMaterials.length > 0) {
+        throw new Error(`current task material missing or unreadable: ${missingMaterials.join(", ")}`);
+      }
     }
     if (context.workspace) {
       current = context.kernel.currentVNextSnapshot();
-      const materialValues = CURRENT_MATERIAL_FILES.map((file) => {
-        try { return [file, context.artifacts.read(file)]; }
-        catch (error) {
-          if (error?.code === "ENOENT") return [file, null];
-          throw error;
-        }
-      });
+      const materialValues = materialFiles.map((file) => [file, materials[file]]);
       materialRevision = materialRevisionFromValues(materialValues);
     }
     const observations = collectCurrentQualityFactObservations({ context, currentSnapshot: current, materialRevision, materials, stage: values.stage });
@@ -984,10 +1202,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           taskId: context.task.identity.taskId,
           stage: values.stage,
           snapshotTree: current.tree,
-          materialScopeRevision: stageMaterialScopeRevision(values.stage, materials),
+          materialScopeRevision: stageMaterialScopeRevision(values.stage, materials, { activationCohort }),
         })
       : [];
     const researchDisclosure = deriveResearchStatus(researchReports);
+    const divergenceOutline = deriveDecisionDivergenceOutline(materials["decision-log.md"]);
     const authenticatedResearchReports = researchReports.filter((report) => report?.value?.recorded_at);
     const executionOutcome = current
       ? deriveExecutionOutcomes({
@@ -996,16 +1215,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           stage_outcome_refs: {},
           snapshot_tree: current.tree,
           material_revision: materialRevision,
-          material_scope_revisions: stageMaterialScopeRevisions(materials),
+          material_scope_revisions: stageMaterialScopeRevisions(materials, { activationCohort }),
           snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
           read_task_facts: () => readTaskFacts(context.task.taskPath),
           authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
         })
       : null;
-    const quality = deriveStageCompletion(values.stage, observations, {
-      requireOutline: values.stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
-    });
-    const slicingValidation = typeof materials["spec.md"] === "string"
+    const quality = deriveStageCompletion(values.stage, observations);
+    const slicingValidation = activationCohort === "pre" && typeof materials["spec.md"] === "string"
       && typeof materials["plan.md"] === "string"
       && typeof materials["tasks.md"] === "string"
       ? validatePlanTaskContract({
@@ -1014,7 +1231,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         tasks: materials["tasks.md"],
       })
       : null;
-    const sliceAdvisory = slicingValidation?.facts?.slice_advisory ?? Object.freeze({
+    const sliceAdvisory = activationCohort === "post"
+      ? postPhaseSliceAdvisory(materials)
+      : slicingValidation?.facts?.slice_advisory ?? Object.freeze({
       status: "unavailable",
       signals: Object.freeze([]),
       explained_signals: Object.freeze([]),
@@ -1024,7 +1243,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       marker_count: 0,
       diagnostics: Object.freeze(["current spec/plan/tasks are unavailable for slicing advisory"]),
     });
-    const progression = deriveStageProgress(values.stage, observations, materials);
+    const progression = deriveStageProgress(values.stage, observations, materials, {
+      activationCohort: context.manifest?.activation_cohort ?? "pre",
+    });
     const taskFacts = current ? canonicalTaskFacts(context) : [];
     const stageReflection = current
       ? readStageReflectionConclusion(context, values.stage, taskFacts)
@@ -1043,8 +1264,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       quality_missing: quality.missing,
       quality_fact_refs: Object.freeze(observations.map(({ fact }) => fact.ref).sort()),
       quality_predicates: quality.predicates,
-      root_causes: deriveStatusRootCauses({ quality, research: researchDisclosure, sliceAdvisory }),
-      named_refs: deriveNamedStatusRefs({ facts: taskFacts }),
+      root_causes: deriveStatusRootCauses({ quality, research: researchDisclosure, divergenceOutline, sliceAdvisory, activationCohort, materials }),
+      named_refs: deriveNamedStatusRefs({ facts: taskFacts, activationCohort, materials }),
       stage_reflection: stageReflection,
       status_matrix: stageReflection.status_matrix ?? null,
       identity: current
@@ -1053,9 +1274,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       source_completeness: Object.freeze({
         task_json: Boolean(context.task),
         facts_jsonl: taskFacts.length > 0,
-        materials: STATUS_MATERIAL_REFS.every((file) => typeof materials[file] === "string"),
+        materials: materialFiles.every((file) => typeof materials[file] === "string"),
       }),
       research: researchDisclosure,
+      divergence_outline: divergenceOutline,
       execution_outcome: executionOutcome?.[values.stage] ?? { status: "unavailable", blocking: false, attempt_count: 0, completed_attempt_count: 0, refs: [], diagnostic: null },
     });
   }
@@ -1088,7 +1310,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     };
   }
   if (command === "artifact") {
-    if (!DESIGN_ARTIFACTS[values.stage]?.has(values.name)) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
+    if (!isDesignArtifact(values.stage, values.name, context.manifest?.activation_cohort ?? "pre")) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
     context.artifacts.writeAtomic(values.name, readFileSync(values.input, "utf8"));
     return { artifact_ref: context.artifacts.reference(values.name) };
   }
@@ -1143,10 +1365,20 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const hasRequest = Object.prototype.hasOwnProperty.call(input, "request");
     const hasResult = Object.prototype.hasOwnProperty.call(input, "result");
     if (hasRequest === hasResult) throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
+    let reviewRequest = input.request;
+    if (hasRequest && values.stage === "build-plan") {
+      const authenticatedCohort = context.manifest?.activation_cohort ?? "pre";
+      for (const key of ["activation_cohort", "activationCohort"]) {
+        if (reviewRequest?.[key] !== undefined && reviewRequest[key] !== authenticatedCohort) {
+          throw new TypeError(`build-plan review ${key} differs from authenticated task cohort`);
+        }
+      }
+      reviewRequest = { ...reviewRequest, activation_cohort: authenticatedCohort };
+    }
     let preparedBundle = null;
     const useTaskBoundBuildCodeBundle = hasRequest
       && typeof services.runReviewRound !== "function"
-      && isTaskBoundBuildCodeReviewRequest(input.request);
+      && isTaskBoundBuildCodeReviewRequest(reviewRequest);
     const prepareBundle = (request) => {
       if (preparedBundle === null) {
         preparedBundle = prepareTaskBoundBuildCodeReviewBundle(context, request, services.reviewBundleDependencies);
@@ -1190,7 +1422,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         ? await recordSimpleReviewRequest({
           task: context.task,
           kernel: context.kernel,
-          request: input.request,
+          request: reviewRequest,
           resolveRouteIdentity: typeof services.resolveRouteIdentity === "function"
             ? services.resolveRouteIdentity
             : resolveSimpleReviewRouteIdentity,
@@ -1290,7 +1522,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const stageResult = await runOfficialStage(values.stage, context, {
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
-    }, stageReflectionPublication(services));
+    }, stageReflectionPublication({
+      ...services,
+      specAnalyzeExecutor: services.specAnalyzeExecutor ?? defaultSpecAnalyzeExecutor,
+    }));
     return stageResult;
   }
   if (command === "confirm") {

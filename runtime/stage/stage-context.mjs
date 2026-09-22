@@ -5,6 +5,8 @@ import { resolveStorageRoot } from "../evidence/storage-root.mjs";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "../task/task-identity.mjs";
 import { openTask } from "../task/task-handle.mjs";
+import { readActivationCohort } from "../task/task-topology.mjs";
+import { inspectMaterialWorkspace, materialFilesForCohort } from "../task/material-workspace.mjs";
 import { createTaskKernel } from "../task/task-kernel.mjs";
 import { authenticateWriteBoundary } from "../evidence/write-boundary-preflight.mjs";
 import {
@@ -81,7 +83,15 @@ function validateStage(stage) {
   return stage;
 }
 
-function assertCurrentTaskMaterials(artifacts) {
+function assertCurrentTaskMaterials(artifacts, activationCohort = "pre") {
+  if (activationCohort === "post") {
+    const inspection = inspectMaterialWorkspace(artifacts.root, { activationCohort });
+    if (inspection.status !== "working") {
+      throw new Error(`current task material missing or unreadable: ${[...inspection.missing, ...inspection.errors].join("; ")}`);
+    }
+    for (const name of materialFilesForCohort("post", inspection.files)) artifacts.read(name);
+    return;
+  }
   const failures = [];
   for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
     try {
@@ -250,7 +260,7 @@ export function bootstrapStage(
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
   if (!readOnly && (normalizedStage === "build-code" || normalizedStage === "verify-code")) {
-    assertCurrentTaskMaterials(artifacts);
+    assertCurrentTaskMaterials(artifacts, readActivationCohort(taskHandle.manifest));
   }
   return Object.freeze({ ...base, kernel: stageKernel, workflowRunId: stageKernel.deriveStageWorkflowRunId(normalizedStage), workspace, artifacts });
 }

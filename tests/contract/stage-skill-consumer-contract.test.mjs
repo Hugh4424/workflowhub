@@ -36,6 +36,16 @@ function allDeclarations() {
 }
 
 describe("stage Skill declaration to formal consumer contract", () => {
+  it("AC-CLEAN-001 loads current make-decision skills without an aggregate consumer or result", () => {
+    const { manifest } = loadStageSkillManifest(repoRoot, "make-decision");
+    expect(manifest.skills.length).toBeGreaterThan(0);
+    for (const skill of manifest.skills) {
+      expect(skill.consumer.target, skill.name).not.toMatch(/aggregate/i);
+      expect(skill.consumer.inputs, skill.name).not.toEqual(expect.arrayContaining([expect.stringMatching(/aggregate/i)]));
+      expect(skill.consumer.result ?? "", skill.name).not.toMatch(/aggregate/i);
+    }
+  });
+
   it("requires every dynamically discovered declaration to name one concrete consumer and its identity inputs", () => {
     const declarations = allDeclarations();
     expect(declarations.length).toBeGreaterThan(0);
@@ -77,10 +87,10 @@ describe("stage Skill declaration to formal consumer contract", () => {
   });
 
   it("binds a triggered result to the current identity and keeps unavailable/not_applicable explicit", () => {
-    const dependency = allDeclarations().find(({ stage, skill }) => stage === "build-spec" && skill.name === "spec-specify").skill;
+    const dependency = allDeclarations().find(({ stage, skill }) => stage === "build-plan" && skill.name === "spec-specify").skill;
     const identity = {
       task_id: "task-1",
-      stage: "build-spec",
+      stage: "build-plan",
       workspace_path: "/tmp/workflowhub-task-1",
     };
     expect(validateSkillConsumerBinding({
@@ -106,10 +116,10 @@ describe("stage Skill declaration to formal consumer contract", () => {
   });
 
   it("does not let lifecycle flags spoof a completed or not-applicable result", () => {
-    const dependency = allDeclarations().find(({ stage, skill }) => stage === "build-spec" && skill.name === "spec-specify").skill;
+    const dependency = allDeclarations().find(({ stage, skill }) => stage === "build-plan" && skill.name === "spec-specify").skill;
     const identity = {
       task_id: "task-1",
-      stage: "build-spec",
+      stage: "build-plan",
       workspace_path: "/tmp/workflowhub-task-1",
     };
     expect(() => validateSkillConsumerBinding({

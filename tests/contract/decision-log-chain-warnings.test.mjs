@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkDecisionLogChain } from "../../tools/cli/check-decision-log-chain.mjs";
 
@@ -65,6 +66,36 @@ describe("decision-log chain warnings are observable but non-blocking", () => {
 });
 
 describe("planning-hardening decision-log chain disclosure", () => {
+  it("AC-COVER-002 reports the real archived CARD-01/02 field gap without treating advisory exit 0 as acceptance", () => {
+    const archived = ["01", "02"].map((card) => {
+      const sourceRef = `specs/archive/workflowhub-thin-core-card-${card}-20260919/decision-log.md`;
+      return checkDecisionLogChain({
+        markdown: readFileSync(join(process.cwd(), sourceRef), "utf8"),
+        source_ref: sourceRef,
+      });
+    });
+
+    expect(archived.map(({ recognized_blocks, recognized_fields }) => ({ recognized_blocks, recognized_fields }))).toEqual([
+      { recognized_blocks: 10, recognized_fields: 39 },
+      { recognized_blocks: 15, recognized_fields: 56 },
+    ]);
+    expect(archived.reduce((total, { recognized_blocks }) => total + recognized_blocks, 0)).toBe(25);
+    expect(archived.reduce((total, { recognized_fields }) => total + recognized_fields, 0)).toBe(95);
+    expect(archived[0].warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_chain_field", decision_id: "D-010", field: "artifacts" }),
+    ]));
+    for (const field of ["module", "requirement_ids", "derived_from", "artifacts"]) {
+      expect(archived[1].warnings).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing_chain_field", decision_id: "D-015", field }),
+      ]));
+    }
+    // D-015 was appended after the original 24-block criterion; excluding it still leaves 95/96 fields.
+    expect(archived[0].recognized_blocks + archived[1].recognized_blocks - 1).toBe(24);
+    expect(archived[0].recognized_fields + archived[1].recognized_fields).not.toBe(24 * 4);
+    expect(archived.map(({ exit_code }) => exit_code)).toEqual([0, 0]);
+    expect(archived.every(({ warnings }) => warnings.length === 0)).toBe(false);
+  });
+
   it("T005 recognizes all four fields in list-prefix/fullwidth-colon decision blocks", () => {
     const markdown = Array.from({ length: 24 }, (_, index) => {
       const id = String(index + 1).padStart(3, "0");

@@ -297,7 +297,7 @@ describe("current quality boundary", () => {
   });
 
   it("keeps the 22-clause constitution and its checklist synchronized", () => {
-    expect(constitution).toContain("Version: 1.9.0");
+    expect(constitution).toContain("Version: 1.9.1");
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
     expect(checklist).toMatch(/\*\*条目数\*\*：22/);
@@ -307,7 +307,8 @@ describe("current quality boundary", () => {
     const f3 = section(constitution, "F3", "F4");
     const q1 = section(constitution, "Q1", "Q2");
     const q2 = section(constitution, "Q2", "Q3");
-    expect(f3).toMatch(/四材料/);
+    expect(f3).toMatch(/pre\/history[\s\S]*plan\.md[\s\S]*tasks\.md/);
+    expect(f3).toMatch(/post[\s\S]*phases\/P<n>\.md[\s\S]*phases\/index\.md/);
     expect(f3).toMatch(/不是推进许可证/);
     expect(f3).toMatch(/fail-loud/);
     expect(q1).toMatch(/不作为开始或继续修复的许可证/);

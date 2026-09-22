@@ -99,6 +99,78 @@ describe("T001 research report contract", () => {
     expect(() => parseResearchReport(JSON.stringify({ ...report("unavailable"), fallback: { approval_status: "declined", requested_route: "host-web", used_routes: ["web_search"] } }), expectedIdentity)).toThrow(/used after approved/);
   });
 
+  it("projects declared candidates as delivered only with summaries, bound sources, and recommendations", () => {
+    const completed = report("completed", {
+      evidence: [
+        { evidence_id: "E-ONE", claim: "route one is bounded", source_ref: "https://example.test/one", locator: "§1", confidence: "high", read_original: true, candidate_ids: ["route-one"] },
+        { evidence_id: "E-TWO", claim: "route two has recovery evidence", source_ref: "https://example.test/two", locator: "§2", confidence: "medium", read_original: true, candidate_ids: ["route-two"] },
+      ],
+      candidates: [
+        { candidate_id: "route-one", plain_language_summary: "Route one keeps the bounded path.", source_refs: ["https://example.test/one"], evidence_refs: ["E-ONE"], recommendation: "recommended", recommendation_reason: "It has the strongest primary evidence." },
+        { candidate_id: "route-two", plain_language_summary: "Route two is viable but less direct.", source_refs: ["https://example.test/two"], evidence_refs: ["E-TWO"], recommendation: "not_recommended", recommendation_reason: "Its recovery proof is weaker." },
+      ],
+    });
+    const raw = `${JSON.stringify(completed)}\n`;
+    const ref = `quality/evidence/research/${createHash("sha256").update(raw).digest("hex")}.json`;
+    const record = readResearchReport({ read: () => raw, ref, ...expectedIdentity });
+    expect(deriveResearchStatus([record]).candidate_delivery).toMatchObject({
+      status: "delivered",
+      full_report: { ref, sha256: ref.slice("quality/evidence/research/".length, -".json".length) },
+      candidates: [
+        { candidate_id: "route-one", status: "delivered" },
+        { candidate_id: "route-two", status: "delivered" },
+      ],
+      missing_candidate_ids: [],
+    });
+
+    const incomplete = report("completed", {
+      candidates: [{ candidate_id: "route-one", plain_language_summary: "Route one.", source_refs: ["https://example.test/three"], evidence_refs: ["missing"], recommendation: "recommended" }],
+    });
+    const incompleteRaw = `${JSON.stringify(incomplete)}\n`;
+    const incompleteRef = `quality/evidence/research/${createHash("sha256").update(incompleteRaw).digest("hex")}.json`;
+    const incompleteRecord = readResearchReport({ read: () => incompleteRaw, ref: incompleteRef, ...expectedIdentity });
+    expect(deriveResearchStatus([incompleteRecord]).candidate_delivery).toMatchObject({
+      status: "incomplete",
+      missing_candidate_ids: ["route-one"],
+      missing_fields_by_candidate: {
+        "route-one": ["evidence_refs_bound_to_candidate", "source_refs_bound_to_candidate_evidence", "recommendation_reason"],
+      },
+    });
+  });
+
+  it("rejects evidence borrowed from a different candidate", () => {
+    const crossBound = report("completed", {
+      evidence: [{ evidence_id: "E-ONE", claim: "only route one is bounded", source_ref: "https://example.test/one", locator: "§1", confidence: "high", read_original: true, candidate_ids: ["route-one"] }],
+      candidates: [{ candidate_id: "route-two", plain_language_summary: "Route two.", source_refs: ["https://example.test/one"], evidence_refs: ["E-ONE"], recommendation: "not_recommended", recommendation_reason: "Evidence is only for route one." }],
+    });
+    const raw = `${JSON.stringify(crossBound)}\n`;
+    const ref = `quality/evidence/research/${createHash("sha256").update(raw).digest("hex")}.json`;
+    const record = readResearchReport({ read: () => raw, ref, ...expectedIdentity });
+    expect(deriveResearchStatus([record]).candidate_delivery).toMatchObject({
+      status: "incomplete",
+      missing_fields_by_candidate: { "route-two": ["evidence_refs_bound_to_candidate"] },
+    });
+  });
+
+  it("requires every completed report to declare whether candidate delivery applies", () => {
+    const undeclaredRaw = `${JSON.stringify(report("completed"))}\n`;
+    const undeclaredRef = `quality/evidence/research/${createHash("sha256").update(undeclaredRaw).digest("hex")}.json`;
+    const undeclared = readResearchReport({ read: () => undeclaredRaw, ref: undeclaredRef, ...expectedIdentity });
+    expect(deriveResearchStatus([undeclared]).candidate_delivery).toMatchObject({
+      status: "incomplete",
+      reason: "candidate_set_not_declared",
+    });
+
+    const noCandidatesRaw = `${JSON.stringify(report("completed", { candidates: [] }))}\n`;
+    const noCandidatesRef = `quality/evidence/research/${createHash("sha256").update(noCandidatesRaw).digest("hex")}.json`;
+    const noCandidates = readResearchReport({ read: () => noCandidatesRaw, ref: noCandidatesRef, ...expectedIdentity });
+    expect(deriveResearchStatus([noCandidates]).candidate_delivery).toMatchObject({
+      status: "not_applicable",
+      reason: "no_candidates_declared",
+      missing_candidate_ids: [],
+    });
+  });
+
   it("publishes one canonical report and does not create a receipt wrapper", () => {
     const writes = new Map();
     const published = publishResearchReport({
