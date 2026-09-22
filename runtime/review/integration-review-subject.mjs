@@ -6,7 +6,7 @@ import { assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { validateCanonicalImplementationReceipt, validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { isExecutionRecordOnlyMaterialDelta } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { materialDigestAxes } from "../../runtime/task/material-workspace.mjs";
+import { inspectMaterialWorkspace, materialDigestAxes, materialFilesForCohort } from "../../runtime/task/material-workspace.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
 const MATERIAL_NAMES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
@@ -35,10 +35,17 @@ function git(root, args, label) {
   }
 }
 
-function currentMaterials(_task, artifacts) {
+function currentMaterials(task, artifacts) {
   const safeArtifacts = assertArtifactDir(artifacts);
   const texts = {};
-  for (const name of MATERIAL_NAMES) {
+  const activationCohort = task.manifest?.activation_cohort === "post" ? "post" : "pre";
+  let names = MATERIAL_NAMES;
+  if (activationCohort === "post") {
+    const inspection = inspectMaterialWorkspace(safeArtifacts.root, { activationCohort });
+    if (inspection.status !== "working") incomplete(`post Phase materials are incomplete: ${[...inspection.missing, ...inspection.errors].join("; ")}`);
+    names = materialFilesForCohort("post", inspection.files);
+  }
+  for (const name of names) {
     let raw;
     try { raw = safeArtifacts.read(name, "utf8"); }
     catch (error) {
@@ -47,17 +54,18 @@ function currentMaterials(_task, artifacts) {
     }
     texts[name] = raw;
   }
-  const digests = materialDigestAxes(texts);
+  const digests = materialDigestAxes(texts, { activationCohort });
   return Object.freeze({
-    ref: "current-four-materials",
+    ref: activationCohort === "post" ? "current-indexed-phase-materials" : "current-four-materials",
     // Existing field names remain stable: integration review's material
     // revision follows the behavior axis, while governance/history keeps the
     // original raw-byte digest in material_digest.
     sha256: digests.behavior,
     material_digest: digests.governance,
     texts: Object.freeze(texts),
+    activation_cohort: activationCohort,
     spec_ref: safeArtifacts.reference("spec.md"),
-    tasks_ref: safeArtifacts.reference("tasks.md"),
+    tasks_ref: activationCohort === "post" ? null : safeArtifacts.reference("tasks.md"),
   });
 }
 
@@ -376,7 +384,7 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   // the document.
   const acceptanceIds = activeAcceptanceCriterionIds(materials.texts["spec.md"]);
   if (acceptanceIds.length === 0) incomplete("current spec declares no acceptance criteria");
-  const tasks = completedTasks(safeTask, materials.texts["tasks.md"]);
+  const tasks = materials.activation_cohort === "post" ? [] : completedTasks(safeTask, materials.texts["tasks.md"]);
   const covered = new Map();
   for (const item of tasks) {
     if (item.history_incomplete === true) continue;
@@ -392,7 +400,9 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   if (green === null) {
     auditGaps.push(Object.freeze({ kind: "current_green_receipt", status: "unavailable", reason: "current GREEN test receipt for final snapshot is missing or invalid; semantic review continues but formal close remains incomplete" }));
   }
-  if (tasks.length === 0) auditGaps.push(Object.freeze({ kind: "task_completion_history", status: "incomplete", reason: "current tasks.md has no completed Task rows; current implementation and GREEN receipts remain authoritative" }));
+  if (tasks.length === 0) auditGaps.push(Object.freeze({ kind: "task_completion_history", status: "incomplete", reason: materials.activation_cohort === "post"
+    ? "indexed Phase files are planning authorities, not completed Task rows; current implementation, test, and AC facts require independent readback"
+    : "current tasks.md has no completed Task rows; current implementation and GREEN receipts remain authoritative" }));
   else {
     for (const item of tasks.filter(({ history_incomplete }) => history_incomplete === true)) {
       auditGaps.push(Object.freeze({
@@ -423,14 +433,16 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
         ? "a current completed Task row names this acceptance criterion and binds an explicit passing test receipt"
         : hasTaskCoverage
           ? "the Task row names this acceptance criterion but has no explicit passing test binding; the shared GREEN receipt is not AC proof"
-          : "no current completed Task row names this acceptance criterion; shared receipts are fallback facts only",
+          : materials.activation_cohort === "post"
+            ? "indexed Phase planning content is not implementation or AC completion proof; current execution facts are required"
+            : "no current completed Task row names this acceptance criterion; shared receipts are fallback facts only",
       // The current trace keeps the semantic change summary, but does not
       // repeat every historical receipt binding once per AC. Those immutable
       // receipt facts remain in the task store; integration review needs the
       // current implementation/test binding and the short change explanation.
       change: Object.freeze(items.length
         ? items.map((item) => ({ task_id: item.task_id, summary: item.summary }))
-        : [{ task_id: null, summary: "no completed Task row; current implementation and GREEN receipts are fallback facts only" }]),
+        : [{ task_id: null, summary: materials.activation_cohort === "post" ? "post Phase authority is not a completed Task row; current implementation and GREEN receipts are fallback facts only" : "no completed Task row; current implementation and GREEN receipts are fallback facts only" }]),
       test: Object.freeze(explicitTests),
       evidence: Object.freeze(implementation ? [{ ref: implementation.ref, sha256: implementation.sha256 }] : []),
       ...(implementation ? {} : {

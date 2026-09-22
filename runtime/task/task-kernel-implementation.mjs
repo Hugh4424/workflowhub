@@ -11,7 +11,8 @@ import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { CLOSE_PLAN_REF, STAGE_OUTCOME_REF, isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 
-import { deriveStageCompletion, stageMaterialScopeRevision, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, stageFactMaterialFiles, stageMaterialScopeRevision } from "../stage/completion-predicates.mjs";
+import { materialFilesForCohort } from "./material-workspace.mjs";
 import {
   buildRiskAcceptance,
   canonicalReviewFindings,
@@ -590,16 +591,26 @@ export function buildTaskKernel(taskHandle, {
   const artifactDir = () => artifacts === undefined
     ? ArtifactDir.open(activeWorkspace().worktreeRoot, task)
     : assertArtifactDir(artifacts);
-  const currentMaterialScopeRevision = (stage) => {
+  const activationCohort = task.manifest.activation_cohort ?? "pre";
+  const currentMaterialValues = () => {
     const dir = artifactDir();
-    const values = Object.fromEntries((STAGE_FACT_MATERIALS[stage] ?? []).map((file) => {
-      try { return [file, dir.read(file)]; }
+    const materials = {};
+    const read = (file) => {
+      try { materials[file] = dir.read(file); }
       catch (error) {
-        if (error?.code === "ENOENT") return [file, null];
-        throw error;
+        if (error?.code === "ENOENT") materials[file] = null;
+        else throw error;
       }
-    }));
-    return stageMaterialScopeRevision(stage, values);
+    };
+    for (const file of activationCohort === "post"
+      ? ["decision-log.md", "spec.md", "phases/index.md"]
+      : MATERIAL_FILES) read(file);
+    const files = materialFilesForCohort(activationCohort, materials);
+    for (const file of files) if (!(file in materials)) read(file);
+    return files.map((file) => [file, materials[file]]);
+  };
+  const currentMaterialScopeRevision = (stage) => {
+    return stageMaterialScopeRevision(stage, Object.fromEntries(currentMaterialValues()), { activationCohort });
   };
   const currentContext = ({ fresh = false } = {}) => {
     if (task.manifest.record_model !== "vnext-single-write") throw new Error("vNext writer requires a vnext-single-write task");
@@ -607,14 +618,7 @@ export function buildTaskKernel(taskHandle, {
     if (!fresh && authenticatedOperationContext !== undefined) return authenticatedOperationContext;
     const active = activeWorkspace();
     if (!active) throw new Error("vNext current material context requires an authenticated Workspace");
-    const dir = artifactDir();
-    const values = MATERIAL_FILES.map((file) => {
-      try { return [file, dir.read(file)]; }
-      catch (error) {
-        if (error?.code === "ENOENT") return [file, null];
-        throw error;
-      }
-    });
+    const values = currentMaterialValues();
     const revisionId = materialRevisionFromValues(values);
     const materialDigest = revisionId.slice("revision-".length);
     const revision = {
@@ -622,9 +626,9 @@ export function buildTaskKernel(taskHandle, {
       task_id: task.identity.taskId,
       revision_id: revisionId,
       material_digest: materialDigest,
-      source: "current-four-materials",
+      source: activationCohort === "post" ? "current-post-materials" : "current-four-materials",
     };
-    return Object.freeze({ revision: Object.freeze(revision), snapshot: Object.freeze(captureExecutionSnapshot(active.worktreeRoot, task.identity.taskId)) });
+    return Object.freeze({ revision: Object.freeze(revision), snapshot: Object.freeze(captureExecutionSnapshot(active.worktreeRoot, task.identity.taskId, activationCohort)) });
   };
   const readInput = (slot) => {
     const input = task.manifest.inputs?.[slot];
@@ -797,7 +801,7 @@ export function buildTaskKernel(taskHandle, {
       // `recorded_at` is a private same-invocation retry input. It freezes the
       // first publication's bytes without adding a public control surface.
       rejectUnknown(options, new Set(["resolved_review", "recorded_at"]), "vNext quality fact options");
-      rejectUnknown(input, new Set(["kind", "status", "review_status", "subject", "evidence"]), "vNext quality fact input");
+      rejectUnknown(input, new Set(["kind", "status", "review_status", "subject", "evidence", "error"]), "vNext quality fact input");
       if (input.evidence.some((entry) => typeof entry?.ref !== "string" || !entry.ref.startsWith("quality/"))) {
         throw new Error("vNext quality facts must reference the quality namespace");
       }
@@ -810,20 +814,13 @@ export function buildTaskKernel(taskHandle, {
         workspaceRoot: activeWorkspace()?.worktreeRoot,
       });
       const { revision, snapshot } = currentContext();
-      const materialScope = STAGE_FACT_MATERIALS[name];
+      const values = currentMaterialValues();
+      const currentValues = Object.fromEntries(values);
+      const materialScope = stageFactMaterialFiles(name, currentValues, { activationCohort });
       // Read the current materials once through the authenticated ArtifactDir;
       // the global revision remains the publication identity while the fixed
       // stage scope prevents downstream-only material writes from invalidating
       // upstream quality facts.
-      const dir = artifactDir();
-      const values = MATERIAL_FILES.map((file) => {
-        try { return [file, dir.read(file)]; }
-        catch (error) {
-          if (error?.code === "ENOENT") return [file, null];
-          throw error;
-        }
-      });
-      const currentValues = Object.fromEntries(values);
       const scopeRevision = materialRevisionFromValues(materialScope.map((file) => [file, currentValues[file] ?? null]));
       const { review_status: reviewStatus, ...factInput } = input;
       const fact = createQualityFact({
@@ -834,6 +831,7 @@ export function buildTaskKernel(taskHandle, {
         materialScopeRevision: scopeRevision,
         snapshotTree: snapshot.tree,
         ...factInput,
+        error: factInput.error,
         reviewStatus,
         recordedAt: options.recorded_at ?? now(),
       });
@@ -878,8 +876,9 @@ export function buildTaskKernel(taskHandle, {
         const sameScope = (value) => directionOnly
           ? isStageMaterialOnlySnapshotDelta(activeWorkspace().worktreeRoot, value.snapshot_tree, snapshot.tree, {
             taskId: task.identity.taskId,
-            downstreamMaterials: ["spec.md", "plan.md", "tasks.md"],
+            downstreamMaterials: currentMaterialValues().map(([file]) => file).filter((file) => file !== "decision-log.md"),
             allowNonMaterialChanges: true,
+            activationCohort,
           })
           : value.material_revision === revision.revision_id && value.snapshot_tree === snapshot.tree;
         let winner = null;
@@ -934,11 +933,8 @@ export function buildTaskKernel(taskHandle, {
             taskId: task.identity.taskId,
             stage: name,
             materialRevision: value.material_revision,
-            materialScope: STAGE_FACT_MATERIALS[name],
-            materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
-              try { return [file, artifactDir().read(file)]; }
-              catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
-            })),
+            materialScope: stageFactMaterialFiles(name, Object.fromEntries(currentMaterialValues()), { activationCohort }),
+            materialScopeRevision: currentMaterialScopeRevision(name),
             snapshotTree: value.snapshot_tree,
             kind: "coverage",
             status: coverage.audit.status,
@@ -957,11 +953,8 @@ export function buildTaskKernel(taskHandle, {
             taskId: task.identity.taskId,
             stage: name,
             materialRevision: value.material_revision,
-            materialScope: STAGE_FACT_MATERIALS[name],
-            materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
-              try { return [file, artifactDir().read(file)]; }
-              catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
-            })),
+            materialScope: stageFactMaterialFiles(name, Object.fromEntries(currentMaterialValues()), { activationCohort }),
+            materialScopeRevision: currentMaterialScopeRevision(name),
             snapshotTree: value.snapshot_tree,
             kind: "confirmation",
             status: value.decision === "accepted" ? "passed" : "failed",

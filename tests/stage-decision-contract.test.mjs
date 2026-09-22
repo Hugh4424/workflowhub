@@ -90,8 +90,8 @@ function completeMain(entry = decisionEntry()) {
     "不改变 review verdict。",
     "## 决定",
     JSON.stringify(entry),
-    "## 三轮 talk",
-    "三轮均有完整队列和结束结论。",
+    "## 动态 Talk 批次",
+    "每个动态批次均有当前 OI 队列和结束结论。",
     "## 调研",
     "本决定无需新增调研。",
     "## grill",
@@ -153,11 +153,6 @@ function completeContract(overrides = {}) {
     },
     detail_review_packet: {
       candidate_tree: "d".repeat(40),
-      interaction_aggregate: {
-        ref: "evidence/interaction-aggregate.json",
-        hash: "e".repeat(64),
-        complete: true,
-      },
       decision_log: {
         ref: main.ref,
         hash: main.hash,

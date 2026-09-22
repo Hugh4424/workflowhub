@@ -29,10 +29,12 @@ export const CLOSE_EXECUTION_SIDECAR_PREFIXES = Object.freeze([
   ...EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
   "qa-artifacts/",
 ]);
-const CURRENT_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
+const PRE_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
+const POST_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec)\.md$|^specs\/[^/]+\/phases\/(?:index|P[1-9][0-9]*)\.md$/;
 
-function isCurrentMaterialPath(path, taskId = null) {
-  if (!CURRENT_MATERIAL_PATH.test(path)) return false;
+function isCurrentMaterialPath(path, taskId = null, activationCohort = "pre") {
+  if (activationCohort !== "pre" && activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
+  if (!(activationCohort === "post" ? POST_MATERIAL_PATH : PRE_MATERIAL_PATH).test(path)) return false;
   return taskId === null || path.split("/")[1] === taskId;
 }
 
@@ -260,11 +262,11 @@ function formalLfsUnavailable(path, pointer) {
   return error;
 }
 
-function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree, filters: providedFilters, taskId = null } = {}) {
+function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree, filters: providedFilters, taskId = null, activationCohort = "pre" } = {}) {
   // Current WorkflowHub materials are handoff records, not implementation or
   // test-contract inputs. Their edits must not invalidate a reusable full-test
   // receipt; the workspace tree still records them for material freshness.
-  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !isCurrentMaterialPath(path, taskId));
+  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !isCurrentMaterialPath(path, taskId, activationCohort));
   const filters = providedFilters ?? lfsFilterMap(root, filePaths);
   const entries = [];
   for (const path of filePaths.sort()) {
@@ -429,7 +431,7 @@ function snapshotCommit(head, tree, format, objectDir) {
   return writeLooseObject(objectDir, format, "commit", body);
 }
 
-function captureSnapshot(root, excludedPrefixes = [], taskId = null) {
+function captureSnapshot(root, excludedPrefixes = [], taskId = null, activationCohort = "pre") {
   const head = gitText(root, ["rev-parse", "HEAD"]);
   const gitTree = gitText(root, ["rev-parse", "HEAD^{tree}"]);
   const format = objectFormat(root);
@@ -458,18 +460,18 @@ function captureSnapshot(root, excludedPrefixes = [], taskId = null) {
     filters,
     EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
     false,
-    (path) => !isCurrentMaterialPath(path, taskId),
+    (path) => !isCurrentMaterialPath(path, taskId, activationCohort),
   );
-  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree, filters, taskId });
+  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree, filters, taskId, activationCohort });
   const tree = workspaceTree(root, head, format, objectDir, filters, excludedPrefixes);
   return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir), source_digest: manifest.source_digest, source_manifest: manifest });
 }
 
 /** Capture tracked, dirty, and untracked bytes without writing repository .git. */
-export function captureGitWorktreeSnapshot(root, taskId = null) { return captureSnapshot(root, [], taskId); }
+export function captureGitWorktreeSnapshot(root, taskId = null, activationCohort = "pre") { return captureSnapshot(root, [], taskId, activationCohort); }
 
 /** Capture a snapshot while preserving HEAD bytes for execution-record files. */
-export function captureExecutionSnapshot(root, taskId = null) { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, taskId); }
+export function captureExecutionSnapshot(root, taskId = null, activationCohort = "pre") { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, taskId, activationCohort); }
 
 /**
  * A reusable material delta is deliberately narrow: only the executor's
@@ -504,6 +506,7 @@ export function isStageMaterialOnlySnapshotDelta(root, expectedTree, actualTree,
   taskId = null,
   downstreamMaterials = [],
   allowNonMaterialChanges = false,
+  activationCohort = "pre",
 } = {}) {
   if (expectedTree === actualTree) return true;
   if (typeof root !== "string" || typeof taskId !== "string" || taskId.trim() === ""
@@ -518,7 +521,7 @@ export function isStageMaterialOnlySnapshotDelta(root, expectedTree, actualTree,
   }
   const allowed = new Set(downstreamMaterials.map((file) => artifactReference(taskId, file)));
   return changed.length > 0 && changed.every((path) => {
-    if (allowNonMaterialChanges && !isCurrentMaterialPath(path, taskId)) return true;
+    if (allowNonMaterialChanges && !isCurrentMaterialPath(path, taskId, activationCohort)) return true;
     if (allowed.has(path)) return true;
     const tasksRef = artifactReference(taskId, "tasks.md");
     return path === tasksRef && isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId);
@@ -591,9 +594,9 @@ export function isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTre
 }
 
 /** Re-read the current source manifest and require the caller's digest to be current. */
-export function assertCurrentSourceDigest(root, expectedDigest, taskId = null) {
+export function assertCurrentSourceDigest(root, expectedDigest, taskId = null, activationCohort = "pre") {
   if (!SHA256_HEX.test(expectedDigest ?? "")) throw new TypeError("expected source digest must be a sha256");
-  const snapshot = captureGitWorktreeSnapshot(root, taskId);
+  const snapshot = captureGitWorktreeSnapshot(root, taskId, activationCohort);
   if (snapshot.source_digest !== expectedDigest) {
     const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected ${expectedDigest}, observed ${snapshot.source_digest}`);
     error.code = "FORMAL_SNAPSHOT_MISMATCH";

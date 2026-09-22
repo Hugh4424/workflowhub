@@ -43,6 +43,36 @@ describe("WorkflowHub stage progress contract", () => {
     expect(result).not.toHaveProperty("status");
   });
 
+  it("lets a post-cohort build-plan start from decision-log before it authors spec", () => {
+    const result = deriveStageProgress(
+      "build-plan",
+      [],
+      { "decision-log.md": "decision", "spec.md": null, "plan.md": null, "tasks.md": null },
+      { activationCohort: "post" },
+    );
+    expect(result).toMatchObject({
+      work_status: "ready",
+      continuation_allowed: true,
+      required_materials: ["decision-log.md"],
+      missing_materials: [],
+    });
+  });
+
+  it("keeps spec as a pre-cohort build-plan prerequisite", () => {
+    const result = deriveStageProgress(
+      "build-plan",
+      [],
+      { "decision-log.md": "decision", "spec.md": null, "plan.md": null, "tasks.md": null },
+      { activationCohort: "pre" },
+    );
+    expect(result).toMatchObject({
+      work_status: "blocked_by_missing_material",
+      continuation_allowed: false,
+      required_materials: ["decision-log.md", "spec.md"],
+      missing_materials: ["spec.md"],
+    });
+  });
+
   it("rejects completed plus incomplete fake green while keeping work ready", () => {
     const readiness = deriveStageProgress("build-code", [], {
       "decision-log.md": "decision",

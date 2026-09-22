@@ -8,7 +8,7 @@ import { openTask } from "../../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { authenticateWriteBoundary } from "../../runtime/evidence/write-boundary-preflight.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort } from "../../runtime/task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { assertTaskWriteIdentity, deriveCurrentStatusDomains } from "./stage-runtime.mjs";
 import {
@@ -138,8 +138,25 @@ function postCleanupArchiveInput(values, command) {
   return { archiveDeclarationRef: required(values, "archive"), priorPlanHash: required(values, "plan-hash") };
 }
 
-function readCurrentStatusMaterials(artifacts) {
-  return Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => {
+function readCurrentStatusMaterials(artifacts, activationCohort = "pre") {
+  const seedFiles = activationCohort === "post"
+    ? ["decision-log.md", "spec.md", "phases/index.md"]
+    : CURRENT_MATERIAL_FILES;
+  const seedMaterials = Object.fromEntries(seedFiles.map((file) => {
+    try { return [file, artifacts.read(file)]; }
+    catch (error) {
+      if (error?.code === "ENOENT") return [file, null];
+      throw error;
+    }
+  }));
+  let materialFiles;
+  try {
+    materialFiles = materialFilesForCohort(activationCohort, seedMaterials);
+  } catch {
+    materialFiles = seedFiles;
+  }
+  return Object.fromEntries(materialFiles.map((file) => {
+    if (Object.prototype.hasOwnProperty.call(seedMaterials, file)) return [file, seedMaterials[file]];
     try { return [file, artifacts.read(file)]; }
     catch (error) {
       if (error?.code === "ENOENT") return [file, null];
@@ -160,8 +177,10 @@ function currentCloseProjection(task, closeState) {
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
     const statusKernel = createTaskKernel(task, { workspace, artifacts });
     const currentSnapshot = statusKernel.currentVNextSnapshot();
-    const materials = readCurrentStatusMaterials(artifacts);
-    const materialRevision = materialRevisionFromValues(CURRENT_MATERIAL_FILES.map((file) => [file, materials[file]]));
+    const activationCohort = task.manifest.activation_cohort ?? "pre";
+    const materials = readCurrentStatusMaterials(artifacts, activationCohort);
+    const materialFiles = materialFilesForCohort(activationCohort, materials);
+    const materialRevision = materialRevisionFromValues(materialFiles.map((file) => [file, materials[file]]));
     Object.assign(domains, deriveCurrentStatusDomains({
       task,
       kernel: statusKernel,

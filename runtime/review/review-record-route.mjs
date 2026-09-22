@@ -7,6 +7,7 @@ import { validateSchema } from "./schema-validator.mjs";
 import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult, providerAdapter } from "./canonical-review-result.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { openCurrentTaskWorkspace } from "../task/workspace.mjs";
+import { materialFilesForCohort } from "../task/material-workspace.mjs";
 import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../evidence/canonical-receipt-writer.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
@@ -208,7 +209,10 @@ function prepareExecutionReviewRequest(task, request, identity, materialIdForReq
   if (request.stage !== "verify-code" || (request.review_kind ?? request.reviewKind ?? null) !== null) throw new Error("reviewed_execution is only supported by ordinary verify-code review");
   const workspace = openCurrentTaskWorkspace(task);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  const materials = Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, artifacts.read(name)]));
+  const activationCohort = task.manifest?.activation_cohort ?? "pre";
+  const phaseIndex = activationCohort === "post" ? artifacts.read("phases/index.md") : null;
+  const materialNames = materialFilesForCohort(activationCohort, phaseIndex === null ? {} : { "phases/index.md": phaseIndex });
+  const materials = Object.fromEntries(materialNames.map((name) => [name, name === "phases/index.md" ? phaseIndex : artifacts.read(name)]));
   const execution = readExecutionSource(task, request.reviewed_execution, identity, materials);
   const diff = runWorkspaceCommand(workspace, "git", ["diff", "--no-ext-diff", "--binary", identity.source.target_commit, identity.tree, "--"]);
   if (diff.error || diff.status !== 0) throw new Error(`reviewed_execution implementation diff unavailable: ${diff.error?.message ?? diff.stderr}`);
@@ -1254,6 +1258,17 @@ function readCanonicalReviewHistory(task, scope = null) {
  * `REVIEW_ROUTE_DEPENDENCIES_REQUIRED`. The host composition root may instead
  * inject a production-backed resolver directly.
  */
+export function bindBuildPlanReviewCohort(request, taskManifest) {
+  if (request?.stage !== "build-plan") return request;
+  const authenticatedCohort = taskManifest?.activation_cohort ?? "pre";
+  for (const key of ["activation_cohort", "activationCohort"]) {
+    if (request[key] !== undefined && request[key] !== authenticatedCohort) {
+      throw new TypeError(`build-plan review ${key} differs from authenticated task cohort`);
+    }
+  }
+  return { ...request, activation_cohort: authenticatedCohort };
+}
+
 export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null,
   resolveRouteIdentity = resolveReviewRouteIdentity, routeDependencies = null,
   reviewRoundTimeoutMs = DEFAULT_REVIEW_ROUND_TIMEOUT_MS, signal = null } = {}) {
@@ -1262,6 +1277,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");
   rejectBuildPrdCanonicalPersistence(request, "review request");
   request = normalizeReviewIdentity(request, "review request");
+  request = bindBuildPlanReviewCohort(request, taskHandle.manifest);
   for (const field of ["snapshot_tree", "material_revision", "task_id", "task_path", "project_name"]) {
     if (Object.hasOwn(request, field)) throw new TypeError(`review request identity field is host-owned: ${field}`);
   }

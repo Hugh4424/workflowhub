@@ -1,4 +1,4 @@
-import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeSync } from "node:fs";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -6,6 +6,55 @@ import { fileURLToPath } from "node:url";
 import { canonicalJson } from "../evidence/canonical-source.mjs";
 
 export const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
+const POST_BASE_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "phases/index.md"]);
+const PHASE_FILE = /^phases\/P([1-9][0-9]*)\.md$/;
+
+export function phaseFilesFromIndex(index) {
+  if (typeof index !== "string" || index.trim() === "") throw new TypeError("post Phase index is missing");
+  const lines = index.split(/\r?\n/);
+  const section = lines.findIndex((line) => /^## Execution Index\s*$/.test(line.trim()));
+  if (section < 0) throw new TypeError("post Phase index lacks Execution Index section");
+  const body = [];
+  for (const line of lines.slice(section + 1)) {
+    if (/^##\s+/.test(line)) break;
+    if (line.trim().startsWith("|")) body.push(line);
+  }
+  const cells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
+  const header = body.length ? cells(body[0]) : [];
+  const phaseColumn = header.indexOf("phase");
+  const authorityColumn = header.indexOf("authority ref");
+  if (phaseColumn < 0 || authorityColumn < 0) throw new TypeError("post Phase index lacks phase/authority ref columns");
+  const refs = body.slice(1).filter((line) => !/^\|\s*:?-{2,}/.test(line)).map((line) => {
+    const row = cells(line);
+    const phase = row[phaseColumn]?.match(/^`(P[1-9][0-9]*)`$/)?.[1];
+    const ref = row[authorityColumn]?.match(/^`([^`]+)`$/)?.[1];
+    if (!phase || ref !== `phases/${phase}.md`) throw new TypeError("post Phase index row has mismatched Phase authority");
+    return ref;
+  });
+  if (refs.length === 0) throw new TypeError("post Phase index has no Phase refs");
+  if (refs.some((ref) => !PHASE_FILE.test(ref))) throw new TypeError("post Phase index has an unsafe Phase ref");
+  if (new Set(refs).size !== refs.length) throw new TypeError("post Phase index has duplicate Phase refs");
+  for (let index = 0; index < refs.length; index += 1) {
+    if (refs[index] !== `phases/P${index + 1}.md`) throw new TypeError("post Phase index must list consecutive ordered Phases");
+  }
+  return Object.freeze(refs);
+}
+
+export function materialFilesForCohort(activationCohort = "pre", materials = {}) {
+  if (activationCohort === "pre") return CURRENT_MATERIAL_FILES;
+  if (activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
+  if (materials?.["phases/index.md"] == null) {
+    if (Object.keys(materials).some((file) => file.startsWith("phases/") && file !== "phases/index.md")) {
+      throw new TypeError("post material map has Phase files without an index");
+    }
+    return POST_BASE_MATERIAL_FILES;
+  }
+  const names = [...POST_BASE_MATERIAL_FILES, ...phaseFilesFromIndex(materials["phases/index.md"])];
+  if (Object.keys(materials).some((file) => file.startsWith("phases/") && !names.includes(file))) {
+    throw new TypeError("post material map has an unindexed Phase");
+  }
+  return Object.freeze(names);
+}
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
@@ -68,9 +117,10 @@ function behaviorText(value) {
  * exposing a non-wire behavior projection for review consumers. Both axes are
  * produced from the same authenticated four-material map.
  */
-export function materialDigestAxes(files = {}) {
+export function materialDigestAxes(files = {}, { activationCohort = "pre" } = {}) {
   if (!files || typeof files !== "object" || Array.isArray(files)) throw new TypeError("material digest files must be an object");
-  const rawEntries = CURRENT_MATERIAL_FILES.map((file) => [file, files[file] ?? null]);
+  const names = materialFilesForCohort(activationCohort, files);
+  const rawEntries = names.map((file) => [file, files[file] ?? null]);
   const behaviorEntries = rawEntries.map(([file, value]) => [file, value === null ? null : behaviorText(value)]);
   return Object.freeze({
     behavior: sha256(JSON.stringify(behaviorEntries)),
@@ -85,10 +135,14 @@ function fsyncDirectory(path) {
 
 function materialPath(root, file) {
   if (typeof root !== "string" || !isAbsolute(root)) throw new TypeError("material workspace root must be absolute");
-  if (!CURRENT_MATERIAL_FILES.includes(file)) throw new TypeError(`invalid material file: ${file}`);
+  if (!CURRENT_MATERIAL_FILES.includes(file) && file !== "phases/index.md" && !PHASE_FILE.test(file)) throw new TypeError(`invalid material file: ${file}`);
   const resolvedRoot = resolve(root);
   const target = resolve(resolvedRoot, file);
-  if (target !== resolve(resolvedRoot, file) || file.includes("..") || file.includes("/")) throw new TypeError(`invalid material file: ${file}`);
+  if (target !== resolve(resolvedRoot, file) || file.includes("..") || (file.includes("/") && !file.startsWith("phases/"))) throw new TypeError(`invalid material file: ${file}`);
+  if (file.startsWith("phases/") && existsSync(resolve(resolvedRoot, "phases"))) {
+    const stat = lstatSync(resolve(resolvedRoot, "phases"));
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new TypeError("phases must be a real directory");
+  }
   return { root: resolvedRoot, target };
 }
 
@@ -106,21 +160,37 @@ function readMaterial(root, file) {
   }
 }
 
-export function inspectMaterialWorkspace(root) {
+export function inspectMaterialWorkspace(root, { activationCohort = "pre" } = {}) {
   if (typeof root !== "string" || !isAbsolute(root)) throw new TypeError("material workspace root must be absolute");
   const files = {};
   const missing = [];
   const errors = [];
-  for (const file of CURRENT_MATERIAL_FILES) {
+  const baseFiles = activationCohort === "post" ? POST_BASE_MATERIAL_FILES : materialFilesForCohort(activationCohort);
+  for (const file of baseFiles) {
     const result = readMaterial(root, file);
     if (result.missing) {
       missing.push(file);
       if (result.reason !== "missing" && result.reason !== "empty") errors.push(`${file}:${result.reason}`);
     } else files[file] = result.value;
   }
-  const digestInput = CURRENT_MATERIAL_FILES.map((file) => [file, files[file] ?? null]);
+  let names = baseFiles;
+  if (activationCohort === "post" && files["phases/index.md"]) {
+    try {
+      names = materialFilesForCohort("post", files);
+      for (const file of names.slice(POST_BASE_MATERIAL_FILES.length)) {
+        const result = readMaterial(root, file);
+        if (result.missing) {
+          missing.push(file);
+          if (result.reason !== "missing" && result.reason !== "empty") errors.push(`${file}:${result.reason}`);
+        } else files[file] = result.value;
+      }
+      const diskPhases = readdirSync(resolve(root, "phases")).filter((name) => name.endsWith(".md") && name !== "index.md").map((name) => `phases/${name}`);
+      for (const file of diskPhases) if (!names.includes(file)) errors.push(`${file}:unindexed_phase`);
+    } catch (error) { errors.push(`phases/index.md:${error.message}`); }
+  }
+  const digestInput = names.map((file) => [file, files[file] ?? null]);
   return Object.freeze({
-    status: missing.length === 0 ? "working" : "not_ready",
+    status: missing.length === 0 && errors.length === 0 ? "working" : "not_ready",
     root: resolve(root),
     files: Object.freeze(files),
     missing: Object.freeze(missing),
@@ -202,10 +272,13 @@ function packetHash(manifest, files) {
 
 function packetSourceEntries(source_materials, files) {
   const entries = Object.entries(source_materials ?? {}).map(([materialName, content]) => {
-    const path = `${materialName}.md`;
+    const path = materialName.endsWith(".md") ? materialName : `${materialName}.md`;
     if (!validPacketPath(path)) throw new TypeError(`source material path is invalid: ${path}`);
+    if (materialName.includes("/") && path !== "phases/index.md" && !PHASE_FILE.test(path)) {
+      throw new TypeError(`source material path is invalid: ${path}`);
+    }
     const normalized = normalizePacketText(content);
-    if (materialName !== "decision-log" && !validateMaterialNavigation(normalized).ok) {
+    if (path !== "decision-log.md" && !path.startsWith("phases/") && !validateMaterialNavigation(normalized).ok) {
       throw new TypeError(`${materialName} material navigation is incomplete`);
     }
     files[path] = normalized;
@@ -275,7 +348,7 @@ export function buildStageInputPacket({ task_id, stage, track = null, material_r
   if (!Array.isArray(derived_files)) throw new TypeError("derived_files must be an array");
   const derivedEntries = derived_files.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || !validPacketPath(entry.path)) throw new TypeError(`derived file ${index + 1} path is invalid`);
-    if (files[entry.path] !== undefined || ["decision-log.md", "spec.md", "plan.md", "tasks.md"].includes(entry.path)) throw new TypeError(`derived file path cannot be a material path: ${entry.path}`);
+    if (files[entry.path] !== undefined || ["decision-log.md", "spec.md", "plan.md", "tasks.md", "phases/index.md"].includes(entry.path) || PHASE_FILE.test(entry.path)) throw new TypeError(`derived file path cannot be a material path: ${entry.path}`);
     if (typeof entry.producer !== "string" || entry.producer.trim() === "" || typeof entry.consumer !== "string" || entry.consumer.trim() === "") throw new TypeError(`derived file ${entry.path} producer/consumer is incomplete`);
     const normalized = normalizePacketText(entry.content);
     files[entry.path] = normalized;

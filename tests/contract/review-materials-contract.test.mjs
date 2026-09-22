@@ -626,6 +626,43 @@ describe("current review material and capture contracts", () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ category: "generated:planning_artifacts" })]));
   });
 
+  it("sends post build-plan independent Phase files and rejects absent or legacy substitutes", () => {
+    const { root, task } = taskFixture();
+    const materials = {
+      raw_requirement: "R-001: deliver the current behavior",
+      draft_spec: "# Spec\n\nFR-DEMO-001 -> AC-DEMO-001",
+      acceptance_criteria: "AC-DEMO-001: observable outcome",
+      phase_index: "## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/demo.mjs | none | build-code |\n",
+      phase_authorities: { "phases/P1.md": "# Phase P1 — behavior\n\n## L0 — Goal\nOutcome.\n\n## L1 — Contract\nImplementation.\n\n## L2 — Reference\nRemovable.\n" },
+      review_instructions: reviewInstructionsFor("build-plan"),
+    };
+    const build = (provided) => buildReviewMaterials({
+      reviewDataRoot: root, attachmentRoot: root, source: sourceForPlanFixture,
+      task, taskId: "review-materials-contract", stage: "build-plan",
+      activationCohort: "post", materials: provided,
+    });
+    const bundle = build(materials);
+    expect(bundle.files).toContain("requirements/draft_spec.md");
+    expect(bundle.files).toContain("requirements/phase_index.md");
+    expect(bundle.files).toContain("requirements/phases/P1.md");
+    expect(bundle.files).not.toContain("requirements/phase_authorities.json");
+    expect(bundle.files).not.toContain("requirements/draft_plan.md");
+    expect(bundle.files).not.toContain("requirements/draft_tasks.md");
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/phases/P1.md"), "utf8")).toBe(materials.phase_authorities["phases/P1.md"]);
+    const projection = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/planning_artifacts.json"), "utf8"));
+    expect(projection).toMatchObject({
+      schema_version: "spec-analyze-planning-artifacts.v2", activation_cohort: "post",
+      draft_spec: materials.draft_spec, phase_index: materials.phase_index,
+      phase_authorities: materials.phase_authorities,
+    });
+    expect(projection).not.toHaveProperty("draft_plan");
+    expect(projection).not.toHaveProperty("draft_tasks");
+    expect(() => build({ ...materials, phase_authorities: {} })).toThrow(/MATERIAL_INCOMPLETE.*phase_authorities/i);
+    expect(() => build({ ...materials, phase_authorities: { "phases/P2.md": materials.phase_authorities["phases/P1.md"] } })).toThrow(/MATERIAL_INCOMPLETE.*phases\/P1\.md/i);
+    expect(() => build({ ...materials, phase_index: materials.phase_index.replace("phases/P1.md", "phases/missing.md") })).toThrow(/MATERIAL_INCOMPLETE.*phase_index/i);
+    expect(() => build({ ...materials, draft_plan: "legacy", draft_tasks: "legacy" })).toThrow(/MATERIAL_FORBIDDEN.*draft_plan|draft_tasks/i);
+  });
+
   it("delivers a large non-build-code packet without truncating its provider material", () => {
     const { root, task } = taskFixture();
     const rawRequirement = "关键行为\n" + "x".repeat(486778);

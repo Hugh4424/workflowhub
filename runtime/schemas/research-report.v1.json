@@ -53,6 +53,10 @@
     "triangulation": { "$ref": "#/$defs/triangulation" },
     "coverage": { "$ref": "#/$defs/coverage" },
     "saturation": { "$ref": "#/$defs/saturation" },
+    "candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/candidate" }
+    },
     "reason": { "type": "string", "minLength": 1 },
     "non_impact_basis": { "type": "string", "minLength": 1 },
     "evidence_refs": {
@@ -171,11 +175,13 @@
       "additionalProperties": false,
       "required": ["claim", "source_ref", "locator", "confidence"],
       "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
         "claim": { "type": "string", "minLength": 1 },
         "source_ref": { "type": "string", "minLength": 1 },
         "locator": { "type": "string", "minLength": 1 },
         "confidence": { "enum": ["high", "medium", "low"] },
-        "read_original": { "const": true }
+        "read_original": { "const": true },
+        "candidate_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       }
     },
     "triangulation": {
@@ -205,6 +211,25 @@
       "properties": {
         "status": { "enum": ["saturated", "timeboxed", "not_saturated"] },
         "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id"],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "plain_language_summary": { "type": "string", "minLength": 1 },
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "recommendation": { "enum": ["recommended", "not_recommended"] },
+        "recommendation_reason": { "type": "string", "minLength": 1 }
       }
     }
   }

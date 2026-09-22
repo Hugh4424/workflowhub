@@ -65,6 +65,14 @@ bare-none, duplicate, or substituted rows are gaps. The OI record is the one
 source for question, source, status and terminal disposition. It is not a
 fifth material or a second state machine.
 
+For a vague requirement, triage also writes the same material's divergence
+record before candidate selection: user-verbatim requirement and pain point,
+at least two angles, user and non-user candidates with structured semantic
+differences, and a 3–5-hypothesis versioned outline. More than half falsified
+hypotheses abandons that version and creates a `redraw_of` replacement tied to
+the current OI outline version. The reader reports missing or weak evidence as
+`incomplete`; it is not a completion gate and does not stand in for real Talk.
+
 The three existing consumers remain separate: direction advice receives the
 current `convergence_outline` questions-only projection (IDs, categories,
 questions/unknowns and sources only, with displayed status `open`); detail
@@ -183,7 +191,11 @@ decision and questions to the user.
 
 1. Replay the original requirement and create the unique current OI outline
    before research. Separate confirmed facts, assumptions,
-   direction-changing ambiguity, non-goals, and deferred work. Completion:
+   direction-changing ambiguity, non-goals, and deferred work. For a vague
+   requirement, write the same decision-log's angle table before candidate
+   generation and bind each non-user direction to an angle, user comparison,
+   source, and changed semantic dimension; record outline falsifiers/evidence
+   and redraw when the majority threshold is crossed. Completion:
    every part of the original requirement is represented or explicitly marked
    unresolved. Record the requirement-to-decision coverage matrix so that every
    original requirement has a visible disposition; the matrix must cover the five
@@ -217,9 +229,9 @@ decision and questions to the user.
      The only alternative `basis` is `three_inputs`.
      This is the sole decision-log fact a later acceptance card may reference;
      do not substitute policy IDs, task prose, or provider identity.
-2. Execute the manifest in order. `step 1–10 写材料；step 11–14 只落 task store`：
+2. Execute the manifest in order. `step 1–10 写材料；step 11–13 只落 task store`：
    steps 1–10 write the current materials through their existing owners. From
-   step 11 through step 14, only write stage facts
+   step 11 through step 13, only write stage facts
    to the task store (`quality/evidence/handoff/`,
    `quality/stage-reflection/<stage>/`, and `facts.jsonl`); do not append
    agent-created step sections to `decision-log.md`. The step outcome records
@@ -228,8 +240,11 @@ decision and questions to the user.
    revise OI rows, but they must update the current outline version rather than
    create a second list. A write failure stays incomplete with its error; it is
    never replaced by a final aggregate claim or a second log.
-3. The Talk flow uses steps 3, 4, 5, and 7: Talk round 1, proportionate
-   research input, Talk round 2, then Talk round 3 after direction advice.
+3. The Talk flow uses the dynamic `outline-talk` and `module-convergence`
+   steps after research/divergence and direction advice. There is no fixed
+   round count or mandatory question count: the current OI decides whether the
+   queue has zero, one, or multiple questions, and every real reply can reorder
+   the remaining queue or trigger another bounded divergence pass.
    Research is an input to Talk, not a review. When a question can materially
    change direction, make-decision uses the `skills/deep-research/SKILL.md`
    R0-R5 contract: generate gaps from the requirement framework, retrieve and
@@ -239,6 +254,13 @@ decision and questions to the user.
    agent questions. Skipping research requires recording why the answer cannot
    change direction and which current facts support the skip. Research is
    advice/input for Talk; it does not approve a direction or create a gate.
+   Every completed research report must explicitly declare `candidates` (use
+   `[]` only when there is no user-visible alternative). When research puts
+   alternatives before the user, it declares every candidate with its
+   plain-language summary, evidence-bound source refs, recommendation
+   (including rejection), and reason. `stage-handlers#researchFacts` derives
+   whether that candidate delivery is complete from the one canonical report;
+   a summary or report ref alone is not candidate delivery.
    Research runs only when its answer could materially change direction;
    otherwise record why it was skipped. Do not invent user answers.
    Ask only questions whose answers could change direction. Talk must cover both
@@ -250,44 +272,39 @@ decision and questions to the user.
    `ask -> wait/pause -> user reply -> resume -> re-rank` seam; never invent a
    reply. Do not run Clarify here; `build-spec` owns the only Clarify flow.
 
-   Host execution binds that seam separately for every Talk round:
-   - Talk round 1 uses `ask -> wait -> user reply -> resume -> re-rank` for the
-     initial independent direction questions.
-   - Talk round 2 uses the same real lifecycle for the remaining independent
-     scope, non-goal, and risk questions after research.
-   - Talk round 3 uses the same real lifecycle for only the remaining
-     direction-advice questions. Its input must explicitly include the
-     red/blue direction-review finding dispute list and any unresolved items
-     from the debate decision; do not compress either source into a generic
-     summary.
-   - A conditional Talk round 4 may run only after the detail-advice review
-     when a remaining dispute is direction-level or changes acceptance. If no
-     such dispute exists, do not start Talk round 4: the main agent repairs
-     implementation-level findings directly and registers the disposition.
-     When Talk round 4 runs, it uses the same ask -> wait -> user reply ->
-     resume -> re-rank lifecycle and binds the reply to the affected finding.
-   Each round must publish its own `ask`, pause at `wait`, accept only the
-   matching real user `reply`, and then `resume` and re-rank before the next
-   owning step. A previous round's decision-log text, aggregate, or default
-   choice is never a reply for another round.
-4. Only after Talk round 2 has resumed and converged, run the direction advice
-   review (step 6). It is independent advice, not a `pass` gate. Preserve the
+   Host execution binds that seam separately for every dynamic Talk batch:
+   - `outline-talk` uses the lifecycle for the independent direction questions
+     left after research and direction advice.
+   - `module-convergence` repeats the same lifecycle only while the current OI
+     contains important, direction-changing, or genuinely ambiguous items. It
+     may finish with zero questions; ordinary details become disclosed agent
+     assumptions. Its input must retain the red/blue dispute list and debate
+     unresolved items instead of compressing them into a generic summary.
+   - After detail advice, run another dynamic batch only when a remaining
+     dispute is direction-level or changes acceptance; otherwise repair
+     implementation-level findings directly and register the disposition.
+   Every batch publishes its own `ask`, pauses at `wait`, accepts only the
+   matching real user `reply`, then `resume`s and re-ranks. A previous
+   decision-log paragraph, aggregate, or default choice is never a reply for a
+   later batch.
+4. After research/divergence and before `outline-talk`, run the direction advice
+   review. It is independent advice, not a `pass` gate. Preserve the
    actual provider, transport status, findings, and provenance; unavailable,
    failure, timeout, and `MATERIAL_INCOMPLETE` remain facts. Dispose each
    finding; this track records one semantic advice result and does not start a
    second provider request after finding repair or material edits. An unavailable review is never `pass` and never becomes an empty findings claim; it may be retried only after its missing route/material is repaired.
-5. After direction advice, resume Talk round 3 (step 7) so the user can address
-   the explicit red/blue finding dispute list, debate unresolved items,
-   contradictions, key assumptions, and remaining risks.
-   Only after that, run `grill-with-docs` (step 8). Grill is
+5. After direction advice, `outline-talk` lets the user address the explicit
+   red/blue finding dispute list, debate unresolved items, contradictions, key
+   assumptions, and remaining risks. Only after that, run `grill-with-docs`.
+   Grill is
    interactive thinking, never review. It may present one batch only when the
    questions are independent frontier questions; dependent questions are split
    and re-ranked. It uses the real `ask -> wait/pause -> user reply -> resume`
    seam and may preserve a partial reply. It must not call wh-review or create
    a review fact. Fold only its minimal `grill_summary.decision_updates` and
    necessary CONTEXT/ADR outcome into `decision-log.md`.
-6. Write the decision draft after Grill (step 9), then run the detail advice
-   review (step 10). This is also advice-only, not a `pass` gate. The detail
+6. Write the decision draft after Grill, then run the detail advice review.
+   This is also advice-only, not a `pass` gate. The detail
    review must happen after Grill and the draft, never before. Preserve real
    transport and finding facts. This track records one semantic advice result
    for the current make-decision execution; a later same-task execution reviews
@@ -320,21 +337,18 @@ repair.
 | --- | --- | --- |
 | 1 load-context | M+S | S 读原始需求和仓库，回传摘要与覆盖矩阵草案；M 校验定稿 |
 | 2 triage-scope | M+S | S 回传范围、不确定性和非目标草案；M 定稿 |
-| 3 talk-r1 | M | M 独占问题卡与真实用户回复 |
-| 4 research-inputs | S 为主 | M 定 gap；S 检索/深读/落盘，回传 report hash、摘要和复核 finding |
-| 5 talk-r2 | M | M 独占研究后的范围、非目标和风险问答 |
-| 6 direction-advice | B+S | B 后台执行红/蓝审查；S 只归纳主题和争议，不做质量裁决；全文≤2页落盘，主会话摘要≤500字 |
-| 6b debate-direction | S 并行+M | 四角色 S 产裁决书 ref 和歧义清单；M 只登记与呈用户 |
-| 7 talk-r3 | M | M 独占方向争议问答 |
-| 8 grill-with-docs | M | M 独占 Grill 问答；S 只提供候选问题池 |
-| 9 write-decision-draft | S+M | S 产草稿；M 修正链字段、模块、覆盖和宪法边界 |
-| 10 detail-advice | B+S | B 后台执行红/蓝审查；S 归纳并保留原始 ref |
-| 10b debate-detail | S 并行+M | 四角色 S 产细节裁决书；M 按分级规则登记 |
-| 第4轮 talk（detail findings） | M | 仅在方向级或影响验收的争议触发；M 独占问题卡与真实用户回复 |
-| 11 approve-decision | B+M | B 汇总直接的 review/finding 事实；M 签发用户确认 |
-| 12 stage-end-spec-analyze | S+B | S/B 产语义 gap；M 处置，改变决策时重新确认 |
-| 13 publish-decision | M | M 发布决策与阶段末披露 |
-| 14 stage-reflection | M | M 产 judgment JSON；S 只提供统计事实 |
+| 3 research-and-diverge | S 为主 | M 定 gap；S 检索/深读/落盘，回传 report hash、摘要、角度和候选来源 |
+| 4 direction-advice | B+S | B 后台执行红/蓝审查；S 只归纳主题和争议，不做质量裁决；全文落盘，主会话保留结构化摘要 |
+| 5 outline-talk | M | M 独占方向大纲问题卡与真实用户回复；问题数由当前 OI 决定 |
+| 6 grill-with-docs | M | M 独占 Grill 问答；S 只提供候选问题池，不调用 wh-review |
+| 7 module-convergence | M | M 独占按 OI 动态生成的模块问题队列、真实回复和每答重排；零问题合法 |
+| 8 write-decision-draft | S+M | S 产草稿；M 修正链字段、模块、覆盖和宪法边界 |
+| 9 detail-advice | B+S | B 后台执行红/蓝审查；S 归纳并保留原始 ref |
+| 条件动态 Talk 批次 | M | 仅在方向级或影响验收的争议触发；M 独占问题卡与真实用户回复 |
+| 10 approve-decision | B+M | B 汇总直接的 review/finding 事实；M 签发用户确认 |
+| 11 stage-end-spec-analyze | S+B | S/B 产语义 gap；M 处置，改变决策时重新确认 |
+| 12 publish-decision | M | M 发布决策与阶段末披露 |
+| 13 stage-reflection | M | M 产 judgment JSON；S 只提供统计事实 |
 
 ### Context conservation rules
 
@@ -349,8 +363,8 @@ repair.
 
 ## Completion and fact writing
 
-Do not claim this stage complete until Talk is resolved, any conditional Talk
-round 4 trigger is evaluated and handled, necessary research ran
+Do not claim this stage complete until the dynamic Talk queue is resolved,
+any post-detail direction-level trigger is evaluated and handled, necessary research ran
 or has a truthful outcome, Grill ran, `decision-log.md` is current,
 independent review findings and transport facts are recorded, every finding has a
 disposition, and the user explicitly confirmed the decision through the existing

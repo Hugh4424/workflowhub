@@ -8,7 +8,7 @@ const skillUrl = new URL("../../workflows/build-spec/SKILL.md", import.meta.url)
 const stageReviewSteps = {
   "make-decision": {
     reviews: ["direction-advice", "detail-advice"],
-    successors: ["talk-round-3", "approve-decision"],
+    successors: ["outline-talk", "approve-decision"],
     skillRule: /review step[\s\S]{0,120}manifest 前移[\s\S]{0,160}不自动回跳/i,
   },
   "build-spec": {

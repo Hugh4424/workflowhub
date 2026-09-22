@@ -122,6 +122,103 @@ export function readResearchReport({ read, task, ref, taskId, stage, snapshotTre
   return Object.freeze({ ref, sha256: actualHash, raw, value });
 }
 
+function candidateDelivery({ record = null, status, reason = null, candidates = [], missingCandidateIds = [], missingFieldsByCandidate = {} } = {}) {
+  return Object.freeze({
+    status,
+    full_report: record ? Object.freeze({ ref: record.ref, sha256: record.sha256 }) : null,
+    candidates: Object.freeze(candidates.map((candidate) => Object.freeze({
+      ...candidate,
+      source_refs: Object.freeze([...(candidate.source_refs ?? [])]),
+      evidence_refs: Object.freeze([...(candidate.evidence_refs ?? [])]),
+      missing_fields: Object.freeze([...(candidate.missing_fields ?? [])]),
+    }))),
+    missing_candidate_ids: Object.freeze([...missingCandidateIds]),
+    missing_fields_by_candidate: Object.freeze(Object.fromEntries(Object.entries(missingFieldsByCandidate)
+      .map(([candidateId, fields]) => [candidateId, Object.freeze([...fields])]))),
+    reason,
+  });
+}
+
+function deriveCandidateDelivery(record) {
+  const report = record.value;
+  if (report.status === "unavailable") {
+    return candidateDelivery({ record, status: "unavailable", reason: "research_unavailable" });
+  }
+  if (report.status !== "completed") {
+    return candidateDelivery({ record, status: "not_applicable", reason: "research_not_completed" });
+  }
+  if (!Array.isArray(report.candidates)) {
+    return candidateDelivery({ record, status: "incomplete", reason: "candidate_set_not_declared" });
+  }
+  const candidates = report.candidates;
+  if (candidates.length === 0) {
+    return candidateDelivery({ record, status: "not_applicable", reason: "no_candidates_declared" });
+  }
+
+  const sourceRefs = new Set((report.sources ?? []).map((source) => source.url_or_ref));
+  const evidenceById = new Map((report.evidence ?? [])
+    .filter((evidence) => typeof evidence.evidence_id === "string" && evidence.evidence_id.trim() !== "")
+    .map((evidence) => [evidence.evidence_id, evidence]));
+  const seenIds = new Set();
+  const missingCandidateIds = [];
+  const missingFieldsByCandidate = {};
+  const deliveredCandidates = candidates.map((candidate) => {
+    const missing = [];
+    const candidateId = candidate.candidate_id;
+    if (seenIds.has(candidateId)) missing.push("candidate_id_unique");
+    seenIds.add(candidateId);
+    if (typeof candidate.plain_language_summary !== "string" || candidate.plain_language_summary.trim() === "") {
+      missing.push("plain_language_summary");
+    }
+    const refs = Array.isArray(candidate.source_refs) ? candidate.source_refs : [];
+    if (refs.length === 0) {
+      missing.push("source_refs");
+    } else if (refs.some((ref) => !sourceRefs.has(ref))) {
+      missing.push("source_refs_declared_in_report");
+    }
+    const evidenceRefs = Array.isArray(candidate.evidence_refs) ? candidate.evidence_refs : [];
+    const selectedEvidence = evidenceRefs.map((evidenceId) => evidenceById.get(evidenceId) ?? null);
+    if (evidenceRefs.length === 0) {
+      missing.push("evidence_refs");
+    } else if (selectedEvidence.some((evidence) => evidence === null
+        || !Array.isArray(evidence.candidate_ids)
+        || !evidence.candidate_ids.includes(candidateId))) {
+      missing.push("evidence_refs_bound_to_candidate");
+    }
+    if (refs.length && (selectedEvidence.some((evidence) => evidence === null)
+        || refs.some((ref) => !selectedEvidence.some((evidence) => evidence?.source_ref === ref)))) {
+      missing.push("source_refs_bound_to_candidate_evidence");
+    }
+    if (!new Set(["recommended", "not_recommended"]).has(candidate.recommendation)) {
+      missing.push("recommendation");
+    }
+    if (typeof candidate.recommendation_reason !== "string" || candidate.recommendation_reason.trim() === "") {
+      missing.push("recommendation_reason");
+    }
+    if (missing.length) {
+      if (!missingCandidateIds.includes(candidateId)) missingCandidateIds.push(candidateId);
+      missingFieldsByCandidate[candidateId] = [...new Set([...(missingFieldsByCandidate[candidateId] ?? []), ...missing])];
+    }
+    return {
+      candidate_id: candidateId,
+      status: missing.length ? "incomplete" : "delivered",
+      plain_language_summary: candidate.plain_language_summary ?? null,
+      source_refs: refs,
+      evidence_refs: evidenceRefs,
+      recommendation: candidate.recommendation ?? null,
+      recommendation_reason: candidate.recommendation_reason ?? null,
+      missing_fields: missing,
+    };
+  });
+  return candidateDelivery({
+    record,
+    status: missingCandidateIds.length ? "incomplete" : "delivered",
+    candidates: deliveredCandidates,
+    missingCandidateIds,
+    missingFieldsByCandidate,
+  });
+}
+
 export function researchFacts(record) {
   if (!record?.value) throw new TypeError("research record is required");
   const report = record.value;
@@ -146,6 +243,7 @@ export function researchFacts(record) {
     tool_attempts: toolAttempts,
     tool_attempt_count: toolAttempts.length,
     gaps,
+    candidate_delivery: deriveCandidateDelivery(record),
     fallback: Object.freeze({
       approval_status: report.fallback.approval_status,
       requested_route: report.fallback.requested_route,
@@ -172,6 +270,7 @@ export function deriveResearchStatus(records = []) {
       covered_questions: [],
       tool_attempts: [],
       gaps: [],
+      candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_missing" }),
       fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] },
     });
   }
@@ -186,17 +285,18 @@ export function deriveResearchStatus(records = []) {
       covered_questions: [],
       tool_attempts: [],
       gaps: [],
+      candidate_delivery: candidateDelivery({ record: integrityFailure, status: "unavailable", reason: "research_record_integrity_failure" }),
       fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] },
     });
   }
   if (records.length > 1) {
     if (records.some((record) => !record.value?.recorded_at)) {
-      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
+      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
     }
     const newest = Math.max(...records.map((record) => Date.parse(record.value.recorded_at)));
     const latest = records.filter((record) => Date.parse(record.value.recorded_at) === newest);
     if (!Number.isFinite(newest) || latest.length !== 1) {
-      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
+      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
     }
     records = latest;
   }

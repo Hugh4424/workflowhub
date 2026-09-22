@@ -13,12 +13,13 @@ import { authenticateCanonicalReviewResult } from "../review/canonical-review-re
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateBrowserQaEvidence, validateReviewAttemptObservation } from "../evidence/stage-content-evidence.mjs";
 import { readResearchReport, deriveResearchStatus } from "../evidence/research-report.mjs";
-import { buildStageInputPacket, verifyStageInputPacket } from "../task/material-workspace.mjs";
+import { buildStageInputPacket, materialFilesForCohort, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
   validateAcceptanceDesignMinimum,
   validateExecutablePlanTaskMinimum,
   validateInteractionLifecycleSequence,
   validatePlanTaskContract,
+  validatePostPhaseContract,
   activeAcceptanceCriterionIds,
   validateProjectStandardSources,
   completeProjectSourceIdentity,
@@ -27,6 +28,8 @@ import {
   validateDeliveryContract,
   buildUiProjectInitFact,
   deriveDesignSourceReadiness,
+  deriveDecisionDivergenceOutline,
+  deriveResearchCandidatePresentation,
   validateUiDesignLoopFact,
   validateUiApplicability,
   validateUiContract,
@@ -35,6 +38,7 @@ import {
   analyzeDecisionOutline,
   buildShortUiDesignPrompt,
   projectAcceptanceExecutionData,
+  projectPostPhaseAcceptanceExecutionData,
   readUiApplicabilityFromDecisionLog,
   validateSpecClarifyAndDirectionFidelity,
   validateDecisionFreeze,
@@ -80,9 +84,21 @@ function currentMaterialContent(worker, name) {
   });
 }
 
+function currentPostPhases(worker) {
+  const index = text(worker.readArtifact("phases/index.md"), "phases/index.md content");
+  const names = materialFilesForCohort("post", { "phases/index.md": index })
+    .filter((name) => /^phases\/P\d+\.md$/.test(name));
+  return Object.freeze({
+    index,
+    names,
+    phases: Object.freeze(Object.fromEntries(names.map((name) => [name, text(worker.readArtifact(name), `${name} content`)]))),
+  });
+}
+
 function stageInputPacketFacts(worker, stage, materials) {
   const snapshot = captureWorkerSnapshot(worker);
-  const required = STAGE_MATERIALS[stage] ?? [];
+  const postPlan = stage === "build-plan" && worker.manifest?.activation_cohort === "post";
+  const required = postPlan ? Object.keys(materials ?? {}) : STAGE_MATERIALS[stage] ?? [];
   const missingMaterials = required.filter((name) => typeof materials?.[name] !== "string");
   if (missingMaterials.length) {
     return { facts: { status: "unavailable", reason: `stage input packet source materials missing: ${missingMaterials.join(", ")}` }, missing_items: [`stage input packet source materials missing: ${missingMaterials.join(", ")}`] };
@@ -96,7 +112,7 @@ function stageInputPacketFacts(worker, stage, materials) {
       stage,
       material_revision: worker.currentMaterialRevision,
       snapshot_tree: snapshot.tree,
-      source_materials: Object.fromEntries(required.map((name) => [name.replace(/\.md$/, ""), materials[name]])),
+      source_materials: Object.fromEntries(required.map((name) => [postPlan ? name : name.replace(/\.md$/, ""), materials[name]])),
     });
     const verified = verifyStageInputPacket(packet);
     if (!verified.ok) throw new Error(`stage input packet verification failed: ${verified.reason}`);
@@ -766,7 +782,10 @@ function researchFacts(worker, invocation, producerStage = worker.stage) {
   const ref = text(refs.research, "research report ref");
   if (!/^quality\/evidence\/research\/[a-f0-9]{64}\.json$/.test(ref)) throw new Error("research report ref is outside its canonical namespace");
   const item = readResearchReport({ task: { readRecord: (value) => worker.readEvidence(value).bytes }, ref, taskId: worker.identity.taskId, stage: producerStage, snapshotTree: captureWorkerSnapshot(worker).tree, materialScopeRevision: currentResearchMaterialScopeRevision(worker, producerStage) });
-  return { facts: { research_status: item.value.status, research_report_ref: item.ref, research_report_hash: item.sha256, research_disclosure: deriveResearchStatus([item]) }, evidence: { ref: item.ref, sha256: item.sha256 } };
+  const disclosure = deriveResearchStatus([item]);
+  const decisionLog = currentMaterialContent(worker, "decision-log.md").content;
+  const candidatePresentation = deriveResearchCandidatePresentation(decisionLog, disclosure);
+  return { facts: { research_status: item.value.status, research_report_ref: item.ref, research_report_hash: item.sha256, research_disclosure: { ...disclosure, candidate_presentation: candidatePresentation } }, evidence: { ref: item.ref, sha256: item.sha256 } };
 }
 
 function clarifyFacts(worker, invocation) {
@@ -1509,10 +1528,20 @@ function confirmationFacts(worker, invocation, { requireV2 = false } = {}) {
  */
 export async function acceptanceExecutionFacts(worker, snapshotTree) {
   if (worker?.stage !== "build-code") throw new Error("acceptance execution is private to build-code");
-  const projection = projectAcceptanceExecutionData(text(worker.readArtifact("tasks.md"), "tasks.md content"), {
-    decisionLog: text(worker.readArtifact("decision-log.md"), "decision-log.md content"),
-    spec: text(worker.readArtifact("spec.md"), "spec.md content"),
-  });
+  let projection;
+  if (worker.manifest?.activation_cohort === "post") {
+    const current = currentPostPhases(worker);
+    projection = projectPostPhaseAcceptanceExecutionData({
+      spec: worker.readArtifact("spec.md"),
+      index: current.index,
+      phases: current.phases,
+    });
+  } else {
+    projection = projectAcceptanceExecutionData(text(worker.readArtifact("tasks.md"), "tasks.md content"), {
+      decisionLog: text(worker.readArtifact("decision-log.md"), "decision-log.md content"),
+      spec: text(worker.readArtifact("spec.md"), "spec.md content"),
+    });
+  }
   if (projection.status !== "ready") {
     return Object.freeze({
       status: projection.status,
@@ -1907,21 +1936,27 @@ export function certifyCurrentTaskCompletion(worker, {
   acceptanceCoverage,
   formalRecordStatus = unavailableFormalRecordStatus(),
 } = {}) {
-  const validation = validatePlanTaskContract({
+  const post = worker.manifest?.activation_cohort === "post";
+  const currentPhaseSet = post ? currentPostPhases(worker) : null;
+  const validation = post ? validatePostPhaseContract({
+    spec: worker.readArtifact("spec.md"), index: currentPhaseSet.index, phases: currentPhaseSet.phases,
+  }) : validatePlanTaskContract({
     spec: worker.readArtifact("spec.md"),
     plan: worker.readArtifact("plan.md"),
     tasks: worker.readArtifact("tasks.md"),
-    // Task completion fields are a human-readable historical audit. Their
-    // current reachability is not a permit to progress or finish; global
-    // implementation, test, AC and review facts are authenticated below.
+    // Pre/history task-card completion is a human-readable audit, not a work permit.
     completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
   });
   const taskCompletion = validation.facts?.task_completion;
   const taskRows = new Map((validation.facts?.task_rows ?? []).map((row) => [row.id, row]));
-  const tasksPath = `specs/${worker.identity.taskId}/tasks.md`;
-  const expectedChanges = [...new Set((changedFiles ?? []).filter((path) => path !== tasksPath && path !== "AGENTS.md"))];
+  const executionIndexPath = `specs/${worker.identity.taskId}/${post ? "phases/index.md" : "tasks.md"}`;
+  const expectedChanges = [...new Set((changedFiles ?? []).filter((path) => path !== executionIndexPath && path !== "AGENTS.md"))];
   const completionGaps = [];
-  if (!taskCompletion || taskCompletion.total_count === 0) {
+  if (post) {
+    // Phase files declare work; actual completion is certified by the current
+    // changed-file, test, review, and AC evidence below, not a second task-card
+    // progress ledger or a permanent missing-history sentinel.
+  } else if (!taskCompletion || taskCompletion.total_count === 0) {
     completionGaps.push("tasks.md has no certifiable Task completion rows; current implementation, tests, AC coverage, and review facts are authoritative");
   } else if (taskCompletion.completed_count !== taskCompletion.total_count) {
     const details = taskCompletion.tasks
@@ -1929,10 +1964,12 @@ export function certifyCurrentTaskCompletion(worker, {
       .map(({ id, errors }) => `${id}: ${errors.join(", ") || "not completed"}`);
     completionGaps.push(`tasks.md completion history is incomplete: ${details.join("; ")}`);
   }
-  const plannedChangesFromRows = [...new Set([...taskRows.values()].flatMap((task) => [
+  const plannedChangesFromRows = post
+    ? [...new Set((validation.facts?.phase_rows ?? []).flatMap((phase) => phase.write_set))]
+    : [...new Set([...taskRows.values()].flatMap((task) => [
       ...(task.fields?.["精确文件"]?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
       ...(task.fields?.boundary?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
-  ]))];
+    ]))];
   const reviewRef = review.result_ref ?? review.attempt_ref;
   const reviewHash = review.result_hash ?? review.attempt_hash;
   if (!acceptanceCoverage || !Array.isArray(acceptanceCoverage.accepted_criterion_ids)
@@ -1948,7 +1985,7 @@ export function certifyCurrentTaskCompletion(worker, {
       && !sameStringSet(acceptanceCoverage.accepted_criterion_ids, expectedAc)) {
     completionGaps.push("build-code acceptance coverage differs from the current spec AC set; quality warning only");
   }
-  if (!validation.ok) completionGaps.push("plan/task structural diagnostics are incomplete; current implementation, tests, AC coverage, and review facts remain authoritative");
+  if (!validation.ok) completionGaps.push(`${post ? "Phase" : "plan/task"} structural diagnostics are incomplete; current implementation, tests, AC coverage, and review facts remain authoritative`);
   const coveredItems = (acceptanceCoverage?.items ?? []).filter(({ status }) => status === "covered");
   if (coveredItems.length !== expectedAc.length) completionGaps.push("build-code does not have covered evidence for every accepted AC; quality warning only");
   const quality = certifyBuildCodeQualityBasis({
@@ -1968,8 +2005,8 @@ export function certifyCurrentTaskCompletion(worker, {
     : Object.freeze({ ...quality.formal_record_status });
   const completion = {
     status: "completed",
-    evidence_ref: worker.artifactRef("tasks.md"),
-    evidence_hash: hashText(worker.readArtifact("tasks.md")),
+    evidence_ref: worker.artifactRef(post ? "phases/index.md" : "tasks.md"),
+    evidence_hash: hashText(worker.readArtifact(post ? "phases/index.md" : "tasks.md")),
     integration_review: { ref: reviewRef, sha256: reviewHash },
     formal_record_status: formal,
     quality_gaps: Object.freeze([...(quality.quality_gaps ?? []), ...completionGaps]),
@@ -1993,8 +2030,8 @@ function uncertifiedBuildCodeCompletion(worker, review, snapshotTree) {
   }
   const completion = {
     status: "completed",
-    evidence_ref: worker.artifactRef("tasks.md"),
-    evidence_hash: hashText(worker.readArtifact("tasks.md")),
+    evidence_ref: worker.artifactRef(worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md"),
+    evidence_hash: hashText(worker.readArtifact(worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md")),
     integration_review: { ref: reviewRef, sha256: reviewHash },
     formal_record_status: {
       status: "unavailable",
@@ -2621,7 +2658,10 @@ function mergedReviewFacts(worker, invocation, {
       self_checks: {
         no_oracle: materialOracle?.ok === true,
         no_provenance: review.facts.status === "recorded" || (review.facts.status === "unavailable" && Boolean(review.facts.attempt_ref)),
-        no_prewritten_test: structural?.facts?.command_oracle_checks?.valid === true,
+        // A declared command/oracle is not an authenticated prewritten test or target RED.
+        no_prewritten_test: worker.manifest?.activation_cohort === "post"
+          ? false
+          : structural?.facts?.command_oracle_checks?.valid === true,
         no_irreversible_action_without_confirmation: confirmation === null || Boolean(confirmation?.evidence?.ref && confirmation?.evidence?.sha256),
       },
     },
@@ -3593,18 +3633,33 @@ HANDLERS.set("make-decision", async (worker, input) => {
     requirementCoverageOutputs: worker.authenticatedRequirementContext?.requirementCoverageOutputs ?? [],
     taskId: worker.identity.taskId,
     directionReview: direction.value ?? direction,
-    // The record-model boundary, not a marker string in user-authored
-    // Markdown, decides whether this is a current task.  Current vNext
-    // tasks must publish the outline subject even when it is missing; legacy
-    // records remain readable without fabricating a new predicate.
-    requireOutline: currentOnly,
+    // `outline_closed` is retained inside convergence diagnostics for
+    // historical reading only. It no longer becomes a current completion
+    // subject in either cohort.
+    requireOutline: false,
+  });
+  const currentOutline = analyzeDecisionOutline(currentDecisionLog, {
+    taskId: worker.identity.taskId,
+    directionReview: direction.value ?? direction,
+  });
+  const explicitDivergenceRequirement = /(?:^|\n)\s*divergence_required\s*:\s*true\s*$/mi.test(currentDecisionLog);
+  const vagueRequirementSignals = /模糊需求|原始痛点|原始候选|发散候选|可证伪大纲|divergence/i.test(currentDecisionLog);
+  const explicitDivergenceSkip = /(?:^|\n)\s*divergence_required\s*:\s*false\s*$/mi.test(currentDecisionLog);
+  const divergenceOutline = deriveDecisionDivergenceOutline(currentDecisionLog, {
+    outlineVersion: currentOutline.outline_version,
+    // A vague/pain-point intake is not allowed to silently become
+    // `not_applicable` merely because the author forgot the explicit marker.
+    // An explicit false remains the documented escape hatch for a concrete
+    // requirement that has no meaningful candidate space.
+    required: explicitDivergenceRequirement || (vagueRequirementSignals && !explicitDivergenceSkip),
   });
   const directionReviewInput = buildDirectionReviewInput({
     decisionLog: currentDecisionLog,
     directionReview: direction.value ?? direction,
   });
-  const hasCurrentOutline = currentOnly;
   const uiApplicability = readUiApplicabilityFromDecisionLog(currentDecisionLog);
+  const legacyOutcomeQualityGap = worker.legacyStageOutcomeStatus !== undefined
+    && worker.legacyStageOutcomeStatus !== "completed";
   const specEvidence = { ref: decisionArtifactRef, sha256: decisionArtifactHash };
   return addCompletion("make-decision", {
     fallback_protocol: fallbackProtocolFacts(worker, input),
@@ -3619,6 +3674,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       decision_artifact_hash: decisionArtifactHash,
       audit_gaps: auditGaps,
       ui_applicability: uiApplicability,
+      divergence_outline: divergenceOutline,
       direction_review_input: directionReviewInput,
       completion_subjects: {
         ui_applicability: subjectFact(
@@ -3631,19 +3687,19 @@ HANDLERS.set("make-decision", async (worker, input) => {
         scope: subjectFact((sectionHasContent(currentDecisionLog, "范围") || sectionHasContent(currentDecisionLog, "目标、用户流程与边界")) ? "passed" : "missing", [specEvidence], "decision-log scope section"),
         non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [specEvidence], "decision-log non-goals section"),
         risks: subjectFact((sectionHasContent(currentDecisionLog, "风险与延期交接") || sectionHasContent(currentDecisionLog, "风险、延期与交接")) ? "passed" : "missing", [specEvidence], "decision-log risk handoff section"),
-        requirement_coverage: subjectFact(convergence.facts.requirement_coverage, [specEvidence], convergence.facts.requirement_coverage === "passed" ? "decision-log requirement coverage matrix is present" : convergence.errors[0]),
+        requirement_coverage: subjectFact(
+          legacyOutcomeQualityGap ? "missing" : convergence.facts.requirement_coverage,
+          [specEvidence],
+          legacyOutcomeQualityGap
+            ? `legacy stage outcome status ${worker.legacyStageOutcomeStatus} remains an adverse quality fact`
+            : convergence.facts.requirement_coverage === "passed"
+              ? "decision-log requirement coverage matrix is present"
+              : convergence.errors[0],
+        ),
         goal_achievement: subjectFact(convergence.facts.goal_achievement, [specEvidence], convergence.facts.goal_achievement === "passed" ? "decision-log goal achievement is present" : convergence.errors.find((e) => e.includes("goal")) ?? "decision-log goal achievement section missing"),
         acceptance_clarity: subjectFact(convergence.facts.acceptance_clarity, [specEvidence], convergence.facts.acceptance_clarity === "passed" ? "decision-log acceptance criteria are present" : convergence.errors.find((e) => e.includes("acceptance")) ?? "decision-log acceptance clarity section missing"),
         solution_convergence: subjectFact(convergence.facts.solution_convergence, [specEvidence], convergence.facts.solution_convergence === "passed" ? "decision-log shows a converged solution" : convergence.errors.find((e) => e.includes("converged solution")) ?? "decision-log solution convergence section missing"),
         plain_language_card: subjectFact(convergence.facts.plain_language_card, [specEvidence], convergence.facts.plain_language_card === "passed" ? "decision-log end card is in plain language" : convergence.errors.find((e) => e.includes("end card")) ?? "decision-log plain-language end card missing"),
-        ...(hasCurrentOutline ? { outline_closed: subjectFact(
-          convergence.facts.outline_closed,
-          [specEvidence, ...(direction.evidence ? [direction.evidence] : [])],
-          convergence.facts.outline_closed === "passed"
-            ? "current OI outline satisfies all five close conjuncts"
-            : convergence.outline.errors[0] ?? "current OI outline is not closed",
-          { outline_components: convergence.outline.components },
-        ) } : {}),
       },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
@@ -3663,7 +3719,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
     missing_items: [...new Set([
       ...dispositions.missing_items,
       ...uiApplicability.missing_items,
-      ...(hasCurrentOutline ? convergence.outline.errors.map((error) => `outline_closed: ${error}`) : []),
     ])],
   }, {
     worker,
@@ -3776,11 +3831,26 @@ HANDLERS.set("build-spec", async (worker, input) => {
   });
 });
 HANDLERS.set("build-plan", async (worker, input) => {
-  const materials = Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => {
+  const post = worker.manifest?.activation_cohort === "post";
+  const indexContent = post ? text(worker.readArtifact("phases/index.md"), "phases/index.md content") : null;
+  const materialNames = post
+    ? materialFilesForCohort("post", { "phases/index.md": indexContent })
+    : ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+  const materials = Object.fromEntries(materialNames.map((name) => {
     const content = text(worker.readArtifact(name), `${name} content`);
     return [name, content];
   }));
-  const executable = validateExecutablePlanTaskMinimum({
+  const structural = post ? validatePostPhaseContract({
+    spec: materials["spec.md"],
+    index: materials["phases/index.md"],
+    phases: Object.fromEntries(materialNames.filter((name) => /^phases\/P\d+\.md$/.test(name)).map((name) => [name, materials[name]])),
+  }) : validatePlanTaskContract({
+    spec: materials["spec.md"],
+    plan: materials["plan.md"],
+    tasks: materials["tasks.md"],
+    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
+  });
+  const executable = post ? { ok: structural.ok, errors: structural.errors } : validateExecutablePlanTaskMinimum({
     spec: materials["spec.md"],
     plan: materials["plan.md"],
     tasks: materials["tasks.md"],
@@ -3789,12 +3859,6 @@ HANDLERS.set("build-plan", async (worker, input) => {
   if (!executable.ok) {
     throw new Error(`build-plan minimum executable contract failed: ${executable.errors.join("; ")}`);
   }
-  const structural = validatePlanTaskContract({
-    spec: materials["spec.md"],
-    plan: materials["plan.md"],
-    tasks: materials["tasks.md"],
-    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
-  });
   const sliceAdvisory = structural.facts?.slice_advisory ?? null;
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
@@ -3802,14 +3866,15 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const stageInputPacket = stageInputPacketFacts(worker, "build-plan", materials);
   const missingItems = structural.ok
     ? []
-    : structural.errors.map((error) => `plan-task contract incomplete: ${error}`);
+    : structural.errors.map((error) => `${post ? "Phase" : "plan-task"} contract incomplete: ${error}`);
   if (!decisionFreeze.ok) missingItems.push(...decisionFreeze.errors.map((error) => `decision freeze: ${error}`));
-  const materialOracle = validateMaterialOracleContract({
+  const materialOracle = post ? structural : validateMaterialOracleContract({
     spec: materials["spec.md"],
     plan: materials["plan.md"],
     tasks: materials["tasks.md"],
   });
   if (!materialOracle.ok) missingItems.push(...materialOracle.errors.map((error) => `material/oracle contract incomplete: ${error}`));
+  if (post) missingItems.push("prewritten target RED evidence is not authenticated by the post build-plan handler; Phase command/oracle text is only a declaration");
   missingItems.push(...stageInputPacket.missing_items);
   const research = input.receipts?.research === undefined ? null : researchFacts(worker, input);
   const componentQuality = componentQualityConsumerFacts(worker, input);
@@ -3822,7 +3887,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
       return null;
     }
   };
-  if (worker.manifest?.record_model !== "vnext-single-write") {
+  if (!post && worker.manifest?.record_model !== "vnext-single-write") {
     optional("plan receipt missing/unverified/mismatch", () => {
       const item = receipt(worker, input, "plan");
       text(item.value.content, "plan content");
@@ -3863,28 +3928,38 @@ HANDLERS.set("build-plan", async (worker, input) => {
   missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final plan review");
-  const planRef = worker.artifactRef("plan.md");
-  const tasksRef = worker.artifactRef("tasks.md");
-  const planEvidence = { ref: planRef, sha256: hashText(materials["plan.md"]) };
-  const tasksEvidence = { ref: tasksRef, sha256: hashText(materials["tasks.md"]) };
+  const planRef = post ? null : worker.artifactRef("plan.md");
+  const tasksRef = post ? null : worker.artifactRef("tasks.md");
+  const phaseIndexRef = post ? worker.artifactRef("phases/index.md") : null;
+  const phaseRefs = post ? materialNames.filter((name) => /^phases\/P\d+\.md$/.test(name)).map((name) => worker.artifactRef(name)) : [];
+  const materialEvidence = post
+    ? ["phases/index.md", ...materialNames.filter((name) => /^phases\/P\d+\.md$/.test(name))].map((name) => ({ ref: worker.artifactRef(name), sha256: hashText(materials[name]) }))
+    : [{ ref: planRef, sha256: hashText(materials["plan.md"]) }, { ref: tasksRef, sha256: hashText(materials["tasks.md"]) }];
   const fr = structural.facts?.fr_coverage;
   const ac = structural.facts?.ac_coverage;
-  const deletionProofs = /(?:deletion proofs?|删除证明|不涉及删除|no deletion)/i.test(`${materials["plan.md"]}\n${materials["tasks.md"]}`);
-  const declaredStrategy = declaredFinalTestScope(materials["tasks.md"]);
+  const materialText = post ? phaseRefs.map((_, index) => materials[`phases/P${index + 1}.md`]).join("\n") : `${materials["plan.md"]}\n${materials["tasks.md"]}`;
+  const deletionProofs = /(?:deletion proofs?|删除证明|不涉及删除|no deletion)/i.test(materialText);
+  const declaredStrategy = post
+    ? (() => {
+      const final = structural.facts?.phase_rows?.at(-1);
+      return final?.command ? { status: "declared", command: final.command, scope: "focused" } : { status: "unknown", reason: "final Phase command is missing" };
+    })()
+    : declaredFinalTestScope(materials["tasks.md"]);
   const testStrategy = {
     status: !structural.ok ? "incomplete" : declaredStrategy.status === "declared" ? "recorded" : "unknown",
     command: declaredStrategy.command ?? null,
     scope: declaredStrategy.scope ?? null,
-    source: "tasks.md",
+    source: post ? "final Phase file" : "tasks.md",
     ...(declaredStrategy.reason ? { reason: declaredStrategy.reason } : {}),
     ...(structural.ok ? {} : { reason: "plan/task contract is incomplete; test strategy is not authoritative" }),
   };
-  const testRouting = declaredTestRouting(structural);
+  const testRouting = post
+    ? { status: "unknown", source: "independent Phase files", reason: "test tier requires the post Phase routing advisor readback" }
+    : declaredTestRouting(structural);
   return addCompletion("build-plan", {
     fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
-      plan_ref: planRef,
-      tasks_ref: tasksRef,
+      ...(post ? { phase_index_ref: phaseIndexRef, phase_refs: phaseRefs } : { plan_ref: planRef, tasks_ref: tasksRef }),
       snapshot_tree: before.tree,
       source_digest: before.source_digest,
       decision_freeze: decisionFreeze,
@@ -3894,11 +3969,11 @@ HANDLERS.set("build-plan", async (worker, input) => {
       stage_input_packet: stageInputPacket.facts,
       audit_gaps: auditGaps,
       completion_subjects: {
-        fr_coverage: subjectFact(fr?.accepted_count > 0 && fr.covered_count === fr.accepted_count ? "passed" : "missing", [planEvidence, tasksEvidence], "FR coverage from current plan/tasks"),
-        ac_coverage: subjectFact(ac?.accepted_count > 0 && ac.covered_count === ac.accepted_count ? "passed" : "missing", [planEvidence, tasksEvidence], "AC coverage from current plan/tasks"),
-        dependencies: subjectFact(structural.facts?.dependency_validation?.valid === true ? "passed" : "missing", [planEvidence, tasksEvidence], "dependency graph validation"),
-        deletion_proofs: subjectFact(deletionProofs ? "passed" : "missing", [planEvidence, tasksEvidence], "explicit deletion proof or not-applicable reason"),
-        executable_tasks: subjectFact(executable.ok && structural.facts?.command_oracle_checks?.valid === true ? "passed" : "missing", [tasksEvidence], "task command/oracle executability"),
+        fr_coverage: subjectFact(fr?.accepted_count > 0 && fr.covered_count === fr.accepted_count ? "passed" : "missing", materialEvidence, post ? "FR coverage from current Phase files" : "FR coverage from current plan/tasks"),
+        ac_coverage: subjectFact(ac?.accepted_count > 0 && ac.covered_count === ac.accepted_count ? "passed" : "missing", materialEvidence, post ? "AC coverage from current Phase files" : "AC coverage from current plan/tasks"),
+        dependencies: subjectFact(structural.facts?.dependency_validation?.valid === true ? "passed" : "missing", materialEvidence, "dependency graph validation"),
+        deletion_proofs: subjectFact(deletionProofs ? "passed" : "missing", materialEvidence, "explicit deletion proof or not-applicable reason"),
+        executable_tasks: subjectFact(executable.ok && structural.facts?.command_oracle_checks?.valid === true ? "passed" : "missing", materialEvidence, "task command/oracle executability"),
       },
       review: review.facts,
       ...(research ? { research: research.facts } : {}),
@@ -3913,14 +3988,16 @@ HANDLERS.set("build-plan", async (worker, input) => {
     missing_items: missingItems,
   }, {
     worker,
-    artifacts: [
-      { label: "实施计划", ref: planRef, hash: hashText(materials["plan.md"]) },
-      { label: "任务清单", ref: tasksRef, hash: hashText(materials["tasks.md"]) },
-    ],
+    artifacts: post
+      ? [{ label: "Phase 索引", ref: phaseIndexRef, hash: hashText(materials["phases/index.md"]) }, ...phaseRefs.map((ref, index) => ({ label: `Phase P${index + 1}`, ref, hash: hashText(materials[`phases/P${index + 1}.md`]) }))]
+      : [
+        { label: "实施计划", ref: planRef, hash: hashText(materials["plan.md"]) },
+        { label: "任务清单", ref: tasksRef, hash: hashText(materials["tasks.md"]) },
+      ],
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
-    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? "unknown"}`,
+    verification: `${post ? "spec 与独立 Phase 文件可读，Phase 合同" : "四份当前材料可读，plan-task"}最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? "unknown"}`,
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {
@@ -3933,7 +4010,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
     const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
-    const current = currentMaterialContent(worker, "tasks.md");
+    const current = currentMaterialContent(worker, worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md");
     const snapshot = captureWorkerSnapshot(worker);
     const review = safeReviewFacts(worker, input, "review", undefined, "build-code", {
       requireRiskAcceptance: false,
@@ -3977,7 +4054,7 @@ HANDLERS.set("build-code", async (worker, input) => {
         ...(uiQa ? { ui_qa: uiQa.facts } : {}),
         review: review.facts,
         finding_dispositions: dispositions.facts,
-        audit_gaps: ["current implementation/test facts are unavailable; current four materials remain the work authority"],
+        audit_gaps: [`current implementation/test facts are unavailable; current ${worker.manifest?.activation_cohort === "post" ? "spec and indexed Phase files" : "four materials"} remain the work authority`],
       },
       evidence_refs: [
         ...(uiQa?.evidence ? [uiQa.evidence] : []),
@@ -4001,8 +4078,8 @@ HANDLERS.set("build-code", async (worker, input) => {
       businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
       audit: null,
       verification: review.facts.status === "recorded"
-        ? "当前四份材料可继续；实现和测试质量事实尚未提供，现有集成审查已保留"
-        : "当前四份材料可继续；实现、测试和审查质量事实尚未提供",
+        ? "当前材料可继续；实现和测试质量事实尚未提供，现有集成审查已保留"
+        : "当前材料可继续；实现、测试和审查质量事实尚未提供",
     });
   }
   const missingItems = [];

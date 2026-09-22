@@ -16,6 +16,18 @@ import { parseReviewerOutput } from "../review/review-output.mjs";
 import { reviewPacketMaterialId } from "../review/review-packet-identity.mjs";
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort } from "../task/material-workspace.mjs";
+
+export function ordinaryReviewMaterialRevision(materials, materialScope = null) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) throw new TypeError("ordinary review materials must be a map");
+  const post = Array.isArray(materialScope) && materialScope.includes("phases/index.md");
+  const names = post ? materialFilesForCohort("post", materials) : CURRENT_MATERIAL_FILES;
+  if (post && JSON.stringify(materialScope) !== JSON.stringify(names)) throw new Error("ordinary review post material scope does not match indexed Phase files");
+  if (names.some((name) => typeof materials[name] !== "string" || materials[name].trim() === "")) {
+    throw new Error("ordinary review material bundle is incomplete");
+  }
+  return materialRevisionFromValues(names.map((name) => [name, materials[name]]));
+}
 
 function readTypedExecutionFact(selection, fact, read, dependencies, key) {
   if (!selection || !SHA256_HEX.test(selection.sha256 ?? "")
@@ -102,7 +114,7 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
       || frozen.content_sha256 !== frozenRef.provider_input_sha256) throw new Error("frozen execution review original bytes hash mismatch");
   const request = JSON.parse(bytes.toString("utf8"));
   if (request.stage !== "verify-code" || reviewPacketMaterialId(request) !== review.material_id
-      || materialRevisionFromValues(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, request.materials.runtime_current_materials?.[name]])) !== fact.material_revision) throw new Error("ordinary review did not consume the bound material bundle");
+      || ordinaryReviewMaterialRevision(request.materials.runtime_current_materials, fact.material_scope) !== fact.material_revision) throw new Error("ordinary review did not consume the bound material bundle");
   const execution = readTypedExecutionFact(request.reviewed_execution, fact, read, dependencies, key);
   if (binding.reviewed_execution.ref !== request.reviewed_execution.ref
       || binding.reviewed_execution.sha256 !== request.reviewed_execution.sha256
@@ -592,6 +604,18 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
           || value.subject !== fact.subject
           || value.snapshot_tree !== fact.snapshot_tree) {
         throw new Error("stage-quality-missing evidence does not bind the missing quality fact");
+      }
+      dependencies[key] = "current";
+      return;
+    }
+    if (value.schema_version === "stage-quality-unavailable.v1") {
+      if (fact.status !== "unavailable"
+          || value.task_id !== fact.task_id
+          || value.stage !== fact.stage
+          || value.subject !== fact.subject
+          || value.snapshot_tree !== fact.snapshot_tree
+          || JSON.stringify(value.error) !== JSON.stringify(fact.error)) {
+        throw new Error("stage-quality-unavailable evidence does not bind the unavailable quality fact");
       }
       dependencies[key] = "current";
       return;

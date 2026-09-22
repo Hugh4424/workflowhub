@@ -9,9 +9,11 @@
 
 ## 先记住三条规则
 
-1. 当前任务的需求真相只有认证 worktree 中 `specs/<task-id>/` 下的四份材料：
-   `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`。原始需求和历史记录是来源与事实，
-   不是第五份当前材料。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、
+1. 当前任务的需求真相在认证 worktree 的 `specs/<task-id>/`，按 cohort 读取：
+   pre/history 是 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；post 是
+   `decision-log.md`、含全局实现设计的 `spec.md`、独立 `phases/P<n>.md`、纯指针
+   `phases/index.md`。原始需求和历史记录是来源与事实，不是第二份当前材料。
+   外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、
    `index.json` 等执行文件，不替代 worktree 材料；这只是落点约定，不是新 gate。
 2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
@@ -20,7 +22,7 @@
    `spec-analyze`。它是这四个 stage 的唯一 stage-end 语义检查和质量事实契约 owner；
    `verify-code` 不调用它，改由 `dsh-code-review` 做当前实现的代码审查。现有 stage
    publication 是唯一写入路径，原子写入 `quality/facts` 与 acceptance evidence。
-   `spec-analyze` 不直接改四份材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
+   `spec-analyze` 不直接改当前材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
    缺失或 `unavailable` 不等于通过，也不能阻止同 task 修复。
 
 ## 正式 stage 集合与 cohort 路线
@@ -29,14 +31,14 @@
 | --- | --- | --- | --- |
 | `make-decision` | 原始需求、仓库事实 | `decision-log.md` | pre → build-spec；post → build-plan |
 | `build-spec`（pre/history） | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
-| `build-plan` | 原始需求、decision-log；pre 另读 spec | post 写 `spec.md`、`plan.md`、`tasks.md`；pre 写 plan/tasks | build-code 的实施任务 |
-| `build-code` | 四份材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
+| `build-plan` | 原始需求、decision-log；pre 另读 spec | post 写 `spec.md`、独立 `phases/P<n>.md`、`phases/index.md`；pre 写 plan/tasks | build-code 的实施任务 |
+| `build-code` | 当前 cohort 材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
 | `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 自动记录结果；随后单独谈 close 授权 |
 
 `post` 不注册或执行 build-spec；它保留为 pre/history 的正式 stage，而不是死代码。每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
 `quality/reviews/results/` 或 `quality/reviews/attempts/`。旧 stage outcome 仅作历史兼容事实，当前阶段不依赖它。前四 stage 的 `spec-analyze` 结果由现有 stage
 publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
-什么，不会覆盖四份材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
+什么，不会覆盖当前材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
 
 ## 三个状态视角和十个读取入口
 
@@ -54,7 +56,7 @@ host、doctor、status、monitor、run、review、verify、confirm、authorize�
 
 ### 进入 stage
 
-当前 WorkflowHub 会话先读取当前 stage 的 workflow skill、依赖清单、原始需求、适用的四份材料和
+当前 WorkflowHub 会话先读取当前 stage 的 workflow skill、依赖清单、原始需求、适用的 cohort 材料和
 已有真实事实。只读取当前任务范围；旧 task、旧 review 和历史 snapshot 只能作为只读
 背景。先确认当前工作区、依赖、接口、权限、安全和测试环境是否满足本 stage 的工作条件。
 
@@ -119,7 +121,7 @@ worktree cleanup 和 branch cleanup，并对每一步做物理读回。
 ### 标准输入
 
 原始用户需求、仓库和运行环境事实、当前 worktree/依赖状态、宪法，以及当前已有的
-`decision-log.md`。后续 `spec.md`、`plan.md` 和 `tasks.md` 不能被提前假设为存在。
+`decision-log.md`。后续材料不能被提前假设为存在：pre 是 `spec.md`、`plan.md`、`tasks.md`，post 是 `spec.md`、`phases/P<n>.md`、`phases/index.md`。
 
 进入研究前，主会话在同一份 `decision-log.md` 建立唯一 OI 大纲：以
 `background`、`problem`、`goal`、`solution`、`acceptance`、`extension` 六个需求框架节点
@@ -218,40 +220,32 @@ build-spec 只消费已确认的方向和真实事实，不再替用户补产品
 
 ### 下游交接
 
-build-plan 以 `spec.md` 为原材料设计实现边界、测试 oracle 和 phase；不重新发明需求，也
-不把 spec 缺口隐藏在 tasks.md。
+pre build-plan 以既有 `spec.md` 为输入，继续写历史 plan/tasks。post build-plan
+在同一份 `spec.md` 内完成需求翻译、全局实现设计与验证策略，再生成独立 Phase；
+它不重新发明 PRD/decision 的目标，也不把 spec 缺口藏进 Phase 索引。
 
 ## `build-plan`：把规格变成可执行任务
 
 ### 标准输入
 
-原始需求、`decision-log.md`、`spec.md`、当前 `plan.md`/`tasks.md`（如有）以及前置事实。
+原始需求、`decision-log.md` 与前置事实。pre 另读既有 `spec.md`、`plan.md`/`tasks.md`；
+post 读取已有 `spec.md` 与 `phases/P<n>.md`、`phases/index.md`（如有），按当前版本增量修复。
 
 ### 标准步骤与最小结果
 
-1. `read-current-materials`：读取当前决定和规格。
-2. `conditional-spec-research`：按需核实规划事实，并记录结果。
-3. `testing-system-blueprint`：为每个行为 phase 设计风险、场景、oracle、命令、证据和
-   覆盖限制；不宣称已执行测试。
-4. `spec-plan`：形成实现 phase、依赖、边界、风险、回滚和验证方案。
-5. `simplicity-guard`：删除不必要的拆分、重复组件和范围扩张。
-6. `plan-eng-review`：检查工程顺序、失败路径、依赖和回滚。
-7. `test-routing-advisor`：按预计改动给出测试层级；build-code 会按真实 changed files
-   必要时重判。
-8. `spec-tasks`：生成每张可执行任务卡，写明 Goal、Files、AC/FR、RED/GREEN、命令、oracle、
-   evidence path、覆盖限制、STOP 和 rollback。
-9. `review-plan`：对 plan/tasks 做一次独立 advice review。
-10. `main-agent-disposes-findings`：在本 stage 修复计划和任务问题。
-11. `final-spec-analyze`：这是 build-plan 的历史兼容名称，语义上就是 stage-end
-    `spec-analyze`；它检查原始需求、decision-log、spec、plan、tasks、所有 DEFER/OPEN 和
-    每个 task oracle 的真实语义与证据。
-12. `publish-plan-result`：交接 plan、tasks 和六项摘要。build-plan step 12
-    必须先取得人工确认；确认后只允许写 `tasks.md` 执行状态填写区，不能
-    改写 `plan.md` 语义段。
+post 按 `workflows/build-plan/steps.json` 的 13 步执行：读取当前材料 → 条件研究 →
+规格澄清 → `spec-specify` 写产品规格 → 条件 UI readiness → `spec-plan` 在同一
+`spec.md` 写全局工程方案并生成每个 `phases/P<n>.md` → 测试系统蓝图 →
+测试路由 → 一次合并独立审查 → 主会话处置 findings → 最终 `spec-analyze` →
+发布并取得真实人工确认 → 阶段反思。`spec-tasks` 从各 Phase 头部生成
+`phases/index.md`，只列路径、锚点、写集、依赖和 consumer，不复制正文或执行状态。
+pre/history 继续按原 `build-spec → build-plan` 路线消费旧四材料，不迁移旧文件。
 
 ### 产物、完成与失败边界
 
-核心产物是 `plan.md` 和 `tasks.md`。每个行为 phase 必须有窄文件边界、依赖、实施顺序、
+post 核心产物是含需求翻译四件与全局实现设计的 `spec.md`、独立
+`phases/P<n>.md` 和纯指针 `phases/index.md`；不生成 `plan.md/tasks.md` 双写。
+pre/history 核心产物仍是 `plan.md`、`tasks.md`。每个行为 Phase 必须有窄文件边界、依赖、实施顺序、
 失败恢复、测试策略、证据路径和停止条件；计划只能设计，不冒充代码、测试或 review 已完成。
 缺 AC/FR 映射、任务无真实 oracle、文件边界不明、依赖未解决或 DEFER/OPEN 没有 owner/触发
 条件/消费者/关闭条件时，当前 stage 修复后再交接。
@@ -264,19 +258,20 @@ build-plan 以 `spec.md` 为原材料设计实现边界、测试 oracle 和 phas
 
 ### 下游交接
 
-build-code 只能按 `plan.md`/`tasks.md` 的当前 phase 执行；它以真实改动范围重判测试，不
+build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
+`phases/P<n>.md` 和 `phases/index.md`，pre/history 读 plan/tasks。它以真实改动范围重判测试，不
 能因为计划写了某个路径就声称该路径实际改动或已验证。
 
 ## `build-code`：按 phase 实施并保留真实证据
 
 ### 标准输入
 
-四份当前材料、当前 phase card、真实 worktree、依赖和 plan 设计的测试路线。历史记录不能
+当前 cohort 材料、当前 Phase、真实 worktree、依赖和设计的测试路线。历史记录不能
 代替当前实现或当前证据。
 
 ### 每个 phase 的标准循环
 
-1. `read-current-task-documents`：读取四份材料并选择下一个未完成 task。
+1. `read-current-task-documents`：读取当前 cohort 材料并选择下一个未完成 Phase task。
 2. `write-red-tests`：行为变化先写并运行 RED；纯材料任务明确记录不适用。
 3. `implement-change`：只改 phase 允许的文件和同 task 事实栏。
 4. `inspect-and-route-actual-tests`：检查真实 diff，必要时重判测试层级。
@@ -296,7 +291,7 @@ build-code 只能按 `plan.md`/`tasks.md` 的当前 phase 执行；它以真实�
     逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
 2. `final-integration-review`：审查跨 phase seam、完整实现和最终证据；无可信终态就保持
     unavailable/incomplete。
-3. `stage-end-spec-analyze`：检查原始需求、四份材料、实现、测试、AC、review 和真实用户
+3. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
     结果；当前 stage 修复实现或事实缺口。
 4. `publish-code-result`：交接实现和完整 build-code 摘要。
 
@@ -315,7 +310,7 @@ finding 必须原样保留。它们是质量事实，不得伪造，但也不应
 
 ### 下游交接
 
-verify-code 消费当前实现、真实 consumer 和相关测试上下文，不能只消费 tasks.md 的文字状态；
+verify-code 消费当前实现、真实 consumer 和相关测试上下文，不能只消费旧 tasks.md 或新 Phase 索引的文字状态；
 它不重新审计 AC、材料或 evidence tree。未授权的 commit、
 push、merge、cleanup 不在 build-code 中自动执行。
 
@@ -324,7 +319,7 @@ push、merge、cleanup 不在 build-code 中自动执行。
 ### 标准输入
 
 当前代码 diff、真实入口和 consumer、实现评估、相关测试上下文、失败/恢复边界和开放代码风险。
-四份材料只作为理解意图的背景，不在本阶段重新验收。
+当前 cohort 材料只作为理解意图的背景，不在本阶段重新验收。
 
 ### 标准步骤与最小结果
 
@@ -361,7 +356,7 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 ## `mini-task` 的位置
 
 `mini-task` 是独立的精简交付流程，不是第六个 stage，也不是历史 `scope_revision`、successor
-或 continuation。它复用四份材料和现有 task-close，只有两个专用 review 主题：
+或 continuation。它复用当前 cohort 材料和现有 task-close，只有两个专用 review 主题：
 `mini_task.design` 审方案，`mini_task.implementation` 审实施、测试、AC trace 和真实结果。
 它适合边界清楚、单一结果、影响面有限且没有重大架构/迁移/权限/安全决定的功能；用户明确
 指定时可以使用，但 Agent 必须说明风险。来自 A 的 mini-task 完成后，A 按普通 stage 重新调用

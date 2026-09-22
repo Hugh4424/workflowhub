@@ -57,8 +57,9 @@ describe("D-015 stage routing and concrete testing contract", () => {
       "talk-with-zhipeng", "grill-with-docs", "decision-log", "deep-research", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
     expect(stepSlugs("make-decision")).toEqual(expect.arrayContaining([
-      "talk-round-1", "talk-round-2", "talk-round-3", "grill-with-docs",
+      "research-and-diverge", "outline-talk", "module-convergence", "grill-with-docs",
     ]));
+    expect(stepSlugs("make-decision").some((slug) => /^talk-round-\d+$/.test(slug))).toBe(false);
     for (const stage of DOWNSTREAM_STAGES) {
       expect(names(stage)).not.toContain("talk-with-zhipeng");
       expect(names(stage)).not.toContain("grill-with-docs");
@@ -82,9 +83,11 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(evidenceKinds("build-plan")).not.toContain("skill_invocation");
     expect(JSON.stringify(steps("build-plan"))).not.toContain("test_strategy");
     const skill = read("workflows/build-plan/SKILL.md");
-    expect(skill).toMatch(/For pre-cohort tasks[\s\S]{0,120}`plan\.md` and `tasks\.md`[\s\S]{0,180}For post-cohort tasks[\s\S]{0,180}`spec\.md`, `plan\.md`, and `tasks\.md`/i);
-    expect(skill).toMatch(/Do not implement code or execute RED\/GREEN/i);
-    expect(skill).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
+    expect(skill).toMatch(/For pre-cohort tasks[\s\S]{0,100}`plan\.md`\/`tasks\.md` contract/i);
+    expect(skill).toMatch(/For post-cohort tasks[\s\S]{0,160}`spec\.md`[\s\S]{0,90}`phases\/P<n>\.md`[\s\S]{0,70}`phases\/index\.md`/i);
+    expect(skill).toMatch(/No post-cohort plan\/tasks dual write/i);
+    expect(skill).toMatch(/build-plan author writes a real[\s\S]*test and executes its scoped command to establish target RED/i);
+    expect(skill).toMatch(/Build-code uses[\s\S]*same test GREEN/i);
     expect(read("workflows/build-spec/SKILL.md")).toMatch(/Do not run Talk or Grill in this stage/i);
     expect(json("skills/wh-review/stage-skill-plan.json").stages["build-plan"].required_skills)
       .toEqual(["review"]);
@@ -118,19 +121,23 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(protocol).toContain("`workflows/<stage>/SKILL.md` 和 `skill-deps.yaml`");
   });
 
-  it("starts downstream stages from the current four-material handoff", () => {
+  it("starts downstream stages from cohort-specific current materials", () => {
     const expectedInputs = {
       "build-spec": ["decision-log"],
-      "build-plan": ["decision-log.md", "spec.md"],
-      "build-code": ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
-      "verify-code": ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
+      "build-plan": ["decision-log.md"],
+      "build-code": ["decision-log.md", "spec.md", "phases/index.md", "phases/P<n>.md"],
+      "verify-code": ["decision-log.md", "spec.md", "phases/index.md", "phases/P<n>.md"],
     };
     for (const [stage, materials] of Object.entries(expectedInputs)) {
       const firstStepInputs = JSON.stringify(json(`workflows/${stage}/steps.json`).steps[0].entry_conditions);
       for (const material of materials) expect(firstStepInputs, `${stage} must read ${material}`).toContain(material);
     }
-    expect(read("skills/workflowhub-host-protocol/SKILL.md"))
-      .toContain("阶段之间只通过当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 传递工作真相");
+    for (const stage of ["build-code", "verify-code"]) {
+      const firstStepInputs = JSON.stringify(json(`workflows/${stage}/steps.json`).steps[0].entry_conditions);
+      expect(firstStepInputs).not.toContain('"uri_or_path":"plan.md"');
+      expect(firstStepInputs).not.toContain('"uri_or_path":"tasks.md"');
+      expect(read(`workflows/${stage}/SKILL.md`)).toMatch(/pre\/history[\s\S]{0,130}`plan\.md`[\s\S]{0,55}`tasks\.md`/i);
+    }
   });
 
   it("routes build-code against actual scope and directly uses one concrete testing package", () => {
@@ -154,7 +161,11 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(buildCodeSteps.find((step) => step.step_slug === "run-tests")
       .completion_evidence.map(({ kind }) => kind)).toContain("test");
     expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").observable_result)
-      .toMatch(/tasks\.md is marked completed only when actual changes, tests, AC evidence, and review dispositions support that claim/i);
+      .toMatch(/current task facts is marked completed only when actual changes, tests, AC evidence, and review dispositions support that claim/i);
+    expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").completion_evidence)
+      .not.toContainEqual(expect.objectContaining({ uri_or_path: "tasks.md" }));
+    expect(read("workflows/build-code/SKILL.md")).toMatch(/For pre\/history,[\s\S]*task card's `执行状态填写区`/i);
+    expect(read("workflows/build-code/SKILL.md")).toMatch(/For post,[\s\S]*task facts\/quality evidence/i);
     const skill = read("workflows/build-code/SKILL.md");
     expect(skill).toMatch(/findings\s+and\s+transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
@@ -180,14 +191,14 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(read("workflows/build-code/SKILL.md")).toMatch(/may mark testing not applicable with a plain\s+reason/i);
   });
 
-  it("keeps verify-code focused on current implementation code review", () => {
+  it("keeps verify-code focused on implementation while checking original-requirement drift", () => {
     const verify = read("workflows/verify-code/SKILL.md");
-    expect(verify).toContain("对上游材料本身，本阶段只审查代码及其对当前实现的影响；不重新检查其完整性，也不列 AC 逐条结论。");
+    expect(verify).toMatch(/原始需求|原话/);
+    expect(verify).toMatch(/遗漏|错绑|强度/);
     expect(verify).toMatch(/真实入口、真实 consumer/);
     expect(verify).toMatch(/生命周期、并发、取消/);
     expect(verify).toMatch(/权限、安全边界/);
     expect(verify).not.toContain("stage-end-spec-analyze");
-    expect(verify).not.toMatch(/逐条.*AC/);
   });
 
   it("uses four-material readiness while real quality facts limit only completion", () => {

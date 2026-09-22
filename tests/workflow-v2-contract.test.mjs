@@ -22,20 +22,19 @@ describe("five-stage current-material contract", () => {
     expect(skill).toMatch(new RegExp(`^---[\\s\\S]*name: ${stage}[\\s\\S]*version: [0-9]+\\.[0-9]+\\.[0-9]+[\\s\\S]*---`));
   });
 
-  it("uses the four materials as the current work authority", () => {
+  it("uses cohort-specific current materials as work authority", () => {
     for (const stage of stages) expectFourMaterials(readStage(stage), stage);
 
-    for (const stage of ["build-spec", "build-plan"]) {
+    for (const stage of ["build-spec"]) {
       expectConcept(readStage(stage), [
         /only current work truth/i,
         /only current (?:work )?authority/i,
       ], `${stage}: current materials are authoritative`);
     }
-    expectConcept(readStage("build-code"), [
-      /only these current materials define the work/i,
-    ], "build-code: current materials define work");
+    expect(readStage("build-plan")).toMatch(/post-cohort[\s\S]*spec\.md[\s\S]*phases\/P<n>\.md[\s\S]*phases\/index\.md/i);
+    expect(readStage("build-code")).toMatch(/For post[\s\S]*spec\.md[\s\S]*phases\/index\.md[\s\S]*phases\/P<n>\.md/i);
     expectConcept(readStage("verify-code"), [
-      /当前 task 的以下四份材料存在且可读，就直接开始或继续验收/,
+      /当前 task 的 cohort 材料存在且可读，就直接开始或继续验收/,
     ], "verify-code: readable materials permit work");
   });
 
@@ -64,9 +63,10 @@ describe("five-stage current-material contract", () => {
     const stepSlugs = JSON.parse(readFileSync(join(root, "workflows", "make-decision", "steps.json"), "utf8"))
       .steps.map(({ step_slug }) => step_slug);
     expect(stepSlugs.slice(2, 10)).toEqual([
-      "talk-round-1", "research-inputs", "talk-round-2", "direction-advice",
-      "talk-round-3", "grill-with-docs", "write-decision-draft", "detail-advice",
+      "research-and-diverge", "direction-advice", "outline-talk", "grill-with-docs",
+      "module-convergence", "write-decision-draft", "detail-advice", "approve-decision",
     ]);
+    expect(stepSlugs.some((slug) => /^talk-round-\d+$/.test(slug))).toBe(false);
 
     const plan = readStage("build-plan");
     expectConcept(plan, [/Do not run Talk, Clarify, or Grill/i], "build-plan: decision activities stay upstream");
@@ -76,14 +76,13 @@ describe("five-stage current-material contract", () => {
     expectConcept(plan, [/does not turn confirmation\s+into a machine work permit/i], "build-plan: confirmation is not work eligibility");
   });
 
-  it("keeps one minimal task status inside tasks.md instead of a runtime ledger", () => {
+  it("keeps post Phase index pointer-only instead of a second completion ledger", () => {
     const skill = readFileSync(join(root, "skills", "spec-tasks", "SKILL.md"), "utf8");
-    const template = readFileSync(join(root, "skills", "spec-tasks", "templates", "tasks-template.md"), "utf8");
-    expect(skill).toMatch(/`status`[\s\S]*`pending`, `in_progress`, or `completed`/);
-    expect(skill).toMatch(/sole current material for task-card details|authoritative `tasks\.md` material/);
-    expect(skill).toMatch(/Do not add workflow summaries[\s\S]*second\s+completion ledger/i);
-    expect(template.match(/- \*\*status\*\*：`pending`/g)).toHaveLength(3);
-    expect(template.match(/- \*\*执行事实\*\*：N\/A — not started/g)).toHaveLength(3);
+    const template = readFileSync(join(root, "skills", "spec-tasks", "templates", "index-template.md"), "utf8");
+    expect(skill).toMatch(/Write only `phases\/index\.md`/);
+    expect(skill).toMatch(/pure pointer index/i);
+    expect(template).toMatch(/authority ref.*semantic anchor.*write set.*dependency.*consumer/i);
+    expect(template).not.toMatch(/gate_cmd|execution status|evidence_path/i);
   });
 
   it("records unavailable review honestly without turning it into pass", () => {

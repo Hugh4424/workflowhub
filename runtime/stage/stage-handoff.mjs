@@ -17,7 +17,11 @@ export const STAGE_HANDOFF_STAGES = Object.freeze([
 
 const STAGES = new Set(STAGE_HANDOFF_STAGES);
 const SCHEMA = "workflowhub-stage-handoff.v1";
-const BANNER = "非权威 current handoff，只以四材料和正式质量原件为准";
+const PRE_BANNER = "非权威 current handoff，只以四材料和正式质量原件为准";
+const POST_BANNER = "非权威 current handoff，只以当前 cohort 材料和正式质量原件为准";
+// Keep the legacy named export for read-only consumers; rendered output is
+// selected by the authenticated material set through bannerFor().
+const BANNER = PRE_BANNER;
 const SECTION_TITLES = Object.freeze([
   "任务身份",
   "背景与目标",
@@ -36,6 +40,23 @@ const SECTION_TITLES = Object.freeze([
 
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
 
+function materialNamesFor(materials) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
+    return ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+  }
+  if (typeof materials["phases/index.md"] !== "string") {
+    return ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+  }
+  const phaseNames = Object.keys(materials)
+    .filter((name) => /^phases\/P\d+\.md$/.test(name))
+    .sort((left, right) => Number(left.match(/P(\d+)/)[1]) - Number(right.match(/P(\d+)/)[1]));
+  return ["decision-log.md", "spec.md", "phases/index.md", ...phaseNames];
+}
+
+function bannerFor(materials) {
+  return materialNamesFor(materials).includes("phases/index.md") ? POST_BANNER : PRE_BANNER;
+}
+
 /**
  * The stage chain is declared once in the spec-analyze profiles; the handoff
  * only needs the immediate successor to name an executable next action. A
@@ -50,14 +71,14 @@ const NEXT_STAGE = Object.freeze({
 });
 
 /** Mechanically摘录 a material section's leading lines; never summarises. */
-function materialSectionLines(markdown, heading, { limit = 4, keepTable = false } = {}) {
+function materialSectionLines(markdown, heading, { limit = 4, keepTable = false, includeSubheadings = false } = {}) {
   const lines = String(markdown ?? "").split(/\r?\n/);
   const start = lines.findIndex((line) => heading.test(line));
   if (start < 0) return [];
   const out = [];
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (/^#{1,3}\s/.test(line)) break;
+    if ((includeSubheadings ? /^##\s/ : /^#{1,3}\s/).test(line)) break;
     const trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("```") || trimmed.startsWith("---")) continue;
     if (!keepTable && trimmed.startsWith("|")) continue;
@@ -141,24 +162,31 @@ function backgroundLines(materials) {
   const lines = [];
   const goalLines = decisionLog ? materialSectionLines(decisionLog, /^##\s*目标/, { limit: 3 }) : [];
   const needLines = decisionLog ? materialSectionLines(decisionLog, /^##\s*核心需求/, { limit: 4 }) : [];
+  const rawRequirementLines = decisionLog
+    ? materialSectionLines(decisionLog, /^##\s*原始需求/, { limit: 6, keepTable: true, includeSubheadings: true })
+    : [];
   const cardLines = spec ? materialSectionLines(spec, /^##\s*速读卡/, { limit: 6, keepTable: true }) : [];
   if (goalLines.length) lines.push("- 目标（摘录 `decision-log.md`）：", ...goalLines.map((line) => `  - ${line}`));
   if (needLines.length) lines.push("- 核心需求（摘录 `decision-log.md`）：", ...needLines.map((line) => `  - ${line}`));
+  if (rawRequirementLines.length) lines.push("- 原始需求（摘录 `decision-log.md`，仅作来源提示）：", ...rawRequirementLines.map((line) => `  - ${line}`));
   if (cardLines.length) lines.push("- 速读卡（摘录 `spec.md`）：", ...cardLines.map((line) => `  - ${line}`));
   if (lines.length === 0) lines.push("- 当前材料不可读，背景与目标保持 unknown。");
-  lines.push("- 只摘录关键行、不复制材料全文；权威仍以四份当前材料为准。");
+  lines.push(`- 只摘录关键行、不复制材料全文；权威仍以${materialNamesFor(materials).includes("phases/index.md") ? "当前 cohort 材料集合" : "四份当前材料"}为准。`);
   return lines;
 }
 
-function deriveNextAction(stage, stageStatus) {
+function deriveNextAction(stage, stageStatus, materials = null) {
   const next = NEXT_STAGE[stage] ?? null;
+  const post = materialNamesFor(materials).includes("phases/index.md");
+  const materialPhrase = post ? "当前 cohort 材料集合（spec.md、phases/index.md 和全部物理 Phase）" : "当前四份材料";
+  const boundaryPhrase = post ? "对应 Phase 文件" : "plan.md / tasks.md";
   if (stageStatus !== "completed") {
     return `继续处理当前 \`${stage}\`：按本 handoff 的非完成行与 run 结果修复后重跑本阶段。`;
   }
   if (next === null) {
     return `\`${stage}\` 不在四阶段作者链条上：按四份材料与正式质量原件确认后续动作。`;
   }
-  return `进入 \`${next}\`：只消费当前四份材料与正式质量原件；执行顺序、Phase 边界与 STOP 条件以 plan.md / tasks.md 为准。`;
+  return `进入 \`${next}\`：只消费${materialPhrase}与正式质量原件；执行顺序、Phase 边界与 STOP 条件以${boundaryPhrase}为准。`;
 }
 
 function fail(message, code = "STAGE_HANDOFF_INPUT_INVALID") {
@@ -259,20 +287,24 @@ function sectionBody(index, {
   pitfalls = null,
   riskLines = null,
   findingDispositionSummary = null,
+  materialNames = ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
 } = {}) {
   const refs = sources.length ? sources.map((value) => `\`${value.ref}#${value.sha256}\``).join(", ") : "（当前没有可引用的正式原件）";
   const failure = diagnostic?.error_summary ?? diagnostic?.reason ?? "没有观察到额外失败";
+  const post = materialNames.includes("phases/index.md");
+  const authorityPhrase = post ? "当前 cohort 材料集合" : "四份当前材料";
+  const pointerText = materialNames.join("、");
   const common = {
     0: [`- task: \`${taskId}\``, `- stage: \`${stage}\``, `- reflection: \`${reflectionStatus}\``],
-    1: background ?? ["- 本 handoff 只保留当前续接所需的结论和指针。", "- 详细背景与需求仍以四份当前材料为准。"],
+    1: background ?? ["- 本 handoff 只保留当前续接所需的结论和指针。", `- 详细背景与需求仍以${authorityPhrase}为准。`],
     2: progress ?? [`- stage status: \`${stageStatus}\``, `- reflection status: \`${reflectionStatus}\``, `- observation: ${observation || "（无）"}`],
-    3: decisionSummary ?? ["- 重要决策请回读 decision-log.md、spec.md、plan.md 和 tasks.md。"],
+    3: decisionSummary ?? [`- 重要决策请回读：${pointerText}。`],
     4: solution ?? ["- 当前实现沿用既有 WorkflowHub TaskHandle、stage runner 和 canonical evidence 边界。"],
     5: pitfalls ?? [`- 本次阶段末事实：${failure}`],
     6: [`- 当前正式来源指针：${refs}`],
     7: [`- current snapshot/material binding：${refs}`, ...findingDispositionLines(findingDispositionSummary)],
     8: ["- 成功：只表示本阶段或本 hook 的实际记录已写入。", "- 失败、unavailable、unknown 和 stale 不得改写为完成。"],
-    9: risks ?? riskLines ?? ["- 未决项和风险必须以当前四材料与正式质量原件回读为准。"],
+    9: risks ?? riskLines ?? [`- 未决项和风险必须以${authorityPhrase}与正式质量原件回读为准。`],
     10: [`- ${nextAction}`],
     11: [readableMaterials?.length ? readableMaterials.map((name) => `- \`${name}\``).join("\n") : "- decision-log.md\n- spec.md\n- plan.md\n- tasks.md"],
     12: ["- 可以自行判断：读取当前文件、正式原件和本 handoff 的指针。", "- 必须问用户：产品方向、不可逆交付授权和超出当前材料的范围变化。"],
@@ -305,7 +337,8 @@ export function renderStageHandoff({
   nonEmpty(materialScopeRevision, "materialScopeRevision");
   nonEmpty(reflectionStatus, "reflectionStatus");
   const sources = normalizeSources([...sourceRefs, ...materialSourceRefs(materials, artifacts)]);
-  const action = nonEmpty(nextAction ?? deriveNextAction(stage, stageStatus), "nextAction");
+  const readableMaterials = materialNamesFor(materials);
+  const action = nonEmpty(nextAction ?? deriveNextAction(stage, stageStatus, materials), "nextAction");
   const progress = deriveProgressLines(stageOutcomeValue);
   const failure = diagnostic?.error_summary ?? diagnostic?.reason ?? null;
   const progressLines = [
@@ -329,7 +362,7 @@ export function renderStageHandoff({
     `## ${index + 1}. ${title}`,
     sectionBody(index, {
       taskId, stage, stageStatus, reflectionStatus, observation, diagnostic, sources,
-      nextAction: action, readableMaterials: ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
+      nextAction: action, readableMaterials, materialNames: readableMaterials,
       decisionSummary: decisionSummary ?? decisionLinesValue,
       risks,
       background: backgroundLines(materials),
@@ -340,7 +373,7 @@ export function renderStageHandoff({
       findingDispositionSummary,
     }),
   ].join("\n"));
-  return `${frontMatter}\n\n> ${BANNER}\n\n${sections.join("\n\n")}\n`;
+  return `${frontMatter}\n\n> ${bannerFor(materials)}\n\n${sections.join("\n\n")}\n`;
 }
 
 function assertReadback(raw, { taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus }) {
@@ -350,7 +383,7 @@ function assertReadback(raw, { taskId, stage, snapshotTree, materialScopeRevisio
   for (const [key, value] of Object.entries({ task: taskId, stage, snapshot_tree: snapshotTree, material_scope_revision: materialScopeRevision, reflection_status: reflectionStatus })) {
     if (!raw.includes(`${key}: ${JSON.stringify(value)}`)) fail(`stage handoff readback is not bound to current ${key}`, "STAGE_HANDOFF_READBACK_FAILED");
   }
-  if (!raw.includes(`> ${BANNER}`)) fail("stage handoff banner is missing", "STAGE_HANDOFF_READBACK_FAILED");
+  if (!raw.includes(`> ${PRE_BANNER}`) && !raw.includes(`> ${POST_BANNER}`)) fail("stage handoff banner is missing", "STAGE_HANDOFF_READBACK_FAILED");
   const headings = [...raw.matchAll(/^## (\d+)\. (.+)$/gm)].map((match) => [Number(match[1]), match[2]]);
   if (headings.length !== SECTION_TITLES.length || headings.some(([number, title], index) => number !== index + 1 || title !== SECTION_TITLES[index])) {
     fail("stage handoff section order is invalid", "STAGE_HANDOFF_READBACK_FAILED");

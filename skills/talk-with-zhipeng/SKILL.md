@@ -19,10 +19,8 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 - 已有调研、规格、计划或代码阅读摘要。
 - 用户原始需求、补充回答和可引用的上下文。
 - 当前工作流通过受控 callback 提供的命名产物内容。
-- 调用方声明的本轮编号与职责：
-  - Round 1：真实痛点、成功标准、是否需要调研；
-  - Round 2：方向、范围、非目标、关键取舍和风险；
-  - Round 3：盲审发现、矛盾、关键假设和剩余风险。
+- 调用方声明的当前问题批次用途与 OI 版本：初始痛点与成功标准、研究后的方向大纲、
+  或逐模块收敛中的未决项。批次数量由真实 OI 决定，不预设轮数。
 
 若输入缺失，不直接提问，先进入输入充分性护栏并说明缺什么。本技能只负责 Talk；
 Clarify 由 build-spec 的 `spec-clarify` 独占，不能在这里补一套。
@@ -44,7 +42,7 @@ stage validator 的内部兼容字段 `recommended_option` 与 `number`；适配
 
 ### 1. 建立本轮候选队列
 
-每个 Round 都独立开始、独立结束，不得合并或借用另一轮代替。内部先生成完整候选
+每个动态问题批次都独立开始、独立结束，不得合并或借用旧批次代替。内部先生成完整候选
 队列，按“会不会改变方向”排序，并标记 `待回答`、`已由事实回答` 或 `不适用`。
 面向用户只展示本轮用途、当前第几个问题和当前队列总数；队列会随回答重排时明确写
 “当前共 N 个，回答后可能变化”。不得把完整候选队列、内部排序或逐项处置倾倒给用户。
@@ -77,7 +75,7 @@ stage validator 的内部兼容字段 `recommended_option` 与 `number`；适配
 面向用户先说业务问题，不展示内部 ID、hash、receipt、attempt、runner 或其他执行黑话。
 每张卡只包含：
 
-1. 当前状态：`talk-with-zhipeng`、Round 编号、当前问题组编号和总组数；
+1. 当前状态：`talk-with-zhipeng`、当前 OI 版本、问题批次编号和总组数；
 2. 一组互相独立、每题只含一个决策轴的问题；
 3. 影响范围；
 4. 每题 2～3 个互斥选项；
@@ -199,21 +197,22 @@ recommendation_reason: "当前事实最支持这个选项"
 ### 11. 返回最小交互事实
 
 候选队列、问题卡、ask/reply/re-rank 过程只用于当前对话内收敛，不形成 run、revision、
-latest、ledger 或独立交互历史。三个 Round 全部结束后，本技能只把父 Stage Agent 完成
+latest、ledger 或独立交互历史。动态问题批次结束后，本技能只把父 Stage Agent 完成
 当前决策所需的最小结构化事实返回内存：
 
 ```yaml
 talk:
   status: completed
-  round_count: 3
+  round_count: <实际问题批次数，可为 0>
+  oi_version: <当前 OI 版本>
   architecture_direction_covered: true
   user_outcome_covered: true
 decision_updates:
   - 只保留需要写进 decision-log.md 的结论、依据、风险或未决项
 ```
 
-`architecture_direction_covered` 与 `user_outcome_covered` 只有在本轮真实覆盖后才能为
-`true`。仍有会改变方向的问题时，本轮不能写 `status: completed`。本技能不填写 task、stage、snapshot、
+`architecture_direction_covered` 与 `user_outcome_covered` 只有在当前批次真实覆盖后才能为
+`true`。仍有会改变方向的问题时，当前批次不能写 `status: completed`。本技能不填写 task、stage、snapshot、
 decision ref/hash、文件路径或内容 hash；这些绑定由父 Stage Agent 在最终决策完成时组装。
 
 不得返回或持久化完整候选队列、完整问题卡、逐轮问答历史、Grill 历史、secret、token、
@@ -250,8 +249,8 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 - 每条四维结论必标「证据」或「主观」，不得遗漏；「证据」必须有具体原文引用或可验证数据来源。
 - 同一批次可以包含多个互相独立的关键问题；每题只问一个决策轴，互相依赖的问题拆到后续批次。
 - 只把用户实际给出的回复当作回答；不得由 Agent 模拟、补写或代替用户确认。提问后必须等待用户回复，再继续依赖该答案的步骤。
-- 三个 Round 的职责、开始队列、每答重排和结束结论必须在当前会话真实执行；长期只保留
-  父 Stage Agent 完成决策所需的最小摘要，一轮的结果不能冒充另一轮已执行。
+- 每个动态批次的职责、开始队列、每答重排和结束结论必须在当前会话真实执行；长期只保留
+  父 Stage Agent 完成决策所需的最小摘要，一个批次的结果不能冒充另一个批次已执行。
 - 核心层不触碰任何具体工作流的私有路径。
 - 不修改与对话无关的文件；丢弃任一需求条目必须登记理由。
 
@@ -266,6 +265,6 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
   保留 WorkflowHub 当前版本。
 - 替代候选：Matt Pocock `grilling`（commit
   `66898f60e8c744e269f8ce06c2b2b99ce7660d5f`）和本地 `deep-interview`。
-  前者适合广泛拷问，后者适合深访，但都没有本 Skill 已锁定的三轮职责、每答重排、
+  前者适合广泛拷问，后者适合深访，但都没有本 Skill 已锁定的动态 OI 队列、每答重排、
   有意义的题目总数和 WorkflowHub 四维范围判定，因此不替换；仅保留其“独立问题成批、
   依赖问题拆开、真实回答后重排”的有效原则。

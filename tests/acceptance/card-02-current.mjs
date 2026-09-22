@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { inspectMaterialWorkspace } from "../../runtime/task/material-workspace.mjs";
 
 // T011 is the one current-snapshot producer. Each achieved result is derived
 // from a named child assertion; deferred and unavailable results additionally
@@ -16,51 +18,52 @@ export const ACCEPTANCE_CRITERIA = Object.freeze([
 ]);
 
 export const TEST_ASSERTIONS = Object.freeze({
-  "AC-DOC-001": { commandIndex: 1, file: "tests/decision-log-content-contract.test.mjs", test: "keeps the decision index complete without turning it into a spec copy" },
-  "AC-DOC-002": { commandIndex: 1, file: "tests/contract/spec-stage-artifact-closure.test.mjs", test: "keeps post-cohort build-plan as the coherent specification owner" },
-  "AC-DOC-003": { commandIndex: 1, file: "tests/contract/spec-stage-artifact-closure.test.mjs", test: "RED: makes spec-plan the sole phase author and spec-tasks a pointer-only index" },
-  "AC-DOC-004": { commandIndex: 1, file: "tests/contract/material-producer-consumer-roundtrip.test.mjs", test: "RED: makes the phase the sole engineering body and tasks a pure execution index" },
-  "AC-DOC-005": { commandIndex: 1, file: "tests/contract/filled-plan-task-production.test.mjs", test: "renders the current pointer template and passes baseline validators through an explicit compatibility fixture" },
-  "AC-OI-001": { commandIndex: 1, file: "tests/decision-log-content-contract.test.mjs", test: "requires a same-log append update after every make-decision step" },
-  "AC-TEST-001": { commandIndex: 1, file: "tests/contract/stage-routing-and-concrete-testing.test.mjs", test: "routes build-code against actual scope and directly uses one concrete testing package" },
-  "AC-TEST-002": { commandIndex: 1, file: "tests/contract/phase-quality-handoff.test.mjs", test: "keeps blueprint advisory and concrete testing single-choice in build-code" },
-  "AC-TEST-003": { commandIndex: 2, file: "tests/integration/vnext-official-stage-run.test.mjs", test: "T009 RED / T010 GREEN: records incomplete dual-phase fixture fields and accepts the complete handoff after two real entries" },
-  "AC-AUTH-001": { commandIndex: 1, file: "tests/contract/human-confirmation-v3.test.mjs", test: "T005 keeps a real confirmation while publishing the authenticated incomplete coverage fact" },
-  "AC-AUTH-002": { commandIndex: 1, file: "tests/contract/human-confirmation-v3.test.mjs", test: "T006 publishes passed coverage only from the authenticated task raw-requirement inventory" },
-  "AC-FLOW-001": { commandIndex: 1, file: "tests/stage-review-cost-policy.test.mjs", test: "keeps the post-cohort authoring chain stage-owned and wh-review as the provider review" },
-  "AC-FLOW-002": { commandIndex: 1, file: "tests/stage-interaction-contract.test.mjs", test: "keeps build-plan authoring cohort-aware without executing tests" },
-  "AC-FLOW-003": { commandIndex: 1, file: "tests/contract/stage-routing-and-concrete-testing.test.mjs", test: "T003 routes build-plan through exactly one merged review and rejects old split review/analyze consumers" },
-  "AC-COVER-001": { commandIndex: 1, file: "tests/contract/review-materials-contract.test.mjs", test: "rejects one shared proving anchor across multiple AC evidence entries" },
-  "AC-COVER-002": { commandIndex: 3, test: "canonical namespaced ACs and legacy compact ACs share the parser" },
-  "AC-CLEAN-001": { commandIndex: 1, file: "tests/contract/make-decision-interaction-publication.test.mjs", test: "keeps legacy aggregate construction out of the current writer surface" },
-  "AC-HANDOFF-001": { commandIndex: 1, file: "tests/contract/phase-quality-handoff.test.mjs", test: "T004 projects the real build-plan handler result into the row before its handoff reads it" },
+  "AC-DOC-003": { commandIndex: 0, file: "tests/acceptance/card-02-current.test.mjs", test: "validates independent post Phase files and rejects missing authority" },
+  "AC-DOC-004": { commandIndex: 0, file: "tests/acceptance/card-02-current.test.mjs", test: "rejects index body copy and missing pointer" },
+});
+
+const STRUCTURE_ONLY_ACCEPTANCE_GAPS = Object.freeze({
+  "AC-DOC-003": "independent weak-model implementation cold read and complete original Phase-field proof are missing",
+  "AC-DOC-004": "real index-reader consumer and semantic-anchor readback proof are missing",
 });
 
 export const NON_ACHIEVED_READBACKS = Object.freeze({
+  "AC-DOC-001": { outcome: "incomplete", owner: "CARD-02", reason: "no filled decision-log fixture proves unique ADR/OI/raw-source authority" },
+  "AC-DOC-002": { outcome: "incomplete", owner: "CARD-02", reason: "no filled spec fixture proves narrative-to-Appendix-A pointers without duplicate acceptance prose" },
+  "AC-DOC-005": { outcome: "incomplete", owner: "CARD-02", reason: "the four translated spec contents and their FR/AC/source pointers lack semantic readback" },
+  "AC-OI-001": { outcome: "incomplete", owner: "CARD-02", reason: "reconstruct, reveal, challenge, confirmation, and build-plan OI projection are not tested as one lifecycle" },
+  "AC-TEST-001": { outcome: "incomplete", owner: "CARD-02", reason: "all 22 original acceptance cards have not been checked for four observable parts and V0=0" },
+  "AC-TEST-002": { outcome: "incomplete", owner: "CARD-02", reason: "frozen-test tampering and authorized test-change review are not exercised" },
+  "AC-TEST-003": { outcome: "incomplete", owner: "CARD-02", reason: "the older dual-phase handoff fixture does not prove separate physical Phase files with a target-assertion RED" },
   "AC-TEST-004": {
     outcome: "deferred", owner: "CARD-10",
     reason: "real Luna E2E is explicitly deferred; the fixture proves only the deferred boundary",
-    assertion: { commandIndex: 2, file: "tests/integration/vnext-official-stage-run.test.mjs", test: "T009 RED / T010 GREEN: records incomplete dual-phase fixture fields and accepts the complete handoff after two real entries" },
     materialMarkers: ["AC-TEST-004", "real Luna E2E", "CARD-10"],
   },
   "AC-REVIEW-001": {
     outcome: "unavailable", owner: "wh-review",
     reason: "the current review route is inspected separately; no semantic provider result exists yet",
-    assertion: { commandIndex: 4, file: "tests/contract/acceptance-execution-tier.test.mjs", test: "keeps explicit deferred and unavailable AC outcomes out of coverage while an independent review receives the executed command evidence" },
     materialMarkers: ["AC-REVIEW-001", "semantic_review_status=incomplete", "REVIEW_WAIT_EXCEEDED"],
   },
   "AC-REVIEW-002": {
     outcome: "unavailable", owner: "wh-review",
     reason: "there are no current semantic findings to dispose",
-    assertion: { commandIndex: 4, file: "tests/contract/acceptance-execution-tier.test.mjs", test: "keeps explicit deferred and unavailable AC outcomes out of coverage while an independent review receives the executed command evidence" },
     materialMarkers: ["AC-REVIEW-002", "provider semantic result", "P1 `REVIEW_WAIT_EXCEEDED`"],
   },
   "AC-REVIEW-003": {
     outcome: "deferred", owner: "CARD-05",
     reason: "the real provider comparison remains owned by CARD-05",
-    assertion: { commandIndex: 1, file: "tests/stage-review-cost-policy.test.mjs", test: "keeps unavailable review visible while same-task work continues" },
     materialMarkers: ["AC-REVIEW-003", "CARD-05", "deferred"],
   },
+  "AC-AUTH-001": { outcome: "incomplete", owner: "CARD-02", reason: "known-inventory ID and four-class authority samples lack current-material readback" },
+  "AC-AUTH-002": { outcome: "incomplete", owner: "CARD-02", reason: "no one-authority product-goal change-propagation diff has been checked" },
+  "AC-FLOW-001": { outcome: "incomplete", owner: "CARD-02", reason: "13-step semantic migration and net-zero public surface were not proved by the mapped review test" },
+  "AC-FLOW-002": { outcome: "incomplete", owner: "CARD-02", reason: "K1-K12 lack individual real-consumer and oracle replay evidence" },
+  "AC-FLOW-003": { outcome: "incomplete", owner: "CARD-02", reason: "physical Phase files are tested, but active writer/reader/validator dual-write census is not complete" },
+  "AC-COVER-001": { outcome: "incomplete", owner: "CARD-02", reason: "five failure fixtures exist, but current complete inventory and confirmation-path readback are not bound to this AC" },
+  "AC-COVER-002": { outcome: "incomplete", owner: "CARD-02", reason: "one-parser behavior exists, but both current decision logs have not been read back as 24 blocks and 96 fields" },
+  "AC-CLEAN-001": { outcome: "incomplete", owner: "CARD-02", reason: "writer removal test alone does not establish absence of all active aggregate inputs, consumers and completion dependencies" },
+  "AC-HANDOFF-001": { outcome: "incomplete", owner: "CARD-02", reason: "deferred and unavailable items lack a complete owner, trigger, handoff target, close condition and state readback" },
 });
 
 const mappedCriteria = [...Object.keys(TEST_ASSERTIONS), ...Object.keys(NON_ACHIEVED_READBACKS)];
@@ -70,38 +73,44 @@ if (mappedCriteria.length !== ACCEPTANCE_CRITERIA.length || new Set(mappedCriter
 }
 
 const commands = Object.freeze([
-  ["node", ["tests/acceptance/card-01-current.mjs"], 300000],
-  ["npx", ["--no-install", "vitest", "run",
-    "tests/decision-log-content-contract.test.mjs",
-    "tests/stage-review-cost-policy.test.mjs",
-    "tests/stage-decision-contract.test.mjs",
-    "tests/stage-interaction-contract.test.mjs",
-    "tests/contract/spec-stage-artifact-closure.test.mjs",
-    "tests/contract/material-producer-consumer-roundtrip.test.mjs",
-    "tests/contract/phase-quality-handoff.test.mjs",
-    "tests/contract/filled-plan-task-production.test.mjs",
-    "tests/contract/stage-order-and-host-interaction.test.mjs",
-    "tests/contract/stage-routing-and-concrete-testing.test.mjs",
-    "tests/contract/spec-analyze-completeness.test.mjs",
-    "tests/contract/review-materials-contract.test.mjs",
-    "tests/contract/review-public-entrypoints.test.mjs",
-    "tests/contract/review-input-bounds-portability.test.mjs",
-    "tests/contract/stage-runtime-preflight.test.mjs",
-    "tests/contract/human-confirmation-v3.test.mjs",
-    "tests/contract/decision-log-chain-warnings.test.mjs",
-    "tests/contract/make-decision-interaction-publication.test.mjs",
-    "tests/contract/decision-convergence-depth.test.mjs",
-    "skills/wh-review/scripts/__tests__/wh-review-cli-bounds.test.mjs",
-    "skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs",
-    "--poolOptions.forks.singleFork", "--no-fileParallelism", "--reporter=verbose"], 900000],
-  ["npx", ["--no-install", "vitest", "run", "tests/integration/vnext-official-stage-run.test.mjs", "-t",
-    "T009 RED / T010 GREEN|guards the official stage run against monitoring fact and projection side effects|keeps a pre-dispatch oversized review attempt unavailable without blocking the repository-owned build-spec run",
-    "--poolOptions.forks.singleFork", "--no-fileParallelism", "--reporter=verbose"], 300000],
-  ["node", ["--test", "tests/contract/ui-stage-integration.test.mjs"], 300000],
-  ["npx", ["--no-install", "vitest", "run", "tests/contract/acceptance-execution-tier.test.mjs", "-t",
-    "keeps explicit deferred and unavailable AC outcomes out of coverage while an independent review receives the executed command evidence",
+  ["npx", ["--no-install", "vitest", "run", "tests/acceptance/card-02-current.test.mjs", "-t",
+    "validates independent post Phase files|rejects index body copy|rejects post plan/tasks dual write",
     "--poolOptions.forks.singleFork", "--no-fileParallelism", "--reporter=verbose"], 300000],
 ]);
+
+const POST_PHASE_ACS = new Set(["AC-DOC-003", "AC-DOC-004", "AC-FLOW-003"]);
+const ORIGINAL_REQUIREMENT_TRACE = Object.freeze({
+  "AC-DOC-003": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
+  "AC-DOC-004": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
+  "AC-FLOW-003": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-09",
+});
+
+export function evaluateCard02PostPhaseEvidence({ spec, index, phases, legacyFiles = [] } = {}) {
+  const errors = [];
+  if (legacyFiles.includes("plan.md") || legacyFiles.includes("tasks.md")) errors.push("post task still has active plan.md/tasks.md");
+  if (typeof index === "string" && (/`(?:gate_cmd|expected_exit|oracle|evidence_path)`\s*[:：]/i.test(index)
+      || /^##\s+L[012]\b/m.test(index) || /```/.test(index))) {
+    errors.push("post Phase index copies executable or contract body");
+  }
+  const result = validatePostPhaseContract({ spec, index, phases });
+  errors.push(...result.errors);
+  return { ok: errors.length === 0, errors, phase_count: result.facts?.phase_count ?? 0 };
+}
+
+export function readCard02PostPhaseEvidence(root) {
+  const resolvedRoot = resolve(root);
+  let inspection;
+  try { inspection = inspectMaterialWorkspace(resolvedRoot, { activationCohort: "post" }); }
+  catch (error) { return { ok: false, errors: [`post material read failed: ${error.message}`], phase_count: 0 }; }
+  if (inspection.status !== "working") {
+    return { ok: false, errors: [...inspection.missing, ...inspection.errors], phase_count: 0 };
+  }
+  const legacyFiles = ["plan.md", "tasks.md"].filter((name) => existsSync(join(resolvedRoot, name)));
+  const phases = Object.fromEntries(Object.entries(inspection.files).filter(([name]) => /^phases\/P[1-9][0-9]*\.md$/.test(name)));
+  return evaluateCard02PostPhaseEvidence({
+    spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases, legacyFiles,
+  });
+}
 
 function commandPassed(result) {
   return result?.exit_code === 0 && result.signal === null && result.error === null && result.timed_out === false;
@@ -123,22 +132,39 @@ function observedAssertion(results, assertion) {
 }
 
 /** Derive rows from observed child assertions and the current task boundary. */
-export function deriveCard02Entries({ results, taskMaterials }) {
+export function deriveCard02Entries({ results, taskMaterials, postPhaseEvidence = null }) {
   const commandsPassed = results.length === commands.length && results.every(commandPassed);
   return ACCEPTANCE_CRITERIA.map((acceptance_criterion_id) => {
     const achieved = TEST_ASSERTIONS[acceptance_criterion_id];
     if (achieved) {
       const observed = observedAssertion(results, achieved);
-      const outcome = commandsPassed && observed === "passed" ? "achieved" : "incomplete";
+      const postPhaseReady = !POST_PHASE_ACS.has(acceptance_criterion_id) || postPhaseEvidence?.ok === true;
+      const originalAcceptanceGap = STRUCTURE_ONLY_ACCEPTANCE_GAPS[acceptance_criterion_id];
+      const outcome = commandsPassed && observed === "passed" && postPhaseReady && !originalAcceptanceGap ? "achieved" : "incomplete";
+      const reason = !postPhaseReady
+        ? `the current post Phase files are incomplete: ${postPhaseEvidence?.errors?.join("; ") ?? "not read"}`
+        : !commandsPassed || observed !== "passed"
+          ? "the named current-snapshot assertion did not pass"
+          : originalAcceptanceGap;
       return {
         acceptance_criterion_id, outcome,
-        ...(outcome === "achieved" ? {} : { owner: "T011", reason: "the named current-snapshot assertion did not pass" }),
-        assertions: [{ id: `${acceptance_criterion_id}:${achieved.test}`, expected: { status: "passed" }, actual: { status: observed } }],
+        ...(POST_PHASE_ACS.has(acceptance_criterion_id) ? { original_requirement: ORIGINAL_REQUIREMENT_TRACE[acceptance_criterion_id] } : {}),
+        ...(outcome === "achieved" ? {} : { owner: originalAcceptanceGap && postPhaseReady && commandsPassed && observed === "passed" ? "CARD-02" : "T011", reason }),
+        assertions: [{ id: `${acceptance_criterion_id}:${achieved.test}`, expected: { status: "passed" }, actual: { status: observed } },
+          ...(POST_PHASE_ACS.has(acceptance_criterion_id) ? [{ id: `${acceptance_criterion_id}:physical-post-phase-readback`, expected: { status: "passed" }, actual: { status: postPhaseReady ? "passed" : "missing" } }] : []),
+          ...(originalAcceptanceGap ? [{ id: `${acceptance_criterion_id}:original-acceptance-proof`, expected: { status: "passed" }, actual: { status: "missing" } }] : [])],
       };
     }
     const readback = NON_ACHIEVED_READBACKS[acceptance_criterion_id];
-    const observed = observedAssertion(results, readback.assertion);
-    const materialPresent = readback.materialMarkers.every((marker) => taskMaterials.includes(marker));
+    if (readback.outcome === "incomplete") {
+      return {
+        acceptance_criterion_id, outcome: "incomplete", owner: readback.owner, reason: readback.reason,
+        ...(ORIGINAL_REQUIREMENT_TRACE[acceptance_criterion_id] ? { original_requirement: ORIGINAL_REQUIREMENT_TRACE[acceptance_criterion_id] } : {}),
+        assertions: [{ id: `${acceptance_criterion_id}:original-requirement-proof`, expected: { status: "passed" }, actual: { status: "missing" } }],
+      };
+    }
+    const observed = readback.assertion ? observedAssertion(results, readback.assertion) : "passed";
+    const materialPresent = readback.materialMarkers.every((marker) => String(taskMaterials ?? "").includes(marker));
     const outcome = commandsPassed && observed === "passed" && materialPresent ? readback.outcome : "incomplete";
     return {
       acceptance_criterion_id, outcome,
@@ -154,7 +180,7 @@ export function deriveCard02Entries({ results, taskMaterials }) {
   });
 }
 
-export function produceCard02Current({ run = spawnSync, cwd = process.cwd(), taskMaterials = null } = {}) {
+export function produceCard02Current({ run = spawnSync, cwd = process.cwd(), taskMaterials = null, postPhaseRoot = null } = {}) {
   const results = [];
   for (const [command, args, timeout] of commands) {
     const result = run(command, args, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "pipe"] });
@@ -168,9 +194,10 @@ export function produceCard02Current({ run = spawnSync, cwd = process.cwd(), tas
     });
     if (!commandPassed(results.at(-1))) break;
   }
-  const materials = taskMaterials ?? readFileSync("specs/workflowhub-thin-core-card-02-20260919/tasks.md", "utf8");
-  const entries = deriveCard02Entries({ results, taskMaterials: materials });
-  return { schema_version: "card02-current-acceptance.v2", commands: results, entries };
+  const materials = taskMaterials ?? readFileSync(join(cwd, "specs/archive/workflowhub-thin-core-card-02-20260919/tasks.md"), "utf8");
+  const postPhaseEvidence = readCard02PostPhaseEvidence(postPhaseRoot ?? join(cwd, "specs/workflowhub-thin-core-card-07-20260919"));
+  const entries = deriveCard02Entries({ results, taskMaterials: materials, postPhaseEvidence });
+  return { schema_version: "card02-current-acceptance.v2", commands: results, post_phase_evidence: postPhaseEvidence, entries };
 }
 
 function main() {

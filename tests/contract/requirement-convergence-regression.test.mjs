@@ -12,9 +12,13 @@ import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/ta
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 import {
+  deriveDecisionDivergenceOutline,
   analyzeDecisionConvergence,
+  validateDecisionLogStepUpdateContract,
+  validateInteractionQuestionBatch,
   validateSpecClarifyAndDirectionFidelity,
 } from "../../runtime/stage/stage-content-contracts.mjs";
+import { officialStageHandler } from "../../runtime/stage/stage-handlers.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -97,6 +101,102 @@ function buildSpecFixture(taskId) {
 
 function qualityFacts(result, task) {
   return result.quality_fact_refs.map((ref) => JSON.parse(task.readRecord(ref)));
+}
+
+function postHandlerWorker(decisionLog, {
+  taskId = "card07-post-handler",
+  readEvidence = () => { throw new Error("unexpected evidence ref"); },
+} = {}) {
+  const snapshotTree = "d".repeat(40);
+  const materialRevision = `revision-${"c".repeat(64)}`;
+  return {
+    stage: "make-decision",
+    identity: { taskId },
+    manifest: { record_model: "vnext-single-write", activation_cohort: "post" },
+    currentMaterialRevision: materialRevision,
+    currentMaterialScopeRevision: () => materialRevision,
+    snapshotWorkspace: () => ({ tree: snapshotTree }),
+    candidateWorkspace: {
+      worktreeRoot: "/fixture",
+      baselineCommit: snapshotTree,
+      captureSnapshot: () => ({ tree: snapshotTree }),
+    },
+    readArtifact: () => decisionLog,
+    artifactRef: () => `specs/${taskId}/decision-log.md`,
+    readEvidence,
+    recordConsumerInvocation: () => {},
+  };
+}
+
+function divergenceFixture() {
+  const binding = {
+    schema_version: "workflowhub-decision-divergence.v1",
+    oi_outline_version: "outline-v1",
+    intake: {
+      raw_requirement: { text: "模糊需求：改善导入流程", attribution: "user_verbatim", source_id: "U-001" },
+      pain_point: { text: "用户不知道失败后如何恢复", attribution: "user_verbatim", source_id: "U-002" },
+    },
+    angles: [
+      { angle_id: "A-UX", plain_language_angle: "减少首次理解成本", source: "internal analysis", strength: "medium" },
+      { angle_id: "A-RECOVERY", plain_language_angle: "让失败可恢复", source: "research R-01", strength: "high" },
+    ],
+    original_candidates: [
+      { candidate_id: "U-1", text: "增加导入说明", source_id: "U-002", semantic_basis: { problem_axis: "understanding", mechanism: "documentation", target: "new user", outcome: "fewer questions" } },
+      { candidate_id: "U-2", text: "增加失败提示", source_id: "U-002", semantic_basis: { problem_axis: "failure", mechanism: "alert", target: "import attempt", outcome: "visible error" } },
+    ],
+    candidates: [
+      { candidate_id: "U-1", text: "增加导入说明", origin: "user", source_ids: ["U-002"], strength: "direct", semantic_basis: { problem_axis: "understanding", mechanism: "documentation", target: "new user", outcome: "fewer questions" } },
+      { candidate_id: "U-2", text: "增加失败提示", origin: "user", source_ids: ["U-002"], strength: "direct", semantic_basis: { problem_axis: "failure", mechanism: "alert", target: "import attempt", outcome: "visible error" } },
+      { candidate_id: "N-1", text: "保存可恢复导入草稿", origin: "internal", angle_id: "A-RECOVERY", source_ids: ["A-RECOVERY"], novelty_against: ["U-1", "U-2"], changed_dimensions: ["problem_axis", "mechanism", "target", "outcome"], strength: "medium", semantic_basis: { problem_axis: "recovery", mechanism: "draft persistence", target: "failed import", outcome: "resume instead of restart" } },
+    ],
+    outlines: [
+      { outline_version: "r0", status: "abandoned", superseded_by: "r1", hypotheses: [
+        { hypothesis_id: "H-01", statement: "说明能消除失败", status: "falsified", falsifier: "用户仍无法恢复", evidence_refs: ["R-01"] },
+        { hypothesis_id: "H-02", statement: "提示能支持恢复", status: "falsified", falsifier: "错误后必须重来", evidence_refs: ["R-02"] },
+        { hypothesis_id: "H-03", statement: "一次性流程足够", status: "falsified", falsifier: "网络中断会丢失进度", evidence_refs: ["R-03"] },
+        { hypothesis_id: "H-04", statement: "用户会理解错误", status: "supported", falsifier: "用户无法解释错误", evidence_refs: ["R-04"] },
+        { hypothesis_id: "H-05", statement: "重试成本可接受", status: "unresolved", falsifier: "重试超过两次", evidence_refs: ["R-05"] },
+      ] },
+      { outline_version: "r1", status: "active", redraw_of: "r0", redraw_reason_ids: ["H-01", "H-02", "H-03"], hypotheses: [
+        { hypothesis_id: "H-06", statement: "草稿可恢复", status: "supported", falsifier: "草稿不可重开", evidence_refs: ["R-06"] },
+        { hypothesis_id: "H-07", statement: "恢复入口可理解", status: "unresolved", falsifier: "用户找不到恢复入口", evidence_refs: ["R-07"] },
+        { hypothesis_id: "H-08", statement: "失败状态可见", status: "supported", falsifier: "错误无状态说明", evidence_refs: ["R-08"] },
+      ] },
+    ],
+  };
+  const render = (value) => `# Decision
+
+divergence_required: true
+
+## 发散候选与可证伪大纲
+
+| 角度 ID | 角度 | 来源 | 强度 |
+| --- | --- | --- | --- |
+| A-UX | 减少首次理解成本 | internal analysis | medium |
+| A-RECOVERY | 让失败可恢复 | research R-01 | high |
+
+| 候选 ID | 候选 | origin | source |
+| --- | --- | --- | --- |
+| U-1 | 增加导入说明 | user | U-002 |
+| U-2 | 增加失败提示 | user | U-002 |
+| N-1 | 保存可恢复导入草稿 | internal | A-RECOVERY |
+
+| 假设 ID | 大纲版本 | 假设 | 状态 |
+| --- | --- | --- | --- |
+| H-01 | r0 | 说明能消除失败 | falsified |
+| H-02 | r0 | 提示能支持恢复 | falsified |
+| H-03 | r0 | 一次性流程足够 | falsified |
+| H-04 | r0 | 用户会理解错误 | supported |
+| H-05 | r0 | 重试成本可接受 | unresolved |
+| H-06 | r1 | 草稿可恢复 | supported |
+| H-07 | r1 | 恢复入口可理解 | unresolved |
+| H-08 | r1 | 失败状态可见 | supported |
+
+\`\`\`json
+${JSON.stringify(value)}
+\`\`\`
+`;
+  return { binding, render };
 }
 
 describe("P1 RED requirement-convergence regression", () => {
@@ -549,5 +649,93 @@ R-001 需要做一个决策。
       const facts = qualityFacts(result, state.task);
       expect(facts.map((fact) => fact.subject)).toContain("clarify");
     });
+  });
+});
+
+describe("CARD07 post journey", () => {
+  it("CARD07 post journey: official handler records a novel direction and rejects a synonym rewrite", async () => {
+    const { binding, render } = divergenceFixture();
+    const goodLog = render(binding);
+    expect(deriveDecisionDivergenceOutline(goodLog, { outlineVersion: "outline-v1" })).toMatchObject({
+      status: "passed",
+      novel_candidate_ids: ["N-1"],
+    });
+    const good = await officialStageHandler("make-decision")(postHandlerWorker(goodLog), { receipts: {} });
+    expect(good.facts.divergence_outline).toMatchObject({
+      status: "passed",
+      novel_candidate_ids: ["N-1"],
+      current_outline_version: "r1",
+    });
+
+    const rewritten = structuredClone(binding);
+    rewritten.candidates[2].semantic_basis = structuredClone(binding.original_candidates[0].semantic_basis);
+    const bad = await officialStageHandler("make-decision")(postHandlerWorker(render(rewritten)), { receipts: {} });
+    expect(bad.facts.divergence_outline).toMatchObject({
+      status: "incomplete",
+      errors: expect.arrayContaining(["divergence candidate N-1 only rewrites a user direction"]),
+    });
+  });
+
+  it("CARD07 post journey: research unavailable preserves the provider error and does not fabricate candidates", async () => {
+    const taskId = "card07-post-research-unavailable";
+    const report = {
+      schema_version: "research-report.v1",
+      task_id: taskId,
+      stage: "make-decision",
+      snapshot_tree: "d".repeat(40),
+      material_scope_revision: `revision-${"c".repeat(64)}`,
+      status: "unavailable",
+      question: "外部研究是否能改变方向？",
+      decision_axis: "方向选择",
+      tool_usage: [],
+      open_items: [{ question_id: "Q-RESEARCH", code: "provider_unavailable", reason: "provider unavailable", next_action: "保留失败事实并继续 Talk" }],
+      review: { status: "unavailable", evidence_ref: null },
+      fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] },
+      reason: "provider unavailable",
+      error_class: "provider_unavailable",
+      pending_questions: ["Q-RESEARCH"],
+    };
+    const raw = `${JSON.stringify(report)}\n`;
+    const ref = `quality/evidence/research/${sha256(raw)}.json`;
+    const result = await officialStageHandler("make-decision")(postHandlerWorker("# Decision\n", {
+      taskId,
+      readEvidence: (candidateRef) => candidateRef === ref ? { bytes: raw, sha256: sha256(raw) } : (() => { throw new Error("unexpected evidence ref"); })(),
+    }), { receipts: { research: ref } });
+
+    expect(result.facts.research).toMatchObject({
+      research_status: "unavailable",
+      research_disclosure: {
+        status: "unavailable",
+        candidate_delivery: { status: "unavailable", candidates: [] },
+      },
+    });
+    expect(JSON.stringify(result.facts.research)).toContain("provider unavailable");
+  });
+
+  it("CARD07 post journey: append-only updates bind one source and reject replacement writers", () => {
+    const valid = {
+      stage: "make-decision",
+      step_id: 3,
+      decision_log_ref: "specs/card07/decision-log.md",
+      decision_log_hash: sha256("decision-log-v1"),
+      writer: { owner: "make-decision", artifact: "decision-log.md", mode: "append-only" },
+      coverage_disposition: "current",
+      outcome: "用户回复已追加，旧原话保留",
+      write_status: "written",
+    };
+    expect(validateDecisionLogStepUpdateContract(valid)).toMatchObject({ ok: true, facts: { step_ids: [3] } });
+    const replacement = validateDecisionLogStepUpdateContract({ ...valid, writer: { ...valid.writer, mode: "replace" } });
+    expect(replacement).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([expect.stringMatching(/append-only writer/)]),
+    });
+  });
+
+  it("CARD07 post journey: zero unresolved questions is legal instead of a fake fixed-round question", () => {
+    const result = validateInteractionQuestionBatch([], {
+      allowEmpty: true,
+      emptyReason: "当前 OI 没有重要、方向变化或真实模糊的未决项",
+    });
+    expect(result.ok, result.errors.join("; ")).toBe(true);
   });
 });

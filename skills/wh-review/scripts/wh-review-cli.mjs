@@ -36,6 +36,11 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const HOST_PATH = /(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g;
 const bareSinkLocks = new Map();
 
+// The verify-code review route may consume only a current passed build-code
+// acceptance execution. A historical stage outcome is provenance, never a
+// substitute for the current WorkflowHub session execution.
+const CURRENT_BUILD_CODE_ACCEPTANCE_BOUNDARY = "current passed build-code acceptance execution";
+
 function safeRecoveryError(error) {
   const code = typeof error?.code === "string" && error.code !== "" ? error.code : "WORKFLOWHUB_LOCAL_ERROR";
   const message = String(error?.message ?? error).replace(HOST_PATH, "<host-path-redacted>");

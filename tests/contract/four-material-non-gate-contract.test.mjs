@@ -105,17 +105,18 @@ describe("four-material non-gate contract", () => {
     expect(cli).not.toMatch(/invokeCodexHost|WORKFLOWHUB_HOST_BRIDGE|stage_skill_dispatch|invoke-stage-skill|host-invocations/);
   });
 
-  it("keeps four-material ownership with authoring stages", () => {
+  it("keeps cohort material ownership with authoring stages", () => {
     const buildCode = readFileSync("workflows/build-code/SKILL.md", "utf8");
     const verifyCode = readFileSync("workflows/verify-code/SKILL.md", "utf8");
     const specSpecify = readFileSync("skills/spec-specify/SKILL.md", "utf8");
-    expect(buildCode).toContain("four current materials: a correction to `spec.md`");
-    expect(buildCode).toContain("existing task card's\n`执行状态填写区` is the one same-task exception");
-    expect(buildCode).toContain("`spec.md` belongs");
+    expect(buildCode).toContain("For post, read `decision-log.md`");
+    expect(buildCode).toContain("`phases/index.md`, and every physical");
+    expect(buildCode).toContain("the existing task card's `执行状态填写区` remains the same-task exception");
+    expect(buildCode).toContain("post `spec.md` or Phase\ncorrection belongs to `build-plan`");
     expect(buildCode).not.toMatch(/may update `spec\.md`, `plan\.md`, and `tasks\.md`/);
-    expect(verifyCode).toContain("不在 verify-code\n中改写材料");
-    expect(verifyCode).toContain("tasks.md` 任务卡既有 `执行状态填写区` 除外");
-    expect(verifyCode).toContain("`spec.md` → build-spec；`plan.md`\/`tasks.md` → build-plan");
+    expect(verifyCode).toContain("verify-code 不改写作者材料");
+    expect(verifyCode).toContain("pre/history 的 `spec.md` → build-spec");
+    expect(verifyCode).toContain("post 的 `spec.md` 与\n`phases/P<n>.md` → build-plan");
     expect(specSpecify).toContain("Build-code and verify-code report a\nmaterial gap to this owner");
     expect(specSpecify).not.toMatch(/When a build-code or verify-code scope revision/);
   });

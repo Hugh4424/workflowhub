@@ -102,11 +102,12 @@ describe("current interaction boundary", () => {
     for (const observable of [buildPlanHandoff?.observable_result]) {
       expect(observable).toMatch(/actual user reply[\s\S]*existing confirmation record/i);
     }
-    expect(buildPlan).toMatch(/append that reply to the final[\s\S]*(?:execution fact|执行事实)[\s\S]*(?:append-only|带标签)[\s\S]*(?:does not change|changes neither|不改变) `status`/i);
+    expect(buildPlan).toMatch(/Do not append confirmation or execution status to the\s+Phase index/i);
     expect(read("workflows", "verify-code", "SKILL.md")).toMatch(/不要求用户补交 verify-code 证据|不把交接确认当作代码 review 的证据门禁/i);
     const catalog = yaml.load(readFileSync(join(root, "skills", "catalog.yaml"), "utf8"));
     const decisionLog = catalog.skills.find(({ name }) => name === "decision-log");
-    expect(decisionLog.local_changes).toMatch(/唯一当前 consumer 是 make-decision[\s\S]*owner 是 make-decision[\s\S]*tests\/stage-interaction-contract\.test\.mjs/i);
+    expect(decisionLog.local_changes).toMatch(/当前交互真相仅为 decision-log\.md 直接字段/i);
+    expect(decisionLog.local_changes).toMatch(/不读取 interaction aggregate；历史 aggregate 只读保留/i);
   });
 
   it("lets four readable materials drive work while quality facts restrict completion", () => {
@@ -126,18 +127,18 @@ describe("current interaction boundary", () => {
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
   });
 
-  it("binds Talk3 to red-blue disputes and makes Talk4 conditional", () => {
-    expect(makeDecision).toMatch(/Talk round 3 uses the same real lifecycle[\s\S]{0,500}red\/blue direction-review finding dispute list/i);
-    expect(makeDecision).toMatch(/red\/blue direction-review finding dispute list[\s\S]{0,260}unresolved items from the debate decision/i);
-    expect(makeDecision).toMatch(/conditional Talk round 4[\s\S]{0,260}direction-level[\s\S]{0,180}acceptance/i);
-    expect(makeDecision).toMatch(/If no[\s\S]{0,120}Talk round 4[\s\S]{0,220}repairs[\s\S]{0,160}implementation-level findings/i);
-    expect(makeDecision).toMatch(/Talk round 3[\s\S]{0,180}same real lifecycle/i);
-    expect(makeDecision).toMatch(/conditional Talk round 4[\s\S]{0,420}ask -> wait -> user reply -> resume/i);
-    expect(makeDecision).toMatch(/Each round must publish its own `ask`[\s\S]{0,160}`resume` and re-rank/i);
-    expect(makeSteps.find((step) => step.step_slug === "talk-round-3").observable_result)
-      .toMatch(/red\/blue[\s\S]*debate unresolved items/i);
+  it("binds dynamic Talk batches to disputes and keeps later Talk conditional", () => {
+    expect(makeDecision).toMatch(/dynamic.*Talk batch/i);
+    expect(makeDecision).toMatch(/red\/blue.*dispute list/i);
+    expect(makeDecision).toMatch(/debate unresolved items/i);
+    expect(makeDecision).toMatch(/detail advice[\s\S]{0,220}direction-level[\s\S]{0,140}changes acceptance/i);
+    expect(makeDecision).toMatch(/otherwise repair[\s\S]{0,120}implementation-level findings/i);
+    expect(makeDecision).toMatch(/Every batch publishes its own `ask`/i);
+    expect(makeDecision).toMatch(/`resume`s and re-ranks/i);
+    expect(makeSteps.find((step) => step.step_slug === "module-convergence").observable_result)
+      .toMatch(/OI[\s\S]*零、一个或多个|OI[\s\S]*zero, one, or multiple/i);
     expect(makeSteps.find((step) => step.step_slug === "detail-advice").observable_result)
-      .toMatch(/direction-level[\s\S]*acceptance-impacting[\s\S]*conditional Talk round 4/i);
+      .toMatch(/方向级[\s\S]*conditional Talk|direction-level[\s\S]*conditional Talk/i);
   });
 
   it("keeps closure enforcement and dialogue ownership aligned", () => {
@@ -147,31 +148,29 @@ describe("current interaction boundary", () => {
     expect(buildSpec).toMatch(/findings 处置对话=复用 spec-clarify/i);
   });
 
-  it("executes the 14 steps in Talk -> direction advice -> Grill -> detail advice -> confirmation -> consistency -> reflection order", () => {
-    expect(makeSteps.map(({ step_slug }) => step_slug)).toEqual([
-      "load-context",
-      "triage-scope",
-      "talk-round-1",
-      "research-inputs",
-      "talk-round-2",
-      "direction-advice",
-      "talk-round-3",
-      "grill-with-docs",
-      "write-decision-draft",
-      "detail-advice",
-      "approve-decision",
-      "stage-end-spec-analyze",
-      "publish-decision",
+  it("executes a dynamic OI-driven flow without fixed Talk rounds", () => {
+    const slugs = makeSteps.map(({ step_slug }) => step_slug);
+    expect(slugs).toEqual([
+      "load-context", "triage-scope", "research-and-diverge", "direction-advice",
+      "outline-talk", "grill-with-docs", "module-convergence", "write-decision-draft",
+      "detail-advice", "approve-decision", "stage-end-spec-analyze", "publish-decision",
       "stage-reflection",
     ]);
+    expect(slugs.some((slug) => /^talk-round-\d+$/.test(slug))).toBe(false);
+    expect(makeSteps.find((step) => step.step_slug === "research-and-diverge").observable_result)
+      .toMatch(/外部与内部研究|发散引擎/);
+    expect(makeSteps.find((step) => step.step_slug === "module-convergence").observable_result)
+      .toMatch(/零、一个或多个|不设固定轮次/);
     expect(makeSteps.find((step) => step.step_slug === "direction-advice").order)
-      .toBeLessThan(makeSteps.find((step) => step.step_slug === "talk-round-3").order);
-    expect(makeSteps.find((step) => step.step_slug === "talk-round-3").order)
-      .toBeLessThan(makeSteps.find((step) => step.step_slug === "grill-with-docs").order);
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "outline-talk").order);
+    expect(makeSteps.find((step) => step.step_slug === "outline-talk").order)
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "module-convergence").order);
+    expect(makeSteps.find((step) => step.step_slug === "module-convergence").order)
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "detail-advice").order);
     expect(makeSteps.find((step) => step.step_slug === "grill-with-docs").order)
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "detail-advice").order);
     const approval = makeSteps.find((step) => step.step_slug === "approve-decision");
-    expect(approval.observable_result).toMatch(/actual confirmation[\s\S]*decision-log/i);
+    expect(approval.observable_result).toMatch(/(?:actual confirmation|真实 confirmation)/i);
     expect(approval.observable_result).not.toMatch(/aggregate/i);
   });
 
@@ -283,10 +282,11 @@ describe("current ambiguity handling", () => {
     expect(buildSpec).toMatch(/returned to `make-decision` as an upstream decision gap/i);
   });
 
-  it("keeps build-plan authoring cohort-aware without executing tests", () => {
-    expect(buildPlan).toMatch(/For pre-cohort tasks[\s\S]{0,120}`plan\.md` and `tasks\.md`[\s\S]{0,180}For post-cohort tasks[\s\S]{0,180}`spec\.md`, `plan\.md`, and `tasks\.md`/i);
-    expect(buildPlan).toMatch(/Do not implement code or execute RED\/GREEN/i);
-    expect(buildPlan).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
+  it("keeps build-plan authoring cohort-aware and owns applicable target RED", () => {
+    expect(buildPlan).toMatch(/For pre-cohort tasks[\s\S]{0,120}`plan\.md`\/`tasks\.md` contract/i);
+    expect(buildPlan).toMatch(/For post-cohort tasks[\s\S]{0,180}`spec\.md`[\s\S]{0,100}`phases\/P<n>\.md` files[\s\S]{0,80}`phases\/index\.md`/i);
+    expect(buildPlan).toMatch(/Do not implement production code or claim GREEN here/i);
+    expect(buildPlan).toMatch(/build-plan writes each applicable[\s\S]*behavior test[\s\S]*target assertion[\s\S]*DO NOT TOUCH/i);
   });
 });
 

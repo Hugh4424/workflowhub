@@ -14,7 +14,7 @@
 仅 pre/history 的第二阶段。把“做什么、怎么验收”写成 accepted spec。post 的当前 spec 作者是 build-plan。概念别名：设计（design）。
 
 **build-plan**：
-pre 的第三阶段、post 的第二阶段。pre 把 accepted spec 拆成可执行 plan 与 tasks；post 同时负责当前 spec、plan 与 tasks。概念别名：计划（plan）。
+pre 的第三阶段、post 的第二阶段。pre 把 accepted spec 拆成旧 `plan.md` 与 `tasks.md`；post 维护含全局实现设计的 `spec.md`，生成独立 `phases/P<n>.md` 与纯指针 `phases/index.md`。概念别名：计划（plan）。
 
 **build-code**：
 pre 的第四阶段、post 的第三阶段。按计划逐项实现，完成针对性测试、每 Phase 独立审查，并执行前期确定的完整功能验收方案。概念别名：实现（apply）。
@@ -28,7 +28,7 @@ pre 的第五阶段、post 的第四阶段。独立审查实现及已有验证�
 由多个阶段技能组成的一条完整开发流程。一个工作流对应一个文件夹。
 
 **mini-task**：
-不运行完整五阶段的精简小功能交付流程。它可由用户直接启动，也可在普通任务 A 被必要依赖或修复阻塞时作为独立前置交付启动；紧凑复用四份当前材料，分别执行方案审查和实施审查，并在真实 Git 交付后让 A 通过普通 stage 重新调用继续。它不是第六个 stage、历史 `scope_revision`、successor/continuation/recovery，也不允许把同源降级审查冒充异源质量裁决。
+不运行完整五阶段的精简小功能交付流程。它可由用户直接启动，也可在普通任务 A 被必要依赖或修复阻塞时作为独立前置交付启动；紧凑复用本 cohort 当前材料，分别执行方案审查和实施审查，并在真实 Git 交付后让 A 通过普通 stage 重新调用继续。它不是第六个 stage、历史 `scope_revision`、successor/continuation/recovery，也不允许把同源降级审查冒充异源质量裁决。
 
 **技能（skill）**：
 完成某一阶段或某一横切能力的独立单元，可独立调用、可搬运。一个阶段对应一个技能。
@@ -41,7 +41,7 @@ pre 的第五阶段、post 的第四阶段。独立审查实现及已有验证�
 
 **stage-handoff**：
 四个作者 stage 在 reflection 终态后生成的当前交接视图。它固定写入
-`quality/evidence/handoff/<stage>.md`，只保留四份材料与正式原件的指针、状态、边界和
+`quality/evidence/handoff/<stage>.md`，只保留当前 cohort 材料与正式原件的指针、状态、边界和
 下一步；每次成功原子覆盖并读回校验，不保留历史版本，不是质量事实、发布结论或推进门。
 
 **复盘执行闭环（reflect）**：
@@ -206,7 +206,7 @@ make-decision 开始时选择并持续回填的结构骨架；按 spec §5 FR-DL
 
 ## 规划支线术语（已选设计／待实现）
 
-以下记录本次已获整体内容批准的方向，实施与机器正式收尾未完成；不表示现行 F7、正式发布或 close 已支持规划支线，普通开发五阶段与四材料规则不变（见 ADR 0025）。
+以下记录本次已获整体内容批准的方向，实施与机器正式收尾未完成；不表示现行 F7、正式发布或 close 已支持规划支线，普通开发 stage 路线与各 cohort 材料规则不变（见 ADR 0025）。
 
 **build-prd**：
 承接 make-decision 已收敛需求的独立规划支线薄编排，负责规划交接而非第六个正式阶段、build-spec 模式或自动开发。
@@ -226,7 +226,7 @@ build-prd 所属的地图核对、适用 UI 的高保真设计分组确认及最
 **规划完整物理交付**：
 本次交付的真实材料与必要接力附件存在、可访问且版本对应的完整交付，不等于重做视觉审查或通读背景研究，缺附件须报材料缺口，过去规划完成与实际 Git 动作事实分别保留。
 
-关系：新任务接纳当前 PRD 来源；在途任务仍按已接纳来源与自己的四材料工作，新稿不自动覆盖在途范围，实质修订只重核受影响内容；未归档母任务的承诺变化仍由当前 make-decision 写决定。
+关系：新任务接纳当前 PRD 来源；在途任务仍按已接纳来源与自己的 cohort 材料工作，新稿不自动覆盖在途范围，实质修订只重核受影响内容；未归档母任务的承诺变化仍由当前 make-decision 写决定。
 
 ## 历史恢复记录（仅审计）
 
@@ -234,12 +234,11 @@ build-prd 所属的地图核对、适用 UI 的高保真设计分组确认及最
 pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象只保留在历史记录中，
 用于排错和解释旧任务；它们不是当前领域对象，也不授权、阻止或改变普通工作。
 
-当前任务不创建恢复代次或阶段恢复 run。材料修订直接更新当前四份材料，并重新采集受影响
+当前任务不创建恢复代次或阶段恢复 run。材料修订直接更新当前 cohort 材料，并重新采集受影响
 的测试、AC 和审查事实；旧阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
-认证 worktree 的 `specs/<task-id>/` 中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
-变更来源。旧版本和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
+认证 worktree 的 `specs/<task-id>/` 中同一任务当前可读材料及其变更来源：pre/history 为 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；post 为 `decision-log.md`、含全局实现设计的 `spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md`。旧版本和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
@@ -294,7 +293,7 @@ workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05�
 对单个 build-code Phase 的完整、冻结 diff 审查；`pass` 与 `revise_required` 原样保留为质量事实，不决定结构性阶段放行，不因材料优化降低代码、测试、简单性或鲁棒性检查强度。
 
 **集成审查（integration review）**：
-build-code 结束时对最终快照的当前交互审查。它读取当前四份材料、当前代码快照、
+build-code 结束时对最终快照的当前交互审查。它读取当前 cohort 材料、当前代码快照、
 当前测试事实和 AC 到改动/测试/证据的追踪；不读取 Phase lineage、seam 或历史
 snapshot 控制面，也不把 review verdict 改写成 stage pass。
 
@@ -303,7 +302,7 @@ snapshot 控制面，也不把 review verdict 改写成 stage pass。
 
 ## 当前治理边界
 
-四材料决定是否可以继续工作；测试、审查、历史、inventory 和复杂度报告只提供事实，不是推进许可证。正式完成仍必须如实呈现测试、逐条验收、独立审查或 unavailable、交接和不可逆操作授权；旧条目到新条目的映射只记录治理演进，不生成新的控制链。历史 task 和历史 bytes 只读，provenance 与原始失败事实保留；新增机制必须登记职责、真实 consumer、owner、测试和删除/保留条件。
+当前 cohort 材料决定是否可以继续工作：pre/history 保留 `plan.md`/`tasks.md`，post 使用 `spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md`，两者均含 `decision-log.md`。测试、审查、历史、inventory 和复杂度报告只提供事实，不是推进许可证。正式完成仍必须如实呈现测试、逐条验收、独立审查或 unavailable、交接和不可逆操作授权；旧条目到新条目的映射只记录治理演进，不生成新的控制链。历史 task 和历史 bytes 只读，provenance 与原始失败事实保留；新增机制必须登记职责、真实 consumer、owner、测试和删除/保留条件。
 
 关系：**工作继续**始终允许同 task 修复；**当前阶段质量修复**消费 stage-end finding；只有 current revision 上适用问题处理完毕，才能满足**阶段完成判据**。三者不得压成一个 `completed` 或 `blocked` 状态。
 
@@ -361,7 +360,7 @@ snapshot 控制面，也不把 review verdict 改写成 stage pass。
 ## 历史审查代次（仅审计）
 
 旧 review-flow generation、reset 和 replacement 记录只用于解释历史审查输入与结果。
-当前审查以当前四份材料、当前代码和当前事实为输入；修订后只重算受影响的质量事实，不
+当前审查以当前 cohort 材料、当前代码和当前事实为输入；修订后只重算受影响的质量事实，不
 创建新的推进许可或复审状态机。
 
 ## 关系与边界
@@ -374,16 +373,16 @@ snapshot 控制面，也不把 review verdict 改写成 stage pass。
 
 ## 已消除的歧义
 
-- “材料修订”只表示当前四份材料内容发生变化；它不创建 reset、reopen、rebind 或 recovery
+- “材料修订”只表示当前 cohort 材料内容发生变化；它不创建 reset、reopen、rebind 或 recovery
   许可，也不覆盖任何历史记录。
 **推进资格（progression eligibility）**：
-build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 存在且可读。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
+build-code/verify-code 的当前 cohort 材料存在且可读：pre/history 为 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；post 为 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md` 与 `phases/index.md`。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
 
 **正式写边界（formal write boundary）**：
 核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次运行内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
 
 **阶段完成判据（stage completion criteria）**：
-与推进资格不同的派生谓词。阶段完成须核对 task_id、stage、工作区路径与待写字节的身份，并读取 facts.jsonl 本阶段行及六类具名 ref（K1–K6），确认阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全；缺失事实保持 unknown/unavailable/incomplete，不能宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。
+与推进资格不同的派生谓词。阶段完成须核对 task_id、stage、工作区路径与待写字节的身份，并读取 facts.jsonl 本阶段行及六类具名 ref（K1–K6），确认阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全；缺失事实保持 unknown/unavailable/incomplete，不能宣称完成。automatic accepted、`live_plan_execution` 或当前材料可读不能单独证明完成。
 
 ## 决策收敛与 Clarify 边界（2026-08-28）
 
@@ -414,7 +413,7 @@ stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `buil
 从大纲投影出的、只含类别/未知/来源/`open` 的材料，禁止出现决策编号、处置与拟议答案；它是 `make-decision/direction` 的必需材料字段 `convergence_outline`。唯一权威来源：阶段运行目录下 review 子目录的 `stage-materials.json` 与 `skills/wh-review/contracts/make-decision.md`。大纲变更后旧方向审查结果作废。
 
 **outline_closed（大纲闭环完成事实）**：
-`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「四材料可读即可继续」的推进边界。唯一权威来源：阶段运行目录下 stage 子目录的 `completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
+`make-decision` 的完成谓词，合取判定：存在 OI 清单且六类与框架条目结构齐备、方向审查材料含与当前大纲版本一致的快照、无未处置 `open` 项、每条终态满足字段表、影响目标/范围/验收的条目带可核验的用户处置凭证。任一不成立即 `missing`：**不得宣称阶段完成、不得发布可被下一阶段消费的完成事实**，但**不阻断同一任务继续修复**，也不改变「当前 cohort 材料可读即可继续」的推进边界。唯一权威来源：阶段运行目录下 stage 子目录的 `completion-predicates.mjs`。它**不是**机器语义裁决（机器不判断讨论是否充分），也不新增 stage、public command、第二 store 或第五份材料。
 
 **用户未收敛项分组确认**：
 收口前，未收敛项按主题分组、一组一组提交用户确认；影响目标/范围/验收的条目必须单独成组并逐项列出。该确认**并入 `make-decision` 既有的 approve-decision 确认**，不新增第五处正常确认点（宪法 F7）。

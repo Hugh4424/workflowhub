@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   CURRENT_MATERIAL_FILES,
+  buildStageInputPacket,
   inspectMaterialWorkspace,
   materialDigestAxes,
+  materialFilesForCohort,
+  verifyStageInputPacket,
   replaceMaterialAtomic,
 } from "../../runtime/task/material-workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
@@ -17,6 +20,10 @@ function workspace() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-materials-")));
   mkdirSync(root, { recursive: true });
   return root;
+}
+
+function phaseIndex(...rows) {
+  return `# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n${rows.map(([phase, ref]) => `| \`${phase}\` | \`${ref}\` | anchor | files | none | build-code |`).join("\n")}\n`;
 }
 
 describe("material workspace contract", () => {
@@ -51,6 +58,81 @@ describe("material workspace contract", () => {
     expect(result.missing).toEqual([]);
     expect(result.material_digest).toMatch(/^[a-f0-9]{64}$/);
     expect(result.files).not.toHaveProperty("materials-current.json");
+  });
+
+  it("reads every indexed post Phase and changes both identity axes with Phase content", () => {
+    const root = workspace();
+    writeFileSync(join(root, "decision-log.md"), "decision\n");
+    writeFileSync(join(root, "spec.md"), "spec\n");
+    mkdirSync(join(root, "phases"));
+    writeFileSync(join(root, "phases/index.md"), `${phaseIndex(["P1", "phases/P1.md"], ["P2", "phases/P2.md"])}\nRead \`phases/index.md\` for navigation.\n`);
+    writeFileSync(join(root, "phases/P1.md"), "phase one\n");
+    writeFileSync(join(root, "phases/P2.md"), "phase two\n");
+    const before = inspectMaterialWorkspace(root, { activationCohort: "post" });
+    expect(before.status).toBe("working");
+    expect(materialFilesForCohort("post", before.files)).toEqual([
+      "decision-log.md", "spec.md", "phases/index.md", "phases/P1.md", "phases/P2.md",
+    ]);
+    writeFileSync(join(root, "phases/P2.md"), "phase two changed\n");
+    const after = inspectMaterialWorkspace(root, { activationCohort: "post" });
+    expect(after.material_digest).not.toBe(before.material_digest);
+    expect(materialDigestAxes(after.files, { activationCohort: "post" }).behavior)
+      .not.toBe(materialDigestAxes(before.files, { activationCohort: "post" }).behavior);
+  });
+
+  it.each([
+    ["duplicate", phaseIndex(["P1", "phases/P1.md"], ["P1", "phases/P1.md"]), ["P1.md"]],
+    ["gap", phaseIndex(["P1", "phases/P1.md"], ["P3", "phases/P3.md"]), ["P1.md", "P3.md"]],
+    ["escape", phaseIndex(["P1", "phases/../P1.md"]), ["P1.md"]],
+    ["extra", phaseIndex(["P1", "phases/P1.md"]), ["P1.md", "P2.md"]],
+    ["missing", phaseIndex(["P1", "phases/P1.md"], ["P2", "phases/P2.md"]), ["P1.md"]],
+  ])("rejects %s post Phase inventory", (_case, index, phaseNames) => {
+    const root = workspace();
+    writeFileSync(join(root, "decision-log.md"), "decision\n");
+    writeFileSync(join(root, "spec.md"), "spec\n");
+    mkdirSync(join(root, "phases"));
+    writeFileSync(join(root, "phases/index.md"), index);
+    for (const name of phaseNames) writeFileSync(join(root, "phases", name), `${name}\n`);
+    expect(inspectMaterialWorkspace(root, { activationCohort: "post" }).status).toBe("not_ready");
+  });
+
+  it("binds every post Phase into build-plan/build-code/verify-code scoped revisions", () => {
+    const files = {
+      "decision-log.md": "decision", "spec.md": "spec",
+      "phases/index.md": phaseIndex(["P1", "phases/P1.md"], ["P2", "phases/P2.md"]),
+      "phases/P1.md": "first", "phases/P2.md": "second",
+    };
+    const changed = { ...files, "phases/P2.md": "changed" };
+    for (const stage of ["build-plan", "build-code", "verify-code"]) {
+      expect(completionPredicates.stageMaterialScopeRevision(stage, changed, { activationCohort: "post" }))
+        .not.toBe(completionPredicates.stageMaterialScopeRevision(stage, files, { activationCohort: "post" }));
+    }
+    expect(completionPredicates.deriveStageProgress("build-code", [], files, { activationCohort: "post" }).required_materials)
+      .toEqual(["decision-log.md", "spec.md", "phases/index.md", "phases/P1.md", "phases/P2.md"]);
+  });
+
+  it("packs post Phase documents as exact source paths rather than non-material derivatives", () => {
+    const packet = buildStageInputPacket({
+      task_id: "post-task", stage: "build-code", material_revision: "revision-current",
+      snapshot_tree: "a".repeat(40),
+      source_materials: {
+        "decision-log.md": "decision", "phases/index.md": phaseIndex(["P1", "phases/P1.md"]),
+        "phases/P1.md": "# P1\n",
+      },
+    });
+    expect(packet.manifest.source_materials.map((entry) => entry.path)).toContain("phases/P1.md");
+    expect(packet.manifest.derived_files.map((entry) => entry.path)).not.toContain("phases/P1.md");
+    expect(verifyStageInputPacket(packet).ok).toBe(true);
+  });
+
+  it("ignores prose Phase mentions outside the authority table but rejects unindexed map keys", () => {
+    const index = `${phaseIndex(["P1", "phases/P1.md"])}\nRead \`phases/P9.md\` only as an example.\n`;
+    expect(materialFilesForCohort("post", { "phases/index.md": index })).toEqual([
+      "decision-log.md", "spec.md", "phases/index.md", "phases/P1.md",
+    ]);
+    expect(() => materialFilesForCohort("post", {
+      "phases/index.md": index, "phases/P1.md": "first", "phases/P2.md": "extra",
+    })).toThrow(/unindexed Phase/);
   });
 
   it("keeps behavior digest stable for formatting noise while retaining raw governance identity", () => {

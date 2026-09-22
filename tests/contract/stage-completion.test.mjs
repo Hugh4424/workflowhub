@@ -106,6 +106,18 @@ function observations(stage) {
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
+  it.each(["pre", "post"])("AC-CLEAN-001 current %s make-decision completes without retired outline or aggregate facts", (activationCohort) => {
+    const facts = observations("make-decision").filter((entry) => !["outline_closed", "interaction_aggregate"].includes(entry.fact.value.subject));
+    const completion = deriveStageCompletion("make-decision", facts, {
+      activationCohort,
+      // Current vNext callers used to force the retired outline predicate.
+      requireOutline: true,
+    });
+    expect(completion, activationCohort).toMatchObject({ status: "completed", missing: [] });
+    expect(completion.predicates).not.toHaveProperty("outline_closed");
+    expect(completion.predicates).not.toHaveProperty("interaction_aggregate");
+  });
+
   it("P3 T007 keeps quality gaps while authenticated execution completion remains a separate fact", () => {
     const current = observations("build-code");
     current.find((entry) => entry.fact.value.subject === "risk_tests_fresh").fact.value.status = "missing";

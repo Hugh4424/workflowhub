@@ -31,11 +31,25 @@ import { completeCanonicalStageMaterials, createRequirementAuthenticationFixture
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+const POST_MATERIAL_ROOT = join(process.cwd(), "specs", "workflowhub-thin-core-card-07-20260919");
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture(taskId = "vnext-stage-run") {
+function postStageMaterials() {
+  const read = (name) => readFileSync(join(POST_MATERIAL_ROOT, name), "utf8");
+  return {
+    "decision-log.md": read("decision-log.md"),
+    "spec.md": read("spec.md"),
+    "phases/index.md": read("phases/index.md"),
+    "phases/P1.md": read("phases/P1.md"),
+    "phases/P2.md": read("phases/P2.md"),
+    "phases/P3.md": read("phases/P3.md"),
+    "phases/P4.md": read("phases/P4.md"),
+  };
+}
+
+function fixture(taskId = "vnext-stage-run", { activationCohort = "pre" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-stage-run-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -58,11 +72,23 @@ function fixture(taskId = "vnext-stage-run") {
       issue_ids: [],
       inputs: {},
       record_model: "vnext-single-write",
+      ...(activationCohort === "post" ? { activation_cohort: "post" } : {}),
     },
   });
   const candidate = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
-  writeCanonicalStageMaterials(artifacts);
+  const materials = activationCohort === "post" ? postStageMaterials() : writeCanonicalStageMaterials(artifacts);
+  if (activationCohort === "post") {
+    for (const [name, content] of Object.entries(materials)) artifacts.writeAtomic(name, content);
+  } else {
+    // Public status/run routes authenticate the current task topology from
+    // decision-log. Keep the shared pre fixture a valid ordinary task rather
+    // than making unrelated integration tests fail during CLI setup.
+    artifacts.writeAtomic(
+      "decision-log.md",
+      `${artifacts.read("decision-log.md")}\n\n## 任务身份\n\n- **任务类型**：普通任务\n`,
+    );
+  }
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
   return { root, task, candidate, kernel };
 }
@@ -195,11 +221,13 @@ function stageAgentExecution(stage) {
         ...analyzerRequirementFixture(),
         grill_summary: {
           status: "completed",
+          activation_cohort: "pre",
           requirement_coverage: { status: "complete", message_classes: [...REQUIREMENT_CLASSES], uncovered: [] },
           exit_checks: { external_interfaces: "pass", canonical_names: "pass", failure_semantics: "pass", scope_boundaries: "pass" },
         },
         final_confirmation: {
           decision: "accepted",
+          activation_cohort: "pre",
           subject_ref: "fixture/decision",
           events: ["ask", "wait", "reply", "resume"].map((event, index) => ({ event, sequence: index + 1 })),
         },
@@ -999,7 +1027,7 @@ describe("vNext official stage completion", () => {
     expect(outcome.value.run_id).toBe(context.workflowRunId);
     expect(outcome.value.skill_outcomes[0].consumer_binding).toMatchObject({
       status: "completed",
-      consumer: "stage-handlers#interactionAggregateFacts",
+      consumer: 'stage-handlers#officialStageHandler("make-decision")',
       identity: {
         task_id: state.task.identity.taskId,
         stage: "make-decision",
@@ -1536,12 +1564,12 @@ describe("vNext official stage completion", () => {
       stage: "make-decision",
       work_status: "ready",
       quality_status: "incomplete",
-      stage_outcome_ref: null,
-      stage_outcome_hash: null,
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
       stage_reflection: { status: "unavailable", step_status: "unavailable", persisted: false, availability: { state: "unavailable", reason_code: "executor_absent" } },
     });
+    expect(result).not.toHaveProperty("stage_outcome_ref");
+    expect(result).not.toHaveProperty("stage_outcome_hash");
+    expect(result).not.toHaveProperty("stage_outcome_status");
+    expect(result).not.toHaveProperty("stage_outcome_diagnostic");
   });
   it("records a supplied invalid optional outcome without hiding the diagnostic", async () => {
     const state = fixture("stage-agent-invalid-optional");
@@ -1690,7 +1718,15 @@ describe("vNext official stage completion", () => {
       kind: "host-session",
       transcript_path: join(state.root, "missing", "host-session.jsonl"),
     };
-    const result = await workflowHubBridgeMain(request);
+    const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
+    process.env.WORKFLOWHUB_TASK_DIR = state.root;
+    let result;
+    try {
+      result = await workflowHubBridgeMain(request);
+    } finally {
+      if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
+      else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
+    }
     expect(result).toMatchObject({
       stage: "make-decision",
       outcome_status: "unavailable",
@@ -2465,12 +2501,10 @@ describe("vNext official stage completion", () => {
         candidateWorkspace: state.candidate, artifacts,
       }, { receipts: {} });
       expect(result).toMatchObject({ stage, status: "in_progress", work_status: "ready", quality_status: "incomplete" });
-      expect(result).toMatchObject({
-        stage_outcome_ref: null,
-        stage_outcome_hash: null,
-        stage_outcome_status: "unavailable",
-        stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
-      });
+      expect(result).not.toHaveProperty("stage_outcome_ref");
+      expect(result).not.toHaveProperty("stage_outcome_hash");
+      expect(result).not.toHaveProperty("stage_outcome_status");
+      expect(result).not.toHaveProperty("stage_outcome_diagnostic");
       expect(result.quality_fact_refs.length).toBeGreaterThan(0);
     }
   });
@@ -2676,5 +2710,38 @@ describe("T1 AC-MS-020", () => {
     const after = readTaskFacts(state.task.taskPath);
     expect(after).toHaveLength(1);
     expect(after[0].review_origin).toBe("conducted");
+  });
+});
+
+describe("CARD07 post journey", () => {
+  it("CARD07 post journey: official make-decision keeps unavailable review provenance instead of empty findings", async () => {
+    const state = fixture("card07-post-review-unavailable", { activationCohort: "post" });
+    const result = await runOfficialStage("make-decision", contextFor("make-decision", state), { receipts: {} });
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    for (const subject of ["direction_review", "detail_review"]) {
+      const fact = facts.find((entry) => entry.kind === "review" && entry.subject === subject);
+      expect(fact, `${subject} quality fact`).toMatchObject({
+        status: "unavailable",
+        error: { code: expect.any(String), message: expect.any(String) },
+      });
+      expect(fact).not.toHaveProperty("findings");
+    }
+  });
+
+  it("CARD07 post journey: build-plan handoff reads every Phase named by the post index", async () => {
+    const state = fixture("card07-post-handoff-all-phases", { activationCohort: "post" });
+    const context = {
+      ...contextFor("build-plan", state),
+      workspace: openCurrentTaskWorkspace(state.task),
+      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
+    };
+    const result = await runOfficialStage("build-plan", context, { receipts: {} });
+    expect(result.stage_handoff).toMatchObject({ status: "published", current: true });
+    const handoff = state.task.readRecord(result.stage_handoff.ref);
+    for (const phase of ["phases/P1.md", "phases/P2.md", "phases/P3.md", "phases/P4.md"]) {
+      expect(handoff, phase).toContain(phase);
+    }
+    expect(handoff).toContain("当前 cohort 材料集合");
+    expect(handoff).not.toMatch(/plan\.md\s*\/\s*tasks\.md/);
   });
 });

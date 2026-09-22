@@ -55,9 +55,9 @@ describe("spec and plan content artifact closure", () => {
     const specSkill = read("skills/spec-specify/SKILL.md");
     const specTemplate = read("skills/spec-specify/templates/spec-template.md");
     const phaseSkill = read("skills/spec-plan/SKILL.md");
-    const phaseTemplate = read("skills/spec-plan/templates/plan-template.md");
+    const phaseTemplate = read("skills/spec-plan/templates/phase-template.md");
     const indexSkill = read("skills/spec-tasks/SKILL.md");
-    const indexTemplate = read("skills/spec-tasks/templates/tasks-template.md");
+    const indexTemplate = read("skills/spec-tasks/templates/index-template.md");
     const buildSpec = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
 
@@ -99,7 +99,7 @@ describe("spec and plan content artifact closure", () => {
     const specSkill = read("skills/spec-specify/SKILL.md");
     const clarifySkill = read("skills/spec-clarify/SKILL.md");
 
-    expect(buildPlan).toMatch(/post-cohort[\s\S]{0,180}writes[\s\S]{0,120}product spec[\s\S]{0,120}phase engineering authority[\s\S]{0,120}execution index/i);
+    expect(buildPlan).toMatch(/post-cohort[\s\S]{0,180}writes[\s\S]{0,120}spec\.md[\s\S]{0,120}phases\/P<n>\.md[\s\S]{0,120}phases\/index\.md/i);
     expect(buildPlan).toMatch(/pre-cohort 回 `build-spec`，post-cohort 回本 stage 的\s*`spec-specify`/);
     expect(buildPlan).not.toMatch(/This stage owns only `plan\.md` and `tasks\.md`/);
     expect(specSkill).toMatch(/callbacks supplied by the owning author stage:[\s\S]{0,120}`build-plan` for post-cohort tasks/i);

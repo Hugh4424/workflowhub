@@ -365,7 +365,7 @@ function validateCandidate(task, expected, facts = {
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
   Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
     validate();
-    return captureExecutionSnapshot(realWorktree, task.identity.taskId);
+    return captureExecutionSnapshot(realWorktree, task.identity.taskId, task.manifest.activation_cohort ?? "pre");
   } });
   CANDIDATE_WORKSPACES.add(candidate);
   return Object.freeze(candidate);
