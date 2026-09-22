@@ -93,25 +93,42 @@
       "additionalProperties": false
     },
     "buildPlanRule": {
-      "allOf": [
-        { "$ref": "#/$defs/rule" },
-        {
+      "type": "object",
+      "required": ["source_bundle", "required", "optional", "generated", "forbidden", "minimum_reviewers", "v2_required_maps", "profiles"],
+      "properties": {
+        "source_bundle": { "const": "none" },
+        "required": { "type": "array", "uniqueItems": true, "contains": { "const": "draft_tasks" }, "items": { "type": "string", "minLength": 1 } },
+        "optional": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
+        "generated": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
+        "forbidden": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
+        "minimum_reviewers": { "type": "integer", "minimum": 1 },
+        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "profiles": {
+          "type": "object",
+          "required": ["post"],
           "properties": {
-            "required": {
-              "contains": { "const": "draft_tasks" }
-            },
-            "optional": {
-              "not": { "contains": { "const": "draft_tasks" } }
-            },
-            "generated": {
-              "not": { "contains": { "const": "draft_tasks" } }
-            },
-            "forbidden": {
-              "not": { "contains": { "const": "draft_tasks" } }
+            "post": {
+              "allOf": [
+                { "$ref": "#/$defs/rule" },
+                { "properties": {
+                  "required": { "allOf": [
+                    { "contains": { "const": "draft_spec" } },
+                    { "contains": { "const": "phase_authorities" } },
+                    { "contains": { "const": "phase_index" } }
+                  ] },
+                  "forbidden": { "allOf": [
+                    { "contains": { "const": "draft_plan" } },
+                    { "contains": { "const": "draft_tasks" } },
+                    { "contains": { "const": "approved_spec" } }
+                  ] }
+                } }
+              ]
             }
-          }
+          },
+          "additionalProperties": false
         }
-      ]
+      },
+      "additionalProperties": false
     },
     "buildCodeProfiles": {
       "type": "object",

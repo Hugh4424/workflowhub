@@ -19,7 +19,7 @@
     "build-plan": {
       "contract": "contracts/build-plan.md",
       "problem_order": ["causal_graph", "dependencies", "consumers", "verification", "recovery", "necessity"],
-      "semantic_fields": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "dependencies", "verification", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
+      "semantic_fields": ["raw_requirement", "approved_spec", "draft_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "phase_authorities", "phase_index", "dependencies", "verification", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
     },
     "build-code/phase": {
       "contract": "contracts/build-code.md",
@@ -102,7 +102,18 @@
       "generated": ["review_instructions", "planning_artifacts"],
       "forbidden": [],
       "minimum_reviewers": 1,
-      "v2_required_maps": []
+      "v2_required_maps": [],
+      "profiles": {
+        "post": {
+          "source_bundle": "none",
+          "required": ["raw_requirement", "draft_spec", "acceptance_criteria", "phase_authorities", "phase_index", "review_instructions"],
+          "optional": ["context_map", "evidence_map"],
+          "generated": ["review_instructions", "planning_artifacts"],
+          "forbidden": ["approved_spec", "draft_plan", "draft_tasks"],
+          "minimum_reviewers": 1,
+          "v2_required_maps": []
+        }
+      }
     },
     "build-code": {
       "profiles": {
