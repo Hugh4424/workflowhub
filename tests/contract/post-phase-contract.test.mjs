@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
+import { readCurrentE2eAcceptanceEvidence } from "../../runtime/stage/stage-runner.mjs";
 
 const validatePostPhaseContract = (...args) => {
   expect(typeof contracts.validatePostPhaseContract, "post Phase validator must exist at the production contract seam").toBe("function");
@@ -166,6 +169,29 @@ describe("post-cohort independent Phase authority", () => {
     });
   });
 
+  it("keeps an explicitly deferred AC visible in history but outside current formal coverage", () => {
+    const deferredSpec = spec.replace("**AC-002**：", "**AC-002 (deferred)**：");
+    expect(contracts.activeAcceptanceCriterionIds(deferredSpec)).toEqual(["AC-001"]);
+    expect(contracts.activeAcceptanceCriterionIds(spec.replace("**AC-002**：", "**AC-002**（deferred）："))).toEqual(["AC-001"]);
+
+    // P2 and its trace remain as historical material; only P1 is current AC coverage.
+    const result = validatePostPhaseContract({ spec: deferredSpec, index, phases });
+    expect(result.ok, result.errors.join("; ")).toBe(true);
+    expect(result.facts.ac_coverage).toMatchObject({
+      accepted_count: 1,
+      covered_count: 1,
+      accepted_ids: ["AC-001"],
+      covered_ids: ["AC-001"],
+      deferred_ids: ["AC-002"],
+    });
+    expect(result.facts.phase_rows[1].acs).toContain("AC-002");
+
+    const notApplicableSpec = spec.replace("**AC-002**：", "**AC-002 (not_applicable)**：");
+    const notApplicable = validatePostPhaseContract({ spec: notApplicableSpec, index, phases });
+    expect(notApplicable.facts.ac_coverage.accepted_ids).toEqual(["AC-001"]);
+    expect(notApplicable.facts.ac_coverage.deferred_ids).toEqual([]);
+  });
+
   it("rejects a missing Phase file even if a monolithic plan is present", () => {
     const result = validatePostPhaseContract({ spec, index, phases: { "phases/P1.md": phases["phases/P1.md"] }, plan: Object.values(phases).join("\n") });
     expect(result.ok).toBe(false);
@@ -223,5 +249,72 @@ describe("post-cohort independent Phase authority", () => {
     const missing = contracts.validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: { ...packet, materials: { ...packet.materials, phases: { "phases/P1.md": phases["phases/P1.md"] } } }, strict_material_contracts: true, identity: { activation_cohort: "post", snapshot_tree: snapshot } });
     expect(missing.ok).toBe(false);
     expect(missing.errors.join("; ")).toMatch(/phases\/P2\.md/);
+  });
+
+  it("keeps non-UI command/service acceptance executable without an E2E verdict when scope is not_required", () => {
+    const scenarios = JSON.stringify([
+      { source: "command", sample: "input", scenario: "run", tier: "command", execution: { command: "node", args: [], timeout_ms: 1000 } },
+      { source: "service", sample: "input", scenario: "run", tier: "service", execution: { module_ref: "runtime/example.mjs", export_name: "run", input: {}, timeout_ms: 1000 } },
+    ]);
+    const phase = `# Phase P5\n\n## L1 — Contract\n\n### T011 — acceptance\n\n- **Source / FR / AC**: FR-001 / AC-REVIEW-001\n- **acceptance_role**: acceptance\n- **ui_scope**: non_ui\n- **e2e_scope**: not_required\n- **acceptance_data**: \`${scenarios}\`\n\n## L2 — Removable reference\n`;
+    const index = `# Phase index\n\n## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n${[1, 2, 3, 4, 5].map((n) => `| \`P${n}\` | \`phases/P${n}.md\` |`).join("\n")}\n`;
+    const phases = Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`phases/P${n}.md`, n === 5 ? phase : `# Phase P${n}`]));
+    const materials = { "decision-log.md": "# Decision log\n", "spec.md": "# Specification\n", "phases/index.md": index, ...phases };
+    const projection = contracts.projectPostPhaseAcceptanceExecutionData({
+      index,
+      phases,
+      spec: materials["spec.md"],
+    });
+
+    expect(projection, projection.errors.join("; ")).toMatchObject({
+      status: "ready",
+      requires_execution: true,
+      requires_independent_verdict: false,
+      scenarios: [{ tier: "command" }, { tier: "service" }],
+    });
+    const evidence = readCurrentE2eAcceptanceEvidence({
+      task: { manifest: { activation_cohort: "post" } },
+      artifacts: {
+        read(name) {
+          if (Object.hasOwn(materials, name)) return materials[name];
+          const error = new Error(`missing fixture: ${name}`);
+          error.code = "ENOENT";
+          throw error;
+        },
+      },
+    });
+    expect(evidence).toEqual({ required: false });
+
+    const verdictRequired = contracts.projectPostPhaseAcceptanceExecutionData({
+      index,
+      phases: { ...phases, "phases/P5.md": phase.replace("e2e_scope**: not_required", "e2e_scope**: high_risk_user_visible") },
+      spec: materials["spec.md"],
+    });
+    expect(verdictRequired.requires_independent_verdict).toBe(true);
+  });
+
+  it("keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent", () => {
+    const phase = readFileSync(new URL("../../specs/workflowhub-thin-core-card-05-20260919/phases/P5.md", import.meta.url), "utf8");
+    const line = phase.split("\n").find((value) => value.startsWith("- **acceptance_data**："));
+    const data = JSON.parse(line.match(/`(.+)`/)[1]);
+    expect(data).toHaveLength(1);
+    const { command, args } = data[0].execution;
+    expect(command).toBe("node");
+    expect(args.at(-1)).toBe("${TASK_DIR}");
+    expect(args[1]).not.toMatch(/spawnSync\(['"]npx/);
+    expect(args[1]).toContain("P5-T011-D044-focused-'+snap+");
+    expect(args[1]).toContain("receipt.snapshot_tree===snap");
+
+    const result = spawnSync(command, [args[0], args[1], "/nonexistent/card05-task-store"], {
+      cwd: process.cwd(), encoding: "utf8", timeout: 30000,
+    });
+    const output = JSON.parse(result.stdout);
+    expect(result.status).toBe(1);
+    expect(output.entries.map((entry) => entry.acceptance_criterion_id)).toEqual([
+      "AC-REVIEW-001", "AC-REVIEW-002", "AC-REVIEW-003", "AC-REVIEW-004",
+      "AC-REVIEW-006", "AC-REVIEW-007", "AC-REVIEW-009", "AC-REVIEW-011", "AC-REVIEW-013",
+    ]);
+    expect(output.entries.every((entry) => entry.outcome === "incomplete"
+      && entry.assertions.some((assertion) => assertion.expected !== assertion.actual))).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createTask } from "../../runtime/task/task-handle.mjs";
-import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { publishQualityFact } from "../../runtime/evidence/quality-store.mjs";
 
 function taskRoot() {
@@ -65,6 +65,58 @@ describe("minimal task storage", () => {
     expect(repaired.action).toBe("replaced");
     expect(readTaskFacts(root)).toHaveLength(2);
     expect(JSON.stringify(readTaskFacts(root))).not.toMatch(/parent|previous|generation|selector|successor/);
+  });
+
+  it("stores one build-code resume cursor and preserves it when later row writes omit it", () => {
+    const root = taskRoot();
+    initializeTaskStore(root, { taskId: "minimal-task" });
+    const cursor = {
+      phase_id: "P2",
+      task_id: "T004",
+      material_revision: `revision-${"a".repeat(64)}`,
+      recorded_at: "2026-09-25T01:02:03.000Z",
+    };
+
+    expect(writeStageRow(root, {
+      record_kind: "stage",
+      stage: "build-code",
+      source: "phase-progress-cursor",
+      phase_progress: cursor,
+    }).action).toBe("inserted");
+
+    const initialRow = readTaskFacts(root)[0];
+    expect(initialRow.phase_progress).toEqual(cursor);
+    expect(Object.keys(initialRow).sort()).toEqual([...STAGE_ROW_KEYS, "phase_progress"].sort());
+
+    expect(writeStageRow(root, {
+      record_kind: "stage",
+      stage: "build-code",
+      source: "stage-end:build-code",
+      evidence: { value: [{ command: "stage-end:build-code", exit_code: 0, failure_signature: "stage_end_recorded" }] },
+    }).action).toBe("replaced");
+
+    const rows = readTaskFacts(root);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe("stage-end:build-code");
+    expect(rows[0].phase_progress).toEqual(cursor);
+  });
+
+  it("reads legacy sixteen-field rows without migrating or rewriting them", () => {
+    const root = taskRoot();
+    initializeTaskStore(root, { taskId: "minimal-task" });
+    writeStageRow(root, {
+      record_kind: "stage",
+      stage: "build-code",
+      source: "legacy-stage-row",
+    });
+    const factsPath = join(root, "facts.jsonl");
+    const before = readFileSync(factsPath, "utf8");
+
+    const [row] = readTaskFacts(root);
+
+    expect(Object.keys(row).sort()).toEqual([...STAGE_ROW_KEYS].sort());
+    expect(row).not.toHaveProperty("phase_progress");
+    expect(readFileSync(factsPath, "utf8")).toBe(before);
   });
 
   it("fails loudly on malformed historical monitoring rows", () => {

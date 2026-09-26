@@ -27,6 +27,9 @@ function observation(stage, subject, kind, status = kind === "review" ? "recorde
     },
     authenticated: true,
     freshness: { status: "current" },
+    ...((stage === "verify-code" && subject === "code_review")
+      || (stage === "build-code" && subject === "integration_review")
+      ? { review_source: "ocr-delegation" } : {}),
   };
 }
 
@@ -197,6 +200,7 @@ describe("C6 status root causes and named references", () => {
     const completion = deriveStageCompletion("build-code", stageFacts("build-code"), {
       requireStageOutcome: true,
       stageOutcomeStatus: "completed",
+      authenticateCodeReview: () => true,
     });
     const roots = deriveStatusRootCauses({ quality: completion });
     expect(completion.status).toBe("completed");
@@ -215,7 +219,7 @@ describe("C6 status root causes and named references", () => {
   it("keeps a failed current predicate visible and does not promote it to completion", () => {
     const completion = deriveStageCompletion("build-code", stageFacts("build-code", {
       risk_tests_fresh: { status: "failed" },
-    }), { requireStageOutcome: true, stageOutcomeStatus: "completed" });
+    }), { requireStageOutcome: true, stageOutcomeStatus: "completed", authenticateCodeReview: () => true });
     expect(completion.status).toBe("in_progress");
     expect(completion.missing).toContain("risk_tests_fresh");
     expect(deriveStatusRootCauses({ quality: completion })[0]).toMatchObject({ root_cause_id: "risk_tests_fresh" });
@@ -229,6 +233,7 @@ describe("C6 status root causes and named references", () => {
     expect(deriveStageCompletion("verify-code", completedFacts, {
       requireStageOutcome: true,
       stageOutcomeStatus: "unavailable",
+      authenticateCodeReview: () => true,
     })).toMatchObject({
       status: "completed",
       missing: [],
@@ -237,6 +242,7 @@ describe("C6 status root causes and named references", () => {
     expect(deriveStageCompletion("verify-code", completedFacts, {
       requireStageOutcome: true,
       stageOutcomeStatus: "completed",
+      authenticateCodeReview: () => true,
     })).toMatchObject({
       status: "completed",
       missing: [],

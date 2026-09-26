@@ -1,0 +1,266 @@
+{
+  "schema_version": "card05-red-evidence-index.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "published_at": "2026-09-22T06:59:50.663Z",
+  "items": {
+    "T002": {
+      "command": "npx vitest run tests/contract/review-material-change-redispatch.test.mjs",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P2-DRIFT: source drift returned attempt_ref at test lines 274 and 309",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/command.txt",
+          "source_sha256": "30dcf38245d43a8440c005460504498b5af02a5042647885045403731abfd8db",
+          "ref": "quality/evidence/review-baseline-red/30dcf38245d43a8440c005460504498b5af02a5042647885045403731abfd8db.json",
+          "record_sha256": "73e85b2d4a569acc557c67ec0e1a163df89bbfdeb9f6b7015ca5a496c708eabf"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/stdout.log",
+          "source_sha256": "ebbc8d5c92fe23792f188cf8d6849f9dc24ea2291cf9b459a5e2ddcd38c26ba3",
+          "ref": "quality/evidence/review-baseline-red/ebbc8d5c92fe23792f188cf8d6849f9dc24ea2291cf9b459a5e2ddcd38c26ba3.json",
+          "record_sha256": "021b77fd17649d6eeef6d6dc415ffc080b02fc6323fac7ae58e700c5bfb61786"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/stderr.log",
+          "source_sha256": "b4e7a2d6f7f12cb0809bc20d73c376e7812eb85f660580b82ee5713639328e66",
+          "ref": "quality/evidence/review-baseline-red/b4e7a2d6f7f12cb0809bc20d73c376e7812eb85f660580b82ee5713639328e66.json",
+          "record_sha256": "2e63b6ec5d2a88e0aa6314eeccc332855bb8389d6d7b64528504f3b28b7c722b"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/manifest.json",
+          "source_sha256": "247ba54b7be8c5cc6c82ceb4ad83273f8e95f8b86940c303fbd991955472199c",
+          "ref": "quality/evidence/review-baseline-red/247ba54b7be8c5cc6c82ceb4ad83273f8e95f8b86940c303fbd991955472199c.json",
+          "record_sha256": "f4fbd9644b5e12484c649abcb293e9597805eaa411b600183ea036ed44f1f910"
+        }
+      }
+    },
+    "T003": {
+      "command": "npx vitest run tests/review/review-record-route.test.mjs -t 'P2 prewritten review union and anchor oracles'",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P2-UNION at line 140 returned null result_ref; ORACLE-P2-ANCHOR at line 168 changed false to true",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/command.txt",
+          "source_sha256": "71b7f29beaf564f27059a55c24d87d932986ecbcc864392f7dd90125943d9da7",
+          "ref": "quality/evidence/review-baseline-red/71b7f29beaf564f27059a55c24d87d932986ecbcc864392f7dd90125943d9da7.json",
+          "record_sha256": "6d45473ddb44d85ce66fde70c1751f6114807c61777be61e864e99125a3d05ab"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/stdout.log",
+          "source_sha256": "c896866e1d0b6059a33cad49d4a50bd726ebd637cedc2b4f8d166c07009d600a",
+          "ref": "quality/evidence/review-baseline-red/c896866e1d0b6059a33cad49d4a50bd726ebd637cedc2b4f8d166c07009d600a.json",
+          "record_sha256": "14f80073dd356c6ffba4da4a2136cde52ab362f46dd163f8980eedb5668e1c3b"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/stderr.log",
+          "source_sha256": "281fbb4bc42e4714c73eb3c3fda444d82ec770f4048a8c8d62eb615d62100c7b",
+          "ref": "quality/evidence/review-baseline-red/281fbb4bc42e4714c73eb3c3fda444d82ec770f4048a8c8d62eb615d62100c7b.json",
+          "record_sha256": "9dfdafed050d4350aaf99acc495f1aa00b385a7a940ca7e120ff784b21e2aad2"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/manifest.json",
+          "source_sha256": "015687b9c121611647d60b1ea88141a977139b1ac59ea3373de4761f5a073e5e",
+          "ref": "quality/evidence/review-baseline-red/015687b9c121611647d60b1ea88141a977139b1ac59ea3373de4761f5a073e5e.json",
+          "record_sha256": "7c90ace55cb0962df8711c44478cb9aa1f24473d92c9c62f37e69d48f98dda7d"
+        }
+      }
+    },
+    "T005": {
+      "command": "npx vitest run tests/contract/review-materials-contract.test.mjs -t ORACLE-P3-PACKET",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P3-PACKET: integration diff absent; verify-code AC forbidden",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/command.txt",
+          "source_sha256": "924535a5ad5b8f9c8bc32f873d91c03b73a7ad40a38dc0e84440abf8c302c993",
+          "ref": "quality/evidence/review-baseline-red/924535a5ad5b8f9c8bc32f873d91c03b73a7ad40a38dc0e84440abf8c302c993.json",
+          "record_sha256": "64fd13e002a39d7f36804b8f79f832b57db80024e1b572880ceebc747c77b6c6"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/stdout.log",
+          "source_sha256": "be6d5bc736114d7013d205c4809f25274f0913d88a4ebcb045cf6cd8e15e5218",
+          "ref": "quality/evidence/review-baseline-red/be6d5bc736114d7013d205c4809f25274f0913d88a4ebcb045cf6cd8e15e5218.json",
+          "record_sha256": "bd89c695ca9f5059a2586717ea9b42f0bf5c673502584821af6f892f0aa3b056"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/stderr.log",
+          "source_sha256": "243a57fa8ae9bebddb4d96c6b79ca02833a4f12be79b60db7b60052bd077b001",
+          "ref": "quality/evidence/review-baseline-red/243a57fa8ae9bebddb4d96c6b79ca02833a4f12be79b60db7b60052bd077b001.json",
+          "record_sha256": "ee6dc7be76a837071789271e98f1fb51bb0274463bbb0e8ef19efa3d167b9999"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/manifest.json",
+          "source_sha256": "9db91dea2d2671a4ab5e3cf1a84c787c0fa05eb6a259109392d77ba36c03e8db",
+          "ref": "quality/evidence/review-baseline-red/9db91dea2d2671a4ab5e3cf1a84c787c0fa05eb6a259109392d77ba36c03e8db.json",
+          "record_sha256": "819627fc8f1f768ff9ae1bb6f69182b1e3462976a18f50e32b6c916df09461fd"
+        }
+      }
+    },
+    "T006": {
+      "command": "npx vitest run tests/contract/ocr-delegation-route.test.mjs --reporter=dot",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P3-ROUTE: three code review surfaces still call legacy runner",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/command.txt",
+          "source_sha256": "ef1345084cba343adfc35a88788be944c56d64677900b9a0ab9fec60f42fcec0",
+          "ref": "quality/evidence/review-baseline-red/ef1345084cba343adfc35a88788be944c56d64677900b9a0ab9fec60f42fcec0.json",
+          "record_sha256": "a7fc771ccedba40e826d597126b0178858a8c4cfd3448b245ed0cf5b996306d5"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/stdout.log",
+          "source_sha256": "8ff93751dcf61f37443726626c8d20bd958e42981c8b78799d18bf9e2e232ee6",
+          "ref": "quality/evidence/review-baseline-red/8ff93751dcf61f37443726626c8d20bd958e42981c8b78799d18bf9e2e232ee6.json",
+          "record_sha256": "da512321d25b39276ae54c6ce95db9fb636651a5be4e662707ee0dae83a561e2"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/stderr.log",
+          "source_sha256": "b27c32772bf22030d75ebecf7e0016b1936a1ad9847d32d2663ff77bf8afef92",
+          "ref": "quality/evidence/review-baseline-red/b27c32772bf22030d75ebecf7e0016b1936a1ad9847d32d2663ff77bf8afef92.json",
+          "record_sha256": "6450d6c416bf21b371d78d59be48eefe8be8662940c8df76dc6ac7ac7105a988"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/manifest.json",
+          "source_sha256": "1544529561b0e9de505ca69c95b85fac98cb248edab923eea59fb579a25b9d32",
+          "ref": "quality/evidence/review-baseline-red/1544529561b0e9de505ca69c95b85fac98cb248edab923eea59fb579a25b9d32.json",
+          "record_sha256": "91271eb264d17036b755465143b50926ba9007f6baf97a7d3ac1ddfb04de97ec"
+        }
+      }
+    },
+    "P21": {
+      "command": "npx vitest run tests/official-make-decision-cli.test.mjs -t ORACLE-P21-UNKNOWN-ARG --reporter=dot",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P21-UNKNOWN-ARG: unknown --receipts option was ignored and run executed",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/command.txt",
+          "source_sha256": "99e7f49a2c9a903e3d7f73f88253a3381b151c5a304e48118750a688fd418bf5",
+          "ref": "quality/evidence/review-baseline-red/99e7f49a2c9a903e3d7f73f88253a3381b151c5a304e48118750a688fd418bf5.json",
+          "record_sha256": "3f50f4d128d850d9e28538cf56cbf9b561ef9cdbb600f474ac5d8486b2e6bc6d"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/stdout.log",
+          "source_sha256": "d0dfbddcd1c4406952e37f580fc71ec1042d4a53ed5b7edfc913af691ddef726",
+          "ref": "quality/evidence/review-baseline-red/d0dfbddcd1c4406952e37f580fc71ec1042d4a53ed5b7edfc913af691ddef726.json",
+          "record_sha256": "61b082e69b061fa1f58a4f02a4849c5e18b495168120a6bddb6e4b88e9494df0"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/stderr.log",
+          "source_sha256": "9a14114bf74897491f91e0e9de10bc670c5e79f3d617a175663e74bfedbd488f",
+          "ref": "quality/evidence/review-baseline-red/9a14114bf74897491f91e0e9de10bc670c5e79f3d617a175663e74bfedbd488f.json",
+          "record_sha256": "a1dc74ca7fa17f832c8e57c0275aded5f7cb99ed1d450de22af238de998c38ce"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/manifest.json",
+          "source_sha256": "326ef7ff8ea5df236ae193372d5a1386b4b33ab64398c0fa3e6f2f6075952361",
+          "ref": "quality/evidence/review-baseline-red/326ef7ff8ea5df236ae193372d5a1386b4b33ab64398c0fa3e6f2f6075952361.json",
+          "record_sha256": "c5cc0ebe32ba4633906cbde8c92403efe3170f09d8726fe29805c2248f55bce7"
+        }
+      }
+    },
+    "T009": {
+      "command": "npx vitest run tests/contract/review-public-entrypoints.test.mjs -t ORACLE-P5-UNAVAILABLE",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P5-UNAVAILABLE: official run hard-threw on zero-provider REVIEW_HISTORY_UNAVAILABLE attempt",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/command.txt",
+          "source_sha256": "2c3e40ff4d5dd697e0f8776c80ed07e80597862d1bcf2dfa3d7e66ec14116c9a",
+          "ref": "quality/evidence/review-baseline-red/2c3e40ff4d5dd697e0f8776c80ed07e80597862d1bcf2dfa3d7e66ec14116c9a.json",
+          "record_sha256": "2cfc8a7d8f7c5db3ca6a5beb22672a4c82f730ffea65bfecde6ba48a3981e7d4"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/stdout.log",
+          "source_sha256": "9fa865f69a6ccd5d47f765cdb52df311a1a03276779d5d9cc56c2f65210a9aa9",
+          "ref": "quality/evidence/review-baseline-red/9fa865f69a6ccd5d47f765cdb52df311a1a03276779d5d9cc56c2f65210a9aa9.json",
+          "record_sha256": "515faf838d334167d629dceb590a299086affa408b7e1fab4b6b3b93b3e92a21"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/stderr.log",
+          "source_sha256": "f8c9663ec297194e2e22655d384885743309c8d4992103c470efed6ff5ae3fdc",
+          "ref": "quality/evidence/review-baseline-red/f8c9663ec297194e2e22655d384885743309c8d4992103c470efed6ff5ae3fdc.json",
+          "record_sha256": "372a2d309428eac2ddd02d71e43b109e042c09c27957b21305acb78be1bc1089"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/manifest.json",
+          "source_sha256": "5e6b40ae08b950663745c2ef5928f0935f2c7378e8d0b47709c637cc703e622f",
+          "ref": "quality/evidence/review-baseline-red/5e6b40ae08b950663745c2ef5928f0935f2c7378e8d0b47709c637cc703e622f.json",
+          "record_sha256": "e0ae82b40ed6eee47f18f8ee509c7ad3a8b33b9ba56026b4fd2dd2b7f8fbe461"
+        }
+      }
+    },
+    "T010": {
+      "command": "npx vitest run tests/contract/task-bootstrap-integrity.test.mjs -t ORACLE-P5-INPUT --reporter=dot",
+      "exit_code": 1,
+      "target_failure": "ORACLE-P5-INPUT: task bootstrap rejected raw_requirement ref+sha input",
+      "files": {
+        "command.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/command.txt",
+          "source_sha256": "95a30d722a6e57623b2feafd2ff775ab5a478d9f02f67d13db187f5fb66e877a",
+          "ref": "quality/evidence/review-baseline-red/95a30d722a6e57623b2feafd2ff775ab5a478d9f02f67d13db187f5fb66e877a.json",
+          "record_sha256": "db5474f76fec2d65dfce7982502a08e9f2a173fd822ecd814e1da9a5d89c0a17"
+        },
+        "exit.txt": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+          "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "ref": "quality/evidence/review-baseline-red/4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865.json",
+          "record_sha256": "233f2d42905c04b024856574c5d0fc3cf0dad82d6edb6ff2a96159d3d9cd7f10"
+        },
+        "stdout.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/stdout.log",
+          "source_sha256": "a46623bebd096cb5b1e2bc346371bfffb83bce82333b7e190364739e2e2e84ae",
+          "ref": "quality/evidence/review-baseline-red/a46623bebd096cb5b1e2bc346371bfffb83bce82333b7e190364739e2e2e84ae.json",
+          "record_sha256": "fc3ee4923aab41701618046b64182a6afd2b5bde08b962ac2bb86c0c8654cb0c"
+        },
+        "stderr.log": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/stderr.log",
+          "source_sha256": "9db2a06976284461d9b8cb2456bae6e67e9c1ba785c95ff02266956438ca498c",
+          "ref": "quality/evidence/review-baseline-red/9db2a06976284461d9b8cb2456bae6e67e9c1ba785c95ff02266956438ca498c.json",
+          "record_sha256": "2bd6ddd12d2417cb766de2491d30c21f19ef1d4975ca21e67d81d63b3c0f6942"
+        },
+        "manifest.json": {
+          "source_path": "specs/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/manifest.json",
+          "source_sha256": "cd7f3f748a6db50038e31cb340e239e1db32377eb1c6fb55d8db7005497d8fb4",
+          "ref": "quality/evidence/review-baseline-red/cd7f3f748a6db50038e31cb340e239e1db32377eb1c6fb55d8db7005497d8fb4.json",
+          "record_sha256": "7d4549f0de84d247edb90a0fe51dc52995f043f407413e51ecdd65b5c0d95dd5"
+        }
+      }
+    }
+  }
+}

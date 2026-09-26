@@ -32,7 +32,7 @@
       "surface": "resolved-review-authorization",
       "class_id": "close_review_binding",
       "check_id": "review_binding",
-      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+      "error": "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
     },
     {
       "entry_id": "4020ded8-fae5-4805-917b-03bd15670668",
@@ -43,7 +43,7 @@
       "surface": "resolved-review-authorization",
       "class_id": "close_review_binding",
       "check_id": "review_binding",
-      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+      "error": "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
     }
   ]
 }

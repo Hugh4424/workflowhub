@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createSimpleReviewPacket,
@@ -718,7 +718,7 @@ describe("simple material-only review", () => {
       },
     });
     expect(result.status).toBe("unavailable");
-    expect(instructions).toContain("Check only the submitted implementation and test code");
+    expect(instructions).toContain("Check the submitted implementation and test code for correctness");
     for (const excluded of ["T010 status", "AC coverage", "repository-wide gate status", "review packet/material completeness", "release/close status"])
       expect(instructions).toContain(excluded);
   });
@@ -1190,6 +1190,8 @@ describe("simple material-only review", () => {
       },
     ];
     let statusCalls = 0;
+    let managedRequestId;
+    let managedMaterialId;
     const result = await runSimpleReview({
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
@@ -1197,15 +1199,312 @@ describe("simple material-only review", () => {
       resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => providerSelectionFor(["model-a", "model-b"], { "model-a": "model-a-model", "model-b": "model-b-model" }),
       managedStatusPollMs: 0,
-      managedTerminalWaitMs: 1000,
       client: {
-        async startManaged() { return { state: "running", runtime_id: "runtime-managed-wait" }; },
-        async statusManaged() { return statuses[statusCalls++]; },
+        async startManaged({ requestId, materials }) {
+          managedRequestId = requestId;
+          managedMaterialId = materials.materialId;
+          return { request_id: requestId, runtime_id: "runtime-managed-wait", state: "running", material_id: materials.materialId };
+        },
+        async statusManaged() {
+          const status = statuses[statusCalls++];
+          return status.state === "terminal" ? status : {
+            ...status,
+            request_id: managedRequestId,
+            material_id: managedMaterialId,
+          };
+        },
       },
     });
 
     expect(statusCalls).toBe(2);
     expect(result).toMatchObject({ status: "available", outcome: "completed" });
+  });
+
+  it.each(["request_id", "runtime_id", "material_id"])("returns unavailable without cancelling when non-terminal managed %s drifts", async (identityField) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-identity-drift-")));
+    roots.push(attachmentRoot);
+    const runtimeId = "runtime-managed-identity-drift";
+    const calls = [];
+    let statusCalls = 0;
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
+      managedStatusPollMs: 0,
+      client: {
+        async startManaged({ requestId, materials }) {
+          return {
+            request_id: requestId,
+            runtime_id: runtimeId,
+            state: "running",
+            material_id: materials.materialId,
+          };
+        },
+        async statusManaged({ requestId, materials }) {
+          calls.push("status");
+          statusCalls += 1;
+          if (statusCalls > 1) {
+            return {
+              request_id: requestId,
+              runtime_id: runtimeId,
+              state: "terminal",
+              material_id: materials.materialId,
+              group: {
+                runtime_id: runtimeId,
+                outcome: "completed",
+                providers: [{ provider: "model-a", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null }],
+              },
+            };
+          }
+          return {
+            request_id: requestId,
+            runtime_id: runtimeId,
+            state: "running",
+            material_id: materials.materialId,
+            providers: {
+              "model-a": { status: "running", session_id: "session-identity-drift", error: null, last_progress_at_ms: 11 },
+            },
+            [identityField]: "mismatched-identity",
+          };
+        },
+        async cancelManaged() { calls.push("cancel"); },
+      },
+    });
+
+    expect(statusCalls).toBe(1);
+    expect(calls).toEqual(["status"]);
+    expect(result).toMatchObject({
+      status: "unavailable",
+      outcome: "unavailable",
+      runtime_id: runtimeId,
+      error: { code: "PROTOCOL_INCOMPATIBLE" },
+      provider_results: [{ status: "running", session_id: "session-identity-drift", last_progress_at_ms: 11 }],
+    });
+  });
+
+  it("keeps polling after a failed health member until the broker reports an actual terminal group", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-failed-health-")));
+    roots.push(attachmentRoot);
+    const requestIds = [];
+    let statusCalls = 0;
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
+      managedStatusPollMs: 0,
+      client: {
+        async startManaged({ requestId, materials }) {
+          requestIds.push(requestId);
+          return { request_id: requestId, runtime_id: "runtime-managed-failed-health", state: "running", material_id: materials.materialId };
+        },
+        async statusManaged({ requestId, materials }) {
+          requestIds.push(requestId);
+          statusCalls += 1;
+          if (statusCalls === 1) {
+            return {
+              request_id: requestId,
+              state: "running",
+              runtime_id: "runtime-managed-failed-health",
+              material_id: materials.materialId,
+              providers: { "model-a": { status: "failed", error: { code: "RATE_LIMITED" }, last_progress_at_ms: 1 } },
+            };
+          }
+          return {
+            state: "terminal",
+            group: {
+              runtime_id: "runtime-managed-failed-health",
+              outcome: "unavailable",
+              providers: [{ provider: "model-a", status: "failed", error: { code: "RATE_LIMITED", message: "rate limited" }, timing: null, usage: null }],
+            },
+          };
+        },
+      },
+    });
+
+    expect(statusCalls).toBe(2);
+    expect(requestIds[0]).toEqual(expect.any(String));
+    expect(new Set(requestIds).size).toBe(1);
+    expect(result).toMatchObject({
+      status: "unavailable",
+      outcome: "unavailable",
+      provider_results: [{ provider: "model-a", status: "failed", error: { code: "RATE_LIMITED" } }],
+    });
+  });
+
+  it("keeps polling the same live managed request beyond 20 minutes without new output until terminal", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-health-wait-")));
+    roots.push(attachmentRoot);
+    const runtimeId = "runtime-managed-health-wait";
+    const requestIds = [];
+    let statusCalls = 0;
+    let nowMs = Date.now();
+    const lastProgressAt = nowMs;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    try {
+      const result = await runSimpleReview({
+        stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+      }, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
+        managedStatusPollMs: 0,
+        client: {
+          async startManaged({ requestId, materials }) {
+            requestIds.push(requestId);
+            return { request_id: requestId, runtime_id: runtimeId, state: "running", material_id: materials.materialId };
+          },
+          async statusManaged({ requestId, materials }) {
+            requestIds.push(requestId);
+            statusCalls += 1;
+            if (statusCalls === 2) nowMs += 1_200_001;
+            if (statusCalls === 3) nowMs += 1000;
+            if (statusCalls < 4) {
+              return {
+                request_id: requestId,
+                state: statusCalls === 1 ? "starting" : "running",
+                runtime_id: runtimeId,
+                material_id: materials.materialId,
+                providers: { "model-a": { status: "running", error: null, last_progress_at_ms: lastProgressAt } },
+              };
+            }
+            return {
+              state: "terminal",
+              group: {
+                runtime_id: runtimeId,
+                outcome: "completed",
+                providers: [{ provider: "model-a", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null }],
+              },
+            };
+          },
+        },
+      });
+
+      expect(result).toMatchObject({ status: "available", outcome: "completed", runtime_id: runtimeId });
+      expect(statusCalls).toBe(4);
+      expect(requestIds[0]).toEqual(expect.any(String));
+      expect(new Set(requestIds).size).toBe(1);
+      expect(nowMs).toBeGreaterThan(lastProgressAt + 1_200_000);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("cancels an aborted managed review and waits for terminal provider and finding facts", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-abort-terminal-")));
+    roots.push(attachmentRoot);
+    const controller = new AbortController();
+    const runtimeId = "runtime-managed-abort-terminal";
+    const calls = [];
+    const statusSignals = [];
+    let requestId;
+    let materialId;
+    let statusCalls = 0;
+    let nowMs = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    const lifecycle = (state, group = undefined) => ({
+      version: "workflowhub-run.v1",
+      request_id: requestId,
+      runtime_id: runtimeId,
+      material_id: materialId,
+      state,
+      ...(group ? { group } : {}),
+    });
+
+    try {
+      const result = await runSimpleReview({
+        stage: "build-code", host_provider: "codex", materials: { implementation: "const reviewed = true;\n" },
+      }, {
+        signal: controller.signal,
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => providerSelectionFor(["model-a", "model-b"], {
+          "model-a": "model-a-model", "model-b": "model-b-model",
+        }),
+        managedStatusPollMs: 0,
+        client: {
+          async startManaged(value) {
+            calls.push("start");
+            requestId = value.requestId;
+            materialId = value.materials.materialId;
+            return lifecycle("running");
+          },
+          async cancelManaged(value) {
+            calls.push("cancel");
+            expect(value).toMatchObject({ runtimeId, requestId });
+            return { cancelled: true };
+          },
+          async statusManaged(value) {
+            calls.push("status");
+            statusSignals.push(value.signal ?? null);
+            statusCalls += 1;
+            if (statusCalls === 1) {
+              return lifecycle("running");
+            }
+            if (statusCalls === 2) {
+              controller.abort(new Error("operator cancelled"));
+              throw Object.assign(new Error("status read cancelled locally"), { code: "PROCESS_CANCELLED" });
+            }
+            if (statusCalls === 3) {
+              nowMs = 1_200_001;
+              return lifecycle("running");
+            }
+            return lifecycle("terminal", {
+              runtime_id: runtimeId,
+              material_id: materialId,
+              outcome: "cancelled",
+              providers: [
+                {
+                  provider: "model-a",
+                  status: "completed",
+                  error: null,
+                  output: JSON.stringify({ findings: [{
+                    severity: "minor",
+                    path: "materials/01-implementation.md",
+                    line: 1,
+                    issue: "completed before cancellation",
+                    recommendation: "retain this finding",
+                    evidence_kind: "direct",
+                    evidence: "The reviewed line is present in the submitted material.",
+                  }] }),
+                  timing: null,
+                  usage: null,
+                },
+                {
+                  provider: "model-b",
+                  status: "cancelled",
+                  error: { code: "CANCELLED", message: "operator cancelled" },
+                  output: null,
+                  timing: null,
+                  usage: null,
+                },
+              ],
+            });
+          },
+        },
+      });
+
+      expect(calls).toEqual(["start", "status", "status", "cancel", "status", "status"]);
+      expect(statusSignals).toEqual([controller.signal, controller.signal, null, null]);
+      expect(statusCalls).toBe(4);
+      expect(nowMs).toBeGreaterThan(1_200_000);
+      expect(result).toMatchObject({
+        status: "unavailable",
+        runtime_id: runtimeId,
+        outcome: "cancelled",
+        error: { code: "REVIEW_CANCELLED", message: "operator cancelled" },
+        provider_results: [
+          { provider: "model-a", status: "completed", evidence_anchor_valid: [true] },
+          { provider: "model-b", status: "cancelled", error: { code: "CANCELLED" } },
+        ],
+        findings: [{ provider: "model-a", issue: "completed before cancellation" }],
+      });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
 });
@@ -1884,6 +2183,22 @@ describe("neutral review instruction identity and trusted selection", () => {
     expect(() => reviewPacketMaterialId({
       stage: "build-prd", review_kind: "build_prd", materials: completeBuildPrdMaterials(),
     })).toThrow(/instruction source is required for build_prd/);
+  });
+
+  it("surfaces verify-code compaction failures instead of hashing uncompressed materials", async () => {
+    const { reviewPacketMaterialId } = await import("../../../../runtime/review/review-packet-identity.mjs");
+    const compactionError = new Error("verify-code material compaction failed");
+    let thrown = null;
+
+    try {
+      reviewPacketMaterialId({ stage: "verify-code", materials: { implementation: "source bytes" } }, {
+        compactMaterials: () => { throw compactionError; },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(compactionError);
   });
 
   it("rejects caller-supplied review_instructions before the broker and never writes a packet", async () => {

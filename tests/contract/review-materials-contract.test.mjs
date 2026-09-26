@@ -1088,7 +1088,7 @@ describe("current review material and capture contracts", () => {
     });
     const receipt = task.readRecord(receiptRef);
     writeFileSync(tasksPath, `${taskCard}\n### 执行状态填写区\n- 记录：只写回执行事实。\n`);
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: true });
     try {
       expect(() => buildReviewMaterials({
         reviewDataRoot: root,
@@ -1122,7 +1122,7 @@ describe("current review material and capture contracts", () => {
     }
   });
 
-  it("rejects a current build-code integration receipt whose command is not npm test", async () => {
+  it("accepts a current passing integration receipt with its actual limited command", async () => {
     const { root, task, workspace } = taskFixture();
     const taskId = task.identity.taskId;
     const receiptRef = "quality/tests/integration-custom-command.json";
@@ -1132,9 +1132,9 @@ describe("current review material and capture contracts", () => {
       outputRef: "quality/tests/output/integration-custom-command.output",
     });
     const receipt = task.readRecord(receiptRef);
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: true });
     try {
-      expect(() => buildReviewMaterials({
+      const bundle = buildReviewMaterials({
         reviewDataRoot: root,
         attachmentRoot: root,
         source,
@@ -1145,7 +1145,7 @@ describe("current review material and capture contracts", () => {
         materials: {
           approved_spec: "# Spec\n\nAC-01：实现结果正确。\n",
           acceptance_criteria: "# Acceptance\n\nAC-01：实现结果正确。\n",
-          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt), suite_scope: "full" },
           ac_trace: {
             schema_version: "ac-change-test-trace.v1",
             snapshot_tree: source.snapshotTree,
@@ -1160,7 +1160,12 @@ describe("current review material and capture contracts", () => {
           },
           review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
         },
-      })).toThrow(/canonical test receipt provenance is invalid/);
+      });
+      const summary = JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"));
+      expect(summary.command).toBe("printf integration");
+      expect(summary.exit_code).toBe(0);
+      expect(summary.suite_scope).toBe("recorded_command_only");
+      expect(summary.coverage_limit).toMatch(/recorded command only.*full-suite.*per-AC/i);
     } finally {
       source.dispose();
     }
@@ -1169,7 +1174,7 @@ describe("current review material and capture contracts", () => {
   it("still builds a semantic integration packet when the test receipt is unavailable", () => {
     const { root, task, workspace } = taskFixture();
     const taskId = task.identity.taskId;
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: true });
     try {
       const bundle = buildReviewMaterials({
         reviewDataRoot: root,
@@ -1214,10 +1219,206 @@ describe("current review material and capture contracts", () => {
     }
   });
 
+  it("ORACLE-P3-PACKET: only candidate integration receives the real diff and full AC text", () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "review-change.diff"), "diff --git a/src/app.ts b/src/app.ts\n+P3_DIFF_MARKER\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
+    try {
+      expect(readFileSync(source.diffPath, "utf8")).toContain("P3_DIFF_MARKER");
+      const fullAc = "## Acceptance Criteria\n\nAC-REVIEW-004：packet 必须包含验收标准全文。\n\nP3_AC_FULL_TEXT_MARKER：验证真实 diff 审查所需的完整验收上下文。\n失败：diff 或 AC 任一缺失。\n证据：packet 原件。";
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: task.identity.taskId,
+        stage: "build-code", reviewScope: "integration",
+        materials: {
+          approved_spec: `# Spec\n\n${fullAc}\n`,
+          acceptance_criteria: fullAc,
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-REVIEW-004"],
+            entries: [{
+              acceptance_criterion_id: "AC-REVIEW-004", coverage_status: "unknown",
+              coverage_reason: "P3 RED fixture", change: [{ task_id: null, summary: "review-change.diff" }],
+              test: [], evidence: [], evidence_status: "unavailable", evidence_reason: "P3 RED fixture",
+              anchors: [{ id: "p3-diff", path: "review-change.diff", start_line: 1, end_line: 1, role: "implementation", reason: "P3 diff" }],
+            }],
+            implementation_anchors: [{ id: "p3-diff", path: "review-change.diff", start_line: 1, end_line: 1, role: "implementation", reason: "P3 diff" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration", null, "full", null, true),
+        },
+        candidateExperiment: true,
+      });
+      const delivered = bundle.manifest.map(({ path }) => path).filter((path) => /\.(?:md|json|diff)$/.test(path))
+        .map((path) => readFileSync(join(bundle.bundleRoot, path), "utf8")).join("\n");
+      expect(delivered).toContain("P3_DIFF_MARKER");
+      expect(delivered).toContain("P3_AC_FULL_TEXT_MARKER");
+      expect(bundle.manifest.some(({ path }) => path.endsWith(".diff"))).toBe(true);
+
+      const productionBundle = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: task.identity.taskId,
+        stage: "build-code", reviewScope: "integration",
+        materials: {
+          approved_spec: `# Spec\n\n${fullAc}\n`,
+          acceptance_criteria: fullAc,
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-REVIEW-004"],
+            entries: [{
+              acceptance_criterion_id: "AC-REVIEW-004", coverage_status: "unknown",
+              coverage_reason: "P3 RED fixture", change: [{ task_id: null, summary: "review-change.diff" }],
+              test: [], evidence: [], evidence_status: "unavailable", evidence_reason: "P3 RED fixture",
+              anchors: [{ id: "p3-diff", path: "review-change.diff", start_line: 1, end_line: 1, role: "implementation", reason: "P3 diff" }],
+            }],
+            implementation_anchors: [{ id: "p3-diff", path: "review-change.diff", start_line: 1, end_line: 1, role: "implementation", reason: "P3 diff" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      const productionPaths = productionBundle.manifest.map(({ path }) => path);
+      expect(productionPaths).not.toContain("changes.diff");
+      expect(productionPaths).not.toContain("diff-index.json");
+      expect(productionPaths.some((path) => path.startsWith("diff-shards/"))).toBe(false);
+      const productionMaterials = productionPaths.filter((path) => /\.(?:md|json)$/.test(path))
+        .map((path) => readFileSync(join(productionBundle.bundleRoot, path), "utf8")).join("\n");
+      expect(productionMaterials).not.toContain("P3_AC_FULL_TEXT_MARKER");
+      expect(readFileSync(join(productionBundle.bundleRoot, "review-instructions.md"), "utf8"))
+        .not.toContain("complete current worktree diff");
+    } finally { source.dispose(); }
+  });
+
+  it("delivers the full frozen diff for every change in a large candidate integration packet", () => {
+    const { root, task, workspace } = taskFixture();
+    mkdirSync(join(workspace.worktreeRoot, "src"), { recursive: true });
+    mkdirSync(join(workspace.worktreeRoot, "docs"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "src/integration-large.ts"), Array.from(
+      { length: 12000 },
+      (_value, index) => `export const integration_${index} = "INTEGRATION_SOURCE_MARKER_${index}";`,
+    ).join("\n"));
+    writeFileSync(join(workspace.worktreeRoot, "docs/integration-large.md"), `INTEGRATION_DOC_MARKER\n${"integration documentation\n".repeat(1800)}`);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
+    try {
+      expect(source.diffBytes).toBeGreaterThan(288 * 1024);
+      const fullAc = "AC-REVIEW-004：集成审查必须看到当前 worktree 的完整 diff。";
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: task.identity.taskId,
+        stage: "build-code", reviewScope: "integration", candidateExperiment: true,
+        materials: {
+          approved_spec: `# Spec\n\n${fullAc}\n`,
+          acceptance_criteria: fullAc,
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-REVIEW-004"],
+            entries: [{
+              acceptance_criterion_id: "AC-REVIEW-004", coverage_status: "unknown",
+              coverage_reason: "integration diff delivery regression", change: [{ task_id: null, summary: "current worktree" }],
+              test: [], evidence: [], evidence_status: "unavailable", evidence_reason: "integration diff delivery regression",
+              anchors: [{ id: "integration-source", path: "src/integration-large.ts", start_line: 1, end_line: 1, role: "implementation", reason: "current worktree source" }],
+            }],
+            implementation_anchors: [{ id: "integration-source", path: "src/integration-large.ts", start_line: 1, end_line: 1, role: "implementation", reason: "current worktree source" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration", null, "full", null, true),
+        },
+      });
+      const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+      expect(index.changes.length).toBeGreaterThanOrEqual(2);
+      for (const change of index.changes) {
+        expect(change.shards.length).toBeGreaterThan(0);
+        expect(change.shards.every(({ delivery }) => delivery === "included")).toBe(true);
+        const diff = Buffer.concat(change.shards
+          .slice().sort((left, right) => left.offset - right.offset)
+          .map(({ shard_id }) => readFileSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`))));
+        expect(diff.toString("utf8")).toContain(`diff --git a/${change.path} b/${change.path}`);
+        expect(diff.toString("utf8")).toMatch(/@@ -/);
+      }
+      const docsChange = index.changes.find(({ path }) => path === "docs/integration-large.md");
+      const docsDiff = Buffer.concat(docsChange.shards.map(({ shard_id }) => readFileSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`))));
+      expect(docsDiff.toString("utf8")).toContain("INTEGRATION_DOC_MARKER");
+    } finally { source.dispose(); }
+  });
+
+  it("ORACLE-P3-PACKET: verify candidate receives full AC beside a sharded real diff", () => {
+    const { root, task, workspace } = taskFixture();
+    mkdirSync(join(workspace.worktreeRoot, "src"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "src/review-change.ts"), Array.from({ length: 16000 }, (_value, index) => `export const marker_${index} = ${index};`).join("\n"));
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
+    try {
+      const fullAc = "AC-REVIEW-004：需求保真。\n验证：真实 diff。\n通过：P3_VERIFY_AC_FULL_TEXT 可见。\n失败：AC 截断。\n证据：packet。";
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: task.identity.taskId,
+        stage: "verify-code",
+        materials: {
+          changed_files: "src/review-change.ts", implementation_assessment: "Review current implementation.",
+          test_context: "Focused test evidence is pending.", open_risks: "none",
+          acceptance_criteria: fullAc,
+          review_instructions: reviewInstructionsFor("verify-code"),
+        },
+      })).toThrow(/MATERIAL_FORBIDDEN.*acceptance_criteria/);
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: task.identity.taskId,
+        stage: "verify-code", candidateExperiment: true,
+        materials: {
+          changed_files: "src/review-change.ts", implementation_assessment: "Review current implementation.",
+          test_context: "Focused test evidence is pending.", open_risks: "P3 RED fixture.",
+          acceptance_criteria: fullAc,
+          review_instructions: reviewInstructionsFor("verify-code", null, false, null, null, "full", null, true),
+        },
+      });
+      const delivered = bundle.manifest.map(({ path }) => path).filter((path) => /\.(?:md|diff)$/.test(path))
+        .map((path) => readFileSync(join(bundle.bundleRoot, path), "utf8")).join("\n");
+      expect(bundle.manifest.some(({ path }) => /^diff-shards\/.+\.diff$/.test(path))).toBe(true);
+      expect(delivered.includes("P3_VERIFY_AC_FULL_TEXT")).toBe(true);
+    } finally { source.dispose(); }
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty", " \n"],
+    ["incomplete", "验收材料待补充，当前无法核对需求。"],
+    ["partial current AC set", "AC-01: first criterion only."],
+  ])("ORACLE-P3-PACKET: verify candidate is unavailable for %s acceptance criteria", (_caseName, acceptanceCriteria) => {
+    const { root, task, workspace } = taskFixture();
+    mkdirSync(join(workspace.worktreeRoot, "src"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "src/review-change.ts"), "export const changed = true;\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
+    try {
+      const currentSpecTask = Object.create(task);
+      currentSpecTask.readArtifact = (path) => {
+        if (path === "spec.md") return "AC-01: first criterion.\nAC-02: second criterion.\n";
+        throw new Error(`unexpected artifact ${path}`);
+      };
+      const materials = {
+        changed_files: "src/review-change.ts",
+        implementation_assessment: "Review current implementation.",
+        test_context: "Focused test evidence is pending.",
+        open_risks: "P3 RED fixture.",
+        review_instructions: reviewInstructionsFor("verify-code", null, false, null, null, "full", null, true),
+      };
+      if (acceptanceCriteria !== undefined) materials.acceptance_criteria = acceptanceCriteria;
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task: currentSpecTask,
+        taskId: task.identity.taskId,
+        stage: "verify-code",
+        candidateExperiment: true,
+        materials,
+      })).toThrow(/MATERIAL_INCOMPLETE:.*acceptance_criteria/i);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("includes explicit Agent/subagent and wait/poll prohibitions in candidate OCR prompts", () => {
+    const prompt = reviewInstructionsFor("verify-code", null, false, null, null, "full", null, true);
+    expect(prompt).toMatch(/Do not invoke Agent, subagent, child-agent, or other agent tools\./i);
+    expect(prompt).toMatch(/Do not wait for or poll agents, sessions, or processes; do not invoke wait\/poll tools\./i);
+    expect(prompt).not.toMatch(/acceptance-criteria text when supplied/i);
+  });
+
   it("treats an explicit missing integration test receipt as unavailable", () => {
     const { root, task, workspace } = taskFixture();
     const taskId = task.identity.taskId;
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: true });
     try {
       const bundle = buildReviewMaterials({
         reviewDataRoot: root,
@@ -1264,7 +1465,7 @@ describe("current review material and capture contracts", () => {
   it("rejects unavailable integration test evidence bound to an older snapshot", () => {
     const { root, task, workspace } = taskFixture();
     const taskId = task.identity.taskId;
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: true });
     try {
       expect(() => buildReviewMaterials({
         reviewDataRoot: root,
@@ -1313,7 +1514,7 @@ describe("current review material and capture contracts", () => {
       outputRef: "quality/tests/output/integration-host-only.output",
     });
     const receipt = task.readRecord(receiptRef);
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
     try {
       const bundle = buildReviewMaterials({
         reviewDataRoot: root,
@@ -1369,7 +1570,7 @@ describe("current review material and capture contracts", () => {
       const target = join(workspace.worktreeRoot, path);
       writeFileSync(target, "export const value = " + JSON.stringify(path) + ";\n");
     }
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
     try {
       const implementationAnchors = paths.map((path, index) => ({
         id: `provider-context-${index}`,
@@ -1426,7 +1627,7 @@ describe("current review material and capture contracts", () => {
     const receiptRef = "quality/tests/integration-spec-compaction.json";
     await runBuildCapture("npm test", receiptRef, { task, workspace, outputRef: "quality/tests/output/integration-spec-compaction.output" });
     const receipt = task.readRecord(receiptRef);
-    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: true });
     try {
       const bundle = buildReviewMaterials({
         reviewDataRoot: root,

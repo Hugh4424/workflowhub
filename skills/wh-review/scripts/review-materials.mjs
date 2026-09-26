@@ -93,7 +93,7 @@ const VERIFY_CODE_FULL_DIFF_PREFIXES = [
   "core/",
   "runtime/",
   "skills/wh-review/scripts/",
-  "skills/dsh-code-review/",
+  "skills/architect-code-review/",
   "tools/cli/",
   "tools/host/",
 ];
@@ -428,8 +428,7 @@ function validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps }
   validateCanonicalTestReceipt(receipt, {
     taskId: task.identity.taskId,
     stage: "build-code",
-    // Phase tests may use the phase's declared focused command; unlike the
-    // final integration receipt, they are not required to be npm test.
+    // Phase tests may use the phase's declared focused command.
     snapshotTree: receipt.snapshot_tree,
     expectedProducerComponent: "build-code-test-capture",
     requirePassed: true,
@@ -480,7 +479,6 @@ function validateIntegrationFreshTests({ task, source, materials }) {
     snapshotTree: receipt.snapshot_tree,
     expectedProducerComponent: "build-code-test-capture",
     allowedProducerComponents: ["build-code-test-capture"],
-    expectedCommand: "npm test",
     requirePassed: true,
   });
   const output = handle.readRecord(receipt.output_ref);
@@ -1027,12 +1025,12 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
     return `Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.${ordered}`;
   }
   if (stage === "verify-code") {
-    return `Focus on the current code diff, real entry points, direct consumers, lifecycle and failure paths, security boundaries, test strength, and open implementation risks. Do not audit materials, acceptance criteria, receipts, lineage, or evidence completeness; report code findings only.${ordered}`;
+    return `Focus on the current code diff, real entry points, direct consumers, lifecycle and failure paths, security boundaries, test strength, and open implementation risks. If authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to check whether current code and test claims match the recorded execution and to identify false-green behavior. Do not audit evidence completeness or turn missing evidence into a code finding or stage gate; report code findings only.${ordered}`;
   }
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
 
-export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null) {
+export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null, candidateExperiment = false) {
   assertReviewIdentity({ stage, reviewTrack: track, reviewScope, reviewKind });
   if (role !== null && !["red", "blue"].includes(role)) throw new Error(`MATERIAL_INCOMPLETE: invalid review role ${role}`);
   const rule = ruleForIdentity(stage, track, reviewScope, reviewKind);
@@ -1054,7 +1052,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : reviewKind
     ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
-    ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
+    ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. When authenticated-evidence.json is supplied, use it only to check code/test execution claims for false-green behavior; do not audit completeness. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
     : `${blind} ${reviewInstruction}`;
   const adviceBoundary = "Every stage produces heterologous advice as a quality fact only; this is advice only, not a completion license. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
   const buildCodeBoundary = stage === "build-code" && reviewKind === null
@@ -1069,8 +1067,12 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     ? "Read the frozen four materials and the design risks; no implementation diff or diff index is supplied for a design review."
     : reviewKind === "mini_task.implementation"
     ? "Read the current implementation diff/snapshot and the explicitly supplied tests, AC trace, and real user result."
+    : stage === "build-code" && reviewScope === "integration" && candidateExperiment
+    ? "For this isolated OCR candidate integration, read the complete current worktree diff together with the final current worktree subject, full acceptance criteria, relevant test outcome, and selected implementation context. AC bindings and evidence-ledger details are host-only and are not review targets."
     : stage === "build-code" && reviewScope === "integration"
-    ? "For integration, do not look for or infer a diff; read only the final current worktree subject, compact behavior requirements, relevant test outcome, and selected implementation context. AC bindings and evidence-ledger details are host-only and are not review targets."
+    ? "For ordinary integration, read the final current worktree subject, compact behavior requirements, relevant test outcome, and selected implementation context. No changes.diff is supplied. AC bindings and evidence-ledger details are host-only and are not review targets."
+    : candidateExperiment && ["build-code", "verify-code"].includes(stage)
+    ? "This isolated OCR candidate packet includes the full acceptance-criteria text; read it in full and do not substitute a compact map summary."
     : stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
     ? "Read only the raw requirement and objective facts; the current choice is intentionally absent."
     : stage === "make-decision" && track === "direction" && directionMode === "challenge"
@@ -1082,7 +1084,10 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     ? ` This is the paired ${role} role; preserve pair_id and role provenance, and report only this role's independent advice.`
     : "";
   const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  const candidateOcrToolBoundaries = candidateExperiment && ["build-code", "verify-code"].includes(stage)
+    ? " Do not invoke Agent, subagent, child-agent, or other agent tools. Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools."
+    : "";
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.${candidateOcrToolBoundaries}\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -1478,10 +1483,11 @@ function selectedPhaseChangeIds(materials) {
   return selected;
 }
 
-function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage = "build-code" }) {
+function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage = "build-code", integration = false }) {
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
-  const selectedChangeIds = selectedPhaseChangeIds(materials);
+  const fullIntegrationDiff = stage === "build-code" && integration;
+  const selectedChangeIds = fullIntegrationDiff ? new Set() : selectedPhaseChangeIds(materials);
   const sections = diffSections(source);
   const includedVerifyCodePaths = selectVerifyCodeDiffPaths(sections, stage);
   const shards = [];
@@ -1498,7 +1504,9 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     const defaultDelivery = stage === "verify-code"
       ? verifyCodeDiffDeliveryForPath(section.path)
       : phaseDiffDeliveryForPath(section.path);
-    const delivery = stage === "verify-code" && includedVerifyCodePaths.has(section.path)
+    const delivery = fullIntegrationDiff
+      ? "included"
+      : stage === "verify-code" && includedVerifyCodePaths.has(section.path)
       ? "included"
       : selectedChangeIds.size > 0
         ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
@@ -1554,10 +1562,12 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     full_diff: { ...archive, lines: (() => { let count = 0; forEachTextLine(source.diffPath, () => { count += 1; }); return count; })() },
     coverage: { change_ids_total: changeMap.changes.length, change_ids_indexed: covered.size },
     changes: compactChanges,
-    anchors: selectedAnchors(materials).map((anchor) => {
+    anchors: selectedAnchors(materials, { integration }).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
-      const anchorHasIncludedDiff = includedVerifyCodePaths !== null
+      const anchorHasIncludedDiff = fullIntegrationDiff
+        ? true
+        : includedVerifyCodePaths !== null
         ? includedVerifyCodePaths.has(anchor.path)
         : (stage === "verify-code" ? verifyCodeDiffDeliveryForPath(anchor.path) : phaseDiffDeliveryForPath(anchor.path)) === "included";
       if (selectedChangeIds.size > 0 ? !selectedChangeIds.has(change.change_id) : !anchorHasIncludedDiff) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
@@ -1708,7 +1718,7 @@ function packetAuthority(path, rule, { reviewScope = null } = {}) {
   return { authority: "context", inclusion_reason: "declared_packet_context" };
 }
 
-function excludedPacketMaterial(rule, stage) {
+function excludedPacketMaterial(rule, stage, { reviewScope = null } = {}) {
   const excluded = rule.forbidden.map((key) => ({ category: `material:${key}`, reason: "forbidden_by_stage_contract" }));
   if (rule.source_bundle === "none") excluded.push({ category: "source_bundle", reason: "stage_contract_does_not_require_a_diff" });
   excluded.push({ category: "changed_file_snapshot", reason: "complete_files_are_not_default_review_material" });
@@ -1722,7 +1732,7 @@ function excludedPacketMaterial(rule, stage) {
     excluded.push({ category: "generated:planning_artifacts", reason: "stage-local spec-analyze projection duplicates declared provider materials" });
   }
   if (stage === "verify-code") excluded.push({ category: "canonical_acceptance_evidence_tree", reason: "not a code-review input" });
-  if (stage === "build-code" && rule.source_bundle === "none") {
+  if (stage === "build-code" && (rule.source_bundle === "none" || reviewScope === "integration")) {
     excluded.push({ category: "material:ac_trace", reason: "host-only AC binding; provider reviews delivery behavior instead" });
     excluded.push({ category: "provider_context_overflow", reason: "provider receives a bounded set of delivery-critical implementation excerpts; host retains the complete authenticated anchor set" });
   }
@@ -1797,7 +1807,7 @@ function packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind = null, i
 
 function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, reviewKind = null, rule, deduplicatedMaterials = [] }) {
   const payload = packetEntries(bundleRoot, rule, { reviewScope });
-  const excluded = excludedPacketMaterial(rule, stage);
+  const excluded = excludedPacketMaterial(rule, stage, { reviewScope });
   const included = [...payload, { path: "packet-plan.json", authority: "metadata" }, { path: "manifest.json", authority: "metadata" }];
   const deliveryMode = reviewScope === "integration" || filesUnder(bundleRoot).includes("diff-index.json")
     ? "selected_context"
@@ -1909,8 +1919,9 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
     schema_version: "wh-review-test-summary.v1",
     command: receipt.command ?? null,
     exit_code: receipt.exit_code ?? null,
-    suite_scope: evidence.suite_scope ?? "unspecified",
+    suite_scope: integration ? "recorded_command_only" : evidence.suite_scope ?? "unspecified",
     coverage_classes: evidence.coverage_classes ?? [],
+    ...(integration ? { coverage_limit: "Passing receipt proves the recorded command only; full-suite and per-AC coverage are not established by this receipt." } : {}),
     raw_output_included: false,
     ...(integration ? {} : {
       receipt_ref: evidence.receipt_ref,
@@ -1930,7 +1941,7 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
 export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, taskId, task, stage, phaseId = null,
   reviewTrack, reviewScope, reviewKind, review_track, review_scope, review_kind,
   uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null,
-  activationCohort = "pre" } = {}) {
+  activationCohort = "pre", candidateExperiment = false } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
   const identity = reviewIdentityFromInput({ stage, review_track, reviewTrack, review_scope, reviewScope, review_kind, reviewKind });
   stage = identity.stage;
@@ -1942,9 +1953,23 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   if (stage === "build-plan" && !["pre", "post"].includes(activationCohort)) {
     throw new Error(`MATERIAL_INCOMPLETE: invalid build-plan activation cohort ${activationCohort}`);
   }
-  const rule = stage === "build-plan" && activationCohort === "post"
+  const baseRule = stage === "build-plan" && activationCohort === "post"
     ? stageMaterials.stages["build-plan"].profiles.post
     : ruleForIdentity(stage, reviewTrack, effectiveScope, reviewKind);
+  const candidateIntegrationDiff = candidateExperiment === true && stage === "build-code" && effectiveScope === "integration";
+  const candidateVerifyCode = candidateExperiment === true && stage === "verify-code";
+  const rule = candidateIntegrationDiff
+    ? { ...baseRule, source_bundle: "diff" }
+    : candidateVerifyCode
+      ? {
+          ...baseRule,
+          required: [...new Set([...baseRule.required, "acceptance_criteria"])],
+          optional: baseRule.optional.filter((key) => key !== "acceptance_criteria"),
+          forbidden: baseRule.forbidden.filter((key) => key !== "acceptance_criteria"),
+        }
+      : baseRule;
+  const preserveCandidateAcceptanceCriteria = candidateExperiment === true
+    && ((stage === "build-code" && ["phase", "integration"].includes(effectiveScope)) || stage === "verify-code");
   if (stage === "build-code" && effectiveScope === "integration" && !Object.hasOwn(materials, "test_evidence")) {
     // Semantic integration review can still inspect the final implementation
     // when the host has no current test receipt. Keep the missing fact explicit
@@ -1960,6 +1985,11 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   const missingRequired = rule.required.filter((key) => !Object.prototype.hasOwnProperty.call(materials, key) || !materialPresent(materials[key]));
   if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
+  if (candidateVerifyCode) {
+    validateVerifyAcceptanceSummary(materials.acceptance_criteria, {
+      expectedCriterionIds: currentSpecCriterionIds(task),
+    });
+  }
   if (stage === "build-plan" && activationCohort === "post") validatePostReviewPhases(materials);
   const materialAllowlist = validateMaterialAllowlist(rule, materials);
   materials = materialAllowlist.materials;
@@ -1981,7 +2011,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const diffIndex = usesDiffBundle ? diffIndexFor(source) : null;
   const changeMap = usesDiffBundle ? changeMapFor({ source, phaseId, diffIndex }) : null;
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
-  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode, role);
+  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode, role, candidateExperiment);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
   if (stage === "verify-code") {
     // verify-code reviews code. AC and evidence completeness are owned by the
@@ -2021,7 +2051,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       const bytes = materialBytes(compacted[key]);
       compacted[key] = compactAuthorityMap(compacted[key], canonicalMaterialArchive({ reviewDataRoot, label: key, bytes }));
     }
-    if (compacted.approved_spec) {
+    if (compacted.approved_spec && !(stage === "build-code" && effectiveScope === "integration")) {
       const bytes = materialBytes(compacted.approved_spec);
       compacted.approved_spec = compactApprovedSpec(
         compacted.approved_spec,
@@ -2030,7 +2060,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         canonicalMaterialArchive({ reviewDataRoot, label: "approved-spec", bytes }),
       );
     }
-    if (compacted.acceptance_criteria && materials.acceptance_map) {
+    if (compacted.acceptance_criteria && materials.acceptance_map
+        && !(stage === "build-code" && effectiveScope === "integration")
+        && !preserveCandidateAcceptanceCriteria) {
       const bytes = materialBytes(compacted.acceptance_criteria);
       compacted.acceptance_criteria = compactApprovedSpec(
         materials.approved_spec ?? compacted.acceptance_criteria,
@@ -2053,7 +2085,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       providerMaterials.approved_spec,
       canonicalMaterialArchive({ reviewDataRoot, label: "integration-approved-spec", bytes }),
     );
-    if (providerMaterials.acceptance_criteria) {
+    if (providerMaterials.acceptance_criteria && !preserveCandidateAcceptanceCriteria) {
       const acceptanceBytes = materialBytes(providerMaterials.acceptance_criteria);
       compacted.acceptance_criteria = compactIntegrationAcceptanceCriteria(
         providerMaterials.acceptance_criteria,
@@ -2133,7 +2165,10 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
-      bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage });
+      bundleDiffIndex = writeShardedPhaseDiff({
+        bundleRoot, reviewDataRoot, source, changeMap, materials, stage,
+        integration: stage === "build-code" && effectiveScope === "integration",
+      });
     }
   }
   const stagePlan = stagePlanFor(stage, reviewTrack, reviewKind);

@@ -1,0 +1,15 @@
+{
+  "schema_version": "card05-red-command.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "task": "T006-candidate",
+  "command": "npx vitest run tests/contract/ocr-delegation-route.test.mjs -t ORACLE-P3-CANDIDATE",
+  "exit_code": 1,
+  "target_failure": "ORACLE-P3-CANDIDATE: candidate_experiment=true reaches the review runner, but build-code/phase, build-code/integration, and verify-code still call the existing runner (OCR spy=0); ordinary production and six reachable retained surfaces use the existing runner",
+  "channels": {
+    "combined_stdout_stderr": "combined.log"
+  },
+  "test_source_path": "tests/contract/ocr-delegation-route.test.mjs",
+  "test_source_sha256": "b6378ecbe0cf536596d9582ed310f49da494921f1858817467df0cd068621d9e",
+  "source_kind": "actual-scoped-reexecution",
+  "recorded_at": "2026-09-22T07:45:58.678Z"
+}

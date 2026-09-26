@@ -1,0 +1,1 @@
+npx vitest run tests/contract/task-bootstrap-integrity.test.mjs -t ORACLE-P5-INPUT --reporter=dot

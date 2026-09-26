@@ -17,22 +17,36 @@ const validCycle = () => ({
 });
 
 describe("verify-code bounded code review", () => {
-  it("declares one independent code review between two bounded repair opportunities", () => {
+  it("declares one OCR review before repair and a conditional Architect fallback", () => {
     const deps = yaml.load(read("workflows/verify-code/skill-deps.yaml"));
-    expect(deps.skills.map(({ name }) => name)).toEqual(["dsh-code-review", "frontend-component-quality", "wh-review", "stage-reflection"]);
+    expect(deps.skills.map(({ name }) => name)).toEqual(["frontend-component-quality", "stage-reflection"]);
+    expect(deps.external_capabilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "ocr-cli", required_when: "code_review" }),
+    ]));
     const steps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
     const evidenceKind = (step, kind) => step.completion_evidence.some((entry) => entry.kind === kind);
-    const reviewStep = steps.find((step) => step.step_slug === "run-one-independent-code-review");
+    const reviewStep = steps.find((step) => step.step_slug === "ocr-code-review");
+    const publishStep = steps.find((step) => step.step_slug === "publish-code-review-fact");
     const repairIndexes = steps.flatMap((step, index) => evidenceKind(step, "repair") ? [index] : []);
 
-    expect(reviewStep).toBeDefined();
+    expect(steps.filter((step) => step.step_slug === "ocr-code-review")).toHaveLength(1);
+    expect(reviewStep).toMatchObject({ order: 2, depends_on: [1], completion_evidence: expect.arrayContaining([
+      { kind: "review", uri_or_path: "quality/reviews/results/" },
+      { kind: "review", uri_or_path: "quality/reviews/attempts/<attempt_id>/attempt.json" },
+    ]) });
+    expect(publishStep).toMatchObject({ order: 3, depends_on: [2] });
+    expect(publishStep.observable_result).toContain("receipts.quality_review");
     expect(repairIndexes).toHaveLength(2);
-    expect(repairIndexes[0]).toBeLessThan(steps.indexOf(reviewStep));
-    expect(steps.indexOf(reviewStep)).toBeLessThan(repairIndexes[1]);
-    expect(reviewStep.observable_result).toMatch(/代码|code|异源|independent/i);
+    expect(steps.indexOf(reviewStep)).toBeLessThan(steps.indexOf(publishStep));
+    expect(steps.indexOf(publishStep)).toBeLessThan(repairIndexes[0]);
+    expect(repairIndexes[0]).toBeLessThan(repairIndexes[1]);
+    expect(reviewStep.observable_result).toMatch(/OCR.*独立代码审查/);
+    const skill = read("workflows/verify-code/SKILL.md");
+    expect(skill).toMatch(/工具 `unavailable` 且零成功审查路时[\s\S]*恰好调用一次[\s\S]*architect-code-review/);
+    expect(skill).toMatch(/旧 wh-review\/broker 只读，不充当替代审查/);
   });
 
-  it("keeps the independent-review packet focused on current acceptance facts", () => {
+  it("keeps the current OCR packet and historical wh-review material contract distinct", () => {
     const verify = JSON.parse(read("runtime/review/stage-materials.json")).stages["verify-code"];
     expect(verify.required).toEqual(expect.arrayContaining([
       "changed_files", "implementation_assessment", "test_context", "open_risks", "review_instructions",
@@ -40,8 +54,13 @@ describe("verify-code bounded code review", () => {
     expect(verify.v2_required_maps).toEqual([]);
     const contract = read("skills/wh-review/contracts/verify-code.md");
     expect(contract).toMatch(/异源代码审查|independent.*code/i);
-    expect(contract).toMatch(/(?:只调用[\s\S]{0,50}wh-review[\s\S]{0,30}一次)|(?:wh-review[\s\S]{0,50}once)/i);
+    // Keep the historical material-contract coverage without treating it as today's dispatch path.
+    expect(contract).toMatch(/不是材料审计/);
     expect(contract).toMatch(/unavailable[\s\S]{0,120}(?:incomplete|缺事实)/i);
+    const skill = read("workflows/verify-code/SKILL.md");
+    expect(skill).toMatch(/review --action=record` 派发一次 OCR delegation/);
+    expect(skill).toMatch(/当前 diff、完整 AC 文本、真实入口和 `reviewed_execution/);
+    expect(skill).toMatch(/4\. \*\*正式发布\*\*：[^\n]*`receipts\.quality_review`[^\n]*OCR canonical result_ref、unavailable attempt_ref[^\n]*Architect canonical result_ref[^\n]*`code_review`/);
   });
 
   it("accepts one architect review, one independent review and two repair slots", () => {
@@ -62,7 +81,7 @@ describe("verify-code bounded code review", () => {
     const skill = read("workflows/verify-code/SKILL.md");
     expect(skill).toMatch(/代码审查|code review/i);
     expect(skill).toMatch(/真实入口|real entry/i);
-    expect(skill).toMatch(/不再开启(?:新的|第三轮)?\s*review|do not.*repeat.*review/i);
+    expect(skill).toMatch(/不为得到空 findings 或补齐证据再次调用|不派发第二次代码审查/);
     // The governed wording moved from "不要求…证据" to "不再要求用户重复…" plus
     // "不要要求用户补交 verify-code 证据". Keep the frozen expectation in sync with the
     // real requirement instead of loosening it: the stage must not demand evidence
@@ -71,11 +90,12 @@ describe("verify-code bounded code review", () => {
   });
 
   it("keeps DeepSeek quality lenses inside one code-review invocation", () => {
-    const skill = read("skills/dsh-code-review/SKILL.md");
+    const skill = read("skills/architect-code-review/SKILL.md");
     for (const lens of ["dsh-find-simplifications", "dsh-doc-standards", "dsh-prose-standard", "dsh-trim-cot-leakage"]) {
       expect(skill).toContain(lens);
     }
-    expect(skill).toMatch(/不新增 skill dispatch、provider 调用、receipt、控制面或 verify-code 轮次/);
+    expect(skill).toMatch(/本技能不生成正式 `code_review` 或 review receipt，也不触发另一次正式审查/);
+    expect(skill).toMatch(/可选的 Architect 诊断不触发额外正式审查轮次/);
     expect(skill).toMatch(/push、merge 和发布.*独立操作/);
     expect(skill).toMatch(/无 consumer|没有真实 consumer/);
     expect(skill).toMatch(/不创建额外记录/);

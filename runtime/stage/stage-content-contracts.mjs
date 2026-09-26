@@ -6295,10 +6295,15 @@ function validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity } = 
     }
     const materials = packet.materials ?? {};
     const requirementIds = new Set((packet.original_requirements ?? []).map((entry) => entry?.id).filter(nonEmptyString));
+    const taskMaterials = typeof materials.tasks === "string"
+      ? materials.tasks
+      : (packet.activation_cohort === "post" || identity?.activation_cohort === "post")
+        ? Object.values(materials.phases ?? {}).filter((value) => typeof value === "string").join("\n")
+        : "";
     for (const id of row.source_ids ?? []) if (!requirementIds.has(id)) errors.push(`${label}.source_ids contains an unknown original requirement: ${id}`);
     for (const id of row.decision_ids ?? []) if (!containsMaterialIdentifier(materials.decision_log, id)) errors.push(`${label}.decision_ids is not present in decision-log.md: ${id}`);
     for (const id of row.fr_ids ?? []) if (!containsMaterialIdentifier(materials.spec, id)) errors.push(`${label}.fr_ids is not present in spec.md: ${id}`);
-    for (const id of row.task_ids ?? []) if (!containsMaterialIdentifier(materials.tasks, id)) errors.push(`${label}.task_ids is not present in tasks.md: ${id}`);
+    for (const id of row.task_ids ?? []) if (!containsMaterialIdentifier(taskMaterials, id)) errors.push(`${label}.task_ids is not present in current Phase/task materials: ${id}`);
     if (!nonEmptyString(row.file_symbol)) errors.push(`${label}.file_symbol is required`);
     const implementationAnchor = row.implementation_anchor;
     const verificationAnchor = row.verification_anchor;
@@ -6397,6 +6402,79 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
   if (!profile) throw new TypeError(`unknown stage spec-analyze profile: ${stage}`);
   if (!object(packet)) return Object.freeze({ ok: false, status: "material_incomplete", stage, errors: Object.freeze(["MATERIAL_INCOMPLETE: packet is required"]), findings: Object.freeze([]), summary: stageAnalyzeSummary(stage, {}, "material_incomplete", [], ["MATERIAL_INCOMPLETE: packet is required"]) });
 
+  // Post build-plan is intentionally a structural report.  The current
+  // decision-log is read-only direction context; no caller-owned raw
+  // requirement inventory, coverage array, or authenticated source census is
+  // required.  Semantic fidelity remains with the existing independent review
+  // and finding dispositions.
+  const postPlanReport = stage === "build-plan"
+    && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
+  if (postPlanReport) {
+    const materials = object(packet.materials) ? packet.materials : {};
+    const phases = object(materials.phases)
+      ? materials.phases
+      : object(materials.phase_authorities) ? materials.phase_authorities : null;
+    const required = ["decision_log", "spec", "phase_index"];
+    const errors = required
+      .filter((name) => !nonEmptyString(materials[name]))
+      .map((name) => `MATERIAL_INCOMPLETE: ${name} material is required for post build-plan`);
+    if (!phases || Object.keys(phases).length === 0 || Object.values(phases).some((value) => !nonEmptyString(value))) {
+      errors.push("MATERIAL_INCOMPLETE: phases material is required for post build-plan");
+    }
+    let structural = null;
+    if (errors.length === 0 || strict_material_contracts) {
+      structural = validatePostPhaseContract({
+        spec: typeof materials.spec === "string" ? materials.spec : "",
+        index: typeof materials.phase_index === "string" ? materials.phase_index : "",
+        phases: phases ?? {},
+      });
+      errors.push(...structural.errors);
+    }
+    const findings = errors.map((error) => stageAnalyzeFinding({
+      type: error.startsWith("MATERIAL_INCOMPLETE:") ? "phase_material_gap" : "phase_contract_gap",
+      artifact: "spec/phases",
+      targetArtifact: "current post materials",
+      frOrTaskId: "post-build-plan",
+      lineOrAnchor: "phases/index.md",
+      rule: "post-build-plan-structural-report",
+      impact: error,
+      correction: "在当前任务修复命名材料或 Phase 合同，再按同一 revision 重新分析；不补 raw inventory。",
+    }));
+    const facts = structural?.facts ?? {};
+    const frCoverage = facts.fr_coverage ?? { accepted_count: 0, covered_count: 0, accepted_ids: [], covered_ids: [] };
+    const acCoverage = facts.ac_coverage ?? { accepted_count: 0, covered_count: 0, accepted_ids: [], covered_ids: [] };
+    const status = errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:"))
+      ? "material_incomplete"
+      : errors.length > 0 ? "inconsistent" : "reported";
+    return Object.freeze({
+      ok: status === "reported",
+      status,
+      stage,
+      errors: Object.freeze(errors),
+      findings: Object.freeze(findings),
+      summary: Object.freeze({
+        stage_work: "已读取当前 decision-log、spec、每个独立 Phase 与 phases/index.md，并只报告结构和引用关系。",
+        requirement_coverage: "本报告不计算 raw requirement 语义覆盖分母；需求语义由独立合并审查及 finding 处置判断。",
+        upstream_alignment: "只报告 FR/AC、Phase/Task、依赖、写集和命令/oracle 的结构缺口，不把字串出现判为语义一致。",
+        current_stage_repairs: "修复以当前材料和正式质量事实为准；本分析器不写四份材料。",
+        remaining_risks: errors.length ? errors.join("; ") : "独立审查的 finding、确认和延期风险仍按原件披露。",
+        next_stage_boundary: "报告不授权推进；下游只消费当前材料、独立审查、确认及正式质量事实。",
+      }),
+      facts: Object.freeze({
+        required_materials: Object.freeze(required),
+        required_evidence: Object.freeze([
+          "decision-log", "spec", "phase-index", ...Object.keys(phases ?? {}).sort(),
+        ]),
+        requirement_count: null,
+        covered_count: null,
+        semantic_review_status: "unavailable",
+        ...(structural?.facts ? { phase_count: structural.facts.phase_count, task_count: structural.facts.task_count } : {}),
+        fr_coverage: Object.freeze({ ...frCoverage, ok: !errors.some((error) => /FR|task card/i.test(error)) }),
+        ac_coverage: Object.freeze({ ...acCoverage, ok: !errors.some((error) => /AC|task card/i.test(error)) }),
+      }),
+    });
+  }
+
   const errors = [];
   const findings = [];
   const materials = object(packet.materials) ? packet.materials : {};
@@ -6404,25 +6482,22 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
   const evidenceByRef = new Map(evidence.map((entry) => [entry?.ref, entry]));
   const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
   const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
-  const postPlan = stage === "build-plan" && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
   const postBuildCode = stage === "build-code" && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
-  const requiredMaterials = postPlan
-    ? ["decision_log", "spec", "phase_index"]
-    : postBuildCode
-      ? ["original_requirement", "decision_log", "spec", "phase_index", "implementation"]
-      : profile.required_materials;
-  const requiredEvidence = postPlan || postBuildCode
-    ? ["decision-log", "spec", "phase-index", ...Object.keys(materials.phases ?? {}).sort(), ...(postBuildCode ? ["implementation", "tests", "ac-trace"] : [])]
+  const requiredMaterials = postBuildCode
+    ? ["original_requirement", "decision_log", "spec", "phase_index", "implementation"]
+    : profile.required_materials;
+  const requiredEvidence = postBuildCode
+    ? ["decision-log", "spec", "phase-index", ...Object.keys(materials.phases ?? {}).sort(), "implementation", "tests", "ac-trace"]
     : profile.required_evidence;
 
-  // Only the official runner can supply this separate source census. The
-  // packet's own `authenticated_requirement_messages` and coverage rows are
-  // untrusted claims: making both shorter must never lower the denominator of
-  // an identity-bound post build-plan result.
-  if ((postPlan || postBuildCode) && nonEmptyString(identity?.task_id)) {
+  // Build-plan post is a structural/report-only profile.  Its decision-log is
+  // the current read-only direction context; semantic requirement coverage is
+  // owned by the independent merged review and its dispositions.  Only the
+  // post build-code profile may use the legacy authenticated source census.
+  if (postBuildCode && nonEmptyString(identity?.task_id)) {
     if (authenticatedSourceCensus?.status !== "present" || !Array.isArray(authenticatedSourceCensus.entries)
         || authenticatedSourceCensus.entries.length === 0) {
-      errors.push("MATERIAL_INCOMPLETE: authenticated original source census is required for post build-plan");
+      errors.push("MATERIAL_INCOMPLETE: authenticated original source census is required for post build-code");
     } else {
       const trustedIds = new Set(authenticatedSourceCensus.entries.map((entry) => entry?.id).filter(nonEmptyString));
       const claimedIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
@@ -6693,14 +6768,8 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
     facts: Object.freeze({
       required_materials: Object.freeze([...requiredMaterials]),
       required_evidence: Object.freeze([...requiredEvidence]),
-      requirement_count: postPlan && nonEmptyString(identity?.task_id)
-        ? (Array.isArray(authenticatedSourceCensus?.entries) ? authenticatedSourceCensus.entries.length : 0)
-        : requirements.length,
-      ...(postPlan && nonEmptyString(identity?.task_id) ? {
-        source_record_count: Array.isArray(authenticatedSourceCensus?.entries) ? authenticatedSourceCensus.entries.length : 0,
-        semantic_review_status: "unavailable",
-      } : {}),
-      covered_count: postPlan && nonEmptyString(identity?.task_id) ? 0 : requirements.filter((requirement) => coverage.some((item) =>
+      requirement_count: requirements.length,
+      covered_count: requirements.filter((requirement) => coverage.some((item) =>
         item?.requirement_id === requirement?.id
         && item.status === "covered"
         && !findings.some((finding) => finding.requirement_id === requirement.id))).length,
@@ -6978,10 +7047,14 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
     }
   }
   const acceptedFrs = [...new Set([...spec.matchAll(/^-\s+\*\*(FR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\*\*/gm)].map((match) => match[1]))];
-  const acceptedAcs = [...new Set([...spec.matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\b/gm)].map((match) => match[1]))];
+  const declaredAcs = [...new Set([...spec.matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\b/gm)].map((match) => match[1]))];
+  const dispositions = acceptanceCriterionDispositions(spec);
+  const activeAcs = new Set(dispositions.active_ids);
+  const acceptedAcs = declaredAcs.filter((id) => activeAcs.has(id));
+  const deferredAcs = declaredAcs.filter((id) => dispositions.deferred_ids.includes(id));
   for (const card of taskCards) {
     for (const id of card.frs) if (!acceptedFrs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown FR: ${id}`);
-    for (const id of card.acs) if (!acceptedAcs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
+    for (const id of card.acs) if (!declaredAcs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
   }
   const design = markdownSections(spec, 2).find(({ heading }) => /^(?:实现设计（全局权威）|Implementation Design)$/i.test(heading));
   if (!design) errors.push("spec.md requires Implementation Design (全局权威)");
@@ -7017,7 +7090,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
     errors.push("spec.md Global Verification Strategy requires a concrete command");
   }
   const coveredFrs = [...new Set(taskCards.flatMap((card) => card.frs))];
-  const coveredAcs = [...new Set(taskCards.flatMap((card) => card.acs))];
+  const coveredAcs = [...new Set(taskCards.flatMap((card) => card.acs))].filter((id) => acceptedAcs.includes(id));
   for (const id of acceptedFrs) if (!coveredFrs.includes(id)) errors.push(`FR has no executable Phase task coverage: ${id}`);
   for (const id of acceptedAcs) if (!coveredAcs.includes(id)) errors.push(`AC has no executable Phase task coverage: ${id}`);
   if (acceptedFrs.length === 0 || acceptedAcs.length === 0) errors.push("spec.md requires accepted FR and AC definitions");
@@ -7026,7 +7099,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
     task_count: [...new Set(phaseRows.flatMap((row) => row.task_ids))].length,
     phase_rows: Object.freeze(phaseRows),
     fr_coverage: Object.freeze({ accepted_count: acceptedFrs.length, covered_count: acceptedFrs.filter((id) => coveredFrs.includes(id)).length, accepted_ids: Object.freeze(acceptedFrs), covered_ids: Object.freeze(coveredFrs) }),
-    ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs) }),
+    ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
     dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|contiguous|duplicate Phase/.test(error)) }),
     command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && !errors.some((error) => /task card|gate_cmd|oracle|RED target|expected_exit/i.test(error)) }),
   });
@@ -8013,10 +8086,14 @@ export function projectPostPhaseAcceptanceExecutionData({ index, phases, spec } 
       }
     }
   }
+  const e2eScope = taskFieldText(row?.fields.e2e_scope).toLowerCase();
   return Object.freeze({
     status: errors.length === 0 ? "ready" : declared.length === 0 ? "unavailable" : "incomplete",
     requires_execution: true,
-    requires_independent_verdict: true,
+    // `not_required` disables the separate E2E execution/review/confirmation
+    // chain, not the command/service acceptance execution above. Other or
+    // absent scopes preserve the stricter current behavior.
+    requires_independent_verdict: e2eScope !== "not_required",
     eligible_for_pass: errors.length === 0 && scenarios.length > 0,
     scenarios: Object.freeze(scenarios),
     errors: Object.freeze(errors),
@@ -8060,7 +8137,7 @@ export function buildPlanTaskContract({
 const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
 const V2_AC = ACCEPTANCE_CRITERION_ID;
 
-export function activeAcceptanceCriterionIds(spec) {
+function acceptanceCriterionDispositions(spec) {
   const text = String(spec ?? "");
   // A spec may legitimately carry more than one section titled 验收标准: the
   // document's own summary card and the detailed acceptance list.  Matching
@@ -8104,19 +8181,37 @@ export function activeAcceptanceCriterionIds(spec) {
   const tableIds = tableEntries.map(({ id }) => id);
   const headingIds = [...listIds, ...headingEntries, ...tableIds];
   const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
-  const explicitMetadata = /^\s*(?:[[(（]\s*(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）]|(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s—–:：,，;；.。-]))/i;
-  const deferredIds = new Set(listEntries.flatMap(([, label, suffix]) => {
+  const explicitDeferredAnnotation = /^\s*[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）](?=$|[\s:：—–-])/i;
+  const explicitMetadata = /(?:^|[\s（(【[])(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
+  const inactiveIds = new Set();
+  const deferredIds = new Set();
+  for (const [, label, suffix] of listEntries) {
     const match = label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(.*)$`, "i"));
-    if (!match) return [];
-    return explicitDeferredLabel.test(match[2].trim()) || explicitMetadata.test(suffix) ? [match[1]] : [];
-  }));
-  for (const entry of tableEntries) {
-    if (explicitDeferredLabel.test(entry.titleSuffix.trim()) || /^(?:deferred|延期|不计入|not_applicable)$/i.test(entry.status ?? "")) {
-      deferredIds.add(entry.id);
+    if (!match) continue;
+    const annotation = suffix.trim().replace(/^[:：—–-]\s*/, "");
+    if (explicitDeferredLabel.test(match[2].trim())
+      || explicitDeferredAnnotation.test(annotation)
+      || explicitMetadata.test(suffix)) {
+      inactiveIds.add(match[1]);
+      if (!/not_applicable/i.test(match[2])
+          && !/(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*not_applicable\b|^[\s:：—–-]*[[(（]\s*not_applicable\b/i.test(suffix)) deferredIds.add(match[1]);
     }
   }
-  return [...new Set(headingIds.length ? headingIds : identifiers(text, ACCEPTANCE_CRITERION_ID))]
-    .filter((id) => !deferredIds.has(id));
+  for (const entry of tableEntries) {
+    if (explicitDeferredLabel.test(entry.titleSuffix.trim()) || /^(?:deferred|延期|不计入|not_applicable)$/i.test(entry.status ?? "")) {
+      inactiveIds.add(entry.id);
+      if (!/not_applicable/i.test(entry.titleSuffix) && !/^not_applicable$/i.test(entry.status ?? "")) deferredIds.add(entry.id);
+    }
+  }
+  return {
+    active_ids: [...new Set(headingIds.length ? headingIds : identifiers(text, ACCEPTANCE_CRITERION_ID))]
+      .filter((id) => !inactiveIds.has(id)),
+    deferred_ids: [...deferredIds],
+  };
+}
+
+export function activeAcceptanceCriterionIds(spec) {
+  return acceptanceCriterionDispositions(spec).active_ids;
 }
 
 function parseReferenceList(value) {

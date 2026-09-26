@@ -191,7 +191,7 @@ describe("build-code diff evidence capture point", () => {
     expect(existsSync(join(state.task.taskPath, "locks", "implementation-capture.execution.lock"))).toBe(false);
   });
 
-  it("retains an authenticated review but refuses to certify mixed implementation, test, and review snapshots", async () => {
+  it("retains an authenticated review but refuses to certify stale test evidence", async () => {
     const state = fixture("build-code-cross-snapshot");
     writeFileSync(join(state.workspace.worktreeRoot, "new.txt"), "current bytes\n");
     const implementation = writeOfficialComponentReceipt({
@@ -201,7 +201,7 @@ describe("build-code diff evidence capture point", () => {
       component: "implementation",
       payload: {},
     });
-    const testsRef = publishTestReceipt(state.task, implementation.value, "cross-snapshot-tests");
+    const testsRef = publishTestReceipt(state.task, { ...implementation.value, snapshot_tree: "a".repeat(40) }, "cross-snapshot-tests");
     const review = writeFormalReviewFixture({
       task: state.task,
       stage: "build-code",
@@ -220,10 +220,38 @@ describe("build-code diff evidence capture point", () => {
       status: "completed",
       formal_record_status: {
         status: "unavailable",
-        reason: "implementation, tests, and review facts use different snapshots; current completion was not certified",
+        reason: "implementation and tests do not bind the current snapshot; current completion was not certified",
       },
     });
     expect(result.completion.facts.result).not.toBe("passed");
+  });
+
+  it("keeps a prior integration review as provenance after same-task code repair", async () => {
+    const state = fixture("build-code-repaired-after-review");
+    writeFileSync(join(state.workspace.worktreeRoot, "new.txt"), "reviewed bytes\n");
+    const reviewedTree = captureWorkspaceSnapshot(state.workspace, state.task.identity.taskId).tree;
+    const review = writeFormalReviewFixture({
+      task: state.task,
+      stage: "build-code",
+      snapshotTree: reviewedTree,
+      materialRevision: `revision-${"a".repeat(64)}`,
+      subjectKind: "worktree",
+      phaseId: null,
+      reviewScope: "integration",
+      provider: "kimi/coding",
+    });
+    writeFileSync(join(state.workspace.worktreeRoot, "new.txt"), "repaired bytes\n");
+    const implementation = writeOfficialComponentReceipt({
+      task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation", payload: {},
+    });
+    const testsRef = publishTestReceipt(state.task, implementation.value, "repaired-tests");
+    const result = await officialStageHandler("build-code")(workerFor(state), {
+      receipts: { implementation: implementation.ref, tests: testsRef, review: review.resultRef },
+    });
+    expect(result.facts.review).toMatchObject({ status: "recorded", result_ref: review.resultRef, snapshot_tree: reviewedTree });
+    expect(result.facts.tests.snapshot_tree).toBe(implementation.value.snapshot_tree);
+    expect(implementation.value.snapshot_tree).not.toBe(reviewedTree);
+    expect(result.missing_items).not.toContainEqual(expect.stringContaining("review binding unavailable"));
   });
 
   it("preflights both immutable targets so an interrupted conflict leaves no half diff", () => {

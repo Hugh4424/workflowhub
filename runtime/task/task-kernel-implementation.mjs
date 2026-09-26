@@ -21,7 +21,8 @@ import {
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
 import { buildDecisionCoverageAudit } from "../stage/stage-content-contracts.mjs";
-import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
+import { authenticateCodeReviewRepairs, authenticateStageReviewResult } from "../evidence/freshness.mjs";
+import { validateSchema } from "../review/schema-validator.mjs";
 import { publishResearchReport } from "../evidence/research-report.mjs";
 // Both forms below are deliberately narrower than the shared reflection grammar:
 // this resolver only accepts the bare per-stage reflection names it can resolve.
@@ -135,10 +136,18 @@ function validateTests(value, label) {
   if (tests.runtime_profile_authenticated !== undefined && typeof tests.runtime_profile_authenticated !== "boolean") throw new TypeError(`${label}.runtime_profile_authenticated must be boolean`);
   return tests;
 }
-function validateReview(value, label) {
+function validateReview(value, label, { allowMissingUnavailable = false } = {}) {
   const review = object(value, label);
   const reviewRef = review.result_ref ?? review.attempt_ref;
   const reviewHash = review.result_hash ?? review.attempt_hash;
+  if (allowMissingUnavailable && review.status === "unavailable"
+      && reviewRef === undefined && reviewHash === undefined) {
+    const error = object(review.error, `${label}.error`);
+    text(error.code, `${label}.error.code`);
+    text(error.message, `${label}.error.message`);
+    oid(review.snapshot_tree, `${label}.snapshot_tree`);
+    return review;
+  }
   ref(reviewRef, `${label}.result_ref`);
   sha(reviewHash, `${label}.result_hash`);
   oid(review.snapshot_tree, `${label}.snapshot_tree`);
@@ -179,6 +188,82 @@ function annotateResolvedReviewError(error, checkId, expected, actual) {
 
 function throwResolvedReviewError(message, checkId, expected, actual, ErrorClass = Error) {
   throw annotateResolvedReviewError(new ErrorClass(message), checkId, expected, actual);
+}
+
+function authenticatedOcrRepairSource(task, review) {
+  if (review?.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId
+      || review.stage !== "verify-code" || review.subject_kind !== "worktree"
+      || review.phase_id !== null || review.review_scope !== null
+      || (review.review_track ?? null) !== null || (review.review_kind ?? null) !== null
+      || !Array.isArray(review.provider_results) || review.provider_results.length < 1
+      || review.provider_results.some((entry) => entry?.provider === "dsh-code-review")) return false;
+  try {
+    authenticateStageReviewResult(review, { taskId: task.identity.taskId, read: task.readRecord });
+    const attempt = JSON.parse(task.readRecord(review.attempt_ref));
+    if (attempt.report_ref !== review.report_ref
+        || attempt.provider_attempts?.length < review.provider_results.length) return false;
+    const report = task.readRecord(review.report_ref);
+    const marker = "\n## Public result and coverage\n\n```json\n";
+    const start = report.lastIndexOf(marker);
+    if (start < 0) return false;
+    const end = report.indexOf("\n```", start + marker.length);
+    if (end < 0) return false;
+    const publicResult = JSON.parse(report.slice(start + marker.length, end)).public_result;
+    return Boolean(publicResult?.ocr && typeof publicResult.ocr.version === "string"
+      && publicResult.ocr.version.trim() !== "" && publicResult.ocr.preview
+      && publicResult.ocr.rules && Array.isArray(publicResult.ocr.manifest)
+      && publicResult.material_id === review.material_id
+      && attempt.provider_attempts.every((entry) => entry.runtime_id === publicResult.runtime_id)
+      && Array.isArray(publicResult.provider_results)
+      && review.provider_results.every((entry) => publicResult.provider_results.some((member) => (
+        member.provider === entry.provider && member.status === "completed"
+      ))));
+  } catch {
+    return false;
+  }
+}
+
+function authenticatedArchitectRepairSource(task, review) {
+  if (review?.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId
+      || review.stage !== "verify-code" || review.subject_kind !== "worktree"
+      || review.phase_id !== null || review.review_scope !== null
+      || (review.review_track ?? null) !== null || (review.review_kind ?? null) !== null
+      || Object.hasOwn(review, "verdict") || review.provider_results?.length !== 1
+      || review.provider_results[0]?.provider !== "dsh-code-review") return false;
+  try {
+    authenticateStageReviewResult(review, { taskId: task.identity.taskId, read: task.readRecord });
+    const fallbackAttempt = JSON.parse(task.readRecord(review.attempt_ref));
+    if (fallbackAttempt.terminal_status !== "semantic"
+        || fallbackAttempt.provider_attempts.length !== 1
+        || fallbackAttempt.provider_attempts[0].provider !== "dsh-code-review"
+        || fallbackAttempt.provider_attempts[0].status !== "completed") return false;
+    let fallbackCount = 0;
+    let dispatchedOcr = 0;
+    for (const ref of task.listCanonicalReviewAttemptRefs()) {
+      const attempt = JSON.parse(task.readRecord(ref));
+      validateSchema("attempt", attempt);
+      if (attempt.task_id !== review.task_id || attempt.stage !== "verify-code"
+          || attempt.snapshot_tree !== review.snapshot_tree
+          || attempt.material_revision !== review.material_revision
+          || attempt.subject_kind !== "worktree" || attempt.phase_id !== null
+          || attempt.review_scope !== null) continue;
+      if (attempt.provider_attempts.some((provider) => provider.provider === "dsh-code-review")) {
+        fallbackCount += 1;
+        continue;
+      }
+      if (attempt.dispatch_state === "blocked_before_dispatch") continue;
+      dispatchedOcr += 1;
+      if (dispatchedOcr > 1) return false;
+      if (attempt.terminal_status !== "unavailable" || attempt.dispatch_state !== "dispatched"
+          || !attempt.error || /(?:CANCELLED|CANCELED)/i.test(attempt.error.code)
+          || attempt.coverage?.group_outcome === "cancelled"
+          || attempt.provider_attempts.some((provider) => provider.status !== "failed"
+            || /(?:CANCELLED|CANCELED)/i.test(provider.error?.code ?? ""))) return false;
+    }
+    return fallbackCount === 1 && dispatchedOcr === 1;
+  } catch {
+    return false;
+  }
 }
 
 function validateResolvedReviewAuthorization({ task, stage, input, authorization, currentContext, workspaceRoot }) {
@@ -263,6 +348,13 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
         "review_identity",
         { snapshot_tree: review?.snapshot_tree ?? null },
         { snapshot_tree: current.source_snapshot_tree },
+      );
+    }
+    if (!authenticatedOcrRepairSource(task, review)
+        && !authenticatedArchitectRepairSource(task, review)) {
+      throwResolvedReviewError(
+        "resolved review current-session source is not an authenticated OCR result or eligible Architect fallback",
+        "review_identity", "authenticated OCR result or Architect fallback after unavailable OCR", current.review_ref,
       );
     }
     const repairStatus = authenticateCodeReviewRepairs({
@@ -392,7 +484,7 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
     outcome.code_review,
     "resolved review authorization code_review",
     "review_binding",
-    "current dsh-code-review stage outcome binding",
+    "current OCR code-review stage outcome binding",
   );
   const reviewEvidence = Array.isArray(input.evidence)
     ? input.evidence.find((entry) => entry?.ref === stageReview.quality_review_ref && entry?.sha256 === stageReview.quality_review_hash)
@@ -409,13 +501,13 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
   }
   if (stageReview.stage !== "verify-code"
       || stageReview.step_slug !== "finalize-code-review"
-      || stageReview.skill_id !== "dsh-code-review"
+      || stageReview.skill_id !== "ocr-delegation"
       || typeof stageReview.quality_review_ref !== "string"
       || !SHA256_HEX.test(stageReview.quality_review_hash ?? "")) {
     throwResolvedReviewError(
       "resolved review authorization code_review binding is invalid",
       "review_identity",
-      { stage: "verify-code", step_slug: "finalize-code-review", skill_id: "dsh-code-review", ref: "canonical review result", hash: "sha256" },
+      { stage: "verify-code", step_slug: "finalize-code-review", skill_id: "ocr-delegation", ref: "canonical review result", hash: "sha256" },
       { stage: stageReview.stage ?? null, step_slug: stageReview.step_slug ?? null, skill_id: stageReview.skill_id ?? null, ref: stageReview.quality_review_ref ?? null, hash: stageReview.quality_review_hash ?? null },
     );
   }
@@ -461,12 +553,18 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
       { task_id: review?.task_id ?? null, stage: review?.stage ?? null },
     );
   }
+  if (!authenticatedOcrRepairSource(task, review)) {
+    throwResolvedReviewError(
+      "resolved review authorization source is not an authenticated OCR result",
+      "review_identity", "authenticated OCR attempt/result and source packet", stageReview.quality_review_ref,
+    );
+  }
   const sourceFindings = canonicalReviewFindings(review).filter(isActionableSeriousFinding);
   const result = objectOrDiagnostic(
     stageReview.result,
     "resolved review authorization result",
     "finding_coverage",
-    "resolved dsh-code-review result with findings and repairs",
+    "resolved OCR code-review result with findings and repairs",
   );
   if (result.status !== "findings" || sourceFindings.length === 0 || !Array.isArray(result.repairs)) {
     throwResolvedReviewError(
@@ -535,9 +633,11 @@ export function validatePhaseCompletion(value, label = "phase_completion", { all
   if (completion.status !== "completed") throw new Error(`${label}.status must be completed`);
   ref(completion.evidence_ref, `${label}.evidence_ref`);
   sha(completion.evidence_hash, `${label}.evidence_hash`);
-  const review = object(completion.integration_review, `${label}.integration_review`);
-  ref(review.ref, `${label}.integration_review.ref`);
-  sha(review.sha256, `${label}.integration_review.sha256`);
+  if (completion.integration_review !== undefined) {
+    const review = object(completion.integration_review, `${label}.integration_review`);
+    ref(review.ref, `${label}.integration_review.ref`);
+    sha(review.sha256, `${label}.integration_review.sha256`);
+  }
   return value;
 }
 
@@ -562,7 +662,7 @@ export function validateStageFacts(stage, facts, { allowLegacyBuildCode = false 
   } else if (name === "build-code") {
     if (!Array.isArray(value.changed)) throw new TypeError("build-code facts.changed must be an array");
     validateTests(value.tests, "build-code facts.tests");
-    validateReview(value.review, "build-code facts.review");
+    validateReview(value.review, "build-code facts.review", { allowMissingUnavailable: true });
     validatePhaseCompletion(value.phase_completion, "build-code facts.phase_completion", { allowLegacyBoolean: allowLegacyBuildCode });
     if (!allowLegacyBuildCode) object(value.acceptance_coverage, "build-code facts.acceptance_coverage");
   } else {

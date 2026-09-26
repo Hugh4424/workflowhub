@@ -52,13 +52,15 @@ real reason; quality facts remain separate from the permission to continue.
 Current materials are cohort-specific. For pre/history, read `decision-log.md`,
 `spec.md`, `plan.md`, and `tasks.md`. For post, read `decision-log.md`, the
 product/global-design `spec.md`, `phases/index.md`, and every physical
-`phases/P<n>.md` referenced by the index. The index is only navigation: take
-the next incomplete Phase task from its own file and current task facts, never
-from a copied index body or absent post `plan.md`/`tasks.md`. Old reviews,
-execution records, provider state, audit history, and other auxiliary objects
-are facts, not work permits. Missing, stale, failed, or unavailable auxiliary
-facts never require a new task and never freeze implementation or same-task
-repair.
+`phases/P<n>.md` referenced by the index. On resume, read the current
+`phase_progress` returned by `status --action=begin`; if its material revision
+matches, continue at that Phase/Task. If absent or stale, derive the next
+incomplete task from the physical Phase files and current task facts. The index
+is navigation only; never use a copied index body or absent post
+`plan.md`/`tasks.md`. Old reviews, execution records, provider state, audit
+history, and other auxiliary objects are facts, not work permits. Missing,
+stale, failed, or unavailable auxiliary facts never require a new task and
+never freeze implementation or same-task repair.
 
 `make-decision` exclusively owns Talk, Grill, and `decision-log.md`.
 The owning spec-authoring stage owns specification research and
@@ -88,9 +90,9 @@ or auxiliary progress gate.
   advisor is stateless and never executes tests or grants permission.
 - Use exactly one applicable concrete testing skill directly:
   `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
-- Use the review dependency declared in `skill-deps.yaml` once. Follow the portable
-  dependency and its declared adapter contract; do not add a second review
-  path or require a particular provider CLI in this skill.
+- Use the existing OCR delegation adapter through public `review --action=record`
+  once for each Phase. The adapter selects the packet; the independent host
+  returns findings. Verify-code owns the one final worktree review.
 
 If a dependency is unavailable, preserve that fact and use any safe repository
 test commands already specified in the owning pre task card or post Phase file. The missing dependency limits the
@@ -155,16 +157,46 @@ its oracle; exit 0 or a hand-written `executed` field does not prove acceptance.
 Missing, failed, skipped, and unavailable items remain visible. Non-UI does not
 make command/service acceptance not applicable.
 
-Submit each Phase review through existing public `review --action=record` with
-`input.request`: `stage=build-code`, `subject_kind=phase`, `phase_id=<current phase>`,
-`review_scope=phase`, the actual host provider, and current review materials.
-The existing request route owns dispatch, reuse and canonical recording;
-consume its returned result/attempt refs in the stage input. Preserve independent
-role results, coverage, member failures, usage/timing and record failures.
-This review record is no gate and creates no new stage or material.
-For final integration review use `review_scope=integration`, `subject_kind=worktree`
-and `phase_id=null` with the integration material profile. A result-only record
-is an import of existing evidence, never proof that a review was dispatched.
+For each ordinary `build-code/phase` review, submit `review --action=record`
+with `input.request` binding `review_scope="phase"`, `subject_kind="phase"`,
+and `phase_id="P<n>"`. No candidate flag or comparative go/no-go is required.
+The OCR adapter selects the authenticated packet and files; the independent
+host executor returns the real findings. Consume the returned canonical
+`result_ref` or unavailable `attempt_ref` through `run` `receipts.review`.
+The Phase result is `phase_review`; the final worktree review belongs to
+verify-code. Historical integration attempts remain readable facts, not a
+current build-code step or completion condition.
+Malformed code-surface requests fail before dispatch. An unavailable host
+remains an unavailable review fact and permits same-task repair.
+
+### AC-REVIEW-011：OCR 工具不可用时的独立替代
+
+当前 WorkflowHub 主会话读取本 Phase 的 OCR canonical attempt：仅当工具
+`unavailable` 且零成功审查路时，在同一 Phase 内调用一次
+`skills/architect-code-review/SKILL.md`。把当前 diff、完整 AC、OCR packet
+可读部分及原始失败原因交给未参与该 Phase 实现的执行者，在全新独立上下文中审查；
+此条件调用由主会话显式读取技能，不增加每 Phase 的常规依赖或固定轮次。
+先核对执行者身份、与实现者的参与记录及仓库读取能力。无法确认独立性或无法启动
+时，该一次替代机会记为 unavailable，不由实现者自审。已有成功路的 findings
+照常入账；局部覆盖缺口单独披露。明确的人为取消按取消事实处理，不自动重派。
+
+一次替代调用完成后，保存原始输入范围、task/Phase、材料版本与代码快照、OCR
+`attempt_ref`、执行者身份及未参与实现的依据、调用命令或 host invocation、
+开始/结束时间、exit/transport、原始输出、findings、覆盖缺口和各原件 hash。
+可用时逐条处理替代 finding，但只称“独立替代审查已执行”；替代也不可用时
+明确记 `unverified`、两路原因和缺失维度，不重派、不写 `findings: []`。
+旧 wh-review/broker 仅供历史读取，不是本分支的执行者。
+
+使用现有证据发布能力保存这份调用记录，保留其返回的原件 ref/hash；
+`capture-evidence` 如可用，只把工作区文件收为 `quality/evidence`，并不生成
+canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
+`result_ref` 或 unavailable `attempt_ref`；在正式 review consumer 无法认证
+替代结果前，Phase review 质量保持 `incomplete/unverified`，不得把证据
+附件冒充 `quality/reviews/results`。单独判断 AC-REVIEW-011：若同一 Phase
+的 OCR unavailable attempt、恰好一次未参与实现者的独立调用及其身份/原始
+输出/exit、来源缺口和最终披露均可核对，则本 AC 可记 achieved；替代也
+不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
+这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
 
 ## Work loop
 
@@ -195,6 +227,7 @@ is an import of existing evidence, never proof that a review was dispatched.
 5. Use the review dependency declared in `skill-deps.yaml` directly for one
    review of the completed Phase. Preserve the actual findings,
    transport status, and provenance;
+   OCR 工具 unavailable 且零成功路时执行上面的 AC-REVIEW-011 分支恰好一次；
    `unavailable` remains an unavailable fact. Do not re-review an unchanged change
    merely to chase an empty findings list. Completion: the review or its real
    unavailability is recorded with provenance; an unavailable attempt keeps the
@@ -209,7 +242,13 @@ is an import of existing evidence, never proof that a review was dispatched.
    risk, deferred work, and the next Task. For pre/history, update the existing
    task card's `执行状态填写区`; for post, record the same actual facts in existing
    task facts/quality evidence without writing to the Phase authority or
-   pointer index. A Task is
+   pointer index. After recording each completed Task, update the one in-place
+   resume cursor through the existing public `run --action=execute` input, for example
+   `{"phase_progress":{"phase_id":"P5","task_id":"T011"}}`; point it at
+   the next incomplete Task, or the last Task when the Phase is complete. The
+   cursor is navigation only: it does not certify completion or unlock work.
+   It is bound to the current material revision, not the changing code snapshot.
+   A Task is
    `completed` only when those facts cover its actual changes, commands/exits,
    affected AC results, evidence, review outcome, and handoff. Then continue
    with the next `pending` or `in_progress` Task; do not replay earlier Phases
@@ -253,14 +292,11 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 After all implementation Tasks, use the dedicated final task in the pre
 `tasks.md` or post physical Phase file. Recheck its route against the full actual change, run the recorded
 final aggregate strategy once, and record its command, oracle, result, limits,
-and per-AC impact. After the final tests and AC trace, run the existing
-`phase_id=null` integration review against the current implementation. Record its
-real findings and transport status, dispose every finding, and repair valid
-findings in the same task. That integration review step is then complete; later
-repairs continue to `stage-end-spec-analyze` rather than dispatching integration
-review again. Unresolved or unavailable facts remain visible and limit the
-completion claim. Verify-code independently replays the risky paths and complete
-user flow.
+and per-AC impact. Reconcile the Phase review findings and repairs with the
+final test and AC facts, then continue to `stage-end-spec-analyze`. Verify-code
+performs one independent final worktree OCR review and replays the risky paths
+and complete user flow. Historical integration review outcomes stay visible but
+do not require a new dispatch.
 
 The final full test is a build-code handoff fact; it is not a provider pass or
 a new quality gate.

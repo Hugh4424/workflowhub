@@ -10,7 +10,7 @@ const REVIEW_FOCUS = Object.freeze({
   "build-plan": "Check dependencies, implementation order, real consumers, verification, recovery, and unnecessary work.",
   "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
-  "verify-code": "Check only the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. Do not report T010 status, AC coverage, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
+  "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Do not report T010 status, AC coverage, evidence completeness, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
 });
 
 const PACKET_REVIEW_BOUNDARY = "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.";
@@ -112,8 +112,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   if (typeof instruction !== "string" || instruction.length === 0) throw new TypeError("review packet instructions are required");
   let packetMaterials = input.materials;
   if (identity.stage === "verify-code") {
-    try { packetMaterials = compactMaterials(input.materials).materials; }
-    catch { packetMaterials = input.materials; }
+    packetMaterials = compactMaterials(input.materials).materials;
   }
   const instructionBytes = Buffer.from(`${redactProviderHostPaths(instruction)}\n`, "utf8");
   const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length, sha256: hash(instructionBytes) }];

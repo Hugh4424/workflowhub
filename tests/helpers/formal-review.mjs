@@ -21,6 +21,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     : provider;
   const outputRef = `${reviewRoot}/attempts/${attemptId}/providers/${providerRefName}.output.json`;
   const resultRef = `${reviewRoot}/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
+  const adapter = provider === "dsh-code-review" ? "dsh" : provider.split("/", 1)[0];
   const source = { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree };
   const finding = {
     severity: findingSeverity,
@@ -38,11 +39,11 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   });
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
   const subject = { subject_kind: subjectKind, phase_id: phaseId, review_scope: reviewScope, base_tree: snapshotTree, candidate_tree: snapshotTree };
-  const identity = { provider, adapter: provider.split("/", 1)[0], source_id: `${provider}-source`, config_id: `${provider}-config`, model: null };
+  const identity = { provider, adapter, source_id: `${provider}-source`, config_id: `${provider}-config`, model: null };
   const reviewPolicy = {
     source: "wh_review.v2", mode: "single_round", minimum_heterologous: 1,
     requested_profiles: [provider], eligible_profiles: [provider], same_source_exclusions: [],
-    effective_profiles: [{ provider, adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null }],
+    effective_profiles: [{ provider, adapter, model: null, effort: null, thinking: null }],
   };
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: task.identity.taskId, stage,

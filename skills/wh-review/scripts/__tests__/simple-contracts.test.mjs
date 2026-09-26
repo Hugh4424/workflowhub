@@ -631,28 +631,35 @@ describe("simple wh-review contracts", () => {
       .toEqual([]);
   });
 
-  it("runs verify-code as a non-gate current-code review fact", () => {
+  it("keeps the historical wh-review plan readable while current verify-code uses one non-gate OCR review fact", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-code"].required_skills).not.toHaveLength(0);
+    // Historical plan facts remain readable; they are not the active workflow route.
     expect(plan.stages["verify-code"].invocation).toBe("post-first-repair-non-gate");
     expect(plan.stages["verify-code"].required_skills).toEqual(["review"]);
     for (const stage of ["build-code", "verify-code"])
       for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
     const deps = yaml.load(readFileSync(join(projectRoot, "workflows", "verify-code", "skill-deps.yaml"), "utf8"));
-    expect(deps.skills.find(({ name }) => name === "dsh-code-review"))
-      .toMatchObject({ execution: "inline", trigger: "code_review" });
-    expect(deps.skills.find(({ name }) => name === "wh-review"))
-      .toMatchObject({ execution: "inline", trigger: "post_first_repair" });
+    expect(deps.skills.map(({ name }) => name)).toEqual(["frontend-component-quality", "stage-reflection"]);
+    expect(deps.external_capabilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "ocr-cli", required_when: "code_review" }),
+    ]));
     const steps = readJson(join(projectRoot, "workflows", "verify-code", "steps.json")).steps;
-    const qualityReview = steps.find(({ step_slug }) => step_slug === "run-one-independent-code-review");
+    const qualityReview = steps.find(({ step_slug }) => step_slug === "ocr-code-review");
     const publish = steps.find(({ step_slug }) => step_slug === "publish-code-review-fact");
-    expect(qualityReview).toMatchObject({ order: 5, depends_on: [4], completion_evidence: expect.arrayContaining([
+    expect(steps.filter(({ step_slug }) => step_slug === "ocr-code-review")).toHaveLength(1);
+    expect(qualityReview).toMatchObject({ order: 2, depends_on: [1], completion_evidence: expect.arrayContaining([
       { kind: "review", uri_or_path: "quality/reviews/results/" },
+      { kind: "review", uri_or_path: "quality/reviews/attempts/<attempt_id>/attempt.json" },
     ]) });
     expect(qualityReview.completion_evidence).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "skill_invocation" }),
     ]));
-    expect(publish).toMatchObject({ order: 8, depends_on: [7] });
+    expect(publish).toMatchObject({ order: 3, depends_on: [2] });
+    expect(publish.observable_result).toContain("receipts.quality_review");
+    const currentSkill = readFileSync(join(projectRoot, "workflows", "verify-code", "SKILL.md"), "utf8");
+    expect(currentSkill).toMatch(/工具 `unavailable` 且零成功审查路时[\s\S]*恰好调用一次[\s\S]*architect-code-review/);
+    expect(currentSkill).toMatch(/旧 wh-review\/broker 只读，不充当替代审查/);
     const contract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
     expect(contract).toMatch(/异源.*代码.*审查[\s\S]*wh-review/);
     expect(contract).toMatch(/不是材料审计[\s\S]*不重复调用 provider/);
@@ -733,6 +740,8 @@ describe("simple wh-review contracts", () => {
     expect(matrix.stages["verify-code"].v2_required_maps).toEqual([]);
     expect(matrix.stages["verify-code"].required).toEqual(expect.arrayContaining(["changed_files", "implementation_assessment", "test_context", "open_risks", "review_instructions"]));
     expect(matrix.stages["verify-code"].optional).toEqual(expect.arrayContaining(["approved_spec", "architect_assessment", "context_map"]));
+    expect(matrix.stages["verify-code"].optional).not.toContain("acceptance_criteria");
+    expect(matrix.stages["verify-code"].optional).not.toContain("acceptance_map");
     expect(matrix.stages["verify-code"].forbidden).toEqual(expect.arrayContaining(["acceptance_criteria", "acceptance_evidence", "evidence_map", "final_test_summary", "quality_verify", "requirement_replay"]));
     expect(matrix.stages["make-decision"].tracks.direction.v2_required_maps).toEqual([]);
     const detail = matrix.stages["make-decision"].tracks.detail;
@@ -785,13 +794,20 @@ describe("simple wh-review contracts", () => {
   });
 
   it("keeps portable quality lenses and provider isolation in every stage contract", () => {
-    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
+    for (const stage of ["make-decision", "build-spec", "build-plan"]) {
       const contract = readFileSync(join(root, "wh-review", "contracts", `${stage}.md`), "utf8");
       expect(contract, stage).toMatch(/provider.*冻结材料/);
       expect(contract, stage).toMatch(/必需材料|共同材料/);
       expect(contract, stage).toMatch(/审查重点/);
       expect(contract, stage).toMatch(/只包含 `findings`|只包含.*findings/s);
     }
+    const buildCodeContract = readFileSync(join(root, "wh-review", "contracts", "build-code.md"), "utf8");
+    expect(buildCodeContract).toMatch(/每个 Phase 的当前真实 diff 发起一次 OCR delegation 独立审查/);
+    expect(buildCodeContract).toMatch(/适用的验收标准全文、实现、直接 consumer、相关测试和失败边界/);
+    expect(buildCodeContract).toMatch(/输出有源码锚点的 findings 或真实 `unavailable`/);
+    expect(buildCodeContract).toMatch(/Phase、材料与代码快照/);
+    expect(buildCodeContract).toMatch(/provider 的身份、原始 findings、失败和/);
+    expect(buildCodeContract).toMatch(/`receipts\.review` 消费[\s\S]*`receipts\.quality_review` 消费/);
     const verifyContract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
     expect(verifyContract).toMatch(/不是材料审计、AC 覆盖审计或证据 pass 门/);
     expect(verifyContract).toMatch(/不重复调用 provider/);

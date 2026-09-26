@@ -601,9 +601,8 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   }
   const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
   if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to finalize-code-review");
-  const reviewSkill = skillManifest.skills?.find((skill) => skill.name === "dsh-code-review");
-  if (!reviewSkill || review.skill_id !== reviewSkill.name) throw outcomeError("stage outcome code_review must bind dsh-code-review");
-  const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === reviewSkill.name);
+  if (review.skill_id !== "ocr-delegation") throw outcomeError("stage outcome code_review must bind ocr-delegation");
+  const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === "ocr-delegation");
   const stepOutcome = record.step_outcomes.find((entry) => entry?.step_slug === reviewStep.step_slug);
   if (!skillOutcome?.trigger || skillOutcome.executed !== true) throw outcomeError("verify-code code-review skill was not executed");
   if (!stepOutcome) throw outcomeError("verify-code code-review closure step outcome is missing");
@@ -625,7 +624,7 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   const boundHash = review.quality_review_hash;
   if (stage === "verify-code" && record.status === "completed"
       && (typeof boundRef !== "string" || !boundRef.trim() || typeof boundHash !== "string" || !boundHash.trim())) {
-    throw outcomeError("stage outcome code_review requires a complete dsh-code-review ref/hash pair");
+    throw outcomeError("stage outcome code_review requires a complete OCR review ref/hash pair");
   }
   if ((boundRef === undefined) !== (boundHash === undefined)) {
     throw outcomeError("stage outcome code_review quality_review_ref/hash must be provided together");
@@ -673,6 +672,9 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
             read: ctx.task.readRecord,
           });
         } catch (error) { throw outcomeError(`stage outcome code_review repair evidence is invalid: ${error.message}`); }
+      }
+      if (resolution === "resolved" && !authenticatedVerifyCodeReviewResult(ctx.task, bound)) {
+        throw outcomeError("resolved verify-code code_review must bind an authenticated OCR result or eligible Architect fallback");
       }
       if (bound.task_id !== ctx.identity.taskId || bound.stage !== stage
           || bound.subject_kind !== "worktree" || bound.phase_id !== null || bound.review_scope !== null
@@ -1147,6 +1149,43 @@ export async function runStageEndReflection(context, {
   const handoffStageOutcome = stageOutcome ?? failureStageOutcome;
   const currentReflectionSnapshot = ctx.kernel.currentVNextSnapshot();
   const currentReflectionMaterialRevision = ctx.kernel.currentVNextMaterialRevision();
+  let resolvedStageProgress = null;
+
+  const resolveStageProgress = (existingStageRow, snapshot, materialScopeRevision) => {
+    if (resolvedStageProgress !== null) return resolvedStageProgress;
+    const existingIsCurrent = existingStageRow !== null
+      && existingStageRow?.snapshot_tree?.value === snapshot?.tree
+      && existingStageRow?.material_digest?.value === materialScopeRevision?.replace(/^revision-/, "");
+    const handlerCompletion = handlerResult?.completion?.status ?? handlerResult?.status;
+    const priorCompletion = existingIsCurrent ? existingStageRow?.layer_states?.implementation_completion : null;
+    const completion = stageStatus !== "completed"
+      ? "unknown"
+      : handlerCompletion === "completed"
+        ? "completed"
+        : handlerCompletion === "in_progress"
+          ? "in_progress"
+          : priorCompletion === "completed"
+            ? "completed"
+            : priorCompletion === "partial" || priorCompletion === "incomplete"
+              ? "in_progress"
+              : "unknown";
+    const handlerQuality = handlerResult?.quality_status;
+    const priorQuality = existingIsCurrent ? existingStageRow?.layer_states?.stage_quality : null;
+    const quality = handlerQuality === "passed"
+      ? "completed"
+      : handlerQuality === "incomplete"
+        ? "incomplete"
+        : new Set(["completed", "unavailable", "incomplete", "partial"]).has(priorQuality)
+          ? priorQuality
+          : "incomplete";
+    resolvedStageProgress = Object.freeze({
+      completion,
+      implementationCompletion: completion === "completed" ? "completed" : completion === "in_progress" ? "partial" : "incomplete",
+      stageQuality: quality,
+      handoffStatus: stageStatus === "completed" ? completion : "failed",
+    });
+    return resolvedStageProgress;
+  };
 
   /**
    * Write this stage end's one row into the single execution record. The row is
@@ -1189,6 +1228,8 @@ export async function runStageEndReflection(context, {
       const materialScopeRevision = handoffFacts === null
         ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialScopeRevision(stage)
         : handoffFacts.materialScopeRevision;
+      const existingStageRow = currentStageRow(ctx.task.taskPath, ctx.identity.taskId, stage);
+      const stageProgress = resolveStageProgress(existingStageRow, snapshot, materialScopeRevision);
       const materialDigest = { value: materialScopeRevision === null ? null : materialScopeRevision.replace(/^revision-/, "") };
       if (materialDigest.value === null) materialDigest.reason = "no current material scope revision was available at this stage end";
       const reflectionRefPattern = new RegExp(`^quality/stage-reflection/${stage}/[a-f0-9]{64}\\.json$`);
@@ -1220,7 +1261,6 @@ export async function runStageEndReflection(context, {
           exit_code: handoffFacts.handoff?.status === "unavailable" ? 1 : 0,
           failure_signature: handoffFacts.handoff?.status ?? "unknown",
         }];
-      const existingStageRow = currentStageRow(ctx.task.taskPath, ctx.identity.taskId, stage);
       // The stage row is the K2 carrier of the real review facts. An
       // authenticated stage outcome already binds the reviewed K5 result, so the
       // row records that conducted review with its named reference instead of
@@ -1249,16 +1289,15 @@ export async function runStageEndReflection(context, {
         spec_analyze: specAnalyze,
         evidence: { value: evidence },
         layer_states: {
-          // A stage end that did not complete must never be recorded as a
-          // completed implementation. A handoff stage is complete only when its
-          // canonical current handoff publication succeeded; an unavailable or
-          // stale handoff is an incomplete execution fact, not a delivered stage.
-          implementation_completion: handoffPending
+          // A successful run only means the handler returned. Its canonical
+          // completion predicate decides whether the stage is actually done.
+          // A current handoff publishes either that completion or an honest
+          // partial state through this same stage row.
+          implementation_completion: handoffPending || stageStatus !== "completed"
+            || (handoffFacts !== null && (handoff.status !== "published" || handoff.current !== true))
             ? "incomplete"
-            : handoffFacts === null
-            ? stageStatus !== "completed" ? "incomplete" : "completed"
-            : stageStatus === "completed" && handoff.status === "published" && handoff.current === true ? "completed" : "incomplete",
-          stage_quality: "incomplete",
+            : stageProgress.implementationCompletion,
+          stage_quality: stageProgress.stageQuality,
           delivery: "unavailable",
           task_closure: "unavailable",
         },
@@ -1315,7 +1354,12 @@ export async function runStageEndReflection(context, {
         snapshotTree: handoffStageOutcome?.value?.snapshot_tree ?? snapshot.tree,
         materialScopeRevision,
         reflectionStatus: reflectionResultValue.reflection_status ?? reflectionResultValue.status,
-        stageStatus,
+        // `stageStatus` records this run's execution result. The next-stage
+        // decision must instead follow the canonical completion result that
+        // the stage runner just produced (or the current stage row readback).
+        stageStatus: stageStatus === "completed"
+          ? (resolvedStageProgress?.handoffStatus ?? "unknown")
+          : stageStatus,
         observation,
         diagnostic: stageOutcomeDiagnostic,
         stageOutcome: handoffStageOutcome,
@@ -1637,24 +1681,28 @@ export function readCurrentE2eAcceptanceEvidence(ctx, receipts = {}) {
     independent_review: { status: "missing", ref: null, sha256: null, reviewer_actor: null, frozen_material: null },
     user_confirmation: { status: "missing", ref: null, sha256: null } };
   if (projection.status !== "ready") result.reason = `${activationCohort === "post" ? "post Phase" : "acceptance"} acceptance contract is ${projection.status}: ${(projection.errors ?? []).join("; ")}`;
-  if (!REVIEW_RESULT_REF.test(receipts.review ?? "")) return result;
+  // verify-code's review receipt belongs to a build-code Phase review and
+  // quality_review belongs to its OCR code review. The accepted confirmation
+  // already names the independent E2E review it confirms.
+  if (typeof receipts.confirmation !== "string") return result;
   const current = { task_id: ctx.identity.taskId, stage: "verify-code", snapshot_tree: ctx.kernel.currentVNextSnapshot().tree,
     material_revision: ctx.kernel.currentVNextMaterialRevision(), material_scope_revision: stageMaterialScopeRevision("verify-code", materials, { activationCohort: ctx.task?.manifest?.activation_cohort ?? "pre" }) };
   const read = (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
     ? ctx.task.readRecordBytes(ref) : ctx.task.readRecord(ref);
   const dependencies = {};
   try {
-    const reviewRaw = read(receipts.review), review = JSON.parse(reviewRaw);
-    const reviewReference = { ref: receipts.review, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
+    const confirmationRaw = read(receipts.confirmation), confirmation = JSON.parse(confirmationRaw);
+    if (!REVIEW_RESULT_REF.test(confirmation.subject_ref ?? "")) {
+      throw new Error("E2E confirmation does not name a canonical independent review result");
+    }
+    const reviewRaw = read(confirmation.subject_ref), review = JSON.parse(reviewRaw);
+    const reviewReference = { ref: confirmation.subject_ref, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
     const authenticated = authenticateOrdinaryExecutionReview(review, current, read, dependencies, "execution-review", reviewReference);
     result.execution = { status: "passed", ...authenticated.execution.wrapperReference, executor_actor: authenticated.execution.actor };
     result.independent_review = { status: "recorded", ...reviewReference, reviewer_actor: authenticated.binding.reviewer_actor, frozen_material: authenticated.binding.frozen_material };
-    if (typeof receipts.confirmation === "string") {
-      const confirmationRaw = read(receipts.confirmation), confirmation = JSON.parse(confirmationRaw);
-      const reference = { ref: receipts.confirmation, sha256: createHash("sha256").update(confirmationRaw).digest("hex") };
-      authenticateExecutionConfirmation(confirmation, reference, reviewReference, current, read, dependencies);
-      result.user_confirmation = { status: "accepted", ...reference };
-    }
+    const reference = { ref: receipts.confirmation, sha256: createHash("sha256").update(confirmationRaw).digest("hex") };
+    authenticateExecutionConfirmation(confirmation, reference, reviewReference, current, read, dependencies);
+    result.user_confirmation = { status: "accepted", ...reference };
   } catch (error) {
     result.reason = error.message;
   }
@@ -1689,6 +1737,10 @@ function evidenceCandidate(result, kind, subject, stage) {
     : facts[subject]
       ?? (kind === "test" ? facts.tests : null)
       ?? (kind === "confirmation" ? facts.human_confirmation : null);
+  if (kind === "review" && stage === "build-code") {
+    if (subject === "integration_review" && subjectFact?.review_scope !== "integration") return null;
+    if (subject === "phase_review" && subjectFact?.review_scope !== "phase") return null;
+  }
   // verify-code's independent review is a distinct quality subject. If the
   // handler did not publish its dedicated quality_note, a generic review ref
   // (usually build-code's review) must not be reused as a false binding.
@@ -1708,8 +1760,8 @@ function evidenceCandidate(result, kind, subject, stage) {
   if (trackSubject && subjectFact?.status !== "unavailable"
       && (!REVIEW_RESULT_REF.test(directRef ?? "") || !SHA256_HEX.test(directHash ?? ""))) return null;
   // verify-code has two intentionally separate review consumers. If the
-  // canonical dsh-code-review slot is missing/unavailable, an advisory
-  // wh-review in `facts.review` or generic evidence_refs must not be promoted
+  // canonical OCR code-review slot is missing/unavailable, a separate
+  // review in `facts.review` or generic evidence_refs must not be promoted
   // into the gating `code_review` subject. A real unavailable attempt may
   // still bind through its own attempt_ref/hash above.
   if (kind === "review" && stage === "verify-code" && subject === "code_review"
@@ -1796,7 +1848,177 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
   return candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
-function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, snapshotTree = null } = {}) {
+function authenticatedOcrCodeReviewResult(task, record) {
+  const verifyScope = record?.stage === "verify-code"
+    && record.subject_kind === "worktree" && record.phase_id === null && record.review_scope === null;
+  const buildCodeScope = record?.stage === "build-code"
+    && ((record.subject_kind === "phase" && typeof record.phase_id === "string" && record.phase_id.trim() !== "" && record.review_scope === "phase")
+      || (record.subject_kind === "worktree" && record.phase_id === null && record.review_scope === "integration"));
+  if (record?.version !== "wh-review-result.v1"
+      || Object.hasOwn(record, "verdict")
+      || record.task_id !== task.identity.taskId
+      || (!verifyScope && !buildCodeScope)
+      || (record.review_track ?? null) !== null
+      || (record.review_kind ?? null) !== null
+      || !Array.isArray(record.provider_results)
+      || record.provider_results.length < 1
+      || record.provider_results.some((entry) => entry?.provider === "dsh-code-review")) return false;
+  try {
+    authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
+    const attempt = JSON.parse(task.readRecord(record.attempt_ref));
+    if (attempt.report_ref !== record.report_ref
+        || attempt.provider_attempts.length < record.provider_results.length) return false;
+    const report = task.readRecord(record.report_ref);
+    const marker = "\n## Public result and coverage\n\n```json\n";
+    const start = report.lastIndexOf(marker);
+    if (start < 0) return false;
+    const end = report.indexOf("\n```", start + marker.length);
+    if (end < 0) return false;
+    const publicResult = JSON.parse(report.slice(start + marker.length, end)).public_result;
+    const ocr = publicResult?.ocr;
+    if (!ocr || typeof ocr.version !== "string" || ocr.version.trim() === ""
+        || !ocr.preview || !ocr.rules || !Array.isArray(ocr.manifest)
+        || publicResult.material_id !== record.material_id
+        || attempt.provider_attempts.some((entry) => entry.runtime_id !== publicResult.runtime_id)
+        || !Array.isArray(publicResult.provider_results)
+        || record.provider_results.some((entry) => !publicResult.provider_results.some((member) => (
+          member.provider === entry.provider && member.status === "completed"
+        )))) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function authenticatedArchitectFallbackResult(task, record) {
+  if (record?.version !== "wh-review-result.v1" || record.stage !== "verify-code"
+      || record.task_id !== task.identity.taskId || record.subject_kind !== "worktree"
+      || record.phase_id !== null || record.review_scope !== null
+      || (record.review_track ?? null) !== null || (record.review_kind ?? null) !== null
+      || Object.hasOwn(record, "verdict")
+      || record.provider_results?.length !== 1
+      || record.provider_results[0]?.provider !== "dsh-code-review") return false;
+  try {
+    authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
+    const fallbackAttempt = JSON.parse(task.readRecord(record.attempt_ref));
+    if (fallbackAttempt.terminal_status !== "semantic"
+        || fallbackAttempt.provider_attempts.length !== 1
+        || fallbackAttempt.provider_attempts[0].provider !== "dsh-code-review"
+        || fallbackAttempt.provider_attempts[0].status !== "completed") return false;
+    let matchingFallbacks = 0;
+    const ocrAttempts = task.listCanonicalReviewAttemptRefs().flatMap((ref) => {
+      try {
+        const attempt = JSON.parse(task.readRecord(ref));
+        validateSchema("attempt", attempt);
+        if (attempt.task_id === record.task_id && attempt.stage === "verify-code"
+            && attempt.snapshot_tree === record.snapshot_tree
+            && attempt.material_revision === record.material_revision
+            && attempt.subject_kind === "worktree" && attempt.phase_id === null
+            && attempt.review_scope === null
+            && attempt.provider_attempts.some((provider) => provider.provider === "dsh-code-review")) {
+          matchingFallbacks += 1;
+        }
+        return attempt.attempt_id !== fallbackAttempt.attempt_id
+          && attempt.task_id === record.task_id && attempt.stage === "verify-code"
+          && attempt.snapshot_tree === record.snapshot_tree
+          && attempt.material_revision === record.material_revision
+          && attempt.subject_kind === "worktree" && attempt.phase_id === null
+          && attempt.review_scope === null
+          && attempt.provider_attempts.every((provider) => provider.provider !== "dsh-code-review")
+          ? [attempt] : [];
+      } catch { return []; }
+    });
+    const dispatchedAttempts = ocrAttempts.filter((attempt) => attempt.dispatch_state !== "blocked_before_dispatch");
+    return matchingFallbacks === 1 && dispatchedAttempts.length === 1
+      && dispatchedAttempts.every((attempt) => attempt.terminal_status === "unavailable"
+        && attempt.dispatch_state === "dispatched" && attempt.error
+        && !/(?:CANCELLED|CANCELED)/i.test(attempt.error.code)
+        && attempt.coverage?.group_outcome !== "cancelled"
+        && attempt.provider_attempts.every((provider) => provider.status === "failed"
+          && !/(?:CANCELLED|CANCELED)/i.test(provider.error?.code ?? "")));
+  } catch {
+    return false;
+  }
+}
+
+function authenticatedVerifyCodeReviewResult(task, record) {
+  return authenticatedOcrCodeReviewResult(task, record)
+    || authenticatedArchitectFallbackResult(task, record);
+}
+
+/** Verify the fact's exact current identity and the immutable OCR review chain. */
+export function authenticateCurrentOcrReviewFact(task, fact, { snapshotTree, materialRevision } = {}) {
+  const verifyCode = fact?.stage === "verify-code" && fact.subject === "code_review";
+  const integration = fact?.stage === "build-code" && fact.subject === "integration_review";
+  if (fact?.task_id !== task?.identity?.taskId || (!verifyCode && !integration)
+      || fact.kind !== "review" || fact.status !== "recorded"
+      || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) return false;
+  const evidence = Array.isArray(fact.evidence)
+    ? fact.evidence.filter((entry) => entry?.evidence_type === "review_result") : [];
+  if (evidence.length !== 1 || !REVIEW_RESULT_REF.test(evidence[0].ref ?? "")
+      || !SHA256_HEX.test(evidence[0].sha256 ?? "")) return false;
+  try {
+    const raw = task.readRecord(evidence[0].ref);
+    if (createHash("sha256").update(raw).digest("hex") !== evidence[0].sha256) return false;
+    const result = JSON.parse(raw);
+    if (!authenticatedOcrCodeReviewResult(task, result)
+        || result.stage !== fact.stage || result.material_revision !== materialRevision
+        || (integration && (result.review_scope !== "integration" || result.subject_kind !== "worktree" || result.phase_id !== null))
+        || ((integration || fact.review_status !== "resolved") && result.snapshot_tree !== snapshotTree)) return false;
+    if (verifyCode && fact.review_status === "clean"
+        && canonicalReviewFindings(result).some(isActionableSeriousFinding)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Keep Architect fallback provenance distinct from the OCR-only reader. */
+export function authenticateCurrentArchitectReviewFact(task, fact, { snapshotTree, materialRevision } = {}) {
+  if (fact?.task_id !== task?.identity?.taskId || fact.stage !== "verify-code"
+      || fact.subject !== "code_review" || fact.kind !== "review" || fact.status !== "recorded"
+      || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) return false;
+  const evidence = Array.isArray(fact.evidence)
+    ? fact.evidence.filter((entry) => entry?.evidence_type === "review_result") : [];
+  if (evidence.length !== 1 || !REVIEW_RESULT_REF.test(evidence[0].ref ?? "")
+      || !SHA256_HEX.test(evidence[0].sha256 ?? "")) return false;
+  try {
+    const raw = task.readRecord(evidence[0].ref);
+    if (createHash("sha256").update(raw).digest("hex") !== evidence[0].sha256) return false;
+    const result = JSON.parse(raw);
+    if (!authenticatedArchitectFallbackResult(task, result)
+        || result.material_revision !== materialRevision
+        || (fact.review_status !== "resolved" && result.snapshot_tree !== snapshotTree)) return false;
+    if (fact.review_status === "clean" && canonicalReviewFindings(result).some(isActionableSeriousFinding)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function authenticateCurrentVerifyCodeReviewFact(task, fact, identity) {
+  return authenticateCurrentOcrReviewFact(task, fact, identity)
+    || authenticateCurrentArchitectReviewFact(task, fact, identity);
+}
+
+function authenticatedOcrCodeReviewCandidate(task, candidate) {
+  if (!candidate || !REVIEW_RESULT_REF.test(candidate.ref ?? "")) return false;
+  try {
+    const raw = task.readRecord(candidate.ref);
+    if (candidate.sha256 && createHash("sha256").update(raw).digest("hex") !== candidate.sha256) return false;
+    return authenticatedOcrCodeReviewResult(task, JSON.parse(raw));
+  } catch {
+    return false;
+  }
+}
+
+function reviewEvidenceStatus(task, candidate, {
+  stage = null,
+  subject = null,
+  snapshotTree = null,
+  materialRevision = null,
+  currentPhaseId = undefined,
+} = {}) {
   if (!candidate) return { status: "missing", evidence_valid: false };
   const expectedTrack = stage === "make-decision"
     ? ({ direction_review: "direction", detail_review: "detail" }[subject] ?? null)
@@ -1814,7 +2036,8 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, s
     return { status: "missing", evidence_valid: false };
   }
   if (stage === "verify-code" && subject === "code_review"
-      && snapshotTree !== null && record.snapshot_tree !== snapshotTree) {
+      && ((snapshotTree !== null && record.snapshot_tree !== snapshotTree)
+        || (materialRevision !== null && record.material_revision !== materialRevision))) {
     return { status: "missing", evidence_valid: false };
   }
   if (expectedTrack !== null
@@ -1836,29 +2059,46 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, s
       && record.adjudication?.version === "wh-review-adjudication.v1") {
       if (stage === "verify-code" && ["code_review", "independent_review"].includes(subject)) {
         try {
-          if (subject === "code_review" && snapshotTree !== null && record.snapshot_tree !== snapshotTree) {
-            throw new Error("verify-code review result is bound to an older code snapshot");
+          const codeReviewSource = subject === "code_review"
+            ? authenticatedOcrCodeReviewResult(task, record) ? "ocr-delegation"
+              : authenticatedArchitectFallbackResult(task, record) ? "architect-code-review" : null
+            : null;
+          if (subject === "code_review" && codeReviewSource === null) {
+            throw new Error("verify-code code_review must bind authenticated OCR or Architect fallback provenance");
           }
           // An empty findings array is only meaningful after the immutable
           // attempt, terminal provider members, provider outputs, and
           // aggregation have all been authenticated. Do not let a copied or
           // partially failed result satisfy the final code-review predicate.
-          authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
+          if (subject !== "code_review") {
+            authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
+          }
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
           return subject === "code_review"
             ? hasSeriousFinding
-              ? { status: "missing", review_status: "findings", evidence_valid: true }
-              : { status: "recorded", review_status: "clean", evidence_valid: true }
+              ? { status: "missing", review_status: "findings", review_source: codeReviewSource, evidence_valid: true }
+              : { status: "recorded", review_status: "clean", review_source: codeReviewSource, evidence_valid: true }
             : { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean", evidence_valid: true };
         } catch {
           return { status: "missing", evidence_valid: false };
         }
       }
-      if (stage === "build-code" && subject === "integration_review") {
+      if (stage === "build-code" && ["integration_review", "phase_review"].includes(subject)) {
+        const expectedTuple = subject === "phase_review"
+          ? record.subject_kind === "phase" && record.review_scope === "phase" && typeof record.phase_id === "string" && record.phase_id.trim() !== ""
+            && (currentPhaseId === undefined || record.phase_id === currentPhaseId)
+          : record.subject_kind === "worktree" && record.review_scope === "integration" && record.phase_id === null;
+        if (!expectedTuple) return { status: "missing", evidence_valid: false };
         try {
+          if (!authenticatedOcrCodeReviewResult(task, record)) return { status: "missing", evidence_valid: false };
           authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
           const hasSeriousFinding = canonicalReviewFindings(record).some(isActionableSeriousFinding);
-          return { status: "recorded", review_status: hasSeriousFinding ? "findings" : "clean", evidence_valid: true };
+          return {
+            status: "recorded",
+            review_status: hasSeriousFinding ? "findings" : "clean",
+            ...(subject === "integration_review" ? { review_source: "ocr-delegation" } : {}),
+            evidence_valid: true,
+          };
         } catch {
           return { status: "missing", evidence_valid: false };
         }
@@ -1908,8 +2148,8 @@ function confirmationEvidenceStatus(task, candidate) {
   }
 }
 
-function assertVNextSourceStable(ctx, expectedSnapshot) {
-  const observed = ctx.kernel.currentVNextSnapshot();
+function assertVNextSourceStable(ctx, expectedSnapshot, { fresh = false } = {}) {
+  const observed = ctx.kernel.currentVNextSnapshot({ fresh });
   if (observed.source_digest !== expectedSnapshot.source_digest || observed.tree !== expectedSnapshot.tree) {
     const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected source/tree ${expectedSnapshot.source_digest}/${expectedSnapshot.tree}, observed ${observed.source_digest}/${observed.tree}`);
     error.code = "FORMAL_SNAPSHOT_MISMATCH";
@@ -2021,7 +2261,9 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null
   const advisory = Object.prototype.hasOwnProperty.call(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze");
   if (!gating && !advisory) return null;
   const analyzerResult = result.spec_analyze?.result;
-  const consistent = analyzerResult?.status === "consistent";
+  const postReport = ctx.stage === "build-plan" && ctx.manifest?.activation_cohort === "post"
+    && result.spec_analyze?.producer === "workflowhub-session";
+  const consistent = postReport ? analyzerResult?.status === "reported" : analyzerResult?.status === "consistent";
   const stageOutcomeEvidence = typeof result.stage_outcome_ref === "string"
     && typeof result.stage_outcome_hash === "string"
     ? [{ ref: result.stage_outcome_ref, sha256: result.stage_outcome_hash }]
@@ -2030,7 +2272,9 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null
     subject: "stage_end_spec_analyze",
     status: consistent ? "passed" : "missing",
     detail: consistent
-      ? "current stage-end spec-analyze is semantically consistent"
+      ? postReport
+        ? "current post build-plan structural report was published; semantic quality belongs to the independent merged review"
+        : "current stage-end spec-analyze is semantically consistent"
       : `current stage-end spec-analyze is ${analyzerResult?.status ?? "unavailable"}`,
     evidenceRefs: stageOutcomeEvidence,
     analysisResult: analyzerResult ?? null,
@@ -2555,6 +2799,7 @@ async function executePrivateAcceptance(ctx, scenario, binding, signal, legacySt
 async function executeAcceptanceCommandOrService(ctx, scenario, binding, executionBinding, executorActor, signal) {
   const ids = binding.acceptance_criterion_ids;
   if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) return unavailableAcceptanceScenario(scenario, "acceptance scenario requires unique declared ACs");
+  const preExecutionSnapshot = ctx.kernel.currentVNextSnapshot();
   const declared = scenario.execution;
   const root = realpathSync(ctx.workspace?.worktreeRoot ?? ctx.candidateWorkspace?.worktreeRoot);
   let command, args, modulePath, moduleHash;
@@ -2586,10 +2831,13 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     outputBindings[`${stream}_ref`] = ref;
     outputBindings[`${stream}_hash`] = hash;
   }
+  // Keep the actual process streams, but reject a changed source before any
+  // per-AC evidence can combine the old binding with the child's outcome.
+  assertVNextSourceStable(ctx, preExecutionSnapshot, { fresh: true });
   let rows = [], reason = null;
   try { rows = deriveAcceptanceExecutionAssertions(result.stdout, ids); }
-  catch (error) { reason = error.message; }
-  const after = ctx.kernel.currentVNextContext();
+  catch (error) { reason = `acceptance execution output is invalid: ${error.message}`; }
+  const after = ctx.kernel.currentVNextContext({ fresh: true });
   let moduleStable = true;
   if (modulePath) {
     try { moduleStable = createHash("sha256").update(readFileSync(modulePath)).digest("hex") === moduleHash; }
@@ -2597,7 +2845,11 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
   }
   const stable = after.snapshot.tree === binding.snapshot_tree && after.materialRevision === binding.material_revision
     && moduleStable;
-  if (!stable) reason = "acceptance source or materials changed during execution";
+  if (!stable) {
+    const error = new Error("FORMAL_SNAPSHOT_MISMATCH: acceptance source or materials changed during execution");
+    error.code = "FORMAL_SNAPSHOT_MISMATCH";
+    throw error;
+  }
   const inconclusive = Boolean(reason) || result.timed_out || result.cancelled || result.cleanup.status !== "completed" || Boolean(result.error);
   const processPassed = result.status === 0 && result.signal === null;
   if (!reason && !processPassed) reason = "acceptance process did not exit successfully";
@@ -2636,8 +2888,17 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     publishVNextEvidence(ctx, ref, raw);
     return { ref, sha256 };
   });
+  const containsNotReadPlaceholder = (value) => {
+    if (value === "not-read") return true;
+    if (!value || typeof value !== "object") return false;
+    if (!Array.isArray(value) && value.status === "not-read") return true;
+    return Object.values(value).some(containsNotReadPlaceholder);
+  };
   const executed = !inconclusive && processPassed && rows.length === ids.length
-    && rows.every((row) => row.assertions.every((assertion) => assertion.result === "passed"));
+    && rows.every((row) => row.outcome !== "incomplete" && row.outcome !== "deferred"
+      && row.assertions.every((assertion) => assertion.result === "passed"
+        && !containsNotReadPlaceholder(assertion.expected)
+        && !containsNotReadPlaceholder(assertion.actual)));
   return Object.freeze({ status: executed ? "executed" : "failed", tier: scenario.tier,
     executor: "workspace-command", ...(executed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
 }
@@ -2712,9 +2973,16 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   if (preflightMaterials && (materials.revision !== preflightMaterials.revision || !sameJson(materials.hashes, preflightMaterials.hashes))) {
     throw outcomeError("current materials changed before stage publication");
   }
+  const phaseProgress = ctx.stage === "build-code" && ctx.manifest?.activation_cohort === "post"
+    ? currentStageRow(ctx.task.taskPath, ctx.identity.taskId, "build-code")?.phase_progress
+    : null;
+  const currentPhaseId = ctx.stage === "build-code" && ctx.manifest?.activation_cohort === "post"
+    ? phaseProgress?.material_revision === materials.revision ? phaseProgress.phase_id : null
+    : undefined;
   const qualityFactRefs = [];
   const qualityAdvisoryFactRefs = [];
   const reviewStatuses = new Map();
+  const reviewSources = new Map();
   let allPassed = true;
   const qualityWarnings = [];
   const qualityAdvisories = [];
@@ -2727,7 +2995,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   if (stageAnalyzeFact) {
     qualityAdvisoryFactRefs.push(stageAnalyzeFact.fact.ref);
   }
-  if (stageAnalyzeFact && analyzerResult?.status !== "consistent") {
+  const postReport = ctx.stage === "build-plan" && ctx.manifest?.activation_cohort === "post"
+    && result.spec_analyze?.producer === "workflowhub-session";
+  if (stageAnalyzeFact && !["consistent", ...(postReport ? ["reported"] : [])].includes(analyzerResult?.status)) {
     qualityAdvisories.push(`stage-end-spec-analyze:${analyzerResult?.status ?? "unavailable"}`);
   }
   for (const diagnostic of result.facts?.machine_gate_diagnostics ?? []) {
@@ -2797,7 +3067,13 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
           ? result.facts?.reviews?.detail
           : null
       : null;
-    let review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject, snapshotTree: snapshot.tree }) : null;
+    let review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate, {
+      stage: ctx.stage,
+      subject,
+      snapshotTree: snapshot.tree,
+      materialRevision: materials.revision,
+      ...(ctx.stage === "build-code" && subject === "phase_review" ? { currentPhaseId } : {}),
+    }) : null;
     // The make-decision handler can prove an unavailable transport without a
     // review attempt ref when no receipt was produced at all. Preserve that
     // explicit status/error as a quality fact instead of projecting it to the
@@ -2805,7 +3081,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     if (kind === "review" && candidate === null && reviewSourceFact?.status === "unavailable") {
       review = { status: "unavailable", evidence_valid: true };
     }
-    // A canonical dsh review may have inspected the pre-repair snapshot.  The
+    // A canonical OCR review may have inspected the pre-repair snapshot. The
     // authenticated stage outcome can still close the current review when it
     // explicitly records every actionable finding as fixed/rejected.  Keep
     // the old review ref and snapshot untouched; only the current fact's
@@ -2813,10 +3089,15 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     if (kind === "review" && ctx.stage === "verify-code" && subject === "code_review"
         && candidate !== null && result.code_review_resolution === "resolved"
         && (typeof result.stage_outcome_ref === "string"
-          || result.current_review_repair?.status === "resolved")) {
-      review = { status: "recorded", review_status: "resolved", evidence_valid: true };
+          || result.current_review_repair?.status === "resolved")
+        && (authenticatedOcrCodeReviewCandidate(ctx.task, candidate)
+          || authenticatedArchitectFallbackResult(ctx.task, JSON.parse(ctx.task.readRecord(candidate.ref))))) {
+      review = { status: "recorded", review_status: "resolved",
+        review_source: authenticatedOcrCodeReviewCandidate(ctx.task, candidate) ? "ocr-delegation" : "architect-code-review",
+        evidence_valid: true };
     }
     if (kind === "review" && review?.review_status) reviewStatuses.set(subject, review.review_status);
+    if (kind === "review" && review?.review_source) reviewSources.set(subject, review.review_source);
     if (kind === "review" && reviewSourceFact?.status === "unavailable" && !reviewStatuses.has(subject)) {
       reviewStatuses.set(subject, "unavailable");
     }
@@ -2985,12 +3266,18 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
       authenticated: true,
       freshness: { status: "current" },
       ...(reviewStatuses.has(value.subject) ? { review_status: reviewStatuses.get(value.subject) } : {}),
+      ...(reviewSources.has(value.subject) ? { review_source: reviewSources.get(value.subject) } : {}),
     };
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx), {
     activationCohort: ctx.manifest?.activation_cohort ?? "pre",
   });
-  const completion = deriveStageCompletion(ctx.stage, observations);
+  const completion = deriveStageCompletion(ctx.stage, observations, {
+    authenticateCodeReview: ({ fact }) => authenticateCurrentVerifyCodeReviewFact(ctx.task, fact, {
+      snapshotTree: snapshot.tree,
+      materialRevision: materials.revision,
+    }),
+  });
   for (const binding of result.skill_consumer_bindings ?? []) {
     if (binding.status === "incomplete") {
       qualityAdvisories.push(`${binding.skill_id}:consumer_incomplete`);
@@ -3261,6 +3548,17 @@ export async function runStage(stage, context, handler, publication = {}, intern
     }
   }
   if (scheduleReflection === null) return published;
+  // Stage-end handoff must consume the canonical status derived during
+  // publication, not only the raw handler return (which describes the run but
+  // does not yet know whether the stage completion predicates were satisfied).
+  // Keep the raw facts for review projection and overlay the published result
+  // through this in-memory call only.
+  handlerResultForReflection = Object.freeze({
+    ...result,
+    status: published.status,
+    ...(published.completion === undefined ? {} : { completion: published.completion }),
+    ...(published.quality_status === undefined ? {} : { quality_status: published.quality_status }),
+  });
   const stageReflection = await scheduleReflection({
     stageStatus: reflectionInput?.stageStatus ?? reflectionOptions.stageStatus ?? "completed",
   });
@@ -3336,6 +3634,12 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
     ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
       ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
       : null);
+  const snapshotSource = ctx.workspace ?? ctx.candidateWorkspace ?? null;
+  const snapshotCapability = snapshotSource && typeof snapshotSource.captureSnapshot === "function"
+    ? () => snapshotSource.captureSnapshot()
+    : snapshotSource
+      ? () => captureWorkspaceSnapshot(snapshotSource, ctx.identity.taskId, ctx.task?.manifest?.activation_cohort ?? "pre")
+      : null;
   const consumerInvocations = new Set();
   return Object.freeze({
     stage: ctx.stage,
@@ -3420,8 +3724,8 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
         },
       }),
     } : {}),
-    ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
-    ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace, ctx.identity.taskId, ctx.task?.manifest?.activation_cohort ?? "pre") } : {}),
+    ...(snapshotSource ? { workspace: Object.freeze({ worktreeRoot: snapshotSource.worktreeRoot, baselineCommit: snapshotSource.baselineCommit }) } : {}),
+    ...(snapshotCapability ? { snapshotWorkspace: snapshotCapability } : {}),
     // Renderer inputs are task-owned source bytes. Keep this filesystem access
     // private to the authenticated handler rather than exposing a new runtime
     // input or public read API.
@@ -3547,6 +3851,9 @@ function authenticateCurrentCodeReviewRepairs(ctx, input, snapshot, materialRevi
   try { validateSchema("result", review); }
   catch (error) { throw new Error(`verify-code repair review is invalid: ${error.message}`); }
   if (!Array.isArray(review.findings) || review.findings.length === 0) throw new Error("verify-code repair review must contain findings");
+  if (!authenticatedVerifyCodeReviewResult(ctx.task, review)) {
+    throw new Error("verify-code repair review must be an authenticated OCR result or eligible Architect fallback");
+  }
   const resolution = authenticateCodeReviewRepairs({
     review,
     result: { status: "findings", findings: review.findings, repairs: structuredClone(repairs) },
@@ -3685,87 +3992,61 @@ export async function publishOfficialStageOutcome({ context, outcome, stage, att
   return Object.freeze({ outcome, quality });
 }
 
-async function currentPostBuildPlanSpecAnalyze(ctx, preflight, runSpecAnalyze = null) {
+export function deriveCurrentPostBuildPlanSpecAnalyze(ctx) {
+  if (ctx?.stage !== "build-plan" || ctx?.manifest?.activation_cohort !== "post") return null;
   const current = currentMaterialTexts(ctx) ?? {};
   const phases = Object.fromEntries(Object.entries(current).filter(([name]) => /^phases\/P\d+\.md$/.test(name)));
-  // The decision-log's verbatim U/V layer is the user-selected original
-  // authority for post tasks. Read the current workspace bytes independently
-  // of any invocation packet; do not let caller-owned coverage set the census.
   const decisionLog = current["decision-log.md"] ?? "";
-  const sourceCensus = deriveDecisionLogOriginalSourceCensus(decisionLog);
   const spec = current["spec.md"] ?? "";
-  const phaseText = Object.values(phases).filter((value) => typeof value === "string").join("\n");
-  const sourceEntries = sourceCensus.entries ?? [];
-  const coverage = sourceEntries.map((entry) => {
-    const traceIds = [entry.id, ...(sourceCensus.index_entries ?? [])
-      .filter((row) => row.source_refs.includes(entry.id))
-      .map((row) => row.id)];
-    const inSpec = traceIds.some((id) => new RegExp(`\\b${id}\\b`).test(spec));
-    const inPhase = traceIds.some((id) => new RegExp(`\\b${id}\\b`).test(phaseText));
-    return {
-      requirement_id: entry.id,
-      status: inSpec && inPhase ? "partial" : "missing",
-      expected_behavior: entry.summary,
-      actual_behavior: "",
-      semantic_status: "unverified",
-      artifact_refs: ["spec", "phases"],
-      evidence_refs: [],
-      scenario_refs: [],
-      oracle_refs: [],
-    };
+  const index = current["phases/index.md"] ?? "";
+  const structural = validateStageSpecAnalyzeProfile({
+    stage: "build-plan",
+    packet: {
+      activation_cohort: "post",
+      materials: { decision_log: decisionLog, spec, phase_index: index, phases },
+    },
+    strict_material_contracts: true,
+    identity: { activation_cohort: "post" },
   });
   const boundEvidence = (ref, value) => typeof value === "string" && value.length > 0
-    ? { ref, kind: ref, status: "fresh", hash: createHash("sha256").update(value).digest("hex"), snapshot_tree: preflight.snapshot.tree }
-    : null;
+    ? { ref, kind: "current_material", status: "fresh", hash: createHash("sha256").update(value).digest("hex"), snapshot_tree: ctx.kernel.currentVNextSnapshot().tree }
+    : { ref, kind: "current_material", status: "missing", hash: null, snapshot_tree: ctx.kernel.currentVNextSnapshot().tree };
   const evidence = [
     boundEvidence("decision-log", decisionLog),
     boundEvidence("spec", spec),
-    boundEvidence("phase-index", current["phases/index.md"]),
+    boundEvidence("phase-index", index),
     ...Object.entries(phases).map(([ref, value]) => boundEvidence(ref, value)),
-  ].filter(Boolean);
-  const packet = {
-    activation_cohort: "post",
-    materials: {
-      decision_log: decisionLog,
-      spec,
-      phase_index: current["phases/index.md"] ?? "",
-      phases,
-    },
-    original_requirements: sourceEntries.map(({ id, summary }) => ({ id, summary })),
-    coverage,
-    evidence,
-  };
-  const result = validateStageSpecAnalyzeProfile({
-    stage: "build-plan",
-    packet,
-    strict_material_contracts: true,
-    identity: {
-      task_id: ctx.identity.taskId,
-      stage: "build-plan",
-      material_revision: preflight.materials.revision,
-      snapshot_tree: preflight.snapshot.tree,
+  ];
+  return Object.freeze({
+    schema_version: "workflowhub-inline-spec-analyze.v1",
+    producer: "workflowhub-session",
+    packet: {
       activation_cohort: "post",
+      materials: { decision_log: decisionLog, spec, phase_index: index, phases },
+      evidence,
+      source_authentication: { status: decisionLog ? "current_material" : "unavailable", ref: "decision-log.md" },
     },
-    authenticatedSourceCensus: sourceCensus,
+    result: structural,
+    material_hashes: Object.fromEntries([
+      ["decision-log.md", decisionLog], ["spec.md", spec], ["phases/index.md", index], ...Object.entries(phases),
+    ].map(([ref, value]) => [ref, typeof value === "string" ? createHash("sha256").update(value).digest("hex") : null])),
   });
+}
+
+async function currentPostBuildPlanSpecAnalyze(ctx, preflight, runSpecAnalyze = null) {
+  const base = deriveCurrentPostBuildPlanSpecAnalyze({
+    ...ctx,
+    // currentMaterialTexts reads the authenticated artifact workspace; retain
+    // the caller's stage/manifest identity while binding the result below.
+    kernel: ctx.kernel,
+  });
+  if (!base) return null;
+  const decisionLog = base.packet.materials.decision_log;
   const sourceContentSha256 = createHash("sha256").update(decisionLog).digest("hex");
   const skillBundleSha256 = createHash("sha256")
     .update(readFileSync(join(REPOSITORY_ROOT, "skills/spec-analyze/skill-bundle.json")))
     .digest("hex");
-  const boundResult = Object.freeze({
-    ...result,
-    facts: Object.freeze({
-      ...result.facts,
-      source_content_sha256: sourceContentSha256,
-      skill_bundle_sha256: skillBundleSha256,
-      index_trace: Object.freeze((sourceCensus.index_entries ?? []).map(({ id, source_refs }) =>
-        Object.freeze({ id, source_refs }))),
-      source_units: Object.freeze((sourceCensus.source_units ?? []).map(({ id, kind, sha256: content_sha256, byte_start, byte_end, start_line, end_line, alias_of, decomposed_by }) =>
-        Object.freeze({ id, kind, content_sha256, byte_start, byte_end, start_line, end_line,
-          ...(alias_of ? { alias_of } : {}), ...(decomposed_by ? { decomposed_by } : {}) }))),
-    }),
-  });
-  const boundFields = Object.freeze({
+  const preflightIdentity = {
     task_id: ctx.identity.taskId,
     stage: "build-plan",
     step_slug: "final-spec-analyze",
@@ -3774,90 +4055,48 @@ async function currentPostBuildPlanSpecAnalyze(ctx, preflight, runSpecAnalyze = 
     material_revision: preflight.materials.revision,
     source_content_sha256: sourceContentSha256,
     skill_bundle_sha256: skillBundleSha256,
-    source_ids: Object.freeze(sourceEntries.map(({ id }) => id)),
-  });
-  let finalResult;
+  };
+  let result = base.result;
+  const facts = { ...result.facts, source_content_sha256: sourceContentSha256, skill_bundle_sha256: skillBundleSha256 };
   if (typeof runSpecAnalyze !== "function") {
-    finalResult = Object.freeze({
-      ...boundResult,
-      status: boundResult.status === "consistent" ? "inconsistent" : boundResult.status,
-      facts: Object.freeze({ ...boundResult.facts, lens_execution_status: "unavailable" }),
-      errors: Object.freeze([...(boundResult.errors ?? []), "portable spec-analyze lens execution unavailable"]),
-    });
+    facts.lens_execution_status = "unavailable";
   } else {
-    const request = Object.freeze({
-      ...boundFields,
-      materials: Object.freeze({ ...packet.materials, phases: Object.freeze({ ...phases }) }),
-    });
+    const request = Object.freeze({ ...preflightIdentity, materials: base.packet.materials });
     let lens;
-    let executorRejected = false;
-    try {
-      lens = await runSpecAnalyze(request);
-    } catch {
-      // Transport/executor failure is an unavailable quality fact, not a
-      // failed stage run. Never persist the raw error: provider text may carry
-      // tokens or task source content. Invalid returned identity is checked
-      // below, outside this catch, and still fails loud before publication.
-      executorRejected = true;
+    try { lens = await runSpecAnalyze(request); }
+    catch {
+      lens = null;
+      facts.lens_execution_status = "unavailable";
+      facts.lens_failure_code = "executor_rejected";
     }
-    if (executorRejected) {
-      finalResult = Object.freeze({
-        ...boundResult,
-        status: ["material_incomplete", "inconsistent"].includes(boundResult.status)
-          ? boundResult.status : "unavailable",
-        facts: Object.freeze({
-          ...boundResult.facts,
-          lens_execution_status: "unavailable",
-          lens_failure_code: "executor_rejected",
-        }),
-        errors: Object.freeze([...(boundResult.errors ?? []), "portable spec-analyze lens executor rejected"]),
-      });
-    } else {
+    if (lens !== null) {
       if (!lens || typeof lens !== "object" || Array.isArray(lens)
           || lens.schema_version !== "workflowhub-spec-analyze-lens-result.v1") {
         throw outcomeError("portable spec-analyze lens did not return a bound result envelope");
       }
-      for (const [field, expected] of Object.entries(boundFields)) {
-        if (field === "source_ids") {
-          if (!Array.isArray(lens.source_ids) || JSON.stringify(lens.source_ids) !== JSON.stringify(expected)) {
-            throw outcomeError("portable spec-analyze lens source_ids do not match the complete current decision-log census");
-          }
-        } else if (lens[field] !== expected) {
-          throw outcomeError(`portable spec-analyze lens ${field} does not match the current materials`);
-        }
+      for (const [field, expected] of Object.entries(preflightIdentity)) {
+        if (lens[field] !== expected) throw outcomeError(`portable spec-analyze lens ${field} does not match the current materials`);
       }
       if (!lens.result || typeof lens.result !== "object" || Array.isArray(lens.result)
-          || !new Set(["inconsistent", "material_incomplete", "unavailable", "unknown"]).has(lens.result.status)
+          || !new Set(["reported", "inconsistent", "material_incomplete", "unavailable", "unknown"]).has(lens.result.status)
           || !lens.result.facts || typeof lens.result.facts !== "object" || Array.isArray(lens.result.facts)
           || !Array.isArray(lens.result.errors) || lens.result.errors.some((error) => typeof error !== "string")
           || (lens.result.findings !== undefined && !Array.isArray(lens.result.findings))) {
-        // A callback's self-asserted consistent status is not an independent
-        // semantic review. Until a separately authenticated review result is
-        // bound here, publication must remain non-pass.
         throw outcomeError("portable spec-analyze lens result is incomplete or claims unauthenticated consistency");
       }
-      finalResult = Object.freeze({
-        ...boundResult,
-        // A structural/source failure from the independent current-byte profile
-        // cannot be downgraded to the callback's unavailable/unknown verdict.
-        // Keep unknown as a semantic fact, not an invented analyzer terminal.
-        status: ["material_incomplete", "inconsistent"].includes(boundResult.status)
-          ? boundResult.status
-          : lens.result.status === "unknown" ? "inconsistent" : lens.result.status,
-        facts: Object.freeze({
-          ...lens.result.facts,
-          ...boundResult.facts,
-          lens_execution_status: "executed",
-          lens_semantic_status: lens.result.status,
-          lens_source_ids: Object.freeze([...lens.source_ids]),
-        }),
-        findings: Object.freeze([...(boundResult.findings ?? []), ...(lens.result.findings ?? [])]),
-        errors: Object.freeze([...(boundResult.errors ?? []), ...lens.result.errors]),
+      result = Object.freeze({
+        ...result,
+        status: ["material_incomplete", "inconsistent"].includes(result.status)
+          ? result.status : lens.result.status === "unknown" ? "inconsistent" : lens.result.status,
+        facts: Object.freeze({ ...lens.result.facts, ...facts, lens_execution_status: "executed", lens_semantic_status: lens.result.status }),
+        findings: Object.freeze([...(result.findings ?? []), ...(lens.result.findings ?? [])]),
+        errors: Object.freeze([...(result.errors ?? []), ...lens.result.errors]),
       });
     }
   }
   return Object.freeze({
     schema_version: "workflowhub-spec-analyze-stage-outcome.v1",
+    producer: "workflowhub-session",
     stage: "build-plan",
     step_slug: "final-spec-analyze",
     skill_id: "spec-analyze",
@@ -3865,11 +4104,12 @@ async function currentPostBuildPlanSpecAnalyze(ctx, preflight, runSpecAnalyze = 
     material_revision: preflight.materials.revision,
     source_content_sha256: sourceContentSha256,
     skill_bundle_sha256: skillBundleSha256,
-    source_status: sourceCensus.status === "present" && sourceCensus.errors.length === 0 ? "present" : "incomplete",
-    source_reason: sourceCensus.errors.length === 0
-      ? "current decision-log.md U/V statements and R index are the original source; semantic coverage remains unverified"
-      : sourceCensus.errors.join("; "),
-    result: finalResult,
+    source_status: decisionLog ? "current_material" : "unavailable",
+    source_reason: decisionLog
+      ? "decision-log.md is current read-only direction context; semantic coverage belongs to the independent merged review"
+      : "decision-log.md is missing",
+    packet: base.packet,
+    result: Object.freeze({ ...result, facts: Object.freeze({ ...result.facts, ...facts }) }),
   });
 }
 
@@ -3888,6 +4128,24 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
   const tests = handlerResult?.facts?.tests;
   const acceptanceCoverage = handlerResult?.facts?.acceptance_coverage;
   const acceptanceRows = Array.isArray(acceptanceCoverage?.items) ? acceptanceCoverage.items : [];
+  const acceptanceProjection = projectPostPhaseAcceptanceExecutionData({
+    index: phaseIndex,
+    phases,
+    spec,
+  });
+  const acceptanceTaskIdsByCriterion = new Map();
+  for (const scenario of acceptanceProjection.scenarios ?? []) {
+    const taskId = typeof scenario?.task_id === "string" && scenario.task_id.trim() !== ""
+      ? scenario.task_id
+      : null;
+    if (!taskId) continue;
+    for (const criterionId of scenario.acceptance_criterion_ids ?? []) {
+      if (typeof criterionId !== "string" || criterionId.trim() === "") continue;
+      const taskIds = acceptanceTaskIdsByCriterion.get(criterionId) ?? [];
+      if (!taskIds.includes(taskId)) taskIds.push(taskId);
+      acceptanceTaskIdsByCriterion.set(criterionId, taskIds);
+    }
+  }
   const acceptanceTraceRaw = `${JSON.stringify({
     snapshot_tree: snapshotTree,
     material_revision: materialRevision,
@@ -3915,6 +4173,15 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
         }
       : null,
     { ref: "ac-trace", kind: "ac-trace", status: "fresh", hash: acceptanceTraceHash, snapshot_tree: snapshotTree },
+    ...acceptanceRows.flatMap((row) => (Array.isArray(row.evidence_refs) ? row.evidence_refs : [])
+      .filter((entry) => typeof entry?.ref === "string" && SHA256_HEX.test(entry.sha256 ?? ""))
+      .map((entry) => ({
+        ref: entry.ref,
+        kind: "acceptance",
+        status: "fresh",
+        hash: entry.sha256,
+        snapshot_tree: snapshotTree,
+      }))),
   ].filter(Boolean);
   const coverage = sourceEntries.map((entry) => ({
     requirement_id: entry.id,
@@ -3933,20 +4200,16 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
     material_revision: materialRevision,
     snapshot_tree: snapshotTree,
     producer_stage: "build-code",
-    source_ids: [],
-    decision_ids: [],
-    fr_ids: [],
-    task_ids: [],
-    file_symbol: "",
-    implementation_anchor: null,
-    verification_anchor: null,
-    gate: { command: tests?.command ?? "", expected_exit: 0, oracle: "" },
-    scenario: row.scenario ?? "",
-    actual_outcome: row.actual_outcome ?? "",
-    coverage_limits: row.coverage_limits ?? "",
-    evidence_refs: [],
-    review_ref: null,
-    stage_end_ref: null,
+    ...((acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) ?? []).length > 0
+      ? { task_ids: acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) }
+      : {}),
+    ...(Array.isArray(row.evidence_refs) && row.evidence_refs.length > 0
+      ? {
+          evidence_refs: row.evidence_refs
+            .filter((entry) => typeof entry?.ref === "string" && SHA256_HEX.test(entry.sha256 ?? ""))
+            .map((entry) => ({ ref: entry.ref, hash: entry.sha256, snapshot_tree: snapshotTree })),
+        }
+      : {}),
   }));
   const packet = {
     activation_cohort: "post",
@@ -4160,7 +4423,7 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
         const boundReviewRef = stageReview?.quality_review_ref;
         const boundReviewHash = stageReview?.quality_review_hash;
         const suppliedReviewRef = receipts.quality_review;
-        // An absent or non-binding dsh-code-review outcome is an optional-host
+        // An absent or non-binding OCR outcome is an optional-host
         // disclosure, not a run failure: skills/workflowhub-host-protocol/SKILL.md
         // fixes that boundary ("没有外部 Stage Agent 时，标准 WorkflowHub 流程继续执行，并把
         // outcome 记为 unavailable 诊断，不把它变成阶段门禁"; "没有外部宿主 outcome 时，正式 run
@@ -4174,11 +4437,11 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
         if (stageOutcome.value?.value?.status === "completed"
             && (typeof boundReviewRef !== "string" || !boundReviewRef.trim()
             || typeof boundReviewHash !== "string" || !boundReviewHash.trim())) {
-          throw new Error("verify-code quality_review is not bound to a complete dsh-code-review ref/hash pair");
+          throw new Error("verify-code quality_review is not bound to a complete OCR review ref/hash pair");
         }
         if (boundReviewRef !== undefined) {
           if (suppliedReviewRef !== undefined && suppliedReviewRef !== boundReviewRef) {
-            const error = new Error("verify-code quality_review does not match the dsh-code-review stage outcome");
+            const error = new Error("verify-code quality_review does not match the OCR review stage outcome");
             Object.defineProperty(error, "diagnostic", {
               value: Object.freeze({
                 check_id: "review_binding",
@@ -4192,6 +4455,19 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
             throw error;
           }
           receipts.quality_review = boundReviewRef;
+        }
+      }
+      const codeReviewRef = stage === "verify-code"
+        ? handlerInput.receipts?.quality_review
+        : stage === "build-code" ? handlerInput.receipts?.review : null;
+      if (REVIEW_RESULT_REF.test(codeReviewRef ?? "")) {
+        let codeReviewRecord;
+        try { codeReviewRecord = JSON.parse(ctx.task.readRecord(codeReviewRef)); }
+        catch (error) { throw new Error(`code review result is unavailable: ${error.message}`); }
+        if (!(stage === "verify-code"
+          ? authenticatedVerifyCodeReviewResult(ctx.task, codeReviewRecord)
+          : authenticatedOcrCodeReviewResult(ctx.task, codeReviewRecord))) {
+          throw new Error("code review receipt is not an authenticated OCR delegation result or eligible Architect fallback");
         }
       }
       if (handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)) {
@@ -4265,7 +4541,7 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
         const actualReviewHash = reviewFacts.result_hash ?? reviewFacts.attempt_hash;
         if (actualReviewRef !== stageOutcome.value.code_review.quality_review_ref
             || actualReviewHash !== stageOutcome.value.code_review.quality_review_hash) {
-          throw new Error("verify-code canonical code_review is not bound to the dsh-code-review stage outcome");
+          throw new Error("verify-code canonical code_review is not bound to the OCR review stage outcome");
         }
       }
       let result = handlerResult;

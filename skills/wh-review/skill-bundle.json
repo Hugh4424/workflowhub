@@ -15,7 +15,7 @@
     },
     {
       "path": "contracts/build-code.md",
-      "sha256": "c908ef3fceb0f85394f31ebc203013bce5d5c6606f071360d97822cb980c80ca"
+      "sha256": "1600db35156dffc232224ff6e00cd4b55fcad5670b19c49f5c92294860b16ff8"
     },
     {
       "path": "contracts/build-prd.md",
@@ -47,7 +47,7 @@
     },
     {
       "path": "contracts/verify-code.md",
-      "sha256": "356a39b621f455ab99b92136d03c5b6a3adf92f9e50457178b3fb48129a7a5fc"
+      "sha256": "cc9f19a39ae5f0e9b58760248464c3e94048df59c1c82d8bb41640c854a5fa38"
     },
     {
       "path": "contracts/workflowhub-result.v1.json",
@@ -75,7 +75,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "f5def759198cbec61ed81775a236fd4a7774de883bbdac341b1f15664495568f"
+      "sha256": "fc20d9ab18709b631cb04de0fb699f6801c1c83f89e97329007e7ea55fe65d35"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -115,11 +115,11 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "a95357030e6218d96cee37714e0b4d7468cf72c9fcd2388ca39b94be2b5a8b8e"
+      "sha256": "9d7e70f1eba9974097ab6d3bfd05e3c95a94f0fb1a2903c5346b7ed883bdcf2c"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "d3010f39c5484843f78724c286b2d5b6c4976766808fa2519ff7173046c815e7"
+      "sha256": "341db7ba109aad1646e60304917d721a1c985e123d648cbdbbe27d5f2b9a4cd8"
     },
     {
       "path": "stage-skill-plan.json",

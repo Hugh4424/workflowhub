@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import yaml from "js-yaml";
 
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 import { resolveStageSkillPackages } from "../../runtime/stage/stage-skill-runtime.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -19,8 +21,6 @@ const stageSkills = Object.freeze({
   ],
   "build-spec": [
     "spec-research",
-    "spec-clarify",
-    "spec-specify",
     "simplicity-guard",
     "plan-ceo-review",
     "ui-project-init",
@@ -34,6 +34,8 @@ const stageSkills = Object.freeze({
   ],
   "build-plan": [
     "spec-research",
+    "spec-clarify",
+    "spec-specify",
     "spec-plan",
     "simplicity-guard",
     "plan-eng-review",
@@ -52,15 +54,29 @@ const stageSkills = Object.freeze({
     "frontend-testing",
     "frontend-component-quality",
     "fullstack-slice-testing",
-    "wh-review",
     "spec-analyze",
     "stage-reflection",
     "stage-handoff",
   ],
-  "verify-code": ["dsh-code-review", "frontend-component-quality", "wh-review", "stage-reflection"],
+  "verify-code": ["frontend-component-quality", "stage-reflection"],
 });
 
 describe("direct stage package contract", () => {
+  it("keeps code-review catalog consumers aligned with stage packages and the optional Architect bundle", () => {
+    const catalog = yaml.load(fs.readFileSync(path.join(root, "skills/catalog.yaml"), "utf8"));
+    for (const name of ["wh-review", "architect-code-review"]) {
+      const entry = catalog.skills.find((skill) => skill.name === name);
+      const declaredStages = Object.entries(stageSkills)
+        .filter(([, skills]) => skills.includes(name))
+        .map(([stage]) => stage);
+      expect(entry.used_by_stages).toEqual(declaredStages);
+      const bundlePath = entry.path.replace(/SKILL\.md$/, "skill-bundle.json");
+      expect(validateSkillBundle(root, bundlePath, entry.path).bundleHash).toBe(entry.local_bundle_hash);
+    }
+    expect(stageSkills["build-code"]).not.toContain("architect-code-review");
+    expect(stageSkills["verify-code"]).not.toContain("wh-review");
+  });
+
   it.each(Object.entries(stageSkills))(
     "resolves every %s dependency directly from its declared bundle",
     (stage, expectedNames) => {

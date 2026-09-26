@@ -202,16 +202,11 @@ export class ArtifactDir {
     return candidate;
   }
 
-  reference(relativeName) {
-    this.verifyIdentity();
-    return relative(this.worktreeRoot, this.path(relativeName)).split("\\").join("/");
-  }
-
   /** Canonical task-relative reference; construction authority stays here. */
   reference(relativeName) {
     const segments = artifactSegments(relativeName);
     this.path(relativeName);
-    return ["specs", this.root.split("/").at(-1), ...segments].join("/");
+    return ["specs", this.root.split(/[\\/]/).at(-1), ...segments].join("/");
   }
 
   read(relativeName, encoding = "utf8") {

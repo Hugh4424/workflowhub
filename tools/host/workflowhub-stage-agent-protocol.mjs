@@ -114,7 +114,7 @@ function writeTemplate(argv) {
         snapshot_tree: null,
         material_revision: null,
         step_slug: stepId("finalize-code-review"),
-        skill_id: "dsh-code-review",
+        skill_id: "architect-code-review",
         result: {
           status: "unavailable",
           findings: [],

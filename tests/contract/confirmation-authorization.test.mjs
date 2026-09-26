@@ -126,7 +126,7 @@ function factsFor(stage) {
     },
     freshness: { status: "current" },
     authenticated: true,
-    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean" } : {}),
+    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean", review_source: "ocr-delegation" } : {}),
   }));
 }
 
@@ -142,7 +142,7 @@ describe("confirmation and authorization boundary", () => {
       authenticated: true,
     });
 
-    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({ status: "completed", missing: [] });
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => true })).toMatchObject({ status: "completed", missing: [] });
   });
 
   it("keeps close authorization separate from automatic verify-code acceptance", () => {

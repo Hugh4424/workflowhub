@@ -22,7 +22,7 @@ describe("non-code review policy", () => {
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "frontend-component-quality", "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
-    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["dsh-code-review", "frontend-component-quality", "wh-review", "stage-reflection"]);
+    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["architect-code-review", "frontend-component-quality", "wh-review", "stage-reflection"]);
     for (const manifest of [buildSpec, buildPlan, buildCode, verifyCode]) {
       expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
       expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);
@@ -56,8 +56,8 @@ describe("non-code review policy", () => {
     for (const key of Array.from({ length: 12 }, (_, index) => `K${index + 1}`)) {
       expect(workflow, `${key} consumer/oracle mapping`).toContain(key);
     }
-    expect(workflow).toMatch(/single phase engineering authority|单一 phase 工程权威/i);
-    expect(workflow).toMatch(/pure pointer (?:execution )?index|纯指针.*索引/i);
+    expect(workflow).toMatch(/single phase engineering authority|sole current authoring chain|单一 phase 工程权威/i);
+    expect(workflow).toMatch(/pure pointer .*index|纯指针.*索引/i);
   });
 
   it.each(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"])("%s keeps review as quality evidence, not work permission", (stage) => {
