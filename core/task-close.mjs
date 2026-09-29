@@ -9,7 +9,7 @@ import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues, materializeGitSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
-import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../runtime/review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
@@ -436,13 +436,16 @@ function currentQualityValue(task, ref) {
   try {
     const raw = task.readRecord(ref);
     const value = JSON.parse(raw);
+    // Validate against the canonical quality-fact schema instead of a close
+    // local subset. Coverage facts (including incomplete coverage) are valid
+    // historical observations and must be readable here even though they do
+    // not participate in the verify-code close predicates below.
+    validateCanonicalQualityFact(value);
     if (value?.schema_version !== "quality-fact.v1"
         || value.task_id !== task.identity.taskId
         || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
         || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")
         || !["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(value.stage)
-        || !["test", "review", "acceptance_criterion", "confirmation"].includes(value.kind)
-        || !["passed", "failed", "recorded", "unavailable", "missing"].includes(value.status)
         || typeof value.subject !== "string" || value.subject.trim() === ""
         || !Array.isArray(value.evidence) || value.evidence.length === 0
         || value.evidence.some((entry) => !entry || typeof entry.ref !== "string" || entry.ref.trim() === ""
