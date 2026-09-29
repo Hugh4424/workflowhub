@@ -3416,3 +3416,33 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 - **本卡已做**：法证登记、本节设计、决定档案 `## 补充登记` 第十三节、施工表行 70（登记为下游推迟写面，本卡不动 runtime）。
 - **CARD-04 未实现，转后续卡**：2026-09-29 复核实测——main 的 `tools/cli/stage-runtime.mjs` 自合并点起零改动（`git log --oneline 40421a46..97092b30 -- tools/cli/stage-runtime.mjs` 为空）；全仓无 `--async`、无 `--action=collect`、无 attempt 态 `result_invalid`（`dispatch_state` 字段本身已存在，但 enum 不含 `result_invalid`）⇒ 措施 1–5 的移交对象为 **CARD-05**（触点 `runtime/review/review-record-route.mjs`）与 **CARD-06**（触点 `skills/wh-review/scripts/simple-review-runner.mjs`）；研究项 6 已由 card-04 落定为删除（见上）。
 - **与 §14.11 关系**：§14.11 build-code 侧 8 条是过程治理（已落地），本节是审查编排机制设计，互不重复。
+
+## §15 PaperBuilder 事故的机制修补设计（I-16 … I-20；用户 4 项拍板；2026-09-29）
+
+**来源与流程**：PaperBuilder 事故法证（`/tmp/pb-forensics/`：`proposal.md` 方案本体、`verify-proposal.md` 对抗验证，加三份根因报告与只读素材）。方案一轮＋**对抗验证一轮**；验证推翻/修正了 5 处措辞与前提（`gate_cmd` 执行点、验收词表实为机器八值域、M2 的强制半句、计划交付确认点已存在、`plan-eng-review` 写面与哈希链）。**本节是设计陈述；决定登记在 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md` 的 `### 十七`**（含用户 4 项拍板逐字与哈希前后值）。
+
+### §15.1 设计原则（三条；违反任一条即回退重写）
+
+1. **只加人读措辞与执行纪律，不加机器门禁**：SD-17 的零阻断立场不变（`decision-log.md:111`）；每条都自述「不是新的 stage、gate 或质量结论」。
+2. **只在既有确认点与既有字段上写实**：不新增文件/schema/字段/确认点/命令；`gate_cmd`/`evidence_path` 这类既有机器必填字段只改「怎么用」的文字。
+3. **人读层与机器取值域分离**：人读三词＝达成／未达成（写明下一步）／退役；机器取值域（验收证据八值、AC 五值）冻结不动。
+
+### §15.2 五条机制
+
+- **I-16（M1）计划交付确认改成三选一**：确认点已存在（`workflows/build-plan/steps.json` step 12；`workflows/build-plan/SKILL.md:133-142`；`docs/standard-workflow.md:273-279`，均为改前行号）⇒ 只改**提问话术**为三选一（修完再进／指派缺口负责人后进／取消本次执行），复用 `human-confirmation.v3`。**未答的语义**＝保持草稿、同 task 继续修复、缺的确认事实如实记缺失、**不阻断**（依据该段自述 `This confirmation does not turn confirmation into a machine work permit.`）。**不**写成「没记录就不算完成」（会撞 card-04 `B-02`/`B-08`、`CONSTITUTION.md:57`）。落点：`workflows/build-plan/SKILL.md:143-146`、`docs/standard-workflow.md:281-283`。
+- **I-17（M2）build-code Phase 收尾三件事**：`gate_cmd`/`evidence_path` 是契约头机器必填（`skills/spec-plan/templates/phase-template.md:123`/`:125`；runtime 强制点 `runtime/stage/stage-content-contracts.mjs:7247`/`:7250`/`:7293`/`:7566`/`:8012`），build-plan 侧已会执行（`workflows/build-plan/SKILL.md:216-218`、`skills/spec-plan/SKILL.md:28`），**build-code 侧此前只有文字要求**（原 `workflows/build-code/SKILL.md:340`）⇒ 把已有要求写实为：①按字面执行该 Phase 的 route 与 `gate_cmd` ②原始输出写入该 Phase 自己声明的 `evidence_path`（原件）③交付锚＝一次 `git commit`（仅既有授权到位时；缺授权记 `delivery pending`）。**「不允许把未达成写成完成」的强制半句被删除**（已由 `CONSTITUTION.md:100` 与 card-04 `B-11` 覆盖；写成「不许收尾/推进」即违反 `decision-log.md:111` SD-17 与 `:112` OI-012）⇒ 改为「未达成如实记为未达成并进失败事实清单，不新增推进前置」。落点：`workflows/build-code/SKILL.md:288-291`、`:352-357`。
+- **I-18（M3）卡住判据＝「变了没有」，无阈值**：build-code 重试前自述一行「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」；写不出＝卡住成立 ⇒ 停下、向人升级（人决定继续/换路/缩小/取消）。**不设次数或时长阈值**（用户反对阈值）；人侧升级纪律早已存在（`AGENTS.md:32-37` 的 `### 卡住与升级`）⇒ 本节只在 build-code 侧补自述行，不重复建设。落点：`workflows/build-code/SKILL.md:272-275`。
+- **I-19（M4）让「加」与「删」同价**：(a) 模块→需求**不加新行**——runtime 已强制双向 trace（`runtime/stage/stage-content-contracts.mjs:7356`），按 `design.md:594` 的逻辑引用既有 trace，避免第二份会漂移的清单；(b) 审查读数在 `skills/plan-eng-review/SKILL.md:78-83` 加「删除类 finding」分类与两个条数（**只报数、不设配额、不许硬凑**）；规模读数**复用** card-04 `D-007`/`OI-010` 的既有反膨胀预算（`tools/architecture/complexity-report.mjs` 的 `budget()` + `tests/contract/repository-inventory.test.mjs` 的 baseline/waiver），**不新写规模规则、不新增门禁**；(c) 退役登记＝官方作者模板新增 `## 退役登记（retirement）` 段，5 栏含「原来的需求编号」（`skills/decision-log/templates/decision-log-template.md:314-327`；控制面登记 `AGENTS.md:68`）。
+- **I-20（M5）销毁性动作适用既有 F7 边界**：整树丢弃类动作（`git restore/reset/checkout -- :/`）与 delete+add 整体替换权威材料属**销毁性动作**，适用既有 F7 不可逆授权边界（`CONSTITUTION.md:56`/`:172`/`:198`、`decision-log.md:111` R-014②、`design.md:2175`）：不得由阶段确认顺带授权、不得作为绕过既有授权的捷径；不新增公共动作/确认点/schema；发生时在既有 task facts 如实登记。用户④的「强推/删分支/删任务目录」落在该边界的**范围举例**里。**未**写成「必须先人工确认才可执行」（撞 `CONSTITUTION.md:56`/`:172` 与 card-04 `B-01…B-12`）。落点：`workflows/build-code/SKILL.md:379-383`。
+
+### §15.3 与既有章节的关系
+
+- §14.2（计划可执行）与 §14.3（build-code 编排）解决「交给下游的东西能不能执行」；本节解决「出口条件是否与现实对齐」，互不重复。
+- §14.4（I-12 卡住必须升级到人）是 M3 的人侧纪律来源；本节只补 build-code 侧的可写自述行。
+- §13 装配记录与本节无关，不改。
+
+### §15.4 未决与移交（如实登记，不代用户决定）
+
+- 退役登记表**无机器消费点**（只依赖 `make-decision` 主会话写模板）；是否加机器读数留给后续卡。
+- M5 **无机器拦截点**：实测 `grep -rn "git checkout|git restore|git reset|force-with-lease|branch -D" runtime/ tools/cli/` 零命中 ⇒ 如实记为**纪律条款**，不宣称已机器化；若后续要把「强推/删分支/删任务目录」写进授权清单枚举，属新控制面，须另立登记。
+- `workflows/build-plan/steps.json` **未改**（其 step 12 `observable_result` 已含 `retains any actual user reply in the existing confirmation record`）；`decision-log.md:441` 记的冻结范围问题维持原状。

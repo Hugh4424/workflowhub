@@ -685,6 +685,63 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 6. **来源声明**。上述转录锚点为**仓库外**证据（`~/.codex/sessions/**`），已在 2026-09-29 逐条 grep 复核；仓库内可核的只有第 4、5 条的外置值与 git 提交。
 
 
+### 十七、PaperBuilder 事故的机制落地（用户 4 项拍板 + M1–M5；2026-09-29）
+
+本节登记一次**由外部事故触发的机制修补**；**本节每条都是一次决定**，不是进度。**来源**＝PaperBuilder 事故法证（`/tmp/pb-forensics/`：`proposal.md` 118 行方案本体、`verify-proposal.md` 对抗验证，另有三份根因报告与 `adds.tsv`、`errors.tsv`、`exec.tsv`、`guard-*.txt`、`bloat-and-guard.md`、`coverage-a.md`、`coverage-b.md`、`time-and-process.md` 等只读素材）。**流程**＝方案一轮 + **对抗验证一轮**；验证推翻或修正了方案中的 5 处措辞与前提（`gate_cmd` 的执行点、验收词表其实是机器八值域、M2 的强制半句、计划交付确认点已存在、`plan-eng-review` 的写面与哈希链），下文口径均为修正后的版本。**授权**＝用户在 step 10 对 4 项**直接拍板**（逐字见 17.1）。下文 `file:line` 均为本节落盘后的实读。
+
+#### 17.1 用户 4 项拍板与落地形态
+
+| # | 用户拍板（逐字） | 落地形态（只改文本与既有字段的用法） | 落点 |
+| --- | --- | --- | --- |
+| ① | 「计划交付时"默认继续"改成"必须三选一"」 | 在**既有**确认点的提问话术里写死三选一（①按现有材料把缺口修完再进／②指派缺口负责人后进／③取消本次执行）；未回答＝保持草稿、在本 task 内继续修复，缺的确认事实如实记为缺失，**不阻断**；复用既有 `human-confirmation.v3`，不新增确认点/字段/文件 | `workflows/build-plan/SKILL.md:143-146`；`docs/standard-workflow.md:281-283`。既有确认点（改前行号）＝`workflows/build-plan/steps.json` step 12 `publish-result-and-confirm`（`completion_evidence = confirmation quality/confirmations/<sha256>.json`）、`workflows/build-plan/SKILL.md:133-142`、`docs/standard-workflow.md:273-279` |
+| ② | 「验收词表删掉"以后再说"」 | **只在人读措辞层**立三词：达成／未达成（写明下一步）／退役；并注明机器取值域不变。**未删任何机器取值**：验收证据 `result` 仍是冻结八值（`pass`/`fail`/`inconclusive`/`deferred`/`missing`/`inconsistent`/`incomplete`/`unavailable`），build-code 的 AC 记录仍用 `pass`/`fail`/`unknown`/`deferred`/`not_applicable`；`quality/evidence/acceptance/**` 的 `result` 与决定处置列未动 | `workflows/build-code/SKILL.md:288-291`；`docs/standard-workflow.md:349-350`。未改 `runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/schemas/ac-evidence-summary.schema.json:32-33` |
+| ③ | 「退役登记加"原本对应哪条需求"一栏」 | 官方作者模板新增 `## 退役登记（retirement）` 段：5 栏＝日期／哪张／为什么退役／谁决定／**原来的需求编号**；退役是一次**决定**、不是进度；「原来的需求编号」缺则写 `unknown`＋原因、不猜 | `skills/decision-log/templates/decision-log-template.md:314-327`；控制面登记 `AGENTS.md:68` |
+| ④ | 「危险操作范围扩到强推/删分支/删任务目录」 | 作为「适用既有 F7 不可逆授权边界」的**范围举例**写入：整树丢弃类动作（`git restore/reset/checkout -- :/`）、delete+add 整体替换权威材料、强推、删分支、删任务目录同属该边界；**未**写成「必须先人工确认才可执行」的新门禁 | `workflows/build-code/SKILL.md:379-383`；边界本体＝`CONSTITUTION.md:56`/`:172`/`:198`、本文件 `:111` R-014②、`design.md:2175` |
+
+#### 17.2 五条机制的落地口径（对抗验证修正后）
+
+1. **M1 计划交付确认**：三选一话术，落点见 17.1①。**未**写成「没记录就不算完成」——那会构成新门禁，撞 card-04 `B-02`/`B-08` 与 `CONSTITUTION.md:57`；也未新增文件/schema/字段/确认点；未答不阻断同任务内的后续动作（依据：`workflows/build-plan/SKILL.md` 该段自述 `This confirmation does not turn confirmation into a machine work permit.`）。
+2. **M2 build-code Phase 收尾三件事**（`workflows/build-code/SKILL.md:352-357`）：①按字面执行本 Phase 记录的 route 与 `gate_cmd`（不换成别的命令、不用全量回归代替）②原始输出写入该 Phase 契约头自己声明的 `evidence_path`（原件、不写摘要）③交付锚＝一次 `git commit`，只在既有 commit 授权到位时执行，缺授权记 `delivery pending`。**前提已核实**：`gate_cmd`/`evidence_path` 是契约头**机器必填**（`skills/spec-plan/templates/phase-template.md:123`/`:125`；runtime 强制点 `runtime/stage/stage-content-contracts.mjs:7247`/`:7250`/`:7293`/`:7566`/`:8012`）；build-plan 侧今天已会跑 `gate_cmd`（`workflows/build-plan/SKILL.md:216-218`、`skills/spec-plan/SKILL.md:28`），而 build-code 侧此前**只有文字要求、没有机器执行点**（原 `:340`「Every completed Phase executes its recorded route」，即本条的原文）⇒ 本次把已有文字要求写实，**只改文字与既有字段的用法，不新增字段/schema/命令**。人读三词同 17.1②。**删掉了方案原句「不允许把未达成写成完成」的强制半句**（该语义已由 `CONSTITUTION.md:100` 与 card-04 `B-11` 覆盖；写成「不许收尾/不许推进」即违反本文件 `:111` SD-17 与 `:112` OI-012）⇒ 改为「未达成如实记为未达成并进失败事实清单，不新增推进前置」。
+3. **M3 卡住判据（"变了没有"，无阈值）**：build-code 重试前自述一行「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」（`workflows/build-code/SKILL.md:272-275`）；写不出＝卡住成立 ⇒ 停下并向人升级（人做决定，不是机器阻断）。**未设任何数字阈值**（用户明确反对阈值）；升级纪律复用既有 `AGENTS.md:32-37` 的 `### 卡住与升级`，不重复建设。
+4. **M4 让"加"和"删"同价**：(a) 模块→需求**不加行**：runtime 已强制双向 trace（`runtime/stage/stage-content-contracts.mjs:7356` 逐字 `spec.md Requirement-to-Task Trace needs source → FR → AC → Phase/Task → oracle rows`），按 `design.md:594` 的逻辑引用既有 trace，避免第二份会漂移的清单；(b) 审查读数在 `skills/plan-eng-review/SKILL.md:78-83` 加「删除类 finding」分类与两个条数（**只报数、不设配额、不许硬凑**）；规模读数**复用** card-04 `D-007`/`OI-010` 既有反膨胀预算（载体 `tools/architecture/complexity-report.mjs` 的 `budget()` + `tests/contract/repository-inventory.test.mjs` 的 baseline/waiver），**不新写规模规则、不新增门禁**；(c) 退役登记同 17.1③。
+5. **M5 销毁性动作**：口径与落点同 17.1④（`workflows/build-code/SKILL.md:379-383`）：不得由阶段确认顺带授权、不得作为绕过既有授权的捷径；不新增公共动作/确认点/schema；发生时在既有 task facts 如实登记；该段自述「本条是既有边界的复述与范围举例，不是新的 stage、gate 或质量结论」。**如实登记一条限制**：本卡实测 `grep -rn "git checkout|git restore|git reset|force-with-lease|branch -D" runtime/ tools/cli/` **零命中** ⇒ M5 是**人的纪律条款**，不是机器门禁；本卡**不**宣称它已机器化。
+
+#### 17.3 落盘清单与写面声明补充
+
+**本轮实际改动（9 个文件；全部在 card-03 worktree 内；未触碰 card-04 归档、未触碰 main 检出、未 push）**：
+
+| 文件 | 改动 | 写面依据 |
+| --- | --- | --- |
+| `workflows/build-plan/SKILL.md` | `:143-146` 新增三选一话术（4 行） | **本轮补声明**（见下） |
+| `workflows/build-code/SKILL.md` | `:272-275`（M3）、`:288-291`（M2 人读三词）、`:352-357`（M2 三件事）、`:379-383`（M5） | §12.5 `:566`/`:569`；`## 决定` `:746` |
+| `docs/standard-workflow.md` | `:281-283`（三选一）、`:349-350`（人读三词） | §12.5 `:568`/`:571`；`## 决定` `:746` |
+| `skills/plan-eng-review/SKILL.md` | `:78-83` 新增第 10 条读数 | §12.5 `:566` |
+| `skills/decision-log/templates/decision-log-template.md` | `:314-327` 新增 `## 退役登记（retirement）` | §12.1 七份模板清单 `:533`；`## 决定` `:746` |
+| `skills/decision-log/skill-bundle.json` | `:11` 模板 sha256 刷新 | `## 决定` `:746` |
+| `skills/catalog.yaml` | `:130`（decision-log）、`:634`（plan-eng-review）bundle 哈希刷新 | `## 决定` `:746` |
+| `AGENTS.md` | `:68` 新增退役登记表控制面登记 | §12.5 `:570`；`## 决定` `:746` |
+| 本文件 §十七 + `design.md` §15 | 决策与设计登记 | 本文件与 `design.md` 为当前写面（§六 `:402`/`:404`、`:407`） |
+
+**写面声明补充（本轮新增）**：`workflows/build-plan/SKILL.md` 此前**未**列入 §六写面清单、§12.5 落盘表或 `## 决定` 的已落盘改动面——它只在 T-030 的问答记录里以「删原 `:209-215` 七行字段枚举、文件 20113→20066 字符」的实例出现过（见 `:74`），而 `:424` 另记它在 2026-09-28 时点**不在** CARD-04 的在研写面。⇒ 自本节起，把 `workflows/build-plan/SKILL.md` 补进本卡写面。理由：M1 必须落在**既有确认点**的提问话术上，而该确认点的 SKILL 侧就在这个文件；改动仅 4 行、只加话术，不动字段、流程、确认点或 schema。
+
+#### 17.4 哈希链刷新（与改动同批）
+
+| 登记处 | 改前 | 改后 |
+| --- | --- | --- |
+| `skills/decision-log/skill-bundle.json:11`（`templates/decision-log-template.md` 的 sha256） | `9e49c9224c84a620e306319c9e85a22f0257be589eae14a22be3140016620012` | `f1b4fd3dbc74a1f6afe784d44d23ea4eb5592a9363fa1417a1613c39ca9ad6ad` |
+| `skills/catalog.yaml:130`（decision-log `local_bundle_hash`） | `88df8c9f9213fa3d019bc4d5a52b4ee3e967d570293907cb97944d52113355eb` | `47974d73bc104f6aa137f472b4f55f29f54c26fa394fbdf8c2dd6dec7510c462` |
+| `skills/catalog.yaml:634`（plan-eng-review `local_bundle_hash`） | `ef828eb4f76b66c6e86e49e6b64130362242d9937b203d96f9cab3eac84ec6b7` | `ca120f215b0e8111926344898dba50816369c15e1431e67a7c22645cbc3bf44c` |
+
+**重算方式**：用机器自己的实现 `runtime/adapters/local-skill-resolver.mjs#validateSkillBundle`（`:108` 实算每文件 sha256；`:116` 按 `localeCompare` 排序后算 `bundleHash`），**没有手改任何哈希**。改模板但未刷 `skill-bundle.json` 时，该函数按字面抛出 `bundle sha256 mismatch: templates/decision-log-template.md`（`:110`）——本轮实测复现了这条失败，刷新后消失。`skills/spec-plan/skill-bundle.json:11` 与 `skills/catalog.yaml:335` **本轮未动**：`skills/spec-plan/templates/phase-template.md` 一字未改，实算 bundleHash 仍为 `b1a6e954162da7506f18a74be37cb8b5cb63d14b386ad3b10fc98acb23dcc3e1`（与 catalog 现值一致）。
+
+#### 17.5 未落地项与留给后续裁决的点
+
+1. `workflows/build-plan/steps.json` **未改**：其 step 12 的 `observable_result` 已写 `retains any actual user reply in the existing confirmation record`，三选一是**提问话术**，落在 SKILL 与 `docs/standard-workflow.md` 即可；`:441` 记的「`workflows/build-code/steps.json` 是否属本轮冻结范围」因此维持原状，不代用户决定。
+2. 机器取值域**未动**：删 `deferred` 会红 ≥6 个测试文件（用户 2026-09-23 裁定「冻结契约，实现者不得增删」，`tests/contract/acceptance-result-machine-classes.test.mjs:95-99`）；本卡不删、不改。
+3. 退役登记表是本轮唯一的**新表**：已按 `AGENTS.md:68` 登记唯一 owner/consumer/替代关系/删除条件；表格落在官方作者模板里，**不**在 decision-log 模板另立第二套口径（守本文件 `:434`）。
+4. **待后续卡/人裁决**：(a) 退役登记目前只依赖 `make-decision` 主会话按模板写入，**没有**任何机器消费点，是否需要机器读数由后续卡决定，本卡不新增；(b) 销毁性动作的执行仍走既有 public runtime 动作，本卡未新增动作；若后续要把「强推/删分支/删任务目录」写进授权清单**枚举**，那属新控制面，须另立登记；(c) M5 在 runtime 内无拦截点（见 17.2 第 5 条实测），本卡如实记为**纪律条款**。
+
+
 ## 收敛检查
 
 四维表按 `workflows/make-decision/SKILL.md`（四行表判据段；原记 `:213-219`，现 `:225`）（逐字：「Every row records the actual user answer or `无新需求` plus a concrete fact/material reference」）与 reader 契约 `runtime/stage/stage-content-contracts.mjs#structuredConvergenceFacts`（原记 `:3505-3567`，现 `:3660-3722`） 列出：**每一行**要么是**真实用户答复**，要么是 `无新需求`，两种都必须配一个**具体事实或材料引用**（判据＝`stage-content-contracts.mjs#recordedUserAnswer`，原记 `:3485-3493`、现 `:3640`；与 `stage-content-contracts.mjs#concreteMaterialReference`，原记 `:3494-3498`、现 `:3649`）；方案行另记取舍、被拒选项与未决项处置（`#structuredConvergenceFacts` 的 solution 分支，原记 `:3552-3557`，现 `:3707-3712`），验收行另记场景、数据来源、通过与失败判据（同函数 acceptance 分支，原记 `:3558-3564`，现 `:3713-3719`）。本卡已进行六批真实 Talk（T-001…T-015）：范围、方案、验收三维按真实用户答复填写（本轮补 T-007=A、T-008=A、T-009=A、T-010=A、T-011=A、T-012=A、T-014=A、T-015=A 与 T-013 自定义答复），目标维按 `无新需求` 登记（六批 Talk 均未改动目标，目标来源是只读母材料与本卡 `## 原始需求` R-001…R-020）。`empty: true` **不是**本表的合法形态（它只用于 `## 唯一 OI 大纲` 的节点/类别行，见 `stage-content-contracts.mjs#analyzeDecisionOutline`（原记 `:3333-3334`，现 `:3488-3489`））；本表不代答、不借用母任务的答复、不新增任何门禁或材料文件。 本轮（step 8 write-decision-draft）另登记十问十答 T-016…T-025（见 `## 本卡问答记录（T 表）` 与 `## 补充登记`），本节四行同步追加登记；本表仍不代答、不借用母任务的答复、不新增任何门禁或材料文件。
