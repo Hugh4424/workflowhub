@@ -65,6 +65,7 @@
 
 - 结构化问答工具卡：owner=各交互 stage 主会话；consumer=stage outcome 交互校验；删除条件=结构化问答机制被经过审查的替代机制取代。
 - accepted_risk confirm 语义扩展：owner=build-spec 及相关 stage；consumer=处置校验与认证 receipt 绑定检查；删除条件=风险接收机制被经过审查的替代机制取代。
+- 退役登记表（`skills/decision-log/templates/decision-log-template.md` 的 `## 退役登记` 段）：owner=decision-log 技能（make-decision 主会话按模板写入本任务 `decision-log.md`）；consumer=人读交接与既有 `analyzeDecisionConvergence` 的拷贝（不新增机器 reader、不新增字段）；替代关系=取代「以后再说」式模糊延后（退役理由、决定人、原需求编号在既有决定表与未决项表里本就无处安放）；删除条件=退役信息被既有决定表与 `## 未决项` 完整承接，或该段被经过审查的替代登记取代。
 
 ## vNext 永久实施边界
 

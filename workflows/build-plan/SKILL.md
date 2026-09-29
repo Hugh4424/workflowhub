@@ -140,6 +140,10 @@ for validation before claiming that build-plan itself is accepted. This
 confirmation does not turn confirmation into a machine work permit. Missing
 review facts do not block continued work: continue research, planning, or
 repair in this same task.
+确认问题按**三选一**提出，不把「没有回答」当成默认继续：①按现有材料把缺口修完再进；
+②**指派缺口负责人后进**（写清谁负责哪条缺口）；③**取消本次执行**。用户未回答时保持草稿、
+在本 task 内继续研究/规划/修复，缺的确认事实如实记为缺失；它不阻断同任务内的后续动作
+（见上：确认不是机器工作许可），也不新增确认点、字段或文件。
 确认后的实际执行事实写入既有 task facts/quality evidence；Phase 正文与索引不充当进度账。
 改变方向的规划歧义按现有 fallback protocol 路由回 `make-decision`。
 Do not implement production code or claim GREEN here. Write and run applicable

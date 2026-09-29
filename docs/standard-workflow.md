@@ -278,6 +278,10 @@ post 按 `workflows/build-plan/steps.json` 的 13 步执行：读取当前材料
 `phases/index.md`，只列路径、锚点、写集、依赖和 consumer，不复制正文或执行状态。
 pre/history 继续按原 `build-spec → build-plan` 路线消费旧四材料，不迁移旧文件。
 
+交付确认（`workflows/build-plan/steps.json` step 12）的问题按**三选一**提出：按现有材料把缺口修完再进／
+指派缺口负责人后进／取消本次执行；未回答时保持草稿、在同一 task 内继续修复，缺的确认事实如实记为缺失，
+它不阻断同任务内的后续动作。确认仍复用既有 `human-confirmation.v3` 记录，不新增确认点、字段或文件。
+
 ### 产物、完成与失败边界
 
 post 核心产物是含需求翻译四件与全局实现设计的 `spec.md`、独立
@@ -342,6 +346,8 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 
 1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次最终 aggregate，
     逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
+    人读结论仍用三词：**达成／未达成（写明下一步）／退役**（退役＝不再做、已由决定退出，不用「以后再说」类说法）；
+    机器取值域不变——上面这组取值与验收证据的冻结机器取值域都不因三词增删；未达成如实记为未达成，不新增推进前置。
 2. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
     结果；当前 stage 修复实现或事实缺口。
 3. `publish-code-result`：交接实现和完整 build-code 摘要。已有 integration review 原件作为

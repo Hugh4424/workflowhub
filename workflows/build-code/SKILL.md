@@ -269,6 +269,10 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    documentation or material Task may mark testing not applicable with a plain
    reason. Completion: every changed file belongs to the Phase Card or is
    explained as a same-task scope correction.
+   重试前自述一行并写进本 Phase 的 task facts：**「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」**。
+   写不出这行＝卡住成立：停下这一次重试，按 `AGENTS.md` 的 `### 卡住与升级` 段用大白话把
+   「卡在哪、为什么不能继续、有几条路、每条路的代价」报告给人，由人决定继续／换路／缩小范围／取消。
+   本判据不设次数或时长阈值，也不是机器阻断。
 3. Compare the actual changed files with the predesigned route. Use
    `test-routing-advisor` directly for this Phase even when the route is
    unchanged; record the old route, selected route, and whether a reroute was
@@ -281,6 +285,10 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
+   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，
+   不用「以后再说」这类模糊说法。三词只是同一份真实结果的大白话读法：上面那组机器取值
+   与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值。
+   未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
 5. Use the review dependency declared in `skill-deps.yaml` directly for one
    review of the completed Phase. Preserve the actual findings,
    transport status, and provenance;
@@ -341,6 +349,13 @@ Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
 
+Phase 收尾把这条已有要求做完整，只使用既有字段，不新增字段、命令或 schema：
+① 执行本 Phase 记录的那条 route 与其 `gate_cmd`，命令按字面跑，不换成别的命令，也不用全量回归代替；
+② 把这次运行的**原始输出**写入本 Phase 契约头自己声明的 `evidence_path`（原件，不写摘要、不写结论）；
+③ 本 Phase 的交付锚是**一次 `git commit`**：只在既有 commit 授权到位时执行（见下方授权段）；
+   缺授权时如实记 `delivery pending`——它不是进入、继续、测试、修复或交接的前置。
+这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。
+
 Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
 step. It compares the original requirement and current cohort materials with
 the actual implementation, tests, AC trace, review facts, and real user-result
@@ -360,6 +375,13 @@ commit is a Git delivery fact and a useful review anchor; it is never required
 to start, continue, test, repair, or hand off the same task. Missing delivery
 authorization means `delivery pending`, not a build-code entry, continuation,
 testing, repair, or handoff blocker.
+
+整树丢弃类动作（`git restore/reset/checkout -- :/`）与 delete+add 整体替换权威材料属于**销毁性动作**，
+适用既有 F7 不可逆授权边界（`CONSTITUTION.md` 的不可逆授权条款、本任务 `decision-log.md` 的不可逆授权需求条目、
+本任务 `design.md` 的 F7 段）：强推、删分支、删任务目录同样落在这一边界内；这类动作不得由阶段确认顺带授权，
+也不得作为绕过既有授权的捷径。不新增公共动作、不新增确认点、不新增 schema；真的发生时在既有 task facts
+如实登记。本条是既有边界的复述与范围举例，不是新的 stage、gate 或质量结论。
+
 A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
 Never require a provider pass.
 

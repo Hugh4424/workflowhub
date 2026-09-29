@@ -75,6 +75,13 @@ for missing plan evidence.
    not-doing/deferral reason with owner. Silent disappearance is a finding
    regardless of how good the written plan is.
 
+10. 加删同价的读数（report-only）：对每条 finding 标注**删除类**（删代码/删文件/删任务/删材料）
+    或非删除类，并在结果里报出两个条数；只报数，**不设配额**、不要求「删够多少」，
+    也不许为凑数把正常删除写成 finding。规模读数直接引用既有反膨胀预算
+    （`tools/architecture/complexity-report.mjs` 的 `budget()` 与
+    `tests/contract/repository-inventory.test.mjs` 的 baseline / waiver），
+    本技能不新写规模规则、不新增 gate，也不新增字段或计数产物。
+
 ## Result
 
 Return anchored findings, affected FR/AC/task IDs, engineering consequence, and
