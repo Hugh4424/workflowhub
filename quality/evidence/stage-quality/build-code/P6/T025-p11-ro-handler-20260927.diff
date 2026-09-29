@@ -1,0 +1,91 @@
+--- /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/stage/stage-handlers.mjs	2026-09-26 17:39:05
++++ /private/tmp/card04-ac17-p11-1R3VDX/src/runtime/stage/stage-handlers.mjs	2026-09-27 11:53:01
+@@ -1037,9 +1037,38 @@
+   }
+ }
+ 
+-async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null) {
++async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null, acceptanceExecution = null) {
+   const suppliedRef = invocation.receipts?.ui_qa;
+-  const adapter = worker.runControlledUiQa;
++  const browserCases = (acceptanceExecution?.items ?? []).filter((item) => item.tier === "browser");
++  // Acceptance owns declared browser execution. UI QA reads the same canonical
++  // result within this attempt, including failures, instead of retrying it.
++  const adapter = browserCases.length === 0 ? worker.runControlledUiQa : async (binding) => {
++    const matches = browserCases.filter((item) =>
++      item.acceptance_criterion_ids?.includes(binding.acceptance_criterion_id)
++      && (browserCases.length === 1 || item.scenario === binding.scenario));
++    if (matches.length !== 1) throw new Error("current browser acceptance case is missing or ambiguous");
++    const item = matches[0];
++    if (item.status !== "executed" || item.evidence_refs?.length !== 1) {
++      throw new Error(item.reason ?? "current browser acceptance has no canonical page result");
++    }
++    const executionBinding = acceptanceExecution.execution_binding;
++    if (!executionBinding || ["task_id", "stage", "attempt_id", "material_revision", "snapshot_tree"]
++      .some((key) => !binding[key] || executionBinding[key] !== binding[key])) {
++      throw new Error("browser acceptance execution does not match the current UI QA binding");
++    }
++    const reference = item.evidence_refs[0];
++    const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
++    if (typeof readBrowserEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
++    const stored = readBrowserEvidence(reference.ref);
++    if (stored.sha256 !== reference.sha256) throw new Error("controlled QA evidence hash mismatch");
++    const payload = JSON.parse(stored.bytes);
++    return {
++      invocation_id: payload.invocation_id,
++      payload,
++      evidence_ref: reference.ref,
++      evidence_hash: reference.sha256,
++    };
++  };
+   const uiSource = readUiApplicabilityFromDecisionLog(worker.readArtifact("decision-log.md"));
+   const usableDerivedImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(derivedImpact) && derivedImpact !== "unknown"
+     ? derivedImpact
+@@ -1170,9 +1199,8 @@
+   let payload;
+   let invocationId = null;
+   let failure = null;
+-  // A previous ui_qa receipt is diagnostic only.  Every applicable attempt
+-  // must execute the current controlled adapter so an old pass cannot be
+-  // reused after the implementation, material, or service changes.
++  // A previous ui_qa receipt is diagnostic only. Consume this attempt's
++  // acceptance execution when available, otherwise execute the UI adapter.
+   invocationId = `ui-qa-${randomUUID()}`;
+   try {
+     const adapterBinding = {
+@@ -3974,7 +4002,8 @@
+   const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
+   if (worker.manifest?.record_model === "vnext-single-write"
+       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
+-    const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
++    const acceptanceExecution = await acceptanceExecutionFacts(worker, currentSnapshotTree);
++    const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact, acceptanceExecution);
+     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
+     const current = currentMaterialContent(worker, worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md");
+     const snapshot = captureWorkerSnapshot(worker);
+@@ -3983,7 +4012,6 @@
+       requireDispositions: false,
+     });
+     const dispositions = findingDispositions(review.facts.review_scope === "phase" ? [review] : [], input, worker.currentMaterialRevision);
+-    const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
+     const acceptanceCoverage = acceptanceExecution.requires_execution
+       ? acceptanceCoverageForExecution(worker, input, snapshot?.tree ?? null, acceptanceExecution)
+       : input.acceptance_coverage === undefined
+@@ -4047,7 +4075,8 @@
+     });
+   }
+   const missingItems = [];
+-  const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
++  const acceptanceExecution = await acceptanceExecutionFacts(worker, currentSnapshotTree);
++  const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact, acceptanceExecution);
+   const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
+   if (uiQa?.missing_items?.length) missingItems.push(...uiQa.missing_items);
+   const auditGaps = [];
+@@ -4076,7 +4105,6 @@
+   // An unavailable Phase review remains an explicit quality gap, while
+   // implementation, tests, and AC work can continue in the same task.
+   if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
+-  const acceptanceExecution = await acceptanceExecutionFacts(worker, currentFactsSnapshot);
+   if (acceptanceExecution.status !== "executed" && acceptanceExecution.status !== "not_applicable") {
+     missingItems.push(...acceptanceExecution.missing_items);
+   }

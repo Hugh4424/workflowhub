@@ -1,0 +1,20 @@
+--- quality/evidence/stage-quality/build-code/P8/T017-ui-source-rebind-20260927/before-business-case-catalog.json	2026-09-27 20:02:47
++++ docs/quality/business-case-catalog.json	2026-09-27 20:03:26
+@@ -1,7 +1,7 @@
+ {
+   "schema": "workflowhub-business-case-catalog.v1",
+   "project": "workflowhub",
+-  "revision": "2026-09-27.card04-current-source-rebind.9",
++  "revision": "2026-09-27.card04-current-source-rebind.10",
+   "owner": "CARD-04 build-code catalog maintainer",
+   "consumers": [
+     "P9",
+@@ -21,7 +21,7 @@
+       "owner": "CARD-04 P6/T009 material owner",
+       "source": {
+         "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+-        "revision": "sha256:4376f8a7e4a269aa5db35bc2b128593cfba469be57fbbdffc0b925c23f6c785e"
++        "revision": "sha256:01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40"
+       },
+       "rule": {
+         "id": "CARD-04-RULING-P6-FULL-EXEC / FR-26",

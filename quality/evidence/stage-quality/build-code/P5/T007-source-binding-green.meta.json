@@ -1,0 +1,61 @@
+{
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "node": "v24.14.0",
+  "vitest": "vitest/2.1.9 darwin-arm64 node-v24.14.0",
+  "environment": {
+    "npm_config_offline": "true",
+    "npm_config_yes": "false"
+  },
+  "sha256": {
+    "runtime/stage/stage-end-report.mjs": "184e33569d5a5ded8e32d7b1ded228469fce0b547a5139cf6c0d9659be045288",
+    "runtime/stage/stage-end-report.test.mjs": "c6273eb0272b6f12914da2b2dcf15282ae4e471f84f27701325d39b06a376165",
+    "quality/evidence/stage-quality/build-code/P5/T007-source-binding-probe.mjs": "351a912152ba158bdfa0aaab1888e77fd7a5a56ce951da62b60dd4edf425fb3c"
+  },
+  "inputs_unchanged_during_run": true,
+  "runs": {
+    "probe": {
+      "command": "node quality/evidence/stage-quality/build-code/P5/T007-source-binding-probe.mjs",
+      "argv": [
+        "node",
+        "quality/evidence/stage-quality/build-code/P5/T007-source-binding-probe.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-probe.stdout.txt",
+      "stdout_sha256": "adb878165d8815e853b378537c3416ece5896bae0d031f7ff1cc5ddea3408f6e",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-probe.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "frozen": {
+      "command": "npx vitest run runtime/stage/stage-end-report.test.mjs",
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "runtime/stage/stage-end-report.test.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-frozen.stdout.txt",
+      "stdout_sha256": "e9b5f24b498aa759202a7e85ff855ecbc38162efbec4537737ba82f0be05b278",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-frozen.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "syntax": {
+      "command": "node --check runtime/stage/stage-end-report.mjs",
+      "argv": [
+        "node",
+        "--check",
+        "runtime/stage/stage-end-report.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-syntax.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-source-binding-green-syntax.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "source_boundary": "T007 collector transforms caller data; no T008 authenticated producer or canonical receipt binding is implemented. Positive test result is only a module contract fact."
+}

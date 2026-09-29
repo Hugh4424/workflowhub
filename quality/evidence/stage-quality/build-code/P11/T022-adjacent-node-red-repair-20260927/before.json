@@ -1,0 +1,14 @@
+{
+  "captured_at_utc": "2026-09-27T12:07:51.088Z",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "files": {
+    "workflows/build-code/SKILL.md": "04420b3aa0a286637f19ffd6837c17102b0218323a0ccddf800d0d136ec9690c",
+    "runtime/stage/stage-content-contracts.mjs": "8e74dcaa19343545c762264ef34124ef8b424d6202628f7d0f2d7778217029cf",
+    "tests/contract/ui-stage-integration.test.mjs": "6f4215a8a6ff95a823eab0fee7f9910b6759eaef114474c48068ddfcd5a3bd52",
+    "tests/contract/ui-applicability-must-ask.test.mjs": "f442e3cefdd05189d8f10a852925c181f551a36b0d617fa7539009818009c7c3",
+    "tests/contract/ui-applicability-contract.test.mjs": "35d5b6d5f5b229511d059e1ace76efa8b2b1ea7af99dd909f4072ec78ffc50c1",
+    "tests/contract/post-phase-contract.test.mjs": "f95517c3c88c43bd61b53c735b0d7394136f4972609b9c68e1f563e8f0362e75"
+  },
+  "old_red_copies_equal": true
+}

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "node",
+    "tools/cli/stage-runtime.mjs",
+    "run",
+    "--action=preflight",
+    "--stage=build-code",
+    "--input=quality/evidence/stage-quality/build-code/P3/T005-current-stage-facts-20260928/run.request.json"
+  ],
+  "utc": "2026-09-27T17:29:24.501862+00:00",
+  "exit_code": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

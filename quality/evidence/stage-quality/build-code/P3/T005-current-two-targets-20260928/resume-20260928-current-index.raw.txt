@@ -1,0 +1,16 @@
+COMMAND=npx vitest run tests/contract/post-build-plan-missing-index.test.mjs
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/post-build-plan-missing-index.test.mjs (4 tests) 14061ms
+   ✓ post build-plan run missing Phase index > reports the missing authored material through the public run protocol 1709ms
+   ✓ post build-plan run missing Phase index > exits with a precise first-line CLI error rather than raw ENOENT 2161ms
+   ✓ post build-plan run missing Phase index > still lets the post build-plan author draft a missing Phase index 2952ms
+   ✓ post build-plan run missing Phase index > passes the material precheck after index and Phase file are present 7240ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  07:17:09
+   Duration  15.44s (transform 523ms, setup 0ms, collect 1.20s, tests 14.06s, environment 0ms, prepare 53ms)
+EXIT=0

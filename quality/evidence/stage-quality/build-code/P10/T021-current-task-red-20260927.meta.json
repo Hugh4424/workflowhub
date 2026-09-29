@@ -1,0 +1,14 @@
+{
+  "command": "npx vitest run tests/contract/build-code-case-reconciliation.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T02:17:13.851Z",
+  "completed_at": "2026-09-27T02:17:20.896Z",
+  "exit_code": 1,
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "source_sha256": "20ad57f0b686d215e3f2d13774ce979bfe27c7063383bb53f81aa61e923ca056",
+  "test_sha256": "11d656e41996f367f54d7788df6e85025aea4aff71330f94a5c3fac7a60b0cc3",
+  "historical_test_sha256": "60a8d271ec77d81cd2c8308a7dd6798bf89b40114887cbf2dcce345da54f9ed3",
+  "stdout_sha256": "e70ca8f7b54584cc86ec9c9c8942533816bcaa5f6f602b2e6d1ae59f93e6d7ca",
+  "stderr_sha256": "2a9a0e29bf316091bb5a26dbf2ed35aeecd3e42f2fbac876069f6806a368fed9"
+}

@@ -1,0 +1,129 @@
+--- a/tests/contract/acceptance-execution-tier.test.mjs
++++ b/tests/contract/acceptance-execution-tier.test.mjs
+@@ -366,7 +366,7 @@
+ // The schema-shaped adapter is a protocol fixture; no page or service is run.
+ function postBrowserSourceFixture({ scenarios = [{ source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" }],
+   declareAcceptance = true, acIds = ["AC-EXE-001"] } = {}) {
+-  const state = officialBrowserFixture({ activationCohort: "post", prepare: ({ artifacts }) => {
++  const state = officialBrowserFixture({ activationCohort: "post", prepare: ({ artifacts, candidate }) => {
+     if (acIds.length > 1) artifacts.writeAtomic("spec.md", `# Spec\n\n## Acceptance Criteria\n\n${acIds.map((id) => `- **${id}**：browser acceptance.`).join("\n")}\n`);
+     const source = { conclusion: "ui", reason: "contract fixture declares a page consumer; real consumer remains unverified" };
+     artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n## UI applicability\n\n\`\`\`json\n${JSON.stringify({ result: "ui", sources: {
+@@ -374,6 +374,10 @@
+     } })}\n\`\`\`\n`);
+     artifacts.writeAtomic("phases/index.md", "## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n");
+     artifacts.writeAtomic("phases/P1.md", `# Phase P1\n\n## L1 — acceptance\n\n### T022 — browser consumer\n\n- **Source / FR / AC**：R-001 / FR-001 / ${acIds.join(" / ")}\n${declareAcceptance ? `- **acceptance_role**：acceptance\n- **ui_scope**：ui\n- **acceptance_data**：\`${JSON.stringify(scenarios)}\`\n` : ""}`);
++    if (scenarios.some((entry) => entry.tier === "command")) {
++      writeFileSync(join(candidate.worktreeRoot, "acceptance-command.mjs"),
++        'process.stdout.write(JSON.stringify({entries:[{acceptance_criterion_id:"AC-EXE-001",assertions:[{id:"command-proof",expected:1,actual:1}]}]}));\n');
++    }
+   } });
+   const attemptId = "p11-post-browser-attempt";
+   const sample = browserPayload({ task_id: state.task.identity.taskId, stage: "build-code", attempt_id: attemptId,
+@@ -545,6 +549,26 @@
+     expect(execution.status).toBe("missing");
+   });
+ 
++  it("does not borrow a passed command leaf for a required unavailable browser case", async () => {
++    const scenarios = [
++      { source: "CASE-COMMAND", sample: "protocol fixture", scenario: "check settings API", tier: "command",
++        execution: { command: process.execPath, args: ["acceptance-command.mjs"], timeout_ms: 5000 } },
++      { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
++    ];
++    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid", scenarios, browserFault: "blocked" });
++    const execution = acceptanceExecutionSubjectFact(state, result);
++    expect(execution.execution_items.map((item) => item.status)).toEqual(["executed", "unavailable"]);
++    expect(calls).toHaveLength(1);
++    const passedCommandRef = execution.execution_items[0].evidence_refs[0];
++    const fact = p9Fact(state, result, "AC-EXE-001");
++    expect(fact.status).toBe("missing");
++    const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
++    const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
++    expect(stageValue.subject_fact.evidence_refs).toContainEqual(passedCommandRef);
++    expect(stageValue.subject_fact.detail).toContain("CASE-001");
++    expect(p9Fresh(state, fact)).toMatchObject({ status: "current", authenticated: true });
++  });
++
+   it("uses the existing standalone QA route when no acceptance scenario is declared", async () => {
+     const noScenario = await runPostBrowserSource({ declareAcceptance: false });
+     expect(noScenario.calls).toHaveLength(1);
+@@ -981,7 +1005,7 @@
+   return { ref, sha256: p9Hash(raw), value };
+ }
+ 
+-function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, mutateMaterialDuringExecution = false, recordModel = "vnext-single-write" } = {}) {
++function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, acceptanceData, mutateMaterialDuringExecution = false, recordModel = "vnext-single-write" } = {}) {
+   let output, execution, marker;
+   const state = officialBrowserFixture({ recordModel, prepare: ({ root, candidate, artifacts }) => {
+     marker = join(root, "observations");
+@@ -1026,7 +1050,8 @@
+       planned_or_changed_frontend_fact: { conclusion: "non_ui", reason: "fixture has no frontend changes" },
+     } })}\n\`\`\`\n`);
+     artifacts.writeAtomic("spec.md", `# Spec\n${independent ? "D-001 requires independent review of local service execution.\n" : ""}\n## Acceptance Criteria\n\n${p9Ids.map((id) => `- **${id}**：runtime JSON equality must match the declared fixture oracle.`).join("\n")}\n`);
+-    artifacts.writeAtomic("tasks.md", `# Tasks\n\n- **Template version**：\`plan-task.v4\`\n\n#### T019 — real acceptance\n- **ID**：T019\n- **ui_scope**：non_ui\n- **acceptance_role**：acceptance\n- **e2e_scope**：${independent ? "high_risk_user_visible" : "not_required"}\n${independent ? '- **e2e_decision_refs**：`["D-001"]`\n- **e2e_risk_decision_ref**：D-001\n' : ""}- **AC**：${p9Ids.join(", ")}\n- **acceptance_data**：\`${JSON.stringify([{ source: "descriptive source; never execute this", sample: "real local data", scenario: "two AC runtime oracle", tier, execution }])}\`\n`);
++    const scenarios = acceptanceData?.(execution) ?? [{ source: "descriptive source; never execute this", sample: "real local data", scenario: "two AC runtime oracle", tier, execution }];
++    artifacts.writeAtomic("tasks.md", `# Tasks\n\n- **Template version**：\`plan-task.v4\`\n\n#### T019 — real acceptance\n- **ID**：T019\n- **ui_scope**：non_ui\n- **acceptance_role**：acceptance\n- **e2e_scope**：${independent ? "high_risk_user_visible" : "not_required"}\n${independent ? '- **e2e_decision_refs**：`["D-001"]`\n- **e2e_risk_decision_ref**：D-001\n' : ""}- **AC**：${p9Ids.join(", ")}\n- **acceptance_data**：\`${JSON.stringify(scenarios)}\`\n`);
+   } });
+   state.context.workspace = openCurrentTaskWorkspace(state.task);
+   const outcome = p9Actor(state, { missing: missingActor, tamper: tamperActor });
+@@ -1137,6 +1162,60 @@
+     expect(aggregate).toMatchObject({ status: "missing", execution_items: [{ status: "failed" }] });
+     const records = p9PerAc(state, result).records.sort((left, right) => left.subject.localeCompare(right.subject));
+     expect(records.map(({ subject_fact }) => subject_fact.status)).toEqual(["passed", "failed"]);
++    expect(p9Fact(state, result, p9Ids[0]).status).toBe("passed");
++    expect(p9Fact(state, result, p9Ids[1]).status).toBe("failed");
++  });
++
++  it("keeps a passed AC leaf but does not cover a second required scenario with no ref", async () => {
++    const state = p9Fixture({ acceptanceData: (execution) => [
++      { source: "CASE-A", sample: "real local data", scenario: "run command", tier: "command", execution },
++      { source: "CASE-B", sample: "real local data", scenario: "run missing service", tier: "service",
++        execution: { module_ref: "missing-acceptance-service.mjs", export_name: "accept", input: {}, timeout_ms: 5000 } },
++    ] });
++    const result = await p9Execute(state);
++    const aggregate = acceptanceExecutionSubjectFact(state, result);
++    expect(aggregate.execution_items.map((item) => item.status)).toEqual(["executed", "unavailable"]);
++    expect(aggregate.execution_items[1].evidence_refs).toEqual([]);
++    for (const acId of p9Ids) {
++      const passedRef = aggregate.execution_items[0].evidence_refs.find((entry) => entry.ref.includes(`/${acId}-`));
++      expect(passedRef).toBeDefined();
++      const fact = p9Fact(state, result, acId);
++      expect(fact.status).toBe("missing");
++      const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
++      expect(acceptance.result).not.toBe("pass");
++      const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
++      expect(stageValue.status).toBe("missing");
++      expect(stageValue.subject_fact.evidence_refs).toContainEqual(passedRef);
++      expect(stageValue.subject_fact.detail).toContain("CASE-B");
++      expect(p9Fresh(state, fact)).toMatchObject({ status: "current", authenticated: true });
++    }
++  });
++
++  it("rejects duplicate declared scenarios instead of counting one content-addressed leaf twice", async () => {
++    const state = p9Fixture({ acceptanceData: (execution) => [
++      { source: "CASE-DUP", sample: "real local data", scenario: "same command", tier: "command", execution },
++      { source: "CASE-DUP", sample: "real local data", scenario: "same command", tier: "command", execution },
++    ] });
++    await expect(p9Execute(state)).rejects.toThrow(/duplicate acceptance scenario/i);
++  });
++
++  it("covers two required scenarios only when each has its own AC leaf", async () => {
++    const state = p9Fixture({ acceptanceData: (execution) => [
++      { source: "CASE-A", sample: "real local data", scenario: "run command", tier: "command", execution },
++      { source: "CASE-B", sample: "real local data", scenario: "run service", tier: "service",
++        execution: { module_ref: "acceptance-service.mjs", export_name: "accept", input: { value: { amount: 7, label: "fixture" } }, timeout_ms: 5000 } },
++    ] });
++    const result = await p9Execute(state);
++    const aggregate = acceptanceExecutionSubjectFact(state, result);
++    expect(aggregate.execution_items.map((item) => item.status)).toEqual(["executed", "executed"]);
++    for (const acId of p9Ids) {
++      const fact = p9Fact(state, result, acId);
++      expect(fact.status).toBe("passed");
++      const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
++      const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
++      expect(stageValue.subject_fact.evidence_refs).toHaveLength(2);
++      expect(p9Fresh(state, fact).status).toBe("current");
++    }
+   });
+ 
+   it("keeps an unavailable AC outcome out of coverage while an independent review receives the executed command evidence", async () => {

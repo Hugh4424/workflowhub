@@ -1,0 +1,11 @@
+{"positive":{"command":"npx vitest run tests/contract/decision-log-census.test.mjs --reporter=json","exit":0,"runner":"vitest","tests":6,"registered":1,"unmatched":5,"missing":0,"first_id":"tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 普查状态是 present（材料存在且被识别）","output_hash":"5a33d739ac97bae668f9fa783fd4876dd0ff4b369bc7cae309aeb8796f15cfaa","receipt_hash":"e8eee53fa2372944c8223e636b770e17c51248cf63c8a8032ced1aa3ede49f3a","snapshot_tree":"30b0f1c7a96eeca81948ef3398ff5506dd95a567","source_digest":"84313a90017f1bc4e1e7fd6ee914517a49e5542ea9ac01907f840cb6e47b0a25"}}
+NEGATIVE raw output tamper: output hash mismatch
+NEGATIVE foreign reporter file: rejected
+NEGATIVE inconsistent test count: rejected
+NEGATIVE duplicate full ID: rejected
+NEGATIVE zero tests: rejected
+CONTROL isolated JSON skipped status: retained, not a passed result
+CONTROL isolated JSON todo status: retained, not a passed result
+NEGATIVE non-JSON output: rejected
+NEGATIVE current source drift: stale receipt rejected
+CLEANUP isolated clone and task-store removed

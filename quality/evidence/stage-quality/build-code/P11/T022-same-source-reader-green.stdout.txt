@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (79 tests | 78 skipped) 9886ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9885ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 78 skipped (79)
+   Start at  13:45:17
+   Duration  10.62s (transform 294ms, setup 0ms, collect 630ms, tests 9.89s, environment 0ms, prepare 27ms)
+

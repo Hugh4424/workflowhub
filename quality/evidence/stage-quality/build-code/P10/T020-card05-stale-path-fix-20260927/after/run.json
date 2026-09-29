@@ -1,0 +1,27 @@
+{
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/contract/post-phase-contract.test.mjs",
+    "tests/contract/decision-freeze-current-oi.test.mjs"
+  ],
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "files": {
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md": {
+      "sha256": "2d5e41b872280063074945e95ec8ccb18e5f2ecc044349b50855fdfe88a09197"
+    },
+    "tests/contract/post-phase-contract.test.mjs": {
+      "sha256": "b31d564a6e7d9971e2260af999f119eba5323c4794c0126770e06deb453bf161"
+    },
+    "tests/contract/decision-freeze-current-oi.test.mjs": {
+      "sha256": "8901c7a858766d8626524c610a244fae5d7920b743ac6d7c86e18ae26f884d20"
+    }
+  },
+  "started_at_utc": "2026-09-27T14:18:50.932121+00:00",
+  "exit_code": 1,
+  "finished_at_utc": "2026-09-27T14:18:53.091054+00:00",
+  "stdout.raw.txt_sha256": "77bd235c7e25366778902e62e4ee8f08cb8a1410f7e2915dd2fae8285139c0e5",
+  "stderr.raw.txt_sha256": "6b034daf01a8a59a4d9939e0f54b2b8f6967338004099e036c8c874515e01091"
+}

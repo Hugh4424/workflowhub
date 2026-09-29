@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t \"P11/T022 v2 actual private browser producer|P11/T022 v3 acceptance browser and UI QA share one source|P11/T022 blocked browser missing readback|keeps the pre-cohort tests producer available to the historical build-code receipt path\"",
+  "receipt_ref": "quality/tests/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.json",
+  "output_ref": "quality/tests/output/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.output",
+  "timeout_ms": 1200000
+}

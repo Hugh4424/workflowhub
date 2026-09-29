@@ -1,0 +1,8477 @@
+import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
+import { phaseFilesFromIndex } from "../task/material-workspace.mjs";
+export { CURRENT_MATERIAL_FILES as MATERIAL_FILES } from "../task/material-workspace.mjs";
+
+import Ajv2020 from "ajv/dist/2020.js";
+import yaml from "js-yaml";
+
+import decisionEntrySchema from "../schemas/decision-entry.v1.json" with { type: "json" };
+import ambiguityLedgerV2Schema from "../schemas/ambiguity-ledger.v2.json" with { type: "json" };
+import planTaskV2Schema from "../schemas/plan-task-contract.v2.json" with { type: "json" };
+import makeDecisionSteps from "../../workflows/make-decision/steps.json" with { type: "json" };
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+// One AC grammar for every current-material parser. Keep the legacy compact
+// forms (AC1/AC-001) while accepting the namespaced form used by spec-content
+// v3 (AC-{DOMAIN}-{NNN}).
+const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
+const ACCEPTANCE_CRITERION_ID = new RegExp(String.raw`\b${ACCEPTANCE_CRITERION_SOURCE}\b`, "g");
+const ACCEPTANCE_CRITERION_EXACT = new RegExp(`^${ACCEPTANCE_CRITERION_SOURCE}$`);
+const ajv = new Ajv2020({ allErrors: true, strict: false, formats: { "date-time": true } });
+const validateEntrySchema = ajv.compile(decisionEntrySchema);
+const validateAmbiguityLedgerV2Schema = ajv.compile(ambiguityLedgerV2Schema);
+const validatePlanTaskV2Schema = ajv.compile(planTaskV2Schema);
+const MAX_MAKE_DECISION_STEP_ID = Math.max(...makeDecisionSteps.steps.map(({ step_id }) => step_id));
+
+// The OI outline is deliberately parsed from the existing decision-log
+// material.  These constants are the contract's vocabulary, not a second
+// persisted schema or ledger.
+export const DECISION_OUTLINE_FRAMEWORK_NODES = Object.freeze([
+  "background", "problem", "goal", "solution", "acceptance", "extension",
+]);
+
+function candidatePresentationSection(markdown) {
+  if (typeof markdown !== "string") return null;
+  const heading = /^## 调研候选交付\s*$/m.exec(markdown);
+  if (!heading) return null;
+  const start = heading.index + heading[0].length;
+  const nextHeading = /\n##\s/.exec(markdown.slice(start));
+  return markdown.slice(start, nextHeading ? start + nextHeading.index : undefined);
+}
+
+function sameCandidatePresentation(actual, expected) {
+  if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+  return actual.candidate_id === expected.candidate_id
+    && actual.plain_language_summary === expected.plain_language_summary
+    && actual.recommendation === expected.recommendation
+    && actual.recommendation_reason === expected.recommendation_reason
+    && JSON.stringify(actual.source_refs) === JSON.stringify(expected.source_refs)
+    && JSON.stringify(actual.evidence_refs) === JSON.stringify(expected.evidence_refs);
+}
+
+/**
+ * Read the one user-visible research-candidate table from decision-log.md.
+ * This is a pure reader over an existing material: it creates no receipt,
+ * projection store, completion gate, or second decision authority.
+ */
+export function deriveResearchCandidatePresentation(markdown, disclosure = null) {
+  const delivery = disclosure?.candidate_delivery;
+  if (!delivery || delivery.status === "unavailable") {
+    return Object.freeze({ status: "unavailable", reason: "candidate_delivery_unavailable", full_report: delivery?.full_report ?? null, candidates: Object.freeze([]) });
+  }
+  if (delivery.status === "not_applicable") {
+    return Object.freeze({ status: "not_applicable", reason: delivery.reason, full_report: delivery.full_report ?? null, candidates: Object.freeze([]) });
+  }
+  if (delivery.status !== "delivered") {
+    return Object.freeze({ status: "incomplete", reason: "candidate_delivery_incomplete", full_report: delivery.full_report ?? null, candidates: Object.freeze([]) });
+  }
+
+  const section = candidatePresentationSection(markdown);
+  if (!section) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_missing", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  const fenced = /```json\s*\n([\s\S]*?)\n```/.exec(section);
+  if (!fenced) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_binding_missing", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  let binding;
+  try { binding = JSON.parse(fenced[1]); }
+  catch {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_binding_invalid", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  if (binding?.schema_version !== "workflowhub-research-candidate-delivery.v1"
+      || binding.report_ref !== delivery.full_report?.ref
+      || binding.report_sha256 !== delivery.full_report?.sha256
+      || !Array.isArray(binding.candidates)) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_binding_mismatch", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  const expected = delivery.candidates.map(({ candidate_id, plain_language_summary, source_refs, evidence_refs, recommendation, recommendation_reason }) => ({
+    candidate_id,
+    plain_language_summary,
+    source_refs,
+    evidence_refs,
+    recommendation,
+    recommendation_reason,
+  }));
+  if (binding.candidates.length !== expected.length
+      || expected.some((candidate) => !binding.candidates.some((actual) => sameCandidatePresentation(actual, candidate)))) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_binding_mismatch", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  const tableRows = section.split("\n").filter((line) => /^\|.*\|\s*$/.test(line));
+  const header = tableRows[0] ?? "";
+  if (!/候选/.test(header) || !/摘要/.test(header) || !/推荐/.test(header) || !/理由/.test(header) || !/出处/.test(header)) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_table_missing", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  if (!section.includes(delivery.full_report.ref)
+      || expected.some((candidate) => !tableRows.some((row) => row.includes(candidate.candidate_id)
+        && row.includes(candidate.plain_language_summary)
+        && row.includes(candidate.recommendation)
+        && row.includes(candidate.recommendation_reason)
+        && candidate.source_refs.every((ref) => row.includes(ref))))) {
+    return Object.freeze({ status: "incomplete", reason: "candidate_presentation_table_mismatch", full_report: delivery.full_report, candidates: Object.freeze([]) });
+  }
+  return Object.freeze({
+    status: "delivered",
+    reason: null,
+    full_report: delivery.full_report,
+    candidates: Object.freeze(expected.map((candidate) => Object.freeze({ ...candidate, source_refs: Object.freeze([...candidate.source_refs]), evidence_refs: Object.freeze([...candidate.evidence_refs]) }))),
+  });
+}
+
+function divergenceOutlineSection(markdown) {
+  if (typeof markdown !== "string") return null;
+  const heading = /^## 发散候选与可证伪大纲\s*$/m.exec(markdown);
+  if (!heading) return null;
+  const start = heading.index + heading[0].length;
+  const nextHeading = /\n##\s/.exec(markdown.slice(start));
+  return markdown.slice(start, nextHeading ? start + nextHeading.index : undefined);
+}
+
+function semanticDirectionKey(candidate) {
+  const basis = candidate?.semantic_basis;
+  if (!basis || typeof basis !== "object" || Array.isArray(basis)) return null;
+  const keys = ["problem_axis", "mechanism", "target", "outcome"];
+  const values = keys.map((key) => typeof basis[key] === "string" ? basis[key].trim() : "");
+  return values.every(Boolean) ? JSON.stringify(values) : null;
+}
+
+/**
+ * Read the user-visible divergence and falsifiable-outline record from the
+ * one current decision-log. This remains a pure diagnostic reader; it neither
+ * creates a candidate store nor becomes a completion predicate.
+ */
+export function deriveDecisionDivergenceOutline(markdown, { outlineVersion = null, required = false } = {}) {
+  const section = divergenceOutlineSection(markdown);
+  if (!section) return Object.freeze(required
+    ? { status: "incomplete", reason: "divergence_outline_missing", errors: Object.freeze(["decision-log is missing 发散候选与可证伪大纲"]), novel_candidate_ids: Object.freeze([]), abandoned_outline_versions: Object.freeze([]), current_outline_version: null }
+    : { status: "not_applicable", reason: "divergence_not_required", errors: Object.freeze([]), novel_candidate_ids: Object.freeze([]), abandoned_outline_versions: Object.freeze([]), current_outline_version: null });
+  const fenced = /```json\s*\n([\s\S]*?)\n```/.exec(section);
+  if (!fenced) return Object.freeze({ status: "incomplete", reason: "divergence_outline_binding_missing", errors: Object.freeze(["divergence outline JSON binding is missing"]), novel_candidate_ids: Object.freeze([]), abandoned_outline_versions: Object.freeze([]), current_outline_version: null });
+  let binding;
+  try { binding = JSON.parse(fenced[1]); }
+  catch { return Object.freeze({ status: "incomplete", reason: "divergence_outline_binding_invalid", errors: Object.freeze(["divergence outline JSON binding is invalid"]), novel_candidate_ids: Object.freeze([]), abandoned_outline_versions: Object.freeze([]), current_outline_version: null }); }
+
+  const errors = [];
+  if (binding?.schema_version !== "workflowhub-decision-divergence.v1") errors.push("divergence outline schema_version is invalid");
+  const intake = binding?.intake;
+  const isVerbatimIntake = (value) => value && typeof value === "object" && !Array.isArray(value)
+    && substantiveOutlineValue(value.text) && value.attribution === "user_verbatim" && substantiveOutlineValue(value.source_id);
+  if (!intake || typeof intake !== "object" || Array.isArray(intake)
+      || !isVerbatimIntake(intake.raw_requirement) || !isVerbatimIntake(intake.pain_point)) {
+    errors.push("divergence intake requires user_verbatim raw_requirement and pain_point source bindings");
+  }
+  const angles = Array.isArray(binding?.angles) ? binding.angles : [];
+  if (angles.length < 2) errors.push("divergence requires at least two angles before candidates");
+  const seenAngleIds = new Set();
+  for (const angle of angles) {
+    if (!substantiveOutlineValue(angle?.angle_id) || seenAngleIds.has(angle.angle_id)) errors.push("divergence angle_id is missing or duplicated");
+    seenAngleIds.add(angle?.angle_id);
+    if (!substantiveOutlineValue(angle?.plain_language_angle)
+        || !substantiveOutlineValue(angle?.source)
+        || !substantiveOutlineValue(angle?.strength)) errors.push(`divergence angle ${angle?.angle_id ?? "unknown"} needs plain_language_angle, source, and strength`);
+  }
+  const originals = Array.isArray(binding?.original_candidates) ? binding.original_candidates : [];
+  const candidates = Array.isArray(binding?.candidates) ? binding.candidates : [];
+  if (originals.length === 0) errors.push("divergence original_candidates is required");
+  if (candidates.length <= originals.length) errors.push("divergence candidates must exceed original_candidates");
+  const originalKeys = new Set();
+  const originalIds = new Set();
+  const originalsById = new Map();
+  for (const candidate of originals) {
+    const key = semanticDirectionKey(candidate);
+    if (!substantiveOutlineValue(candidate?.candidate_id) || !substantiveOutlineValue(candidate?.text)
+        || !substantiveOutlineValue(candidate?.source_id) || !key) errors.push(`original candidate ${candidate?.candidate_id ?? "unknown"} lacks source or semantic basis`);
+    if (key) originalKeys.add(key);
+    if (substantiveOutlineValue(candidate?.candidate_id)) {
+      originalIds.add(candidate.candidate_id);
+      originalsById.set(candidate.candidate_id, candidate);
+    }
+  }
+  const novelCandidateIds = [];
+  const seenCandidateIds = new Set();
+  for (const candidate of candidates) {
+    const key = semanticDirectionKey(candidate);
+    const id = candidate?.candidate_id;
+    if (!substantiveOutlineValue(id) || seenCandidateIds.has(id)) errors.push("divergence candidate_id is missing or duplicated");
+    seenCandidateIds.add(id);
+    if (!substantiveOutlineValue(candidate?.text) || !["user", "internal", "research"].includes(candidate?.origin)
+        || !Array.isArray(candidate?.source_ids) || candidate.source_ids.length === 0 || !substantiveOutlineValue(candidate?.strength) || !key) {
+      errors.push(`divergence candidate ${id ?? "unknown"} lacks text, origin, source_ids, strength, or semantic basis`);
+      continue;
+    }
+    if (candidate.origin === "user") {
+      const original = originalsById.get(id);
+      if (!original || semanticDirectionKey(original) !== key || !candidate.source_ids.includes(original.source_id)) errors.push(`divergence user candidate ${id} is not bound to its original candidate`);
+      continue;
+    }
+    if (!substantiveOutlineValue(candidate.angle_id) || !seenAngleIds.has(candidate.angle_id)
+        || !candidate.source_ids.includes(candidate.angle_id)) {
+      errors.push(`divergence candidate ${id} must bind its declared angle`);
+    }
+    if (!Array.isArray(candidate.novelty_against) || candidate.novelty_against.length === 0
+        || candidate.novelty_against.some((originalId) => !originalIds.has(originalId))) {
+      errors.push(`divergence candidate ${id} must name the original candidates it contrasts with`);
+    }
+    const changedDimensions = Array.isArray(candidate.changed_dimensions) ? candidate.changed_dimensions : [];
+    const semanticDimensions = new Set(["problem_axis", "mechanism", "target", "outcome"]);
+    if (changedDimensions.length === 0 || changedDimensions.some((dimension) => !semanticDimensions.has(dimension))
+        || (candidate.novelty_against ?? []).some((originalId) => {
+          const original = originalsById.get(originalId);
+          return !changedDimensions.some((dimension) => candidate.semantic_basis?.[dimension] !== original?.semantic_basis?.[dimension]);
+        })) {
+      errors.push(`divergence candidate ${id} does not prove a changed semantic dimension`);
+    }
+    if (candidate.origin !== "user" && originalKeys.has(key)) {
+      errors.push(`divergence candidate ${id} only rewrites a user direction`);
+    } else if (candidate.origin !== "user") {
+      novelCandidateIds.push(id);
+    }
+  }
+  for (const original of originals) {
+    const matching = candidates.filter((candidate) => candidate?.candidate_id === original?.candidate_id);
+    if (matching.length !== 1 || matching[0]?.origin !== "user"
+        || semanticDirectionKey(matching[0]) !== semanticDirectionKey(original)
+        || !matching[0]?.source_ids?.includes(original?.source_id)) {
+      errors.push(`original candidate ${original?.candidate_id ?? "unknown"} is missing or mismatched from candidate set`);
+    }
+  }
+  if (novelCandidateIds.length === 0) errors.push("divergence has no non-user semantic direction");
+
+  if (!substantiveOutlineValue(binding?.oi_outline_version)) errors.push("divergence oi_outline_version is required");
+  if (outlineVersion !== null && binding?.oi_outline_version !== outlineVersion) errors.push("divergence oi_outline_version does not match the current OI outline");
+  const outlines = Array.isArray(binding?.outlines) ? binding.outlines : [];
+  if (outlines.length === 0) errors.push("divergence outlines is required");
+  const versions = new Map();
+  const abandonedVersions = [];
+  for (const outline of outlines) {
+    const version = outline?.outline_version;
+    if (!substantiveOutlineValue(version) || versions.has(version)) {
+      errors.push("divergence outline_version is missing or duplicated");
+      continue;
+    }
+    versions.set(version, outline);
+    const hypotheses = Array.isArray(outline.hypotheses) ? outline.hypotheses : [];
+    if (hypotheses.length < 3 || hypotheses.length > 5) errors.push(`outline ${version} must contain three to five hypotheses`);
+    const falsified = hypotheses.filter((hypothesis) => hypothesis?.status === "falsified");
+    if (hypotheses.some((hypothesis) => !substantiveOutlineValue(hypothesis?.hypothesis_id)
+        || !substantiveOutlineValue(hypothesis?.statement)
+        || !substantiveOutlineValue(hypothesis?.falsifier)
+        || !Array.isArray(hypothesis?.evidence_refs) || hypothesis.evidence_refs.length === 0
+        || !["supported", "falsified", "unresolved"].includes(hypothesis?.status))) errors.push(`outline ${version} has an invalid hypothesis`);
+    if (hypotheses.length > 0 && falsified.length * 2 > hypotheses.length) {
+      if (outline.status !== "abandoned" || !substantiveOutlineValue(outline.superseded_by)) {
+        errors.push(`outline ${version} has more than half falsified hypotheses and must be abandoned with superseded_by`);
+      } else {
+        abandonedVersions.push(version);
+      }
+    }
+  }
+  const active = outlines.filter((outline) => outline?.status === "active");
+  if (active.length !== 1) errors.push("divergence requires exactly one active outline");
+  for (const version of abandonedVersions) {
+    const successor = versions.get(versions.get(version)?.superseded_by);
+    if (!successor || successor.status !== "active" || successor.redraw_of !== version
+        || !Array.isArray(successor.redraw_reason_ids) || successor.redraw_reason_ids.length === 0) errors.push(`abandoned outline ${version} must point to the active replacement with redraw_of and redraw_reason_ids`);
+  }
+  const tableRows = section.split("\n").filter((line) => /^\|.*\|\s*$/.test(line));
+  const visibleIds = [...angles.map((angle) => angle?.angle_id), ...candidates.map((candidate) => candidate?.candidate_id), ...outlines.flatMap((outline) => (outline?.hypotheses ?? []).map((hypothesis) => hypothesis?.hypothesis_id))].filter(Boolean);
+  if (!tableRows.some((row) => /角度/.test(row)) || !tableRows.some((row) => /候选/.test(row)) || !tableRows.some((row) => /假设/.test(row))
+      || visibleIds.some((id) => !tableRows.some((row) => row.includes(id)))
+      || angles.some((angle) => !tableRows.some((row) => row.includes(angle.angle_id) && row.includes(angle.plain_language_angle)))
+      || candidates.some((candidate) => !tableRows.some((row) => row.includes(candidate.candidate_id) && row.includes(candidate.text) && row.includes(candidate.origin)))
+      || outlines.flatMap((outline) => outline.hypotheses ?? []).some((hypothesis) => !tableRows.some((row) => row.includes(hypothesis.hypothesis_id) && row.includes(hypothesis.statement) && row.includes(hypothesis.status)))) errors.push("divergence user-visible angle, candidate, or hypothesis table is missing or incomplete");
+  return Object.freeze({
+    status: errors.length ? "incomplete" : "passed",
+    reason: errors.length ? "divergence_outline_incomplete" : null,
+    errors: Object.freeze([...new Set(errors)]),
+    novel_candidate_ids: Object.freeze(novelCandidateIds),
+    abandoned_outline_versions: Object.freeze(abandonedVersions),
+    current_outline_version: active[0]?.outline_version ?? null,
+  });
+}
+export const DECISION_OUTLINE_FIXED_CATEGORIES = Object.freeze([
+  "complete_user_flow", "page_scope", "data_state", "success_failure_boundary", "non_goals", "deferred",
+]);
+const OI_STATUSES = new Set(["open", "confirmed", "deferred", "not_applicable"]);
+const OI_IMPACT_DIMENSIONS = new Set(["goal", "scope", "acceptance", "ordinary_detail"]);
+const PLANNING_QUESTION_FORBIDDEN_PATTERNS = Object.freeze([
+  ["文件路径与文件面", /文件路径|文件面|file\s+path|file\s+surface/i],
+  ["函数名", /函数名|function\s+name/i],
+  ["字段名", /字段名|field\s+name/i],
+  ["算法", /算法|algorithm/i],
+  ["schema 形状", /schema\s*(?:形状|shape)/i],
+  ["命令形态", /命令形态|command\s+(?:form|shape)/i],
+  ["入口参数形态", /入口参数形态|entry\s+parameter|argument\s+shape/i],
+  ["行号", /行号|line\s+number/i],
+  ["代码片段", /代码片段|code\s+snippet/i],
+  ["测试记录与实测记录", /测试记录|实测记录|test\s+(?:record|evidence)/i],
+]);
+
+const REQUIRED_MAIN_SECTIONS = Object.freeze([
+  "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
+  "审查处置", "最终确认", "拒绝方案", "风险", "未决项", "Supersedes", "文档结果", "Exit checks",
+]);
+
+export const DECISION_CORRECTIONS = Object.freeze({
+  D1: "原“全部通过后才恢复/允许 replay”读作“全部通过后必须在原 task 产生新 revision/attempt 并实际重放处理组 1；仅允许或计划 replay 不算完成”",
+  D2: "原“连接 authenticated Stage-specific content records”补足为“官方发布必须消费 audit carrier 与 typed content refs；writer/handler 不产生第二 verdict”",
+  D3: "原“new truthful continuation”读作“原 task 上 append-only 新 revision/attempt，旧 bytes/hash 不变，不另建替代 task”",
+  D4: "原“real delivery 可证明”补足为“每题强绑 host-visible ask/reply refs、card hash、round、题号、re-rank 和每轮结束结论”",
+  D5: "原“two synchronized views”补足为“同一 completion facts、同一 human-readable artifact label、同一 accepted lookup rule；formal review record 与大白话 brief 分离”",
+  D6: "原“serious/evidence-backed”固定为“全部五阶段 formal review 中 `actionable + major|blocking`”；build-spec/build-code 的暂停是异常处置点，不新增正常确认",
+  D7: "原“结构错误不可继续”保持；decision coverage omission 只有被机器发现、展示并进入专用 omission appendix 后才从未处置错误变成 accepted exception，review risk record 不得代替",
+});
+
+function result(errors, extras = {}) {
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), ...extras });
+}
+
+export const TEST_RUNTIME_PROFILE_NAMES = Object.freeze(["inner", "phase", "aggregate"]);
+export const TEST_RUNTIME_PROFILE_LIMITS_MS = Object.freeze({
+  inner: 60_000,
+  phase: 300_000,
+  aggregate: null,
+});
+const TEST_RUNTIME_CAPABILITIES = Object.freeze(["network", "db", "filesystem", "subprocess", "environment"]);
+const TEST_RUNTIME_PERMISSION_POLICIES = Object.freeze({
+  network: new Set(["deny", "localhost_only", "ci_only"]),
+  db: new Set(["deny", "localhost_only", "ci_only"]),
+  filesystem: new Set(["deny", "worktree_temp_only", "ci_only"]),
+  subprocess: new Set(["deny", "explicit_only", "ci_only"]),
+  environment: new Set(["local_ci", "ci_only"]),
+});
+const TEST_TIERS = new Set(["simple", "feature", "fullstack"]);
+const CAPABILITY_PROOF_STATUSES = new Set(["passed", "unavailable"]);
+const CAPABILITY_PROOF_DECISIONS = new Set([
+  "deny", "localhost_only", "worktree_temp_only", "explicit_only", "ci_only", "local_ci", "allow", "unknown",
+]);
+
+function isHash(value) {
+  return typeof value === "string" && SHA256_HEX.test(value);
+}
+
+function validateCapabilityProof(value, errors, { requireProof, permissions = undefined }) {
+  if (value === undefined) {
+    if (requireProof) errors.push("capability proof is required");
+    return "unavailable";
+  }
+  if (!object(value)) {
+    errors.push("capability proof must be an object");
+    return "unavailable";
+  }
+  if (!CAPABILITY_PROOF_STATUSES.has(value.status)) {
+    errors.push("capability proof status must be passed or unavailable");
+    return "unknown";
+  }
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") {
+    errors.push("capability proof executor_id is required");
+  }
+  if (!Array.isArray(value.observations)) {
+    errors.push("capability proof observations must be an array");
+    return value.status;
+  }
+  const seen = new Set();
+  for (const observation of value.observations) {
+    if (!object(observation) || !TEST_RUNTIME_CAPABILITIES.includes(observation.capability)) {
+      errors.push("capability proof observation capability is invalid");
+      continue;
+    }
+    if (seen.has(observation.capability)) errors.push(`duplicate capability proof: ${observation.capability}`);
+    seen.add(observation.capability);
+    if (!CAPABILITY_PROOF_DECISIONS.has(observation.decision)) {
+      errors.push(`capability proof decision is invalid for ${observation.capability}`);
+      continue;
+    }
+    if (value.status === "passed") {
+      if (permissions?.[observation.capability] !== undefined
+          && (observation.requested !== permissions[observation.capability]
+            || observation.decision !== permissions[observation.capability])) {
+        errors.push(`capability proof decision does not match ${observation.capability} permission`);
+      }
+      if (typeof observation.requested !== "string" || observation.requested.trim() === "") {
+        errors.push(`capability proof requested policy is required for ${observation.capability}`);
+      }
+      if (typeof observation.mechanism !== "string" || observation.mechanism.trim() === "") {
+        errors.push(`capability proof mechanism is required for ${observation.capability}`);
+      }
+      if (typeof observation.proof_ref !== "string" || observation.proof_ref.trim() === "" || !isHash(observation.proof_hash)) {
+        errors.push(`capability proof ref/hash is required for ${observation.capability}`);
+      }
+      if (observation.observed !== true) errors.push(`capability proof observation is not authenticated for ${observation.capability}`);
+    }
+  }
+  if (value.status === "passed" && seen.size !== TEST_RUNTIME_CAPABILITIES.length) {
+    errors.push("capability proof must cover every runtime capability");
+  }
+  if (value.status === "passed") {
+    for (const observation of value.observations) {
+      if (observation.decision === "unknown" || observation.decision === "allow") {
+        errors.push(`capability proof ${observation.capability} is not a constrained decision`);
+      }
+    }
+  }
+  return value.status;
+}
+
+/**
+ * Validate the test runtime profile independently from the test tier.
+ * This is a descriptive contract: the executor must attach capability proof;
+ * an unavailable proof is preserved as unavailable and is never a pass.
+ */
+export function validateTestRuntimeProfile(value, { requireProof = false, allowUnavailable = false, declarationOnly = false } = {}) {
+  const errors = [];
+  if (!object(value)) return result(["test runtime profile must be an object"], { status: "incomplete" });
+  if (!TEST_RUNTIME_PROFILE_NAMES.includes(value.runtime_profile)) errors.push("runtime profile must be inner, phase, or aggregate");
+  if (value.test_tier !== undefined && !TEST_TIERS.has(value.test_tier)) errors.push("test tier is invalid");
+  if (typeof value.executor_id !== "string" || value.executor_id.trim() === "") errors.push("runtime profile executor_id is required");
+  const profile = value.runtime_profile;
+  const ceiling = value.ceiling_ms;
+  if (profile === "aggregate") {
+    if (ceiling !== null) errors.push("aggregate runtime profile ceiling_ms must be null");
+  } else if (!Number.isSafeInteger(ceiling) || ceiling < 1) {
+    errors.push("runtime profile ceiling_ms must be a positive integer");
+  }
+  else if (TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== null && TEST_RUNTIME_PROFILE_LIMITS_MS[profile] !== undefined && ceiling > TEST_RUNTIME_PROFILE_LIMITS_MS[profile]) {
+    errors.push(`${profile} runtime profile ceiling exceeds ${TEST_RUNTIME_PROFILE_LIMITS_MS[profile]}ms`);
+  }
+  if (profile === "aggregate" && value.permissions?.environment !== "ci_only") {
+    errors.push("aggregate runtime profile requires CI-only environment");
+  }
+  if (profile === "aggregate" && !declarationOnly && value.capability_proof?.status === "passed" && value.permissions?.environment !== "ci_only") {
+    errors.push("aggregate runtime profile proof requires CI-only environment");
+  }
+  if (!object(value.permissions)) {
+    errors.push("runtime profile permissions are required");
+  } else {
+    for (const capability of TEST_RUNTIME_CAPABILITIES) {
+      const policy = value.permissions[capability];
+      if (!TEST_RUNTIME_PERMISSION_POLICIES[capability].has(policy)) {
+        errors.push(`${capability} permission policy is invalid`);
+      }
+    }
+    const expected = profile === "inner"
+      ? { network: "deny", db: "deny", filesystem: "deny", subprocess: "deny" }
+      : profile === "phase"
+        ? { network: "localhost_only", db: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" }
+        : null;
+    for (const [capability, policy] of Object.entries(expected ?? {})) {
+      if (value.permissions[capability] !== policy) errors.push(`${profile} ${capability} permission must be ${policy}`);
+    }
+    if (profile === "aggregate" && value.permissions.environment !== "ci_only") errors.push("aggregate environment permission must be ci_only");
+    if (profile === "aggregate" && Object.values(value.permissions).some((policy) => policy === "unknown")) errors.push("aggregate unknown permission is denied");
+    if (profile === "phase" && value.permissions.environment !== "local_ci" && value.permissions.environment !== "ci_only") errors.push("phase environment must be local_ci or ci_only");
+    if (profile === "inner" && value.permissions.environment !== "local_ci") errors.push("inner environment permission must be local_ci");
+  }
+  if (value.behavior_fingerprint !== undefined) {
+    const fingerprint = value.behavior_fingerprint;
+    for (const side of ["before", "after"]) {
+      if (!object(fingerprint?.[side])) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      } else if (!(fingerprint[side].selection_hash === null && fingerprint[side].assertion_hash === null)
+          && (!isHash(fingerprint[side].selection_hash) || !isHash(fingerprint[side].assertion_hash))) {
+        errors.push(`behavior fingerprint ${side} is invalid`);
+      }
+    }
+    if (isHash(fingerprint?.before?.selection_hash) && isHash(fingerprint?.after?.selection_hash)
+        && fingerprint.before.selection_hash !== fingerprint.after.selection_hash) errors.push("behavior selection fingerprint must remain equal");
+    if (isHash(fingerprint?.before?.assertion_hash) && isHash(fingerprint?.after?.assertion_hash)
+        && fingerprint.before.assertion_hash !== fingerprint.after.assertion_hash) errors.push("behavior assertion fingerprint must remain equal");
+  } else if (requireProof) {
+    errors.push("behavior fingerprint is required");
+  }
+  const proofStatus = validateCapabilityProof(value.capability_proof, errors, { requireProof, permissions: value.permissions });
+  if (proofStatus === "passed" && value.capability_proof.executor_id !== value.executor_id) errors.push("capability proof executor_id must match runtime profile executor_id");
+  if (proofStatus === "unknown") errors.push("capability proof is unavailable");
+  if (errors.length > 0) return result(errors, { status: proofStatus === "unavailable" || proofStatus === "unknown" ? "unavailable" : "incomplete" });
+  if (proofStatus === "unavailable") {
+    if (!allowUnavailable && !declarationOnly) return result(["capability proof is unavailable"], { status: "unavailable" });
+    return result([], { ok: false, status: "unavailable", profile: value.runtime_profile });
+  }
+  return result([], { status: "ready", profile: value.runtime_profile });
+}
+
+function schemaErrors(validate) {
+  return (validate.errors ?? []).map((error) => {
+    const missing = error.params?.missingProperty;
+    return missing ? `${missing} is required` : `${error.instancePath || "/"} ${error.message}`;
+  });
+}
+
+function object(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+const FREEZE_PACKET_COVERAGE = Object.freeze([
+  "user_flow",
+  "data_states",
+  "success_failure_boundaries",
+  "non_goals",
+]);
+const FINDING_CLASSIFICATIONS = Object.freeze([
+  "direction_change",
+  "spec_ambiguity",
+  "implementation_defect",
+  "invalid_finding",
+]);
+const DIRECTION_DIMENSIONS = new Set(["direction_change", "product_direction", "scope_change", "acceptance_boundary_change"]);
+
+function normalizedValue(value) {
+  return typeof value === "string" ? value.normalize("NFC").trim().replace(/\s+/g, " ") : value;
+}
+
+function currentOiFreezeProjection(markdown) {
+  const heading = /^### OI 记录（解析器权威记录，YAML）\s*$/gm;
+  const matches = [...markdown.matchAll(heading)];
+  if (matches.length === 0) return null;
+  const errors = [];
+  if (matches.length !== 1) errors.push("current OI authority has duplicate headings");
+  const start = matches[0].index + matches[0][0].length;
+  const tail = markdown.slice(start);
+  const next = /^#{1,3}\s+/m.exec(tail);
+  const body = tail.slice(0, next ? next.index : undefined);
+  const records = [];
+  let fence = null;
+  const parseFence = () => {
+    let parsed;
+    const content = fence.lines.join("\n");
+    try { parsed = fence.language === "json" ? JSON.parse(content) : yaml.load(content); }
+    catch { errors.push("current OI authority contains invalid YAML or JSON"); return; }
+    const entries = Array.isArray(parsed) ? parsed : object(parsed) && Array.isArray(parsed.ois) ? parsed.ois : [parsed];
+    for (const entry of entries) {
+      if (!object(entry)) { errors.push("current OI authority contains an invalid record"); continue; }
+      records.push(entry);
+    }
+  };
+  for (const line of body.split(/\r?\n/)) {
+    const marker = /^[ \t]*(`{3,}|~{3,})([^\r\n]*)$/.exec(line);
+    if (/^[ \t]*(?:`{2}(?!`)|~{2}(?!~))/.test(line)) {
+      errors.push("current OI authority contains a malformed fence");
+    }
+    if (fence === null) {
+      if (!marker) {
+        if (/^[ \t]*(?:oi_id|category|status)\s*:/.test(line)) errors.push("current OI authority contains a record outside a supported fence");
+        continue;
+      }
+      const language = marker[2].trim().toLowerCase();
+      if (language === "") { errors.push("current OI authority has a stray closing fence"); continue; }
+      fence = { marker: marker[1], language, lines: [] };
+      if (marker[1] !== "```" || !["yaml", "yml", "json"].includes(language)) {
+        errors.push("current OI authority contains an unsupported fence");
+      }
+    } else if (marker && marker[1] === fence.marker && marker[2].trim() === "") {
+      if (fence.marker === "```" && ["yaml", "yml", "json"].includes(fence.language)) parseFence();
+      fence = null;
+    } else if (marker) {
+      errors.push("current OI authority contains a malformed nested fence");
+      fence = null;
+    } else {
+      fence.lines.push(line);
+    }
+  }
+  if (fence !== null) errors.push("current OI authority contains an unclosed fence");
+  if (records.length === 0) errors.push("current OI authority has no records");
+  const seen = new Set();
+  const categories = new Set();
+  const unresolved = [];
+  const map = {
+    complete_user_flow: "user_flow",
+    data_state: "data_states",
+    success_failure_boundary: "success_failure_boundaries",
+    non_goals: "non_goals",
+  };
+  for (const record of records) {
+    const id = record.oi_id ?? record.id;
+    if (typeof id !== "string" || !/^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(id)) {
+      errors.push("current OI authority has a record without a valid OI id");
+    } else if (seen.has(id)) {
+      errors.push(`current OI authority duplicates ${id}`);
+    } else seen.add(id);
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(record.category)) errors.push(`current OI authority ${id ?? "record"} category is missing or invalid`);
+    else if (map[record.category]) categories.add(map[record.category]);
+    if (!OI_STATUSES.has(record.status)) errors.push(`current OI authority ${id ?? "record"} status is missing or invalid`);
+    else if (record.status === "open") unresolved.push(id ?? "open OI");
+  }
+  return {
+    coverage: FREEZE_PACKET_COVERAGE.filter((category) => categories.has(category)),
+    unresolved,
+    errors,
+    records,
+  };
+}
+
+function currentCfFreezeProjection(markdown, oiRecords) {
+  const heading = /^## 独立替代审查发现的未决冲突（须用户裁决）\s*$/gm;
+  const matches = [...markdown.matchAll(heading)];
+  if (matches.length === 0) return { unresolved: [], errors: [] };
+  const errors = [];
+  if (matches.length !== 1) errors.push("current CF authority has duplicate headings");
+  const tail = markdown.slice(matches[0].index + matches[0][0].length);
+  const next = /^#{1,2}\s+/m.exec(tail);
+  const body = tail.slice(0, next ? next.index : undefined);
+  const entries = [...body.matchAll(/^#{3,4}\s+(CF-\d+)(?!\s*[–-])[^\n]*$/gm)];
+  if (entries.length === 0) errors.push("current CF authority has no numbered conflicts");
+  const seen = new Set();
+  const unresolved = [];
+  for (const [index, entry] of entries.entries()) {
+    const id = entry[1];
+    if (seen.has(id)) errors.push(`current CF authority duplicates ${id}`);
+    seen.add(id);
+    const section = body.slice(entry.index + entry[0].length, entries[index + 1]?.index);
+    const statuses = [...section.matchAll(/^\|\s*\*\*状态（(?:当前|[^）]*用户裁决)）\*\*\s*\|\s*([^|]*)\|/gm)];
+    if (statuses.length > 1) { errors.push(`current CF ${id} has no unique current status`); continue; }
+    if (statuses.length === 0) {
+      const approval = /^\|\s*\*\*用户裁决（[^\n]*）\*\*\s*\|\s*(用户已\*\*显式批准\*\*[^|]*)\|/m.exec(section);
+      const landing = /^\|\s*本修复的落地\s*\|\s*([^|]*)\|/m.exec(section);
+      const oiIds = [...new Set(approval?.[1].match(/\bOI-\d+\b/g) ?? [])];
+      const decisionId = landing?.[1].match(/\b(D-\d+)\s+的 (?:decision|决定)/)?.[1] ?? null;
+      const oi = oiIds.length === 1 ? oiRecords.find((record) => record.oi_id === oiIds[0]) : null;
+      const decisionHeading = decisionId ? new RegExp(`^### ${decisionId}\\s*$`, "m").exec(markdown) : null;
+      const decisionTail = decisionHeading ? markdown.slice(decisionHeading.index + decisionHeading[0].length) : "";
+      const nextDecision = /^#{1,3}\s+/m.exec(decisionTail);
+      const decisionBody = decisionTail.slice(0, nextDecision ? nextDecision.index : undefined);
+      const currentDecisionBindsOi = decisionBody.split(/\r?\n/)
+        .filter((line) => /^-\s*(?:\*\*decision\*\*|\*\*（校正|decision:)/.test(line))
+        .flatMap((line) => line.split(/[。！？；;]/))
+        .some((sentence) => /显式批准/.test(sentence)
+          && [...new Set(sentence.match(/\bOI-\d+\b/g) ?? [])].join(",") === oiIds[0]);
+      if (approval && /已由用户裁决/.test(entry[0]) && oi?.status === "confirmed"
+          && decisionHeading && currentDecisionBindsOi) continue;
+      errors.push(`current CF ${id} has no verified current disposition`);
+      continue;
+    }
+    const status = statuses[0][1].replace(/\*/g, "").trim();
+    if (/^RESOLVED by D-\d+/i.test(status)) continue;
+    if (/^(?:open|未决)/i.test(status)) { unresolved.push(id); continue; }
+    errors.push(`current CF ${id} status is invalid`);
+  }
+  return { unresolved, errors };
+}
+
+function decisionFreezeModel(value) {
+  if (object(value)) return value;
+  if (typeof value !== "string") return {};
+  const oi = currentOiFreezeProjection(value);
+  const cf = oi ? currentCfFreezeProjection(value, oi.records) : { unresolved: [], errors: [] };
+  const active = value.match(/### M6[\s\S]*?(?=\n### |\n## |$)/i)?.[0] ?? value;
+  const status = active.match(/approval_binding\s*(?:status\s*)?(?::|：|已)?\s*([a-z_]+)/i)?.[1]?.toLowerCase() ?? null;
+  const confirmationSection = value.match(/##\s*最终确认[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
+  const step11Section = value.match(/##\s*step 11[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
+  const confirmationStatus = /(?:状态|status)\s*[:：]\s*\**accepted\b/i.test(confirmationSection) ? "accepted" : null;
+  const step11Status = step11Section.match(/(?:状态|status)\s*[:：]\s*\**(accepted|pending|rejected)\b/i)?.[1]?.toLowerCase() ?? null;
+  const sectionScope = (section) => {
+    const encoded = section.match(/\bmaterial_scope\s*[=:：]\s*(\[[^\n]*?\])/i)?.[1];
+    let scope = /\bmaterial_scope\s*[=:：]/i.test(section) ? "invalid" : null;
+    if (encoded !== undefined) {
+      try { scope = JSON.parse(encoded); } catch { scope = encoded; }
+    }
+    return {
+      material_scope: scope,
+      material_scope_revision: section.match(/\bmaterial_scope_revision\s*[=:：]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    };
+  };
+  const sectionBinding = (section, sectionStatus) => ({
+    ...sectionScope(section),
+    status: sectionStatus,
+    material_revision: section.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    snapshot_tree: section.match(/snapshot_tree\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+  });
+  const coverage = FREEZE_PACKET_COVERAGE.filter((item) => {
+    const aliases = {
+      user_flow: /用户流程|user.?flow/i,
+      data_states: /数据状态|data.?states/i,
+      success_failure_boundaries: /成功[／/]失败边界|成败边界|success.?failure/i,
+      non_goals: /非目标|non.?goals?/i,
+    };
+    return aliases[item].test(active);
+  });
+  const unresolved = (active.match(/(?:方向级|direction)[^\n]*(?:未决|open|unresolved)/gi) ?? []);
+  const binding = {
+    ...sectionScope(active),
+    status,
+    decision_id: active.match(/decision_id\s*[=:：]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    material_revision: active.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    snapshot_tree: active.match(/snapshot_tree\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+  };
+  return {
+    approval_binding: binding,
+    final_confirmation: sectionBinding(confirmationSection, confirmationStatus),
+    step_11: sectionBinding(step11Section, step11Status),
+    unresolved_direction_questions: oi ? [...oi.unresolved, ...cf.unresolved] : unresolved,
+    freeze_packet: { coverage: oi?.coverage ?? coverage },
+    _decision_freeze_content_errors: oi ? [...oi.errors, ...cf.errors] : [],
+  };
+}
+
+function freezeSource(value) {
+  if (!object(value)) return { status: null };
+  return {
+    status: typeof value.status === "string" ? value.status.toLowerCase() : null,
+    decision_id: value.decision_id ?? value.decisionId ?? null,
+    material_scope: value.material_scope ?? value.materialScope ?? null,
+    material_scope_revision: value.material_scope_revision ?? value.materialScopeRevision ?? null,
+    material_revision: value.material_revision ?? value.materialRevision ?? null,
+    snapshot_tree: value.snapshot_tree ?? value.snapshotTree ?? null,
+  };
+}
+
+/**
+ * Validate the read-only decision freeze contract used by build-spec and
+ * build-plan. This returns a completion fact and does not create a public
+ * command or second state machine. Callers decide how the fact affects stage
+ * completion. Parsed decision logs or their Markdown text are accepted.
+ */
+export function validateDecisionFreeze({ decisionLog, material_revision, snapshot_tree, currentMaterialRevision, currentSnapshotTree, currentDecisionScopeRevision } = {}) {
+  const model = decisionFreezeModel(decisionLog);
+  const current = {
+    material_revision: currentMaterialRevision ?? material_revision ?? null,
+    snapshot_tree: currentSnapshotTree ?? snapshot_tree ?? null,
+  };
+  const errors = Array.isArray(model._decision_freeze_content_errors)
+    ? [...model._decision_freeze_content_errors] : [];
+  const binding = freezeSource(model.approval_binding);
+  const confirmation = freezeSource(model.final_confirmation ?? model.finalConfirmation);
+  const step11 = freezeSource(model.step_11 ?? model.step11);
+  const sources = [binding, confirmation, step11];
+  if (sources.some((source) => source.status !== "accepted")) errors.push("freeze approval is not accepted by all three sources");
+  if (typeof binding.decision_id !== "string" || binding.decision_id.trim() === "") errors.push("approval binding is missing decision_id");
+  if (current.material_revision === null || current.material_revision === "") errors.push("current material revision is missing");
+  if (current.snapshot_tree === null || current.snapshot_tree === "") errors.push("current snapshot is missing");
+  for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+    if (source.material_revision === null || source.material_revision === "") errors.push(`${name} is missing material revision`);
+    if (source.snapshot_tree === null || source.snapshot_tree === "") errors.push(`${name} is missing snapshot`);
+  }
+  if (new Set(sources.map((source) => `${source.status}:${source.material_revision}:${source.snapshot_tree}`)).size > 1) {
+    errors.push("freeze approval sources are inconsistent");
+  }
+  const scoped = currentDecisionScopeRevision !== undefined
+    || sources.some((source) => source.material_scope !== null || source.material_scope_revision !== null);
+  if (scoped) {
+    if (!/^revision-[a-f0-9]{64}$/.test(currentDecisionScopeRevision ?? "")) {
+      errors.push("current decision scope revision is missing or invalid");
+    }
+    for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+      if (!Array.isArray(source.material_scope) || source.material_scope.length !== 1 || source.material_scope[0] !== "decision-log.md") {
+        errors.push(`${name} must bind only the decision material scope`);
+      }
+      if (!/^revision-[a-f0-9]{64}$/.test(source.material_scope_revision ?? "")
+          || source.material_scope_revision !== currentDecisionScopeRevision) {
+        errors.push(`${name} is not for the current decision scope revision`);
+      }
+    }
+  } else {
+    for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+      if (current.material_revision !== null && source.material_revision !== null && source.material_revision !== current.material_revision) {
+        errors.push(`${name} is not for the current material revision`);
+      }
+      if (current.snapshot_tree !== null && source.snapshot_tree !== null && source.snapshot_tree !== current.snapshot_tree) {
+        errors.push(`${name} is not for the current snapshot`);
+      }
+    }
+  }
+  const openDirection = Array.isArray(model.unresolved_direction_questions)
+    ? model.unresolved_direction_questions.filter((entry) => entry !== null && String(entry).trim() !== "")
+    : [];
+  if (openDirection.length > 0) errors.push("direction-level questions remain unresolved");
+  const coverage = Array.isArray(model.freeze_packet?.coverage) ? model.freeze_packet.coverage : [];
+  for (const required of FREEZE_PACKET_COVERAGE) if (!coverage.includes(required)) errors.push(`freeze packet is missing ${required}`);
+  const renewals = Array.isArray(model.incremental_renewals) ? model.incremental_renewals : [];
+  for (const renewal of renewals) {
+    if (!object(renewal) || renewal.status !== "accepted") {
+      errors.push("incremental renewal is not accepted");
+      continue;
+    }
+    if (typeof renewal.decision_id !== "string" || renewal.decision_id.trim() === "") errors.push("incremental renewal is missing decision_id");
+    if (typeof renewal.reply_ref !== "string" || renewal.reply_ref.trim() === "") errors.push("incremental renewal is missing reply_ref");
+    if (renewal.material_revision !== current.material_revision || renewal.snapshot_tree !== current.snapshot_tree) errors.push("incremental renewal is not current");
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    status: errors.length === 0 ? "passed" : "paused",
+    reason_codes: Object.freeze(errors.map((error) => error.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "").toLowerCase())),
+    errors: Object.freeze([...new Set(errors)]),
+    material_revision: current.material_revision,
+    snapshot_tree: current.snapshot_tree,
+    decision_id: binding.decision_id,
+    coverage: Object.freeze([...coverage]),
+    renewal_count: renewals.length,
+    next_action: errors.length === 0 ? null : "return_to_make_decision",
+  });
+}
+
+function findingDimensions(finding) {
+  return Array.from(new Set([
+    ...(Array.isArray(finding?.impact_dimensions) ? finding.impact_dimensions : []),
+    ...(Array.isArray(finding?.dimensions) ? finding.dimensions : []),
+  ].map((entry) => normalizedValue(entry)).filter(Boolean)));
+}
+
+/** Classify a finding from explicit kind/dimension/evidence facts, never keywords. */
+export function classifyFinding(finding = {}) {
+  if (!object(finding)) return Object.freeze({ classification: "invalid_finding", reason: "finding must be an object" });
+  if (["environment_unavailable", "provider_unavailable", "review_unavailable"].includes(finding.kind) || finding.attempt_status === "unavailable") {
+    return Object.freeze({ classification: null, status: "attempt_unavailable", reason: "environment/provider unavailability belongs to attempt execution facts" });
+  }
+  const dimensions = findingDimensions(finding);
+  if (finding.evidence_status === "invalid_anchor") {
+    return Object.freeze({ classification: "invalid_finding", status: "classified", dimensions: Object.freeze(dimensions), reason: "finding evidence anchor is invalid" });
+  }
+  let classification = null;
+  if (dimensions.some((dimension) => DIRECTION_DIMENSIONS.has(dimension))) classification = "direction_change";
+  else if (finding.kind === "spec_ambiguity" || dimensions.includes("spec_ambiguity")) classification = "spec_ambiguity";
+  else if (finding.kind === "implementation_defect" || dimensions.includes("implementation_defect")) classification = "implementation_defect";
+  else if (finding.kind === "invalid_finding") classification = "invalid_finding";
+  const hasEvidence = (Array.isArray(finding.evidence_refs) && finding.evidence_refs.some((ref) => typeof ref === "string" && ref.trim() !== ""))
+    || (object(finding.evidence_anchor) && Object.keys(finding.evidence_anchor).length > 0)
+    || (typeof finding.evidence_ref === "string" && finding.evidence_ref.trim() !== "");
+  if (!classification || !hasEvidence) {
+    return Object.freeze({ classification: "invalid_finding", status: "incomplete", reason: !hasEvidence ? "finding requires evidence" : "finding classification is not mutually determined", dimensions: Object.freeze(dimensions) });
+  }
+  return Object.freeze({ classification, status: "classified", dimensions: Object.freeze(dimensions) });
+}
+
+/** Check that a disposition follows the classified finding's required route. */
+export function validateFindingRouting({ finding = {}, classification, disposition = {} } = {}) {
+  const inferred = classifyFinding(finding);
+  const selected = classification ?? inferred.classification;
+  const errors = [];
+  if (inferred.status === "attempt_unavailable") return Object.freeze({ ok: true, status: "attempt_unavailable", classification: null, route: "record_attempt_unavailable", errors: Object.freeze([]) });
+  if (!FINDING_CLASSIFICATIONS.includes(selected)) errors.push("finding classification is invalid");
+  if (inferred.classification !== selected) errors.push("finding classification does not match its evidence-backed dimensions");
+  const status = disposition?.status;
+  if (status === "needs_human") errors.push("needs_human is a pause state, not a terminal disposition");
+  if (selected === "direction_change") {
+    if (status !== "fixed" && status !== "user_decided" && status !== "accepted_risk") errors.push("direction_change requires fixed, incremental decision, or accepted risk route");
+    if (status === "user_decided" && (typeof (disposition.incremental_decision_ref ?? disposition.decision_ref) !== "string" || (disposition.incremental_decision_ref ?? disposition.decision_ref).trim() === "")) errors.push("direction_change user_decided requires incremental decision ref");
+  } else if (selected === "spec_ambiguity") {
+    if (status !== "user_decided") errors.push("spec_ambiguity requires user_decided route");
+    if (typeof disposition.reply_ref !== "string" || disposition.reply_ref.trim() === "") errors.push("spec_ambiguity user_decided requires reply_ref");
+  } else if (selected === "implementation_defect") {
+    if (!["fixed", "rejected_invalid", "accepted_risk"].includes(status)) errors.push("implementation_defect requires fixed, rejected_invalid, or accepted_risk");
+  } else if (selected === "invalid_finding" && status !== "rejected_invalid") {
+    errors.push("invalid_finding requires rejected_invalid route");
+  }
+  return Object.freeze({ ok: errors.length === 0, classification: selected, route: selected === "direction_change" ? "return_to_make_decision" : selected === "spec_ambiguity" ? "return_to_spec" : "stay_current_stage", errors: Object.freeze([...new Set(errors)]) });
+}
+
+const FORMAL_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const FALLBACK_CLASSIFICATIONS = Object.freeze([
+  "implementation_defect",
+  "spec_ambiguity",
+  "direction_change",
+  "material_gap",
+  "environment_unavailable",
+]);
+const FALLBACK_ROUTE_RULES = Object.freeze({
+  implementation_defect: { owner: "current", next_action: "repair_current_stage" },
+  spec_ambiguity: { owner: "build-spec", next_action: "clarify_once" },
+  direction_change: { owner: "make-decision", next_action: "incremental_decision" },
+  material_gap: { owner: "declared", next_action: "repair_material_owner" },
+  environment_unavailable: { owner: "current", next_action: "record_attempt_unavailable" },
+});
+
+/**
+ * Validate the one fallback route contract shared by all five formal stages.
+ * This is a completion fact only: an invalid route leaves completion
+ * incomplete while keeping same-task repair available.
+ */
+export function validateFallbackProtocol({ stage, finding = {}, route = {}, completion = {} } = {}) {
+  const errors = [];
+  const classification = route.classification ?? finding.classification ?? finding.kind;
+  if (!FORMAL_STAGES.includes(stage)) errors.push("fallback stage is not a formal stage");
+  if (!FALLBACK_CLASSIFICATIONS.includes(classification)) errors.push("fallback classification is invalid");
+  const rule = FALLBACK_ROUTE_RULES[classification];
+  const ownerStage = route.owner_stage;
+  if (rule?.owner === "current" && ownerStage !== stage) errors.push("fallback owner must be the current stage");
+  if (rule?.owner && !["current", "declared"].includes(rule.owner) && ownerStage !== rule.owner) {
+    errors.push(`fallback owner must be ${rule.owner}`);
+  }
+  if (rule?.owner === "declared" && !FORMAL_STAGES.includes(ownerStage)) errors.push("material gap requires a formal owner stage");
+  if (classification === "material_gap") {
+    const target = finding.target_artifact ?? finding.evidence?.artifact_ref;
+    const material = typeof target === "string" ? target.split("/").at(-1) : null;
+    const materialOwner = { "decision-log.md": "make-decision", "spec.md": "build-spec", "plan.md": "build-plan", "tasks.md": "build-plan" }[material];
+    const targetDeclared = Object.hasOwn(finding, "target_artifact") || Object.hasOwn(finding.evidence ?? {}, "artifact_ref");
+    if (targetDeclared && !materialOwner) errors.push("material gap explicit target must identify a current authored material");
+    if (materialOwner && ownerStage !== materialOwner) errors.push(`material gap for ${material} requires owner ${materialOwner}`);
+  }
+  if (rule && route.next_action !== rule.next_action) errors.push(`fallback next_action must be ${rule.next_action}`);
+  if (route.rerun_scope !== "same_task_local") errors.push("fallback cannot request a full-stage rerun");
+  if (route.continuation_allowed !== true) errors.push("fallback must preserve same-task continuation");
+  if (completion.status !== "incomplete") errors.push("fallback completion must remain incomplete");
+  const unique = [...new Set(errors)];
+  return Object.freeze({
+    ok: unique.length === 0,
+    status: "incomplete",
+    reason: unique.length === 0 ? null : "fallback_mismatch",
+    continuation_allowed: true,
+    classification: classification ?? null,
+    route: Object.freeze({
+      owner_stage: ownerStage ?? null,
+      next_action: route.next_action ?? null,
+      rerun_scope: "same_task_local",
+      continuation_allowed: true,
+    }),
+    errors: Object.freeze(unique),
+  });
+}
+
+const DIAGNOSTIC_SECTIONS = Object.freeze(["research-Q1", "research-Q2", "research-Q3", "综合结论"]);
+const DIAGNOSTIC_FIELDS = Object.freeze(["source", "evidence", "impact", "conclusion"]);
+
+/** Validate the derived four-part diagnostic report without making it a material. */
+export function validateDiagnosticReport(markdown, { required_context: context } = {}) {
+  const errors = [];
+  if (typeof markdown !== "string" || markdown.trim() === "") {
+    return Object.freeze({ ok: false, status: "incomplete", sections: 0, errors: Object.freeze(["diagnostic report is empty"]) });
+  }
+  const normalized = markdown.replace(/\r\n?/g, "\n");
+  const starts = DIAGNOSTIC_SECTIONS.map((section) => ({ section, index: normalized.search(new RegExp(`^##\\s+${section.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*$`, "mi")) }));
+  for (const entry of starts) if (entry.index < 0) errors.push(`missing diagnostic section: ${entry.section}`);
+  const ranges = starts.filter(({ index }) => index >= 0).sort((left, right) => left.index - right.index);
+  for (const [position, entry] of ranges.entries()) {
+    const end = ranges[position + 1]?.index ?? normalized.length;
+    const block = normalized.slice(entry.index, end);
+    for (const field of DIAGNOSTIC_FIELDS) {
+      const value = block.match(new RegExp(`^${field}\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? "";
+      if (!value || PLACEHOLDER_LINE.test(value)) errors.push(`${entry.section} missing ${field} binding`);
+    }
+  }
+  if (context !== undefined) {
+    for (const field of ["task_id", "material_revision", "stage"]) {
+      if (typeof context?.[field] !== "string" || context[field].trim() === "") errors.push(`missing_${field}`);
+    }
+    if (typeof context?.snapshot_tree !== "string" || !/^[a-f0-9]{40}$/i.test(context.snapshot_tree)) errors.push("missing_snapshot_binding");
+    if (context?.confirmation_ref === null || context?.confirmation_ref === undefined || String(context.confirmation_ref).trim() === "") errors.push("missing_confirmation_receipt");
+  }
+  const unique = [...new Set(errors)];
+  return Object.freeze({ ok: unique.length === 0, status: unique.length === 0 ? "ready" : "incomplete", sections: ranges.length, errors: Object.freeze(unique) });
+}
+
+export function normalizeGapReasons(reasons = []) {
+  const values = Array.isArray(reasons) ? reasons : [reasons];
+  return Object.freeze([...new Set(values.map((value) => normalizedValue(value)).filter((value) => typeof value === "string" && value !== ""))].sort((left, right) => left.localeCompare(right)));
+}
+
+/** Derive a same-snapshot gap identity from a fixed four-field v1 tuple. */
+export function deriveGapId({ task_id, material_revision, gap_kind, content } = {}) {
+  const fields = [task_id, material_revision, gap_kind, content].map((value) => normalizedValue(value));
+  const invalid = fields.some((value) => typeof value !== "string" || value === "");
+  if (invalid) return Object.freeze({ ok: false, gap_id: null, reason: "invalid_gap_identity", canonical_payload: null });
+  const canonical_payload = JSON.stringify(["gap-id.v1", ...fields]);
+  return Object.freeze({ ok: true, gap_id: `gap-id.v1-${sha256(canonical_payload)}`, canonical_payload, algorithm: "gap-id.v1" });
+}
+
+export const UI_APPLICABILITY_INPUTS = Object.freeze([
+  "raw_requirement",
+  "project_inventory",
+  "planned_or_changed_frontend_fact",
+]);
+export const UI_APPLICABILITY_RESULTS = Object.freeze(["ui", "non_ui", "unknown"]);
+export const UI_STATE_CONTRACT_FIELDS = Object.freeze([
+  "name",
+  "interaction_flow",
+  "visible_structure",
+  "fixture_shape",
+  "available_actions",
+  "disabled_actions",
+  "trigger",
+  "recovery_or_exit",
+  "permission_result",
+  "responsive",
+  "a11y",
+  "preview_browser_screenshot_assertion",
+]);
+export const UI_CONTRACT_FIELDS = Object.freeze([
+  "page_or_region",
+  "design_status",
+  "design_authority",
+  "missing_items",
+  "fallback_visual_basis",
+  "constraints",
+  "assumptions",
+  "rework_risk",
+  "human_confirmation",
+  "current_material_ref",
+  "design_revision",
+  "visible_labels",
+  "preview_refs",
+  "fixture_refs",
+  "viewport_refs",
+  "screenshot_refs",
+]);
+export const UI_COMPONENT_QUALITY_FIELDS = Object.freeze([
+  "component_quality_map",
+  "real_consumer",
+  "state_owner",
+  "typed_view_model",
+  "css_token_owner",
+  "story_or_test_update",
+]);
+export const COMPONENT_QUALITY_ACTIONS = Object.freeze([
+  "reuse",
+  "modify",
+  "extend-state-or-variant",
+  "add-local",
+  "extract-shared",
+  "remove-after-no-consumers",
+]);
+
+/**
+ * The build-spec UI design loop is a small fact contract, not a second
+ * workflow or a persisted state machine.  These values describe the fact
+ * recorded in the current four materials after each design observation.
+ */
+export const UI_DESIGN_LOOP_STATES = Object.freeze([
+  "preview_ready",
+  "preview_unavailable",
+  "design_prompt_ready",
+  "external_design_pending",
+  "external_design_returned",
+  "external_design_cancelled",
+  "external_design_not_returned",
+  "external_design_version_mismatch",
+  "human_approved",
+  "human_acknowledged",
+  "human_not_approved",
+]);
+
+export const UI_DESIGN_PROMPT_FIELDS = Object.freeze([
+  "page_or_region",
+  "interactions",
+  "states",
+  "visible_labels",
+]);
+
+const UI_DESIGN_ACTION_LABELS = Object.freeze({
+  preview_ready: ["确认设计", "需要修改"],
+  preview_unavailable: ["重新读取", "生成设计提示词", "继续并记录风险"],
+  design_prompt_ready: ["取消"],
+  external_design_pending: ["未返回", "取消"],
+  external_design_returned: ["确认设计", "需要修改"],
+  external_design_cancelled: ["继续并记录风险"],
+  external_design_not_returned: ["重新生成设计提示词", "继续并记录风险"],
+  external_design_version_mismatch: ["重新读取并确认"],
+});
+
+const UI_DESIGN_STATUSES = new Set(["ready", "not_ready", "unknown", "unavailable"]);
+const UI_CONFIRMATION_RESULTS = new Set(["approved", "acknowledged", "not_approved"]);
+const MISSING_FACT_STATUSES = new Set(["unknown", "unavailable", "not_applicable", "n/a", "na"]);
+const UNKNOWN_LITERAL = /^(?:unknown|unavailable|n\/a|na)$/i;
+const explicitFact = (value) => (nonEmptyString(value) && !UNKNOWN_LITERAL.test(value.trim()))
+  || (object(value) && (
+    nonEmptyString(value.value)
+    || nonEmptyString(value.ref)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.reason)
+    || (MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()) && nonEmptyString(value.reason))
+  ));
+
+function versionFact(value) {
+  if (nonEmptyString(value)) return !UNKNOWN_LITERAL.test(value.trim());
+  return object(value) && (
+    nonEmptyString(value.version)
+    || (MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()) && nonEmptyString(value.reason))
+  );
+}
+
+function resolvedConsumer(value) {
+  return nonEmptyString(value) && !UNKNOWN_LITERAL.test(value.trim());
+}
+
+function factText(value) {
+  if (typeof value === "string") return value;
+  if (!object(value)) return "";
+  return [value.signal, value.kind, value.type, value.name, value.title, value.description, value.value]
+    .filter((entry) => typeof entry === "string")
+    .join(" ");
+}
+
+function sourceConclusion(value) {
+  if (object(value)) {
+    const declared = [value.result, value.conclusion, value.applicability, value.ui_applicability, value.scope]
+      .filter((entry) => UI_APPLICABILITY_RESULTS.includes(entry));
+    const booleanSignals = [
+      value.ui === true || value.is_ui === true || value.frontend === true ? "ui" : null,
+      value.ui === false || value.is_ui === false || value.frontend === false ? "non_ui" : null,
+    ].filter(Boolean);
+    const signals = new Set([...declared, ...booleanSignals]);
+    if (signals.has("ui") && signals.has("non_ui")) return "conflict";
+    if (declared.length > 0) return declared[0];
+    if (booleanSignals[0]) return booleanSignals[0];
+  }
+  const text = factText(value).toLowerCase();
+  if (!text) return "unknown";
+  if (UI_APPLICABILITY_RESULTS.includes(text.trim())) return text.trim();
+  if (/(?:non[-_ ]?ui|backend[-_ ]?only|api[-_ ]?only|cli[-_ ]?only|command[-_ ]?line[-_ ]?only|docs?[-_ ]?only|no (?:page|screen|frontend|ui))/.test(text)) {
+    return "non_ui";
+  }
+  if (/(?:\bui\b|frontend|front[-_ ]?end|page|screen|route|component|css|design|browser)/.test(text)) {
+    return "ui";
+  }
+  return "unknown";
+}
+
+function collectionFact(value, { allowEmpty = false } = {}) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return allowEmpty;
+    return value.every((entry) => explicitFact(entry));
+  }
+  return explicitFact(value);
+}
+
+function factList(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .filter((entry) => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function unknownFact(reason) {
+  return Object.freeze({ status: "unknown", reason });
+}
+
+function knownOrUnknown(value, reason) {
+  return explicitFact(value) ? value : unknownFact(reason);
+}
+
+// Inventory values may be lists (routes, component candidates) or small
+// structured maps, not only scalar facts. Preserve those values when they are
+// present; otherwise keep a reasoned unknown fact instead of silently dropping
+// the legacy-project surface.
+function inventoryFact(value, reason) {
+  if (Array.isArray(value) && value.length > 0) return value;
+  if (object(value) && Object.keys(value).length > 0) return value;
+  return knownOrUnknown(value, reason);
+}
+
+function designRevisionValue(value, reason = "Design.md version is unavailable") {
+  return versionFact(value) ? value : unknownFact(reason);
+}
+
+function actionLabels(value) {
+  return factList(value?.visible_actions ?? value?.actions);
+}
+
+function hasActions(value, required) {
+  const actual = actionLabels(value);
+  return required.every((label) => actual.includes(label));
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+// Project-level sources are deliberately a pair of plain facts.  They are
+// not task materials and they do not create another workflow state machine.
+// Keeping this contract here lets build-spec/build-plan/build-code/verify-code
+// share exactly the same identity and responsibility vocabulary.
+export const PROJECT_STANDARD_DOCUMENT_KINDS = Object.freeze(["design", "experience"]);
+export const CONSUMER_KINDS = Object.freeze(["route", "import", "lazy", "css", "data"]);
+export const CONSUMER_DISCOVERY_STATUSES = Object.freeze(["discovered", "unknown", "incomplete", "unavailable"]);
+export const CONSUMER_UNKNOWN_REASONS = Object.freeze([
+  "dynamic_loading",
+  "generated_code",
+  "unsupported_framework",
+  "scan_failed",
+  "semantic_ambiguity",
+  "missing_anchor",
+  "unsupported_pattern",
+  "unavailable_source",
+]);
+export const DELIVERY_IMPACTS = Object.freeze(["non_ui", "ui", "backend", "fullstack", "unknown"]);
+
+const DESIGN_RESPONSIBILITY_WORDS = new Set([
+  "visual", "component", "components", "token", "tokens", "layout", "responsive",
+  "state", "states", "accessibility", "performance", "governance", "style", "styles",
+]);
+const EXPERIENCE_RESPONSIBILITY_WORDS = new Set([
+  "page", "pages", "region", "regions", "interaction", "interactions", "flow", "flows",
+  "recovery", "scenario", "scenarios", "long_term_scenarios", "testing", "test_scenarios",
+  "accessibility_interaction", "known_gaps", "states",
+]);
+const DESIGN_FORBIDDEN_WORDS = /(?:page flow|user flow|interaction|scenario|test step|运行结果|页面流转|用户流程|长期场景|逐次运行)/i;
+const EXPERIENCE_FORBIDDEN_WORDS = /(?:design token|color token|font|typography|spacing token|breakpoint|component api|组件规则|视觉规则|色彩|字体|间距|断点|样式)/i;
+const SAFE_DOCUMENT_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
+const SAFE_REF = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))\S+$/;
+
+function sourceIdentity(value, expectedKind, errors, label) {
+  if (!object(value)) {
+    errors.push(`${label} must be an object`);
+    return null;
+  }
+  if (value.document_kind !== expectedKind) errors.push(`${label}.document_kind must be ${expectedKind}`);
+  if (!nonEmptyString(value.path) || !SAFE_DOCUMENT_PATH.test(value.path)) errors.push(`${label}.path must be a project-relative path`);
+  if (!SHA256_HEX.test(value.content_sha256 ?? "")) errors.push(`${label}.content_sha256 must be a sha256 of the raw UTF-8 bytes`);
+  if (typeof value.content === "string" && SHA256_HEX.test(value.content_sha256 ?? "") && sha256(value.content) !== value.content_sha256) {
+    errors.push(`${label}.content_sha256 does not match the supplied raw UTF-8 content`);
+  }
+  if (!nonEmptyString(value.revision) || UNKNOWN_LITERAL.test(String(value.revision))) errors.push(`${label}.revision must be a non-empty current revision`);
+  if (!nonEmptyString(value.anchor_id) || UNKNOWN_LITERAL.test(String(value.anchor_id))) errors.push(`${label}.anchor_id must be an explicit stable anchor`);
+  if (!nonEmptyString(value.anchor_title)) errors.push(`${label}.anchor_title is required`);
+  if (value.anchor_source !== "explicit") errors.push(`${label}.anchor_source must be explicit; title slugs are not stable anchors`);
+  if (!nonEmptyString(value.owner)) errors.push(`${label}.owner is required`);
+  if (Array.isArray(value.anchors)) {
+    const ids = value.anchors.map((entry) => entry?.anchor_id);
+    if (ids.some((id) => !nonEmptyString(id)) || new Set(ids).size !== ids.length) errors.push(`${label}.anchors must contain unique explicit anchor_id values`);
+  }
+  return value;
+}
+
+function sourceResponsibilities(value) {
+  const values = [];
+  for (const field of ["responsibilities", "sections", "scope"]) {
+    const raw = value?.[field];
+    if (Array.isArray(raw)) values.push(...raw);
+    else if (nonEmptyString(raw)) values.push(raw);
+  }
+  return values.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean);
+}
+
+function identityComparable(value) {
+  if (!object(value)) return null;
+  return {
+    document_kind: value.document_kind,
+    path: value.path,
+    content_sha256: value.content_sha256,
+    revision: value.revision,
+    anchor_id: value.anchor_id,
+  };
+}
+
+function sameIdentity(left, right) {
+  const a = identityComparable(left);
+  const b = identityComparable(right);
+  return Boolean(a && b && Object.keys(a).every((key) => a[key] === b[key]));
+}
+
+export function completeProjectSourceIdentity(value) {
+  const identity = identityComparable(value);
+  return Boolean(identity
+    && PROJECT_STANDARD_DOCUMENT_KINDS.includes(identity.document_kind)
+    && SAFE_DOCUMENT_PATH.test(identity.path ?? "")
+    && SHA256_HEX.test(identity.content_sha256 ?? "")
+    && nonEmptyString(identity.revision)
+    && nonEmptyString(identity.anchor_id)
+    && !UNKNOWN_LITERAL.test(String(identity.revision))
+    && !UNKNOWN_LITERAL.test(String(identity.anchor_id)));
+}
+
+// Replay identity must not depend on JavaScript object insertion order.  A
+// scanner may construct the same scan configuration from maps in a different
+// order; the census result and replay key must still be identical.
+function stableJsonValue(value) {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableJsonValue(value[key])]));
+}
+
+function stableJson(value) {
+  return JSON.stringify(stableJsonValue(value));
+}
+
+function identityTokens(value) {
+  if (nonEmptyString(value)) return new Set([value.trim()]);
+  if (!object(value)) return new Set();
+  return new Set([
+    value.ref,
+    value.identity_ref,
+    value.revision,
+    value.content_sha256,
+    value.anchor_id,
+    value.replay_key,
+    value.evidence_ref,
+  ].filter(nonEmptyString).map((entry) => entry.trim()));
+}
+
+function sameBoundIdentity(declared, current) {
+  if (object(declared) && object(current) && identityComparable(declared) && identityComparable(current)) {
+    return sameIdentity(declared, current);
+  }
+  const declaredTokens = identityTokens(declared);
+  const currentTokens = identityTokens(current);
+  return declaredTokens.size > 0 && [...declaredTokens].some((token) => currentTokens.has(token));
+}
+
+function exactIdentityToken(value) {
+  if (nonEmptyString(value)) return value.trim();
+  if (!object(value)) return null;
+  const tokens = [value.replay_key, value.ref, value.evidence_ref, value.identity_ref, value.identity]
+    .filter(nonEmptyString)
+    .map((entry) => entry.trim());
+  return tokens.length === 1 ? tokens[0] : null;
+}
+
+function requireBoundIdentity(label, declared, current, errors, { structured = false, exactToken = false } = {}) {
+  if (!explicitFact(current)) {
+    errors.push(`${label} identity source is missing`);
+    return;
+  }
+  if (!explicitFact(declared)) {
+    errors.push(`${label} identity is required`);
+    return;
+  }
+  if (structured && (!completeProjectSourceIdentity(declared) || !completeProjectSourceIdentity(current))) {
+    errors.push(`${label} identity must be the structured Design.md/Experience.md identity object`);
+    return;
+  }
+  if (exactToken && exactIdentityToken(declared) !== exactIdentityToken(current)) {
+    errors.push(`${label} identity must exactly match the current canonical token`);
+    return;
+  }
+  if (!sameBoundIdentity(declared, current)) errors.push(`${label} identity does not match current source`);
+}
+
+/**
+ * Validate the one Design.md + one Experience.md project source contract.
+ * Identity comparison is explicit (path/hash/revision/anchor); no title slug
+ * or missing value is silently promoted to a current source.
+ */
+export function validateProjectStandardSources(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["project standard sources must be an object"]);
+  const design = sourceIdentity(input.design ?? input.design_source, "design", errors, "design");
+  const experience = sourceIdentity(input.experience ?? input.experience_source, "experience", errors, "experience");
+  if (design && experience && design.path === experience.path) errors.push("Design.md and Experience.md must use distinct project paths");
+
+  const designWords = sourceResponsibilities(design);
+  const experienceWords = sourceResponsibilities(experience);
+  if (design && !designWords.some((entry) => DESIGN_RESPONSIBILITY_WORDS.has(entry) || /design|visual|component|token|layout|responsive|style|accessibility|performance/i.test(entry))) {
+    errors.push("Design.md must declare visual/component responsibilities");
+  }
+  if (design && designWords.some((entry) => EXPERIENCE_RESPONSIBILITY_WORDS.has(entry) && !DESIGN_RESPONSIBILITY_WORDS.has(entry))) {
+    errors.push("Design.md must not own page, interaction, or long-term experience responsibilities");
+  }
+  if (design && DESIGN_FORBIDDEN_WORDS.test([...designWords, design.description, design.content].filter(Boolean).join(" "))) {
+    errors.push("Design.md must not contain page-flow, interaction, scenario, or run-result semantics");
+  }
+  if (experience && !experienceWords.some((entry) => EXPERIENCE_RESPONSIBILITY_WORDS.has(entry) || /experience|page|interaction|flow|scenario|recovery|testing/i.test(entry))) {
+    errors.push("Experience.md must declare page/interaction/scenario responsibilities");
+  }
+  if (experience && experienceWords.some((entry) => DESIGN_RESPONSIBILITY_WORDS.has(entry) && !EXPERIENCE_RESPONSIBILITY_WORDS.has(entry))) {
+    errors.push("Experience.md must not own shared visual/component responsibilities");
+  }
+  if (experience && EXPERIENCE_FORBIDDEN_WORDS.test([...experienceWords, experience.description, experience.content].filter(Boolean).join(" "))) {
+    errors.push("Experience.md must not define style, token, breakpoint, or visual component rules");
+  }
+
+  const bound = object(input.bound) ? input.bound : {};
+  const stale = [];
+  const missing = [];
+  for (const [kind, current] of [["design", design], ["experience", experience]]) {
+    const previous = bound[kind];
+    if (!current) {
+      missing.push(kind);
+    } else if (previous !== undefined && !sameIdentity(current, previous)) {
+      stale.push(kind);
+    }
+  }
+  if (input.require_current_binding === true) {
+    if (!completeProjectSourceIdentity(bound.design) || !completeProjectSourceIdentity(bound.experience)) {
+      errors.push("current project standard sources require authenticated Design.md and Experience.md bindings");
+    }
+  }
+  const updateRequested = input.update_required === true || input.update === true || input.change_kind === "rules_changed" || input.change_kind === "experience_changed";
+  if (updateRequested && input.stage !== "build-code") errors.push("only build-code may write an updated Design.md or Experience.md identity");
+  const status = stale.length > 0
+    ? "stale"
+    : errors.length > 0
+      ? (missing.length > 0 ? "unknown" : "not_ready")
+        : missing.length > 0
+          ? "missing"
+        : updateRequested
+          ? "update_required"
+          : "bound_current";
+  return result(errors, {
+    status,
+    identities: Object.freeze({ design: design ? identityComparable(design) : null, experience: experience ? identityComparable(experience) : null }),
+    stale: Object.freeze(stale),
+    missing: Object.freeze(missing),
+    writer: Object.freeze({ stage: input.stage ?? null, can_write: input.stage === "build-code" }),
+    responsibilities: Object.freeze({ design: Object.freeze(designWords), experience: Object.freeze(experienceWords) }),
+  });
+}
+
+function normalizeSupportMatrix(value, errors) {
+  const entries = Array.isArray(value)
+    ? value
+    : object(value)
+      ? Object.entries(value).map(([kind, entry]) => (object(entry) ? { kind, ...entry } : { kind, supported: entry }))
+      : [];
+  if (entries.length === 0) errors.push("consumer census support_matrix must enumerate route/import/lazy/css/data modes");
+  const seen = new Set();
+  const normalized = [];
+  for (const entry of entries) {
+    const kind = entry?.kind;
+    if (!CONSUMER_KINDS.includes(kind)) { errors.push(`consumer census support_matrix kind is invalid: ${kind ?? "missing"}`); continue; }
+    if (seen.has(kind)) { errors.push(`consumer census support_matrix kind is duplicated: ${kind}`); continue; }
+    seen.add(kind);
+    if (typeof entry.supported !== "boolean") errors.push(`consumer census support_matrix ${kind}.supported must be boolean`);
+    const unknownReason = entry.unknown_reason;
+    if (entry.supported === false && !CONSUMER_UNKNOWN_REASONS.includes(unknownReason)) errors.push(`consumer census unsupported ${kind} requires an enumerated unknown_reason`);
+    normalized.push({
+      kind,
+      supported: entry.supported === true,
+      ...(Array.isArray(entry.patterns) ? { patterns: [...entry.patterns].map(String).sort() } : {}),
+      ...(unknownReason ? { unknown_reason: unknownReason } : {}),
+    });
+  }
+  for (const kind of CONSUMER_KINDS) if (!seen.has(kind)) errors.push(`consumer census support_matrix missing ${kind}`);
+  return normalized.sort((a, b) => a.kind.localeCompare(b.kind));
+}
+
+function normalizeSourceSnapshot(value, errors) {
+  const snapshot = typeof value === "string" ? { tree: value } : value;
+  if (!object(snapshot) || !/^[a-f0-9]{40,64}$/i.test(snapshot?.tree ?? snapshot?.snapshot_tree ?? "")) {
+    errors.push("consumer census source_snapshot must bind a Git snapshot tree");
+    return { tree: null };
+  }
+  return { tree: snapshot.tree ?? snapshot.snapshot_tree, ...(snapshot.commit ? { commit: snapshot.commit } : {}) };
+}
+
+function consumerId(kind, path, anchor) {
+  return sha256(`${kind}\0${path}\0${anchor}`);
+}
+
+function normalizeConsumer(entry, source, errors, index) {
+  if (!object(entry)) { errors.push(`consumer census consumer ${index + 1} must be an object`); return null; }
+  const kind = entry.kind;
+  const path = String(entry.path ?? entry.location?.path ?? "").trim();
+  const anchor = String(entry.anchor ?? entry.anchor_id ?? "").trim();
+  if (!CONSUMER_KINDS.includes(kind)) errors.push(`consumer census consumer ${index + 1} kind is invalid`);
+  if (!SAFE_DOCUMENT_PATH.test(path)) errors.push(`consumer census consumer ${index + 1} path must be project-relative`);
+  if (!nonEmptyString(anchor) || UNKNOWN_LITERAL.test(anchor)) errors.push(`consumer census consumer ${index + 1} needs an explicit anchor`);
+  const status = entry.discovery_status ?? entry.status ?? "discovered";
+  if (!CONSUMER_DISCOVERY_STATUSES.includes(status)) errors.push(`consumer census consumer ${index + 1} discovery_status is invalid`);
+  const unknownReason = entry.unknown_reason;
+  if (["unknown", "incomplete", "unavailable"].includes(status) && !CONSUMER_UNKNOWN_REASONS.includes(unknownReason)) {
+    errors.push(`consumer census consumer ${index + 1} needs an enumerated unknown_reason`);
+  }
+  if (status === "discovered" && unknownReason !== undefined) errors.push(`consumer census discovered consumer ${index + 1} must not carry unknown_reason`);
+  if (!nonEmptyString(entry.location) && !object(entry.location)) errors.push(`consumer census consumer ${index + 1} location is required`);
+  if (kind === "route" && !nonEmptyString(entry.page) && !nonEmptyString(entry.page_ref)) {
+    errors.push(`consumer census route ${index + 1} must identify its Experience page or page_ref`);
+  }
+  const invalidEvidenceRefs = entry.evidence_refs !== undefined
+    && (!Array.isArray(entry.evidence_refs)
+      || entry.evidence_refs.some((ref) => !(nonEmptyString(ref) || (object(ref) && nonEmptyString(ref.ref)))));
+  if (invalidEvidenceRefs) {
+    errors.push(`consumer census consumer ${index + 1} evidence_refs must contain canonical or explicit references`);
+  }
+  if (source === "human") {
+    if (!nonEmptyString(entry.reason)) errors.push(`consumer census human addition ${index + 1} requires a reason`);
+    if (!Array.isArray(entry.evidence_refs) || entry.evidence_refs.length === 0) {
+      errors.push(`consumer census human addition ${index + 1} requires evidence_refs`);
+    }
+  }
+  const normalized = {
+    consumer_id: consumerId(kind, path, anchor),
+    kind,
+    path,
+    anchor,
+    location: entry.location,
+    discovery_status: status,
+    source,
+    ...(entry.page ? { page: entry.page } : {}),
+    ...(entry.page_ref ? { page_ref: entry.page_ref } : {}),
+    ...(entry.data_chain ? { data_chain: entry.data_chain } : {}),
+    ...(entry.evidence_refs ? { evidence_refs: Array.isArray(entry.evidence_refs) ? [...entry.evidence_refs].sort() : entry.evidence_refs } : {}),
+    ...(unknownReason ? { unknown_reason: unknownReason } : {}),
+    ...(entry.reason ? { reason: entry.reason } : {}),
+  };
+  return normalized;
+}
+
+/**
+ * Normalize an explicit, replayable consumer scan.  This function does not
+ * walk a repository; callers provide scanner facts, and unsupported/dynamic
+ * patterns remain reasoned unknown entries. Human additions are append-only.
+ */
+export function buildConsumerCensus(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["consumer census input must be an object"]);
+  if (input.schema_version !== "consumer-census.v1") errors.push("consumer census schema_version must be consumer-census.v1");
+  if (!nonEmptyString(input.scanner_version)) errors.push("consumer census scanner_version is required");
+  const sourceSnapshot = normalizeSourceSnapshot(input.source_snapshot ?? input.source_snapshot_identity, errors);
+  if (!object(input.scan_config)) errors.push("consumer census scan_config is required");
+  if (!Array.isArray(input.consumers)) errors.push("consumer census consumers must be an explicit array; absence is not zero consumers");
+  const supportMatrix = normalizeSupportMatrix(input.support_matrix, errors);
+  const seenSourceIds = new Set();
+  const consumers = [];
+  for (const [index, entry] of (Array.isArray(input.consumers) ? input.consumers : []).entries()) {
+    const normalized = normalizeConsumer(entry, "scanner", errors, index);
+    if (!normalized) continue;
+    if (seenSourceIds.has(`${normalized.source}:${normalized.consumer_id}`)) errors.push(`consumer census duplicate scanner consumer ${normalized.consumer_id}`);
+    seenSourceIds.add(`${normalized.source}:${normalized.consumer_id}`);
+    consumers.push(normalized);
+  }
+  for (const [index, entry] of (Array.isArray(input.human_additions) ? input.human_additions : []).entries()) {
+    const normalized = normalizeConsumer({ ...entry, source: "human" }, "human", errors, index);
+    if (!normalized) continue;
+    if (seenSourceIds.has(`${normalized.source}:${normalized.consumer_id}`)
+        || [...seenSourceIds].some((key) => key.endsWith(`:${normalized.consumer_id}`))) {
+      errors.push(`consumer census human addition collides with existing consumer ${normalized.consumer_id}`);
+      continue;
+    }
+    seenSourceIds.add(`${normalized.source}:${normalized.consumer_id}`);
+    consumers.push(normalized);
+  }
+  consumers.sort((a, b) => a.consumer_id.localeCompare(b.consumer_id) || a.source.localeCompare(b.source) || a.path.localeCompare(b.path));
+  const experienceIndex = consumers
+    .filter((entry) => entry.kind === "route")
+    .map((entry) => ({ consumer_id: entry.consumer_id, page: entry.page ?? entry.page_ref ?? unknownFact("route has no Experience page binding"), status: entry.page || entry.page_ref ? "indexed" : "incomplete" }));
+  return result(errors, {
+    schema_version: "consumer-census.v1",
+    scanner_version: input.scanner_version ?? null,
+    source_snapshot: Object.freeze(sourceSnapshot),
+    scan_config: structuredClone(input.scan_config ?? {}),
+    support_matrix: Object.freeze(supportMatrix),
+    consumers: Object.freeze(consumers),
+    experience_index: Object.freeze(experienceIndex),
+    replay_key: sha256(stableJson({
+      schema_version: "consumer-census.v1",
+      scanner_version: input.scanner_version ?? null,
+      source_snapshot: sourceSnapshot,
+      scan_config: input.scan_config ?? {},
+      support_matrix: supportMatrix,
+      consumers,
+    })),
+    unknown_count: consumers.filter((entry) => entry.discovery_status !== "discovered").length
+      + supportMatrix.filter((entry) => entry.supported === false).length,
+  });
+}
+
+function impactSignal(value) {
+  if (typeof value === "string") {
+    const text = value.trim().toLowerCase();
+    if (DELIVERY_IMPACTS.includes(text)) return text;
+    const hasUiSignal = /(?:\bui\b|front[-_ ]?end|frontend|page|screen|route|component|css|design|browser|页面|前端)/.test(text);
+    const hasBackendSignal = /(?:backend|back[-_ ]?end|api|dto|schema|migration|persistence|后端|数据链)/.test(text);
+    if (/full[-_ ]?stack|前后端|跨边界/.test(text) || (hasUiSignal && hasBackendSignal)) return "fullstack";
+    if (/backend|back[-_ ]?end|api|dto|schema|migration|persistence|后端|数据链/.test(text)) return "backend";
+    if (/non[-_ ]?ui|backend[-_ ]?only|api[-_ ]?only|cli[-_ ]?only|docs?[-_ ]?only/.test(text)) return "non_ui";
+    if (/ui|front[-_ ]?end|frontend|page|screen|route|component|css|design|browser|页面|前端/.test(text)) return "ui";
+    return "unknown";
+  }
+  if (!object(value)) return "unknown";
+  const signals = [];
+  for (const field of ["impact", "result", "conclusion", "scope", "kind"]) {
+    if (value[field] !== undefined) {
+      const signal = impactSignal(value[field]);
+      if (signal !== "unknown") signals.push(signal);
+    }
+  }
+  if (value.frontend === true || value.ui === true || value.is_ui === true) signals.push("ui");
+  if (value.backend === true || value.api === true || value.data === true) signals.push("backend");
+  if (signals.includes("ui") && signals.includes("backend")) return "fullstack";
+  if (signals.includes("fullstack")) return "fullstack";
+  if (signals.length > 0) return signals[0];
+  if (value.frontend === false && value.backend === false) return "non_ui";
+  return impactSignal(factText(value));
+}
+
+/** Derive impact from evidence, never from a caller's downgrade label. */
+export function deriveChangeImpact(input = {}) {
+  if (!object(input)) return Object.freeze({ impact: "unknown", status: "unknown", evidence_refs: [], unknown_reasons: ["input_unavailable"] });
+  const census = input.census ?? input.consumer_census;
+  const consumers = Array.isArray(census?.consumers) ? census.consumers : [];
+  const signals = [];
+  const unknownReasons = [];
+  for (const source of [input.raw_requirement, input.project_inventory, input.planned_or_changed_frontend_fact, input.backend_fact, input.fullstack_fact]) {
+    const signal = impactSignal(source);
+    if (signal !== "unknown") signals.push(signal);
+    else if (source !== undefined && source !== null) {
+      const reason = object(source) ? source.reason ?? source.unknown_reason : null;
+      if (reason) unknownReasons.push(String(reason));
+    }
+  }
+  for (const consumer of consumers) {
+    if (consumer.discovery_status !== "discovered") unknownReasons.push(consumer.unknown_reason ?? "consumer_unknown");
+    if (consumer.kind === "data") signals.push("backend");
+    if (["route", "import", "lazy", "css"].includes(consumer.kind)) signals.push("ui");
+  }
+  if (census && consumers.length === 0 && census.unknown_count > 0) unknownReasons.push("consumer_scan_unknown");
+  for (const unsupported of (Array.isArray(census?.support_matrix) ? census.support_matrix : []).filter((entry) => entry?.supported === false)) {
+    unknownReasons.push(unsupported.unknown_reason ?? `unsupported_${unsupported.kind ?? "consumer"}_pattern`);
+  }
+  const hasUi = signals.includes("ui") || signals.includes("fullstack");
+  const hasBackend = signals.includes("backend") || signals.includes("fullstack");
+  let impact = hasUi && hasBackend ? "fullstack" : hasUi ? "ui" : hasBackend ? "backend" : "unknown";
+  if (impact === "unknown" && signals.length > 0 && signals.every((signal) => signal === "non_ui") && unknownReasons.length === 0) impact = "non_ui";
+  if (impact === "unknown" && signals.length === 0 && input.raw_requirement !== undefined && input.raw_requirement !== null) {
+    const reason = object(input.raw_requirement) ? input.raw_requirement.reason : null;
+    if (reason && /non[-_ ]?ui|backend[-_ ]?only|no (?:page|ui)/i.test(String(reason))) impact = "non_ui";
+    else unknownReasons.push(reason ?? "impact_evidence_unavailable");
+  }
+  if (input.declared_impact && input.declared_impact !== impact) unknownReasons.push("caller_declared_impact_did_not_match_evidence");
+  const evidenceRefs = consumers.flatMap((entry) => Array.isArray(entry.evidence_refs) ? entry.evidence_refs : []).filter(nonEmptyString);
+  return Object.freeze({
+    impact,
+    status: impact === "unknown" || unknownReasons.length > 0 ? "unknown" : "derived",
+    evidence_refs: Object.freeze([...new Set(evidenceRefs)].sort()),
+    unknown_reasons: Object.freeze([...new Set(unknownReasons.filter(nonEmptyString))]),
+    consumer_count: consumers.length,
+    basis: Object.freeze({ census: Boolean(census), signals: Object.freeze([...new Set(signals)]) }),
+  });
+}
+
+const INCOMPLETE_FACT_STATUSES = new Set([
+  "failed", "failure", "incomplete", "missing", "cancelled", "canceled", "blocked", "stale", "mismatch",
+  "identity_mismatch", "cleanup_failed", "not_executed", "not_started", "error", "invalid",
+]);
+const UNKNOWN_FACT_STATUSES = new Set(["unknown", "unavailable", "unsupported", "pending"]);
+const PASSED_FACT_STATUSES = new Set(["passed", "pass", "success", "succeeded", "completed", "covered", "ready", "current"]);
+
+function factStatus(value) {
+  if (typeof value === "string") return value.trim().toLowerCase();
+  if (!object(value)) return "missing";
+  return String(value.status ?? value.result ?? value.conclusion ?? "missing").trim().toLowerCase();
+}
+
+function factReason(value) {
+  if (typeof value === "string") return value;
+  if (!object(value)) return "fact is missing";
+  return value.reason ?? value.failure_reason ?? value.unknown_reason ?? value.message ?? "fact has no reason";
+}
+
+/** Apply the fixed incomplete > unknown > covered precedence. */
+export function deriveDeliveryConclusion({ impact, facts = {}, contract } = {}) {
+  const kind = DELIVERY_IMPACTS.includes(impact) ? impact : "unknown";
+  const source = object(facts) ? facts : object(contract) ? contract : {};
+  const requiredByImpact = {
+    non_ui: ["impact_evidence"],
+    ui: ["design", "experience", "census", "evidence"],
+    backend: ["api", "dto", "schema_migration", "persistence", "consumer"],
+    fullstack: ["design", "experience", "census", "evidence", "api", "dto", "schema_migration", "persistence", "consumer", "e2e_slice"],
+    unknown: ["impact_evidence"],
+  };
+  const required = requiredByImpact[kind];
+  const incomplete = [];
+  const unknown = [];
+  const considered = [];
+  if (kind === "unknown") unknown.push({ key: "impact", reason: "impact classification is unknown" });
+  for (const key of required) {
+    const value = source[key];
+    const status = factStatus(value);
+    if (status === "not_applicable") {
+      incomplete.push({ key, status, reason: factReason(value) === "fact is missing" ? "not_applicable requires a reason" : factReason(value) });
+      continue;
+    }
+    if (INCOMPLETE_FACT_STATUSES.has(status)) incomplete.push({ key, status, reason: factReason(value) });
+    else if (UNKNOWN_FACT_STATUSES.has(status)) unknown.push({ key, status, reason: factReason(value) });
+    else if (PASSED_FACT_STATUSES.has(status)) considered.push({ key, status });
+    else incomplete.push({ key, status: status || "missing", reason: factReason(value) });
+  }
+  const status = incomplete.length > 0 ? "incomplete" : unknown.length > 0 ? "unknown" : "covered";
+  return Object.freeze({
+    status,
+    conclusion: status,
+    impact: kind,
+    required: Object.freeze(required),
+    incomplete: Object.freeze(incomplete),
+    unknown: Object.freeze(unknown),
+    considered: Object.freeze(considered),
+    reason: status === "covered" ? "all required current facts passed" : `${status} facts remain in the contract`,
+  });
+}
+
+function validateLayer(layer, name, errors) {
+  if (!object(layer)) { errors.push(`${name} layer is required`); return; }
+  const status = factStatus(layer);
+  if (!PASSED_FACT_STATUSES.has(status) && !INCOMPLETE_FACT_STATUSES.has(status) && !UNKNOWN_FACT_STATUSES.has(status)) errors.push(`${name} layer status is invalid`);
+  for (const field of ["success", "failure", "state_owner", "recovery"]) if (!explicitFact(layer[field])) errors.push(`${name} layer requires ${field}`);
+}
+
+const API_FAILURE_CLASSES = Object.freeze(["validation", "permission", "conflict", "upstream", "timeout"]);
+
+function validateApiFailureClasses(api, errors) {
+  if (!Array.isArray(api?.failure_classes) || api.failure_classes.length === 0) {
+    errors.push("api layer must enumerate applicable validation/permission/conflict/upstream/timeout failures");
+    return;
+  }
+  const seen = new Set();
+  for (const [index, entry] of api.failure_classes.entries()) {
+    const kind = typeof entry === "string"
+      ? entry.trim().toLowerCase()
+      : object(entry)
+        ? String(entry.kind ?? entry.class ?? entry.type ?? "").trim().toLowerCase()
+        : "";
+    if (!API_FAILURE_CLASSES.includes(kind)) {
+      errors.push(`api failure_classes[${index}] must identify one of ${API_FAILURE_CLASSES.join(", ")}`);
+      continue;
+    }
+    if (seen.has(kind)) {
+      errors.push(`api failure_classes must not duplicate ${kind}`);
+      continue;
+    }
+    seen.add(kind);
+    if (object(entry) && entry.applicable !== undefined && typeof entry.applicable !== "boolean") {
+      errors.push(`api failure_classes[${index}].applicable must be boolean`);
+    }
+    if (object(entry) && entry.applicable === false && !explicitFact(entry.reason)) {
+      errors.push(`api failure_classes[${index}] not_applicable requires an explicit reason`);
+    }
+  }
+  for (const kind of API_FAILURE_CLASSES) {
+    if (!seen.has(kind)) errors.push(`api failure_classes is missing ${kind}`);
+  }
+}
+
+function validateBackendContract(dataContract, errors, { requireReadBack = false } = {}) {
+  if (!object(dataContract)) { errors.push("backend data_contract is required"); return; }
+  for (const name of ["api", "dto", "schema_migration", "persistence", "consumer"]) validateLayer(dataContract[name], name, errors);
+  const api = dataContract.api;
+  if (object(api)) validateApiFailureClasses(api, errors);
+  const dto = dataContract.dto;
+  if (object(dto) && dto.compatibility !== "compatible") errors.push("dto incompatibility must be explicit; defaults cannot hide it");
+  const migration = dataContract.schema_migration;
+  if (object(migration)) {
+    if (!/atomic|transaction/i.test(String(migration.atomicity ?? ""))) errors.push("schema_migration must declare atomicity");
+    if (!explicitFact(migration.stop_condition)) errors.push("schema_migration must declare a stop_condition");
+    if (!explicitFact(migration.forward) || (!explicitFact(migration.rollback) && !explicitFact(migration.manual_recovery))) errors.push("schema_migration must declare forward and rollback or manual_recovery");
+  }
+  const persistence = dataContract.persistence;
+  if (object(persistence)) {
+    if (persistence.atomic_commit !== true
+        && !(persistence.atomic_commit === false && explicitFact(persistence.atomic_commit_reason ?? persistence.unsupported_reason ?? persistence.reason))) {
+      errors.push("persistence must declare atomic_commit true or an explicit unsupported reason");
+    }
+    if (persistence.partial_commit_observable !== true) errors.push("persistence must expose partial-commit state");
+    if (!object(persistence.idempotency) || typeof persistence.idempotency.supported !== "boolean") errors.push("persistence must declare idempotency support");
+    else if (persistence.idempotency.supported && !explicitFact(persistence.idempotency.key)) errors.push("persistence idempotency needs a key");
+    else if (!persistence.idempotency.supported && !explicitFact(persistence.idempotency.reason)) errors.push("unsupported idempotency needs a reason");
+  }
+  const consumer = dataContract.consumer;
+  if (object(consumer)) {
+    for (const field of ["retry", "no_retry", "unknown"]) if (!explicitFact(consumer[field])) errors.push(`consumer layer must map ${field} to a recovery action`);
+  }
+  if (requireReadBack || dataContract.read_back !== undefined) {
+    const readBack = dataContract.read_back;
+    if (!object(readBack) || !PASSED_FACT_STATUSES.has(factStatus(readBack)) || !explicitFact(readBack.correlation_id) || !explicitFact(readBack.consumer_id) || !explicitFact(readBack.value_ref)) {
+      errors.push("backend consumer read_back must bind correlation_id, consumer_id, and value_ref");
+    }
+  }
+}
+
+/** Validate the minimal UI/backend/fullstack contract without inventing a product API. */
+export function validateDeliveryContract(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["delivery contract must be an object"]);
+  const impact = input.impact;
+  const suppliedFacts = object(input.facts) ? input.facts : {};
+  if (!DELIVERY_IMPACTS.includes(impact)) errors.push("delivery contract impact is invalid");
+  if (impact === "non_ui") {
+    if (!explicitFact(input.reason ?? input.impact_evidence ?? input.basis)) errors.push("non_ui delivery requires an evidence-based reason");
+  } else if (impact === "ui" || impact === "fullstack") {
+    const ui = input.ui_contract;
+    if (!object(ui)) errors.push("ui delivery requires ui_contract");
+    else {
+      for (const field of ["design_identity", "experience_identity", "census_ref", "experience_scenario_ref", "evidence_ref"]) if (!explicitFact(ui[field])) errors.push(`ui_contract requires ${field}`);
+    }
+  }
+  if (impact === "backend" || impact === "fullstack") validateBackendContract(input.data_contract ?? input.backend_contract, errors, { requireReadBack: impact === "fullstack" });
+  if (impact === "fullstack") {
+    const slice = input.e2e_slice;
+    if (!object(slice)) errors.push("fullstack delivery requires e2e_slice");
+    else {
+      if (!PASSED_FACT_STATUSES.has(factStatus(slice))) errors.push("fullstack e2e_slice must be a current successful fact");
+      for (const field of ["correlation_id", "request_ref", "consumer_read_back_ref"]) if (!explicitFact(slice[field])) errors.push(`fullstack e2e_slice requires ${field}`);
+      const readBack = (input.data_contract ?? input.backend_contract)?.read_back;
+      if (object(readBack) && explicitFact(slice.correlation_id) && readBack.correlation_id !== slice.correlation_id) errors.push("fullstack request/read-back correlation_id mismatch");
+      if (object(readBack) && explicitFact(slice.consumer_read_back_ref) && explicitFact(readBack.value_ref)
+          && slice.consumer_read_back_ref !== readBack.value_ref) errors.push("fullstack consumer read-back value_ref mismatch");
+    }
+  }
+  if (impact === "unknown" && !explicitFact(input.reason ?? input.unknown_reason)) errors.push("unknown delivery requires a reason");
+  // When build-code has current project sources/census, the UI contract must
+  // bind to those exact identities.  Non-empty labels alone are not enough:
+  // otherwise an unrelated Design.md/Experience.md or stale census can be
+  // presented as if it covered this implementation.
+  if (impact === "ui" || impact === "fullstack") {
+    const ui = object(input.ui_contract) ? input.ui_contract : {};
+    const standardSources = input.project_standard_sources ?? input.standard_sources;
+    if (object(standardSources)) {
+      const currentDesign = standardSources.design ?? standardSources.design_source ?? standardSources.identities?.design;
+      const currentExperience = standardSources.experience ?? standardSources.experience_source ?? standardSources.identities?.experience;
+      requireBoundIdentity("ui_contract.design", ui.design_identity, currentDesign, errors, { structured: true });
+      requireBoundIdentity("ui_contract.experience", ui.experience_identity, currentExperience, errors, { structured: true });
+      if (object(suppliedFacts.design) && explicitFact(suppliedFacts.design.identity ?? suppliedFacts.design.source)) {
+        requireBoundIdentity("facts.design", suppliedFacts.design.identity ?? suppliedFacts.design.source, currentDesign, errors, { structured: true });
+      }
+      if (object(suppliedFacts.experience) && explicitFact(suppliedFacts.experience.identity ?? suppliedFacts.experience.source)) {
+        requireBoundIdentity("facts.experience", suppliedFacts.experience.identity ?? suppliedFacts.experience.source, currentExperience, errors, { structured: true });
+      }
+    }
+    const censusSource = input.consumer_census;
+    if (censusSource !== undefined) {
+      const census = censusSource?.ok === true && nonEmptyString(censusSource.replay_key)
+        ? censusSource
+        : buildConsumerCensus(censusSource);
+      const declaredCensus = ui.census_ref;
+      if (!census.ok) errors.push("ui_contract census identity source is invalid");
+      else if (!exactIdentityToken(declaredCensus) || exactIdentityToken(declaredCensus) !== exactIdentityToken(census.replay_key)) errors.push("ui_contract.census_ref does not exactly match current consumer census");
+      if (census.ok && input.current_snapshot_tree && census.source_snapshot?.tree !== input.current_snapshot_tree) {
+        errors.push("ui_contract consumer census is stale for the current snapshot");
+      }
+      if (census.ok && census.consumers.length === 0) errors.push("ui_contract consumer census has no discovered consumer");
+      if (census.ok && census.experience_index.length > 0) {
+        const scenarioTokens = identityTokens(ui.experience_scenario_ref);
+        const indexed = census.experience_index.flatMap((entry) => [entry.consumer_id, entry.page, entry.page_ref].filter(nonEmptyString));
+        if (![...scenarioTokens].some((token) => indexed.includes(token))) errors.push("ui_contract.experience_scenario_ref does not match consumer census experience index");
+      } else if (census.ok) {
+        errors.push("ui_contract experience scenario has no indexed Experience page");
+      }
+      if (object(suppliedFacts.census) && explicitFact(suppliedFacts.census.replay_key ?? suppliedFacts.census.identity)) {
+        requireBoundIdentity("facts.census", suppliedFacts.census.replay_key ?? suppliedFacts.census.identity, census.replay_key, errors, { exactToken: true });
+      }
+    }
+    const evidenceSource = input.ui_evidence ?? input.evidence_source ?? input.current_ui_evidence;
+    if (evidenceSource !== undefined) {
+      const declaredEvidence = ui.evidence_ref;
+      const currentEvidence = object(evidenceSource) ? (evidenceSource.ref ?? evidenceSource.evidence_ref ?? evidenceSource.identity ?? evidenceSource) : evidenceSource;
+      requireBoundIdentity("ui_contract.evidence", declaredEvidence, currentEvidence, errors, { exactToken: true });
+      if (object(suppliedFacts.evidence) && explicitFact(suppliedFacts.evidence.identity ?? suppliedFacts.evidence.ref ?? suppliedFacts.evidence.evidence_ref)) {
+        requireBoundIdentity("facts.evidence", suppliedFacts.evidence.identity ?? suppliedFacts.evidence.ref ?? suppliedFacts.evidence.evidence_ref, currentEvidence, errors, { exactToken: true });
+      }
+    }
+  }
+  const normalizedSuppliedFacts = { ...suppliedFacts };
+  if (impact === "non_ui" && typeof normalizedSuppliedFacts.impact_evidence === "string") {
+    normalizedSuppliedFacts.impact_evidence = { status: "passed", reason: normalizedSuppliedFacts.impact_evidence };
+  }
+  const data = input.data_contract ?? input.backend_contract;
+  const derivedFacts = {
+    ...normalizedSuppliedFacts,
+    ...(impact === "non_ui" && !Object.hasOwn(normalizedSuppliedFacts, "impact_evidence")
+      ? {
+        impact_evidence: (() => {
+          const evidence = input.impact_evidence ?? input.reason ?? input.basis;
+          return typeof evidence === "string" ? { status: "passed", reason: evidence } : evidence;
+        })(),
+      }
+      : {}),
+    ...(impact === "ui" || impact === "fullstack"
+      ? {
+        design: suppliedFacts.design ?? input.ui_contract?.design,
+        experience: suppliedFacts.experience ?? input.ui_contract?.experience,
+        census: suppliedFacts.census ?? input.ui_contract?.census,
+        evidence: suppliedFacts.evidence ?? input.ui_contract?.evidence,
+      }
+      : {}),
+    ...(impact === "backend" || impact === "fullstack"
+      ? {
+        api: suppliedFacts.api ?? data?.api,
+        dto: suppliedFacts.dto ?? data?.dto,
+        schema_migration: suppliedFacts.schema_migration ?? data?.schema_migration,
+        persistence: suppliedFacts.persistence ?? data?.persistence,
+        consumer: suppliedFacts.consumer ?? data?.consumer,
+        ...(impact === "fullstack" ? { e2e_slice: suppliedFacts.e2e_slice ?? input.e2e_slice } : {}),
+      }
+      : {}),
+  };
+  const conclusion = deriveDeliveryConclusion({ impact, facts: derivedFacts });
+  if (errors.length === 0 && conclusion.status !== "covered") {
+    errors.push(`delivery contract conclusion is ${conclusion.status}; required current facts are not all covered`);
+  }
+  return result(errors, { status: errors.length === 0 ? conclusion.status : "incomplete", conclusion });
+}
+
+/**
+ * Build the intentionally short prompt sent to an external design tool.
+ * Design.md and the UI Contract carry technical constraints; this function
+ * only emits page/region, interaction, state and visible-label context.
+ */
+export function buildShortUiDesignPrompt(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["short UI design prompt input must be an object"]);
+  const pageOrRegion = String(input.page_or_region ?? input.page ?? input.region ?? "").trim();
+  const interactions = factList(input.interactions ?? input.interaction);
+  const states = factList(input.states ?? input.state);
+  const visibleLabels = factList(input.visible_labels);
+  if (!pageOrRegion) errors.push("short UI design prompt page_or_region is required");
+  if (interactions.length === 0) errors.push("short UI design prompt interactions are required");
+  if (states.length === 0) errors.push("short UI design prompt states are required");
+  if (visibleLabels.length === 0) errors.push("short UI design prompt visible_labels are required");
+  const fields = Object.freeze({
+    page_or_region: pageOrRegion,
+    interactions: Object.freeze(interactions),
+    states: Object.freeze(states),
+    visible_labels: Object.freeze(visibleLabels),
+  });
+  const prompt = errors.length > 0 ? null : [
+    `页面/区域：${pageOrRegion}`,
+    `交互：${interactions.join("；")}`,
+    `状态：${states.join("；")}`,
+    `可见 label：${visibleLabels.join("、")}`,
+  ].join("\n");
+  return result(errors, { fields, prompt });
+}
+
+/**
+ * Produce the executable output contract of ui-project-init. Missing project
+ * inputs are facts with reasons, not errors and never become a progression
+ * gate. The function deliberately does no filesystem mutation or inference.
+ */
+export function buildUiProjectInitFact(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["ui-project-init input must be an object"]);
+  const mode = input.mode;
+  if (!["new", "legacy"].includes(mode)) errors.push("ui-project-init mode must be new or legacy");
+  const inventory = object(input.project_inventory) ? input.project_inventory : {};
+  const missingItems = [];
+  const missing = (code, reason) => {
+    missingItems.push(Object.freeze({ code, reason }));
+    return unknownFact(reason);
+  };
+  const designPath = nonEmptyString(input.design_path ?? input.design_source_path)
+    ? String(input.design_path ?? input.design_source_path).trim()
+    : missing("DESIGN-SOURCE-PATH-MISSING", "Design.md path was not provided");
+  const designRevision = versionFact(input.design_revision)
+    ? input.design_revision
+    : missing("DESIGN-REVISION-MISSING", "Design.md version was not provided");
+  const experiencePath = nonEmptyString(input.experience_path ?? input.experience_source_path)
+    ? String(input.experience_path ?? input.experience_source_path).trim()
+    : missing("EXPERIENCE-SOURCE-PATH-MISSING", "Experience.md path was not provided");
+  const experienceRevision = versionFact(input.experience_revision)
+    ? input.experience_revision
+    : missing("EXPERIENCE-REVISION-MISSING", "Experience.md version was not provided");
+  const scope = knownOrUnknown(input.scope ?? input.first_page ?? inventory.first_page,
+    mode === "legacy" ? "legacy first-page boundary requires human selection" : "first UI page or region is not selected");
+  const componentBoundary = knownOrUnknown(
+    input.component_boundary ?? (mode === "legacy" ? inventory.component_candidates : undefined),
+    mode === "legacy" ? "legacy component candidates were not inventoried" : "component boundary is not selected",
+  );
+  const styleBoundary = knownOrUnknown(
+    input.style_boundary ?? (mode === "legacy" ? inventory.css_boundary : undefined),
+    mode === "legacy" ? "legacy CSS boundary was not inventoried" : "style boundary is not selected",
+  );
+  const fixture = knownOrUnknown(input.fixture, "fixed preview fixture is not selected");
+  const viewport = knownOrUnknown(input.viewport, "preview viewport is not selected");
+  const preview = knownOrUnknown(input.preview, "preview host or Story is unavailable");
+  const assumptions = Array.isArray(input.assumptions) && input.assumptions.length > 0
+    ? input.assumptions
+    : [unknownFact("initialization assumptions are not confirmed")];
+  const humanConfirmation = object(input.human_confirmation) || nonEmptyString(input.human_confirmation)
+    ? input.human_confirmation
+    : unknownFact("human confirmation is pending");
+  const status = missingItems.length > 0 || [scope, componentBoundary, styleBoundary, fixture, viewport, preview]
+    .some((value) => object(value) && MISSING_FACT_STATUSES.has(String(value.status ?? "").toLowerCase()))
+    ? "not_ready"
+    : "ready";
+  const legacyInventory = mode === "legacy"
+    ? Object.freeze({
+      technology_stack: inventoryFact(
+        inventory.technology_stack ?? inventory.tech_stack ?? inventory.stack,
+        "legacy technology stack was not inventoried",
+      ),
+      routes: inventoryFact(inventory.routes, "legacy routes were not inventoried"),
+      css_side_effects: inventoryFact(
+        inventory.css_side_effects ?? inventory.css_effects ?? inventory.css_boundary,
+        "legacy CSS side effects were not inventoried",
+      ),
+      data_entrypoints: inventoryFact(
+        inventory.data_entrypoints ?? inventory.data_sources ?? inventory.data_entry_points,
+        "legacy data entrypoints were not inventoried",
+      ),
+      component_candidates: inventoryFact(
+        inventory.component_candidates ?? input.component_boundary,
+        "legacy component candidates were not inventoried",
+      ),
+      testing_capability: inventoryFact(
+        inventory.testing_capability ?? inventory.test_capability ?? inventory.tests,
+        "legacy testing capability was not inventoried",
+      ),
+      baseline: inventoryFact(inventory.baseline, "legacy baseline was not recorded"),
+      legacy_exceptions: inventoryFact(
+        inventory.legacy_exceptions ?? inventory.exceptions,
+        "legacy exceptions were not recorded",
+      ),
+      first_page_candidates: inventoryFact(
+        inventory.first_page_candidates ?? inventory.first_page ?? input.first_page,
+        "legacy first-page candidates were not inventoried",
+      ),
+      coupling_risks: inventoryFact(
+        inventory.coupling_risks ?? inventory.coupling_risk,
+        "legacy coupling risks were not inventoried",
+      ),
+      minimal_scope_reduction: inventoryFact(
+        inventory.minimal_scope_reduction ?? inventory.scope_reduction ?? inventory.shrink_suggestion,
+        "legacy minimal scope-reduction suggestion was not recorded",
+      ),
+    })
+    : undefined;
+  return result(errors, {
+    mode,
+    status,
+    design_path: designPath,
+    design_revision: designRevision,
+    experience_path: experiencePath,
+    experience_revision: experienceRevision,
+    source_identities: Object.freeze({
+      design: object(input.design_identity) ? input.design_identity : unknownFact("Design.md identity is not bound"),
+      experience: object(input.experience_identity) ? input.experience_identity : unknownFact("Experience.md identity is not bound"),
+    }),
+    scope,
+    component_boundary: componentBoundary,
+    style_boundary: styleBoundary,
+    fixture,
+    viewport,
+    preview,
+    missing_items: Object.freeze(missingItems),
+    assumptions: Object.freeze(assumptions),
+    human_confirmation: humanConfirmation,
+    ...(legacyInventory ? { legacy_inventory: legacyInventory } : {}),
+    gate: false,
+  });
+}
+
+function parseDesignMarkdownSections(content) {
+  if (typeof content !== "string" || content.trim() === "") return [];
+  return [...content.matchAll(/^#{2,6}\s+(.+?)\s*$/gm)].map(([, heading]) => ({
+    page_or_region: heading.trim(),
+  }));
+}
+
+/**
+ * Derive a Screen Read Map from caller-parsed Design.md sections (or headings
+ * in the supplied text). This is a pure lens: it reports missing fields and
+ * freshness but does not rewrite Design.md or score visual quality.
+ */
+export function deriveDesignSourceReadiness(input = {}) {
+  const errors = [];
+  if (!object(input)) return result(["design-source-readiness input must be an object"]);
+  const designPath = nonEmptyString(input.design_path ?? input.path)
+    ? String(input.design_path ?? input.path).trim()
+    : "";
+  const actualRevision = input.design_revision;
+  const expectedRevision = input.expected_design_revision;
+  const sections = Array.isArray(input.sections)
+    ? input.sections
+    : Array.isArray(input.read_map)
+      ? input.read_map
+      : parseDesignMarkdownSections(input.design_content ?? input.content);
+  const missingItems = [];
+  const addMissing = (code, reason, anchor = undefined) => {
+    const fact = Object.freeze({ code, reason, ...(anchor ? { anchor } : {}) });
+    missingItems.push(fact);
+    return fact;
+  };
+  let bindingState = "bindable";
+  let freshnessStatus = "matching";
+  if (!designPath) {
+    bindingState = "not_bindable";
+    freshnessStatus = "unknown";
+    addMissing("DESIGN-SOURCE-MISSING", "Design.md path is unavailable");
+  } else if (!versionFact(actualRevision)) {
+    bindingState = "unknown";
+    freshnessStatus = "unknown";
+    addMissing("DESIGN-REVISION-MISSING", "Design.md version is unavailable");
+  } else if (versionFact(expectedRevision) && String(actualRevision) !== String(expectedRevision)) {
+    bindingState = "not_bindable";
+    freshnessStatus = "stale";
+    addMissing("DESIGN-REVISION-MISMATCH", "current Design.md version does not match the requested version");
+  }
+  if (!Array.isArray(sections)) {
+    bindingState = bindingState === "bindable" ? "unknown" : bindingState;
+    freshnessStatus = freshnessStatus === "matching" ? "unknown" : freshnessStatus;
+    addMissing("SCREEN-READ-MAP-MISSING", "Design.md sections could not be read");
+  }
+  const sourceSections = Array.isArray(sections) ? sections : [];
+  const readMap = sourceSections.map((section, index) => {
+    const source = object(section) ? section : {};
+    const explicitAnchor = source.anchor_id ?? source.anchor ?? source.id;
+    const anchor = nonEmptyString(explicitAnchor)
+      ? String(explicitAnchor).trim()
+      : `section-${index + 1}`;
+    const entryMissing = [];
+    if (!nonEmptyString(explicitAnchor)) {
+      entryMissing.push("anchor_id is missing; heading slugs are not stable anchors");
+      addMissing("SCREEN-READ-MAP-ANCHOR-MISSING", "Design.md section needs an explicit anchor_id", anchor);
+    }
+    for (const field of [
+      "page_or_region", "goal", "primary_action", "states", "components", "tokens",
+      "fixture", "viewport", "responsive", "a11y", "evidence",
+    ]) {
+      const value = field === "page_or_region"
+        ? (source.page_or_region ?? source.page ?? source.region)
+        : source[field];
+      if (!explicitFact(value) && !(Array.isArray(value) && value.length > 0)) {
+        entryMissing.push(`${field} is missing`);
+      }
+    }
+    for (const reason of entryMissing) addMissing("SCREEN-READ-MAP-FIELD-MISSING", reason, anchor);
+    return Object.freeze({
+      anchor,
+      page_or_region: source.page_or_region ?? source.page ?? source.region ?? unknownFact("page or region is missing"),
+      goal: source.goal ?? unknownFact("screen goal is missing"),
+      primary_action: source.primary_action ?? unknownFact("primary action is missing"),
+      states: source.states ?? unknownFact("state list is missing"),
+      components: source.components ?? unknownFact("component source is missing"),
+      tokens: source.tokens ?? unknownFact("token/style source is missing"),
+      fixture: source.fixture ?? unknownFact("fixture is missing"),
+      viewport: source.viewport ?? unknownFact("viewport is missing"),
+      responsive: source.responsive ?? unknownFact("responsive intent is missing"),
+      a11y: source.a11y ?? unknownFact("accessibility intent is missing"),
+      evidence: source.evidence ?? unknownFact("preview/browser/screenshot evidence is missing"),
+      missing_items: Object.freeze(entryMissing),
+    });
+  });
+  if (readMap.length === 0) addMissing("SCREEN-READ-MAP-EMPTY", "Design.md contains no page or section map");
+  const confirmation = object(input.human_confirmation) || nonEmptyString(input.human_confirmation)
+    ? input.human_confirmation
+    : unknownFact("human confirmation is pending");
+  const status = bindingState === "bindable" && missingItems.length === 0 ? "ready" : "not_ready";
+  return result(errors, {
+    status,
+    design_path: designPath || unknownFact("Design.md path is unavailable"),
+    design_revision: designRevisionValue(actualRevision),
+    expected_design_revision: expectedRevision ?? unknownFact("requested Design.md version is not specified"),
+    binding_state: bindingState,
+    read_map: Object.freeze(readMap),
+    missing_items: Object.freeze(missingItems),
+    freshness: Object.freeze({
+      status: freshnessStatus,
+      expected: expectedRevision ?? null,
+      actual: actualRevision ?? null,
+    }),
+    human_confirmation: confirmation,
+    gate: false,
+  });
+}
+
+/**
+ * Validate one append-only design-loop fact. It makes the failure/cancel/
+ * version-mismatch labels observable while leaving continuation non-gating.
+ */
+export function validateUiDesignLoopFact(value) {
+  const errors = [];
+  if (!object(value)) return result(["UI design loop fact must be an object"]);
+  const state = value.state ?? value.status;
+  if (!UI_DESIGN_LOOP_STATES.includes(state)) errors.push("UI design loop state is invalid");
+  if (!nonEmptyString(value.current_material_ref)) errors.push("UI design loop current_material_ref is required");
+  if (value.gate === true || value.is_gate === true) errors.push("UI design loop fact must not become a gate");
+  const actions = actionLabels(value);
+  if (UI_DESIGN_ACTION_LABELS[state] && !hasActions(value, UI_DESIGN_ACTION_LABELS[state])) {
+    errors.push(`UI design loop ${state} must preserve its visible action labels`);
+  }
+  if (state === "preview_ready" && !collectionFact(value.preview_refs ?? value.preview_ref)) {
+    errors.push("preview_ready requires preview_refs");
+  }
+  if (state === "preview_unavailable" && !nonEmptyString(value.reason)) {
+    errors.push("preview_unavailable requires a reason");
+  }
+  if (state === "design_prompt_ready") {
+    const promptInput = value.prompt ?? value.design_prompt;
+    const prompt = buildShortUiDesignPrompt(promptInput);
+    if (!prompt.ok) errors.push(...prompt.errors.map((error) => `design_prompt: ${error}`));
+    if (nonEmptyString(value.prompt_text) && value.prompt_text !== prompt.prompt) {
+      errors.push("design_prompt prompt_text does not match the executable prompt builder");
+    }
+  }
+  if (state === "external_design_pending" && !nonEmptyString(value.prompt_ref)) {
+    errors.push("external_design_pending requires prompt_ref");
+  }
+  if (state === "external_design_returned") {
+    if (!nonEmptyString(value.design_ref)) errors.push("external_design_returned requires design_ref");
+    if (!versionFact(value.expected_design_revision)) errors.push("external_design_returned requires expected_design_revision");
+    if (!versionFact(value.returned_design_revision)) errors.push("external_design_returned requires returned_design_revision");
+    if (String(value.expected_design_revision) !== String(value.returned_design_revision)) {
+      errors.push("external_design_returned cannot carry a mismatched design revision");
+    }
+  }
+  if (["external_design_cancelled", "external_design_not_returned"].includes(state)) {
+    if (!nonEmptyString(value.reason)) errors.push(`${state} requires a reason`);
+    if (value.preserves_current_contract !== true) errors.push(`${state} must preserve the current UI Contract`);
+  }
+  if (state === "external_design_version_mismatch") {
+    if (!versionFact(value.expected_design_revision)) errors.push("external_design_version_mismatch requires expected_design_revision");
+    if (value.returned_design_revision !== undefined
+      && versionFact(value.returned_design_revision)
+      && String(value.expected_design_revision) === String(value.returned_design_revision)) {
+      errors.push("external_design_version_mismatch must retain a different or missing returned revision");
+    }
+    if (!nonEmptyString(value.reason)) errors.push("external_design_version_mismatch requires a reason");
+    if (value.preserves_current_contract !== true) errors.push("external_design_version_mismatch must preserve the current UI Contract");
+  }
+  if (["human_approved", "human_acknowledged", "human_not_approved"].includes(state)) {
+    const expected = state === "human_approved" ? "approved" : state === "human_acknowledged" ? "acknowledged" : "not_approved";
+    const confirmation = object(value.human_confirmation) ? value.human_confirmation.result : value.human_confirmation;
+    if (confirmation !== expected) errors.push(`${state} requires human_confirmation=${expected}`);
+    if (state === "human_approved" && value.continuation_allowed !== true) {
+      errors.push("human_approved must explicitly preserve continuation_allowed=true");
+    }
+    if (state !== "human_approved" && value.continuation_allowed !== false) {
+      errors.push(`${state} must explicitly preserve continuation_allowed=false`);
+    }
+    if (state !== "human_approved" && value.design_status === "ready") errors.push(`${state} cannot mark design_status=ready`);
+  }
+  return result(errors, {
+    state,
+    continuation_allowed: state === "human_approved",
+    visible_actions: Object.freeze(actions),
+  });
+}
+
+function namedFact(value) {
+  return nonEmptyString(value) || (object(value) && (
+    nonEmptyString(value.name)
+    || nonEmptyString(value.page)
+    || nonEmptyString(value.region)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.ref)
+  ));
+}
+
+function componentFact(value) {
+  return nonEmptyString(value) || (object(value) && (
+    nonEmptyString(value.name)
+    || nonEmptyString(value.path)
+    || nonEmptyString(value.ref)
+  ));
+}
+
+/**
+ * Validate the UI applicability fact carried by the existing stage contracts.
+ * It is a derived fact from three named inputs; it never acts as a gate.
+ */
+export function validateUiApplicability(value) {
+  const errors = [];
+  if (!object(value)) return result(["ui applicability must be an object"]);
+  const declared = value.result ?? value.conclusion;
+  if (!UI_APPLICABILITY_RESULTS.includes(declared)) {
+    errors.push("ui applicability result must be ui, non_ui, or unknown");
+  }
+  const sources = value.sources ?? value.source_facts;
+  if (!object(sources) && !Array.isArray(sources)) errors.push("ui applicability must retain the three source facts");
+  const sourceValues = UI_APPLICABILITY_INPUTS.map((input) => {
+    if (object(sources)) return sources[input];
+    if (Array.isArray(sources)) {
+      const entry = sources.find((candidate) => candidate?.name === input || candidate?.input === input);
+      return entry?.value ?? entry?.fact ?? entry;
+    }
+    return undefined;
+  });
+  for (const input of UI_APPLICABILITY_INPUTS) {
+    if (object(sources) && !Object.prototype.hasOwnProperty.call(sources, input)) errors.push(`ui applicability source missing ${input}`);
+    if (Array.isArray(sources) && !sources.some((entry) => entry?.name === input || entry?.input === input)) errors.push(`ui applicability source missing ${input}`);
+  }
+  const sourceResults = sourceValues.map(sourceConclusion);
+  const hasUi = sourceResults.includes("ui");
+  const hasNonUi = sourceResults.includes("non_ui");
+  const hasConflict = sourceResults.includes("conflict");
+  const derived = hasConflict || (hasUi && hasNonUi)
+    ? "unknown"
+    : hasUi
+      ? "ui"
+      : sourceResults.every((entry) => entry === "non_ui")
+        ? "non_ui"
+        : "unknown";
+  if (declared !== derived) {
+    errors.push(`ui applicability result ${declared ?? "missing"} conflicts with derived ${derived}`);
+  }
+  if (derived === "unknown") {
+    if (!nonEmptyString(value.reason) && !nonEmptyString(value.unknown_reason)
+      && !(Array.isArray(value.source_reasons) && value.source_reasons.some((reason) => explicitFact(reason)))) {
+      errors.push("unknown ui applicability requires source reasons");
+    }
+    if (!nonEmptyString(value.handoff) || !/make-decision/i.test(value.handoff)) errors.push("unknown ui applicability requires a make-decision handoff");
+  }
+  if (value.gate === true || value.is_gate === true) errors.push("ui applicability must not become a gate");
+  return result(errors, { derived_result: derived, source_results: Object.freeze(sourceResults) });
+}
+
+/**
+ * Validate the UI Contract and its state-level eight-field observation seam.
+ * Missing design/preview facts remain observable quality facts and do not
+ * become a stage gate.
+ */
+export function validateUiContract(value) {
+  const errors = [];
+  if (!object(value)) return result(["ui contract must be an object"]);
+  if (!UI_DESIGN_STATUSES.has(value.design_status)) errors.push("ui contract design_status is invalid");
+  const pageOrRegion = value.page_or_region ?? value.page ?? value.region;
+  if (!namedFact(pageOrRegion)) errors.push("ui contract page_or_region is required");
+  for (const field of UI_CONTRACT_FIELDS) {
+    if (field === "page_or_region") continue;
+    if (value[field] === undefined || value[field] === null) errors.push(`ui contract is missing ${field}`);
+  }
+  const designAuthority = object(value.design_authority) ? value.design_authority : null;
+  for (const [kind, label] of [["design", "Design.md"], ["experience", "Experience.md"]]) {
+    if (!completeProjectSourceIdentity(designAuthority?.[kind])) {
+      errors.push(`ui contract design_authority must bind ${label} by path, content_sha256, revision, and explicit anchor`);
+    }
+  }
+  if (!Array.isArray(value.missing_items)) errors.push("ui contract missing_items must be an array");
+  for (const [index, item] of (Array.isArray(value.missing_items) ? value.missing_items : []).entries()) {
+    if (!explicitFact(item)) errors.push(`ui contract missing_items[${index}] must include a non-empty reasoned fact`);
+  }
+  if (!versionFact(value.design_revision)) errors.push("ui contract design_revision must be a version or reasoned unknown");
+  for (const field of ["current_material_ref", "fallback_visual_basis", "rework_risk"]) {
+    if (!explicitFact(value[field])) errors.push(`ui contract ${field} must preserve a non-empty fact or reasoned unknown`);
+  }
+  for (const field of ["visible_labels", "preview_refs", "fixture_refs", "viewport_refs", "screenshot_refs"]) {
+    if (!collectionFact(value[field])) errors.push(`ui contract ${field} must preserve a non-empty fact or reasoned unknown`);
+  }
+  if (!collectionFact(value.constraints, { allowEmpty: true })) errors.push("ui contract constraints must be an explicit list or reasoned fact");
+  if (!collectionFact(value.assumptions, { allowEmpty: true })) errors.push("ui contract assumptions must be an explicit list or reasoned fact");
+  const states = value.states ?? value.state_contracts ?? [];
+  if (!Array.isArray(states)) errors.push("ui contract states must be an array");
+  if (Array.isArray(states) && states.length === 0) errors.push("ui contract requires at least one state");
+  for (const [index, state] of (Array.isArray(states) ? states : []).entries()) {
+    if (!object(state)) {
+      errors.push(`ui contract state ${index + 1} must be an object`);
+      continue;
+    }
+    for (const field of UI_STATE_CONTRACT_FIELDS) {
+      const valid = field === "name" ? namedFact(state[field]) : explicitFact(state[field]);
+      if (!valid) errors.push(`ui contract state ${index + 1} missing ${field}`);
+    }
+  }
+  if (value.human_confirmation !== undefined && value.human_confirmation !== null) {
+    const confirmation = value.human_confirmation.result ?? value.human_confirmation;
+    if (!UI_CONFIRMATION_RESULTS.has(confirmation)) errors.push("ui contract human_confirmation result is invalid");
+  } else {
+    errors.push("ui contract human_confirmation is required");
+  }
+  const confirmation = object(value.human_confirmation)
+    ? value.human_confirmation.result
+    : value.human_confirmation;
+  if (value.design_status === "ready" && confirmation !== "approved") {
+    errors.push("ready ui contract requires approved human_confirmation");
+  }
+  if (["not_ready", "unknown", "unavailable"].includes(value.design_status)) {
+    const hasMissingReason = Array.isArray(value.missing_items)
+      && value.missing_items.some((item) => explicitFact(item));
+    if (!hasMissingReason && !explicitFact(value.rework_risk)) {
+      errors.push("non-ready ui contract requires a missing-item reason or rework_risk");
+    }
+  }
+  if (value.gate === true || value.is_gate === true) errors.push("ui contract must not become a gate");
+  return result(errors);
+}
+
+/**
+ * Validate the conditional Component Quality Map consumed by plan/code/verify.
+ * The map records ownership and consumers; it does not grant a progression
+ * permit.
+ */
+export function validateComponentQualityMap(value) {
+  const errors = [];
+  const risks = [];
+  const entries = Array.isArray(value) ? value : value?.entries;
+  if (!Array.isArray(entries)) return result(["component quality map must contain entries"]);
+  for (const [index, entry] of entries.entries()) {
+    if (!object(entry)) {
+      errors.push(`component quality entry ${index + 1} must be an object`);
+      continue;
+    }
+    if (!COMPONENT_QUALITY_ACTIONS.includes(entry.action)) errors.push(`component quality entry ${index + 1} action is invalid`);
+    if (!componentFact(entry.component)) errors.push(`component quality entry ${index + 1} missing component`);
+    const consumers = Array.isArray(entry.real_consumers)
+      ? entry.real_consumers
+      : entry.real_consumer === undefined ? [] : [entry.real_consumer];
+    const hasUnknownConsumer = consumers.some((consumer) => object(consumer)
+      && MISSING_FACT_STATUSES.has(String(consumer.status ?? "").toLowerCase())
+      && nonEmptyString(consumer.reason));
+    const hasMalformedConsumer = consumers.some((consumer) => (
+      (typeof consumer === "string" && UNKNOWN_LITERAL.test(consumer.trim()))
+      || (!nonEmptyString(consumer) && !(
+        object(consumer)
+        && MISSING_FACT_STATUSES.has(String(consumer.status ?? "").toLowerCase())
+        && nonEmptyString(consumer.reason)
+      ))
+    ));
+    const validConsumers = consumers.filter(resolvedConsumer);
+    const distinctConsumers = new Set(validConsumers.map((consumer) => consumer.trim()));
+    if (hasMalformedConsumer) errors.push(`component quality entry ${index + 1} contains a malformed real consumer fact`);
+    if (hasUnknownConsumer) risks.push(`component quality entry ${index + 1} retains an unresolved real_consumer fact`);
+    if (entry.action === "extract-shared" && distinctConsumers.size < 2 && !hasUnknownConsumer) errors.push(`component quality entry ${index + 1} extract-shared requires two distinct real consumers`);
+    if (entry.action === "extract-shared" && distinctConsumers.size < 2 && hasUnknownConsumer) risks.push(`component quality entry ${index + 1} cannot confirm two distinct real consumers`);
+    if (entry.action !== "remove-after-no-consumers" && validConsumers.length === 0 && !hasUnknownConsumer) errors.push(`component quality entry ${index + 1} requires a real consumer`);
+    if (entry.action === "remove-after-no-consumers" && validConsumers.length > 0) errors.push(`component quality entry ${index + 1} removal still has a real consumer`);
+    if (entry.action === "remove-after-no-consumers") {
+      const hasRemovalEvidence = nonEmptyString(entry.no_consumer_evidence)
+        || (Array.isArray(entry.evidence_refs) && entry.evidence_refs.some(nonEmptyString));
+      if (!hasRemovalEvidence) errors.push(`component quality entry ${index + 1} removal requires no-consumer evidence`);
+    }
+    for (const field of ["state_owner", "typed_view_model", "css_token_owner"]) {
+      if (!explicitFact(entry[field])) errors.push(`component quality entry ${index + 1} missing ${field}`);
+    }
+    if (["modify", "extend-state-or-variant", "add-local", "extract-shared"].includes(entry.action) && !explicitFact(entry.story_or_test_update)) {
+      errors.push(`component quality entry ${index + 1} ${entry.action} requires story_or_test_update`);
+    }
+    if (entry.gate === true || entry.is_gate === true) errors.push("component quality map must not become a gate");
+  }
+  return result(errors, { risks: Object.freeze(risks) });
+}
+
+function semanticAnchor(value, expectedRole = null) {
+  return object(value)
+    && nonEmptyString(value.id)
+    && nonEmptyString(value.path)
+    && !value.path.startsWith("/")
+    && !value.path.split("/").includes("..")
+    && Number.isSafeInteger(value.start_line)
+    && value.start_line >= 1
+    && Number.isSafeInteger(value.end_line)
+    && value.end_line >= value.start_line
+    && nonEmptyString(value.role)
+    && (expectedRole === null || value.role === expectedRole);
+}
+
+const GIT_OID = /^[a-f0-9]{40,64}$/i;
+
+/**
+ * Validate the small, append-only evidence carrier used by a build-code
+ * phase.  Implementation and integration baselines are deliberately typed
+ * separately: equal commit values in a fixture do not make them the same
+ * fact.  The carrier is bound to one candidate snapshot and never acts as a
+ * completion permit by itself.
+ */
+export function validateBuildCodePhaseEvidence(value, { snapshotTree } = {}) {
+  if (!object(value)) throw new TypeError("build-code phase evidence must be an object");
+  const allowed = new Set(["schema_version", "phase_id", "phase_order", "snapshot_tree", "baseline", "evidence", "failure_attribution"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`build-code phase evidence contains unsupported fields: ${unknown.join(", ")}`);
+  if (value.schema_version !== "build-code-phase-evidence.v1") throw new Error("build-code phase evidence schema_version is invalid");
+  if (typeof value.phase_id !== "string" || value.phase_id.trim() === "") throw new TypeError("build-code phase evidence phase_id is required");
+  if (!Array.isArray(value.phase_order) || value.phase_order.length === 0
+      || value.phase_order.some((entry) => typeof entry !== "string" || entry.trim() === "")
+      || new Set(value.phase_order).size !== value.phase_order.length) {
+    throw new TypeError("build-code phase evidence phase_order must contain unique non-empty task ids");
+  }
+  if (!GIT_OID.test(value.snapshot_tree ?? "")) throw new TypeError("build-code phase evidence snapshot_tree must be a Git object id");
+  if (snapshotTree !== undefined && value.snapshot_tree !== snapshotTree) throw new Error("build-code phase evidence snapshot_tree drift");
+  if (!object(value.baseline)) throw new TypeError("build-code phase evidence baseline is required");
+  const baselines = {};
+  for (const role of ["implementation", "integration"]) {
+    const baseline = value.baseline[role];
+    if (!object(baseline) || Object.keys(baseline).some((key) => !new Set(["kind", "commit"]).has(key))
+        || baseline.kind !== role || !GIT_OID.test(baseline.commit ?? "")) {
+      throw new TypeError(`build-code phase evidence ${role} baseline is invalid`);
+    }
+    baselines[role] = { kind: role, commit: baseline.commit };
+  }
+  if (!Array.isArray(value.evidence) || value.evidence.length === 0) throw new TypeError("build-code phase evidence requires evidence");
+  const evidence = value.evidence.map((entry, index) => {
+    if (!object(entry) || Object.keys(entry).some((key) => !new Set(["ref", "sha256", "snapshot_tree"]).has(key))
+        || typeof entry.ref !== "string" || entry.ref.trim() === "" || !SHA256_HEX.test(entry.sha256 ?? "")
+        || !GIT_OID.test(entry.snapshot_tree ?? value.snapshot_tree) || (entry.snapshot_tree ?? value.snapshot_tree) !== value.snapshot_tree) {
+      throw new TypeError(`build-code phase evidence evidence[${index}] is invalid or stale`);
+    }
+    return { ref: entry.ref, sha256: entry.sha256, snapshot_tree: entry.snapshot_tree ?? value.snapshot_tree };
+  });
+  if (!object(value.failure_attribution)
+      || Object.keys(value.failure_attribution).some((key) => !new Set(["status", "category", "code", "reason", "exit_code"]).has(key))
+      || !new Set(["passed", "failed", "unknown", "incomplete"]).has(value.failure_attribution.status)
+      || typeof value.failure_attribution.category !== "string" || value.failure_attribution.category.trim() === ""
+      || typeof value.failure_attribution.code !== "string" || value.failure_attribution.code.trim() === ""
+      || typeof value.failure_attribution.reason !== "string" || value.failure_attribution.reason.trim() === ""
+      || (value.failure_attribution.exit_code !== undefined && !Number.isInteger(value.failure_attribution.exit_code))) {
+    throw new TypeError("build-code phase evidence failure_attribution is invalid");
+  }
+  return Object.freeze({
+    schema_version: value.schema_version,
+    phase_id: value.phase_id,
+    phase_order: Object.freeze([...value.phase_order]),
+    snapshot_tree: value.snapshot_tree,
+    baseline: Object.freeze(baselines),
+    evidence: Object.freeze(evidence),
+    failure_attribution: Object.freeze({ ...value.failure_attribution }),
+  });
+}
+
+export function validateInteractionQuestionProgress(value) {
+  const errors = [];
+  if (!object(value)) return Object.freeze({
+    ok: false,
+    errors: Object.freeze(["interaction question progress must be an object"]),
+    facts: Object.freeze({}),
+  });
+  const asked = value.asked_question_ids;
+  const open = value.open_direction_changing_question_ids;
+  if (!Array.isArray(asked) || asked.some((id) => typeof id !== "string" || id.trim() === "")) {
+    errors.push("asked_question_ids must be non-empty string identifiers");
+  }
+  if (!Array.isArray(open) || open.some((id) => typeof id !== "string" || id.trim() === "")) {
+    errors.push("open_direction_changing_question_ids must be non-empty string identifiers");
+  }
+  const askedIds = Array.isArray(asked) ? asked : [];
+  const openIds = Array.isArray(open) ? open : [];
+  const allIds = [...askedIds, ...openIds];
+  if (new Set(allIds).size !== allIds.length) errors.push("asked and open question identifiers must be unique");
+
+  const currentTotal = askedIds.length + openIds.length;
+  const expectedQuestionNumber = openIds.length === 0 ? askedIds.length : askedIds.length + 1;
+  if (value.displayed_total !== currentTotal) {
+    errors.push("displayed_total must equal asked questions plus open direction-changing questions");
+  }
+  if (value.displayed_question_number !== expectedQuestionNumber) {
+    errors.push("displayed_question_number must identify the next open question");
+  }
+
+  const previous = value.previous;
+  const previousTotal = object(previous) && Number.isInteger(previous.displayed_total)
+    ? previous.displayed_total
+    : currentTotal;
+  const totalDelta = currentTotal - previousTotal;
+  if (object(previous) && totalDelta !== 0) {
+    if (typeof value.reply_ref !== "string" || value.reply_ref.trim() === "" || !SHA256_HEX.test(value.reply_hash ?? "")) {
+      errors.push("a changed total requires a bound real reply ref/hash");
+    }
+    if (typeof value.total_change_reason !== "string" || value.total_change_reason.trim() === "") {
+      errors.push("a changed total requires a factual change reason");
+    }
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({
+      displayed_question_number: value.displayed_question_number,
+      current_total: currentTotal,
+      total_delta: totalDelta,
+    }),
+  });
+}
+
+const INTERACTION_LIFECYCLE = Object.freeze(["ask", "wait", "reply", "resume"]);
+const DECISION_LOG_STEP_DISPOSITIONS = new Set([
+  "current",
+  "deferred",
+  "non_goal",
+  "non-goal",
+  "open",
+  "no_new_requirement",
+  "no-new-requirement",
+  "evidence_only",
+  "evidence-only",
+  "historical",
+]);
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function validHash(value) {
+  return SHA256_HEX.test(value ?? "");
+}
+
+function validInteractionRound(value) {
+  return Number.isSafeInteger(value) && value >= 1;
+}
+
+function questionIdentity(question, interactionType = "interaction") {
+  return interactionType === "Grill"
+    ? question?.frontier_id ?? question?.question_id ?? question?.axis
+    : question?.question_id ?? question?.frontier_id ?? question?.axis;
+}
+
+export function validateInteractionQuestionBatch(questions, { interactionType = "interaction", taskType = null, allowEmpty = false, emptyReason = null } = {}) {
+  const errors = [];
+  if (!Array.isArray(questions)) {
+    errors.push(`${interactionType} ask must be an explicit question array`);
+    return Object.freeze({ ok: false, errors: Object.freeze(errors), question_ids: Object.freeze([]), option_ids: Object.freeze(Object.create(null)) });
+  }
+  if (questions.length === 0) {
+    if (allowEmpty !== true || !nonEmptyString(emptyReason)) {
+      errors.push(`${interactionType} zero-question terminal requires an explicit reason`);
+    }
+    return Object.freeze({
+      ok: errors.length === 0,
+      errors: Object.freeze(errors),
+      question_ids: Object.freeze([]),
+      option_ids: Object.freeze(Object.create(null)),
+      empty_reason: nonEmptyString(emptyReason) ? emptyReason.trim() : null,
+    });
+  }
+  if (taskType === "unknown") errors.push(`${interactionType} task type is unknown; clarify before asking type-dependent questions`);
+  const ids = questions.map((question) => questionIdentity(question, interactionType));
+  const axes = questions.map((question) => question?.axis ?? question?.frontier_id ?? question?.question_id);
+  // Question ids are user/content supplied. A null-prototype map prevents a
+  // question named "constructor" or "__proto__" from resolving to an object
+  // prototype member during reply validation.
+  const optionIdsByQuestion = Object.create(null);
+  if (ids.some((id) => !nonEmptyString(id)) || new Set(ids).size !== ids.length) {
+    errors.push(`${interactionType} questions must have unique question ids or axes`);
+  }
+  if (axes.some((axis) => !nonEmptyString(axis)) || new Set(axes).size !== axes.length) {
+    errors.push(`${interactionType} questions must each contain one unique decision axis`);
+  }
+  for (const [index, question] of questions.entries()) {
+    if (taskType === "规划任务") {
+      const questionText = [question?.axis, question?.prompt, question?.question, question?.text, question?.kind, question?.question_kind]
+        .filter((value) => nonEmptyString(value)).join(" ");
+      const forbidden = PLANNING_QUESTION_FORBIDDEN_PATTERNS
+        .filter(([, pattern]) => pattern.test(questionText))
+        .map(([label]) => label);
+      if (forbidden.length > 0) {
+        errors.push(`${interactionType} planning question ${index + 1} asks forbidden implementation detail: ${forbidden.join(", ")}`);
+      }
+    }
+    if (question?.independent !== true) {
+      errors.push(`${interactionType} may batch only independent questions, never review work`);
+    }
+    if (question?.review === true) errors.push(`${interactionType} may not batch review work`);
+    const options = question?.options;
+    if (!Array.isArray(options) || options.length < 2 || options.length > 3) {
+      errors.push(`${interactionType} question ${index + 1} must provide 2 or 3 options`);
+      continue;
+    }
+    const optionIds = options.map((option) => option?.option_id ?? option?.number);
+    optionIdsByQuestion[ids[index]] = optionIds;
+    if (optionIds.some((id) => id === undefined || id === null) || new Set(optionIds).size !== optionIds.length) {
+      errors.push(`${interactionType} question ${index + 1} options must have unique numbers or ids`);
+    }
+    for (const [optionIndex, option] of options.entries()) {
+      for (const field of ["label", "meaning", "consequence", "risk"]) {
+        if (!nonEmptyString(option?.[field])) errors.push(`${interactionType} question ${index + 1} option ${optionIndex + 1} needs ${field}`);
+      }
+    }
+    const recommended = question?.recommended_option;
+    if (!optionIds.includes(recommended) || !nonEmptyString(question?.recommendation_reason)) {
+      errors.push(`${interactionType} question ${index + 1} needs a valid recommended option and reason`);
+    }
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    question_ids: Object.freeze(ids),
+    option_ids: Object.freeze(optionIdsByQuestion),
+  });
+}
+
+function validateInteractionQuestions(questions, interactionType, errors) {
+  const batch = validateInteractionQuestionBatch(questions, { interactionType });
+  errors.push(...batch.errors);
+  return batch;
+}
+
+/**
+ * Validate the host-visible lifecycle used by Talk, Grill, and Clarify.
+ *
+ * The events are an in-memory interaction fact, not a new persisted object.
+ * Both skills must expose a real ask -> wait -> user reply -> resume seam;
+ * the validator deliberately rejects an aggregate that merely claims it
+ * completed.
+ */
+export function validateInteractionLifecycleContract(value) {
+  const errors = [];
+  if (!object(value)) return Object.freeze({ ok: false, errors: Object.freeze(["interaction lifecycle must be an object"]), facts: Object.freeze({}) });
+
+  const interactionType = value.interaction_type ?? value.kind;
+  if (!new Set(["talk", "grill", "spec-clarify"]).has(interactionType)) errors.push("interaction lifecycle kind must be talk, grill, or spec-clarify");
+  if (!Array.isArray(value.events) || value.events.length !== INTERACTION_LIFECYCLE.length) {
+    errors.push("interaction lifecycle must contain ask -> wait -> reply -> resume events");
+  }
+  const events = Array.isArray(value.events) ? value.events : [];
+  for (const [index, expected] of INTERACTION_LIFECYCLE.entries()) {
+    if (events[index]?.event !== expected) errors.push(`interaction lifecycle event ${index + 1} must be ${expected}`);
+  }
+
+  const [ask, wait, reply, resume] = events;
+  const withdrawn = reply?.status === "withdrawn";
+  if (!nonEmptyString(ask?.card_ref) || !validHash(ask?.card_hash) || !validInteractionRound(ask?.round)) {
+    errors.push("ask must bind a card ref, hash, and positive round");
+  }
+  if (wait?.card_ref !== ask?.card_ref || wait?.card_hash !== ask?.card_hash
+      || wait?.round !== ask?.round || wait?.status !== "waiting-for-user") {
+    errors.push("wait must pause on the exact ask card and round until the user replies");
+  }
+  if (reply?.card_ref !== ask?.card_ref || reply?.card_hash !== ask?.card_hash
+      || reply?.round !== ask?.round
+      || reply?.source !== "user" || !nonEmptyString(reply?.reply_ref) || !validHash(reply?.reply_hash)) {
+    errors.push("reply must be a real user reply bound to the ask card and round");
+  }
+  if (resume?.card_ref !== ask?.card_ref || resume?.card_hash !== ask?.card_hash
+      || resume?.round !== ask?.round
+      || resume?.reply_ref !== reply?.reply_ref || resume?.reply_hash !== reply?.reply_hash
+      || resume?.status !== "resumed") {
+    errors.push("resume must bind the exact user reply, ask card, and round");
+  }
+
+  if (interactionType === "talk" || interactionType === "spec-clarify") {
+    const batch = validateInteractionQuestions(ask?.questions, interactionType, errors);
+    const questionIds = batch.question_ids;
+    const hasBatchReply = Array.isArray(reply?.answers) && reply.answers.length > 0;
+    if ((!hasBatchReply && !withdrawn) || reply?.re_ranked !== true) {
+      errors.push(`${interactionType} reply must contain the user answer(s) and re-rank the remaining questions`);
+    }
+    const answeredIds = new Set();
+    if (hasBatchReply) for (const answer of reply.answers) {
+      const answerId = questionIdentity(answer, interactionType);
+      if (!questionIds.includes(answerId)) errors.push(`${interactionType} reply answers must bind to questions in the current batch`);
+      if (answeredIds.has(answerId)) errors.push(`${interactionType} reply must not answer one question twice`);
+      answeredIds.add(answerId);
+      const selectedOption = answer?.option_id ?? answer?.number;
+      if (!(batch.option_ids[answerId] ?? []).includes(selectedOption)) {
+        errors.push(`${interactionType} reply option must belong to its question`);
+      }
+    }
+    const remaining = reply?.remaining_question_ids;
+    if (!Array.isArray(remaining) || remaining.some((id) => !questionIds.includes(id))
+        || new Set(remaining).size !== remaining.length
+        || questionIds.some((id) => !answeredIds.has(id) && !remaining.includes(id))
+        || remaining.some((id) => answeredIds.has(id))) {
+      errors.push(`${interactionType} reply must preserve and re-rank remaining question ids`);
+    }
+  }
+
+  if (interactionType === "grill") {
+    const questions = ask?.questions;
+    const batch = validateInteractionQuestions(questions, "Grill", errors);
+    const frontierIds = batch.question_ids;
+    if (Object.prototype.hasOwnProperty.call(value, "review_fact") || value.produces_review_fact === true
+        || Object.prototype.hasOwnProperty.call(reply ?? {}, "review_fact")) {
+      errors.push("Grill must not produce a review fact");
+    }
+    if (!Array.isArray(reply?.answers) || (reply.answers.length === 0 && !withdrawn) || reply?.re_ranked !== true
+        || !Array.isArray(reply?.remaining_frontier_ids)
+        || reply.remaining_frontier_ids.some((id) => !frontierIds.includes(id))
+        || new Set(reply.remaining_frontier_ids).size !== reply.remaining_frontier_ids.length
+        || reply.answers.some((answer) => !frontierIds.includes(questionIdentity(answer, "Grill")))
+        || reply.answers.some((answer) => !(batch.option_ids[questionIdentity(answer, "Grill")] ?? []).includes(answer?.option_id ?? answer?.number))
+        || reply.answers.some((answer, index, all) => all.findIndex((candidate) => questionIdentity(candidate, "Grill") === questionIdentity(answer, "Grill")) !== index)
+        || frontierIds.some((id) => !reply.answers.some((answer) => questionIdentity(answer, "Grill") === id) && !reply.remaining_frontier_ids.includes(id))
+        || reply.answers.some((answer) => reply.remaining_frontier_ids.includes(questionIdentity(answer, "Grill")))) {
+      errors.push("Grill reply must preserve the reply, partial answers, and re-rank remaining frontiers");
+    }
+  }
+
+  if (withdrawn && (!Array.isArray(reply.answers) || reply.answers.length !== 0)) {
+    errors.push("withdrawn interaction must preserve unanswered questions without creating answers");
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({
+      interaction_type: interactionType,
+      lifecycle: Object.freeze([...INTERACTION_LIFECYCLE]),
+      card_ref: ask?.card_ref ?? null,
+      round: ask?.round ?? null,
+      user_reply_ref: reply?.reply_ref ?? null,
+    }),
+  });
+}
+
+/** Validate several real interaction rounds without treating them as duplicate skills. */
+export function validateInteractionLifecycleSequence(value) {
+  const errors = [];
+  const rounds = Array.isArray(value) ? value : value?.rounds;
+  const expectedType = Array.isArray(value) ? null : value?.interaction_type ?? value?.kind;
+  if (!Array.isArray(rounds) || rounds.length === 0) {
+    return Object.freeze({ ok: false, errors: Object.freeze(["interaction lifecycle sequence must contain one or more rounds"]), facts: Object.freeze({}) });
+  }
+  const seenRounds = new Set();
+  const seenCards = new Set();
+  const answered = new Set();
+  const pending = new Set();
+  let withdrawn = false;
+  let previousRound = 0;
+  for (const [index, round] of rounds.entries()) {
+    const lifecycle = round?.lifecycle ?? round;
+    const interactionType = lifecycle?.interaction_type ?? lifecycle?.kind;
+    if (expectedType !== null && interactionType !== expectedType) errors.push(`interaction round ${index + 1} has a different interaction type`);
+    const result = validateInteractionLifecycleContract(lifecycle);
+    if (!result.ok) errors.push(...result.errors.map((error) => `round ${index + 1}: ${error}`));
+    const [ask, , reply] = lifecycle?.events ?? [];
+    if (withdrawn) errors.push("interaction sequence cannot continue after user withdrawal");
+    for (const question of Array.isArray(ask?.questions) ? ask.questions : []) {
+      const id = questionIdentity(question, interactionType);
+      if (answered.has(id)) errors.push(`interaction question ${id} was already answered`);
+      pending.add(id);
+    }
+    for (const answer of Array.isArray(reply?.answers) ? reply.answers : []) {
+      const id = questionIdentity(answer, interactionType);
+      answered.add(id);
+      pending.delete(id);
+    }
+    withdrawn = reply?.status === "withdrawn";
+    const roundNumber = lifecycle?.events?.[0]?.round;
+    const cardRef = lifecycle?.events?.[0]?.card_ref;
+    if (!validInteractionRound(roundNumber)) errors.push(`interaction round ${index + 1} must contain a positive round`);
+    if (seenRounds.has(roundNumber)) errors.push(`interaction round ${roundNumber} was started more than once`);
+    if (seenCards.has(cardRef)) errors.push(`interaction card ${cardRef} was started more than once`);
+    if (validInteractionRound(roundNumber) && roundNumber <= previousRound) errors.push("interaction rounds must be strictly ordered");
+    seenRounds.add(roundNumber);
+    seenCards.add(cardRef);
+    if (validInteractionRound(roundNumber)) previousRound = roundNumber;
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({ interaction_type: expectedType ?? rounds[0]?.interaction_type ?? rounds[0]?.kind ?? null, rounds: rounds.length,
+      remaining_question_ids: Object.freeze([...pending]), withdrawn }),
+  });
+}
+
+/**
+ * Validate the input-side shape of the single make-decision interaction
+ * aggregate.  Writing, hashing, replay and conflict handling remain owned by
+ * the make-decision kernel writer in the later phase; P1 only supplies the
+ * shared, fail-loud contract.
+ */
+export function validateInteractionAggregateContract(value) {
+  const errors = [];
+  if (!object(value)) return result(["interaction aggregate must be an object"]);
+  if (value.schema_version !== "workflowhub-interaction-aggregate.v1") errors.push("interaction aggregate schema_version is invalid");
+  if (!nonEmptyString(value.task_id)) errors.push("interaction aggregate task_id is required");
+  if (value.stage !== "make-decision") errors.push("interaction aggregate stage must be make-decision");
+  if (!/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")) errors.push("interaction aggregate snapshot_tree must be a Git snapshot tree");
+  const allowed = new Set([
+    "schema_version", "task_id", "stage", "snapshot_tree", "original_requirement", "decision", "confirmation",
+    "talk", "grill", "advice", "decision_ref", "decision_hash", "clarify", "generated_at", "oi_dispositions",
+  ]);
+  for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`interaction aggregate contains unsupported field ${key}`);
+  if (value.generated_at !== undefined && !Number.isFinite(Date.parse(value.generated_at))) {
+    errors.push("interaction aggregate generated_at must be an ISO timestamp");
+  }
+
+  const requirement = value.original_requirement;
+  if (!object(requirement) || !SAFE_REF.test(requirement.ref ?? "") || !SHA256_HEX.test(requirement.hash ?? "")) {
+    errors.push("interaction aggregate original_requirement must bind a ref and hash");
+  }
+  const decision = value.decision ?? (value.decision_ref ? { ref: value.decision_ref, hash: value.decision_hash, revision: value.material_revision } : null);
+  if (!object(decision) || !SAFE_REF.test(decision.ref ?? "") || !SHA256_HEX.test(decision.hash ?? "") || !/^revision-[a-f0-9]{64}$/.test(decision.revision ?? "")) {
+    errors.push("interaction aggregate decision must bind ref, hash, and material revision");
+  }
+  const confirmation = value.confirmation;
+  if (!object(confirmation) || !/^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(confirmation.ref ?? "") || !SHA256_HEX.test(confirmation.hash ?? "") || confirmation.result !== "accepted") {
+    errors.push("interaction aggregate confirmation must bind an accepted confirmation ref and hash");
+  }
+
+  // Core OI confirmation bindings live inside the existing interaction
+  // aggregate.  The list is optional for legacy aggregates that predate the
+  // OI contract; when present it is producer-owned semantic content and is
+  // validated strictly so a caller cannot relabel an unrelated confirmation.
+  if (value.oi_dispositions !== undefined) {
+    if (!Array.isArray(value.oi_dispositions) || value.oi_dispositions.length === 0) {
+      errors.push("interaction aggregate oi_dispositions must be a non-empty array when present");
+    } else {
+      const seenOiIds = new Set();
+      for (const [index, binding] of value.oi_dispositions.entries()) {
+        if (!object(binding) || !nonEmptyString(binding.oi_id) || !nonEmptyString(binding.task_id)
+            || !nonEmptyString(binding.outline_version) || !nonEmptyString(binding.selected_disposition)
+            || (!nonEmptyString(binding.visible_group_id) && !nonEmptyString(binding.batch_id))) {
+          errors.push(`interaction aggregate oi_dispositions[${index}] must bind task, outline, OI, group, and selected disposition`);
+          continue;
+        }
+        if (seenOiIds.has(binding.oi_id)) errors.push(`interaction aggregate oi_dispositions duplicates ${binding.oi_id}`);
+        seenOiIds.add(binding.oi_id);
+      }
+    }
+  }
+
+  const talk = value.talk;
+  if (!object(talk) || talk.status !== "completed" || !Number.isSafeInteger(talk.round_count) || talk.round_count < 1 || !Array.isArray(talk.lifecycle_rounds)) {
+    errors.push("interaction aggregate talk must contain completed status, round_count, and lifecycle_rounds");
+  } else {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: talk.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors.map((error) => `Talk: ${error}`));
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Talk must not contain withdrawn or unanswered questions");
+    if (lifecycle.facts.rounds !== talk.round_count) errors.push("interaction aggregate Talk round_count does not match lifecycle_rounds");
+  }
+  const grill = value.grill;
+  if (!object(grill) || !["completed", "recorded"].includes(grill.status) || !explicitFact(grill.summary)) {
+    errors.push("interaction aggregate grill must retain a completed summary");
+  }
+  if (object(grill)) {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "grill", rounds: grill.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors.map((error) => `Grill: ${error}`));
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Grill must not contain withdrawn or unanswered frontiers");
+    if (Object.hasOwn(grill, "review_fact") || grill.produces_review_fact === true) errors.push("interaction aggregate Grill summary must not become a review fact");
+  }
+  const advice = value.advice ?? value.detail_advice;
+  if (!object(advice) || !["completed", "recorded", "unavailable"].includes(advice.status)) {
+    errors.push("interaction aggregate advice summary is required");
+  } else if (advice.status === "unavailable") {
+    if (!explicitFact(advice.reason)) errors.push("unavailable interaction advice requires a reason");
+  } else if (!SAFE_REF.test(advice.result_ref ?? "") || !SHA256_HEX.test(advice.result_hash ?? "")) {
+    errors.push("interaction aggregate advice must bind result_ref and result_hash");
+  }
+  return result(errors, {
+    status: errors.length === 0 ? "valid" : "invalid",
+    bound: Object.freeze({
+      task_id: value.task_id ?? null,
+      stage: value.stage ?? null,
+      decision_ref: decision?.ref ?? null,
+      confirmation_ref: confirmation?.ref ?? null,
+    }),
+  });
+}
+
+const REQUIREMENT_COVERAGE_CLASSES = new Set([
+  "goal",
+  "flow_or_surface",
+  "data_or_state",
+  "success_failure_acceptance",
+  "constraint_non_goal_defer",
+]);
+const REQUIREMENT_IMPACTS = new Set(["high", "medium", "low"]);
+const REQUIREMENT_DISPOSITIONS = new Set(["selected", "represented", "explicitly_deferred", "not_asked"]);
+
+/**
+ * Validate the semantic output produced after authenticated messages are
+ * classified by a product skill. The runtime checks bindings and omissions;
+ * it does not classify natural language itself or let a host source do so.
+ */
+export function validateRequirementCoverage({ messages, outputs } = {}) {
+  const errors = [];
+  if (!Array.isArray(messages) || messages.length === 0) errors.push("authenticated requirement messages are required");
+  if (!Array.isArray(outputs)) errors.push("requirement coverage outputs are required");
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: Object.freeze({}) });
+  const byId = new Map();
+  for (const message of messages) {
+    if (!nonEmptyString(message?.id) || !validHash(message?.content_hash)) {
+      errors.push("authenticated message identity and hash are required");
+      continue;
+    }
+    if (byId.has(message.id)) errors.push(`authenticated message ${message.id} is duplicated`);
+    byId.set(message.id, message);
+  }
+  const coveredClasses = new Set();
+  const coveredMessages = new Set();
+  const coveredAxes = new Set();
+  for (const [index, output] of outputs.entries()) {
+    const message = byId.get(output?.message_id);
+    if (!message) { errors.push(`coverage output ${index + 1} must bind an authenticated message`); continue; }
+    if (output.message_hash !== message.content_hash) errors.push(`coverage output ${index + 1} message hash binding mismatch`);
+    if (!REQUIREMENT_COVERAGE_CLASSES.has(output.message_class)) errors.push(`coverage output ${index + 1} message class is invalid`);
+    if (!nonEmptyString(output.axis_id)) errors.push(`coverage output ${index + 1} axis_id is required`);
+    if (!REQUIREMENT_IMPACTS.has(output.impact)) errors.push(`coverage output ${index + 1} impact is invalid`);
+    if (!REQUIREMENT_DISPOSITIONS.has(output.disposition)) errors.push(`coverage output ${index + 1} disposition is invalid`);
+    // make-decision owns the original-requirement and decision bindings.
+    // Functional requirements and acceptance criteria are created only by
+    // build-spec, so requiring their IDs here would force a fabricated
+    // downstream contract into the decision stage.
+    const ids = ["decision_ids", "requirement_ids"];
+    for (const field of ids) {
+      if (!Array.isArray(output[field]) || output[field].length === 0 || output[field].some((id) => !nonEmptyString(id))) errors.push(`coverage output ${index + 1} ${field} must be non-empty`);
+    }
+    if (["high", "medium"].includes(output.impact) && output.disposition === "explicitly_deferred" && !nonEmptyString(output.skip_reason)) {
+      errors.push(`coverage output ${index + 1} explicitly_deferred needs skip_reason`);
+    }
+    if (["high", "medium"].includes(output.impact) && output.disposition === "not_asked" && !nonEmptyString(output.skip_reason)) {
+      errors.push(`coverage output ${index + 1} not_asked needs skip_reason`);
+    }
+    if (REQUIREMENT_COVERAGE_CLASSES.has(output.message_class)) coveredClasses.add(output.message_class);
+    coveredMessages.add(message.id);
+    if (nonEmptyString(output.axis_id)) coveredAxes.add(output.axis_id);
+  }
+  for (const message of messages) if (!coveredMessages.has(message.id)) errors.push(`authenticated message ${message.id} has no coverage output`);
+  for (const category of REQUIREMENT_COVERAGE_CLASSES) if (!coveredClasses.has(category)) errors.push(`requirement message class ${category} has no coverage output`);
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({ message_count: messages.length, output_count: outputs.length, class_count: coveredClasses.size, axis_count: coveredAxes.size }),
+  });
+}
+
+/**
+ * Validate one or more append-only updates made by the existing decision-log
+ * writer when a make-decision step completes. This is a contract over facts;
+ * it does not create a writer, ledger, status machine, or additional material.
+ */
+export function validateDecisionLogStepUpdateContract(value) {
+  const errors = [];
+  const updates = Array.isArray(value) ? value : value?.updates ?? (object(value) ? [value] : []);
+  if (updates.length === 0) return Object.freeze({ ok: false, errors: Object.freeze(["decision-log step updates are required"]), facts: Object.freeze({}) });
+
+  const seenSteps = new Set();
+  let ref = null;
+  let hash = null;
+  for (const update of updates) {
+    const stepId = update?.step_id;
+    if (update?.stage !== "make-decision") errors.push("decision-log step update stage must be make-decision");
+    if (!Number.isInteger(stepId) || stepId < 1 || stepId > MAX_MAKE_DECISION_STEP_ID) errors.push(`decision-log step update step_id must be 1..${MAX_MAKE_DECISION_STEP_ID}`);
+    if (seenSteps.has(stepId)) errors.push(`decision-log step ${stepId} was updated more than once in one batch`);
+    seenSteps.add(stepId);
+    if (!nonEmptyString(update?.decision_log_ref) || !validHash(update?.decision_log_hash)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must bind decision-log ref/hash`);
+    }
+    if (ref === null) ref = update?.decision_log_ref;
+    if (hash === null) hash = update?.decision_log_hash;
+    if (update?.decision_log_ref !== ref || update?.decision_log_hash !== hash) {
+      errors.push("all make-decision step updates must bind the same decision-log ref/hash");
+    }
+    if (update?.writer?.owner !== "make-decision" || update?.writer?.artifact !== "decision-log.md"
+        || update?.writer?.mode !== "append-only") {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must use the existing make-decision append-only writer`);
+    }
+    if (!DECISION_LOG_STEP_DISPOSITIONS.has(update?.coverage_disposition)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must record a requirement disposition`);
+    }
+    if (!nonEmptyString(update?.outcome)) errors.push(`decision-log step ${stepId ?? "unknown"} outcome is required`);
+    if (!new Set(["written", "incomplete"]).has(update?.write_status)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} write_status must be written or incomplete`);
+    }
+    if (update?.write_status === "incomplete" && !nonEmptyString(update?.write_error)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} incomplete write must preserve the error`);
+    }
+  }
+
+  const sortedSteps = [...seenSteps].sort((left, right) => left - right);
+  if (updates.length > 1 && sortedSteps.some((step, index) => step !== sortedSteps[0] + index)) {
+    errors.push("a multi-step decision-log update batch must cover contiguous steps");
+  }
+  const incomplete = updates.some((update) => update?.write_status === "incomplete");
+  return Object.freeze({
+    ok: errors.length === 0 && !incomplete,
+    errors: Object.freeze(incomplete && errors.length === 0
+      ? ["decision-log write is incomplete; preserve the failure and do not claim step completion"]
+      : errors),
+    facts: Object.freeze({
+      stage: "make-decision",
+      step_ids: Object.freeze(sortedSteps),
+      decision_log_ref: ref,
+      decision_log_hash: hash,
+      write_status: incomplete ? "incomplete" : "written",
+    }),
+  });
+}
+
+export function validateDecisionEntry(value) {
+  return result(validateEntrySchema(value) ? [] : schemaErrors(validateEntrySchema));
+}
+
+function validateMain(input, errors) {
+  if (!object(input.main)) {
+    errors.push("main decision log is required");
+    return;
+  }
+  if (typeof input.main.markdown !== "string" || input.main.markdown.trim() === "") errors.push("main markdown is required");
+  if (typeof input.main.ref !== "string" || input.main.ref.trim() === "") errors.push("main ref is required");
+  if (!SHA256_HEX.test(input.main.hash ?? "") || input.main.hash !== sha256(input.main.markdown ?? "")) errors.push("main decision log hash binding mismatch");
+  for (const section of REQUIRED_MAIN_SECTIONS) {
+    if (!new RegExp(`^##\\s+${section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "mi").test(input.main.markdown ?? "")) {
+      errors.push(`main decision log section missing: ${section}`);
+    }
+  }
+  if (!Array.isArray(input.main.entries) || input.main.entries.length === 0) errors.push("main decision entries are required");
+  for (const [index, entry] of (input.main.entries ?? []).entries()) {
+    const validation = validateDecisionEntry(entry);
+    for (const error of validation.errors) errors.push(`main.entries[${index}].${error}`);
+  }
+}
+
+function appendixEntries(input, errors) {
+  const byRef = new Map();
+  for (const [index, appendix] of (input.appendices ?? []).entries()) {
+    if (!object(appendix)) {
+      errors.push(`appendices[${index}] must be an object`);
+      continue;
+    }
+    if (appendix.kind !== "decision-omission-acceptance.v1") {
+      errors.push(`${appendix.kind ?? "appendix"} cannot replace the dedicated omission schema`);
+      continue;
+    }
+    if (typeof appendix.ref !== "string" || byRef.has(appendix.ref)) {
+      errors.push("omission appendix ref must be unique");
+      continue;
+    }
+    const entryValidation = validateDecisionEntry(appendix.decision_entry);
+    for (const error of entryValidation.errors) errors.push(`appendix ${appendix.ref}: ${error}`);
+    byRef.set(appendix.ref, appendix.decision_entry);
+  }
+  return byRef;
+}
+
+function completeDetailPacket(input, errors) {
+  const packet = input.detail_review_packet;
+  if (!object(packet) || !/^[a-f0-9]{40}$/.test(packet.candidate_tree ?? "")) errors.push("detail review candidate tree is required");
+  const decision = packet?.decision_log;
+  if (!object(decision) || typeof decision.complete_bytes !== "string") {
+    errors.push("detail review requires complete decision-log bytes; a summary is forbidden");
+    return;
+  }
+  let decoded;
+  try { decoded = Buffer.from(decision.complete_bytes, "base64").toString("utf8"); }
+  catch { errors.push("detail review complete decision-log bytes are invalid"); return; }
+  if (decision.ref !== input.main?.ref || decision.hash !== input.main?.hash || decoded !== input.main?.markdown
+      || sha256(decoded) !== decision.hash) {
+    errors.push("detail review decision-log complete bytes binding mismatch");
+  }
+}
+
+export function validateDecisionLogContract(input) {
+  const errors = [];
+  if (!object(input)) return result(["decision log contract must be an object"]);
+  validateMain(input, errors);
+  if (!Array.isArray(input.appendices)) errors.push("appendices must be an array");
+  const appendices = appendixEntries(input, errors);
+  const coverage = input.coverage;
+  if (!object(coverage) || !Array.isArray(coverage.items)) {
+    errors.push("decision coverage items are required");
+  } else {
+    if (coverage.decision_log_ref !== input.main?.ref || coverage.decision_log_hash !== input.main?.hash) {
+      errors.push("decision coverage main ref/hash binding mismatch");
+    }
+    const seen = new Set();
+    for (const item of coverage.items) {
+      const key = item?.source_item_ref;
+      if (typeof key !== "string" || !SHA256_HEX.test(item?.source_item_hash ?? "")) errors.push("coverage source ref/hash is invalid");
+      if (seen.has(key)) errors.push(`source ${key} is covered more than once; every source must map exactly once`);
+      seen.add(key);
+      if (!new Set(["covered", "accepted_omission"]).has(item?.coverage_status)) errors.push(`source ${key} has invalid coverage status`);
+      if (item?.coverage_status === "covered" && (item?.decision_location?.kind !== "main" || item.decision_location.ref !== input.main?.ref)) {
+        errors.push(`source ${key} covered location must bind the main decision log`);
+      }
+      if (item?.coverage_status === "accepted_omission"
+          && (item?.decision_location?.kind !== "appendix" || !appendices.has(item.decision_location.ref))) {
+        errors.push(`source ${key} accepted omission must bind a dedicated omission appendix`);
+      }
+    }
+    const counts = coverage.items.reduce((value, item) => {
+      if (item.coverage_status === "covered") value.covered += 1;
+      else if (item.coverage_status === "accepted_omission") value.accepted_omission += 1;
+      else value.missing += 1;
+      return value;
+    }, { covered: 0, accepted_omission: 0, missing: 0 });
+    if (JSON.stringify(counts) !== JSON.stringify(coverage.summary)) errors.push("decision coverage summary does not match items");
+    if (counts.missing !== 0) errors.push("unhandled decision omission blocks final confirmation");
+  }
+  const coverageByRef = new Map((coverage?.items ?? []).map((item) => [item.source_item_ref, item]));
+  for (const selection of input.interaction?.selections ?? []) {
+    const covered = coverageByRef.get(selection.source_item_ref);
+    if (!covered || covered.source_item_hash !== selection.source_item_hash) errors.push("interaction source hash binding mismatch");
+    const entry = covered?.coverage_status === "accepted_omission"
+      ? appendices.get(covered?.decision_location?.ref)
+      : input.main?.entries?.[covered?.decision_location?.entry_index];
+    if (!entry || entry.selected_option !== selection.selected_option
+        || entry.approval_ref !== selection.reply_ref || entry.approval_hash !== selection.reply_hash) {
+      errors.push("interaction selected option/reply hash binding mismatch");
+    }
+  }
+  completeDetailPacket(input, errors);
+  return result(errors);
+}
+
+/**
+ * Analyze a make-decision decision-log for the four convergence dimensions and
+ * the plain-language end card required by the convergence spec.
+ *
+ * The checks are operational: they look for readable sections/labels, not just
+ * IDs or file existence. IDs are internal anchors; the user-facing surface is
+ * plain language.
+ */
+const REQUIREMENT_MESSAGE_CLASSES = [
+  "goal",
+  "flow_or_surface",
+  "data_or_state",
+  "success_failure_acceptance",
+  "constraint_non_goal_defer",
+];
+
+function parseCoverageRows(markdown) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const rows = [];
+  let inCoverage = false;
+  for (const line of lines) {
+    if (/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/i.test(line)) inCoverage = true;
+    if (inCoverage && /^#{1,3}\s+/.test(line) && !/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/i.test(line)) break;
+    if (inCoverage && /^\s*\|/.test(line)) {
+      const cells = line.split("|").map((cell) => cell.trim()).filter((cell) => cell !== "");
+      if (cells.length >= 3 && !/^[-:]+$/.test(cells[0])) rows.push(cells);
+    }
+  }
+  return rows;
+}
+
+function markdownSectionBody(markdown, headingPattern) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  let latest = null;
+  for (let start = 0; start < lines.length; start += 1) {
+    const heading = lines[start].match(/^(#{1,3})(?:\s+|$)(.+?)\s*$/);
+    if (!heading || !headingPattern.test(heading[2])) continue;
+    const body = [];
+    for (let index = start + 1; index < lines.length; index += 1) {
+      const nextHeading = lines[index].match(/^(#{1,3})\s+/);
+      if (nextHeading && nextHeading[1].length <= heading[1].length) break;
+      body.push(lines[index]);
+    }
+    latest = body.join("\n");
+  }
+  return latest;
+}
+
+function explicitUiQuestion(value) {
+  const question = value?.user_question ?? value?.question ?? value?.talk_question;
+  if (nonEmptyString(question)) return true;
+  return object(question) && [question.prompt, question.text, question.question]
+    .some((candidate) => nonEmptyString(candidate));
+}
+
+/**
+ * Read the one recomputable UI applicability fact from the current decision
+ * log. The existing three-input validator remains the sole merger; this
+ * reader only owns the decision-log representation and unknown-question seam.
+ */
+export function readUiApplicabilityFromDecisionLog(decisionLogMarkdown) {
+  const body = markdownSectionBody(decisionLogMarkdown, /^(?:UI applicability|UI 判定|界面判定)$/i);
+  if (body === null) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze(["decision-log is missing the UI applicability fact"]),
+      missing_items: Object.freeze([
+        "UI applicability is missing: record the three input facts in decision-log.md",
+        "UI applicability is missing: ask the user whether this task changes a page, interaction, or frontend component",
+      ]),
+    });
+  }
+  const jsonBlocks = [...body.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/gi)];
+  if (jsonBlocks.length !== 1) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze([`UI applicability section must contain exactly one JSON fact; found ${jsonBlocks.length}`]),
+      missing_items: Object.freeze(["UI applicability is missing: record exactly one JSON fact with all three inputs"]),
+    });
+  }
+  let value;
+  try {
+    value = JSON.parse(jsonBlocks[0][1]);
+  } catch (error) {
+    return Object.freeze({
+      status: "missing", applicability: "unknown", value: null,
+      errors: Object.freeze([`UI applicability JSON is invalid: ${error.message}`]),
+      missing_items: Object.freeze(["UI applicability is missing: repair the decision-log JSON fact"]),
+    });
+  }
+  const validation = validateUiApplicability(value);
+  const applicability = value?.result ?? value?.conclusion ?? "unknown";
+  const errors = [...validation.errors];
+  const missingItems = validation.errors.map((error) => `UI applicability: ${error}`);
+  if (validation.ok && applicability === "unknown") {
+    if (!explicitUiQuestion(value)) {
+      errors.push("unknown UI applicability must record the real user question");
+      missingItems.push("UI applicability is unknown: ask the user whether this task changes a page, interaction, or frontend component");
+    }
+    errors.push("unknown UI applicability requires a user reply/ruling and updated source facts");
+    missingItems.push("UI applicability is unknown: preserve the user reply/ruling, update the source fact it resolves, and recompute");
+  }
+  return Object.freeze({
+    status: validation.ok && applicability !== "unknown" ? "recorded" : "missing",
+    applicability: UI_APPLICABILITY_RESULTS.includes(applicability) ? applicability : "unknown",
+    value,
+    errors: Object.freeze(errors),
+    missing_items: Object.freeze([...new Set(missingItems)]),
+  });
+}
+
+const TASK_TYPES = new Set(["规划任务", "普通任务"]);
+
+function cleanTaskTypeValue(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^\*+|\*+$/g, "")
+    .replace(/^`+|`+$/g, "")
+    .trim();
+}
+
+/**
+ * Read the sole task-type declaration from the existing decision-log
+ * material.  This is deliberately a pure reader: it does not add a task
+ * field, persist state, or infer a type when the declaration is absent or
+ * malformed.
+ */
+export function readTaskTypeFromDecisionLog(decisionLogMarkdown) {
+  const text = String(decisionLogMarkdown ?? "");
+  const lines = text.split(/\r?\n/);
+  const identityHeading = /^(?:任务身份|task identity)$/i;
+  const identityHeadings = lines.filter((line) => {
+    const match = line.match(/^#{1,3}(?:\s+|$)(.+?)\s*$/);
+    return match && identityHeading.test(match[1]);
+  });
+  if (identityHeadings.length !== 1) return "unknown";
+
+  const body = markdownSectionBody(text, identityHeading);
+  if (body === null) return "unknown";
+  const declarations = [];
+  let fenced = false;
+  for (const line of body.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+
+    if (/^\s*\|/.test(line)) {
+      const cells = line.split("|")
+        .map((cell) => cell.trim())
+        .filter((cell, index, all) => !(index === 0 && cell === "") && !(index === all.length - 1 && cell === ""));
+      if (/^任务类型$/i.test(cleanTaskTypeValue(cells[0])) && cells.length >= 2) {
+        declarations.push(cleanTaskTypeValue(cells[1]));
+      }
+      continue;
+    }
+
+    const bullet = line.match(/^\s*[-*]\s+\*\*任务类型\*\*\s*[:：]\s*(.*?)\s*$/i);
+    if (bullet) declarations.push(cleanTaskTypeValue(bullet[1]));
+  }
+
+  if (declarations.length !== 1 || !TASK_TYPES.has(declarations[0])) return "unknown";
+  return declarations[0];
+}
+
+function parseConvergenceRows(body) {
+  const rows = body.split(/\r?\n/)
+    .filter((line) => /^\s*\|/.test(line))
+    .map((line) => {
+      const cells = line.split("|").map((cell) => cell.trim());
+      if (cells[0] === "") cells.shift();
+      if (cells.at(-1) === "") cells.pop();
+      return cells;
+    })
+    .filter((cells) => cells.length >= 4 && !cells.every((cell) => /^[-: ]+$/.test(cell)));
+  return rows.length === 0 ? { columns: null, rows: [] } : { columns: rows[0].map((value) => value.toLowerCase()), rows: rows.slice(1) };
+}
+
+function markdownTables(markdown) {
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const tables = [];
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!/^\s*\|/.test(lines[index]) || !/^\s*\|?\s*:?-{2,}/.test(lines[index + 1])) continue;
+    const parse = (line) => line.split("|").map((cell) => cell.trim()).filter((cell, position, cells) => !(position === 0 && cell === "") && !(position === cells.length - 1 && cell === ""));
+    const headers = parse(lines[index]).map((value) => value.toLowerCase());
+    const rows = [];
+    for (let row = index + 2; row < lines.length && /^\s*\|/.test(lines[row]); row += 1) rows.push(parse(lines[row]));
+    tables.push({ headers, rows, start: index });
+    index += rows.length + 1;
+  }
+  return tables;
+}
+
+function tableColumn(headers, names) {
+  return headers.findIndex((header) => names.some((name) => header === name || header.includes(name)));
+}
+
+function splitOiIds(value) {
+  return [...new Set(String(value ?? "").split(/[\s,，、;；|]+/).map((item) => item.trim()).filter((item) => /^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(item)))];
+}
+
+function parseBoolean(value) {
+  if (value === true || value === false) return value;
+  if (/^(?:true|yes|是)$/i.test(String(value ?? "").trim())) return true;
+  if (/^(?:false|no|否)$/i.test(String(value ?? "").trim())) return false;
+  return null;
+}
+
+function parseOiYamlBlocks(markdown) {
+  const records = [];
+  for (const match of String(markdown ?? "").matchAll(/```(?:ya?ml|json)\s*\n([\s\S]*?)```/gi)) {
+    let value;
+    try { value = /^\s*\{/.test(match[1]) ? JSON.parse(match[1]) : yaml.load(match[1]); } catch { continue; }
+    const entries = Array.isArray(value) ? value : value && typeof value === "object" && Array.isArray(value.ois) ? value.ois : [value];
+    for (const entry of entries) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry) && (entry.oi_id || entry.id)) records.push(entry);
+    }
+  }
+  return records;
+}
+
+function substantiveOutlineValue(value) {
+  return substantiveConvergenceText(value)
+    && !/^(?:none|nil|n\/a|na|无|无内容|暂无|待定|tbd|todo|unknown|未知|占位|placeholder)$/i.test(String(value).trim());
+}
+
+function outlineTerminalField(value, ...keys) {
+  for (const key of keys) {
+    const candidate = value?.[key];
+    if (Array.isArray(candidate) && candidate.length > 0) return candidate.join("; ");
+    if (substantiveOutlineValue(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Derive the questions-only projection of the current OI authority.
+ *
+ * The direction reviewer is supposed to consume exactly this projection, but
+ * nothing in the review pipeline persists it: the recorded review result keeps
+ * only `material_id`/`material_revision`, and neither the bare sink nor the
+ * record route computes a semantic projection. This projection is review input
+ * only; it is not a completion predicate or a replacement state store.
+ *
+ * The projection is fully determined by the current OI records, so derive it
+ * here instead of persisting a second copy.  It exposes only the fields the
+ * questions-only contract allows, always reports `open`, and leaks nothing:
+ * this is a read-side view of the one OI authority, not new state.
+ */
+function deriveQuestionsOnlyOutline(byId, outlineVersion, recordTaskId) {
+  if (!byId || byId.size === 0) return null;
+  const entries = [...byId.values()].map((record) => ({
+    oi_id: record.oi_id ?? record.id,
+    category: record.category,
+    source: record.source,
+    question: record.question,
+    status: "open",
+  }));
+  return { task_id: recordTaskId, outline_version: outlineVersion, entries };
+}
+
+function normalizeOutlineReview(review) {
+  if (!review || typeof review !== "object") return null;
+  const candidates = [review.convergence_outline, review.materials?.convergence_outline, review.semantic_fields?.convergence_outline, review.value?.convergence_outline, review.value?.materials?.convergence_outline];
+  const outline = candidates.find((candidate) => candidate && typeof candidate === "object");
+  if (!outline) return null;
+  const entries = outline.entries ?? outline.items ?? outline.ois ?? outline.records;
+  return {
+    ...outline,
+    // Existing review packets put identity either beside or inside the
+    // semantic field.  Normalize both forms without creating a second
+    // persisted projection; the field remains the sole authority.
+    task_id: outline.task_id ?? review.task_id,
+    outline_version: outline.outline_version ?? review.outline_version,
+    entries: Array.isArray(entries) ? entries : [],
+  };
+}
+
+/**
+ * Parse and validate the single decision-log OI authority.  The returned
+ * `components` map is intentionally explicit so callers can disclose the
+ * exact missing conjunct instead of collapsing it into a generic failure.
+ */
+export function analyzeDecisionOutline(decisionLogMarkdown, {
+  taskId = null,
+  directionReview = null,
+} = {}) {
+  const text = String(decisionLogMarkdown ?? "");
+  const errors = [];
+  const tables = markdownTables(text);
+  const frameworkTable = tables.find(({ headers }) => tableColumn(headers, ["framework_node"]) >= 0 && tableColumn(headers, ["oi_ids"]) >= 0);
+  const categoryTable = tables.find(({ headers }) => tableColumn(headers, ["category"]) >= 0 && tableColumn(headers, ["oi_ids"]) >= 0);
+  const frameworkRows = frameworkTable?.rows ?? [];
+  const categoryRows = categoryTable?.rows ?? [];
+  const nodeColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["framework_node"]) : -1;
+  const nodeOiColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["oi_ids"]) : -1;
+  const nodeEmptyColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["empty"]) : -1;
+  const nodeReasonColumn = frameworkTable ? tableColumn(frameworkTable.headers, ["reason"]) : -1;
+  const categoryColumn = categoryTable ? tableColumn(categoryTable.headers, ["category"]) : -1;
+  const categoryOiColumn = categoryTable ? tableColumn(categoryTable.headers, ["oi_ids"]) : -1;
+  const categoryEmptyColumn = categoryTable ? tableColumn(categoryTable.headers, ["empty"]) : -1;
+  const categoryReasonColumn = categoryTable ? tableColumn(categoryTable.headers, ["reason"]) : -1;
+  const frameworkMap = new Map();
+  const categoryMap = new Map();
+  const parseCoverageRow = (row, oiIndex, emptyIndex, reasonIndex, label) => {
+    const ids = splitOiIds(row[oiIndex]);
+    const empty = parseBoolean(row[emptyIndex]);
+    const reason = row[reasonIndex] ?? "";
+    if (empty === true && !substantiveOutlineValue(reason)) errors.push(`${label} empty row requires a concrete reason`);
+    if (empty !== true && ids.length === 0) errors.push(`${label} must reference an OI or declare empty: true`);
+    if (empty === true && ids.length > 0) errors.push(`${label} cannot combine OI IDs with empty: true`);
+    return { oi_ids: ids, empty, reason };
+  };
+  for (const row of frameworkRows) {
+    const node = String(row[nodeColumn] ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FRAMEWORK_NODES.includes(node)) continue;
+    if (frameworkMap.has(node)) errors.push(`framework node ${node} is duplicated`);
+    frameworkMap.set(node, parseCoverageRow(row, nodeOiColumn, nodeEmptyColumn, nodeReasonColumn, `framework node ${node}`));
+  }
+  for (const row of categoryRows) {
+    const category = String(row[categoryColumn] ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(category)) continue;
+    if (categoryMap.has(category)) errors.push(`fixed category ${category} is duplicated`);
+    categoryMap.set(category, parseCoverageRow(row, categoryOiColumn, categoryEmptyColumn, categoryReasonColumn, `fixed category ${category}`));
+  }
+  if (!frameworkTable) errors.push("decision-log is missing the framework node OI table");
+  if (!categoryTable) errors.push("decision-log is missing the fixed category OI table");
+  for (const node of DECISION_OUTLINE_FRAMEWORK_NODES) if (!frameworkMap.has(node)) errors.push(`framework node ${node} is missing`);
+  for (const category of DECISION_OUTLINE_FIXED_CATEGORIES) if (!categoryMap.has(category)) errors.push(`fixed category ${category} is missing`);
+
+  const records = parseOiYamlBlocks(text);
+  const byId = new Map();
+  for (const raw of records) {
+    const record = { ...raw, oi_id: raw.oi_id ?? raw.id };
+    if (!/^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(record.oi_id ?? "")) { errors.push("OI record id is invalid"); continue; }
+    if (byId.has(record.oi_id)) { errors.push(`OI ${record.oi_id} is duplicated`); continue; }
+    byId.set(record.oi_id, record);
+  }
+  const referenced = new Set([...frameworkMap.values(), ...categoryMap.values()].flatMap((row) => row.oi_ids));
+  for (const id of referenced) if (!byId.has(id)) errors.push(`outline reference ${id} has no OI record`);
+  for (const id of byId.keys()) if (!referenced.has(id)) errors.push(`OI ${id} is not referenced by a framework node or fixed category`);
+  const first = [...byId.values()][0] ?? {};
+  const outlineVersion = first.outline_version ?? first.version ?? null;
+  const recordTaskId = first.task_id ?? null;
+  if (taskId !== null && recordTaskId !== taskId) errors.push("OI task_id does not bind the current task");
+  if (!substantiveOutlineValue(outlineVersion)) errors.push("OI outline_version is required");
+  for (const [id, record] of byId.entries()) {
+    const version = record.outline_version ?? record.version ?? null;
+    if (record.task_id !== recordTaskId) errors.push(`OI ${id} task_id is inconsistent with the current outline`);
+    if (version !== outlineVersion) errors.push(`OI ${id} outline_version is inconsistent with the current outline`);
+  }
+  let openCount = 0;
+  for (const [id, record] of byId.entries()) {
+    const status = String(record.status ?? "").trim().toLowerCase();
+    const category = String(record.category ?? "").trim().toLowerCase();
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(category)) errors.push(`OI ${id} category is invalid`);
+    for (const [field, label] of [["source", "source"], ["question", "question"]]) if (!substantiveOutlineValue(record[field])) errors.push(`OI ${id} ${label} is missing`);
+    if (!OI_STATUSES.has(status)) { errors.push(`OI ${id} status is invalid`); continue; }
+    if (status === "open") { openCount += 1; continue; }
+    const impact = Array.isArray(record.impact_dimensions) ? record.impact_dimensions : [];
+    if (impact.length === 0 || impact.some((item) => !OI_IMPACT_DIMENSIONS.has(item))) errors.push(`OI ${id} impact_dimensions is invalid`);
+    const requiresUser = record.requires_user_decision === true;
+    const core = impact.some((item) => ["goal", "scope", "acceptance"].includes(item));
+    if (core && !requiresUser) errors.push(`OI ${id} core impact requires_user_decision=true`);
+    const group = record.visible_group_id ?? record.batch_id;
+    if (requiresUser && !substantiveOutlineValue(group)) errors.push(`OI ${id} visible_group_id or batch_id is required`);
+    if (status === "confirmed") {
+      for (const [label, keys] of [["selected_disposition", ["selected_disposition"]], ["evidence", ["evidence", "evidence_ref", "evidence_refs", "basis"]], ["acceptance", ["acceptance", "acceptance_criterion", "falsifiable_acceptance"]], ["counterexample", ["counterexample", "counterexample_boundary"]]]) {
+        if (!outlineTerminalField(record, ...keys)) errors.push(`OI ${id} confirmed ${label} is missing`);
+      }
+    } else if (status === "deferred") {
+      for (const [label, keys] of [["owner", ["owner"]], ["trigger", ["trigger", "trigger_condition"]], ["scope", ["scope", "scope_boundary"]], ["impact", ["impact"]], ["follow_up_acceptance", ["follow_up_acceptance", "follow_up", "next_acceptance"]]]) {
+        if (!outlineTerminalField(record, ...keys)) errors.push(`OI ${id} deferred ${label} is missing`);
+      }
+      if (!requiresUser) errors.push(`OI ${id} deferred item requires user decision`);
+    } else if (status === "not_applicable") {
+      if (!outlineTerminalField(record, "reason")) errors.push(`OI ${id} not_applicable reason is missing`);
+      if (!outlineTerminalField(record, "counterexample_boundary", "counterexample")) errors.push(`OI ${id} not_applicable counterexample boundary is missing`);
+    }
+  }
+  const direction = normalizeOutlineReview(directionReview) ?? deriveQuestionsOnlyOutline(byId, outlineVersion, taskId ?? recordTaskId);
+  let directionCurrent = false;
+  if (!direction) errors.push("direction review is missing current convergence_outline questions-only snapshot");
+  else {
+    const entries = direction.entries;
+    const ids = entries.map((entry) => entry?.oi_id ?? entry?.id);
+    const expectedIds = [...byId.keys()];
+    const allowedDirectionEntryFields = new Set(["oi_id", "id", "category", "source", "question", "status"]);
+    const sameIds = ids.length === expectedIds.length && expectedIds.every((id) => ids.filter((candidate) => candidate === id).length === 1);
+    if (direction.task_id !== (taskId ?? recordTaskId) || direction.outline_version !== outlineVersion) errors.push("direction convergence_outline task/version is stale or mismatched");
+    if (!sameIds) errors.push("direction convergence_outline does not cover every current OI exactly once");
+    for (const entry of entries) {
+      const entryId = entry?.oi_id ?? entry?.id ?? "unknown";
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        errors.push(`direction convergence_outline ${entryId} must be an object`);
+        continue;
+      }
+      const unknownFields = Object.keys(entry).filter((key) => !allowedDirectionEntryFields.has(key));
+      if (unknownFields.length > 0) errors.push(`direction convergence_outline ${entryId} contains unsupported fields: ${unknownFields.join(", ")}`);
+      const source = byId.get(entry?.oi_id ?? entry?.id);
+      if (source && (entry.category !== source.category || entry.source !== source.source || entry.question !== source.question)) errors.push(`direction convergence_outline ${entry?.oi_id ?? entry?.id ?? "unknown"} does not match the current OI question/source/category`);
+      if (entry?.status !== "open") errors.push(`direction convergence_outline ${entry?.oi_id ?? entry?.id ?? "unknown"} must expose status open`);
+      for (const forbidden of ["answer", "selected_disposition", "disposition", "evidence", "conclusion", "proposed_answer", "interaction_ref", "interaction_hash"]) if (Object.hasOwn(entry ?? {}, forbidden)) errors.push(`direction convergence_outline leaks ${forbidden}`);
+    }
+    const directionEntriesValid = entries.every((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const source = byId.get(entry.oi_id ?? entry.id);
+      return Object.keys(entry).every((key) => allowedDirectionEntryFields.has(key))
+        && entry.status === "open"
+        && source
+        && entry.category === source.category
+        && entry.source === source.source
+        && entry.question === source.question;
+    });
+    directionCurrent = sameIds
+      && direction.task_id === (taskId ?? recordTaskId)
+      && direction.outline_version === outlineVersion
+      && directionEntriesValid;
+  }
+  const structure = frameworkMap.size === DECISION_OUTLINE_FRAMEWORK_NODES.length && categoryMap.size === DECISION_OUTLINE_FIXED_CATEGORIES.length && byId.size > 0 && errors.every((error) => !/(framework node|fixed category|OI record|outline reference|OI .* category|OI .* source|OI .* question)/i.test(error));
+  const components = {
+    structure: structure ? "passed" : "missing",
+    direction_snapshot: directionCurrent ? "passed" : "missing",
+    no_open_items: openCount === 0 && byId.size > 0 ? "passed" : "missing",
+    terminal_fields: errors.every((error) => !/confirmed|deferred|not_applicable|status is invalid|impact_dimensions/i.test(error)) ? "passed" : "missing",
+  };
+  const ok = Object.values(components).every((status) => status === "passed") && errors.length === 0;
+  return Object.freeze({
+    ok,
+    errors: Object.freeze([...new Set(errors)]),
+    facts: Object.freeze({ outline_closed: ok ? "passed" : "missing" }),
+    components: Object.freeze(components),
+    outline_version: outlineVersion,
+    task_id: recordTaskId,
+    oi_ids: Object.freeze([...byId.keys()]),
+    oi_records: Object.freeze([...byId.values()].map((record) => Object.freeze({
+      oi_id: record.oi_id ?? record.id,
+      category: record.category,
+      source: record.source,
+      question: record.question,
+    }))),
+    open_items: Object.freeze([...byId.values()].filter((record) => record.status === "open").map((record) => record.oi_id)),
+  });
+}
+
+function convergenceDimension(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (/^(?:目标|goal|target)$/.test(normalized)) return "goal";
+  if (/^(?:范围|scope)$/.test(normalized)) return "scope";
+  if (/^(?:方案|solution|direction)$/.test(normalized)) return "solution";
+  if (/^(?:验收|acceptance)$/.test(normalized)) return "acceptance";
+  return null;
+}
+
+function substantiveConvergenceText(value) {
+  const text = String(value ?? "").trim();
+  return text.length > 1
+    && !/^(?:n\/?a|none|无|未知|unknown|tbd|todo|待定|待确认|未回答|缺失|-)$/i.test(text)
+    && !/(?:未回答|待确认|待定|\btbd\b|\btodo\b|未知|\bunknown\b|缺失)/i.test(text);
+}
+
+function recordedUserAnswer(value) {
+  const text = String(value ?? "").trim();
+  if (!substantiveConvergenceText(text)) return false;
+  if (/无新需求|no_new_requirement/i.test(text)) return true;
+  if (!/(?:用户|user)/i.test(text)) return false;
+  const answer = text.replace(/(?:用户|user)\s*(?:(?:已)?(?:确认|回答|答复|选择|回复|confirmed|answered|replied|selected))?/gi, "").trim();
+  return substantiveConvergenceText(answer);
+}
+
+function concreteMaterialReference(value) {
+  const text = String(value ?? "").trim();
+  return substantiveConvergenceText(text)
+    && /(?:\b(?:R|D|F|FR|AC|PFACT)-?[A-Za-z0-9][A-Za-z0-9_-]*\b|(?:decision-log|spec|plan|tasks)\.md(?:[:#][^\s]+)?)/i.test(text);
+}
+
+function labelledSubstantiveValue(text, label) {
+  const match = new RegExp(`${label}\\s*(?:[:：=]|是)?\\s*([^；;。\\n]+)`, "i").exec(String(text ?? ""));
+  return match !== null && substantiveConvergenceText(match[1]);
+}
+
+function structuredConvergenceFacts(decisionLogMarkdown) {
+  const body = markdownSectionBody(decisionLogMarkdown, /^(?:收敛检查|convergence check)$/i);
+  const hasCurrentUiFact = markdownSectionBody(decisionLogMarkdown, /^(?:UI applicability|UI 判定|界面判定)$/i) !== null;
+  const emptyFacts = { goal: false, scope: false, solution: false, acceptance: false };
+  if (body === null) {
+    return hasCurrentUiFact
+      ? { present: true, facts: emptyFacts, errors: ["current decision-log with UI applicability must contain its four-dimension convergence table"] }
+      : { present: false, facts: {}, errors: [] };
+  }
+  const { columns, rows } = parseConvergenceRows(body);
+  if (!columns) return { present: true, facts: emptyFacts, errors: ["decision convergence check must contain its four-dimension table"] };
+  const indexFor = (names) => columns.findIndex((column) => names.some((name) => column.includes(name)));
+  const dimensionIndex = indexFor(["维度", "dimension"]);
+  const answerIndex = indexFor(["用户答案", "answer", "无新需求"]);
+  const referenceIndex = indexFor(["事实", "材料", "reference"]);
+  const acceptanceIndex = indexFor(["可执行验收", "acceptance"]);
+  if ([dimensionIndex, answerIndex, referenceIndex, acceptanceIndex].some((index) => index < 0)) {
+    return { present: true, facts: emptyFacts, errors: ["decision convergence table must include dimension, user answer, material reference, and executable acceptance columns"] };
+  }
+  const errors = [];
+  const byDimension = new Map();
+  for (const row of rows) {
+    const dimension = convergenceDimension(row[dimensionIndex]);
+    if (!dimension) continue;
+    if (byDimension.has(dimension)) {
+      errors.push(`decision convergence ${dimension} has duplicate rows`);
+      continue;
+    }
+    byDimension.set(dimension, { answer: row[answerIndex] ?? "", reference: row[referenceIndex] ?? "", acceptance: row[acceptanceIndex] ?? "" });
+  }
+  const facts = {};
+  for (const dimension of ["goal", "scope", "solution", "acceptance"]) {
+    const row = byDimension.get(dimension);
+    if (!row) {
+      facts[dimension] = false;
+      errors.push(`decision convergence ${dimension} is missing`);
+      continue;
+    }
+    let valid = true;
+    if (!recordedUserAnswer(row.answer)) {
+      valid = false;
+      errors.push(`decision convergence ${dimension} is missing a real user answer or no_new_requirement record`);
+    }
+    if (!concreteMaterialReference(row.reference)) {
+      valid = false;
+      errors.push(`decision convergence ${dimension} is missing a concrete fact or material reference`);
+    }
+    if (dimension === "solution" && (!labelledSubstantiveValue(row.answer, "(?:取舍|tradeoff)")
+        || !labelledSubstantiveValue(row.answer, "(?:被拒方案|被拒选项|rejected option)")
+        || !(/无未决项|no open items/i.test(row.answer) || labelledSubstantiveValue(row.answer, "(?:未决项|open item)")))) {
+      valid = false;
+      errors.push("decision convergence solution is missing tradeoff, rejected option, or open-item disposition");
+    }
+    if (dimension === "acceptance" && (!labelledSubstantiveValue(row.acceptance, "(?:场景|scenario)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:数据来源|data source)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:通过|pass)")
+        || !labelledSubstantiveValue(row.acceptance, "(?:失败|fail)"))) {
+      valid = false;
+      errors.push("decision convergence acceptance is missing scenario, data source, pass, or fail criterion");
+    }
+    facts[dimension] = valid;
+  }
+  return { present: true, facts, errors };
+}
+
+function meaningfulSectionBody(markdown, headingPattern) {
+  const body = markdownSectionBody(markdown, headingPattern);
+  if (body === null) return "";
+  const meaningful = body.split(/\r?\n/).map((line) => line.replace(/^\s*[-*|]\s*/, "").replace(/[`|]/g, "").trim())
+    .find((line) => line !== ""
+      && !/^[-: ]+$/.test(line)
+      && !/^(?:(?:R|D|AC|FR|RISK)-[A-Za-z0-9_-]+[，,;；:\s]*)+$/i.test(line));
+  if (meaningful) return meaningful;
+  return "";
+}
+
+/**
+ * Analyze a make-decision decision-log for the four convergence dimensions and
+ * the plain-language end card required by the convergence spec.
+ *
+ * The checks are operational: they look for readable sections/labels, not just
+ * IDs or file existence. IDs are internal anchors; the user-facing surface is
+ * plain language.
+ */
+export function analyzeDecisionConvergence(decisionLogMarkdown, {
+  originalRequirement = "",
+  requirementMessages = [],
+  requirementCoverageOutputs = [],
+  taskId = null,
+  directionReview = null,
+  requireOutline = false,
+} = {}) {
+  const errors = [];
+  const text = String(decisionLogMarkdown ?? "");
+  const hasSection = (pattern) => pattern.test(text);
+  const hasTaskIdentitySection = /^#{1,3}(?:\s+|$)(?:任务身份|task identity)\s*$/im.test(text);
+  const taskType = readTaskTypeFromDecisionLog(text);
+  if (hasTaskIdentitySection && taskType === "unknown") {
+    errors.push("decision-log task type declaration is missing or invalid");
+  }
+
+  const goalBody = meaningfulSectionBody(text, /^(?:核心目标|目标|goal|成功意图|success intent)$/i);
+  const acceptanceBody = meaningfulSectionBody(text, /^(?:验收标准|acceptance|验收目标|AC)$/i);
+  const directionBody = meaningfulSectionBody(text, /^(?:决定|decision|方案|direction|已选方向|selected direction|结论)$/i);
+  const riskBody = meaningfulSectionBody(text, /^(?:开放问题|风险|延期|未决|风险与延期交接|open questions|risks|deferred)$/i);
+  const coreRequirementBody = meaningfulSectionBody(text, /^(?:核心需求|core requirement)$/i);
+  const structuredConvergence = structuredConvergenceFacts(text);
+  const outline = analyzeDecisionOutline(text, { taskId, directionReview });
+
+  const requirementCoverage = hasSection(/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/im)
+    || /(?:R-001|原始需求|requirement).*(?:D-001|决定|decision)/i.test(text);
+  let goalAchievement = goalBody !== "" && /(?:实现|达成|确认|可执行|完成|achiev|executable|confirmed)/i.test(goalBody);
+  let scope = meaningfulSectionBody(text, /^(?:范围|scope|目标、用户流程与边界)$/i) !== "";
+  let acceptanceClarity = acceptanceBody !== "" && /(?:可验证|通过|失败|条件|边界|verify|pass|fail|condition|boundary)/i.test(acceptanceBody);
+  let solutionConvergence = directionBody !== "" && riskBody !== "";
+  const plainLanguageCard = coreRequirementBody !== "" && goalBody !== "" && directionBody !== "";
+
+  if (structuredConvergence.present) {
+    goalAchievement = structuredConvergence.facts.goal === true;
+    scope = structuredConvergence.facts.scope === true;
+    solutionConvergence = structuredConvergence.facts.solution === true;
+    acceptanceClarity = structuredConvergence.facts.acceptance === true;
+    errors.push(...structuredConvergence.errors);
+  }
+
+  if (!requirementCoverage) errors.push("decision-log does not present a requirement-to-decision coverage matrix");
+  if (!goalAchievement) errors.push("decision-log does not state the core goal achievement");
+  if (!scope) errors.push("decision-log does not state the scoped user flow, surface, or functional boundary");
+  if (!acceptanceClarity) errors.push("decision-log does not make acceptance criteria explicit");
+  if (!solutionConvergence) errors.push("decision-log does not show a converged solution with open items");
+  if (!plainLanguageCard) errors.push("decision-log end card is missing core requirement, core goal, or selected direction");
+
+  const originalLines = String(originalRequirement ?? "").split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (originalLines.length > 0 && !requirementCoverage) {
+    errors.push("original requirement exists but coverage matrix is missing");
+  }
+
+  const coverageRows = requirementCoverage ? parseCoverageRows(text) : [];
+  let dispositionsValid = true;
+  let requiredDimensionsPresent = true;
+  if (requirementCoverage && coverageRows.length < 2) {
+    errors.push("requirement coverage section does not contain a mapped rows");
+  }
+  if (coverageRows.length > 0) {
+    const dispositionColumn = coverageRows[0].findIndex((cell) => /状态|处置|disposition|status/i.test(cell));
+    if (dispositionColumn < 0) {
+      dispositionsValid = false;
+      errors.push("coverage matrix header is missing a disposition/status column");
+    } else {
+      const dataRows = coverageRows.slice(1);
+      for (const row of dataRows) {
+        const disposition = row[dispositionColumn];
+        if (!disposition || !/(?:covered|accepted_omission|deferred|rejected|non.?goal|延期|拒绝|覆盖|已接受)/i.test(disposition)) {
+          dispositionsValid = false;
+          errors.push(`coverage row "${row.join(" | ")}" lacks a valid disposition`);
+        }
+      }
+    }
+  }
+
+  const coverageDataRows = coverageRows.slice(1);
+  const coverageText = coverageRows.map((row) => row.join(" ")).join("\n");
+  for (const requirementMessage of requirementMessages) {
+    const directClass = typeof requirementMessage === "string" ? requirementMessage : requirementMessage?.message_class;
+    const messageId = typeof requirementMessage === "object" && requirementMessage !== null ? requirementMessage.id : null;
+    const messageHash = typeof requirementMessage === "object" && requirementMessage !== null ? requirementMessage.content_hash : null;
+    // The host-authenticated message carries identity only; the semantic
+    // classification is a make-decision artifact.  Derive each message's
+    // classes from its hash-bound requirement coverage outputs instead of
+    // requiring the transcript line to carry a class it cannot know.
+    const outputClasses = typeof messageId === "string"
+      ? requirementCoverageOutputs
+        .filter((entry) => entry?.message_id === messageId
+          && (!SHA256_HEX.test(messageHash ?? "") || entry?.message_hash === messageHash))
+        .map((entry) => entry?.message_class)
+      : [];
+    const messageClasses = [...new Set([directClass, ...outputClasses]
+      .filter((value) => typeof value === "string" && value.trim() !== ""))];
+    if (messageClasses.length === 0) {
+      requiredDimensionsPresent = false;
+      errors.push("authenticated requirement message class is missing");
+      continue;
+    }
+    for (const messageClass of messageClasses) {
+      if (!new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(coverageText)) {
+        requiredDimensionsPresent = false;
+        errors.push(`coverage matrix is missing the required dimension: ${messageClass}`);
+      }
+      if (typeof requirementMessage === "object" && requirementMessage !== null) {
+        const { id, content_hash: contentHash } = requirementMessage;
+        const output = typeof id === "string" && SHA256_HEX.test(contentHash ?? "")
+          ? requirementCoverageOutputs.find((entry) => entry?.message_id === id
+            && entry?.message_hash === contentHash && entry?.message_class === messageClass)
+          : null;
+        const boundRow = output && coverageDataRows.find((row) => {
+          const rowText = row.join(" ");
+          // A row may legitimately map one requirement to several decisions
+          // ("D-001、D-009"), so containment is checked against the row text,
+          // not exact cell equality.  Requirement/decision ids are fixed-width
+          // (R-001/D-001), so substring containment cannot alias a longer id.
+          return output.requirement_ids?.some((requirementId) => rowText.includes(requirementId))
+            && output.decision_ids?.some((decisionId) => rowText.includes(decisionId))
+            && new RegExp(`\\b${messageClass.replace(/_/g, "[_\\\\-]?")}\\b`, "i").test(rowText);
+        });
+        if (!boundRow) {
+          requiredDimensionsPresent = false;
+          errors.push(`coverage matrix does not bind authenticated message through its requirement/decision coverage output: ${id ?? "unknown"}`);
+        }
+      }
+    }
+  }
+
+  const completeRequirementCoverage = requirementCoverage
+    && coverageRows.length >= 2
+    && dispositionsValid
+    && requiredDimensionsPresent;
+
+  return Object.freeze({
+    ok: errors.length === 0 && (!requireOutline || outline.ok),
+    errors: Object.freeze([...errors, ...(requireOutline ? outline.errors : [])]),
+    facts: Object.freeze({
+      requirement_coverage: completeRequirementCoverage ? "passed" : "missing",
+      goal_achievement: goalAchievement ? "passed" : "missing",
+      scope: scope ? "passed" : "missing",
+      acceptance_clarity: acceptanceClarity ? "passed" : "missing",
+      solution_convergence: solutionConvergence ? "passed" : "missing",
+      plain_language_card: plainLanguageCard ? "passed" : "missing",
+      outline_closed: outline.facts.outline_closed,
+    }),
+    outline,
+  });
+}
+
+function hasMarkdownHeadings(value) {
+  return /^#{1,3}\s+\S/m.test(String(value ?? ""));
+}
+
+/**
+ * Check that build-spec does not invent product direction and that Clarify
+ * evidence is present when the spec has material ambiguity or direction change.
+ */
+export function validateSpecClarifyAndDirectionFidelity(specMarkdown, decisionLogMarkdown) {
+  const errors = [];
+  const spec = String(specMarkdown ?? "");
+  const decision = String(decisionLogMarkdown ?? "");
+
+  const directionInventionMarkers = [
+    /(?:新增产品方向|new product direction|扩展到原始决策未授权|expand beyond the authorized decision|重命名为完全不同的产品)/i,
+  ];
+  const explicitDirectionAuthorization = decision.split(/\r?\n/).some((line) => {
+    const namesDirectionChange = directionInventionMarkers.some((pattern) => pattern.test(line));
+    const authorizes = /(?:明确授权|用户(?:已)?确认允许|已批准|决定允许|同意(?:新增|扩展|重命名)|explicitly authorized|approved|allowed)/i.test(line);
+    const rejects = /(?:不|未|禁止|拒绝|without|not)\s*(?:授权|批准|允许|同意|authorized|approved|allowed)/i.test(line);
+    return namesDirectionChange && authorizes && !rejects;
+  });
+  const invented = directionInventionMarkers.some((pattern) => pattern.test(spec))
+    && !explicitDirectionAuthorization;
+
+  if (invented) errors.push("spec.md invents product direction not present in decision-log.md");
+
+  const ambiguityLines = spec.split(/\r?\n/).filter((line) => {
+    if (/(?:没有|无|零|不存在|已解决|已关闭|no)\s*(?:实质材料|材料|方向性)?\s*(?:歧义|ambiguity)/i.test(line)
+        || /(?:material ambiguity|open material ambiguity)\s*=\s*0/i.test(line)) return false;
+    return /(?:待澄清|仍有[^\n]{0,20}歧义|歧义[^\n]{0,20}(?:未解决|未关闭|待处理|需要用户)|\bneeds clarification\b|\bopen material ambiguity\b|\bdirection-changing ambiguity\b)/i.test(line);
+  });
+  const hasAmbiguity = ambiguityLines.length > 0;
+  const hasTriggerTrue = /(?:spec-clarify[^\n]*|clarify[^\n]*|batch[^\n]*)trigger\s*=\s*true/i.test(spec);
+  const hasTriggerFalse = /(?:spec-clarify[^\n]*|clarify[^\n]*)trigger\s*=\s*false/i.test(spec);
+  const hasSkipReason = /trigger\s*=\s*false[^\n]*(?:reason\s*=\s*\S+|理由\s*[:=：]\s*\S+)/i.test(spec);
+  const hasZeroOpenQuestions = /(?:open(?:_direction_changing_questions| material ambiguity| material ambiguities)?|开放(?:方向性)?问题|开放项)\s*[:=：]\s*0/i.test(spec);
+
+  if (hasAmbiguity && !hasTriggerTrue) {
+    errors.push("spec.md has material ambiguity and must record Clarify trigger=true with a reason");
+  }
+  if (!hasAmbiguity && !hasTriggerTrue && !(hasTriggerFalse && hasSkipReason && hasZeroOpenQuestions)) {
+    errors.push("spec.md with no material ambiguity must explicitly record Clarify trigger=false, a reason, and zero open questions");
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    clarify: Object.freeze({
+      trigger: hasTriggerTrue ? true : hasTriggerFalse ? false : undefined,
+      reason: hasAmbiguity ? "material ambiguity present in spec" : hasTriggerTrue && hasZeroOpenQuestions
+        ? "recorded Clarify completed with zero open material ambiguities"
+        : "no material ambiguity detected by contract check",
+      open_direction_changing_questions: hasAmbiguity && !hasTriggerTrue ? 1 : 0,
+    }),
+  });
+}
+
+export function validateDecisionCorrectionAppendix(value) {
+  const errors = [];
+  if (!object(value)) return result(["decision correction appendix must be an object"]);
+  if (!SHA256_HEX.test(value.source_decision_hash ?? "") || typeof value.source_decision_ref !== "string") errors.push("source decision ref/hash is invalid");
+  if (value.does_not_rewrite_upstream !== true) errors.push("does_not_rewrite_upstream must be true");
+  const corrections = new Map((value.corrections ?? []).map((entry) => [entry?.id, entry?.text]));
+  for (const [id, text] of Object.entries(DECISION_CORRECTIONS)) {
+    if (corrections.get(id) !== text) errors.push(`${id} correction must match the accepted literal text`);
+  }
+  if (corrections.size !== Object.keys(DECISION_CORRECTIONS).length) errors.push("correction appendix must contain exactly D1-D7");
+  return result(errors);
+}
+
+export function buildDecisionCoverageAudit({
+  decisionLogRef,
+  decisionLogHash,
+  sourceItems = [],
+  mappings = [],
+  declared_counts = null,
+  known_inventory = null,
+} = {}) {
+  if (typeof decisionLogRef !== "string" || !SHA256_HEX.test(decisionLogHash ?? "")) {
+    throw new TypeError("decision log ref/hash is required");
+  }
+  if (!Array.isArray(sourceItems) || !Array.isArray(mappings)) throw new TypeError("sourceItems and mappings must be arrays");
+  const failures = [];
+  const failure = (code, source, message) => failures.push(Object.freeze({
+    code,
+    source_item_ref: typeof source?.source_item_ref === "string" ? source.source_item_ref : null,
+    source_anchor: typeof source?.source_anchor === "string" ? source.source_anchor : null,
+    message,
+  }));
+  const mappingBySource = new Map();
+  for (const mapping of mappings) {
+    if (mappingBySource.has(mapping?.source_item_ref)) throw new Error(`duplicate decision coverage mapping: ${mapping?.source_item_ref}`);
+    mappingBySource.set(mapping?.source_item_ref, mapping);
+  }
+  const seenSources = new Set();
+  const items = sourceItems.map((source) => {
+    if (typeof source?.source_item_ref !== "string" || !SHA256_HEX.test(source?.source_item_hash ?? "")) {
+      throw new TypeError("source item ref/hash is invalid");
+    }
+    if (seenSources.has(source.source_item_ref)) throw new Error(`duplicate decision source item: ${source.source_item_ref}`);
+    seenSources.add(source.source_item_ref);
+    if (typeof source.source_anchor !== "string" || source.source_anchor.trim() === "") {
+      failure("missing_source_anchor", source, "source item has no authenticated source_anchor");
+    }
+    if (typeof source.exact_excerpt !== "string" || source.exact_excerpt.trim() === "") {
+      failure("missing_exact_excerpt", source, "source item has no exact requirement excerpt");
+    }
+    if (source.requirement_strength !== "must") {
+      failure("requirement_strength_weakened", source, "source item requirement_strength must remain must");
+    }
+    const mapping = mappingBySource.get(source.source_item_ref);
+    if (!mapping) {
+      failure("missing_disposition", source, "source item has no explicit coverage disposition");
+      return { ...source, coverage_status: "missing", decision_location: null };
+    }
+    if (mapping.source_item_hash !== source.source_item_hash) throw new Error(`decision source hash mismatch: ${source.source_item_ref}`);
+    if (!new Set(["covered", "accepted_omission"]).has(mapping.coverage_status)) {
+      throw new Error(`invalid decision coverage status: ${source.source_item_ref}`);
+    }
+    if (typeof mapping.disposition !== "string" || mapping.disposition.trim() === "") {
+      failure("missing_disposition", source, "coverage mapping has no explicit disposition");
+    }
+    if (mapping.coverage_status === "accepted_omission"
+        && (typeof mapping.owner !== "string" || mapping.owner.trim() === ""
+          || typeof mapping.exclusion_reason !== "string" || mapping.exclusion_reason.trim() === "")) {
+      failure("accepted_omission_missing_owner_or_reason", source, "accepted omission requires owner and exclusion_reason");
+    }
+    return {
+      ...source,
+      coverage_status: mapping.coverage_status,
+      decision_location: structuredClone(mapping.decision_location),
+    };
+  });
+  const unknown = [...mappingBySource.keys()].filter((ref) => !seenSources.has(ref));
+  if (unknown.length) throw new Error(`decision coverage maps unknown source items: ${unknown.join(", ")}`);
+  const summary = items.reduce((counts, item) => {
+    counts[item.coverage_status] += 1;
+    return counts;
+  }, { covered: 0, accepted_omission: 0, missing: 0 });
+  if (sourceItems.length === 0) {
+    failure("source_inventory_unavailable", null, "authenticated raw requirement inventory is unavailable");
+  }
+  const expectedCounts = {
+    source_items: items.length,
+    covered: summary.covered,
+    accepted_omission: summary.accepted_omission,
+    missing: summary.missing,
+  };
+  const countSource = items[0] ?? null;
+  if (!declared_counts || typeof declared_counts !== "object"
+      || Object.entries(expectedCounts).some(([key, value]) => declared_counts[key] !== value)) {
+    failure("declared_counts_do_not_close", countSource, "declared coverage counts do not equal the observed item counts");
+  }
+  const inventoryPresent = known_inventory && typeof known_inventory === "object" && !Array.isArray(known_inventory);
+  if (!inventoryPresent) {
+    failure("known_inventory_unavailable", countSource, "known inventory is unavailable; this audit makes no global authority claim");
+  }
+  const stableIds = Array.isArray(known_inventory?.stable_ids) ? known_inventory.stable_ids : [];
+  const groupedIds = new Map();
+  for (const entry of stableIds) {
+    if (typeof entry?.id !== "string" || entry.id.trim() === "" || typeof entry.position !== "string" || entry.position.trim() === "") continue;
+    const positions = groupedIds.get(entry.id) ?? [];
+    positions.push(entry.position);
+    groupedIds.set(entry.id, positions);
+  }
+  const authorityFindings = [...groupedIds.entries()]
+    .filter(([, positions]) => positions.length > 1)
+    .map(([id, positions]) => Object.freeze({ code: "duplicate_stable_id", id, positions: Object.freeze([...positions]) }));
+  for (const entry of authorityFindings) {
+    failure("duplicate_stable_id", countSource, `known inventory duplicates ${entry.id}: ${entry.positions.join(", ")}`);
+  }
+  const samples = Array.isArray(known_inventory?.fact_samples)
+    ? known_inventory.fact_samples.map((entry) => Object.freeze({ ...entry }))
+    : [];
+  const requiredFactTypes = ["product_goal", "user_flow", "cross_task_requirement", "acceptance"];
+  const factAuthorityFindings = [];
+  for (const factType of requiredFactTypes) {
+    const typed = samples.filter((entry) => entry?.fact_type === factType);
+    if (typed.length !== 1) {
+      failure("authority_sample_cardinality", countSource, `known inventory requires exactly one ${factType} sample`);
+      continue;
+    }
+    const sample = typed[0];
+    if (["sample", "authority_file", "conclusion", "evidence"].some((field) => typeof sample[field] !== "string" || sample[field].trim() === "")) {
+      failure("authority_sample_incomplete", countSource, `${factType} sample must include sample, authority_file, conclusion, and evidence`);
+    }
+  }
+  const authorityByFact = new Map();
+  for (const sample of samples) {
+    if (typeof sample?.fact_type !== "string" || typeof sample?.sample !== "string" || typeof sample?.authority_file !== "string") continue;
+    const key = `${sample.fact_type}\0${sample.sample}`;
+    const files = authorityByFact.get(key) ?? new Set();
+    files.add(sample.authority_file);
+    authorityByFact.set(key, files);
+  }
+  for (const [key, files] of authorityByFact) {
+    if (files.size < 2) continue;
+    const [fact_type, sample] = key.split("\0");
+    const finding = Object.freeze({ code: "duplicate_fact_authority", fact_type, sample, authority_files: Object.freeze([...files].sort()) });
+    factAuthorityFindings.push(finding);
+    failure("duplicate_fact_authority", countSource, `${fact_type} sample declares multiple authorities: ${finding.authority_files.join(", ")}`);
+  }
+  const authority = Object.freeze({
+    scope: "known_inventory",
+    duplicate_authorities: authorityFindings.length + factAuthorityFindings.length,
+    findings: Object.freeze([...authorityFindings, ...factAuthorityFindings]),
+    samples: Object.freeze(samples),
+  });
+  return Object.freeze({
+    decision_log_ref: decisionLogRef,
+    decision_log_hash: decisionLogHash,
+    items: Object.freeze(items),
+    summary: Object.freeze(summary),
+    status: failures.length === 0 && summary.missing === 0 ? "passed" : "incomplete",
+    failures: Object.freeze(failures),
+    authority,
+  });
+}
+
+export function assertDecisionCoverageReadyForConfirmation(audit) {
+  if (!object(audit) || !object(audit.summary) || !Array.isArray(audit.items)) throw new TypeError("decision coverage audit is required");
+  if (audit.summary.missing !== 0 || audit.items.some((item) => item.coverage_status === "missing")) {
+    throw new Error("unhandled decision omissions must be shown to the user and resolved before final confirmation");
+  }
+  return audit;
+}
+
+export function buildDecisionCorrectionAppendix({
+  sourceDecisionRef,
+  sourceDecisionHash,
+  reason,
+  impactScope = [],
+} = {}) {
+  const value = {
+    source_decision_ref: sourceDecisionRef,
+    source_decision_hash: sourceDecisionHash,
+    corrections: Object.entries(DECISION_CORRECTIONS).map(([id, text]) => ({ id, text })),
+    reason,
+    impact_scope: structuredClone(impactScope),
+    does_not_rewrite_upstream: true,
+  };
+  const validation = validateDecisionCorrectionAppendix(value);
+  if (!validation.ok) throw new TypeError(validation.errors.join("; "));
+  return Object.freeze(value);
+}
+
+function taskRelativeRef(value) {
+  return typeof value === "string" && value.trim() !== ""
+    && !value.startsWith("/") && !value.split(/[\\/]+/).includes("..");
+}
+
+const COMPLETION_EVIDENCE_KINDS = new Set([
+  "task_record",
+  "git_commit",
+  "workspace_file",
+  "test_run",
+  "review_fact",
+]);
+
+function completionEvidenceRef(entry) {
+  const kind = entry?.kind ?? "task_record";
+  if (!COMPLETION_EVIDENCE_KINDS.has(kind)) return false;
+  if (kind === "git_commit") {
+    return typeof entry.ref === "string"
+      && /^(?:git\/commits\/)?[a-f0-9]{40,64}$/.test(entry.ref);
+  }
+  return taskRelativeRef(entry.ref);
+}
+
+function addUniqueIds(items, label, errors) {
+  const ids = new Set();
+  for (const item of items ?? []) {
+    if (ids.has(item.id)) errors.push(`duplicate ${label} ID: ${item.id}`);
+    ids.add(item.id);
+  }
+  return ids;
+}
+
+function validateBoundSpecReference(reference, knownIds, subject, label, errors) {
+  if (reference.artifact_kind !== "spec" || reference.ref !== subject.ref
+      || reference.hash !== subject.hash || !knownIds.has(reference.id)) {
+    errors.push(`${label} must resolve to the bound spec identity`);
+  }
+}
+
+/**
+ * v2 derives identity/closure facts from one spec snapshot. It deliberately
+ * stores only IDs and bindings, never a second copy of product prose.
+ */
+export function validateAmbiguityLedgerV2(value) {
+  if (value?.content_profile === "spec-content.v3" && !object(value.clarification)) {
+    return result(["spec-clarify must record canonical trigger=false and reason when there is no ambiguity"]);
+  }
+  if (!validateAmbiguityLedgerV2Schema(value)) return result(schemaErrors(validateAmbiguityLedgerV2Schema));
+  const errors = [];
+  const subject = value.subject_binding;
+  if (subject.artifact_kind !== "spec" || !taskRelativeRef(subject.ref)
+      || subject.hash !== value.spec_content_hash) {
+    errors.push("subject_binding must identify the exact task-relative spec bytes");
+  }
+
+  const scenarioIds = addUniqueIds(value.scenarios ?? [], "SCN", errors);
+  const pfactIds = addUniqueIds(value.pfacts, "PFACT", errors);
+  const frIds = addUniqueIds(value.frs, "FR", errors);
+  const acIds = addUniqueIds(value.acs, "AC", errors);
+  addUniqueIds(value.open_questions ?? [], "OPEN", errors);
+  const allIds = new Set([...pfactIds, ...frIds, ...acIds]);
+
+  if (value.content_profile === "spec-content.v3") {
+    for (const id of frIds) {
+      if (!/^FR-[A-Z][A-Z0-9]*-[0-9]{3}$/.test(id)) {
+        errors.push(`new content profile FR must use FR-{DOMAIN}-{NNN}: ${id}`);
+      }
+    }
+  }
+  for (const pfact of value.pfacts) {
+    for (const evidence of pfact.evidence ?? []) {
+      if (!taskRelativeRef(evidence.ref)) errors.push(`PFACT ${pfact.id} evidence ref must be task-relative`);
+    }
+    for (const reference of pfact.affects_frs) validateBoundSpecReference(reference, frIds, subject, `PFACT ${pfact.id} FR reference`, errors);
+    for (const reference of pfact.affects_acs) validateBoundSpecReference(reference, acIds, subject, `PFACT ${pfact.id} AC reference`, errors);
+  }
+  for (const fr of value.frs) {
+    for (const reference of fr.pfact_refs) validateBoundSpecReference(reference, pfactIds, subject, `FR ${fr.id} PFACT reference`, errors);
+    for (const reference of fr.scenario_refs ?? []) validateBoundSpecReference(reference, scenarioIds, subject, `FR ${fr.id} scenario reference`, errors);
+    for (const reference of fr.ac_refs) validateBoundSpecReference(reference, acIds, subject, `FR ${fr.id} AC reference`, errors);
+  }
+  for (const ac of value.acs) {
+    for (const reference of ac.fr_refs) validateBoundSpecReference(reference, frIds, subject, `AC ${ac.id} FR reference`, errors);
+  }
+  for (const risk of value.risks) {
+    for (const id of risk.affected_ids) if (!allIds.has(id)) errors.push(`risk ${risk.id} affects unknown ID: ${id}`);
+  }
+  for (const question of value.open_questions ?? []) {
+    for (const id of question.affected_ids) if (!allIds.has(id)) errors.push(`open question ${question.id} affects unknown ID: ${id}`);
+  }
+  const clarification = value.clarification;
+  if ((value.open_questions ?? []).length > 0) {
+    const sameAxis = object(clarification?.ask) && object(clarification?.wait) && object(clarification?.resume)
+      && clarification.ask.axis === clarification.wait.axis
+      && clarification.wait.axis === clarification.resume.axis;
+    const ordered = clarification?.ask?.sequence === 1
+      && clarification?.wait?.sequence === 2
+      && clarification?.resume?.sequence === 3;
+    const hostVisible = /^host-message:\/\/ask\//.test(clarification?.ask?.ref ?? "")
+      && clarification?.wait?.status === "waiting-for-user"
+      && /^host-message:\/\/reply\//.test(clarification?.wait?.reply_ref ?? "")
+      && /^host-message:\/\/resume\//.test(clarification?.resume?.ref ?? "");
+    if (!object(clarification)
+        || clarification.component !== "spec-clarify"
+        || clarification.status !== "executed"
+        || !sameAxis || !ordered || !hostVisible) {
+      errors.push("spec-clarify open questions require canonical host-visible ask -> wait -> resume facts and reason");
+    }
+  } else if (!object(clarification)
+      || clarification.component !== "spec-clarify"
+      || clarification.status !== "trigger=false"
+      || typeof clarification.reason !== "string"
+      || clarification.reason.trim() === "") {
+    errors.push("spec-clarify must record canonical trigger=false and reason when there is no ambiguity");
+  }
+  if (value.content_profile === "spec-content.v3") {
+    const referencedScenarios = new Set(value.frs.flatMap((fr) => (fr.scenario_refs ?? []).map((reference) => reference.id)));
+    for (const id of scenarioIds) if (!referencedScenarios.has(id)) errors.push(`scenario has no FR coverage: ${id}`);
+    const unresolvedIds = new Set([
+      ...value.risks.flatMap((risk) => risk.affected_ids),
+      ...(value.open_questions ?? []).flatMap((question) => question.affected_ids),
+    ]);
+    for (const pfact of value.pfacts) {
+      if (pfact.status === "unknown" && !unresolvedIds.has(pfact.id)) {
+        errors.push(`unknown PFACT must be bound to a RISK or OPEN card: ${pfact.id}`);
+      }
+    }
+  }
+  return result(errors);
+}
+
+const SPEC_CONTENT_V3_SECTIONS = Object.freeze([
+  /^速读卡(?:（30 秒）)?$/,
+  /^1\.\s+问题与紧迫性$/,
+  /^2\.\s+背景、目标与范围$/,
+  /^3\.\s+用户场景与状态覆盖$/,
+  /^4\.\s+产品事实与假设（PFACT）$/,
+  /^5\.\s+功能需求$/,
+  /^6\.\s+模块划分$/,
+  /^7\.\s+关键实体$/,
+  /^8\.\s+数据和生命周期$/,
+  /^9\.\s+兼容性预留$/,
+  /^10\.\s+明确不做与默认必须成立$/,
+  /^11\.\s+验收标准$/,
+  /^12\.\s+风险、未决与交接$/,
+  /^13\.\s+业务影响与回归范围$/,
+]);
+const LEGACY_SPEC_CONTENT_V3_SECTIONS = Object.freeze([
+  /^速读卡(?:（30 秒）)?$/,
+  /^1\.\s+问题与紧迫性$/,
+  /^2\.\s+背景、目标与范围$/,
+  /^3\.\s+用户场景与状态覆盖$/,
+  /^4\.\s+产品事实与假设（PFACT）$/,
+  /^5\.\s+功能需求$/,
+  /^6\.\s+条件式业务合同$/,
+  /^7\.\s+明确不做与默认必须成立$/,
+  /^8\.\s+业务影响与回归范围$/,
+  /^9\.\s+验收标准$/,
+  /^10\.\s+风险、未决与交接$/,
+]);
+
+export function validateSpecContentProfile(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return result(["spec markdown is required"]);
+  const errors = markdownStructureErrors(markdown, "spec");
+  const residueText = withoutProgrammingFencedCode(markdown).replace(/`[^`\n]*`/g, "");
+  if (/\{[^{}"':,\n]{1,120}\}/.test(residueText)) errors.push("spec contains an unresolved placeholder");
+  if (/\[填写：[^\]\r\n]{1,120}\]/.test(residueText)) errors.push("spec contains an unresolved placeholder");
+  if (/<!--[\s\S]*?-->/.test(markdown)) errors.push("spec contains an authoring comment");
+  if (/^\s*(?:待补充|TBD|TODO)\s*$/mi.test(markdown)) errors.push("spec contains filler");
+  if ((markdown.match(/^###\s+明确不做\s*$/gm) ?? []).length !== 1) {
+    errors.push("spec must contain exactly one authoritative 明确不做 section");
+  }
+  if (/^###\s+假设\s*$/m.test(markdown)) errors.push("assumptions must be represented only as inferred PFACT");
+
+  const sectionHeadings = markdownSections(markdown, 2).map(({ heading }) => heading);
+  const sectionProfiles = [SPEC_CONTENT_V3_SECTIONS, LEGACY_SPEC_CONTENT_V3_SECTIONS];
+  const matchingProfile = sectionProfiles.find((profile) =>
+    profile.every((expected) => sectionHeadings.some((heading) => expected.test(heading))));
+  if (!matchingProfile) {
+    for (const expected of SPEC_CONTENT_V3_SECTIONS) {
+      if (!sectionHeadings.some((heading) => expected.test(heading))) {
+        errors.push(`spec-content.v3 section missing: ${expected.source}`);
+      }
+    }
+  }
+  for (const [label, pattern] of [
+    ["SCN card", /^###\s+SCN-\d{3}(?:\s*[:：].*)?$/m],
+    ["PFACT card", /^\s*-\s+\*\*PFACT-[A-Z0-9]+\*\*\s*[:：]/m],
+    ["FR card", /^\s*-\s+\*\*FR-[A-Z][A-Z0-9]*-\d{3}\*\*\s*[:：]/m],
+    ["AC card", new RegExp(String.raw`^\s*-\s+\[[ xX]\]\s+\*\*${ACCEPTANCE_CRITERION_SOURCE}\*\*\s*[:：]`, "m")],
+  ]) {
+    if (!pattern.test(markdown)) errors.push(`spec-content.v3 is missing a ${label}`);
+  }
+
+  const tableBlocks = [];
+  let current = [];
+  for (const line of markdown.split(/\r?\n/)) {
+    if (/^\s*\|.*\|\s*$/.test(line)) current.push(line);
+    else if (current.length) {
+      tableBlocks.push(current);
+      current = [];
+    }
+  }
+  if (current.length) tableBlocks.push(current);
+  for (const table of tableBlocks) {
+    if (table.length < 3) errors.push("spec contains an empty table");
+    const widths = table.map((line) => line.split("|").length);
+    if (new Set(widths).size !== 1) errors.push("spec contains an inconsistent table");
+    if (Math.max(...widths) - 2 > 5) errors.push("spec table exceeds five columns");
+  }
+
+  const engineeringPatterns = [
+    /^##+\s+(?:Code Anchors?|Implementation (?:Plan|Steps?)|工程方案|实现步骤)\b/im,
+    /\b(?:gate_cmd|expected_exit|display_cmd|design_state)\b/,
+    /`(?:src|core|lib|skills|tests)\/[^`]+`/,
+    /`[^`\n]+\.(?:js|mjs|cjs|ts|tsx|py|go|rs)(?::[^`]*)?`/,
+    /\breuse\s*(?:→|->)\s*extend\s*(?:→|->)\s*new\b/i,
+  ];
+  if (engineeringPatterns.some((pattern) => pattern.test(markdown))) {
+    errors.push("spec contains plan/task engineering material");
+  }
+  return result(errors);
+}
+
+/**
+ * A specification may be structurally valid while leaving the acceptance
+ * meaning implicit.  Catch that at build-spec: implementation results and
+ * evidence anchors belong to build-code/verify-code, but every AC must already
+ * say what is being exercised and how the result will be judged.
+ */
+export function validateAcceptanceDesignMinimum(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") {
+    return result(["spec acceptance design requires readable markdown"]);
+  }
+  const lines = markdown.split(/\r?\n/);
+  const starts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^###\s+AC-[A-Za-z0-9_-]+\b/i.test(lines[index])
+        || /^\s*[-*]\s+\[[ xX]\]\s+\*\*AC-[A-Za-z0-9_-]+\*\*/i.test(lines[index])) {
+      starts.push(index);
+    }
+  }
+  if (starts.length === 0) return result([]);
+  const errors = [];
+  for (const [position, start] of starts.entries()) {
+    const end = starts[position + 1] ?? lines.length;
+    const block = lines.slice(start, end).join("\n");
+    const id = lines[start].match(/\bAC-[A-Za-z0-9_-]+\b/i)?.[0] ?? `AC-${position + 1}`;
+    const body = block.replace(/^[^\n]*\n?/, "").trim();
+    const verificationIndex = body.search(/(?:^|\n)\s*(?:验证|验收|判定|oracle|verification|assertion|test\s+oracle)\s*[:：]/im);
+    const scenarioText = (verificationIndex >= 0 ? body.slice(0, verificationIndex) : body).trim();
+    if (scenarioText.length < 8) {
+      errors.push(`${id} acceptance design is missing an observable scenario`);
+    }
+    if (!/(?:^|\n)\s*(?:验证|验收|判定|oracle|verification|assertion|test\s+oracle)\s*[:：]/im.test(block)) {
+      errors.push(`${id} acceptance design is missing an oracle/verification rule`);
+    }
+  }
+  return result(errors);
+}
+
+const AC_CARD_LABELS = Object.freeze(["验证", "通过", "失败", "证据"]);
+const ORACLE_ROLES = new Set(["RED", "GREEN", "N/A"]);
+const ORACLE_SEMANTIC_STATUSES = new Set(["completed", "incomplete", "unavailable"]);
+const PLACEHOLDER_LINE = /^(?:TBD|TODO|待填写)$/i;
+
+function materialContractResult(errors, status, extras = {}) {
+  const unique = [...new Set(errors)];
+  return Object.freeze({ ok: unique.length === 0, status: unique.length === 0 ? status : "incomplete", errors: Object.freeze(unique), ...extras });
+}
+
+function acHeading(line) {
+  return line.match(/^###\s+(AC-[A-Za-z0-9_-]+)\b/i)?.[1]
+    ?? line.match(/^\s*-\s*\[[ xX]\]\s*\*\*(AC-[A-Za-z0-9_-]+)\*\*/i)?.[1]
+    ?? null;
+}
+
+/** Validate the four plain, ordered, non-empty AC segments used by new materials. */
+export function validateAcFourSegmentCards(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return materialContractResult(["AC material is empty"], "incomplete", { cards: [] });
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const errors = lines.filter((line) => PLACEHOLDER_LINE.test(line.trim())).map((line) => `whole-line placeholder is not allowed: ${line.trim()}`);
+  const starts = lines.map(acHeading);
+  const cards = [];
+  for (let index = 0; index < starts.length; index += 1) {
+    if (!starts[index]) continue;
+    const end = lines.findIndex((line, offset) => offset > index && (/^##\s+/.test(line) || Boolean(acHeading(line))));
+    const blockLines = lines.slice(index + 1, end < 0 ? lines.length : end);
+    const sections = new Map();
+    let active = null;
+    for (const line of blockLines) {
+      const label = line.match(/^(验证|通过|失败|证据)[：:](.*)$/)?.[1] ?? null;
+      if (label) {
+        if (sections.has(label)) errors.push(`${starts[index]} has duplicate ${label} segment`);
+        sections.set(label, []);
+        active = label;
+        const inline = line.match(/^(?:验证|通过|失败|证据)[：:](.*)$/)?.[1] ?? "";
+        if (inline.trim() !== "") sections.get(label).push(inline.trim());
+      } else if (active !== null) {
+        sections.get(active).push(line);
+      }
+    }
+    const values = Object.fromEntries(AC_CARD_LABELS.map((label) => [label, (sections.get(label) ?? []).join("\n").trim()]));
+    for (const label of AC_CARD_LABELS) if (!sections.has(label) || values[label] === "") errors.push(`${starts[index]} ${label} segment is missing or empty`);
+    const labels = [...sections.keys()];
+    if (labels.some((label, position) => label !== AC_CARD_LABELS[position])) errors.push(`${starts[index]} segments must be ordered 验证/通过/失败/证据`);
+    cards.push(Object.freeze({ id: starts[index], segments: Object.freeze(values) }));
+  }
+  if (cards.length === 0) return materialContractResult(errors, "not_applicable", { cards: [] });
+  return materialContractResult(errors, "ready", { cards: Object.freeze(cards) });
+}
+
+function taskField(body, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return body.match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+}
+
+function nonPlaceholderText(value) {
+  return typeof value === "string" && value.trim() !== "" && !PLACEHOLDER_LINE.test(value.trim());
+}
+
+/** Validate task oracle shape, including RED-only reject and semantic review facts. */
+export function validateTaskOracleContract(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return materialContractResult(["tasks material is empty"], "incomplete", { tasks: [] });
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const starts = lines.map((line, index) => /^####\s+(T[A-Za-z0-9_-]+)/.test(line) ? index : -1).filter((index) => index >= 0);
+  if (starts.length === 0) return materialContractResult([], "not_applicable", { tasks: [] });
+  const errors = [];
+  const tasks = [];
+  for (const [position, start] of starts.entries()) {
+    const body = lines.slice(start + 1, starts[position + 1] ?? lines.length).join("\n");
+    const id = lines[start].match(/^####\s+(T[A-Za-z0-9_-]+)/)?.[1];
+    const roleRaw = taskField(body, "verification_role");
+    // Keep the authored explanation while exposing a canonical non-behavior role.
+    const role = /^N\/A\s+[—-]\s+\S/i.test(roleRaw ?? "") ? "N/A" : roleRaw;
+    const paired = taskField(body, "paired_task");
+    const oracleRaw = taskField(body, "oracle")?.replace(/^`|`$/g, "") ?? "";
+    const oracleId = oracleRaw.match(/^([A-Z][A-Z0-9_-]+)\b/)?.[1] ?? null;
+    const oracleJson = oracleRaw.slice(oracleId ? oracleId.length : 0).trim();
+    let oracle = null;
+    try { oracle = JSON.parse(oracleJson); } catch { errors.push(`${id} oracle must contain a JSON object`); }
+    if (!ORACLE_ROLES.has(role)) errors.push(`${id} verification_role is invalid`);
+    if (role === "N/A" && !/^N\/A\s+[—-]\s+\S/i.test(roleRaw ?? "")) errors.push(`${id} N/A verification_role requires a reason`);
+    if (paired === null || paired.trim() === "") errors.push(`${id} paired_task is missing`);
+    if (role === "N/A" && !/^N\/A\s+[—-]\s+\S/i.test(paired ?? "")) errors.push(`${id} N/A task requires a paired_task reason`);
+    if (!oracleId || !oracle || typeof oracle !== "object" || Array.isArray(oracle)) errors.push(`${id} oracle identity or object is missing`);
+    if (oracle && !nonPlaceholderText(oracle.pass)) errors.push(`${id} oracle.pass is missing or placeholder`);
+    const needsReject = role === "RED" && paired !== null && !/^N\/A\s+[—-]/i.test(paired);
+    if (needsReject) {
+      for (const field of ["input", "expected_rejection", "observation"]) {
+        if (!nonPlaceholderText(oracle?.reject?.[field])) errors.push(`${id} oracle.reject.${field} is missing`);
+      }
+    }
+    if (role === "RED" || role === "GREEN") {
+      const semanticStatus = taskField(body, "semantic_review_status");
+      if (!ORACLE_SEMANTIC_STATUSES.has(semanticStatus)) errors.push(`${id} semantic_review_status is invalid`);
+      if (!nonPlaceholderText(taskField(body, "semantic_review_ref"))) errors.push(`${id} semantic_review_ref is missing`);
+      if (!nonPlaceholderText(taskField(body, "semantic_review_reason"))) errors.push(`${id} semantic_review_reason is missing`);
+    }
+    tasks.push(Object.freeze({ id, verification_role: role, paired_task: paired, oracle_id: oracleId, oracle: oracle ? Object.freeze(oracle) : null }));
+  }
+  return materialContractResult(errors, "ready", { tasks: Object.freeze(tasks) });
+}
+
+/** Shared producer/consumer check for spec/plan AC cards and task oracles. */
+export function validateMaterialOracleContract({ spec, plan, tasks } = {}) {
+  const specResult = validateAcFourSegmentCards(spec);
+  const planResult = validateAcFourSegmentCards(plan);
+  const tasksResult = validateTaskOracleContract(tasks);
+  const errors = [
+    ...specResult.errors.map((error) => `spec: ${error}`),
+    ...planResult.errors.map((error) => `plan: ${error}`),
+    ...tasksResult.errors.map((error) => `tasks: ${error}`),
+  ];
+  const specPayload = JSON.stringify(specResult.cards.map(({ id, segments }) => [id, segments]));
+  const planPayload = JSON.stringify(planResult.cards.map(({ id, segments }) => [id, segments]));
+  if (specResult.cards.length > 0 && planResult.cards.length > 0 && specPayload !== planPayload) errors.push("plan AC cards drift from spec AC cards");
+  return materialContractResult(errors, "ready", { spec: specResult, plan: planResult, tasks: tasksResult });
+}
+
+const PLAN_SECTIONS = Object.freeze([
+  "Technical Context",
+  "Global Constraints",
+  "Modules, Interfaces, and Data Contracts",
+  "Implementation Order",
+  "Test Strategy",
+  "Rollback and Recovery",
+  "FR to AC to Step Traceability",
+  "Constitution Check",
+  "Complexity Trade-offs",
+]);
+const PLAN_SECTIONS_V3 = Object.freeze([
+  "Quick Read",
+  "Technical Context",
+  "Code Anchors",
+  "Solution Design",
+  "File Boundary",
+  "Technical Decisions",
+  "Test Strategy",
+  "Rollback and Recovery",
+  "Implementation Order",
+  "Dependencies and Parallelism",
+  "Requirement and Verification Traceability",
+  "Governance Synchronization Matrix",
+  "Constitution Check",
+]);
+const PLAN_SECTION_ALIASES = Object.freeze({
+  "Quick Read": [/速读卡/, /Quick Read/i],
+  "Technical Context": [/Technical Context/i],
+  "Global Constraints": [/Global Constraints/i, /全局约束/],
+  "Code Anchors": [/Code Anchors/i, /代码锚点/],
+  "Solution Design": [/Solution Design/i, /方案设计/],
+  "File Boundary": [/File Boundary/i, /文件边界/],
+  "Technical Decisions": [/Technical Decisions/i, /技术决策/],
+  "Modules, Interfaces, and Data Contracts": [/Modules.*Interfaces.*Data Contracts/i, /模块职责与接口/],
+  "Implementation Order": [/Implementation Order/i, /依赖与并行/, /实施顺序/],
+  "Dependencies and Parallelism": [/Dependencies and Parallelism/i, /依赖与并行/],
+  "Test Strategy": [/Test Strategy/i, /场景优先级与独立测试/, /测试策略/],
+  "Rollback and Recovery": [/Rollback and Recovery/i, /风险与回滚/],
+  "FR to AC to Step Traceability": [/FR to AC to Step Traceability/i, /FR.*AC.*Step.*追踪/i],
+  "Requirement and Verification Traceability": [/Requirement and Verification Traceability/i, /需求与验证追踪/],
+  "Governance Synchronization Matrix": [/Governance Synchronization Matrix/i, /治理同步矩阵/],
+  "Constitution Check": [/Constitution Check/i, /宪法逐项检查/],
+  "Complexity Trade-offs": [/Complexity Trade-offs/i, /候选方案.*取舍.*复杂度/],
+});
+const PHASE_FIELDS = Object.freeze(["Goal", "Files", "Tasks", "Verify", "Knowledge", "STOP"]);
+const PHASE_FIELDS_V3 = Object.freeze([
+  "Goal", "Files", "Tasks", "Verify", "Knowledge", "STOP", "Done", "Risks and rollback",
+]);
+const TASK_FIELDS = Object.freeze([
+  "ID", "动作", "精确文件", "输入", "输出", "依赖", "并行",
+  "FR", "AC", "gate_cmd", "expected_exit", "oracle", "evidence_path",
+]);
+const TASK_FIELDS_V3 = Object.freeze([
+  "ID", "Phase", "goal", "design_state", "versioned_refs", "输入", "依赖", "并行",
+  "FR", "AC", "动作", "精确文件", "boundary", "输出", "Knowledge",
+  "verification_role", "paired_task", "gate_cmd", "expected_exit", "oracle",
+  "evidence_path", "STOP", "recovery", "task risk",
+]);
+export const PLAN_TASK_SLICE_SIGNALS = Object.freeze([
+  "SIG-FILES", "SIG-TARGETS", "SIG-CROSS-PHASE",
+]);
+export const PLAN_TASK_SLICE_STATUSES = Object.freeze([
+  "within_budget", "explained_overage", "unexplained_overage",
+]);
+const PLAN_TASK_V3 = "plan-task.v3";
+const PLAN_TASK_V4 = "plan-task.v4";
+const SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS = new Set([PLAN_TASK_V3, PLAN_TASK_V4]);
+const CURRENT_CONSTITUTION_CLAUSE_IDS = Object.freeze([
+  // Deliberate governance snapshot: update this list with constitution-checklist.md.
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11",
+  "Q1", "Q2", "Q3",
+  "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
+]);
+
+function markdownSections(document, level, prefix = "") {
+  const lines = document.split(/\r?\n/);
+  const marker = "#".repeat(level);
+  const indexes = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(new RegExp(`^${marker}\\s+(.+?)\\s*$`));
+    if (match && (!prefix || match[1].startsWith(prefix))) indexes.push({ index, heading: match[1] });
+  }
+  return indexes.map((entry, position) => ({
+    heading: entry.heading,
+    body: lines.slice(entry.index + 1, indexes[position + 1]?.index ?? lines.length).join("\n").trim(),
+  }));
+}
+
+function taskBlocks(document) {
+  const lines = document.split(/\r?\n/);
+  const starts = [];
+  let phase = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const phaseMatch = lines[index].match(/^##\s+(Phase\s+.+?)\s*$/);
+    if (phaseMatch) phase = phaseMatch[1];
+    const taskMatch = lines[index].match(/^#{3,4}\s+(T\d+\b.*?)\s*$/);
+    if (taskMatch) starts.push({ index, heading: taskMatch[1], phase });
+  }
+  return starts.map((entry) => {
+    let end = lines.length;
+    for (let index = entry.index + 1; index < lines.length; index += 1) {
+      if (/^#{1,4}\s+/.test(lines[index])) {
+        end = index;
+        break;
+      }
+    }
+    const body = lines.slice(entry.index + 1, end).join("\n").trim();
+    const fields = {};
+    for (const line of body.split(/\r?\n/)) {
+      const match = line.match(/^\s*-\s+\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/);
+      if (match) fields[match[1].trim()] = match[2].trim();
+    }
+    return {
+      heading: entry.heading,
+      heading_id: entry.heading.match(/^(T\d+)/)?.[1],
+      phase: entry.phase,
+      body,
+      fields,
+    };
+  });
+}
+
+function executionIndexRows(document) {
+  const section = markdownSections(document, 2).find(({ heading }) => /^(?:Execution Index|执行索引)$/i.test(heading));
+  if (!section) return null;
+  const rows = [];
+  for (const line of section.body.split(/\r?\n/)) {
+    if (!/^\s*\|/.test(line) || /^\s*\|\s*(?:---|phase\s*\|)/i.test(line)) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.length !== 6 || cells.every((cell) => /^-+$/.test(cell))) continue;
+    const plain = (value) => value.replace(/^`|`$/g, "").trim();
+    rows.push(Object.freeze({
+      phase: plain(cells[0]),
+      authority_ref: plain(cells[1]),
+      semantic_anchor: plain(cells[2]),
+      write_set: Object.freeze(inlinePaths(cells[3])),
+      dependency: plain(cells[4]),
+      consumer: plain(cells[5]),
+    }));
+  }
+  return Object.freeze(rows);
+}
+
+function phaseDeclaredWritePaths(filesBody) {
+  const writeSetLine = String(filesBody ?? "").split(/\r?\n/).find((line) => /\*\*write set\*\*/i.test(line));
+  const explicit = inlinePaths(writeSetLine ?? "");
+  return new Set(explicit.length > 0 ? explicit : [...phaseWritePaths(filesBody)]);
+}
+
+function pointerPlanTaskRows({ plan, planPhaseRows, pointerRows, errors }) {
+  const indexByPhase = new Map(pointerRows.map((row) => [row.phase, row]));
+  if (pointerRows.length === 0) errors.push("tasks execution index has no phase rows");
+  if (new Set(pointerRows.map(({ phase }) => phase)).size !== pointerRows.length) errors.push("tasks execution index has duplicate phase rows");
+  if (pointerRows.length !== planPhaseRows.length) errors.push("plan/tasks Phase counts must match");
+  const taskRows = [];
+  const orderedIds = [];
+  for (const [phaseIndex, phase] of planPhaseRows.entries()) {
+    const phaseId = phase.phase.match(/^Phase\s+(P\d+)\b/i)?.[1];
+    const indexRow = phaseId ? indexByPhase.get(phaseId) : null;
+    if (!indexRow) {
+      errors.push(`tasks execution index is missing ${phaseId ?? phase.phase}`);
+      continue;
+    }
+    if (indexRow.authority_ref !== "plan.md") errors.push(`${phaseId} authority ref must be plan.md`);
+    if (!indexRow.semantic_anchor) errors.push(`${phaseId} semantic anchor is required`);
+    if (!indexRow.consumer) errors.push(`${phaseId} consumer is required`);
+    const plannedWriteSet = phaseDeclaredWritePaths(phase.fields.Files);
+    if (plannedWriteSet.size === 0) errors.push(`${phase.phase} must declare a non-empty write set`);
+    if (!sameIds([...plannedWriteSet], [...indexRow.write_set])) errors.push(`${phaseId} execution index write set must match plan phase write set`);
+    const expectedDependency = phaseIndex === 0
+      ? "none"
+      : planPhaseRows[phaseIndex - 1].phase.match(/^Phase\s+(P\d+)\b/i)?.[1];
+    if (indexRow.dependency !== expectedDependency) errors.push(`${phaseId} execution index dependency must be ${expectedDependency}`);
+    const command = phase.fields.Verify.match(/`?((?:npx|npm|pnpm|yarn|bun|node|python|pytest|go|cargo|make|bash|sh|git|\.\/)[^`\n]*)`?/i)?.[1]?.trim() ?? null;
+    const oracle = phase.fields.Verify.match(/\bORACLE-[A-Z0-9-]+\b/)?.[0] ?? null;
+    if (!command) errors.push(`${phase.phase} Verify is missing an executable command`);
+    if (!oracle) errors.push(`${phase.phase} Verify is missing an oracle identity`);
+    const taskLines = String(phase.fields.Tasks ?? "").split(/\r?\n/).filter((line) => /\bT\d+\b/.test(line));
+    for (const line of taskLines) {
+      const id = line.match(/\b(T\d+)\b/)?.[1];
+      if (!id) continue;
+      orderedIds.push(id);
+      const role = /\bRED\b/i.test(line) ? "RED" : /\bGREEN\b/i.test(line) ? "GREEN" : "N/A";
+      taskRows.push(Object.freeze({
+        id,
+        order: taskRows.length,
+        phase: phase.phase,
+        fields: Object.freeze({
+          Phase: phase.phase,
+          "精确文件": [...plannedWriteSet].map((file) => `\`${file}\``).join("; "),
+          boundary: [...plannedWriteSet].map((file) => `\`${file}\``).join("; "),
+          gate_cmd: command ?? "",
+          oracle: oracle ?? "",
+          verification_role: role,
+          "test tier / test method": phaseId === "P3" ? "fullstack / fullstack-slice-testing" : "feature / backend-testing",
+          "task risk": phase.fields["Risks and rollback"] ?? "",
+        }),
+        dependencies: Object.freeze(taskRows.length === 0 ? [] : [taskRows.at(-1).id]),
+        frs: Object.freeze([]),
+        acs: Object.freeze([]),
+      }));
+    }
+  }
+  if (new Set(orderedIds).size !== orderedIds.length) errors.push("plan Phase task IDs must be unique");
+  return Object.freeze(taskRows);
+}
+
+function identifiers(text, pattern) {
+  return [...new Set(text.match(pattern) ?? [])];
+}
+
+function commandFieldValue(value) {
+  const text = String(value ?? "").trim();
+  // A task field may carry a code span followed by an explanatory sentence.
+  // Validate the executable command itself rather than requiring the entire
+  // prose field to be wrapped in one pair of backticks.
+  const codeSpan = text.match(/^`([^`\n]+)`/)?.[1];
+  return (codeSpan ?? text).trim();
+}
+
+function hasExecutableCommand(value) {
+  const command = commandFieldValue(value);
+  return /^(?:mkdir\b|npx\b|npm\b|pnpm\b|yarn\b|bun\b|node\b|python\b|pytest\b|go\b|cargo\b|make\b|bash\b|sh\b|git\b|\.\/)/.test(command);
+}
+
+function templateVersion(document) {
+  return document.match(/^\s*(?:-\s+)?\*\*Template version\*\*\s*[:：]\s*`?([^`\s]+)`?\s*$/mi)?.[1] ?? null;
+}
+
+function placeholderOrTemplateNoise(document) {
+  if (/<!--[\s\S]*?-->/.test(document)) return true;
+  const prose = withoutProgrammingFencedCode(document)
+    .replace(/`[^`\n]*`/g, "");
+  return /\{[^{}\n]{1,120}\}|\[填写：[^\]\r\n]{1,120}\]|^\s*(?:待补充|TBD|TODO)\s*$/mi.test(prose);
+}
+
+function withoutFencedCode(document) {
+  return document.replace(/^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)\s*$/gm, "");
+}
+
+function withoutProgrammingFencedCode(document) {
+  return document.replace(
+    /^(?:```|~~~)(?:javascript|js|jsx|typescript|ts|tsx|python|py|go|rust|rs|java|c|cpp|csharp|cs|ruby|rb|php|swift|kotlin|kt|shell|sh|bash|zsh|powershell|ps1|json|yaml|yml|toml|sql|html|css|scss|xml)\s*\n[\s\S]*?^(?:```|~~~)\s*$/gmi,
+    "",
+  );
+}
+
+function markdownStructureErrors(document, label) {
+  const errors = [];
+  const lines = withoutFencedCode(document).split(/\r?\n/);
+  let previousLevel = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const heading = lines[index].match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (!heading) continue;
+    const level = heading[1].length;
+    if (previousLevel && level > previousLevel + 1) {
+      errors.push(`${label} heading level jumps from ${previousLevel} to ${level}: ${heading[2]}`);
+    }
+    previousLevel = level;
+    let next = index + 1;
+    while (next < lines.length && lines[next].trim() === "") next += 1;
+    const nextHeading = lines[next]?.match(/^(#{1,6})\s+/);
+    if (nextHeading && nextHeading[1].length <= level) {
+      errors.push(`${label} heading is empty: ${heading[2]}`);
+    }
+  }
+  return errors;
+}
+
+function parseConstitutionBinding(document) {
+  const value = document.match(/^\s*-\s+\*\*Constitution binding\*\*\s*[:：]\s*`(\{.*\})`\s*$/mi)?.[1];
+  if (!value) return null;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function phaseRows(document, fields, errors, label) {
+  const phases = markdownSections(document, 2, "Phase ");
+  if (phases.length === 0) errors.push(`${label} must contain at least one Phase`);
+  return phases.map((phase) => {
+    const sections = new Map(markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+      .map((section) => [section.heading, section.body]));
+    for (const field of fields) {
+      const body = sections.get(field);
+      if (body === undefined || body.trim() === "") errors.push(`${label} ${phase.heading} is missing ${field}`);
+      else if (/^(?:None|N\/A)\.?$/i.test(body.trim())) errors.push(`${label} ${phase.heading} ${field} uses unexplained N/A`);
+    }
+    return {
+      phase: phase.heading,
+      fields: Object.fromEntries(fields.map((field) => [field, sections.get(field) ?? null])),
+    };
+  });
+}
+
+function inlinePaths(value) {
+  return [...new Set([...String(value ?? "").matchAll(/`([^`\n]+)`/g)].map((match) => match[1]))];
+}
+
+function phasePaths(filesBody, includeReadOnlyConsumer = false) {
+  const pattern = includeReadOnlyConsumer
+    ? /\*\*(?:NEW|MODIFY|READ-ONLY CONSUMER)\*\*/i
+    : /\*\*(?:NEW|MODIFY)\*\*/i;
+  return new Set(String(filesBody ?? "").split(/\r?\n/)
+    .filter((line) => pattern.test(line))
+    .flatMap((line) => inlinePaths(line)));
+}
+
+function phaseChangePaths(filesBody) {
+  // READ-ONLY CONSUMER is an owned phase input for task boundary validation,
+  // but it must not be promoted to a write boundary or global File Boundary
+  // requirement.
+  return phasePaths(filesBody, true);
+}
+
+function phaseWritePaths(filesBody) {
+  return phasePaths(filesBody, false);
+}
+
+function globalChangePaths(fileBoundaryBody) {
+  const sections = markdownSections(`## File Boundary\n${fileBoundaryBody ?? ""}`, 3);
+  return new Set(sections
+    .filter(({ heading }) => /^(?:NEW|MODIFY)$/i.test(heading))
+    .flatMap(({ body }) => inlinePaths(body)));
+}
+
+function boundaryPaths(value) {
+  const declared = String(value ?? "").match(/(?:^|;)\s*(?:files|路径)\s*[:：]\s*([^;]+)/i)?.[1] ?? "";
+  return inlinePaths(declared);
+}
+
+function oracleIdentity(value) {
+  return String(value ?? "").replace(/^`|`$/g, "").match(/^([A-Z][A-Z0-9_-]+)\b/)?.[1] ?? null;
+}
+
+function normalizedCommand(value) {
+  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+}
+
+function sameIds(left, right) {
+  return [...left].sort().join("\0") === [...right].sort().join("\0");
+}
+
+function nAWithReason(value, kind = "") {
+  const text = String(value ?? "").trim();
+  if (!/^N\/A\s+[—-]\s+\S/i.test(text)) return false;
+  return !kind || new RegExp(kind, "i").test(text);
+}
+
+function fieldValue(body, field) {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(body ?? "").match(new RegExp(
+    `^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
+    "mi",
+  ))?.[1]?.trim() ?? null;
+}
+
+const SLICE_ADVISORY_MARKER = /^slice-advisory: reason="([^"\r\n]+)"; impact="([^"\r\n]+)"; owner="([^"\r\n]+)"; recheck="([^"\r\n]+)"$/;
+
+function freezeSliceAdvisoryMarker(marker) {
+  return Object.freeze({
+    reason: marker.reason,
+    impact: marker.impact,
+    owner: marker.owner,
+    recheck: marker.recheck,
+  });
+}
+
+function parseSliceAdvisoryRisk(value, taskId) {
+  const markers = [];
+  const errors = [];
+  for (const line of String(value ?? "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const markerStart = trimmed.indexOf("slice-advisory:");
+    if (markerStart < 0) continue;
+    const candidate = trimmed.slice(markerStart).replace(/`\s*$/, "").trim();
+    const match = candidate.match(SLICE_ADVISORY_MARKER);
+    if (!match || match.slice(1).some((part) => part.trim() === "")) {
+      errors.push(`${taskId} task risk contains a malformed slice-advisory marker`);
+      continue;
+    }
+    markers.push(freezeSliceAdvisoryMarker({
+      reason: match[1], impact: match[2], owner: match[3], recheck: match[4],
+    }));
+  }
+  return Object.freeze({ markers: Object.freeze(markers), errors: Object.freeze(errors) });
+}
+
+function phaseVerifyTargets(value) {
+  const targets = [];
+  const pattern = /(?:^|\r?\n)\s*(?:[-*]\s+)?(?:\*\*)?(?:(?:Verify\.)?Target)(?:\*\*)?\s*[:=：]\s*([^\r\n]+)$/gmi;
+  for (const match of String(value ?? "").matchAll(pattern)) {
+    const target = match[1].trim();
+    if (target !== "") targets.push(target);
+  }
+  return Object.freeze(targets);
+}
+
+function freezeSliceSignalDetail(detail) {
+  const frozen = {
+    ...detail,
+    marker_task_ids: Object.freeze([...detail.marker_task_ids]),
+    marker_errors: Object.freeze([...detail.marker_errors]),
+  };
+  if (detail.files) frozen.files = Object.freeze([...detail.files]);
+  if (detail.targets) frozen.targets = Object.freeze([...detail.targets]);
+  if (detail.phases) frozen.phases = Object.freeze([...detail.phases]);
+  return Object.freeze(frozen);
+}
+
+function derivePlanTaskSlicingFromRows({ planPhaseRows = [], taskRows = [] } = {}) {
+  const taskMarkerFacts = taskRows.map((task) => {
+    const parsed = parseSliceAdvisoryRisk(task.fields?.["task risk"], task.id ?? "unknown-task");
+    return Object.freeze({
+      task_id: task.id,
+      phase: task.phase,
+      markers: parsed.markers,
+      errors: parsed.errors,
+    });
+  });
+  const markerByTask = new Map(taskMarkerFacts.map((fact) => [fact.task_id, fact]));
+  const allMarkers = taskMarkerFacts.flatMap((fact) => fact.markers.map((marker) => Object.freeze({
+    task_id: fact.task_id,
+    phase: fact.phase,
+    ...marker,
+  })));
+  const explanationFor = (taskIds) => {
+    const relevant = taskIds.map((id) => markerByTask.get(id)).filter(Boolean);
+    const markerTaskIds = relevant.filter((fact) => fact.markers.length > 0).map(({ task_id }) => task_id);
+    const markerErrors = relevant.flatMap(({ errors }) => errors);
+    return {
+      explained: markerTaskIds.length > 0 && markerErrors.length === 0,
+      marker_task_ids: markerTaskIds,
+      marker_errors: markerErrors,
+    };
+  };
+
+  const signalDetails = [];
+  for (const task of taskRows) {
+    const files = inlinePaths(task.fields?.["精确文件"]);
+    if (new Set(files).size <= 10) continue;
+    const explanation = explanationFor([task.id]);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-FILES",
+      task_id: task.id,
+      file_count: new Set(files).size,
+      files: [...new Set(files)],
+      ...explanation,
+    }));
+  }
+
+  for (const phase of planPhaseRows) {
+    const targets = phaseVerifyTargets(phase.fields?.Verify);
+    if (targets.length <= 1) continue;
+    const phaseTaskIds = taskRows.filter((task) => task.phase === phase.phase).map(({ id }) => id);
+    const explanation = explanationFor(phaseTaskIds);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-TARGETS",
+      phase: phase.phase,
+      target_count: targets.length,
+      targets: [...targets],
+      ...explanation,
+    }));
+  }
+
+  const filesByPhase = new Map();
+  for (const phase of planPhaseRows) {
+    for (const file of phaseWritePaths(phase.fields?.Files)) {
+      const owners = filesByPhase.get(file) ?? [];
+      owners.push(phase.phase);
+      filesByPhase.set(file, owners);
+    }
+  }
+  for (const [file, phases] of filesByPhase) {
+    const uniquePhases = [...new Set(phases)];
+    if (uniquePhases.length <= 1) continue;
+    const phaseTaskIds = taskRows.filter((task) => uniquePhases.includes(task.phase)).map(({ id }) => id);
+    const explanation = explanationFor(phaseTaskIds);
+    signalDetails.push(freezeSliceSignalDetail({
+      signal: "SIG-CROSS-PHASE",
+      file,
+      phases: uniquePhases,
+      ...explanation,
+    }));
+  }
+
+  const signals = [...new Set(signalDetails.map(({ signal }) => signal))]
+    .filter((signal) => PLAN_TASK_SLICE_SIGNALS.includes(signal));
+  const explainedSignals = PLAN_TASK_SLICE_SIGNALS.filter((signal) => {
+    const matches = signalDetails.filter((detail) => detail.signal === signal);
+    return matches.length > 0 && matches.every((detail) => detail.explained);
+  });
+  const unexplainedSignals = signals.filter((signal) => !explainedSignals.includes(signal));
+  const markerErrors = taskMarkerFacts.flatMap(({ errors }) => errors);
+  const diagnostics = [
+    ...markerErrors,
+    ...signalDetails
+      .filter((detail) => !detail.explained)
+      .map((detail) => `${detail.signal} overage is not fully explained by task risk`),
+  ];
+  const status = signals.length === 0
+    ? "within_budget"
+    : unexplainedSignals.length === 0
+    ? "explained_overage"
+    : "unexplained_overage";
+  return Object.freeze({
+    status,
+    signals: Object.freeze(signals),
+    explained_signals: Object.freeze(explainedSignals),
+    unexplained_signals: Object.freeze(unexplainedSignals),
+    signal_details: Object.freeze(signalDetails),
+    markers: Object.freeze(allMarkers),
+    marker_count: allMarkers.length,
+    diagnostics: Object.freeze([...new Set(diagnostics)]),
+  });
+}
+
+export function derivePlanTaskSlicing({ plan, tasks } = {}) {
+  if (typeof plan !== "string" || typeof tasks !== "string" || plan.trim() === "" || tasks.trim() === "") {
+    return Object.freeze({
+      status: "unavailable",
+      signals: Object.freeze([]),
+      explained_signals: Object.freeze([]),
+      unexplained_signals: Object.freeze([]),
+      signal_details: Object.freeze([]),
+      markers: Object.freeze([]),
+      marker_count: 0,
+      diagnostics: Object.freeze(["plan and tasks content are required for slicing advisory"]),
+    });
+  }
+  const parsedTasks = taskBlocks(tasks).map((task, order) => Object.freeze({
+    id: task.heading_id,
+    order,
+    phase: task.phase,
+    fields: Object.freeze({ ...task.fields }),
+  }));
+  return derivePlanTaskSlicingFromRows({
+    planPhaseRows: phaseRows(plan, ["Files", "Verify"], [], "plan"),
+    taskRows: parsedTasks,
+  });
+}
+
+function cycleIn(tasks) {
+  const edges = new Map(tasks.map((task) => [task.id ?? task.heading_id, task.dependencies]));
+  const visiting = new Set();
+  const visited = new Set();
+  const visit = (id) => {
+    if (visiting.has(id)) return true;
+    if (visited.has(id)) return false;
+    visiting.add(id);
+    for (const dependency of edges.get(id) ?? []) if (edges.has(dependency) && visit(dependency)) return true;
+    visiting.delete(id);
+    visited.add(id);
+    return false;
+  };
+  return [...edges.keys()].some(visit);
+}
+
+function parseJsonField(value) {
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value.trim().replace(/^`([\s\S]*)`$/, "$1"));
+  } catch {
+    return null;
+  }
+}
+
+function completionZone(task) {
+  const marker = /^#####\s+执行状态填写区（唯一完成权威）\s*$/m;
+  const index = task.body.search(marker);
+  return index < 0 ? null : task.body.slice(index);
+}
+
+function taskCompletionFact(task, completionEvidence) {
+  const zone = completionZone(task);
+  const checked = /-\s+\[[xX]\]\s+\*\*任务完成\*\*/.test(zone ?? "");
+  const status = String(task.fields.status ?? "").replace(/^`|`$/g, "");
+  const claimed = checked || status === "completed";
+  const errors = [];
+  if (zone === null) errors.push("missing unique completion status area");
+  if (checked !== (status === "completed")) errors.push("completion checkbox and status must agree");
+  const required = [
+    "actual_changes", "executed_commands", "evidence_refs", "covered_ac",
+    "review_fact", "completed_at",
+  ];
+  if (claimed) {
+    for (const field of required) {
+      const value = task.fields[field];
+      if (typeof value !== "string" || value.trim() === "" || /^N\/A\b/i.test(value.trim())) {
+        errors.push(`completed task is missing ${field}`);
+      }
+    }
+  }
+  const evidenceRefs = parseJsonField(task.fields.evidence_refs);
+  if (claimed && (!Array.isArray(evidenceRefs) || evidenceRefs.length === 0)) {
+    errors.push("completed task evidence_refs must be a non-empty JSON array");
+  }
+  for (const [index, entry] of (Array.isArray(evidenceRefs) ? evidenceRefs : []).entries()) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || !completionEvidenceRef(entry) || !SHA256_HEX.test(entry.sha256 ?? "")) {
+      errors.push(`evidence_refs[${index}] must contain a supported ref, optional kind, and sha256`);
+      continue;
+    }
+    if (typeof completionEvidence === "function") {
+      const authenticated = completionEvidence(entry, task.heading_id);
+      if (typeof authenticated === "string") {
+        if (sha256(authenticated) !== entry.sha256) errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      } else if (!authenticated || authenticated.ok !== true) {
+        errors.push(`evidence_refs[${index}] is missing: ${entry.ref}`);
+      } else if (authenticated.sha256 !== entry.sha256) {
+        errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      }
+    } else if (claimed) {
+      errors.push(`evidence_refs[${index}] was not authenticated: ${entry.ref}`);
+    }
+  }
+  const claimValid = !claimed || errors.length === 0;
+  return Object.freeze({
+    id: task.heading_id,
+    checked,
+    status: status || "pending",
+    claimed_complete: claimed,
+    claim_valid: claimValid,
+    complete: claimed && claimValid,
+    errors: Object.freeze(errors),
+    evidence_refs: Object.freeze(Array.isArray(evidenceRefs) ? structuredClone(evidenceRefs) : []),
+    actual_changes: task.fields.actual_changes ?? null,
+    executed_commands: task.fields.executed_commands ?? null,
+    covered_ac: Object.freeze(identifiers(task.fields.covered_ac ?? "", ACCEPTANCE_CRITERION_ID)),
+    review_fact: task.fields.review_fact ?? null,
+    completed_at: task.fields.completed_at ?? null,
+  });
+}
+
+function sourceRows(document) {
+  const pattern = new RegExp(String.raw`^\|\s*([A-Z][A-Z0-9-]+)\s*\|\s*(SCN-\d+)\s*\|\s*(FR-[A-Z0-9-]+)\s*\|\s*(${ACCEPTANCE_CRITERION_SOURCE})\s*\|\s*([^|]+)\|$`, "gm");
+  return [...String(document ?? "").matchAll(pattern)].map((match) => Object.freeze({
+    source: match[1],
+    scenario: match[2],
+    fr: match[3],
+    ac: match[4],
+    tasks: Object.freeze(identifiers(match[5], /\bT\d+\b/g)),
+  }));
+}
+
+function sourceCoverageFacts({ spec, plan, tasks, acceptedFrs, acceptedAcs, taskRows }) {
+  const documents = [sourceRows(spec), sourceRows(plan), sourceRows(tasks)];
+  const keys = [...new Set(documents.flatMap((rows) => rows.map(({ source }) => source)))];
+  const missing = keys.filter((key) => documents.some((rows) => !rows.some(({ source }) => source === key)));
+  const knownTasks = new Set(taskRows.map(({ id }) => id));
+  const invalidRows = documents.flatMap((rows) => rows).filter((row) =>
+    !acceptedFrs.includes(row.fr) || !acceptedAcs.includes(row.ac));
+  const reverseInvalid = documents.flatMap((rows) => rows).filter((row) =>
+    row.tasks.some((id) => !knownTasks.has(id)));
+  return Object.freeze({
+    source_count: keys.length,
+    source_keys: Object.freeze(keys),
+    missing_sources: Object.freeze(missing),
+    orphan_sources: Object.freeze([...new Set(invalidRows.map(({ source }) => source))]),
+    reverse_missing: Object.freeze([...new Set(reverseInvalid.map(({ source }) => source))]),
+  });
+}
+
+const SPEC_ANALYZE_SOURCE_ID = /\bR-[0-9]{3}\b/g;
+const SPEC_ANALYZE_DECISION_ID = /\bD-[0-9]{3}\b/g;
+const SPEC_ANALYZE_FR_ID = /\bFR-[A-Z0-9]+(?:-[0-9]{3})?\b/g;
+const SPEC_ANALYZE_AC_ID = new RegExp(String.raw`\b${ACCEPTANCE_CRITERION_SOURCE}\b`, "g");
+const SPEC_ANALYZE_TASK_ID = /\bT[0-9]{3}\b/g;
+const SPEC_ANALYZE_DEFERRED_OPEN_ID = /\b(?:DEFER|OPEN)-[0-9]{3}\b/g;
+const SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT = /^(?:DEFER|OPEN)-[0-9]{3}$/;
+
+const SPEC_ANALYZE_DEFERRED_FIELDS = Object.freeze({
+  // The current four-material handoff index uses its phase/task routing
+  // columns as the explicit owner/trigger carrier. These aliases are only
+  // accepted inside the item-specific row/block above, never document-wide.
+  owner: Object.freeze([/\bowner\b/i, /负责人|责任人|处理阶段|owner\/阶段|任务\/阶段|处理 Stage|plan\/tasks 去向/i]),
+  trigger: Object.freeze([/\btrigger\b|\bwhen\b/i, /触发|条件|前置|依赖|进入阶段|进入 build-|spec 承接|plan\/tasks 去向|owner\/阶段|任务\/阶段/i]),
+  handoff: Object.freeze([/\bhandoff\b|\bconsumer\b/i, /交接|去向|plan\/tasks|下游|消费者|输出|下一步|paired_task/i]),
+  close_condition: Object.freeze([/\bclose(?: condition)?\b|\bacceptance\b/i, /关闭|验收|结果边界|完成条件|通过条件|失败条件|保留边界|验证|oracle|STOP|Done/i]),
+});
+
+function analyzeIds(value, pattern) {
+  return [...new Set(String(value ?? "").match(pattern) ?? [])];
+}
+
+function containsAnalyzedId(value, id) {
+  const text = String(value ?? "");
+  if (text.includes(id)) return true;
+  const match = /^(.*-)(\d+)$/.exec(id);
+  if (!match) return false;
+  const [, prefix, numberText] = match;
+  const target = Number(numberText);
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const range = new RegExp(`${escapedPrefix}(\\d+)\\s*[—-]{1,2}\\s*(\\d+)`, "g");
+  return [...text.matchAll(range)].some(([, start, end]) => {
+    const low = Math.min(Number(start), Number(end));
+    const high = Math.max(Number(start), Number(end));
+    return target >= low && target <= high;
+  });
+}
+
+function normalizeAnalyzeTrackedItems(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      if (typeof entry === "string") return { id: entry };
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      return { ...entry, id: entry.id ?? entry.item_id };
+    }).filter((entry) => typeof entry?.id === "string" && SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(entry.id));
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.entries(value).map(([id, entry]) => ({
+      ...(entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {}),
+      id: entry && typeof entry === "object" && !Array.isArray(entry) ? (entry.id ?? id) : id,
+    })).filter((entry) => typeof entry.id === "string" && SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(entry.id));
+  }
+  return [];
+}
+
+function analyzeTrackedDeferredOpenItems({ decisionText, specText, planText, tasksText, raw, deferredItems, openItems }) {
+  const byId = new Map();
+  const add = (entry) => {
+    const id = entry?.id;
+    if (typeof id !== "string" || !SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(id)) return;
+    byId.set(id, Object.freeze({ ...(byId.get(id) ?? {}), ...entry, id }));
+  };
+  for (const entry of [
+    ...normalizeAnalyzeTrackedItems(deferredItems),
+    ...normalizeAnalyzeTrackedItems(openItems),
+    ...normalizeAnalyzeTrackedItems(raw?.deferred_items),
+    ...normalizeAnalyzeTrackedItems(raw?.open_items),
+  ]) add(entry);
+  for (const document of [decisionText, specText, planText, tasksText]) {
+    for (const id of analyzeIds(document, SPEC_ANALYZE_DEFERRED_OPEN_ID)) add({ id });
+  }
+  return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function isAnalyzeMarkdownTableLine(line) {
+  return /^\s*\|.*\|\s*$/.test(String(line ?? ""));
+}
+
+function isAnalyzeMarkdownHeading(line) {
+  return /^\s*#{1,6}\s+/.test(String(line ?? ""));
+}
+
+function containsOtherDeferredOpenId(line, id) {
+  return analyzeIds(line, SPEC_ANALYZE_DEFERRED_OPEN_ID).some((candidate) => candidate !== id);
+}
+
+function analyzeMarkdownTableCells(line) {
+  const value = String(line ?? "").trim();
+  if (!value.startsWith("|")) return [];
+  return value
+    .replace(/^\|/, "")
+    .replace(/\|\s*$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function analyzeTableRowContext(headerLine, rowLine) {
+  const headers = analyzeMarkdownTableCells(headerLine);
+  const cells = analyzeMarkdownTableCells(rowLine);
+  return headers.map((header, index) => {
+    const cell = cells[index] ?? "";
+    return cell === "" ? "" : `- **${header}**: ${cell}`;
+  }).filter(Boolean).join("\n");
+}
+
+function analyzeReferenceBlock(documentLines, index, kind) {
+  const marker = kind === "source"
+    ? /^#{3,4}\s+/
+    : /^(?:\s*-\s+\*\*(?:RISK|PLAN-RISK|F-|风险)|#{1,6}\s+)/i;
+  let start = index;
+  while (start > 0 && !marker.test(documentLines[start - 1])) start -= 1;
+  let end = index + 1;
+  while (end < documentLines.length && !marker.test(documentLines[end])) end += 1;
+  return documentLines.slice(start, end).join("\n");
+}
+
+function analyzeDocumentContexts(document, id) {
+  const lines = String(document ?? "").split(/\r?\n/);
+  const contexts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!containsAnalyzedId(line, id)) continue;
+
+    // A table row gets its own header and row only. This makes a grouped
+    // handoff row usable for the IDs named in that row, without allowing a
+    // different row elsewhere in the document to lend it fields.
+    if (isAnalyzeMarkdownTableLine(line)) {
+      let tableStart = index;
+      while (tableStart > 0 && isAnalyzeMarkdownTableLine(lines[tableStart - 1])) tableStart -= 1;
+      let tableEnd = index;
+      while (tableEnd + 1 < lines.length && isAnalyzeMarkdownTableLine(lines[tableEnd + 1])) tableEnd += 1;
+      const separator = lines.slice(tableStart, tableEnd + 1)
+        .findIndex((candidate) => /^\s*\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(candidate));
+      const header = separator > 0 ? tableStart + separator - 1 : tableStart;
+      const normalized = separator > 0 ? analyzeTableRowContext(lines[header], line) : "";
+      contexts.push(normalized || lines.slice(header, index + 1).join("\n"));
+      continue;
+    }
+
+    // A source/affected-ID reference is only evidence that the item is
+    // mentioned. It is not a handoff contract and must not absorb fields from
+    // the rest of its task/risk section.
+    if (/(?:source_refs|decision_refs)/i.test(line)) {
+      contexts.push(analyzeReferenceBlock(lines, index, "source"));
+      continue;
+    }
+    if (/(?:受影响 ID|affected IDs)/i.test(line)) {
+      contexts.push(analyzeReferenceBlock(lines, index, "affected"));
+      continue;
+    }
+
+    // For prose bullets, keep the contiguous item block. A blank line,
+    // heading, or the next DEFER/OPEN item is a hard boundary. This covers
+    // an item's owner/trigger/handoff/close lines while preventing a sibling
+    // item's fields from satisfying it.
+    let end = index + 1;
+    while (end < lines.length
+      && !/^\s*$/.test(lines[end])
+      && !isAnalyzeMarkdownHeading(lines[end])
+      && !isAnalyzeMarkdownTableLine(lines[end])
+      && !containsOtherDeferredOpenId(lines[end], id)) {
+      end += 1;
+    }
+    contexts.push(lines.slice(index, end).join("\n"));
+  }
+  return [...new Set(contexts)];
+}
+
+function analyzeDocumentHasField(document, id, patterns) {
+  return analyzeDocumentContexts(document, id)
+    .some((context) => patterns.some((pattern) => pattern.test(context)));
+}
+
+function analyzeDeferredOpenHandoff({ decisionText, specText, planText, tasksText, raw, deferredItems, openItems, findings, errors }) {
+  const items = analyzeTrackedDeferredOpenItems({
+    decisionText,
+    specText,
+    planText,
+    tasksText,
+    raw,
+    deferredItems,
+    openItems,
+  });
+  const documents = [
+    ...(decisionText.trim() ? [{ name: "decision-log", text: decisionText }] : []),
+    { name: "spec", text: specText },
+    { name: "plan", text: planText },
+    { name: "tasks", text: tasksText },
+  ];
+  const downstreamDocuments = documents.filter(({ name }) => name !== "decision-log");
+  const missingByItem = new Map();
+  for (const item of items) {
+    const introducedStage = String(item.introduced_stage ?? item.source_stage ?? "").trim().toLowerCase();
+    const downstreamIntroduced = new Set(["build-spec", "build-plan", "build-code", "verify-code"]).has(introducedStage);
+    const externalOwner = /(?:^|\b)(?:external|upstream|close-readiness|外部|上游)(?:\b|$)/i.test(String(item.owner ?? ""));
+    const missing = [];
+    // An engineering OPEN/DEFER introduced by build-spec or build-plan is a
+    // downstream fact; requiring it to be retrofitted into make-decision
+    // invents history. Only direction-stage items require a decision-log ID.
+    if (decisionText.trim() && !downstreamIntroduced && !externalOwner && !decisionText.includes(item.id)) missing.push("id missing in decision-log");
+    const localDocuments = externalOwner
+      ? []
+      : downstreamDocuments.filter(({ name }) => !downstreamIntroduced || name !== "decision-log");
+    for (const { name, text } of localDocuments) {
+      if (!String(text ?? "").includes(item.id)) missing.push(`id missing in ${name}`);
+    }
+    // External ownership is retained as an explicit handoff and is not a
+    // local closure obligation. The caller may still report the external
+    // reference, but local owner/trigger/close fields are not fabricated.
+    for (const [field, patterns] of Object.entries(SPEC_ANALYZE_DEFERRED_FIELDS)) {
+      if (externalOwner) continue;
+      const absentFrom = localDocuments.filter(({ text }) => !analyzeDocumentHasField(text, item.id, patterns)).map(({ name }) => name);
+      if (absentFrom.length > 0) missing.push(`${field} missing in ${absentFrom.join(",")}`);
+    }
+    if (missing.length > 0) {
+      missingByItem.set(item.id, Object.freeze([...missing]));
+      const targetArtifact = missing[0].split(" missing in ")[1] ?? "planning_artifacts";
+      const finding = analyzeFinding({
+        type: "deferred_open_handoff_gap",
+        sourceArtifact: "decision-log",
+        targetArtifact,
+        id: item.id,
+        anchor: `${item.id}:${missing.join(";")}`,
+        impact: "延期/未决事项可能在下游材料中静默丢失，后续阶段会自行猜测",
+        correction: `补齐 ${item.id} 的 owner、触发、去向和关闭条件，并传播到 spec、plan、tasks；不能由 build-code 猜测`,
+      });
+      findings.push(Object.freeze({ ...finding, id: item.id }));
+      errors.push(`${item.id} deferred/open handoff gap: ${missing.join("; ")}`);
+    }
+  }
+  return Object.freeze({
+    ids: Object.freeze(items.map(({ id }) => id)),
+    coverage: Object.freeze({
+      checked: items.length,
+      missing: Object.freeze([...missingByItem.keys()]),
+    }),
+  });
+}
+
+function analyzeField(body, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(body ?? "").match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+}
+
+function hasAnalyzeField(body, ...labels) {
+  return labels.some((label) => {
+    const value = analyzeField(body, label);
+    return typeof value === "string" && value.trim() !== "";
+  });
+}
+
+function analyzeFinding({ type, sourceArtifact, targetArtifact, id, anchor, impact, correction }) {
+  return Object.freeze({
+    type,
+    source_artifact: sourceArtifact,
+    target_artifact: targetArtifact,
+    fr_or_task_id: id,
+    line_or_anchor: anchor,
+    impact,
+    suggested_correction: correction,
+    disposition: "pending_main_agent_review",
+  });
+}
+
+function addAnalyzeFinding(findings, errors, finding, error) {
+  findings.push(finding);
+  errors.push(error);
+}
+
+function addConsistencyFinding(findings, errors, { type, sourceArtifact, targetArtifact, id, anchor, impact, correction }, message) {
+  addAnalyzeFinding(findings, errors, analyzeFinding({
+    type,
+    sourceArtifact,
+    targetArtifact,
+    id,
+    anchor,
+    impact,
+    correction,
+  }), message);
+}
+
+function analyzeCrossMaterialPlanningGaps({ specText, decisionText, planText, tasksText, taskRows, findings, errors }) {
+  const specFrs = analyzeIds(specText, SPEC_ANALYZE_FR_ID);
+  const specAcs = analyzeIds(specText, SPEC_ANALYZE_AC_ID);
+  const planSections = markdownSections(planText, 2);
+  const traceability = planSections.find(({ heading }) => /Requirement and Verification Traceability/i.test(heading));
+  if (traceability) {
+    for (const id of [...specFrs, ...specAcs]) {
+      if (!containsAnalyzedId(traceability.body, id)) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_plan_trace",
+          sourceArtifact: "spec",
+          targetArtifact: "plan.traceability",
+          id,
+          anchor: `plan:Requirement and Verification Traceability:${id}`,
+          impact: "需求虽可能落到 task，但 plan 的汇总追踪表没有声明它，人工和普通执行模型会看到不完整的交接地图",
+          correction: `在 plan 的 Requirement and Verification Traceability 表补齐 ${id}、Task、AC、Phase 和 gate/evidence 行`,
+        }, `plan trace gap: ${id}`);
+      }
+    }
+  }
+
+  const implementationOrder = planSections.find(({ heading }) => /Implementation Order/i.test(heading));
+  if (implementationOrder) {
+    const phaseIds = [...new Set(markdownSections(planText, 2, "Phase ")
+      .flatMap(({ heading }) => heading.match(/\bP\d+\b/g) ?? []))];
+    for (const phaseId of phaseIds) {
+      if (!containsAnalyzedId(implementationOrder.body, phaseId)) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_phase_order_trace",
+          sourceArtifact: "plan",
+          targetArtifact: "plan.Implementation Order",
+          id: phaseId,
+          anchor: `plan:Implementation Order:${phaseId}`,
+          impact: "Phase 已定义但执行顺序汇总没有包含它，可能导致 producer/consumer 反转",
+          correction: `把 ${phaseId} 加入 Implementation Order，并与 Dependencies and Parallelism 保持一致`,
+        }, `implementation order gap: ${phaseId}`);
+      }
+    }
+  }
+
+  const phaseSections = markdownSections(planText, 2, "Phase ");
+  const hasAnyVerifySection = phaseSections.some((phase) =>
+    markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+      .some(({ heading }) => /^Verify$/i.test(heading)));
+  if (hasAnyVerifySection) {
+    for (const phase of phaseSections) {
+      const verify = markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+        .find(({ heading }) => /^Verify$/i.test(heading));
+      const phaseTaskRows = taskRows.filter((task) => task.phase === phase.heading);
+      const taskOracles = new Set(phaseTaskRows.map((task) => oracleIdentity(task.fields.oracle)).filter(Boolean));
+      const verifyOracle = oracleIdentity(verify?.body);
+      if (!verify) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_phase_verification",
+          sourceArtifact: "plan",
+          targetArtifact: "tasks",
+          id: phase.heading,
+          anchor: `plan:${phase.heading}:Verify`,
+          impact: "Phase 没有独立验证合同，执行模型无法判断何时可以交接",
+          correction: "补齐与该 Phase task oracle、命令和 evidence path 对齐的 Verify 小节",
+        }, `phase verification gap: ${phase.heading}`);
+      } else if (taskOracles.size > 0 && (!verifyOracle || !taskOracles.has(verifyOracle))) {
+        addConsistencyFinding(findings, errors, {
+          type: "phase_verification_mismatch",
+          sourceArtifact: "plan",
+          targetArtifact: "tasks",
+          id: phase.heading,
+          anchor: `plan:${phase.heading}:Verify:oracle`,
+          impact: "Phase Verify 使用了另一套 oracle，可能把错误的测试结果当成当前 Phase 交接依据",
+          correction: `让 Verify oracle 与该 Phase task oracle 对齐；当前 task oracles=${[...taskOracles].join(", ")}`,
+        }, `phase verification mismatch: ${phase.heading}`);
+      }
+    }
+  }
+
+  const t004 = taskRows.find((task) => task.heading_id === "T004");
+  if (t004 && /build-plan[^\n]*(?:blueprint|concrete testing)/i.test(t004.body)
+      && !/(?:supersede|已废止|历史)/i.test(t004.body)) {
+    addConsistencyFinding(findings, errors, {
+      type: "stale_task_contract",
+      sourceArtifact: "tasks:T004",
+      targetArtifact: "build-code",
+      id: "T004",
+      anchor: "tasks:T004:输出",
+      impact: "普通执行模型可能把已废止的 blueprint/concrete testing 调用当成当前 build-plan 合同",
+      correction: "标记旧文本已被 D-015/P5 supersede，并指向当前 T013/T014 顺序",
+    }, "stale task contract: T004 retains superseded build-plan testing order");
+  }
+
+  const hashFromHeader = (document, label) => {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+    return document.match(new RegExp("^\\s*-\\s+\\*\\*" + escapedLabel + " SHA-256\\*\\*\\s*[:：]\\s*`?([a-f0-9]{64})`?\\s*$", "mi"))?.[1] ?? null;
+  };
+  const planSpecHash = hashFromHeader(planText, "Spec");
+  const planDecisionHash = hashFromHeader(planText, "Decision-log");
+  const tasksSpecHash = hashFromHeader(tasksText, "Spec");
+  const tasksPlanHash = hashFromHeader(tasksText, "Plan");
+  const expectedSpecHash = sha256(specText);
+  const expectedPlanHash = sha256(planText);
+  const expectedDecisionHash = decisionText ? sha256(decisionText) : null;
+  const hashChecks = [
+    ["plan Spec SHA-256", planSpecHash, expectedSpecHash, "plan"],
+    ["plan Decision-log SHA-256", planDecisionHash, expectedDecisionHash, "decision-log"],
+    ["tasks Spec SHA-256", tasksSpecHash, expectedSpecHash, "tasks"],
+    ["tasks Plan SHA-256", tasksPlanHash, expectedPlanHash, "tasks"],
+  ];
+  for (const [label, actual, expected, target] of hashChecks) {
+    if (actual && expected && actual !== expected) {
+      addConsistencyFinding(findings, errors, {
+        type: "material_hash_binding_gap",
+        sourceArtifact: target === "decision-log" ? "decision-log" : target,
+        targetArtifact: target,
+        id: label,
+        anchor: `${target}:${label}`,
+        impact: "材料身份绑定到旧快照，普通执行模型无法确定它读的是哪一版 spec/plan",
+        correction: `重算 ${label} 并与当前材料正文 SHA-256 一致；不要保留两个确定 hash`,
+      }, `${label} does not match the supplied current material`);
+    }
+  }
+  const bindingHash = planText.match(/\*\*Spec binding\*\*[^\n]*\"hash\"\s*:\s*\"([a-f0-9]{64})\"/i)?.[1] ?? null;
+  if (bindingHash && bindingHash !== expectedSpecHash) {
+    addConsistencyFinding(findings, errors, {
+      type: "material_hash_binding_gap",
+      sourceArtifact: "plan",
+      targetArtifact: "spec",
+      id: "Spec binding",
+      anchor: "plan:Spec binding",
+      impact: "plan §11 与 plan 头部可能绑定不同 spec 快照",
+      correction: "让 §11 Spec binding 使用当前 spec.md 的 SHA-256",
+    }, "plan Spec binding does not match the supplied current spec");
+  }
+}
+
+function analyzeStrategyGaps(body, subject, { aggregate = false } = {}) {
+  const gaps = [];
+  if (aggregate) {
+    const required = [
+      ["tier / method", /\b(?:tier|test tier)\s*\/\s*(?:method|test method)\b/i],
+      ["scenarios", /\bscenarios\b|场景/i],
+      ["command", /\bcommand\b|命令/i],
+      ["expected exit", /\bexpected[_ ]exit\b|预期退出/i],
+      ["oracle", /\boracle\b/i],
+      ["fixtures_services", /\bfixtures_services\b/i],
+      ["evidence_path", /\bevidence_path\b/i],
+      ["coverage limits", /\bcoverage limits\b/i],
+      ["STOP", /\bSTOP\b/i],
+    ];
+    for (const [field, pattern] of required) {
+      if (!pattern.test(String(body ?? ""))) gaps.push(field);
+    }
+    return gaps.map((field) => `${subject} missing ${field}`);
+  }
+
+  // Task cards intentionally keep executable fields separate so a normal
+  // build-code model can read and execute them without decoding a long
+  // combined sentence. Keep the legacy combined field valid for old cards and
+  // fixtures, but accept the canonical split form as the current contract.
+  const combined = hasAnalyzeField(body, "scenarios / commands / expected exit / oracle");
+  const required = [
+    ["test tier / test method", ["test tier / test method"]],
+    ["scenarios", ["scenarios", "scenarios / commands / expected exit / oracle"]],
+    ["command", ["gate_cmd", "command", "scenarios / commands / expected exit / oracle"]],
+    ["expected exit", ["expected_exit", "expected exit", "scenarios / commands / expected exit / oracle"]],
+    ["oracle", ["oracle", "scenarios / commands / expected exit / oracle"]],
+    ["fixtures_services", ["fixtures_services"]],
+    ["evidence_path", ["evidence_path"]],
+    ["coverage limits", ["coverage limits"]],
+    ["STOP", ["STOP"]],
+  ];
+  for (const [field, labels] of required) {
+    if (field === "scenarios" || field === "command" || field === "expected exit" || field === "oracle") {
+      if (combined) continue;
+    }
+    if (!hasAnalyzeField(body, ...labels)) gaps.push(field);
+  }
+  return gaps.map((field) => `${subject} missing ${field}`);
+}
+
+/**
+ * Report-only consistency facts for spec-analyze. The raw requirement index is
+ * a derived view of decision-log, never a fifth current material or a writer.
+ * Findings deliberately remain pending until the main agent reviews them.
+ */
+export function validateSpecAnalyzeCompleteness({
+  planningArtifacts,
+  rawRequirementIndex,
+  decisionLog,
+  spec,
+  plan,
+  tasks,
+  deferredItems,
+  openItems,
+} = {}) {
+  const source = planningArtifacts && object(planningArtifacts) ? planningArtifacts : {};
+  const raw = rawRequirementIndex ?? source.raw_requirement_index;
+  const decision = decisionLog ?? source.decision_log ?? source.decision_log_index;
+  const decisionText = typeof decision === "string" ? decision : "";
+  const specText = spec ?? source.approved_spec ?? source.spec;
+  const planText = plan ?? source.draft_plan ?? source.plan;
+  const tasksText = tasks ?? source.draft_tasks ?? source.tasks;
+  const errors = [];
+  const findings = [];
+
+  if (!object(raw) || raw.schema_version !== "raw-requirement-index.v1" || !Array.isArray(raw.entries) || raw.entries.length === 0) {
+    errors.push("MATERIAL_INCOMPLETE: raw requirement index from decision-log is required");
+  }
+  for (const [name, value] of [["spec", specText], ["plan", planText], ["tasks", tasksText]]) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`MATERIAL_INCOMPLETE: ${name} excerpt is required`);
+  }
+  if (errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:")) && (!specText || !planText || !tasksText)) {
+    return Object.freeze({ ok: false, errors: Object.freeze(errors), findings: Object.freeze(findings), facts: Object.freeze({}) });
+  }
+
+  const sourceEntries = Array.isArray(raw?.entries) ? raw.entries : [];
+  const sourceIds = sourceEntries.map((entry) => entry?.id).filter((id) => typeof id === "string" && /^R-[0-9]{3}$/.test(id));
+  if (sourceIds.length !== sourceEntries.length || new Set(sourceIds).size !== sourceIds.length) {
+    errors.push("MATERIAL_INCOMPLETE: raw requirement index entries need unique R-NNN ids");
+  }
+  for (const entry of sourceEntries) {
+    const id = entry?.id;
+    if (typeof id !== "string" || !/^R-[0-9]{3}$/.test(id)) continue;
+    if (decisionText && !decisionText.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "source_gap",
+        sourceArtifact: "decision-log",
+        targetArtifact: "planning_artifacts",
+        id,
+        anchor: `decision-log:${id}`,
+        impact: "原始需求没有进入当前分析输入",
+        correction: "补回 decision-log 的 source index 绑定，不能由 spec-analyze 猜测",
+      }), `source gap: ${id} is absent from decision-log`);
+    }
+    for (const decisionId of entry.decision_ids ?? []) {
+      if (typeof decisionId === "string" && decisionText && !decisionText.includes(decisionId)) {
+        addAnalyzeFinding(findings, errors, analyzeFinding({
+          type: "source_gap",
+          sourceArtifact: "decision-log",
+          targetArtifact: "planning_artifacts",
+          id,
+          anchor: `decision-log:${decisionId}`,
+          impact: "原始需求的关键决定无法回放",
+          correction: `补回 ${decisionId} 的 decision-log 绑定或标记真实延期原因`,
+        }), `source gap: ${id} references missing ${decisionId}`);
+      }
+    }
+  }
+
+  const specFrs = analyzeIds(specText, SPEC_ANALYZE_FR_ID);
+  const specAcs = analyzeIds(specText, SPEC_ANALYZE_AC_ID);
+  for (const id of specFrs) {
+    if (!containsAnalyzedId(planText, id) || !containsAnalyzedId(tasksText, id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "uncovered_functional_requirement",
+        sourceArtifact: "spec",
+        targetArtifact: !containsAnalyzedId(planText, id) ? "plan" : "tasks",
+        id,
+        anchor: id,
+        impact: "功能要求没有完整落到实施和执行任务",
+        correction: "补齐 plan/task 映射，不在 build-code 临时补需求",
+      }), `FR coverage gap: ${id}`);
+    }
+  }
+  for (const id of specAcs) {
+    if (!containsAnalyzedId(planText, id) || !containsAnalyzedId(tasksText, id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "uncovered_acceptance_criterion",
+        sourceArtifact: "spec",
+        targetArtifact: !containsAnalyzedId(planText, id) ? "plan" : "tasks",
+        id,
+        anchor: id,
+        impact: "验收点没有完整落到任务和测试策略",
+        correction: "补齐对应 task、命令、oracle 和 evidence path",
+      }), `AC coverage gap: ${id}`);
+    }
+  }
+
+  const taskRows = taskBlocks(String(tasksText));
+  const taskIds = taskRows.map(({ heading_id }) => heading_id).filter(Boolean);
+  const planTaskIds = analyzeIds(planText, SPEC_ANALYZE_TASK_ID);
+  for (const id of taskIds) {
+    if (!planTaskIds.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "orphan_task",
+        sourceArtifact: "tasks",
+        targetArtifact: "plan",
+        id,
+        anchor: `tasks:${id}`,
+        impact: "任务没有计划来源，普通执行模型无法判断它是否在范围内",
+        correction: "把任务挂回 plan 的 Phase/traceability，或按主 agent 评审结果删除",
+      }), `orphan task: ${id} is absent from plan`);
+    }
+  }
+  for (const id of planTaskIds) {
+    if (!taskIds.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "orphan_task",
+        sourceArtifact: "plan",
+        targetArtifact: "tasks",
+        id,
+        anchor: `plan:${id}`,
+        impact: "计划声明了没有执行卡的任务",
+        correction: "补齐 tasks 执行卡，或移除无来源的计划任务",
+      }), `orphan task: ${id} is absent from tasks`);
+    }
+  }
+  for (const task of taskRows) {
+    const referenceLine = task.body.match(/source_refs\s*\/\s*decision_refs[^\n]*/i)?.[0] ?? "";
+    if (!analyzeIds(referenceLine, SPEC_ANALYZE_SOURCE_ID).length && !analyzeIds(referenceLine, SPEC_ANALYZE_DECISION_ID).length) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_source_reference",
+        sourceArtifact: "tasks",
+        targetArtifact: "decision-log",
+        id: task.heading_id ?? "TASK-UNKNOWN",
+        anchor: `${task.heading_id ?? "task"}:source_refs / decision_refs`,
+        impact: "任务无法回放到已确认需求和决定",
+        correction: "补回 inherited source_refs / decision_refs",
+      }), `${task.heading_id ?? "task"} missing source_refs / decision_refs`);
+    }
+    for (const gap of analyzeStrategyGaps(task.body, task.heading_id ?? "task")) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_test_strategy",
+        sourceArtifact: "tasks",
+        targetArtifact: "build-code",
+        id: task.heading_id ?? "TASK-UNKNOWN",
+        anchor: `${task.heading_id ?? "task"}:test_strategy`,
+        impact: "普通 build-code 模型缺少可直接执行的测试合同",
+        correction: `补齐 ${gap.replace(`${task.heading_id ?? "task"} missing `, "")}`,
+      }), gap);
+    }
+  }
+
+  analyzeCrossMaterialPlanningGaps({
+    specText,
+    decisionText,
+    planText,
+    tasksText,
+    taskRows,
+    findings,
+    errors,
+  });
+
+  const deferredOpen = analyzeDeferredOpenHandoff({
+    decisionText,
+    specText,
+    planText,
+    tasksText,
+    raw,
+    deferredItems: deferredItems ?? source.deferred_items,
+    openItems: openItems ?? source.open_items,
+    findings,
+    errors,
+  });
+
+  const aggregateStart = String(tasksText).search(/^##\s+(?:4\.\s+)?Final current-snapshot aggregate strategy\b/im);
+  if (aggregateStart < 0) {
+    addAnalyzeFinding(findings, errors, analyzeFinding({
+      type: "missing_test_strategy",
+      sourceArtifact: "tasks",
+      targetArtifact: "final-aggregate",
+      id: "FINAL",
+      anchor: "Final current-snapshot aggregate strategy",
+      impact: "最终完整测试没有预先设计，build-code 可能临场重选路线",
+      correction: "在 tasks 中固定最终 tier、具体 testing skill、命令、oracle、evidence 和 STOP",
+    }), "missing test strategy: final current-snapshot aggregate strategy");
+  } else {
+    for (const gap of analyzeStrategyGaps(String(tasksText).slice(aggregateStart), "FINAL", { aggregate: true })) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_test_strategy",
+        sourceArtifact: "tasks",
+        targetArtifact: "final-aggregate",
+        id: "FINAL",
+        anchor: "Final current-snapshot aggregate strategy",
+        impact: "最终完整测试合同不完整",
+        correction: `补齐 ${gap}`,
+      }), `FINAL missing ${gap}`);
+    }
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    findings: Object.freeze(findings),
+    facts: Object.freeze({
+      source_ids: Object.freeze(sourceIds),
+      spec_fr_ids: Object.freeze(specFrs),
+      spec_ac_ids: Object.freeze(specAcs),
+      task_ids: Object.freeze(taskIds),
+      plan_task_ids: Object.freeze(planTaskIds),
+      deferred_open_ids: deferredOpen.ids,
+      deferred_open_coverage: deferredOpen.coverage,
+      strategy: Object.freeze({
+        task_count: taskRows.length,
+        final_aggregate_present: aggregateStart >= 0,
+      }),
+    }),
+  });
+}
+
+/**
+ * Narrow, report-only consistency profiles used at the end of the four
+ * authoring stages. verify-code uses the separate code-review outcome.
+ * These profiles consume the current packet; they never create a material,
+ * writer, status gate, or fifth source of truth.
+ */
+export const STAGE_SPEC_ANALYZE_PROFILES = Object.freeze({
+  "make-decision": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log"]),
+    required_evidence: Object.freeze(["decision-log"]),
+    next_stage: "build-spec",
+  }),
+  "build-spec": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec"]),
+    required_evidence: Object.freeze(["decision-log", "spec"]),
+    next_stage: "build-plan",
+  }),
+  "build-plan": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks"]),
+    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks"]),
+    next_stage: "build-code",
+  }),
+  "build-code": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"]),
+    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"]),
+    next_stage: "verify-code",
+  }),
+});
+
+function stageAnalyzeFinding({
+  type,
+  requirementId,
+  artifact,
+  evidenceRef,
+  sourceArtifact = "original_requirement",
+  targetArtifact = artifact ?? "current-stage-output",
+  frOrTaskId = requirementId ?? "stage-packet",
+  lineOrAnchor = evidenceRef ?? artifact ?? "coverage",
+  rule = "semantic-and-evidence-coverage",
+  impact,
+  correction,
+}) {
+  return Object.freeze({
+    type,
+    requirement_id: requirementId ?? null,
+    artifact: artifact ?? null,
+    evidence_ref: evidenceRef ?? null,
+    source_artifact: sourceArtifact,
+    target_artifact: targetArtifact,
+    fr_or_task_id: frOrTaskId,
+    line_or_anchor: lineOrAnchor,
+    rule,
+    evidence: Object.freeze({ artifact_ref: artifact ?? null, evidence_ref: evidenceRef ?? null }),
+    impact,
+    suggested_correction: correction,
+    disposition: "pending_main_agent_review",
+  });
+}
+
+function stageAnalyzeSummary(stage, packet, status, findings, errors = [], authenticatedSourceCensus = null, identity = null) {
+  const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
+  const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
+  const postPlan = stage === "build-plan" && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
+  const postBuildCode = stage === "build-code" && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
+  const postMaterialStage = postPlan || postBuildCode;
+  const identityBoundPost = postMaterialStage && nonEmptyString(identity?.task_id);
+  const invalidRequirements = new Set(findings.map((item) => item.requirement_id).filter(nonEmptyString));
+  const claimedCovered = requirements.filter((requirement) => coverage.some((item) =>
+    item?.requirement_id === requirement?.id
+      && item.status === "covered"
+      && !invalidRequirements.has(requirement.id))).length;
+  // Post-cohort caller coverage is not an independent semantic verdict.
+  const covered = postMaterialStage ? 0 : claimedCovered;
+  const total = identityBoundPost
+    ? (Array.isArray(authenticatedSourceCensus?.entries) ? authenticatedSourceCensus.entries.length : 0)
+    : requirements.length;
+  const next = STAGE_SPEC_ANALYZE_PROFILES[stage]?.next_stage ?? "unknown";
+  const repairs = Array.isArray(packet.current_stage_repairs) ? packet.current_stage_repairs : [];
+  const dispositionCounts = coverage.reduce((counts, item) => {
+    const disposition = item?.status ?? "unknown";
+    if (disposition !== "covered") counts[disposition] = (counts[disposition] ?? 0) + 1;
+    return counts;
+  }, {});
+  const dispositionSummary = Object.entries(dispositionCounts)
+    .map(([disposition, count]) => `${disposition} ${count}`)
+    .join("、");
+  return Object.freeze({
+    stage_work: String(packet.work_summary ?? "当前 stage 已完成产物一致性检查。"),
+    requirement_coverage: postMaterialStage
+      ? `${covered}/${total} 条原始来源记录（尚未语义去重）有独立语义核验（状态：${status}；自报 covered 不计入已核验）${dispositionSummary ? `；非 covered 终态：${dispositionSummary}` : ""}。`
+      : `${covered}/${total} 条原始需求有语义和证据绑定（状态：${status}；以实际校验结果计数）${dispositionSummary ? `；非 covered 终态：${dispositionSummary}` : ""}。`,
+    upstream_alignment: `已按 ${stage} 的累计输入检查前序产物、实际语义和证据；发现 ${findings.filter((item) => item.type === "semantic_mismatch").length} 条语义偏差、${findings.filter((item) => item.type === "stale_evidence").length} 条证据问题。`,
+    current_stage_repairs: repairs.length > 0
+      ? `当前 stage 已记录 ${repairs.length} 项修复：${repairs.join("；")}`
+      : findings.length === 0 && errors.length === 0 ? "本次未发现需要修复的问题。" : `发现 ${findings.length + errors.length} 条输入、语义或证据问题，必须在当前 stage 修复后复查。`,
+    remaining_risks: findings.length === 0 && errors.length === 0 ? "当前没有发现已知一致性风险。" : `当前仍有 ${findings.length + errors.length} 条输入、语义或证据问题，不能由下游猜测或静默移交。`,
+    next_stage_boundary: `下一阶段：${next}；不得把当前问题静默移交或由下游猜测。`,
+  });
+}
+
+/**
+ * Derive the post-cohort source denominator from the current decision-log
+ * bytes. R rows are stable trace indexes, but are not trusted alone: the
+ * verbatim U/V layer and any U decomposition must remain indexed too.
+ * This is an inventory check, not a claim of semantic equivalence.
+ */
+export function deriveDecisionLogOriginalSourceCensus(markdown) {
+  if (!nonEmptyString(markdown)) return Object.freeze({ status: "missing", entries: Object.freeze([]), errors: Object.freeze(["decision-log.md is missing"]) });
+  const section = (heading) => {
+    const match = new RegExp(`^## ${heading}\\s*$`, "m").exec(markdown);
+    if (!match) return "";
+    const tail = markdown.slice(match.index + match[0].length);
+    const next = /^## /m.exec(tail);
+    return next ? tail.slice(0, next.index) : tail;
+  };
+  const changes = section("需求变更记录");
+  const index = section("原始需求索引");
+  const verbatim = section("逐字声明层（verbatim）");
+  const errors = [];
+  if (!changes) errors.push("decision-log.md has no 需求变更记录 section");
+  if (!index) errors.push("decision-log.md has no 原始需求索引 section");
+  if (!verbatim) errors.push("decision-log.md has no 逐字声明层（verbatim） section");
+  const uSections = changes.split(/(?=^### U-\d{3})/m)
+    .map((part) => {
+      const id = /^### (U-\d{3})/.exec(part)?.[1];
+      const quoteLines = [...part.matchAll(/^>\s?(.*)$/gm)];
+      const rawStart = id && quoteLines.length ? markdown.indexOf(part) + quoteLines[0].index : -1;
+      const last = quoteLines.at(-1);
+      const rawEnd = rawStart >= 0 ? markdown.indexOf(part) + last.index + last[0].length : -1;
+      return { id, text: quoteLines.map(([, line]) => line).join("\n").trim(), rawStart, rawEnd };
+    })
+    .filter((entry) => entry.id)
+    .filter((entry) => entry.text);
+  const atoms = [...changes.matchAll(/^\| (U-\d{3}-\d{2}) \| ([^|]+) \|/gm)]
+    .map(([, id, text]) => ({ id, text: text.trim() }));
+  const vRows = [...verbatim.matchAll(/^\| (V-\d{3}) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|/gm)]
+    .filter(([, , speaker]) => speaker.trim() === "用户")
+    .map(([, id, , , text]) => ({ id, text: text.trim() }));
+  const locatedUnit = (entry, kind, rawStart, rawEnd) => {
+    const raw = markdown.slice(rawStart, rawEnd);
+    return Object.freeze({
+      id: entry.id, kind, text: entry.text, raw_excerpt: raw,
+      sha256: sha256(raw),
+      byte_start: Buffer.byteLength(markdown.slice(0, rawStart), "utf8"),
+      byte_end: Buffer.byteLength(markdown.slice(0, rawEnd), "utf8"),
+      start_line: markdown.slice(0, rawStart).split("\n").length,
+      end_line: markdown.slice(0, rawEnd).split("\n").length,
+    });
+  };
+  const sourceUnits = [
+    ...uSections.map((entry) => locatedUnit(entry, "verbatim_u", entry.rawStart, entry.rawEnd)),
+    ...atoms.map((entry) => {
+      const start = markdown.indexOf(`| ${entry.id} |`);
+      const end = markdown.indexOf("\n", start);
+      return locatedUnit(entry, "decomposed_u", start, end < 0 ? markdown.length : end);
+    }),
+    ...vRows.map((entry) => {
+      const start = markdown.indexOf(`| ${entry.id} |`);
+      const end = markdown.indexOf("\n", start);
+      return locatedUnit(entry, "verbatim_v", start, end < 0 ? markdown.length : end);
+    }),
+  ];
+  const rows = [...index.matchAll(/^\| (R-\d{3}) \| ([^|]+) \| (D-\d{3}) \|/gm)]
+    .map(([, id, source, decision]) => ({ id, summary: source.trim(), source: source.trim(), decision }));
+  if (uSections.length === 0 && vRows.length === 0) errors.push("decision-log.md has no verbatim U/V source statements");
+  if (rows.length === 0) errors.push("decision-log.md has no R requirement index rows");
+  const quotedUIds = new Set(uSections.map(({ id }) => id));
+  for (const atom of atoms) {
+    const parentId = atom.id.slice(0, 5);
+    if (!quotedUIds.has(parentId)) errors.push(`decomposed source has no verbatim U parent: ${atom.id}`);
+  }
+  const indexedSource = rows.map((row) => row.source).join("; ");
+  const indexed = (id) => indexedSource.includes(id)
+    || (/^U-\d{3}-\d{2}$/.test(id) && rows.some((row) => {
+      const number = Number(id.slice(-2));
+      const family = id.slice(0, 5);
+      return [...row.source.matchAll(/(U-\d{3})-(\d{2})(?:~(\d{2}))?(?:\/\d{2})*/g)]
+        .some(([whole, prefix, start, end]) => prefix === family
+          && ((end && number >= Number(start) && number <= Number(end))
+            || number === Number(start)
+            || [...whole.matchAll(/\/(\d{2})/g)].some(([, sibling]) => number === Number(sibling))));
+    }));
+  for (const entry of [...uSections, ...atoms]) {
+    if (!indexed(entry.id)) errors.push(`verbatim source is absent from R index: ${entry.id}`);
+  }
+  const vAliasOf = new Map(vRows.map((entry) => [entry.id,
+    uSections.find((u) => indexed(u.id) && u.text.includes(entry.text))?.id ?? null,
+  ]));
+  for (const entry of vRows) {
+    // Only an exact excerpt of an indexed U quotation is a duplicate V alias.
+    // Similar wording is an independent source until a human resolves it.
+    if (!indexed(entry.id) && !vAliasOf.get(entry.id)) errors.push(`verbatim source is absent from R index: ${entry.id}`);
+  }
+  const knownSourceIds = new Set([...uSections, ...atoms, ...vRows].map((entry) => entry.id));
+  const sourceRefs = (source) => {
+    const refs = [...source.matchAll(/\b(?:U|V)-\d{3}\b/g)].map(([id]) => id);
+    for (const [whole, family, start, end] of source.matchAll(/(U-\d{3})-(\d{2})(?:~(\d{2}))?(?:\/\d{2})*/g)) {
+      if (end) for (let number = Number(start); number <= Number(end); number++) refs.push(`${family}-${String(number).padStart(2, "0")}`);
+      else refs.push(`${family}-${start}`);
+      for (const [, sibling] of whole.matchAll(/\/(\d{2})/g)) refs.push(`${family}-${sibling}`);
+    }
+    return [...new Set(refs)];
+  };
+  for (const row of rows) {
+    // Research, PRD and confirmed-decision-derived R rows are legitimate
+    // planning trace edges. They are checked but not counted as additional
+    // original user requirements.
+    const refs = sourceRefs(row.source);
+    for (const id of refs) if (!knownSourceIds.has(id)) {
+      // U-003 is an explicit pointer to U-001, not a separate quotation.
+      if (id === "U-003" && knownSourceIds.has("U-001")) continue;
+      errors.push(`R index row cites absent U/V source: ${row.id} -> ${id}`);
+    }
+  }
+  const seen = new Set();
+  for (const row of rows) {
+    if (seen.has(row.id)) errors.push(`duplicate R requirement index row: ${row.id}`);
+    seen.add(row.id);
+  }
+  const decomposedParents = new Set(atoms.map(({ id }) => id.slice(0, 5)));
+  const coverageUnits = sourceUnits.filter((unit) =>
+    unit.kind === "decomposed_u"
+      || (unit.kind === "verbatim_u" && !decomposedParents.has(unit.id))
+      || (unit.kind === "verbatim_v" && !vAliasOf.get(unit.id)));
+  return Object.freeze({
+    status: "present",
+    // R rows are derived trace edges, not additional original requirements.
+    // Count independent U/V statements and decomposed atoms only.
+    entries: Object.freeze(coverageUnits.map(({ id, text, kind, sha256: content_sha256, byte_start, byte_end }) => Object.freeze({
+      id, summary: text, kind, content_sha256, byte_start, byte_end, source_refs: Object.freeze([id]),
+    }))),
+    index_entries: Object.freeze(rows.map(({ id, summary, source, decision }) => Object.freeze({
+      id, summary, source, decision, source_refs: Object.freeze(sourceRefs(source)), kind: "requirement_index",
+    }))),
+    source_units: Object.freeze(sourceUnits.map((unit) => Object.freeze({
+      ...unit,
+      ...(vAliasOf.get(unit.id) ? { alias_of: vAliasOf.get(unit.id) } : {}),
+      ...(decomposedParents.has(unit.id) ? { decomposed_by: Object.freeze(atoms.filter(({ id }) => id.startsWith(`${unit.id}-`)).map(({ id }) => id)) } : {}),
+    }))),
+    source_counts: Object.freeze({ u: uSections.length, atoms: atoms.length, v: vRows.length, r: rows.length }),
+    errors: Object.freeze(errors),
+  });
+}
+
+function semanticMeaningMatches(expected, actual) {
+  const normalize = (value) => String(value ?? "").toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+  const left = normalize(expected);
+  const right = normalize(actual);
+  if (left === "" || right === "") return false;
+  // Very short Chinese terms are ambiguous labels, not sufficient semantic
+  // proof when the actual statement adds a different operation or outcome.
+  if (left.length <= 2 && left !== right) return false;
+  // A document/path/identifier/test-result claim is metadata, not proof that
+  // the requested behavior exists. Only reject artifact-result phrases when
+  // they are the whole actual statement or a clearly prefixed artifact claim;
+  // a genuine behavior may still mention ordinary "存在" or "测试".
+  const artifactClaim = /^(?:(?:文件|文档|路径|编号|id|hash)(?:存在|一致|匹配|通过|正确|可用)|(?:绿色)?测试(?:通过|成功|通过了)|测试结果(?:为|是)?(?:通过|成功))$/u;
+  const compoundArtifactClaim = /^(?:文件|文档|路径|编号|id|hash)(?:已|且|有|为)?(?:检查|覆盖|存在|一致|匹配|通过|正确|可用)(?:且(?:检查|覆盖|存在|一致|匹配|通过|正确|可用))*$/u;
+  const verificationClaim = /^(?:(?:已|已经)?(?:检查|核验|验证|确认|审查|复核)(?:了)?|(?:已|已经)?完成)$/u;
+  const negativeClaim = /(?:不再|不支持|不能|不会|不要|不必|没法|没有|尚未|未(?:能|支持|实现|包含)?|无法|不满足|不完全|不具备|不符合|不允许|禁止|拒绝|取消|删除|移除|去掉|停止|不提供|not|no|without)/u;
+  // A statement can contain the requested words and then explicitly narrow
+  // their scope. Containment is not semantic proof for such contradictions.
+  const everyRound = /(?:每(?:一)?轮|每次|每个回合|everyround|eachround)/u.test(left);
+  const limitedRound = /(?:仅|只|唯)(?:在|于|有)?(?:第)?(?:[一二三四五六七八九十百0-9]+|首|末|最后|某)(?:轮|次|个回合)/u.test(right)
+    || /(?:只有|仅有|部分|某些)(?:轮|轮次)/u.test(right)
+    || /至少(?:执行|提供|检查)?(?:一|1)次/u.test(right);
+  if (everyRound && limitedRound) return false;
+  if (artifactClaim.test(right) || compoundArtifactClaim.test(right) || verificationClaim.test(left) || verificationClaim.test(right)
+      || (negativeClaim.test(right) && !negativeClaim.test(left))) return false;
+  if (right.includes(left)) {
+    const negation = /(?:不|没|未|无|非|否|没有|尚未|不满足|不完全|不具备|不符合|未包含|not|no|without)$/u;
+    const contradictionSuffix = /(?:未(?:启用|实现|完成|发生|保留|写入|记录)?|没有|不(?:存在|成立|正确|可用|支持|满足)|缺失|丢失|错误|失败)$/u;
+    // Copying the requested sentence does not preserve its meaning when a
+    // following adversative clause explicitly permits an exception or narrows
+    // where the behavior applies. This is a conservative rejection, not a
+    // general natural-language entailment check.
+    const contradictoryException = /^(?:但是|但|然而|不过|却)(?=.*(?:允许|默认|只|仅|无需|不必|不用|不再|改为|代替))/u;
+    let offset = right.indexOf(left);
+    while (offset >= 0) {
+      const after = right.slice(offset + left.length);
+      if (!negation.test(right.slice(0, offset)) && !contradictionSuffix.test(after)
+          && !contradictoryException.test(after)) return true;
+      offset = right.indexOf(left, offset + left.length);
+    }
+    return false;
+  }
+  // Do not use fuzzy n-gram overlap as proof: short Chinese phrases can share
+  // most grams while changing the behavior (提问 vs 回答). A stage profile
+  // must provide an explicit semantic statement, not a lexical guess.
+  return false;
+}
+
+function hasEvidenceBinding(entry) {
+  return nonEmptyString(entry?.ref)
+    && SHA256_HEX.test(entry?.hash ?? "")
+    && GIT_OID.test(entry?.snapshot_tree ?? "");
+}
+
+function addStageContractError(errors, findings, {
+  type = "stage_contract_gap",
+  artifact,
+  anchor,
+  message,
+  correction = "在当前 stage 修复该产物或事实，并用同一 current revision 重跑 spec-analyze",
+}) {
+  errors.push(message);
+  findings.push(stageAnalyzeFinding({
+    type,
+    artifact,
+    targetArtifact: artifact,
+    lineOrAnchor: anchor,
+    rule: "production-stage-material-contract",
+    impact: message,
+    correction,
+  }));
+}
+
+function hasStructuredSpecMaterial(markdown) {
+  return typeof markdown === "string"
+    && /^##\s+速读卡(?:（30 秒）)?\s*$/m.test(markdown)
+    && /^##\s+1\.\s+/m.test(markdown);
+}
+
+function hasPlanTaskV3Material(markdown) {
+  return typeof markdown === "string"
+    && (templateVersion(markdown) === PLAN_TASK_V3 || /\bplan-task\.v3\b/i.test(markdown));
+}
+
+export function validateSpecFailureConditions(markdown) {
+  const errors = [];
+  const lines = markdown.split(/\r?\n/);
+  const starts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^\s*-\s+\[[ xX]\]\s+\*\*AC-[A-Za-z0-9_-]+\*\*/i.test(lines[index])) starts.push(index);
+  }
+  for (const [position, start] of starts.entries()) {
+    const block = lines.slice(start, starts[position + 1] ?? lines.length).join("\n");
+    const id = lines[start].match(/\bAC-[A-Za-z0-9_-]+\b/i)?.[0] ?? `AC-${position + 1}`;
+    const hasFailureCondition = /(?:^|\n)\s*(?:-\s+)?(?:\*\*)?失败(?:条件)?(?:\*\*)?\s*[:：]/m.test(block)
+      || /(?:^|\n)\s*(?:-\s+)?(?:\*\*)?(?:failure condition|failure)(?:\*\*)?\s*[:：]/im.test(block);
+    if (!hasFailureCondition) {
+      errors.push(`${id} acceptance design is missing a failure condition`);
+    }
+  }
+  return errors;
+}
+
+function validateStructuredSpecContracts({ markdown, packet, identity }) {
+  const errors = [];
+  const findings = [];
+  const structure = validateSpecContentProfile(markdown);
+  for (const error of structure.errors) addStageContractError(errors, findings, {
+    type: "spec_contract_gap", artifact: "spec", anchor: "spec-content.v3", message: error,
+  });
+  const acceptance = validateAcceptanceDesignMinimum(markdown);
+  for (const error of acceptance.errors) addStageContractError(errors, findings, {
+    type: "acceptance_contract_gap", artifact: "spec", anchor: "验收标准", message: error,
+  });
+  for (const error of validateSpecFailureConditions(markdown)) addStageContractError(errors, findings, {
+    type: "acceptance_contract_gap", artifact: "spec", anchor: "验收标准/失败条件", message: error,
+  });
+
+  // Accept the section depth used by the current spec (`##`) as well as the
+  // nested `###` form used by older fixtures.
+  const mappingStart = markdown.search(/^###{0,1}\s+来源与决策映射\s*$/m);
+  const mapping = mappingStart < 0 ? "" : markdown.slice(mappingStart);
+  // Current decision logs use both the original compact `D1` form and the
+  // normalized `D-001` form used by generic fixtures.  The analyzer must
+  // recognize either spelling without inventing a second decision source.
+  if (mappingStart < 0 || !/\bR-[A-Za-z0-9_-]+\b/.test(mapping) || !/\bD(?:-\d+|\d+)\b/.test(mapping)
+      || !/\bFR-[A-Z][A-Z0-9]*-\d{3}\b/.test(mapping) || !/\bAC-[A-Za-z0-9_-]+\b/.test(mapping)) {
+    addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: "来源与决策映射",
+      message: "spec source/decision to FR/AC mapping is missing or incomplete",
+    });
+  }
+
+  const frIds = identifiers(markdown, /\bFR-[A-Z][A-Z0-9]*-\d{3}\b/g);
+  const acIds = identifiers(markdown, /\bAC-[A-Za-z0-9_-]+\b/g);
+  for (const id of frIds) {
+    if ((markdown.match(new RegExp(`\\b${id}\\b`, "g")) ?? []).length < 2) addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: id,
+      message: `${id} has no downstream source/decision or acceptance reference`,
+    });
+  }
+  for (const id of acIds) {
+    if ((markdown.match(new RegExp(`\\b${id}\\b`, "g")) ?? []).length < 2) addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: id,
+      message: `${id} has no upstream FR/source mapping reference`,
+    });
+  }
+
+  const markdownLines = markdown.split(/\r?\n/);
+  const pfactLineIndexes = markdownLines
+    .map((line, index) => /^\s*-\s+\*\*PFACT-[^*]+\*\*/.test(line) ? index : -1)
+    .filter((index) => index >= 0);
+  for (const [position, lineIndex] of pfactLineIndexes.entries()) {
+    const line = markdownLines[lineIndex];
+    const id = line.match(/\*\*(PFACT-[^*]+)\*\*/)?.[1] ?? "PFACT";
+    const nextPfact = pfactLineIndexes[position + 1] ?? markdownLines.length;
+    const nextSection = markdownLines.slice(lineIndex + 1, nextPfact).findIndex((candidate) => /^\s*##\s+/.test(candidate));
+    const end = nextSection >= 0 ? lineIndex + 1 + nextSection : nextPfact;
+    // A PFACT's state is commonly declared on the following `status` line;
+    // inspect the whole card while keeping neighboring facts out of scope.
+    const block = markdownLines.slice(lineIndex, end).join("\n");
+    const states = block.match(/\b(?:verified|inferred|unknown|not_applicable)\b/gi) ?? [];
+    if (states.length !== 1) addStageContractError(errors, findings, {
+      type: "pfact_contract_gap", artifact: "spec", anchor: id,
+      message: `${id} must declare exactly one PFACT state: verified, inferred, unknown, or not_applicable`,
+    });
+  }
+
+  const clarification = packet?.clarify_outcome ?? packet?.clarify;
+  if (clarification !== undefined) {
+    const clarifyErrors = validateClarifyOutcome(clarification, { stage: "build-spec", identity });
+    for (const error of clarifyErrors) addStageContractError(errors, findings, {
+      type: "clarify_contract_gap", artifact: "clarify", anchor: "spec-clarify", message: error,
+    });
+  } else if (!/spec-clarify[\s\S]{0,260}(?:trigger\s*=\s*false|trigger=false|executed)/i.test(markdown)) {
+    addStageContractError(errors, findings, {
+      type: "clarify_contract_gap", artifact: "spec", anchor: "spec-clarify",
+      message: "build-spec production profile has no current Clarify outcome or explicit trigger=false reason",
+    });
+  }
+  return { errors, findings };
+}
+
+function validateIdentityBinding(value, identity, label, errors) {
+  if (!object(value)) {
+    errors.push(`${label} is required`);
+    return;
+  }
+  for (const [field, expected] of Object.entries(identity ?? {})) {
+    if (expected === undefined || expected === null) continue;
+    if (value[field] !== expected) errors.push(`${label}.${field} is not bound to the current ${field}`);
+  }
+}
+
+function validateLifecycleEvents(value, label, errors) {
+  const events = value?.events ?? value?.lifecycle_events;
+  if (!Array.isArray(events) || events.map((entry) => entry?.event).join(",") !== "ask,wait,reply,resume") {
+    errors.push(`${label} must contain the real ask -> wait -> reply -> resume lifecycle`);
+  }
+}
+
+function validateClarifyOutcome(value, { stage = "build-spec", identity } = {}) {
+  const errors = [];
+  if (!object(value)) return [`${stage} Clarify outcome is required`];
+  if (!new Set(["resolved", "completed"]).has(value.status)) errors.push("Clarify outcome status must be resolved or completed");
+  validateIdentityBinding(value, identity, "Clarify outcome", errors);
+  if (value.trigger === false) {
+    if (!nonEmptyString(value.reason)) errors.push("Clarify trigger=false requires a concrete reason");
+    if (value.open_direction_changing_questions !== undefined
+        && value.open_direction_changing_questions !== 0) {
+      errors.push("Clarify trigger=false must have zero open direction-changing questions");
+    }
+    if (value.lifecycle_rounds !== undefined
+        && (!Array.isArray(value.lifecycle_rounds) || value.lifecycle_rounds.length > 0)) {
+      errors.push("Clarify trigger=false must omit lifecycle_rounds or provide an empty array");
+    }
+  } else if (value.trigger === true) {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: value.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors);
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Clarify must not contain withdrawn or unanswered questions");
+  } else {
+    errors.push("Clarify outcome must explicitly declare trigger=true or trigger=false");
+  }
+  return errors;
+}
+
+function validateGrillSummary(value, { identity } = {}) {
+  const errors = [];
+  if (!object(value)) return ["make-decision analyzer requires the completed full-requirement Grill summary"];
+  if (value.status !== "completed") errors.push("Grill summary must be completed");
+  validateIdentityBinding(value, identity, "Grill summary", errors);
+  const coverage = value.requirement_coverage;
+  const expected = ["goal", "flow_or_surface", "data_or_state", "success_failure_acceptance", "constraint_non_goal_defer"];
+  if (!object(coverage) || coverage.status !== "complete") errors.push("Grill requirement_coverage must be complete");
+  if (!expected.every((kind) => coverage?.message_classes?.includes(kind))) errors.push("Grill must cover all five original-requirement message classes");
+  if (!Array.isArray(coverage?.uncovered) || coverage.uncovered.length !== 0) errors.push("Grill must not leave an uncovered requirement class or axis");
+  for (const [name, status] of Object.entries(value.exit_checks ?? {})) if (status !== "pass") errors.push(`Grill exit check ${name} is not pass`);
+  return errors;
+}
+
+function validateFinalConfirmation(value, { stage = "make-decision", identity } = {}) {
+  const errors = [];
+  if (!object(value)) return [`${stage} analyzer requires the current final confirmation fact`];
+  if (value.decision !== "accepted" && value.status !== "accepted") errors.push("final confirmation must be accepted");
+  validateIdentityBinding(value, identity, "final confirmation", errors);
+  if (!nonEmptyString(value.subject_ref) && !nonEmptyString(value.subject_id)) errors.push("final confirmation subject binding is required");
+  if (!SHA256_HEX.test(value.material_hash ?? value.decision_hash ?? "") && !nonEmptyString(value.material_revision)) errors.push("final confirmation must bind the current material identity");
+  validateLifecycleEvents(value, "final confirmation", errors);
+  return errors;
+}
+
+function validateEvidenceEntry(entry, evidenceByRef, identity, label, errors) {
+  if (!object(entry)) {
+    errors.push(`${label} must be an object with ref/hash/snapshot_tree`);
+    return;
+  }
+  if (!hasEvidenceBinding(entry)) errors.push(`${label} ref/hash/snapshot_tree binding is invalid`);
+  const current = evidenceByRef.get(entry.ref);
+  if (!current || current.status !== "fresh" || current.hash !== entry.hash || current.snapshot_tree !== entry.snapshot_tree) {
+    errors.push(`${label} does not bind a fresh current evidence entry`);
+  }
+  if (identity?.snapshot_tree && entry.snapshot_tree !== identity.snapshot_tree) errors.push(`${label} snapshot_tree is stale`);
+}
+
+function containsMaterialIdentifier(value, identifier) {
+  if (!nonEmptyString(value) || !nonEmptyString(identifier)) return false;
+  const escaped = identifier.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)`).test(value);
+}
+
+function validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors) {
+  const test = row.test_result;
+  if (!object(test)) {
+    errors.push(`${label}.test_result must bind the gate to an actual test result`);
+    return;
+  }
+  const testRef = test.evidence_ref ?? test.ref;
+  if (!nonEmptyString(testRef)) errors.push(`${label}.test_result.evidence_ref is required`);
+  if (!nonEmptyString(test.command)) errors.push(`${label}.test_result.command is required`);
+  if (!Number.isInteger(test.expected_exit)) errors.push(`${label}.test_result.expected_exit is required`);
+  if (!Number.isInteger(test.actual_exit)) errors.push(`${label}.test_result.actual_exit is required`);
+  if (!nonEmptyString(test.oracle)) errors.push(`${label}.test_result.oracle is required`);
+  if (!nonEmptyString(test.actual_outcome)) errors.push(`${label}.test_result.actual_outcome is required`);
+  const gate = row.gate ?? {};
+  if (test.command !== (gate.command ?? row.gate_command)) errors.push(`${label}.test_result.command does not match gate.command`);
+  if (test.expected_exit !== (gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.test_result.expected_exit does not match gate.expected_exit`);
+  if (test.oracle !== (gate.oracle ?? row.oracle)) errors.push(`${label}.test_result.oracle does not match gate.oracle`);
+  if (Number.isInteger(test.expected_exit) && Number.isInteger(test.actual_exit) && test.expected_exit !== test.actual_exit) {
+    errors.push(`${label}.test_result actual_exit does not satisfy expected_exit`);
+  }
+  if (!Array.isArray(row.evidence_refs) || !row.evidence_refs.some((entry) => entry?.ref === testRef)) {
+    errors.push(`${label}.test_result.evidence_ref must be one of evidence_refs`);
+  }
+  const evidence = evidenceByRef.get(testRef);
+  if (!evidence || !object(evidence.test_result)) {
+    errors.push(`${label}.test_result must bind a test_result-bearing current evidence entry`);
+    return;
+  }
+  const bound = evidence.test_result;
+  for (const field of ["command", "expected_exit", "actual_exit", "oracle", "actual_outcome"]) {
+    if (bound[field] !== test[field]) errors.push(`${label}.test_result.${field} does not match bound evidence`);
+  }
+  if (identity?.snapshot_tree && evidence.snapshot_tree !== identity.snapshot_tree) {
+    errors.push(`${label}.test_result evidence snapshot_tree is stale`);
+  }
+}
+
+function validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity } = {}) {
+  const errors = [];
+  const findings = [];
+  const currentSpecIds = activeAcceptanceCriterionIds(packet?.materials?.spec ?? "");
+  const explicitExpectedIds = packet?.expected_ac_ids ?? packet?.accepted_ac_ids;
+  const expectedIds = currentSpecIds;
+  if (explicitExpectedIds !== undefined
+      && (!Array.isArray(explicitExpectedIds)
+        || explicitExpectedIds.length !== currentSpecIds.length
+        || new Set(explicitExpectedIds).size !== currentSpecIds.length
+        || explicitExpectedIds.some((id) => !currentSpecIds.includes(id)))) {
+    errors.push("build-code acceptance chain expected_ac_ids must exactly match the active AC set in spec.md");
+  }
+  const rows = packet?.acceptance_coverage ?? packet?.ac_trace?.entries;
+  if (!Array.isArray(rows) || rows.length === 0) return { errors: [...errors, "build-code acceptance chain is missing"], findings: [stageAnalyzeFinding({ type: "acceptance_chain_gap", artifact: "ac-trace", targetArtifact: "build-code", frOrTaskId: "AC", lineOrAnchor: "acceptance-chain", impact: "逐 AC 结果没有完整 current lineage", correction: "在当前 build-code 记录每条 AC 修复该字段并重跑 stage-end spec-analyze" })] };
+  if (!Array.isArray(expectedIds) || expectedIds.length === 0) {
+    errors.push("build-code acceptance chain requires a non-empty current AC set from spec.md or expected_ac_ids");
+  }
+  const seen = new Set();
+  for (const [index, row] of rows.entries()) {
+    const label = `build-code acceptance chain[${index}]`;
+    if (!object(row)) { errors.push(`${label} must be an object`); continue; }
+    const acId = row.acceptance_criterion_id ?? row.ac_id;
+    if (!nonEmptyString(acId)) errors.push(`${label}.acceptance_criterion_id is required`);
+    const keyParts = [row.task_id, acId, row.material_revision, row.snapshot_tree, row.producer_stage];
+    if (keyParts.some((part) => !nonEmptyString(part))) errors.push(`${label} exact identity key task_id + AC id + material_revision + snapshot_tree + producer_stage is required`);
+    if (identity) {
+      if (row.task_id !== identity.task_id) errors.push(`${label}.task_id is stale`);
+      if (row.material_revision !== identity.material_revision) errors.push(`${label}.material_revision is stale`);
+      if (row.snapshot_tree !== identity.snapshot_tree) errors.push(`${label}.snapshot_tree is stale`);
+      if (row.producer_stage !== identity.stage) errors.push(`${label}.producer_stage is stale`);
+    }
+    const key = keyParts.join("|");
+    if (seen.has(key)) errors.push(`${label} conflicts with another result for the same exact identity key`);
+    seen.add(key);
+    if (row.status !== "covered") errors.push(`${label} status must be covered for a complete analyzer chain`);
+    for (const field of ["source_ids", "decision_ids", "fr_ids", "task_ids"]) {
+      if (!Array.isArray(row[field]) || row[field].length === 0 || row[field].some((id) => !nonEmptyString(id))) errors.push(`${label}.${field} must be non-empty`);
+    }
+    const materials = packet.materials ?? {};
+    const requirementIds = new Set((packet.original_requirements ?? []).map((entry) => entry?.id).filter(nonEmptyString));
+    const taskMaterials = typeof materials.tasks === "string"
+      ? materials.tasks
+      : (packet.activation_cohort === "post" || identity?.activation_cohort === "post")
+        ? Object.values(materials.phases ?? {}).filter((value) => typeof value === "string").join("\n")
+        : "";
+    for (const id of row.source_ids ?? []) if (!requirementIds.has(id)) errors.push(`${label}.source_ids contains an unknown original requirement: ${id}`);
+    for (const id of row.decision_ids ?? []) if (!containsMaterialIdentifier(materials.decision_log, id)) errors.push(`${label}.decision_ids is not present in decision-log.md: ${id}`);
+    for (const id of row.fr_ids ?? []) if (!containsMaterialIdentifier(materials.spec, id)) errors.push(`${label}.fr_ids is not present in spec.md: ${id}`);
+    for (const id of row.task_ids ?? []) if (!containsMaterialIdentifier(taskMaterials, id)) errors.push(`${label}.task_ids is not present in current Phase/task materials: ${id}`);
+    if (!nonEmptyString(row.file_symbol)) errors.push(`${label}.file_symbol is required`);
+    const implementationAnchor = row.implementation_anchor;
+    const verificationAnchor = row.verification_anchor;
+    if (!semanticAnchor(implementationAnchor, "implementation")) errors.push(`${label}.implementation_anchor is invalid`);
+    if (!semanticAnchor(verificationAnchor, "verification")) errors.push(`${label}.verification_anchor is invalid`);
+    if (implementationAnchor?.path === verificationAnchor?.path && implementationAnchor?.start_line === verificationAnchor?.start_line) errors.push(`${label} implementation and verification must be independently anchored`);
+    const gate = row.gate ?? {};
+    if (!nonEmptyString(gate.command ?? row.gate_command)) errors.push(`${label}.gate.command is required`);
+    if (!Number.isInteger(gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.gate.expected_exit is required`);
+    if (!nonEmptyString(gate.oracle ?? row.oracle)) errors.push(`${label}.gate.oracle is required`);
+    for (const field of ["scenario", "actual_outcome", "coverage_limits"]) if (!nonEmptyString(row[field])) errors.push(`${label}.${field} is required`);
+    if (!Array.isArray(row.evidence_refs) || row.evidence_refs.length === 0) errors.push(`${label}.evidence_refs is required`);
+    else for (const [refIndex, entry] of row.evidence_refs.entries()) validateEvidenceEntry(entry, evidenceByRef, identity, `${label}.evidence_refs[${refIndex}]`, errors);
+    validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors);
+    validateEvidenceEntry(row.review_ref, evidenceByRef, identity, `${label}.review_ref`, errors);
+    validateEvidenceEntry(row.stage_end_ref, evidenceByRef, identity, `${label}.stage_end_ref`, errors);
+  }
+  if (Array.isArray(expectedIds) && expectedIds.length > 0) {
+    const actual = new Set(rows.map((row) => row?.acceptance_criterion_id ?? row?.ac_id).filter(nonEmptyString));
+    for (const id of expectedIds) if (!actual.has(id)) errors.push(`acceptance chain is missing ${id}`);
+    for (const id of actual) if (!expectedIds.includes(id)) errors.push(`acceptance chain contains unexpected ${id}`);
+  }
+  for (const error of errors) findings.push(stageAnalyzeFinding({ type: "acceptance_chain_gap", artifact: "ac-trace", targetArtifact: "build-code", frOrTaskId: "AC", lineOrAnchor: "acceptance-chain", impact: error, correction: "在当前 build-code 修复该字段并重跑 stage-end spec-analyze" }));
+  return { errors, findings };
+}
+
+function validateStageMaterialContracts({ stage, materials, packet, evidenceByRef, identity } = {}) {
+  const errors = [];
+  const findings = [];
+  if (stage === "make-decision") {
+    const messages = packet?.authenticated_requirement_messages;
+    const outputs = packet?.requirement_coverage_outputs ?? packet?.requirement_outputs;
+    const coverage = validateRequirementCoverage({ messages, outputs });
+    for (const error of coverage.errors) addStageContractError(errors, findings, {
+      type: "requirement_coverage_gap", artifact: "registered-requirements", anchor: "requirement-coverage", message: error,
+    });
+    for (const error of validateGrillSummary(packet?.grill_summary ?? packet?.grill, { identity })) addStageContractError(errors, findings, {
+      type: "grill_coverage_gap", artifact: "grill", anchor: "full-requirement-matrix", message: error,
+    });
+    for (const error of validateFinalConfirmation(packet?.final_confirmation ?? packet?.confirmation, { identity })) addStageContractError(errors, findings, {
+      type: "confirmation_contract_gap", artifact: "confirmation", anchor: "final-confirmation", message: error,
+    });
+  }
+  if (stage === "build-spec") {
+    const checked = validateStructuredSpecContracts({ markdown: typeof materials?.spec === "string" ? materials.spec : "", packet, identity });
+    errors.push(...checked.errors); findings.push(...checked.findings);
+  }
+  if (stage === "build-plan") {
+    const post = identity?.activation_cohort === "post" || packet?.activation_cohort === "post";
+    const structural = post ? validatePostPhaseContract({
+      spec: typeof materials?.spec === "string" ? materials.spec : "",
+      index: typeof materials?.phase_index === "string" ? materials.phase_index : "",
+      phases: materials?.phases,
+    }) : validatePlanTaskContract({
+      spec: typeof materials?.spec === "string" ? materials.spec : "",
+      plan: typeof materials?.plan === "string" ? materials.plan : "",
+      tasks: typeof materials?.tasks === "string" ? materials.tasks : "",
+    });
+    const executable = post ? structural : validateExecutablePlanTaskMinimum({
+      spec: typeof materials?.spec === "string" ? materials.spec : "",
+      plan: typeof materials?.plan === "string" ? materials.plan : "",
+      tasks: typeof materials?.tasks === "string" ? materials.tasks : "",
+      decisionLog: typeof (materials?.decisionLog ?? materials?.decision_log ?? materials?.["decision-log.md"]) === "string"
+        ? (materials.decisionLog ?? materials.decision_log ?? materials["decision-log.md"])
+        : null,
+    });
+    for (const error of [...structural.errors, ...executable.errors]) addStageContractError(errors, findings, {
+      type: post ? "phase_contract_gap" : "plan_task_contract_gap",
+      artifact: post ? "phases" : "plan/tasks", anchor: post ? "phases/index.md" : "plan-task.v3", message: error,
+    });
+  }
+  if (stage === "build-code") {
+    const post = identity?.activation_cohort === "post" || packet?.activation_cohort === "post";
+    if (post) {
+      const structural = validatePostPhaseContract({
+        spec: typeof materials?.spec === "string" ? materials.spec : "",
+        index: typeof materials?.phase_index === "string" ? materials.phase_index : "",
+        phases: materials?.phases,
+      });
+      for (const error of structural.errors) addStageContractError(errors, findings, {
+        type: "phase_contract_gap", artifact: "phases", anchor: "phases/index.md", message: error,
+      });
+    }
+    const chain = validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity });
+    errors.push(...chain.errors); findings.push(...chain.findings);
+  }
+  return { errors, findings };
+}
+
+/**
+ * Check actual semantic coverage and evidence bindings, not just IDs or file
+ * existence. Missing packet input is explicitly material_incomplete.
+ */
+export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material_contracts = false, identity, authenticatedSourceCensus = null } = {}) {
+  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  if (!profile) throw new TypeError(`unknown stage spec-analyze profile: ${stage}`);
+  if (!object(packet)) return Object.freeze({ ok: false, status: "material_incomplete", stage, errors: Object.freeze(["MATERIAL_INCOMPLETE: packet is required"]), findings: Object.freeze([]), summary: stageAnalyzeSummary(stage, {}, "material_incomplete", [], ["MATERIAL_INCOMPLETE: packet is required"]) });
+
+  // Post build-plan is intentionally a structural report.  The current
+  // decision-log is read-only direction context; no caller-owned raw
+  // requirement inventory, coverage array, or authenticated source census is
+  // required.  Semantic fidelity remains with the existing independent review
+  // and finding dispositions.
+  const postPlanReport = stage === "build-plan"
+    && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
+  if (postPlanReport) {
+    const materials = object(packet.materials) ? packet.materials : {};
+    const phases = object(materials.phases)
+      ? materials.phases
+      : object(materials.phase_authorities) ? materials.phase_authorities : null;
+    const required = ["decision_log", "spec", "phase_index"];
+    const errors = required
+      .filter((name) => !nonEmptyString(materials[name]))
+      .map((name) => `MATERIAL_INCOMPLETE: ${name} material is required for post build-plan`);
+    if (!phases || Object.keys(phases).length === 0 || Object.values(phases).some((value) => !nonEmptyString(value))) {
+      errors.push("MATERIAL_INCOMPLETE: phases material is required for post build-plan");
+    }
+    let structural = null;
+    if (errors.length === 0 || strict_material_contracts) {
+      structural = validatePostPhaseContract({
+        spec: typeof materials.spec === "string" ? materials.spec : "",
+        index: typeof materials.phase_index === "string" ? materials.phase_index : "",
+        phases: phases ?? {},
+      });
+      errors.push(...structural.errors);
+    }
+    const findings = errors.map((error) => stageAnalyzeFinding({
+      type: error.startsWith("MATERIAL_INCOMPLETE:") ? "phase_material_gap" : "phase_contract_gap",
+      artifact: "spec/phases",
+      targetArtifact: "current post materials",
+      frOrTaskId: "post-build-plan",
+      lineOrAnchor: "phases/index.md",
+      rule: "post-build-plan-structural-report",
+      impact: error,
+      correction: "在当前任务修复命名材料或 Phase 合同，再按同一 revision 重新分析；不补 raw inventory。",
+    }));
+    const facts = structural?.facts ?? {};
+    const frCoverage = facts.fr_coverage ?? { accepted_count: 0, covered_count: 0, accepted_ids: [], covered_ids: [] };
+    const acCoverage = facts.ac_coverage ?? { accepted_count: 0, covered_count: 0, accepted_ids: [], covered_ids: [] };
+    const status = errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:"))
+      ? "material_incomplete"
+      : errors.length > 0 ? "inconsistent" : "reported";
+    return Object.freeze({
+      ok: status === "reported",
+      status,
+      stage,
+      errors: Object.freeze(errors),
+      findings: Object.freeze(findings),
+      summary: Object.freeze({
+        stage_work: "已读取当前 decision-log、spec、每个独立 Phase 与 phases/index.md，并只报告结构和引用关系。",
+        requirement_coverage: "本报告不计算 raw requirement 语义覆盖分母；需求语义由独立合并审查及 finding 处置判断。",
+        upstream_alignment: "只报告 FR/AC、Phase/Task、依赖、写集和命令/oracle 的结构缺口，不把字串出现判为语义一致。",
+        current_stage_repairs: "修复以当前材料和正式质量事实为准；本分析器不写四份材料。",
+        remaining_risks: errors.length ? errors.join("; ") : "独立审查的 finding、确认和延期风险仍按原件披露。",
+        next_stage_boundary: "报告不授权推进；下游只消费当前材料、独立审查、确认及正式质量事实。",
+      }),
+      facts: Object.freeze({
+        required_materials: Object.freeze(required),
+        required_evidence: Object.freeze([
+          "decision-log", "spec", "phase-index", ...Object.keys(phases ?? {}).sort(),
+        ]),
+        requirement_count: null,
+        covered_count: null,
+        semantic_review_status: "unavailable",
+        ...(structural?.facts ? { phase_count: structural.facts.phase_count, task_count: structural.facts.task_count } : {}),
+        fr_coverage: Object.freeze({ ...frCoverage, ok: !errors.some((error) => /FR|task card/i.test(error)) }),
+        ac_coverage: Object.freeze({ ...acCoverage, ok: !errors.some((error) => /AC|task card/i.test(error)) }),
+      }),
+    });
+  }
+
+  const errors = [];
+  const findings = [];
+  const materials = object(packet.materials) ? packet.materials : {};
+  const evidence = Array.isArray(packet.evidence) ? packet.evidence : [];
+  const evidenceByRef = new Map(evidence.map((entry) => [entry?.ref, entry]));
+  const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
+  const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
+  const postBuildCode = stage === "build-code" && (identity?.activation_cohort === "post" || packet.activation_cohort === "post");
+  const requiredMaterials = postBuildCode
+    ? ["original_requirement", "decision_log", "spec", "phase_index", "implementation"]
+    : profile.required_materials;
+  const requiredEvidence = postBuildCode
+    ? ["decision-log", "spec", "phase-index", ...Object.keys(materials.phases ?? {}).sort(), "implementation", "tests", "ac-trace"]
+    : profile.required_evidence;
+
+  // Build-plan post is a structural/report-only profile.  Its decision-log is
+  // the current read-only direction context; semantic requirement coverage is
+  // owned by the independent merged review and its dispositions.  Only the
+  // post build-code profile may use the legacy authenticated source census.
+  if (postBuildCode && nonEmptyString(identity?.task_id)) {
+    const censusPresent = authenticatedSourceCensus?.status === "present"
+      && Array.isArray(authenticatedSourceCensus.entries);
+    if (censusPresent) {
+      for (const error of authenticatedSourceCensus.errors ?? []) {
+        errors.push(`MATERIAL_INCOMPLETE: decision-log original source census: ${error}`);
+        findings.push(stageAnalyzeFinding({
+          type: "requirement_gap", artifact: "decision_log", lineOrAnchor: "原始需求索引",
+          impact: error, correction: "在当前 decision-log 补齐逐字声明与 R 索引的双向映射，再复查 spec/Phase",
+        }));
+      }
+    }
+    if (!censusPresent || authenticatedSourceCensus.entries.length === 0) {
+      errors.push("MATERIAL_INCOMPLETE: authenticated original source census is required for post build-code");
+    } else {
+      const trustedIds = new Set(authenticatedSourceCensus.entries.map((entry) => entry?.id).filter(nonEmptyString));
+      const claimedIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
+      for (const id of trustedIds) {
+        if (claimedIds.has(id)) continue;
+        errors.push(`MATERIAL_INCOMPLETE: authenticated original source is absent from analyzer packet: ${id}`);
+        findings.push(stageAnalyzeFinding({
+          type: "requirement_gap", requirementId: id, artifact: "original_requirement",
+          impact: "原始来源在认证分母内，但分析包没有该要求；包内覆盖数不能缩小分母",
+          correction: "把该原始要求及其同义行为和失败 oracle 补入当前 spec/Phase，再重新分析",
+        }));
+      }
+      for (const id of claimedIds) if (!trustedIds.has(id)) {
+        errors.push(`MATERIAL_INCOMPLETE: analyzer packet claims unregistered original source: ${id}`);
+      }
+      for (const source of authenticatedSourceCensus.entries) {
+        const claim = requirements.find((entry) => entry?.id === source.id);
+        if (claim && claim.summary !== source.summary) {
+          errors.push(`MATERIAL_INCOMPLETE: analyzer packet changed decision-log source text: ${source.id}`);
+        }
+      }
+      const sourceUnits = new Map((authenticatedSourceCensus.source_units ?? []).map((entry) => [entry.id, entry]));
+      for (const item of coverage.filter((entry) => entry?.status === "covered")) {
+        const source = authenticatedSourceCensus.entries.find((entry) => entry.id === item.requirement_id);
+        const refs = item.source_unit_refs;
+        const sourceBound = Array.isArray(refs) && refs.length > 0
+          && refs.every((id) => source?.source_refs?.includes(id) && sourceUnits.has(id))
+          && refs.some((id) => sourceUnits.get(id)?.text === item.expected_behavior);
+        if (!sourceBound) errors.push(`MATERIAL_INCOMPLETE: covered ${item.requirement_id} has no exact decision-log source-unit binding`);
+        const actual = item.actual_behavior;
+        const targetBound = nonEmptyString(actual) && materials.spec?.includes(actual)
+          && Object.values(materials.phases ?? {}).some((phase) => typeof phase === "string" && phase.includes(actual));
+        if (!targetBound) errors.push(`MATERIAL_INCOMPLETE: covered ${item.requirement_id} has no exact current spec/Phase behavior anchor`);
+        // This local profile can authenticate source/target bytes, not judge
+        // whether they mean the same thing. An independent semantic verdict
+        // is not presently available to this official runner; keep the
+        // claimed covered result non-green even when strings happen to match.
+        errors.push(`MATERIAL_INCOMPLETE: covered ${item.requirement_id} needs independent semantic review`);
+      }
+    }
+  }
+
+  if (strict_material_contracts) {
+    const materialContracts = validateStageMaterialContracts({
+      stage, materials, packet, evidenceByRef, identity,
+    });
+    errors.push(...materialContracts.errors);
+    findings.push(...materialContracts.findings);
+  }
+
+  if (requirements.length === 0) errors.push("MATERIAL_INCOMPLETE: original_requirements is required");
+  if (coverage.length === 0) errors.push("MATERIAL_INCOMPLETE: semantic coverage is required");
+  for (const name of requiredMaterials) {
+    if (!nonEmptyString(materials[name])) errors.push(`MATERIAL_INCOMPLETE: ${name} material is required for ${stage}`);
+  }
+  for (const ref of requiredEvidence) {
+    const entry = evidenceByRef.get(ref);
+    if (!entry) errors.push(`MATERIAL_INCOMPLETE: evidence ${ref} is required for ${stage}`);
+    else if (entry.status !== "fresh" || !hasEvidenceBinding(entry)) {
+      findings.push(stageAnalyzeFinding({
+        type: "stale_evidence",
+        artifact: entry.kind ?? ref,
+        evidenceRef: ref,
+        impact: "证据引用存在但不是当前快照的可用证据",
+        correction: `在 ${stage} 重新采集 ${ref} 的真实证据，或明确记录不可用原因`,
+      }));
+      errors.push(`stale evidence: ${ref}`);
+    }
+  }
+
+  const requirementIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
+  const coverageById = new Map();
+  for (const item of coverage) {
+    if (!nonEmptyString(item?.requirement_id)) {
+      errors.push("coverage entry requirement_id is required");
+      continue;
+    }
+    if (!requirementIds.has(item.requirement_id)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId: item.requirement_id,
+        artifact: Array.isArray(item.artifact_refs) ? item.artifact_refs.join(",") || null : null,
+        evidenceRef: Array.isArray(item.evidence_refs) ? item.evidence_refs.join(",") || null : null,
+        impact: "coverage 引用了不存在于原始需求索引的 requirement_id，不能证明任何真实需求",
+        correction: "在当前 stage 删除错误编号或补回原始需求索引中的真实条目；不能用新编号掩盖遗漏",
+      }));
+      errors.push(`unknown requirement coverage: ${item.requirement_id}`);
+      continue;
+    }
+    if (coverageById.has(item.requirement_id)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId: item.requirement_id,
+        artifact: Array.isArray(item.artifact_refs) ? item.artifact_refs.join(",") || null : null,
+        evidenceRef: Array.isArray(item.evidence_refs) ? item.evidence_refs.join(",") || null : null,
+        impact: "同一原始需求有重复 coverage，按顺序覆盖会造成结果不确定",
+        correction: "在当前 stage 合并为一个明确的语义和证据绑定条目",
+      }));
+      errors.push(`duplicate requirement coverage: ${item.requirement_id}`);
+      continue;
+    }
+    coverageById.set(item.requirement_id, item);
+    const artifactRefs = Array.isArray(item.artifact_refs) ? item.artifact_refs : [];
+    const evidenceRefs = Array.isArray(item.evidence_refs) ? item.evidence_refs : [];
+    // `semantic_match` is a caller assertion, not evidence.  The verdict is
+    // derived from the authenticated material/evidence context and the
+    // bounded behavior statement only; a forged boolean cannot make a
+    // contradictory statement green (or make a valid statement fail).
+    const semanticOk = item.semantic_status === "completed"
+      && semanticMeaningMatches(item.expected_behavior, item.actual_behavior);
+    const artifactOk = artifactRefs.length > 0 && artifactRefs.every((ref) => nonEmptyString(materials[ref]));
+    const evidenceOk = evidenceRefs.length > 0 && evidenceRefs.every((ref) => {
+      const evidenceEntry = evidenceByRef.get(ref);
+      return evidenceEntry?.status === "fresh" && hasEvidenceBinding(evidenceEntry);
+    });
+    const scenarioOk = Array.isArray(item.scenario_refs) && item.scenario_refs.length > 0
+      && item.scenario_refs.every(nonEmptyString);
+    const oracleOk = Array.isArray(item.oracle_refs) && item.oracle_refs.length > 0
+      && item.oracle_refs.every(nonEmptyString);
+    if (item.status === "covered" && (!semanticOk || !scenarioOk || !oracleOk || !artifactOk || !evidenceOk)) {
+      const type = !semanticOk || !scenarioOk || !oracleOk
+        ? "semantic_mismatch" : !artifactOk ? "artifact_evidence_gap" : "stale_evidence";
+      findings.push(stageAnalyzeFinding({
+        type,
+        requirementId: item.requirement_id,
+        artifact: artifactRefs.join(",") || null,
+        evidenceRef: evidenceRefs.join(",") || null,
+        impact: "编号和引用存在，但没有证明实际语义与原始需求一致",
+        correction: "在当前 stage 修复实际产物或补充真实证据；不能只补编号或文档路径",
+      }));
+      errors.push(`${type}: ${item.requirement_id}`);
+    }
+    const knownCoverageStates = new Set(["partial", "missing", "changed", "expanded", "stale", "not_applicable", "unavailable", "incomplete", "deferred"]);
+    if (item.status !== "covered") {
+      if (!knownCoverageStates.has(item.status)) {
+        errors.push(`unknown coverage status: ${item.requirement_id}`);
+        findings.push(stageAnalyzeFinding({
+          type: "requirement_gap",
+          requirementId: item.requirement_id,
+          artifact: artifactRefs.join(",") || null,
+          evidenceRef: evidenceRefs.join(",") || null,
+          impact: `需求覆盖状态 ${String(item.status)} 未被当前 stage 合同识别，不能继续猜测`,
+          correction: "在当前 stage 明确合法 coverage status 及其真实语义和证据",
+        }));
+        continue;
+      }
+      if (item.status === "not_applicable" || item.status === "deferred") {
+        const requiredDispositionFields = item.status === "not_applicable"
+          ? ["reason"]
+          : ["owner", "trigger", "handoff", "close_condition"];
+        const missingDispositionFields = requiredDispositionFields.filter((field) => !nonEmptyString(item[field]));
+        if (missingDispositionFields.length > 0) {
+          const type = item.status === "deferred" ? "deferred_open_handoff_gap" : "requirement_gap";
+          findings.push(stageAnalyzeFinding({
+            type,
+            requirementId: item.requirement_id,
+            artifact: artifactRefs.join(",") || null,
+            evidenceRef: evidenceRefs.join(",") || null,
+            impact: `${item.status} 是合法的非 covered 终态，但缺少处置依据，后续阶段可能静默猜测或丢失它`,
+            correction: item.status === "deferred"
+              ? `在当前 stage 补齐延期项的 owner、trigger、handoff、close_condition：${missingDispositionFields.join(", ")}`
+              : "在当前 stage 补齐 not_applicable 的明确 reason；不能把不适用写成空白",
+          }));
+          errors.push(`${type}: ${item.requirement_id} status=${item.status} missing=${missingDispositionFields.join(",")}`);
+        }
+        continue;
+      }
+      const type = ["stale", "unavailable"].includes(item.status)
+        ? "stale_evidence"
+        : ["changed", "expanded"].includes(item.status) ? "semantic_mismatch" : "requirement_gap";
+      findings.push(stageAnalyzeFinding({
+        type,
+        requirementId: item.requirement_id,
+        artifact: artifactRefs.join(",") || null,
+        evidenceRef: evidenceRefs.join(",") || null,
+        impact: `当前需求覆盖状态为 ${item.status}，不能宣称已完整实现`,
+        correction: "在当前 stage 补齐实际语义、产物或真实证据，并重新分析",
+      }));
+      errors.push(`${type}: ${item.requirement_id} status=${item.status}`);
+    }
+  }
+  for (const requirementId of requirementIds) {
+    if (!coverageById.has(requirementId)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId,
+        impact: "原始需求没有当前 stage 的语义覆盖记录",
+        correction: "在当前 stage 补齐实际产物和证据映射，不能留给下游猜测",
+      }));
+      errors.push(`requirement coverage gap: ${requirementId}`);
+    }
+  }
+
+  let specAnalyzeSkip = null;
+  if (stage === "make-decision" && nonEmptyString(materials.decision_log)) {
+    if (hasMarkdownHeadings(materials.decision_log)) {
+      const authenticatedMessages = Array.isArray(packet?.authenticated_requirement_messages)
+        ? packet.authenticated_requirement_messages
+        : [];
+      const convergence = analyzeDecisionConvergence(materials.decision_log, {
+        requirementMessages: authenticatedMessages,
+        requirementCoverageOutputs: Array.isArray(packet?.requirement_coverage_outputs)
+          ? packet.requirement_coverage_outputs
+          : [],
+      });
+      // `outline_closed` remains historical convergence diagnostic data. The
+      // stage-end analyzer keeps the six directly observable dimensions and
+      // never recreates it as an analyzer or completion gate.
+      for (const [dimension, value] of Object.entries(convergence.facts).filter(([dimension]) => dimension !== "outline_closed")) {
+        if (value !== "passed") {
+          findings.push(stageAnalyzeFinding({
+            type: "convergence_gap",
+            requirementId: dimension,
+            impact: `decision-log convergence dimension ${dimension} is ${value}`,
+            correction: "在 make-decision 补齐需求覆盖、目标达成、验收清晰、方案收敛或结束卡三要素",
+          }));
+          errors.push(`convergence gap: ${dimension}`);
+        }
+      }
+    } else {
+      specAnalyzeSkip = {
+        status: "skipped",
+        reason: "decision-log has no Markdown headings; make-decision convergence analysis threshold was not met",
+      };
+      errors.push(`spec-analyze skipped: ${specAnalyzeSkip.reason}`);
+    }
+  }
+
+  if (stage === "build-spec" && nonEmptyString(materials.spec) && nonEmptyString(materials.decision_log)) {
+    if (hasMarkdownHeadings(materials.spec) || hasMarkdownHeadings(materials.decision_log)) {
+      const fidelity = validateSpecClarifyAndDirectionFidelity(materials.spec, materials.decision_log);
+      if (!fidelity.ok) {
+        for (const error of fidelity.errors) {
+          findings.push(stageAnalyzeFinding({
+            type: "spec_direction_gap",
+            impact: error,
+            correction: "build-spec 必须回到 make-decision 处理方向性歧义，或显式记录 Clarify 触发/跳过",
+          }));
+          errors.push(`spec direction fidelity: ${error}`);
+        }
+      }
+    } else {
+      specAnalyzeSkip = {
+        status: "skipped",
+        reason: "spec and decision-log have no Markdown headings; build-spec fidelity analysis threshold was not met",
+      };
+      errors.push(`spec-analyze skipped: ${specAnalyzeSkip.reason}`);
+    }
+  }
+
+  const status = errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:"))
+    ? "material_incomplete"
+    : errors.length > 0 ? "inconsistent" : "consistent";
+  return Object.freeze({
+    ok: status === "consistent",
+    status,
+    stage,
+    errors: Object.freeze(errors),
+    findings: Object.freeze(findings),
+    summary: stageAnalyzeSummary(stage, packet, status, findings, errors, authenticatedSourceCensus, identity),
+    facts: Object.freeze({
+      required_materials: Object.freeze([...requiredMaterials]),
+      required_evidence: Object.freeze([...requiredEvidence]),
+      requirement_count: requirements.length,
+      covered_count: requirements.filter((requirement) => coverage.some((item) =>
+        item?.requirement_id === requirement?.id
+        && item.status === "covered"
+        && !findings.some((finding) => finding.requirement_id === requirement.id))).length,
+      ...(specAnalyzeSkip ? { spec_analyze: Object.freeze(specAnalyzeSkip) } : {}),
+    }),
+  });
+}
+
+/**
+ * Single public entry point for every stage. The legacy planning call remains
+ * available for old build-plan callers, while stage packets use the same
+ * semantic/evidence validator instead of growing a second contract.
+ */
+export function validateSpecAnalyze({ profile, packet, ...legacy } = {}) {
+  if (profile !== undefined) {
+    if (packet === undefined) throw new TypeError("stage spec-analyze profile requires packet");
+    return validateStageSpecAnalyzeProfile({ stage: profile, packet });
+  }
+  return validateSpecAnalyzeCompleteness(legacy);
+}
+
+export function resolvePhaseTaskIds({ plan, tasks, phaseId } = {}) {
+  if (typeof plan !== "string" || typeof tasks !== "string" || typeof phaseId !== "string" || phaseId.trim() === "") {
+    throw new TypeError("plan, tasks, and phaseId are required");
+  }
+  const planPhases = markdownSections(plan, 2, "Phase ").map(({ heading }) => heading);
+  const taskPhases = markdownSections(tasks, 2, "Phase ").map(({ heading }) => heading);
+  if (!sameIds(planPhases, taskPhases)) throw new Error("plan/tasks Phase headings or order differ");
+  const ordinal = /^phase[-_. ]?(\d+)$/i.exec(phaseId)?.[1];
+  const matchedPhase = planPhases.find((phase) => phase === phaseId)
+    ?? (ordinal ? planPhases.find((phase) => new RegExp(`^Phase\\s+${Number(ordinal)}(?:\\b|\\s|[:：])`, "i").test(phase)) : undefined);
+  if (!matchedPhase) throw new Error(`phase_id has no unique plan/tasks Phase mapping: ${phaseId}`);
+  const rows = taskBlocks(tasks);
+  const ids = rows.filter(({ phase }) => phase === matchedPhase).map(({ heading_id }) => heading_id);
+  if (ids.length === 0 || ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) {
+    throw new Error(`Phase has no unique non-empty Task IDs: ${matchedPhase}`);
+  }
+  for (const row of rows.filter(({ phase }) => phase === matchedPhase)) {
+    if (row.fields.Phase !== undefined && row.fields.Phase !== matchedPhase) {
+      throw new Error(`${row.heading_id} Phase field differs from its owning Phase`);
+    }
+  }
+  return Object.freeze({ phase: matchedPhase, task_ids: Object.freeze(ids) });
+}
+
+export function validateTasksOnlyCompletionSeam({
+  before,
+  after,
+  taskId,
+  allowedTaskIds,
+  requiredBindings = [],
+  expectedReviewRef,
+  completionEvidence,
+} = {}) {
+  if (typeof before !== "string" || typeof after !== "string"
+      || (taskId !== undefined && typeof taskId !== "string")
+      || (allowedTaskIds !== undefined && (!Array.isArray(allowedTaskIds)
+        || allowedTaskIds.length === 0
+        || allowedTaskIds.some((id) => typeof id !== "string")
+        || new Set(allowedTaskIds).size !== allowedTaskIds.length))) {
+    throw new TypeError("before and after are required; taskId must be a string when provided");
+  }
+  const beforeTasks = taskBlocks(before);
+  const afterTasks = taskBlocks(after);
+  const errors = [];
+  if (!sameIds(beforeTasks.map(({ heading_id }) => heading_id), afterTasks.map(({ heading_id }) => heading_id))) {
+    errors.push("tasks-only seam cannot add, remove, or reorder Task identities");
+  }
+  const zones = new Map();
+  // `versioned_refs` is derived from the live plan/spec anchors. A legitimate
+  // refresh is allowed only for the tasks explicitly in this completion seam;
+  // unrelated task bindings remain visible so tampering cannot be masked.
+  const derivedTaskIds = new Set(allowedTaskIds ?? (taskId ? [taskId] : []));
+  const maskDerivedTaskMetadata = (document) => document.replace(
+    /(^####\s+(T\d+)\b[^\n]*\n)([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/gm,
+    (block, heading, id, body) => derivedTaskIds.has(id)
+      ? `${heading}${body.replace(/^- \*\*versioned_refs\*\*：.*$/m, "- **versioned_refs**：<derived-from-live-plan>\n")}`
+      : block,
+  );
+  const mask = (document, parsed, side) => {
+    for (const task of parsed) {
+      const zone = completionZone(task);
+      if (zone === null) errors.push(`${task.heading_id} ${side} is missing the unique completion status area`);
+      else zones.set(`${side}:${task.heading_id}`, zone);
+    }
+    return maskDerivedTaskMetadata(document).replace(
+      /(^####\s+(T\d+)\b[^\n]*\n)([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/gm,
+      (block, heading, id, body) => {
+        const marker = body.search(/^#####\s+执行状态填写区（唯一完成权威）\s*$/m);
+        return marker < 0 ? block : `${heading}${body.slice(0, marker)}##### EXECUTION_STATUS:${id}\n`;
+      },
+    );
+  };
+  if (mask(before, beforeTasks, "before") !== mask(after, afterTasks, "after")) {
+    errors.push("tasks-only seam changed content outside execution status areas");
+  }
+  const changedIds = beforeTasks.map(({ heading_id }) => heading_id).filter((id) =>
+    zones.get(`before:${id}`) !== zones.get(`after:${id}`));
+  if (allowedTaskIds && !sameIds(changedIds, allowedTaskIds)) {
+    errors.push(`tasks-only seam must change exactly ${allowedTaskIds.join(", ")}`);
+  } else if (taskId && (changedIds.length !== 1 || changedIds[0] !== taskId)) {
+    errors.push(`tasks-only seam must change only ${taskId}`);
+  } else if (!taskId && changedIds.length === 0) {
+    errors.push("tasks-only seam must change at least one Task completion area");
+  }
+  for (const changedId of changedIds) {
+    const target = afterTasks.find(({ heading_id }) => heading_id === changedId);
+    const targetFact = target ? taskCompletionFact(target, completionEvidence) : null;
+    if (!targetFact?.claimed_complete
+        || targetFact.errors.length > 0) {
+      errors.push(`${changedId} completion area is not structurally complete`);
+      continue;
+    }
+    const bindings = new Map(targetFact.evidence_refs.map((entry) => [entry.ref, entry.sha256]));
+    for (const required of requiredBindings) {
+      if (!required || typeof required.ref !== "string" || !SHA256_HEX.test(required.sha256 ?? "")
+          || bindings.get(required.ref) !== required.sha256) {
+        errors.push(`${changedId} completion evidence does not bind ${required?.ref ?? "required fact"}`);
+      }
+    }
+    const reviewRef = parseJsonField(targetFact.review_fact)?.ref
+      ?? String(targetFact.review_fact ?? "").replace(/^`|`$/g, "");
+    if (expectedReviewRef !== undefined && reviewRef !== expectedReviewRef) {
+      errors.push(`${changedId} review_fact does not bind the Phase review`);
+    }
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    changed_task_ids: Object.freeze(changedIds),
+    requires_repeat_review: false,
+  });
+}
+
+/** Validate the post-cohort physical Phase set, not a synthetic plan/tasks copy. */
+export function validatePostPhaseContract({ spec, index, phases } = {}) {
+  const errors = [];
+  if (!nonEmptyString(spec)) errors.push("spec.md content is required");
+  if (!nonEmptyString(index)) errors.push("phases/index.md content is required");
+  if (!phases || typeof phases !== "object" || Array.isArray(phases)) errors.push("independent Phase files are required");
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
+
+  const rows = executionIndexRows(index);
+  if (!rows || rows.length === 0) errors.push("phases/index.md requires an Execution Index with Phase pointers");
+  if (/^\s*[-*]\s*(?:\*\*)?(?:gate_cmd|expected_exit|oracle|evidence_path)\b/mi.test(index)) {
+    errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
+  }
+  const phaseRows = [];
+  const indexedPaths = new Set();
+  const writeOwners = new Map();
+  const taskOwners = new Map();
+  const taskCards = [];
+  for (const [position, row] of (rows ?? []).entries()) {
+    const expectedId = `P${position + 1}`;
+    if (row.phase !== expectedId) errors.push(`Phase index must declare contiguous P1..Pn; expected ${expectedId}`);
+    const expectedPath = `phases/${expectedId}.md`;
+    if (row.authority_ref !== expectedPath) errors.push(`${expectedId} authority ref must be ${expectedPath}`);
+    if (!row.semantic_anchor) errors.push(`${expectedId} semantic anchor is required`);
+    if (!row.consumer) errors.push(`${expectedId} consumer is required`);
+    if (indexedPaths.has(row.authority_ref)) errors.push(`duplicate Phase authority ref: ${row.authority_ref}`);
+    indexedPaths.add(row.authority_ref);
+    const body = phases[expectedPath];
+    if (!nonEmptyString(body)) {
+      errors.push(`${expectedPath} is missing or empty`);
+      continue;
+    }
+    if (!new RegExp(`^#\\s+Phase\\s+${expectedId}\\b`, "m").test(body)) errors.push(`${expectedPath} must declare Phase ${expectedId}`);
+    for (const heading of ["L0", "L1", "L2"]) {
+      if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
+    }
+    const declaredWriteSet = inlinePaths(fieldValue(body, "Write set") ?? "");
+    if (declaredWriteSet.length === 0) errors.push(`${expectedPath} Write set is missing`);
+    if (!sameIds(declaredWriteSet, row.write_set)) errors.push(`${expectedPath} write set differs from Phase index`);
+    for (const path of declaredWriteSet) {
+      const owner = writeOwners.get(path);
+      if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
+      else writeOwners.set(path, expectedPath);
+    }
+    const dependencyText = fieldValue(body, "Dependency");
+    const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
+    const phaseDependencies = dependency === "none" ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
+    const indexDependencies = row.dependency === "none" ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
+    if (!sameIds(phaseDependencies, indexDependencies)
+        || (dependency !== "none" && phaseDependencies.length === 0)
+        || (row.dependency !== "none" && indexDependencies.length === 0)
+        || phaseDependencies.some((id) => Number(id.slice(1)) >= position + 1)) {
+      errors.push(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
+    }
+    if (!fieldValue(body, "Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
+    const consumer = fieldValue(body, "Consumer")?.replace(/[。；;\s]+$/u, "").trim();
+    if (!consumer || consumer !== row.consumer?.replace(/[。；;\s]+$/u, "").trim()) {
+      errors.push(`${expectedPath} consumer differs from Phase index`);
+    }
+    const command = fieldValue(body, "gate_cmd");
+    const oracle = fieldValue(body, "oracle");
+    if (!hasExecutableCommand(command) || !/^ORACLE-[A-Z0-9-]+/.test(oracle ?? "")) {
+      errors.push(`${expectedPath} requires an executable gate_cmd and oracle`);
+    }
+    if (!fieldValue(body, "STOP") || !fieldValue(body, "Done") || !fieldValue(body, "evidence_path")) {
+      errors.push(`${expectedPath} requires STOP, Done, and evidence_path`);
+    }
+    const frs = identifiers(body, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const acs = identifiers(body, ACCEPTANCE_CRITERION_ID);
+    const l1 = body.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? "";
+    const cards = markdownSections(l1, 3).filter(({ heading }) => /^T\d+\b/.test(heading));
+    if (cards.length === 0) errors.push(`${expectedPath} requires independent ### Tnnn task cards; one-line Tasks is insufficient`);
+    for (const { heading, body: cardBody } of cards) {
+      const taskId = heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1];
+      if (!taskId) {
+        errors.push(`${expectedPath} task card requires stable ### Tnnn — outcome heading`);
+        continue;
+      }
+      if (taskOwners.has(taskId)) errors.push(`${expectedPath} duplicate task card ${taskId} owned by ${taskOwners.get(taskId)}`);
+      else taskOwners.set(taskId, expectedPath);
+      const required = [
+        "Source / FR / AC", "Files / symbols", "Action", "Inputs", "Outputs / failure",
+        "Boundary / DO NOT TOUCH", "Dependency", "Test tier / skill", "Scenario / fixture or service",
+        "RED/GREEN gate_cmd", "expected_exit", "RED target failure", "GREEN oracle",
+        "Evidence", "STOP / recovery", "Coverage limit", "Done",
+      ];
+      const fields = Object.fromEntries(required.map((field) => [field, fieldValue(cardBody, field)]));
+      for (const field of required) {
+        const value = fields[field];
+        if (!value || /^(?:TBD|TODO|待补充|\[|N\/A\s*$)/i.test(value)) {
+          errors.push(`${expectedPath} ${taskId} task card missing concrete ${field}`);
+        }
+      }
+      const cardFrs = identifiers(fields["Source / FR / AC"] ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+      const cardAcs = identifiers(fields["Source / FR / AC"] ?? "", ACCEPTANCE_CRITERION_ID);
+      if (cardFrs.length === 0 || cardAcs.length === 0 || !/\b(?:R|U|PRD|CARD)-[A-Z0-9-]+\b/.test(fields["Source / FR / AC"] ?? "")) {
+        errors.push(`${expectedPath} ${taskId} Source / FR / AC must bind original source, FR, and AC`);
+      }
+      const filePaths = inlinePaths(fields["Files / symbols"] ?? "").filter((path) => /[/.]/.test(path));
+      if (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.includes(path))) {
+        errors.push(`${expectedPath} ${taskId} Files / symbols must name owned write-set paths`);
+      }
+      if (!/\b(?:symbol|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
+        errors.push(`${expectedPath} ${taskId} Files / symbols must name a symbol or explain N/A for non-code files`);
+      }
+      if (!hasExecutableCommand(fields["RED/GREEN gate_cmd"])) errors.push(`${expectedPath} ${taskId} needs one executable RED/GREEN gate_cmd`);
+      if (!/^ORACLE-[A-Z0-9-]+\b/.test(fields["GREEN oracle"] ?? "")) errors.push(`${expectedPath} ${taskId} needs an identifiable GREEN oracle`);
+      const greenOracle = fields["GREEN oracle"]?.match(/^ORACLE-[A-Z0-9-]+\b/)?.[0];
+      const redOracle = fields["RED target failure"]?.match(/\bORACLE-[A-Z0-9-]+\b/)?.[0];
+      if (!greenOracle || redOracle !== greenOracle) errors.push(`${expectedPath} ${taskId} RED oracle must match GREEN oracle`);
+      if (!/(?:assert|断言|expected|预期|nonzero|失败)/i.test(fields["RED target failure"] ?? "")) {
+        errors.push(`${expectedPath} ${taskId} RED target failure must identify the failing assertion`);
+      }
+      if (!/RED[^\n]*\b(?:nonzero|[1-9])\b/i.test(fields.expected_exit ?? "")
+          || !/GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "")) {
+        errors.push(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
+      }
+      if (!/(?:`[^`]+`|\bP\d+\b|\bT\d+\b|\bnone\b)/i.test(fields.Dependency ?? "")) {
+        errors.push(`${expectedPath} ${taskId} Dependency must identify an existing prerequisite or none`);
+      }
+      taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
+    }
+    const taskIds = cards.map(({ heading }) => heading.match(/^(T\d{3,})\b/)?.[1]).filter(Boolean);
+    phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(declaredWriteSet), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
+  }
+  for (const path of Object.keys(phases)) {
+    if (!indexedPaths.has(path)) errors.push(`unindexed Phase file: ${path}`);
+  }
+  for (const [position, card] of taskCards.entries()) {
+    const refs = identifiers(card.dependency, /\b[PT]\d+\b/g);
+    if (refs.length === 0 && !/\bnone\b/i.test(card.dependency)) {
+      errors.push(`${card.phase}/${card.id} dependency must be none or identify a Phase/Task`);
+    }
+    for (const ref of refs) {
+      if (ref.startsWith("P") && Number(ref.slice(1)) >= Number(card.phase.slice(1))) {
+        errors.push(`${card.phase}/${card.id} dependency ${ref} must be an earlier Phase`);
+      }
+      if (ref.startsWith("T") && (!taskOwners.has(ref) || taskCards.findIndex((task) => task.id === ref) >= position)) {
+        errors.push(`${card.phase}/${card.id} dependency ${ref} must be an existing earlier task`);
+      }
+    }
+  }
+  const acceptedFrs = [...new Set([...spec.matchAll(/^-\s+\*\*(FR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\*\*/gm)].map((match) => match[1]))];
+  const declaredAcs = [...new Set([...spec.matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\b/gm)].map((match) => match[1]))];
+  const dispositions = acceptanceCriterionDispositions(spec);
+  const activeAcs = new Set(dispositions.active_ids);
+  const acceptedAcs = declaredAcs.filter((id) => activeAcs.has(id));
+  const deferredAcs = declaredAcs.filter((id) => dispositions.deferred_ids.includes(id));
+  for (const card of taskCards) {
+    for (const id of card.frs) if (!acceptedFrs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown FR: ${id}`);
+    for (const id of card.acs) if (!declaredAcs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
+  }
+  const design = markdownSections(spec, 2).find(({ heading }) => /^(?:实现设计（全局权威）|Implementation Design)$/i.test(heading));
+  if (!design) errors.push("spec.md requires Implementation Design (全局权威)");
+  const designSections = design ? markdownSections(`## ${design.heading}\n${design.body}`, 3) : [];
+  const designBody = Object.fromEntries(designSections.map(({ heading, body }) => [heading, body]));
+  for (const heading of ["Code Anchors", "Interfaces and Failure Semantics", "Requirement-to-Task Trace", "Global Verification Strategy"]) {
+    if (!designBody[heading] || placeholderOrTemplateNoise(designBody[heading])) errors.push(`spec.md Implementation Design requires concrete ${heading}`);
+  }
+  if (designBody["Code Anchors"] && !/`[^`\n]*[/.][^`\n]*`/.test(designBody["Code Anchors"])) {
+    errors.push("spec.md Code Anchors must identify a concrete path");
+  }
+  const traceLines = (designBody["Requirement-to-Task Trace"] ?? "").split(/\r?\n/).filter((line) => /^\s*\|/.test(line));
+  const traceRows = traceLines.filter((line) => /\b(?:R|U|PRD|CARD)-[A-Z0-9-]+\b/.test(line)
+    && /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/.test(line)
+    && identifiers(line, ACCEPTANCE_CRITERION_ID).length > 0
+    && /\bP\d+\/T\d{3,}\b/.test(line)
+    && /\bORACLE-[A-Z0-9-]+\b/.test(line));
+  if (traceRows.length === 0) errors.push("spec.md Requirement-to-Task Trace needs source → FR → AC → Phase/Task → oracle rows");
+  for (const id of acceptedFrs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing FR: ${id}`);
+  for (const id of acceptedAcs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing AC: ${id}`);
+  for (const card of taskCards) {
+    const trace = traceRows.filter((row) => row.includes(`${card.phase}/${card.id}`));
+    if (trace.length === 0 || card.frs.some((id) => !trace.some((row) => row.includes(id)))
+        || card.acs.some((id) => !trace.some((row) => row.includes(id)))) {
+      errors.push(`spec.md Requirement-to-Task Trace is missing ${card.phase}/${card.id} FR/AC binding`);
+    }
+    const oracle = card.oracle?.match(/^ORACLE-[A-Z0-9-]+\b/)?.[0];
+    if (oracle && !trace.some((row) => row.includes(oracle))) {
+      errors.push(`spec.md Requirement-to-Task Trace ${card.phase}/${card.id} oracle differs from task card`);
+    }
+  }
+  if (designBody["Global Verification Strategy"] && !/`(?:npx|npm|pnpm|yarn|bun|node|python|pytest|go|cargo|make|bash|sh|git|\.\/)[^`\n]+`/.test(designBody["Global Verification Strategy"])) {
+    errors.push("spec.md Global Verification Strategy requires a concrete command");
+  }
+  const coveredFrs = [...new Set(taskCards.flatMap((card) => card.frs))];
+  const coveredAcs = [...new Set(taskCards.flatMap((card) => card.acs))].filter((id) => acceptedAcs.includes(id));
+  for (const id of acceptedFrs) if (!coveredFrs.includes(id)) errors.push(`FR has no executable Phase task coverage: ${id}`);
+  for (const id of acceptedAcs) if (!coveredAcs.includes(id)) errors.push(`AC has no executable Phase task coverage: ${id}`);
+  if (acceptedFrs.length === 0 || acceptedAcs.length === 0) errors.push("spec.md requires accepted FR and AC definitions");
+  const facts = Object.freeze({
+    phase_count: phaseRows.length,
+    task_count: [...new Set(phaseRows.flatMap((row) => row.task_ids))].length,
+    phase_rows: Object.freeze(phaseRows),
+    fr_coverage: Object.freeze({ accepted_count: acceptedFrs.length, covered_count: acceptedFrs.filter((id) => coveredFrs.includes(id)).length, accepted_ids: Object.freeze(acceptedFrs), covered_ids: Object.freeze(coveredFrs) }),
+    ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
+    dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|contiguous|duplicate Phase/.test(error)) }),
+    command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && !errors.some((error) => /task card|gate_cmd|oracle|RED target|expected_exit/i.test(error)) }),
+  });
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
+}
+
+export function validatePlanTaskContract({
+  spec, plan, tasks, completionEvidence,
+} = {}) {
+  const errors = [];
+  for (const [name, value] of Object.entries({ spec, plan, tasks })) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
+  }
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
+  const planVersion = templateVersion(plan);
+  const tasksVersion = templateVersion(tasks);
+  const pointerRows = executionIndexRows(tasks);
+  const pointerMode = planVersion === PLAN_TASK_V4 && pointerRows !== null && taskBlocks(tasks).length === 0;
+  const resolvedTasksVersion = pointerMode && tasksVersion === null ? planVersion : tasksVersion;
+  const isPlanTask = SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(planVersion)
+    || SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(resolvedTasksVersion);
+  const templateLabel = planVersion ?? resolvedTasksVersion ?? "plan-task";
+  for (const [label, version] of [["plan", planVersion], ["tasks", resolvedTasksVersion]]) {
+    if (version !== null && !SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(version)) {
+      errors.push(`${label} uses unsupported explicit template version: ${version}`);
+    }
+  }
+  if (isPlanTask && (planVersion !== resolvedTasksVersion || !SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(planVersion))) {
+    errors.push("plan and tasks must use the same supported plan-task template version");
+  }
+  if (isPlanTask && (placeholderOrTemplateNoise(plan) || placeholderOrTemplateNoise(tasks))) {
+    errors.push("generated plan/tasks must not retain placeholders, template comments, or filler");
+  }
+  if (isPlanTask) {
+    errors.push(...markdownStructureErrors(plan, "plan"), ...markdownStructureErrors(tasks, "tasks"));
+  }
+
+  const planSections = markdownSections(plan, 2);
+  const findPlanSection = (name) => planSections.find(({ heading }) =>
+    PLAN_SECTION_ALIASES[name].some((pattern) => pattern.test(heading)));
+  for (const heading of isPlanTask ? PLAN_SECTIONS_V3 : PLAN_SECTIONS) {
+    const section = findPlanSection(heading);
+    const body = section?.body ?? (heading === "Rollback and Recovery" && /风险与回滚/.test(plan) ? "declared per Phase" : undefined);
+    if (body === undefined || body.trim() === "") errors.push(`plan section missing or empty: ${heading}`);
+  }
+  const constitution = findPlanSection("Constitution Check")?.body ?? "";
+  const constitutionIds = identifiers(constitution, /\b(?:F(?:11|10|[1-9])|Q[1-3]|S[1-8])\b/g);
+  if (isPlanTask) {
+    const binding = parseConstitutionBinding(plan);
+    if (!binding || binding.artifact_kind !== "constitution"
+        || typeof binding.ref !== "string" || binding.ref.trim() === ""
+        || !SHA256_HEX.test(binding.hash ?? "") || typeof binding.id !== "string"
+        || typeof binding.version !== "string" || !Number.isInteger(binding.clause_count)) {
+      errors.push("Constitution Check requires a complete ref/hash/id/version/clause_count binding");
+    } else {
+      const expectedClauseCount = CURRENT_CONSTITUTION_CLAUSE_IDS.length;
+      const missingClauseIds = CURRENT_CONSTITUTION_CLAUSE_IDS.filter((id) => !constitutionIds.includes(id));
+      if (binding.clause_count !== expectedClauseCount
+          || constitutionIds.length !== expectedClauseCount
+          || missingClauseIds.length > 0) {
+        errors.push(
+          `Constitution Check must preserve the current clause snapshot (${CURRENT_CONSTITUTION_CLAUSE_IDS.join(", ")}); `
+          + `binding declares ${binding.clause_count}, document contains ${constitutionIds.length}, `
+          + `missing ${missingClauseIds.join(", ") || "none"}`,
+        );
+      }
+    }
+    const quickRead = findPlanSection("Quick Read")?.body ?? "";
+    if (!/^\s*-\s+\*\*Non-goals\*\*\s*[:：]/mi.test(quickRead)
+        || !/来源\s*[:：]|source\s*[:：]/i.test(quickRead)) {
+      errors.push("plan Non-goals must preserve accepted source refs");
+    }
+    if (/^##\s+Verification Mapping\s*$/mi.test(plan)) {
+      errors.push(`${templateLabel} uses one Requirement and Verification Traceability authority`);
+    }
+    const globalConstraints = markdownSections(
+      `## Technical Context\n${findPlanSection("Technical Context")?.body ?? ""}`,
+      3,
+    ).find(({ heading }) => /^Global Constraints$/i.test(heading));
+    if (!globalConstraints || globalConstraints.body.trim() === "") {
+      errors.push("Technical Context is missing a non-empty Global Constraints subsection");
+    }
+    const decisions = markdownSections(
+      `## Technical Decisions\n${findPlanSection("Technical Decisions")?.body ?? ""}`,
+      3,
+    ).filter(({ heading }) => /^DEC-[A-Z0-9]+/i.test(heading));
+    for (const decision of decisions) {
+      const selected = fieldValue(decision.body, "Selected");
+      if (!selected) {
+        errors.push(`${decision.heading} is missing Selected`);
+        continue;
+      }
+      if (/\bnew\b/i.test(selected)) {
+        for (const question of ["F10 real threat", "F10 existing cover", "F10 bypassable", "F10 maintenance cost"]) {
+          if (!fieldValue(decision.body, question)) errors.push(`${decision.heading} new mechanism is missing ${question}`);
+        }
+      }
+    }
+    const rollback = findPlanSection("Rollback and Recovery")?.body ?? "";
+    const riskHandoff = markdownSections(
+      `## Rollback and Recovery\n${rollback}`,
+      3,
+    ).find(({ heading }) => /^Engineering Risk Handoff$/i.test(heading))?.body;
+    if (!riskHandoff) errors.push("Rollback and Recovery is missing Engineering Risk Handoff");
+    for (const field of [
+      "Affected IDs", "Trigger", "Consequence", "Mitigation or STOP",
+      "Handling Stage", "Verification",
+    ]) {
+      if (!riskHandoff || !fieldValue(riskHandoff, field)) {
+        errors.push(`Engineering Risk Handoff is missing ${field}`);
+      }
+    }
+  } else if (constitutionIds.length !== CURRENT_CONSTITUTION_CLAUSE_IDS.length) {
+    errors.push(`Constitution Check must enumerate all ${CURRENT_CONSTITUTION_CLAUSE_IDS.length} clauses; found ${constitutionIds.length}`);
+  }
+
+  const planPhaseRows = phaseRows(plan, isPlanTask ? PHASE_FIELDS_V3 : PHASE_FIELDS, errors, "plan");
+
+  if (pointerMode) {
+    const taskRows = pointerPlanTaskRows({ plan, planPhaseRows, pointerRows, errors });
+    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseDeclaredWritePaths(row.fields.Files)]));
+    const globalUnion = globalChangePaths(findPlanSection("File Boundary")?.body);
+    for (const file of phaseUnion) if (!globalUnion.has(file)) errors.push(`global File Boundary is missing Phase write-set file: ${file}`);
+    for (const file of globalUnion) if (!phaseUnion.has(file)) errors.push(`global File Boundary adds a file outside Phase write sets: ${file}`);
+    const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const acceptedAcs = activeAcceptanceCriterionIds(spec);
+    const traceability = findPlanSection("Requirement and Verification Traceability")?.body ?? "";
+    const referencedFrs = identifiers(traceability, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const referencedAcs = identifiers(traceability, ACCEPTANCE_CRITERION_ID);
+    if (acceptedFrs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted FR`);
+    if (acceptedAcs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted AC`);
+    for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no plan traceability: ${id}`);
+    for (const id of referencedFrs) if (!acceptedFrs.includes(id)) errors.push(`plan traceability references unknown FR: ${id}`);
+    for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no plan traceability: ${id}`);
+    for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`plan traceability references unknown AC: ${id}`);
+    const commandOracleValid = taskRows.length > 0 && taskRows.every((row) =>
+      hasExecutableCommand(row.fields.gate_cmd) && /\bORACLE-[A-Z0-9-]+\b/.test(row.fields.oracle));
+    const facts = Object.freeze({
+      template_version: templateLabel,
+      phase_count: planPhaseRows.length,
+      task_count: taskRows.length,
+      phase_rows: Object.freeze(planPhaseRows.map((row) => Object.freeze({ phase: row.phase, fields: Object.freeze(row.fields) }))),
+      task_rows: taskRows,
+      fr_coverage: Object.freeze({
+        accepted_count: acceptedFrs.length,
+        covered_count: acceptedFrs.filter((id) => referencedFrs.includes(id)).length,
+        accepted_ids: Object.freeze(acceptedFrs),
+        covered_ids: Object.freeze(referencedFrs.filter((id) => acceptedFrs.includes(id))),
+      }),
+      ac_coverage: Object.freeze({
+        accepted_count: acceptedAcs.length,
+        covered_count: acceptedAcs.filter((id) => referencedAcs.includes(id)).length,
+        accepted_ids: Object.freeze(acceptedAcs),
+        covered_ids: Object.freeze(referencedAcs.filter((id) => acceptedAcs.includes(id))),
+      }),
+      dependency_validation: Object.freeze({ valid: taskRows.length > 0 && !cycleIn(taskRows) }),
+      command_oracle_checks: Object.freeze({ valid: commandOracleValid }),
+      slice_advisory: derivePlanTaskSlicingFromRows({ planPhaseRows, taskRows }),
+      task_completion: Object.freeze({
+        total_count: 0,
+        claimed_completed_count: 0,
+        completed_count: 0,
+        pending_ids: Object.freeze([]),
+        invalid_completed_ids: Object.freeze([]),
+        tasks: Object.freeze([]),
+      }),
+      source_coverage: Object.freeze({ source_count: 0, source_keys: Object.freeze([]), missing_sources: Object.freeze([]), orphan_sources: Object.freeze([]), reverse_missing: Object.freeze([]) }),
+    });
+    return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
+  }
+
+  const parsedTasks = taskBlocks(tasks);
+  if (parsedTasks.length === 0) errors.push("tasks document has no task blocks");
+  const headingIds = parsedTasks.map(({ heading_id }) => heading_id);
+  const duplicateIds = headingIds.filter((id, index) => headingIds.indexOf(id) !== index);
+  if (duplicateIds.length) errors.push(`duplicate task ID: ${[...new Set(duplicateIds)].join(", ")}`);
+  const activeAcSet = new Set(activeAcceptanceCriterionIds(spec));
+  const taskRows = parsedTasks.map((task, index) => {
+    for (const field of isPlanTask ? TASK_FIELDS_V3 : TASK_FIELDS) {
+      if (!(field in task.fields) || task.fields[field].trim() === "") errors.push(`${task.heading_id ?? `task ${index + 1}`} is missing ${field}`);
+    }
+    if (task.fields.ID && task.fields.ID !== task.heading_id) errors.push(`task heading/ID mismatch: ${task.heading_id} != ${task.fields.ID}`);
+    if (task.fields.gate_cmd && !hasExecutableCommand(task.fields.gate_cmd)) errors.push(`${task.heading_id} gate_cmd is not an executable command`);
+    if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
+    if (tasksVersion === PLAN_TASK_V4 && /\bFR-TEST-001\b/.test(spec)) {
+      const profileDeclaration = `${task.fields["test tier / test method"] ?? ""} ${task.fields["runtime profile"] ?? ""}`;
+      const runtimeProfile = profileDeclaration.match(/\bruntime\s+profile\s*[=:：]\s*(inner|phase|aggregate)\b/i)?.[1]?.toLowerCase();
+      if (!runtimeProfile) errors.push(`${task.heading_id} runtime profile must declare inner, phase, or aggregate`);
+      else if (!/\b(?:ceiling|上限)\s*[=:：]\s*\d+\s*(?:ms|s|秒)\b/i.test(profileDeclaration)) errors.push(`${task.heading_id} runtime profile must declare a duration ceiling`);
+      const permissions = String(task.fields["runtime permissions"] ?? "");
+      for (const capability of ["network", "db", "filesystem", "subprocess", "environment"]) {
+        if (!new RegExp(`\\b${capability}\\s*=` , "i").test(permissions)) errors.push(`${task.heading_id} runtime permissions missing ${capability}`);
+      }
+    }
+    const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
+    const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)
+      .filter((id) => activeAcSet.has(id));
+    return Object.freeze({
+      id: task.heading_id,
+      order: index,
+      phase: task.phase,
+      fields: Object.freeze({ ...task.fields }),
+      dependencies: Object.freeze(dependencies),
+      frs: Object.freeze(frs),
+      acs: Object.freeze(acs),
+    });
+  });
+  const knownTasks = new Set(taskRows.map(({ id }) => id));
+  for (const task of taskRows) {
+    for (const dependency of task.dependencies) {
+      if (!knownTasks.has(dependency)) errors.push(`${task.id} has unknown dependency ${dependency}`);
+      else if (isPlanTask && taskRows.find(({ id }) => id === dependency).order >= task.order) {
+        errors.push(`${task.id} dependency ${dependency} must appear before its consumer`);
+      }
+    }
+  }
+  if (cycleIn(taskRows)) errors.push("task dependency graph contains a cycle");
+
+  if (isPlanTask) {
+    const tasksPhaseRows = phaseRows(tasks, PHASE_FIELDS_V3, errors, "tasks");
+    if (planPhaseRows.length !== tasksPhaseRows.length) {
+      errors.push("plan/tasks Phase counts must match");
+    }
+    for (const [index, planPhase] of planPhaseRows.entries()) {
+      const taskPhase = tasksPhaseRows[index];
+      if (!taskPhase || taskPhase.phase !== planPhase.phase) {
+        errors.push(`tasks Phase must match plan Phase at position ${index + 1}`);
+        continue;
+      }
+      if (taskPhase.fields.Files !== planPhase.fields.Files) {
+        errors.push(`${planPhase.phase} Files must be copied byte-for-byte from plan to tasks`);
+      }
+    }
+    const planPhaseByName = new Map(planPhaseRows.map((row) => [row.phase, row]));
+    const taskPathsById = new Map();
+    for (const task of taskRows) {
+      if (task.fields.Phase !== task.phase) errors.push(`${task.id} Phase field must match its owning Phase heading`);
+      const allowed = phaseChangePaths(planPhaseByName.get(task.phase)?.fields.Files);
+      const taskPaths = new Set([
+        ...inlinePaths(task.fields["精确文件"]),
+        ...boundaryPaths(task.fields.boundary),
+      ]);
+      if (taskPaths.size === 0) errors.push(`${task.id} must declare at least one exact backticked file`);
+      taskPathsById.set(task.id, taskPaths);
+      for (const file of taskPaths) {
+        if (!allowed.has(file)) errors.push(`${task.id} file/boundary is outside ${task.phase} NEW/MODIFY: ${file}`);
+      }
+    }
+    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseWritePaths(row.fields.Files)]));
+    const globalUnion = globalChangePaths(findPlanSection("File Boundary")?.body);
+    for (const file of phaseUnion) {
+      if (!globalUnion.has(file)) errors.push(`global File Boundary is missing Phase NEW/MODIFY file: ${file}`);
+    }
+    for (const file of globalUnion) {
+      if (!phaseUnion.has(file)) errors.push(`global File Boundary adds a file outside Phase NEW/MODIFY: ${file}`);
+    }
+    for (const phase of planPhaseRows) {
+      for (const file of phaseChangePaths(phase.fields.Files)) {
+        const owners = taskRows.filter((task) =>
+          task.phase === phase.phase && taskPathsById.get(task.id)?.has(file));
+        if (owners.length === 0) errors.push(`${phase.phase} planned file has no owning task: ${file}`);
+      }
+    }
+    for (let left = 0; left < taskRows.length; left += 1) {
+      if (!/(?:^|\s)(?:是|\[P\]|yes)(?:\s|$)/i.test(taskRows[left].fields.并行 ?? "")) continue;
+      const leftFiles = taskPathsById.get(taskRows[left].id) ?? new Set();
+      for (let right = left + 1; right < taskRows.length; right += 1) {
+        if (taskRows[right].phase !== taskRows[left].phase
+            || !/(?:^|\s)(?:是|\[P\]|yes)(?:\s|$)/i.test(taskRows[right].fields.并行 ?? "")) continue;
+        const overlap = [...(taskPathsById.get(taskRows[right].id) ?? [])].filter((file) => leftFiles.has(file));
+        if (overlap.length) errors.push(`parallel tasks ${taskRows[left].id}/${taskRows[right].id} overlap files: ${overlap.join(", ")}`);
+      }
+    }
+    for (const task of taskRows) {
+      const roleValue = task.fields.verification_role;
+      const role = ["RED", "GREEN"].includes(roleValue)
+        ? roleValue
+        : nAWithReason(roleValue, "(?:non-behavior|非行为变更)") ? "N/A" : null;
+      if (!role) errors.push(`${task.id} verification_role must be RED, GREEN, or N/A — non-behavior change: reason`);
+      if (role === "RED" && (!/^-?\d+$/.test(task.fields.expected_exit ?? "") || Number(task.fields.expected_exit) === 0)) {
+        errors.push(`${task.id} RED expected_exit must be a non-zero integer`);
+      }
+      if (role === "GREEN" && task.fields.expected_exit !== "0") errors.push(`${task.id} GREEN expected_exit must be 0`);
+      if (role === "N/A") {
+        if (!nAWithReason(task.fields.paired_task)) errors.push(`${task.id} non-behavior task paired_task requires N/A — reason`);
+        if (task.fields.expected_exit !== "0") errors.push(`${task.id} non-behavior task expected_exit must be 0`);
+      }
+      if (role === "RED" || role === "GREEN") {
+        const pair = taskRows.find(({ id }) => id === task.fields.paired_task);
+        const expectedRole = role === "RED" ? "GREEN" : "RED";
+        if (!pair || pair.fields.verification_role !== expectedRole || pair.fields.paired_task !== task.id) {
+          errors.push(`${task.id} must have a reciprocal ${expectedRole} paired_task`);
+        } else {
+          if (normalizedCommand(task.fields.gate_cmd) !== normalizedCommand(pair.fields.gate_cmd)) {
+            errors.push(`${task.id}/${pair.id} RED/GREEN must use the same gate_cmd`);
+          }
+          const taskOracle = oracleIdentity(task.fields.oracle);
+          const pairOracle = oracleIdentity(pair.fields.oracle);
+          if (!taskOracle || taskOracle !== pairOracle) {
+            errors.push(`${task.id}/${pair.id} RED/GREEN must use the same oracle identity`);
+          }
+          if (task.phase !== pair.phase) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same Phase`);
+          if (!sameIds(task.frs, pair.frs)) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same FR IDs`);
+          if (!sameIds(task.acs, pair.acs)) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same AC IDs`);
+          if (role === "RED" && !pair.dependencies.includes(task.id)) {
+            errors.push(`${pair.id} GREEN must depend on ${task.id} RED`);
+          }
+          if (role === "RED" && task.order >= pair.order) errors.push(`${task.id} RED must appear before ${pair.id} GREEN`);
+        }
+      }
+    }
+  } else {
+    const redIndexes = taskRows.filter((task) => /\bRED\b/i.test(parsedTasks[task.order].heading) && Number(task.fields.expected_exit) !== 0).map(({ order }) => order);
+    const greenIndexes = taskRows.filter((task) => /\bGREEN\b/i.test(parsedTasks[task.order].heading) && task.fields.expected_exit === "0").map(({ order }) => order);
+    if (redIndexes.length === 0 || greenIndexes.length === 0 || Math.min(...redIndexes) >= Math.max(...greenIndexes)) {
+      errors.push("behavior-changing work must show explicit RED before GREEN");
+    }
+  }
+
+  const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec);
+  if (isPlanTask && acceptedFrs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted FR`);
+  if (isPlanTask && acceptedAcs.length === 0) errors.push(`${templateLabel} spec must contain at least one accepted AC`);
+  const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
+  const referencedAcs = [...new Set(taskRows.flatMap(({ acs }) => acs))];
+  for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
+  for (const id of referencedFrs) if (!acceptedFrs.includes(id)) errors.push(`task references unknown FR: ${id}`);
+  for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
+  for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
+
+  const sliceAdvisory = derivePlanTaskSlicingFromRows({ planPhaseRows, taskRows });
+  const completionTasks = parsedTasks.map((task) => taskCompletionFact(task, completionEvidence));
+  const facts = Object.freeze({
+    template_version: isPlanTask ? templateLabel : "legacy-v1",
+    phase_count: planPhaseRows.length,
+    task_count: taskRows.length,
+    phase_rows: Object.freeze(planPhaseRows.map((row) => Object.freeze({
+      phase: row.phase,
+      fields: Object.freeze(row.fields),
+    }))),
+    task_rows: Object.freeze(taskRows),
+    fr_coverage: Object.freeze({
+      accepted_count: acceptedFrs.length,
+      covered_count: acceptedFrs.filter((id) => referencedFrs.includes(id)).length,
+      accepted_ids: Object.freeze(acceptedFrs),
+      covered_ids: Object.freeze(referencedFrs.filter((id) => acceptedFrs.includes(id))),
+    }),
+    ac_coverage: Object.freeze({
+      accepted_count: acceptedAcs.length,
+      covered_count: acceptedAcs.filter((id) => referencedAcs.includes(id)).length,
+      accepted_ids: Object.freeze(acceptedAcs),
+      covered_ids: Object.freeze(referencedAcs.filter((id) => acceptedAcs.includes(id))),
+    }),
+    dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|cycle/.test(error)) }),
+    command_oracle_checks: Object.freeze({
+      valid: !errors.some((error) => /gate_cmd|expected_exit|RED before GREEN|oracle|paired_task|RED\/GREEN|GREEN must depend/.test(error)),
+    }),
+    slice_advisory: sliceAdvisory,
+    task_completion: Object.freeze({
+      total_count: completionTasks.length,
+      claimed_completed_count: completionTasks.filter(({ claimed_complete }) => claimed_complete).length,
+      completed_count: completionTasks.filter(({ complete }) => complete).length,
+      pending_ids: Object.freeze(completionTasks.filter(({ complete }) => !complete).map(({ id }) => id)),
+      invalid_completed_ids: Object.freeze(completionTasks.filter(({ claimed_complete, complete }) => claimed_complete && !complete).map(({ id }) => id)),
+      tasks: Object.freeze(completionTasks),
+    }),
+    source_coverage: sourceCoverageFacts({
+      spec, plan, tasks, acceptedFrs, acceptedAcs, taskRows,
+    }),
+  });
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
+}
+
+const E2E_SCOPES = new Set(["ui", "fullstack", "high_risk_user_visible", "not_required"]);
+
+function taskFieldText(value) {
+  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1").trim();
+}
+
+function concreteAcceptanceText(value) {
+  return typeof value === "string"
+    && value.trim() !== ""
+    && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+}
+
+function acceptanceExecutionErrors(scenario, label) {
+  const tier = taskFieldText(scenario?.tier).toLowerCase();
+  if (tier === "browser") {
+    return scenario?.execution === undefined
+      ? []
+      : [`${label}.execution is not allowed for browser; use the browser-QA contract`];
+  }
+  if (tier !== "command" && tier !== "service") return [];
+  const execution = scenario?.execution;
+  if (!execution || typeof execution !== "object" || Array.isArray(execution)) {
+    return [`${label}.execution is required for ${tier}`];
+  }
+  const keys = tier === "command"
+    ? ["command", "args", "timeout_ms"]
+    : ["module_ref", "export_name", "input", "timeout_ms"];
+  if (Object.keys(execution).some((key) => !keys.includes(key))
+      || keys.some((key) => !Object.hasOwn(execution, key))
+      || !Number.isSafeInteger(execution.timeout_ms)
+      || execution.timeout_ms <= 0) {
+    return [`${label}.execution is invalid for ${tier}`];
+  }
+  if (tier === "command"
+      && (!concreteAcceptanceText(execution.command)
+        || !Array.isArray(execution.args)
+        || execution.args.some((arg) => typeof arg !== "string"))) {
+    return [`${label}.execution is invalid for command`];
+  }
+  if (tier === "service"
+      && (!concreteAcceptanceText(execution.module_ref)
+        || execution.module_ref.startsWith("/")
+        || execution.module_ref.split(/[\\/]/).includes("..")
+        || !concreteAcceptanceText(execution.export_name))) {
+    return [`${label}.execution is invalid for service`];
+  }
+  return [];
+}
+
+function parseE2eDecisionRefs(value, { knownDecisionRefs = null } = {}) {
+  const raw = taskFieldText(value);
+  if (raw === "") return { refs: [], errors: ["e2e_decision_refs is required for high_risk_user_visible"] };
+  let refs;
+  try { refs = JSON.parse(raw); } catch { return { refs: [], errors: ["e2e_decision_refs must be a JSON array"] }; }
+  if (!Array.isArray(refs) || refs.length === 0 || refs.some((ref) => typeof ref !== "string" || !/^D(?:-\d{3}|\d+)$/.test(ref))) {
+    return { refs: [], errors: ["e2e_decision_refs must be a non-empty D-xxx or legacy D<number> JSON array"] };
+  }
+  if (new Set(refs).size !== refs.length) return { refs: [], errors: ["e2e_decision_refs must not contain duplicates"] };
+  const errors = [];
+  // Legacy compact fixtures retain the former policy contract. Current
+  // materials use explicit D-xxx references and are checked against the
+  // current decision log instead of hard-coded D6/D7 identities.
+  if (refs.every((ref) => /^D\d+$/.test(ref))) {
+    for (const required of ["D6", "D7"]) if (!refs.includes(required)) errors.push(`e2e_decision_refs must include ${required}`);
+  }
+  if (knownDecisionRefs) {
+    for (const ref of refs) if (!knownDecisionRefs.has(ref)) errors.push(`e2e_decision_refs references unknown ${ref}`);
+  }
+  return { refs, errors };
+}
+
+function parseE2eRiskDecisionRef(value, { knownDecisionRefs = null } = {}) {
+  const ref = taskFieldText(value);
+  if (!/^D(?:-\d{3}|\d+)$/.test(ref)) return { ref: null, errors: ["e2e_risk_decision_ref must be a D-xxx or legacy D<number> task risk decision"] };
+  const errors = [];
+  if (["D6", "D7"].includes(ref)) errors.push("e2e_risk_decision_ref must be a task risk decision, not D6 or D7 policy");
+  if (knownDecisionRefs && !knownDecisionRefs.has(ref)) errors.push(`e2e_risk_decision_ref references unknown ${ref}`);
+  return { ref, errors };
+}
+
+function structuredDecisionRefs(markdown) {
+  const refs = new Set();
+  if (typeof markdown !== "string" || markdown.trim() === "") return refs;
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^###\s+(D(?:-\d{3}|\d+))\b/);
+    const tableRow = line.match(/^\|\s*(D(?:-\d{3}|\d+))\s*\|/);
+    if (heading) refs.add(heading[1]);
+    if (tableRow) refs.add(tableRow[1]);
+  }
+  return refs;
+}
+
+function decisionSection(decisionLog, ref) {
+  if (typeof decisionLog !== "string" || decisionLog.trim() === "") return null;
+  const heading = new RegExp(`^###\\s+${ref}\\b[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3}\\s+|(?![\\s\\S]))`, "m");
+  return decisionLog.match(heading)?.[1] ?? null;
+}
+
+function parseHighRiskDecisionFact(decisionLog, ref) {
+  const section = decisionSection(decisionLog, ref);
+  if (section === null) return { errors: [`${ref} is missing from current decision-log`] };
+  const matches = [...section.matchAll(/\*\*high_risk_fact\*\*[：:]\s*`([^`]+)`/gi)];
+  if (matches.length !== 1) return { errors: [`${ref} must contain exactly one structured high_risk_fact`] };
+  let fact;
+  try { fact = JSON.parse(matches[0][1]); } catch { return { errors: [`${ref} high_risk_fact must be JSON`] }; }
+  if (!fact || typeof fact !== "object" || Array.isArray(fact)
+      || Object.keys(fact).some((key) => !new Set(["classification", "basis"]).has(key))) {
+    return { errors: [`${ref} high_risk_fact has unsupported fields`] };
+  }
+  if (fact.classification !== "high_risk_user_visible") {
+    return { errors: [`${ref} high_risk_fact classification must be high_risk_user_visible`] };
+  }
+  if (!new Set(["user_declaration", "three_inputs"]).has(fact.basis)) {
+    return { errors: [`${ref} high_risk_fact basis must be user_declaration or three_inputs`] };
+  }
+  return { errors: [] };
+}
+
+function planTaskTemplateVersion(tasks) {
+  return tasks.match(/^\s*-\s*\*\*Template version\*\*[：:]\s*`?([^`\n]+)`?\s*$/m)?.[1].trim() ?? null;
+}
+
+function acceptanceE2eScope({ row, scenarios = [], knownDecisionRefs = null, specDecisionRefs = null, decisionLog = null }) {
+  const hasField = (name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const hasScope = hasField("e2e_scope");
+  const hasDecisionRefs = hasField("e2e_decision_refs");
+  const hasRiskDecisionRef = hasField("e2e_risk_decision_ref");
+  if (!hasScope && !hasDecisionRefs && !hasRiskDecisionRef) return { scope: null, decisionRefs: [], riskDecisionRef: null, errors: [] };
+  const errors = [];
+  const scope = taskFieldText(row.fields.e2e_scope).toLowerCase();
+  if (!hasScope || !E2E_SCOPES.has(scope)) {
+    errors.push("e2e_scope must be ui, fullstack, high_risk_user_visible, or not_required");
+    return { scope, decisionRefs: [], riskDecisionRef: null, errors };
+  }
+
+  let decisionRefs = [];
+  let riskDecisionRef = null;
+  if (scope === "high_risk_user_visible") {
+    const parsed = parseE2eDecisionRefs(row.fields.e2e_decision_refs, { knownDecisionRefs });
+    decisionRefs = parsed.refs;
+    errors.push(...parsed.errors);
+    const risk = parseE2eRiskDecisionRef(row.fields.e2e_risk_decision_ref, { knownDecisionRefs: specDecisionRefs });
+    riskDecisionRef = risk.ref;
+    errors.push(...risk.errors);
+    if (riskDecisionRef !== null) errors.push(...parseHighRiskDecisionFact(decisionLog, riskDecisionRef).errors);
+  } else if (hasDecisionRefs && taskFieldText(row.fields.e2e_decision_refs) !== "") {
+    errors.push(`${scope} e2e_scope must not declare e2e_decision_refs`);
+  } else if (hasRiskDecisionRef && taskFieldText(row.fields.e2e_risk_decision_ref) !== "") {
+    errors.push(`${scope} e2e_scope must not declare e2e_risk_decision_ref`);
+  }
+
+  const uiScope = taskFieldText(row.fields.ui_scope).toLowerCase();
+  const tiers = new Set(scenarios.map((scenario) => taskFieldText(scenario?.tier).toLowerCase()));
+  const requireTier = (tier) => {
+    if (!tiers.has(tier)) errors.push(`${scope} e2e_scope requires acceptance_data tier=${tier}`);
+  };
+  if (scope === "ui") {
+    if (uiScope !== "ui") errors.push("ui e2e_scope requires ui_scope=ui");
+    requireTier("browser");
+  } else if (scope === "fullstack") {
+    if (uiScope !== "fullstack") errors.push("fullstack e2e_scope requires ui_scope=fullstack");
+    requireTier("browser");
+    requireTier("service");
+  } else if (scope === "high_risk_user_visible") {
+    if (!new Set(["non_ui", "ui", "fullstack"]).has(uiScope)) {
+      errors.push("high_risk_user_visible e2e_scope requires ui_scope=non_ui|ui|fullstack");
+    } else if (uiScope === "non_ui") {
+      requireTier("service");
+    } else if (uiScope === "ui") {
+      requireTier("browser");
+    } else {
+      requireTier("browser");
+      requireTier("service");
+    }
+  } else if (uiScope !== "non_ui") {
+    errors.push("not_required e2e_scope requires ui_scope=non_ui");
+  } else if (tiers.has("browser")) {
+    // A non-UI task may still declare service/command acceptance checks, but a
+    // browser scenario is an explicit UI execution contract. Keeping it on a
+    // `not_required` card silently reintroduces an external UI dogfood path
+    // that the scope declaration says is out of scope.
+    errors.push("not_required e2e_scope cannot declare browser acceptance");
+  }
+  return { scope, decisionRefs, riskDecisionRef, errors };
+}
+
+// `not_required` is a positive non-UI declaration, not a caller-controlled
+// escape hatch.  The only source allowed to make that declaration is the
+// current make-decision fact; a missing or unresolved fact must keep the
+// later execution/review boundary visible.
+function notRequiredUiApplicabilityGate(decisionLog) {
+  const source = readUiApplicabilityFromDecisionLog(decisionLog);
+  if (source.status === "recorded" && source.applicability === "non_ui") {
+    return Object.freeze({ errors: Object.freeze([]), requiresIndependentVerdict: false });
+  }
+  const state = source.status === "recorded" ? source.applicability : source.status;
+  return Object.freeze({
+    errors: Object.freeze([`not_required e2e_scope requires decision-log ui_applicability=non_ui; current state is ${state}`]),
+    requiresIndependentVerdict: true,
+  });
+}
+
+function uiImplementationReferenceErrors(row) {
+  const refs = parseReferenceList(row.fields.versioned_refs);
+  const required = [
+    ["design-authority", "design authority"],
+    ["ui-contract", "UI contract"],
+  ];
+  return required.flatMap(([id, label]) => refs.some((ref) => validReference(ref)
+    && ref.artifact_kind === "evidence" && ref.id === id)
+    ? []
+    : [`${row.id} UI implementation requires a hash-bound ${label} evidence ReferenceBinding`]);
+}
+
+export function validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionLog = null } = {}) {
+  const errors = [];
+  const concreteFile = (value) => {
+    const path = String(value).trim();
+    return path !== ""
+      && !/^(?:N\/A|none|无|待定|TBD|TODO)$/i.test(path)
+      && !path.startsWith("/")
+      && !path.endsWith("/")
+      && !/[*?[\]{}]/.test(path)
+      && path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
+      && /[^/]/.test(path);
+  };
+  const presentCommand = (value) => {
+    const command = String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1").trim();
+    return command !== "" && !/^(?:N\/A|none|无|待定|TBD|TODO)$/i.test(command);
+  };
+  for (const [name, value] of Object.entries({ spec, plan, tasks })) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
+  }
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors) });
+
+  if (templateVersion(plan) === PLAN_TASK_V4 && executionIndexRows(tasks) !== null && taskBlocks(tasks).length === 0) {
+    const structural = validatePlanTaskContract({ spec, plan, tasks });
+    return Object.freeze({ ok: structural.ok, errors: structural.errors });
+  }
+
+  const parsedTasks = taskBlocks(tasks);
+  if (parsedTasks.length === 0) errors.push("tasks document has no task blocks");
+  const rows = parsedTasks.map((task, index) => {
+    const id = task.heading_id;
+    const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
+    const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID);
+    const files = new Set([
+      ...inlinePaths(task.fields["精确文件"]),
+      ...boundaryPaths(task.fields.boundary),
+    ].filter(concreteFile));
+    const plainFile = String(task.fields["精确文件"] ?? "").trim().replace(/^`|`$/g, "");
+    if (concreteFile(plainFile)) files.add(plainFile);
+    if (files.size === 0) errors.push(`${id ?? `task ${index + 1}`} must declare at least one exact file boundary`);
+    if (!presentCommand(task.fields.gate_cmd)) errors.push(`${id ?? `task ${index + 1}`} gate_cmd is missing`);
+    return {
+      id,
+      order: index,
+      heading: task.heading,
+      fields: task.fields,
+      dependencies,
+      frs,
+      acs,
+    };
+  });
+  const known = new Set(rows.map(({ id }) => id));
+  for (const row of rows) {
+    for (const dependency of row.dependencies) {
+      if (!known.has(dependency)) errors.push(`${row.id} has unknown dependency ${dependency}`);
+    }
+  }
+  if (cycleIn(rows)) errors.push("task dependency graph contains a cycle");
+
+  const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec);
+  const referencedFrs = [...new Set(rows.flatMap(({ frs }) => frs))];
+  const referencedAcs = [...new Set(rows.flatMap(({ acs }) => acs))];
+  if (acceptedFrs.length === 0) errors.push("spec has no accepted FR");
+  if (acceptedAcs.length === 0) errors.push("spec has no accepted AC");
+  for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
+  for (const id of referencedFrs) if (!acceptedFrs.includes(id)) errors.push(`task references unknown FR: ${id}`);
+  for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
+  for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
+
+  const roles = rows.map((row) => ({
+    ...row,
+    role: ["RED", "GREEN"].includes(row.fields.verification_role)
+      ? row.fields.verification_role
+      : nAWithReason(row.fields.verification_role, "(?:non-behavior|非行为变更)") ? "N/A"
+        : /\bRED\b/i.test(row.heading ?? "") ? "RED"
+          : /\bGREEN\b/i.test(row.heading ?? "") ? "GREEN" : null,
+  }));
+  for (const row of roles) {
+    if (row.role === null || row.role === "N/A") continue;
+    const pair = row.fields.paired_task
+      ? roles.find(({ id }) => id === row.fields.paired_task)
+      : roles.find((candidate) => candidate.role !== row.role
+        && (row.role === "RED"
+          ? candidate.dependencies.includes(row.id)
+          : row.dependencies.includes(candidate.id)));
+    const expected = row.role === "RED" ? "GREEN" : "RED";
+    const reciprocal = !row.fields.paired_task || pair?.fields.paired_task === row.id;
+    if (!pair || pair.role !== expected || !reciprocal) {
+      errors.push(`${row.id} behavior change must have a reciprocal ${expected} paired_task`);
+    } else if (row.role === "GREEN" && !row.dependencies.includes(pair.id)) {
+      errors.push(`${row.id} GREEN must depend on ${pair.id} RED`);
+    }
+  }
+
+  // The delivery contract is opt-in for older readable cards, but once a plan
+  // declares any of its explicit fields it must not infer a missing final
+  // acceptance or UI implementation task from phase names or headings.
+  const hasField = (row, name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const e2eFields = ["e2e_scope", "e2e_decision_refs", "e2e_risk_decision_ref"];
+  const deliveryRows = rows.filter((row) => hasField(row, "acceptance_role")
+    || hasField(row, "acceptance_data") || e2eFields.some((field) => hasField(row, field)));
+  if (deliveryRows.length > 0) {
+    const concreteText = concreteAcceptanceText;
+    const acceptanceRows = rows.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "acceptance");
+    if (acceptanceRows.length === 0) errors.push("delivery contract requires an explicit acceptance_role=acceptance task");
+    const finalAcceptance = acceptanceRows.at(-1);
+    if (finalAcceptance && finalAcceptance.order !== rows.length - 1) {
+      errors.push(`${finalAcceptance.id} acceptance task must be the final task`);
+    }
+    for (const row of deliveryRows) {
+      if (!concreteText(row.fields.acceptance_role)) errors.push(`${row.id} delivery contract requires acceptance_role`);
+      if (!concreteText(row.fields.ui_scope)) errors.push(`${row.id} delivery contract requires ui_scope`);
+    }
+    const knownDecisionRefs = structuredDecisionRefs(decisionLog);
+    const specDecisionRefs = new Set([...spec.matchAll(/\bD(?:-\d{3}|\d+)\b/g)].map(([ref]) => ref));
+    const templateVersion = planTaskTemplateVersion(tasks);
+    const requiresTypedE2e = templateVersion === "plan-task.v4";
+    const e2eRows = rows.filter((row) => e2eFields.some((field) => hasField(row, field)));
+    for (const row of e2eRows) {
+      if (row.id !== finalAcceptance?.id) errors.push(`${row.id} e2e_* fields are allowed only on the final acceptance task`);
+    }
+    if (requiresTypedE2e && !hasField(finalAcceptance ?? { fields: {} }, "e2e_scope")) {
+      errors.push(`${finalAcceptance?.id ?? "final acceptance task"} plan-task.v4 requires e2e_scope`);
+    }
+    for (const row of acceptanceRows) {
+      const raw = String(row.fields.acceptance_data ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+      let scenarios = null;
+      try { scenarios = JSON.parse(raw); } catch { /* reported below */ }
+      if (!Array.isArray(scenarios) || scenarios.length === 0) {
+        errors.push(`${row.id} acceptance_data must be a non-empty JSON array`);
+        continue;
+      }
+      for (const [index, scenario] of scenarios.entries()) {
+        for (const field of ["source", "sample", "scenario", "tier"]) {
+          if (!concreteText(scenario?.[field])) errors.push(`${row.id} acceptance_data[${index}].${field} is required`);
+        }
+        if (concreteText(scenario?.tier) && !["browser", "service", "command"].includes(scenario.tier.trim())) {
+          errors.push(`${row.id} acceptance_data[${index}].tier is unsupported`);
+        }
+        if (["browser", "service", "command"].includes(taskFieldText(scenario?.tier).toLowerCase())) {
+          errors.push(...acceptanceExecutionErrors(scenario, `${row.id} acceptance_data[${index}]`));
+        }
+      }
+      if (row.id === finalAcceptance?.id && (requiresTypedE2e || e2eFields.some((field) => hasField(row, field)))) {
+        const e2e = acceptanceE2eScope({ row, scenarios, knownDecisionRefs, specDecisionRefs, decisionLog });
+        for (const error of e2e.errors) errors.push(`${row.id} ${error}`);
+      }
+    }
+    if (requiresTypedE2e && taskFieldText(finalAcceptance?.fields.e2e_scope).toLowerCase() === "not_required") {
+      for (const error of notRequiredUiApplicabilityGate(decisionLog).errors) {
+        errors.push(`${finalAcceptance.id} ${error}`);
+      }
+    }
+    const uiRows = rows.filter((row) => ["ui", "fullstack"].includes(taskFieldText(row.fields.ui_scope).toLowerCase()));
+    const uiImplementationRows = uiRows.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "implementation");
+    if (uiRows.length > 0 && uiImplementationRows.length === 0) {
+      errors.push("UI delivery contract requires a separate ui_scope=ui|fullstack implementation task");
+    }
+    for (const row of uiImplementationRows) errors.push(...uiImplementationReferenceErrors(row));
+  }
+
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+}
+
+/**
+ * Project the one explicit acceptance_data source used by build-code. This is
+ * deliberately narrower than the plan validator: it never infers scenarios
+ * from headings or prose, and it preserves an invalid declared contract as an
+ * unavailable execution input rather than inventing a fallback.
+ */
+export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec = null } = {}) {
+  if (typeof tasks !== "string" || tasks.trim() === "") {
+    throw new TypeError("acceptance execution projection requires tasks content");
+  }
+  const rows = taskBlocks(tasks);
+  const hasField = (row, name) => Object.prototype.hasOwnProperty.call(row.fields, name);
+  const e2eFields = ["e2e_scope", "e2e_decision_refs", "e2e_risk_decision_ref"];
+  const declared = rows.filter((row) => hasField(row, "acceptance_role")
+    || hasField(row, "acceptance_data") || e2eFields.some((field) => hasField(row, field)));
+  if (declared.length === 0) {
+    return Object.freeze({
+      status: "not_applicable",
+      requires_execution: false,
+      requires_independent_verdict: false,
+      scenarios: Object.freeze([]),
+      errors: Object.freeze([]),
+    });
+  }
+  const errors = [];
+  const scenarios = [];
+  const templateVersion = planTaskTemplateVersion(tasks);
+  const requiresTypedE2e = templateVersion === "plan-task.v4";
+  const concrete = (value) => typeof value === "string" && value.trim() !== ""
+    && !/^(?:N\/A|none|无|待定|TBD|TODO|unknown|unavailable)$/i.test(value.trim());
+  const acceptanceRows = declared.filter((row) => taskFieldText(row.fields.acceptance_role).toLowerCase() === "acceptance");
+  if (acceptanceRows.length === 0) errors.push("delivery contract has no acceptance_role=acceptance task");
+  const finalAcceptance = acceptanceRows.at(-1);
+  for (const row of rows.filter((row) => e2eFields.some((field) => hasField(row, field)))) {
+    if (row.heading_id !== finalAcceptance?.heading_id) errors.push(`${row.heading_id ?? "task"} e2e_* fields are allowed only on the final acceptance task`);
+  }
+  if (requiresTypedE2e && !hasField(finalAcceptance ?? { fields: {} }, "e2e_scope")) {
+    errors.push(`${finalAcceptance?.heading_id ?? "final acceptance task"} plan-task.v4 requires e2e_scope`);
+  }
+  const knownDecisionRefs = structuredDecisionRefs(decisionLog);
+  const specDecisionRefs = new Set([...(typeof spec === "string" ? spec : "").matchAll(/\bD(?:-\d{3}|\d+)\b/g)].map(([ref]) => ref));
+  const legacyTemplate = templateVersion !== PLAN_TASK_V4;
+  let legacyScopeMissing = false;
+  let finalE2eScope = null;
+  for (const row of acceptanceRows) {
+    const raw = String(row.fields.acceptance_data ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+    let data;
+    try { data = JSON.parse(raw); } catch { data = null; }
+    const isFinal = row.heading_id === finalAcceptance?.heading_id;
+    const hasE2eField = e2eFields.some((field) => hasField(row, field));
+    const e2e = isFinal && (requiresTypedE2e || hasE2eField)
+      ? acceptanceE2eScope({ row, scenarios: Array.isArray(data) ? data : [], knownDecisionRefs, specDecisionRefs, decisionLog })
+      : { scope: null, decisionRefs: [], riskDecisionRef: null, errors: [] };
+    if (isFinal) finalE2eScope = e2e.scope;
+    if (isFinal && !hasE2eField) legacyScopeMissing = true;
+    for (const error of e2e.errors) errors.push(`${row.heading_id ?? "acceptance task"} ${error}`);
+    if (!Array.isArray(data) || data.length === 0) {
+      errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data must be a non-empty JSON array`);
+      continue;
+    }
+    for (const [index, scenario] of data.entries()) {
+      if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)
+          || Object.keys(scenario).some((key) => !new Set(["source", "sample", "scenario", "tier", "execution"]).has(key))) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}] has unsupported fields`);
+        continue;
+      }
+      const missing = ["source", "sample", "scenario", "tier"].filter((field) => !concrete(scenario[field]));
+      if (missing.length > 0) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}] is missing ${missing.join(", ")}`);
+        continue;
+      }
+      const tier = scenario.tier.trim();
+      if (!new Set(["browser", "service", "command"]).has(tier)) {
+        errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].tier is unsupported`);
+        continue;
+      }
+      const executionErrors = acceptanceExecutionErrors(scenario, `${row.heading_id ?? "acceptance task"} acceptance_data[${index}]`);
+      if (executionErrors.length > 0) {
+        errors.push(...executionErrors);
+        continue;
+      }
+      scenarios.push(Object.freeze({
+        task_id: row.heading_id,
+        acceptance_criterion_ids: Object.freeze(identifiers(row.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)),
+        ui_scope: taskFieldText(row.fields.ui_scope),
+        ...(e2e.scope === null ? {} : { e2e_scope: e2e.scope }),
+        ...(e2e.decisionRefs.length === 0 ? {} : { e2e_decision_refs: Object.freeze([...e2e.decisionRefs]) }),
+        ...(e2e.riskDecisionRef === null ? {} : { e2e_risk_decision_ref: e2e.riskDecisionRef }),
+        source: scenario.source.trim(),
+        sample: scenario.sample.trim(),
+        scenario: scenario.scenario.trim(),
+        tier,
+        ...(scenario.execution === undefined ? {} : { execution: Object.freeze(structuredClone(scenario.execution)) }),
+      }));
+    }
+  }
+  const notRequiredUiGate = finalE2eScope === "not_required"
+    ? notRequiredUiApplicabilityGate(decisionLog)
+    : { errors: [], requiresIndependentVerdict: false };
+  errors.push(...notRequiredUiGate.errors);
+  const malformedContract = errors.length > 0 || legacyScopeMissing || legacyTemplate;
+  const requiresIndependentVerdict = malformedContract || declared.some((row) => {
+    const e2eScope = taskFieldText(row.fields.e2e_scope).toLowerCase();
+    if (E2E_SCOPES.has(e2eScope)) return e2eScope !== "not_required";
+    // Legacy cards remain readable. Their pre-existing UI/fullstack trigger
+    // is retained as an execution requirement, but later verification must
+    // still refuse a passed verdict without current typed scope evidence.
+    return ["ui", "fullstack"].includes(taskFieldText(row.fields.ui_scope).toLowerCase());
+  }) || notRequiredUiGate.requiresIndependentVerdict;
+  return Object.freeze({
+    status: errors.length === 0 && !legacyScopeMissing && !legacyTemplate ? "ready" : "unavailable",
+    // A declared delivery contract remains execution-bound even when malformed.
+    // Treating an invalid array as absent let a caller re-introduce stage-agent
+    // coverage and bypass the physical-execution boundary.
+    requires_execution: true,
+    requires_independent_verdict: requiresIndependentVerdict,
+    eligible_for_pass: errors.length === 0 && !legacyScopeMissing && !legacyTemplate,
+    legacy_template: legacyTemplate,
+    legacy_scope_missing: legacyScopeMissing,
+    scenarios: Object.freeze(scenarios),
+    errors: Object.freeze(errors),
+  });
+}
+
+function postPhaseTaskCards(index, phases) {
+  const errors = [];
+  let refs = [];
+  try { refs = phaseFilesFromIndex(index); }
+  catch (error) { return { cards: [], errors: [`post Phase acceptance index is invalid: ${error.message}`] }; }
+  const cards = [];
+  for (const ref of refs) {
+    const phase = phases?.[ref];
+    if (typeof phase !== "string" || phase.trim() === "") {
+      errors.push(`${ref} is missing for post Phase acceptance`);
+      continue;
+    }
+    const l1 = phase.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? "";
+    for (const section of markdownSections(l1, 3).filter(({ heading }) => /^T\d+\b/.test(heading))) {
+      const fields = {};
+      for (const line of section.body.split(/\r?\n/)) {
+        const match = line.match(/^\s*-\s+\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/);
+        if (match) fields[match[1].trim()] = match[2].trim();
+      }
+      const taskId = section.heading.match(/^(T\d+)\b/)?.[1] ?? null;
+      if (taskId === null) {
+        errors.push(`${ref} post acceptance task heading is missing a stable T id`);
+        continue;
+      }
+      cards.push(Object.freeze({
+        phase_id: ref.match(/^phases\/(P\d+)\.md$/)?.[1] ?? null,
+        task_id: taskId,
+        fields: Object.freeze(fields),
+      }));
+    }
+  }
+  return { cards, errors };
+}
+
+/**
+ * Project the post-cohort native acceptance source from the indexed Phase
+ * authorities. This deliberately does not read tasks.md or infer scenarios
+ * from a Phase gate command.
+ */
+export function projectPostPhaseAcceptanceExecutionData({ index, phases, spec } = {}) {
+  const parsed = postPhaseTaskCards(index, phases);
+  const errors = [...parsed.errors];
+  const hasField = (card, name) => Object.prototype.hasOwnProperty.call(card.fields, name);
+  const declared = parsed.cards.filter((card) => hasField(card, "acceptance_role") || hasField(card, "acceptance_data"));
+  const roleRows = parsed.cards.filter((card) => hasField(card, "acceptance_role"));
+  const dataRows = parsed.cards.filter((card) => hasField(card, "acceptance_data"));
+  if (declared.length === 0) errors.push("post Phase acceptance contract requires one acceptance_role=acceptance Task");
+  if (roleRows.length !== 1) errors.push(`post Phase acceptance contract requires exactly one acceptance_role card (found ${roleRows.length})`);
+  if (dataRows.length !== 1) errors.push(`post Phase acceptance contract requires exactly one acceptance_data card (found ${dataRows.length})`);
+  const row = roleRows[0] ?? dataRows[0] ?? null;
+  if (row && roleRows.length === 1 && dataRows.length === 1 && roleRows[0].task_id !== dataRows[0].task_id) {
+    errors.push("post Phase acceptance_role and acceptance_data must belong to the same Task");
+  }
+  if (row && taskFieldText(row.fields.acceptance_role).toLowerCase() !== "acceptance") {
+    errors.push(`${row.phase_id}/${row.task_id} acceptance_role must be acceptance`);
+  }
+  for (const card of parsed.cards) {
+    if (hasField(card, "acceptance_data") && taskFieldText(card.fields.acceptance_role).toLowerCase() !== "acceptance") {
+      errors.push(`${card.phase_id}/${card.task_id} acceptance_data requires acceptance_role=acceptance`);
+    }
+  }
+  const acceptanceCriterionIds = row
+    ? identifiers(row.fields["Source / FR / AC"] ?? "", ACCEPTANCE_CRITERION_ID)
+    : [];
+  if (row && acceptanceCriterionIds.length === 0) errors.push(`${row.phase_id}/${row.task_id} native acceptance Task must bind at least one AC in Source / FR / AC`);
+  const scenarios = [];
+  if (row && hasField(row, "acceptance_data")) {
+    const raw = String(row.fields.acceptance_data ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+    let data = null;
+    try { data = JSON.parse(raw); } catch { /* reported below */ }
+    if (!Array.isArray(data) || data.length === 0) {
+      errors.push(`${row.phase_id}/${row.task_id} acceptance_data must be a non-empty JSON array`);
+    } else {
+      for (const [index, scenario] of data.entries()) {
+        const label = `${row.phase_id}/${row.task_id} acceptance_data[${index}]`;
+        if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)
+            || Object.keys(scenario).some((key) => !new Set(["source", "sample", "scenario", "tier", "execution"]).has(key))) {
+          errors.push(`${label} has unsupported fields`);
+          continue;
+        }
+        const missing = ["source", "sample", "scenario", "tier"].filter((field) => !concreteAcceptanceText(scenario[field]));
+        if (missing.length > 0) {
+          errors.push(`${label} is missing ${missing.join(", ")}`);
+          continue;
+        }
+        const tier = taskFieldText(scenario.tier).toLowerCase();
+        if (!["browser", "command", "service"].includes(tier)) {
+          errors.push(`${label}.tier must be browser, command, or service`);
+          continue;
+        }
+        const uiScope = taskFieldText(row.fields.ui_scope).toLowerCase();
+        if (tier === "browser" && uiScope !== "ui") {
+          errors.push(`${label}.ui_scope must be ui for browser acceptance`);
+          continue;
+        }
+        const executionErrors = acceptanceExecutionErrors({ ...scenario, tier }, label);
+        if (executionErrors.length > 0) {
+          errors.push(...executionErrors);
+          continue;
+        }
+        scenarios.push(Object.freeze({
+          task_id: row.task_id,
+          phase_id: row.phase_id,
+          acceptance_criterion_ids: Object.freeze([...acceptanceCriterionIds]),
+          ui_scope: tier === "browser" ? uiScope : taskFieldText(row.fields.ui_scope) || "non_ui",
+          source: scenario.source.trim(),
+          sample: scenario.sample.trim(),
+          scenario: scenario.scenario.trim(),
+          tier,
+          ...(scenario.execution === undefined ? {} : { execution: Object.freeze(structuredClone(scenario.execution)) }),
+        }));
+      }
+    }
+  }
+  const e2eScope = taskFieldText(row?.fields.e2e_scope).toLowerCase();
+  return Object.freeze({
+    status: errors.length === 0 ? "ready" : declared.length === 0 ? "unavailable" : "incomplete",
+    requires_execution: true,
+    // `not_required` disables the separate E2E execution/review/confirmation
+    // chain, not the command/service acceptance execution above. Other or
+    // absent scopes preserve the stricter current behavior.
+    requires_independent_verdict: e2eScope !== "not_required",
+    eligible_for_pass: errors.length === 0 && scenarios.length > 0,
+    scenarios: Object.freeze(scenarios),
+    errors: Object.freeze(errors),
+  });
+}
+
+export function buildPlanTaskContract({
+  spec,
+  plan,
+  tasks,
+  planRef,
+  planHash,
+  tasksRef,
+  tasksHash,
+} = {}) {
+  if (typeof planRef !== "string" || !SHA256_HEX.test(planHash ?? "")
+      || typeof tasksRef !== "string" || !SHA256_HEX.test(tasksHash ?? "")) {
+    throw new TypeError("plan/tasks canonical ref/hash bindings are required");
+  }
+  if (sha256(plan ?? "") !== planHash || sha256(tasks ?? "") !== tasksHash) {
+    throw new Error("plan/tasks content hash binding mismatch");
+  }
+  const validation = validatePlanTaskContract({ spec, plan, tasks });
+  if (!validation.ok) throw new Error(`plan-task contract is incomplete: ${validation.errors.join("; ")}`);
+  return Object.freeze({
+    plan_ref: planRef,
+    plan_hash: planHash,
+    tasks_ref: tasksRef,
+    tasks_hash: tasksHash,
+    phase_rows: validation.facts.phase_rows,
+    task_rows: validation.facts.task_rows,
+    fr_coverage: validation.facts.fr_coverage,
+    ac_coverage: validation.facts.ac_coverage,
+    dependency_validation: validation.facts.dependency_validation,
+    command_oracle_checks: validation.facts.command_oracle_checks,
+    slice_advisory: validation.facts.slice_advisory,
+    errors: Object.freeze([]),
+  });
+}
+
+const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
+const V2_AC = ACCEPTANCE_CRITERION_ID;
+
+function acceptanceCriterionDispositions(spec) {
+  const text = String(spec ?? "");
+  // A spec may legitimately carry more than one section titled 验收标准: the
+  // document's own summary card and the detailed acceptance list.  Matching
+  // only the first heading silently narrowed the authoritative AC set to the
+  // summary card, so collect every such section.  Sections are found by
+  // heading rather than by number, because the summary card can sit before the
+  // numbered body.
+  const headingPattern = /^##\s+(?:\d+\.\s*)?(?:验收标准|验收清单(?:（AC）|\(AC\))?|Acceptance Criteria)\s*$/gmi;
+  const sections = [];
+  for (const match of text.matchAll(headingPattern)) {
+    sections.push(text.slice(match.index + match[0].length).split(/^##\s+/m, 1)[0]);
+  }
+  const body = sections.length > 0 ? sections.join("\n") : text;
+  const listEntries = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*([^\n]*)/gm)];
+  const listIds = listEntries
+    .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
+    .filter(Boolean);
+  // Acceptance criteria may also be declared as their own heading
+  // (`#### AC-S3-01 <title>`).  Heading declarations carry no status suffix,
+  // so the deferred markers below only apply to the list/table forms.
+  const headingEntries = [...body.matchAll(/^#{1,6}\s+([^\n]*)$/gm)]
+    .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
+    .filter(Boolean);
+  const tableEntries = [];
+  const bodyLines = body.split(/\r?\n/);
+  for (let index = 0; index < bodyLines.length;) {
+    if (!/^\s*\|/.test(bodyLines[index])) { index += 1; continue; }
+    const rows = [];
+    while (index < bodyLines.length && /^\s*\|/.test(bodyLines[index])) {
+      rows.push(analyzeMarkdownTableCells(bodyLines[index]));
+      index += 1;
+    }
+    const header = rows[0] ?? [];
+    const separatorOffset = rows[1]?.every((cell) => /^:?-{3,}:?$/.test(cell)) ? 2 : 1;
+    const statusIndex = header.findIndex((cell) => /^(?:status|状态|disposition|处置|scope|计入状态)$/i.test(cell));
+    for (const row of rows.slice(separatorOffset)) {
+      const match = row[0]?.match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])(.*)$`, "i"));
+      if (match) tableEntries.push({ id: match[1], titleSuffix: match[2], status: statusIndex >= 0 ? row[statusIndex] : null });
+    }
+  }
+  const tableIds = tableEntries.map(({ id }) => id);
+  const headingIds = [...listIds, ...headingEntries, ...tableIds];
+  const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
+  const explicitDeferredAnnotation = /^\s*[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）](?=$|[\s:：—–-])/i;
+  // A disposition marker must lead the text immediately after the AC title;
+  // a sentence that merely discusses "status: deferred" remains an active AC.
+  const explicitMetadata = /^\s*(?:[（(【[]\s*)?(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
+  const inactiveIds = new Set();
+  const deferredIds = new Set();
+  for (const [, label, suffix] of listEntries) {
+    const match = label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(.*)$`, "i"));
+    if (!match) continue;
+    const annotation = suffix.trim().replace(/^[:：—–-]\s*/, "");
+    if (explicitDeferredLabel.test(match[2].trim())
+      || explicitDeferredAnnotation.test(annotation)
+      || explicitMetadata.test(annotation)) {
+      inactiveIds.add(match[1]);
+      if (!/not_applicable/i.test(match[2])
+          && !/(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*not_applicable\b|^[\s:：—–-]*[[(（]\s*not_applicable\b/i.test(suffix)) deferredIds.add(match[1]);
+    }
+  }
+  for (const entry of tableEntries) {
+    if (explicitDeferredLabel.test(entry.titleSuffix.trim()) || /^(?:deferred|延期|不计入|not_applicable)$/i.test(entry.status ?? "")) {
+      inactiveIds.add(entry.id);
+      if (!/not_applicable/i.test(entry.titleSuffix) && !/^not_applicable$/i.test(entry.status ?? "")) deferredIds.add(entry.id);
+    }
+  }
+  return {
+    active_ids: [...new Set(headingIds.length ? headingIds : identifiers(text, ACCEPTANCE_CRITERION_ID))]
+      .filter((id) => !inactiveIds.has(id)),
+    deferred_ids: [...deferredIds],
+  };
+}
+
+export function activeAcceptanceCriterionIds(spec) {
+  return acceptanceCriterionDispositions(spec).active_ids;
+}
+
+function parseReferenceList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || value.trim() === "") return [];
+  try {
+    const normalized = value.trim().replace(/^`([\s\S]*)`$/, "$1");
+    const parsed = JSON.parse(normalized);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function validReference(value) {
+  return object(value) && ["spec", "plan", "tasks", "evidence"].includes(value.artifact_kind)
+    && typeof value.ref === "string" && value.ref.trim() !== ""
+    && SHA256_HEX.test(value.hash ?? "") && typeof value.id === "string" && value.id.trim() !== "";
+}
+
+function v2TaskRows(tasks, errors) {
+  const rows = taskBlocks(tasks).map((task, order) => {
+    const f = task.fields;
+    const id = task.heading_id;
+    const refs = parseReferenceList(f.versioned_refs ?? f.versioned_refs_json);
+    const row = {
+      id,
+      phase: f.Phase ?? f.phase ?? f["所属 Phase"] ?? "",
+      goal: f.goal ?? f.Goal ?? "",
+      versioned_refs: refs,
+      knowledge: f.Knowledge ?? f.knowledge ?? "",
+      boundary: f.boundary ?? f["边界"] ?? "",
+      action: f.action ?? f["动作"] ?? "",
+      command: f["test/acceptance command"] ?? f.gate_cmd ?? "",
+      design_state: f.design_state ?? "",
+      stop: f.STOP ?? f.stop ?? "",
+      recovery: f.recovery ?? "",
+      risk: f.risk ?? f["task risk"] ?? "",
+    };
+    for (const field of ["phase", "goal", "knowledge", "boundary", "action", "command", "stop", "recovery", "risk"]) {
+      if (typeof row[field] !== "string" || row[field].trim() === "") errors.push(`${id} is missing authoritative ${field}`);
+    }
+    if (!["ready", "blocked-by-design"].includes(row.design_state)) errors.push(`${id} design_state must be ready or blocked-by-design`);
+    if (!Array.isArray(refs) || refs.length === 0) errors.push(`${id} versioned_refs must be a non-empty JSON array`);
+    for (const ref of refs) if (!validReference(ref)) errors.push(`${id} has an incomplete ReferenceBinding`);
+    return row;
+  });
+  return rows;
+}
+
+/**
+ * Strict v2 projection facts. v1 remains the read-only compatibility parser;
+ * this function is used when a new build-plan publishes plan-task-contract.v2.
+ */
+export function validatePlanTaskContractV2({ spec, plan, tasks, specRef, specHash, planRef, planHash, tasksRef, tasksHash } = {}) {
+  const errors = [];
+  for (const [name, value] of Object.entries({ spec, plan, tasks })) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
+  }
+  for (const [name, ref, hash] of [["spec", specRef, specHash], ["plan", planRef, planHash], ["tasks", tasksRef, tasksHash]]) {
+    if (typeof ref !== "string" || ref.trim() === "" || !SHA256_HEX.test(hash ?? "")) errors.push(`${name} artifact ref/hash is required`);
+    else if (sha256(({ spec, plan, tasks })[name] ?? "") !== hash) errors.push(`${name} content hash binding mismatch`);
+  }
+  if (SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(templateVersion(plan ?? ""))
+      || SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(templateVersion(tasks ?? ""))) {
+    const structural = validatePlanTaskContract({ spec, plan, tasks });
+    const templateLabel = templateVersion(plan ?? "") ?? templateVersion(tasks ?? "") ?? "plan-task";
+    for (const error of structural.errors) errors.push(`${templateLabel}: ${error}`);
+  }
+  const acceptedFrs = identifiers(spec ?? "", V2_FR);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec ?? "");
+  if (acceptedFrs.length === 0) errors.push("spec must contain at least one accepted FR");
+  if (acceptedAcs.length === 0) errors.push("spec must contain at least one accepted AC");
+  if (/^\s*[-*]?\s*PFACT-[A-Z0-9]+\s*[—:-]/m.test(plan ?? "")) errors.push("plan must not copy product facts into an authoritative section");
+  const rows = v2TaskRows(tasks ?? "", errors);
+  const acceptedArtifacts = new Map([
+    ["spec", { ref: specRef, hash: specHash }],
+    ["plan", { ref: planRef, hash: planHash }],
+    ["tasks", { ref: tasksRef, hash: tasksHash }],
+  ]);
+  for (const row of rows) {
+    for (const binding of row.versioned_refs) {
+      const accepted = acceptedArtifacts.get(binding.artifact_kind);
+      if (accepted && (binding.ref !== accepted.ref || binding.hash !== accepted.hash)) {
+        errors.push(`${row.id} has stale or mismatched ${binding.artifact_kind} ReferenceBinding`);
+      }
+    }
+  }
+  const ids = new Set(rows.map((row) => row.id));
+  const dependencies = new Map();
+  for (const row of rows) {
+    const raw = taskBlocks(tasks ?? "").find((item) => item.heading_id === row.id)?.fields?.依赖 ?? "";
+    const deps = identifiers(raw, /\bT\d+\b/g);
+    dependencies.set(row.id, deps);
+    for (const dependency of deps) if (!ids.has(dependency)) errors.push(`${row.id} has unknown dependency ${dependency}`);
+  }
+  if (cycleIn(rows.map((row) => ({ id: row.id, dependencies: dependencies.get(row.id) ?? [] })))) errors.push("task dependency graph contains a cycle");
+  const referencedFrs = identifiers(tasks ?? "", V2_FR);
+  const referencedAcs = identifiers(tasks ?? "", V2_AC);
+  for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
+  for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
+  const value = {
+    schema_version: "plan-task-contract.v2",
+    spec: { artifact_kind: "spec", ref: specRef, hash: specHash, id: "SPEC" },
+    plan: { artifact_kind: "plan", ref: planRef, hash: planHash, id: "PLAN" },
+    tasks: { artifact_kind: "tasks", ref: tasksRef, hash: tasksHash, id: "TASKS" },
+    task_rows: rows,
+    fr_coverage: { accepted_count: acceptedFrs.length, covered_count: acceptedFrs.filter((id) => referencedFrs.includes(id)).length, accepted_ids: acceptedFrs, covered_ids: referencedFrs.filter((id) => acceptedFrs.includes(id)) },
+    ac_coverage: { accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => referencedAcs.includes(id)).length, accepted_ids: acceptedAcs, covered_ids: referencedAcs.filter((id) => acceptedAcs.includes(id)) },
+    dependency_validation: { valid: !errors.some((error) => /dependency|cycle/.test(error)) },
+    errors,
+  };
+  if (errors.length === 0 && !validatePlanTaskV2Schema(value)) errors.push(...schemaErrors(validatePlanTaskV2Schema));
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts: Object.freeze(value) });
+}
+
+export function buildPlanTaskContractV2(options = {}) {
+  const result = validatePlanTaskContractV2(options);
+  if (!result.ok) throw new Error(`plan-task v2 contract is incomplete: ${result.errors.join("; ")}`);
+  return Object.freeze(result.facts);
+}

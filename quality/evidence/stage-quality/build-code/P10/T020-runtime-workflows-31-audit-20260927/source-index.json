@@ -1,0 +1,252 @@
+{
+  "captured_at_utc": "2026-09-27T12:29:36.064Z",
+  "index_ref": "quality/evidence/stage-quality/build-code/P10/T020-unmapped-206-census-20260927/index.json",
+  "index_sha256": "2125e618b10ac49fdfbc50bc9a1acee9485c999f4a6874eb485e9eb90ba76a30",
+  "catalog_ref": "docs/quality/business-case-catalog.json",
+  "catalog_sha256": "f4f5dc307b83e4f73d4bd4b6479d1030fa1efa56473c8ded3282c44a74445306",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "current_status_exit": 0,
+  "current_status_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+    "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b"
+  },
+  "fixed_run_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "start_ref": "identity/executions/bootstrap-workflowhub-thin-core-card-04-20260919.json",
+    "start_commit": "35a881ac3c3288249677597a9079d445949de778",
+    "start_tree": "61b56b594f5c22c71c8743ca908fad85c017574f",
+    "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+    "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+    "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+    "catalog_revision": "2026-09-27.card04-current-source-rebind.10",
+    "catalog_sha256": "f4f5dc307b83e4f73d4bd4b6479d1030fa1efa56473c8ded3282c44a74445306"
+  },
+  "counts": {
+    "runtime": 16,
+    "workflows": 15,
+    "direct_three_case_triggers": 0
+  },
+  "entries": [
+    {
+      "path": "runtime/review/canonical-review-result.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "343ad88b3b89efe22f2ea50fca7dffbc3bf1be65f048e76776f0c5ea27e046c7",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/review/ocr-delegation-adapter.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "b0b41f125368cbbbb9de53704837d6cda110fdd8e5b0d240d51674de0a6bc357",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/review/review-packet-identity.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "e419436d3dbea460fe9896130b4ab3db73a1ecb928fc516dd4d329f5711af3cd",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/review/review-record-route.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "0c1332b53e52f2db99d1733793d41d678700d1c5771a2e1773c02d668e4339d4",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/review/schemas/attempt.schema.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "3e5989e2cd6cb9ffc110663775ef76d9ea7094c57655ee0760ee0baa17abc288",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/review/schemas/result.schema.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "a59a7733c32f25d16e1097ea9efa0bae9baa88a1b9db3d01466a7d2a2619efae",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/completion-predicates.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "20c9e90ec507c267957f07d8ce8c4360e4eb47961fd4f55ebe2233cb30b0f8be",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/protocol-error-whitelist.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "38b546d4ba44de679c57e38633c4050886b763a5967d8537d204fbb4aa46c351",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-agent-outcome-adapter.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "108a495a4c1de193e63a411b89d4a5474dfd2850b1e79f982181eb6237e24c24",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-context.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "60aee6dcfc18f66739f44e5467e6a4447f7386998fe3dc19dc10b8b97bfd47fd",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-end-report.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p5_report",
+      "current_sha256": "7828fe354db7cc4507ddd5a503ad9cd97279d81ac1e2d51291b48dab11ba6b43",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-end-report.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p5_report",
+      "current_sha256": "3882d202565978f5e4d3d6a4985bcabccac907263e4e3f53782c79928c353428",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-handoff.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "5945708871e46cb714f3b78d4851a9d795e32e576d42665744d12838c35f4693",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/stage/stage-runner.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "0e791e9c094aba2e2005bd1f654e3ecd535f061d869d7e9c252c962d0c9601fd",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/task/task-kernel-implementation.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "19e1727a5aed55e4b0e8c0d0e0a05f38d8ac04310708137e5ee228a59ab5bdf7",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "runtime/task/task-store.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "stage_task_runtime",
+      "current_sha256": "7f58e5913e4d30faaa6bbc16c3c6c54503236ef436d2a3f48b7839a3034e68f5",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "60378a4987c37aa7cdf6421e9a2ba5950593cbf1182f63e54d3afaf825e9b6b9",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "2da71029f5da992768c506fbdfaa6f4a4dafc1561b3a3f7f7d488daedf9564d7",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/case-reconciliation.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "151a77ae6842fd27b7b87ceee5f43c08e57dcb89c92879b44a08ce48cd413784",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/case-selection.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "5801544f09b9481129231f7fb610571701a5c3f52a939a07671884b5bb3a7400",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/change-scope.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "da79f207228cf38abd92513c5bcc29b0bd14a54cfe3556a4d77f4ee7788adcf8",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/skill-deps.yaml",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "7906fa54f889284d628e8de162cc59aa2bdf6cd126579b7b1e321a153879e876",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/steps.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "fdea7c13055e57f9d3fd7fad9e6a1ebe462c609d3902b621838302e04eb5a00b",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/targeted-capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "e0e1d94e5f72b1054577dc8c0c38e53a9c62bbee8b718b5c4f3b10919eecd794",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/targeted-runner.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "ebbb9f4ab78dfa074c088a79fd3bdab0873ec1150c4375455e31a57a6304d0f2",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-code/test-asset-inventory.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": "p8_p9_p10",
+      "current_sha256": "29d10bc7a49a3f71864781bc3f0f6b831357dcfc4c929ca29b2040ed82a2a1b2",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/build-plan/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": null,
+      "current_sha256": "523cb88f2aeee07f006d9048377383591a89c2a66e7bc003bd03078073a93308",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/make-decision/SKILL.md",
+      "origin_bucket": "worktree_only_at_run",
+      "risk_cluster": null,
+      "current_sha256": "f0439433901922dba07f77ceaddb5cd60302873e9680de8a215b971be71a1698",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/verify-code/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "cb2ac0a1ce29e104440a2afe1ab7fe56fa3caa86944ce73753d0820fe869b114",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/verify-code/skill-deps.yaml",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "102c32c0889f2386ba1d5cb3b76cdbcad285b5ec2803dbf1dab8a3fbbd67bffc",
+      "in_three_case_triggers": false
+    },
+    {
+      "path": "workflows/verify-code/steps.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "risk_cluster": "card05_review",
+      "current_sha256": "a460c98354ac2482e935fc4a5d67ee8df2cc2d8b75bc3e164cc0d0cfbdf186c8",
+      "in_three_case_triggers": false
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+command=npx vitest run tests/contract/build-code-test-inventory.test.mjs
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+utc=2026-09-26T12:31:09Z
+head=ef920f1fbd415fe87d50930359059b661e141acd
+node=v24.14.0
+448b803d2ceaf8f6256878f32a68dc36ce19fec34c631024e80f25111818c725  tests/contract/build-code-test-inventory.test.mjs
+85de1d860331f8e1ff26fcb7552edda858c1068fbb0d4aff240ce91415ff5f76  workflows/build-code/capture.mjs
+1a097616461ffc74f50385d98b506e35766d4cbbaa9d2629bff80c5b1c06c137  workflows/build-code/test-asset-inventory.mjs
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-test-inventory.test.mjs (3 tests | 1 failed) 3446ms
+   × ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP 3209ms
+     → expected { status: 'unavailable', …(1) } to match object { status: 'recorded', …(3) }
+(1 matching property omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-test-inventory.test.mjs > ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP
+AssertionError: expected { status: 'unavailable', …(1) } to match object { status: 'recorded', …(3) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "snapshot_tree": "03abc00573232d61ca5552951b0ed4b5ffde29f8",
+-   "source_digest": "3bae4d277afb9ae3d4fcac9cb95681ba0e9c484f5f4c6601ae8991793b544d43",
+-   "status": "recorded",
+-   "task_id": "p9-node-runner",
++   "status": "unavailable",
+  }
+
+ ❯ tests/contract/build-code-test-inventory.test.mjs:109:36
+    107|     expect(rawOutput).toMatch(/# SKIP/);
+    108|     expect(saved).not.toHaveProperty("test_inventory");
+    109|     expect(receipt.test_inventory).toMatchObject({
+       |                                    ^
+    110|       status: "recorded", task_id: task.identity.taskId,
+    111|       snapshot_tree: saved.snapshot_tree, source_digest: saved.source_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  20:31:09
+   Duration  3.92s (transform 150ms, setup 0ms, collect 364ms, tests 3.45s, environment 0ms, prepare 28ms)
+
+EXIT=1

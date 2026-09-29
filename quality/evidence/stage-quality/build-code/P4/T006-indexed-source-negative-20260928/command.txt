@@ -1,0 +1,1 @@
+node node_modules/vitest/vitest.mjs run tests/contract/post-acceptance-chain-source-index.test.mjs --poolOptions.forks.singleFork --no-fileParallelism

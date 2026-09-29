@@ -1,0 +1,21 @@
+{
+  "receipt_ref": "quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
+  "receipt_sha256": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d",
+  "receipt_hash_claimed": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d",
+  "output_ref": "quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
+  "output_sha256": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2",
+  "output_hash_claimed": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2",
+  "receipt_exit_code": 0,
+  "cli_exit_code": 0,
+  "receipt_snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "receipt_snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "receipt_source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "tests_summary": [
+    " Test Files  4 passed (4)",
+    "      Tests  62 passed (62)",
+    "   Duration  948ms (transform 284ms, setup 0ms, collect 892ms, tests 22ms, environment 0ms, prepare 111ms)"
+  ],
+  "copy_matches": false,
+  "ref_hashes_match": true,
+  "material_and_source_unchanged": true
+}

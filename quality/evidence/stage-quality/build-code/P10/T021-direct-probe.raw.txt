@@ -1,0 +1,1 @@
+{"valid_artifacts":"unauthenticated_business_oracle","observed_status":"observed","forged_report":"report_digest_mismatch","wrong_account":"business_effect_mismatch"}

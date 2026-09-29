@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (71 tests | 69 skipped) 26089ms
+   ✓ acceptance execution tiers > executes browser acceptance only after callback and canonical bytes share the complete scenario binding 6726ms
+   ✓ acceptance execution tiers > keeps the current stage runnable without an upstream host outcome 19363ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 69 skipped (71)
+   Start at  13:26:22
+   Duration  26.91s (transform 326ms, setup 0ms, collect 706ms, tests 26.09s, environment 0ms, prepare 30ms)
+

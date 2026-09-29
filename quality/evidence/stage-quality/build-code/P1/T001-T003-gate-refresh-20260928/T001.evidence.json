@@ -1,0 +1,26 @@
+{
+  "id": "T001",
+  "start_utc": "2026-09-27T16:55:38.108784Z",
+  "end_utc": "2026-09-27T16:55:38.132639Z",
+  "command": "node -e \"const fs=require('fs');let bad=0;const f='docs/architecture/test-asset-governance-rules.md';const ss=['验收标准可执行形式','oracle 与实现分离','有效 RED','G-2 豁免','机器产物按路线适用','真实入口联通','模块×层级矩阵','就近共置','命名规则','规模预算只报不拦','覆盖率只诊断','负控抽查','不对称压缩','统计口径','provenance','exceptions','route_applicability','报告事实层','空数组不合法','DER-01','DER-03','DER-04','DER-05','DER-06','DER-11','DER-12','DER-13','DER-14'];let t='';try{t=fs.readFileSync(f,'utf8')}catch{console.error('断言失败: '+f+' 不存在');process.exit(1)}for(const s of ss){if(!t.includes(s)){console.error('断言失败: 缺 '+s);bad=1}}if(!bad)console.log('rules doc OK');process.exit(bad)\"",
+  "exit_code": 0,
+  "stdout_sha256": "dc71173ec1a723911218f9e834ff77648f59093485df7201b49521de6bcf7892",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "transcript_sha256": "5fdd8f58bdb4dd2b863b8cbfa35a8396b35d5b9817f8e97e25184fea1fd56f72",
+  "expected_stdout": "rules doc OK\n",
+  "valid": true,
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P1",
+  "task_id_in_phase": "T001",
+  "kind": "command_checks",
+  "check_ids": [
+    "P1-RULES-DOC"
+  ],
+  "material_revision": "revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6",
+  "snapshot_tree": "4381e90d43a7072ba12d1a4359ba757c3ddd5786",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "output_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T001.transcript.txt",
+  "stdout_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T001.stdout.raw.txt",
+  "stderr_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T001.stderr.raw.txt"
+}

@@ -1,0 +1,15 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs (4 tests | 1 failed) 4ms
+   × uses the current YAML OI authority instead of append-only historical prose 2ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-05-20260919/decision-log.md'
+ ❯ tests/contract/post-phase-contract.test.mjs (16 tests | 1 failed) 14ms
+   × post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 2ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-05-20260919/phases/P5.md'
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 18 passed (20)
+   Start at  22:15:10
+   Duration  712ms (transform 255ms, setup 0ms, collect 752ms, tests 18ms, environment 0ms, prepare 73ms)
+

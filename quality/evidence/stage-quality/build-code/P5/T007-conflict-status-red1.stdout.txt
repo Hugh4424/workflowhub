@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ runtime/stage/stage-end-report.test.mjs (15 tests | 1 failed) 18ms
+   × stage-end-report current vNext result disclosure > keeps a conflicted completion predicate distinct from an ordinary missing one 5ms
+     → expected [ …(10) ] to deeply equal ArrayContaining{…}
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  08:44:52
+   Duration  152ms (transform 24ms, setup 0ms, collect 12ms, tests 18ms, environment 0ms, prepare 46ms)
+

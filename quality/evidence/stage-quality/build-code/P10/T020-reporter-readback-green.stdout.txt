@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (10 tests | 5 skipped) 3ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 5 skipped (10)
+   Start at  10:36:00
+   Duration  432ms (transform 139ms, setup 0ms, collect 332ms, tests 3ms, environment 0ms, prepare 26ms)
+

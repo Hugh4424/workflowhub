@@ -1,0 +1,17 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-selection.test.mjs (16 tests | 14 skipped) 5017ms
+   ✓ P10 pre-run registered case selection > keeps known cases and each unknown path visible without calling partial coverage selected 2766ms
+   ✓ P10 pre-run registered case selection > keeps an entirely unknown change unavailable with no runnable case 2250ms
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (15 tests | 11 skipped) 28200ms
+   ✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 15199ms
+   ✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 3237ms
+   ✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 2970ms
+   ✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 6793ms
+
+ Test Files  2 passed (2)
+      Tests  6 passed | 25 skipped (31)
+   Start at  17:42:22
+   Duration  28.73s (transform 196ms, setup 0ms, collect 820ms, tests 33.22s, environment 0ms, prepare 73ms)
+

@@ -1,0 +1,34 @@
+{
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "pre_status": "recorded",
+  "pre_reason": null,
+  "changed_path_count": 215,
+  "registry_status": "recorded",
+  "registry_revision": "2026-09-27.card04-limited.1",
+  "catalog_revision": "2026-09-27.card04-current-source-rebind.8",
+  "catalog_sha256": "52ff4e9cef411c96133946d7d3315b7e2dd6ae199c473e82336ec4bef6ec1c8d",
+  "bindings": [
+    {
+      "case_id": "CARD04-DECISION-LOG-CENSUS",
+      "source_matches": true,
+      "rule_matches": true,
+      "observation_rule_matches": true
+    },
+    {
+      "case_id": "CARD04-ACCEPTANCE-MACHINE-CLASSES",
+      "source_matches": true,
+      "rule_matches": true,
+      "observation_rule_matches": true
+    },
+    {
+      "case_id": "CARD04-DEFERRED-ACCEPTANCE-REGRESSION",
+      "source_matches": true,
+      "rule_matches": true,
+      "observation_rule_matches": true
+    }
+  ],
+  "selection_status": "unavailable",
+  "selection_reason": "unmapped_changed_path",
+  "selected_case_ids": []
+}

@@ -1,0 +1,20 @@
+--- test-asset-governance-rules.before.md
++++ test-asset-governance-rules.md
+@@ -12,7 +12,7 @@
+ 
+ 验收 oracle 的期望业务结果须在改实现前确定，不能由当前代码输出反推。目标隔离形态只有 `只读` 或 `隐藏`：`只读` 时实现者可看测试但无写权限；`隐藏` 时连测试内容也不可读。验收时应实际观察实现者的读写权限；仅写 `DO NOT TOUCH` 或让另一个上下文起草，不证明物理隔离。若实现者能写测试，或隐藏模式仍能读取，AC-17 失败。
+ 
+-每份 oracle/预置测试记 `provenance`：产出者、产出上下文和时间、源材料与测试版本、实现者可访问面（`只读`/`隐藏`，或明确「未建立」）、独立判定者是否建立、可复核的原件引用。未建立独立判定者或无法证明权限时标 `incomplete`，保留真实访问边界。本卡单 worktree 目前没有物理读写隔离，也没有 AC-17 样例任务；异源上下文和冻结声明只是有限替代，AC-17 仍 `MISSING — not established`。来源：`decision-log.md` OI-005、D-007；`spec.md` DER-12 与 Appendix A AC-17。
++每份 oracle/预置测试记 `provenance`：产出者、产出上下文和时间、源材料与测试版本、实现者可访问面（`只读`/`隐藏`，或明确「未建立」）、独立判定者是否建立、可复核的原件引用。未建立独立判定者或无法证明权限时标 `incomplete`，保留真实访问边界。本卡 P6/T025 已有独立复核的受限实施者窄样例：两个独立启动的容器分别验证测试只读和隐藏，原件见 `quality/evidence/stage-quality/build-code/P6/T025-T026-narrow-sample-20260927.md` 及外置 Task 的独立复核。该样例只覆盖已测路径；所有网络绕路未证，认证文件也未最小化，不能据此判 AC-17、P6 或整卡完成。来源：`decision-log.md` OI-005、D-007；`spec.md` DER-12 与 Appendix A AC-17。
+ 
+ ## 有效 RED 与 G-2 豁免（DER-01；FR-18/AC-18、FR-19/AC-19）
+ 
+@@ -40,7 +40,7 @@
+ 
+ ## 报告事实层、exceptions 与不对称压缩（DER-01、DER-05、DER-06、DER-13）
+ 
+-阶段末按纯文本路径调用计划中的 `runtime/stage/stage-end-report.mjs` 导出，消费真实阶段结果和证据目录；不改变现有 stage 流程。事实层 `stage-end-report-facts.v1` 应保留 `not_done[]`、`route_applicability[]`、`executions[]`、`coverage_limits[]`、`exceptions[]`、`sources[]`。执行项逐条列命令、exit、output/ref 与来源；逐 AC 列路线适用及不能证明的部分。缺输入标缺失，不凭文件名或概述制造来源。P5/T007 只负责未来事实层；P5/T008 中途检查点目前 blocked/not_done/G2，P13/T024 才负责 P1–P12 的最终聚合与独立聊天叙述；二者不能互相替代。
++阶段末按纯文本路径调用 `runtime/stage/stage-end-report.mjs` 的现有导出，消费真实阶段结果和证据目录；不改变现有 stage 流程。事实层 `stage-end-report-facts.v1` 应保留 `not_done[]`、`route_applicability[]`、`executions[]`、`coverage_limits[]`、`exceptions[]`、`sources[]`。执行项逐条列命令、exit、output/ref 与来源；逐 AC 列路线适用及不能证明的部分。缺输入标缺失，不凭文件名或概述制造来源。P5/T007 的事实转换器已有实现；P5/T008 的真实阶段报告与正式来源仍未完成，P13/T024 负责 P1–P12 的最终聚合与独立聊天叙述；局部实现不能代替阶段或整卡验收。
+ 
+ 机器判定类 `not_done` 只用 `missing`、`inconsistent`、`incomplete`、`failed`、`unavailable`，逐条说明源路径和原因。`exceptions` 是人事先声明、验收时披露的非通过项，如 `deferred` 或人工例外；每条写声明者、理由、影响范围、到期阶段和 owner。`coverage_limits` 记录尚未证明的范围及影响。机器判定类与人写声明类不得互相顶替：缺测试不能写成人工豁免而消失，人工延期也不能假称机器判定。`coverage_limits` 与 `exceptions` **空数组不合法**，各至少一条真实披露；没有可确认例外时须由 owner 查清契约如何如实表达，不能编造一个例外凑数组。来源：D-004/DER-05、`spec.md` §5.1/§7。
+ 

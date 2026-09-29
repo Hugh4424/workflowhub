@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+stdout | tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 三、缺料的精确错误 > 缺料-3（观测，不断言）缺料夹具上 build-plan 真实执行的原始形态
+[观测/非断言] run --action=execute --stage=build-plan（缺 phases/index.md）：exit=1 stderr 首行="Error: current task material missing or unreadable: spec.md; phases/index.md"
+
+ ✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 40766ms
+   ✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 14100ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  18:25:59
+   Duration  40.89s (transform 142ms, setup 0ms, collect 16ms, tests 40.77s, environment 0ms, prepare 29ms)
+

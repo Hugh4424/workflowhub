@@ -1,0 +1,2170 @@
+{
+  "schema": "card04-p10-unmapped-path-census.local-evidence.v1",
+  "purpose": "Read-only human ownership and consumer audit; not selector filtering, case activation, or a quality pass.",
+  "indexed_at_utc": "2026-09-27T12:24:42.681298+00:00",
+  "input": {
+    "task_root": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919",
+    "source_ref": "quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/cli-stdout.raw.txt",
+    "source_sha256": "b21bdb32d7e09bc4b92ef3a0cd213f29d60c5d058cab5d400889332b759ae8f2",
+    "json_pointer": "/targeted_capture/unmapped_changed_paths",
+    "cross_check_pointer": "/case_reconciliation/unmapped_changed_paths",
+    "path_count": 206
+  },
+  "run_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "start_ref": "identity/executions/bootstrap-workflowhub-thin-core-card-04-20260919.json",
+    "start_commit": "35a881ac3c3288249677597a9079d445949de778",
+    "start_tree": "61b56b594f5c22c71c8743ca908fad85c017574f",
+    "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+    "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+    "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+    "catalog_revision": "2026-09-27.card04-current-source-rebind.10",
+    "catalog_sha256": "f4f5dc307b83e4f73d4bd4b6479d1030fa1efa56473c8ded3282c44a74445306"
+  },
+  "index_read_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+    "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+    "note": "HEAD tree is not the dirty worktree snapshot tree. No current worktree snapshot was recomputed."
+  },
+  "git_provenance": {
+    "committed_delta_command": [
+      "git",
+      "diff",
+      "--name-only",
+      "-z",
+      "35a881ac3c3288249677597a9079d445949de778",
+      "ef920f1fbd415fe87d50930359059b661e141acd"
+    ],
+    "commits_between_start_and_head": [
+      {
+        "sha": "ef920f1fbd415fe87d50930359059b661e141acd",
+        "subject": "archive specs/workflowhub-thin-core-card-05-20260919"
+      },
+      {
+        "sha": "24a4a751e6df50afadc431114374a2aebfade4fe",
+        "subject": "Merge branch 'task/workflowhub/workflowhub-thin-core-card-05-20260919'"
+      },
+      {
+        "sha": "64e74acbc9aaf979a887123314af119d375dce94",
+        "subject": "workflowhub ephemeral workspace snapshot"
+      }
+    ],
+    "committed_delta_total_paths": 149,
+    "unmapped_paths_in_committed_delta": 145,
+    "dirty_at_index_read_command": [
+      "git diff --name-only -z HEAD",
+      "git ls-files --others --exclude-standard -z"
+    ],
+    "unmapped_paths_dirty_at_index_read": 68,
+    "committed_and_dirty_overlap_paths": [
+      "docs/architecture/move-map.json",
+      "runtime/review/review-record-route.mjs",
+      "tests/contract/acceptance-execution-tier.test.mjs",
+      "tests/contract/post-phase-official-handler.test.mjs",
+      "tests/contract/post-spec-analyze-original-source.test.mjs",
+      "tools/cli/stage-runtime.mjs",
+      "workflows/build-code/SKILL.md",
+      "workflows/verify-code/SKILL.md"
+    ],
+    "timing_limit": "Dirty state is read at index creation, after the official capture; origin_bucket uses fixed start-to-HEAD commit delta and captured 206-path list."
+  },
+  "counts": {
+    "unmapped": 206,
+    "full_changed_scope": 215,
+    "mapped": 9,
+    "origin_buckets": {
+      "card05_archive_committed": 51,
+      "card05_merge_nonarchive_committed": 94,
+      "worktree_only_at_run": 61
+    },
+    "surface_buckets": {
+      "core": 1,
+      "docs": 11,
+      "root": 3,
+      "runtime": 16,
+      "skills": 21,
+      "specs_archive_card05": 51,
+      "specs_current_card04": 13,
+      "tests": 72,
+      "tools": 3,
+      "workflows": 15
+    }
+  },
+  "mapped_changed_paths": [
+    "runtime/evidence/acceptance-evidence-validator.mjs",
+    "runtime/evidence/freshness.mjs",
+    "runtime/evidence/quality-store.mjs",
+    "runtime/stage/stage-content-contracts.mjs",
+    "runtime/stage/stage-handlers.mjs",
+    "runtime/stage/stage-runner.mjs",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md"
+  ],
+  "entries": [
+    {
+      "path": "AGENTS.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "root",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "CONTEXT.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "root",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "core/artifact-dir.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "core",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "WorkflowHub runtime/task owner",
+      "consumer_hint": "official stage CLI and Task fact writer/reader",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "docs/adr/0032-review-chain-delegation-and-layer-contract.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/architecture/complexity-baseline.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/architecture/move-map.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/architecture/real-entry-inventory.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/architecture/test-asset-governance-rules.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/architecture/test-asset-inventory.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/quality/business-case-catalog.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P8 catalog owner",
+      "consumer_hint": "P9/P10 fixed targeted capture source reader",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "docs/quality/test-asset-registry.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9 test asset owner",
+      "consumer_hint": "P9 inventory and P10 fixed targeted capture",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "docs/stage-atomic-step-inventory.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "docs/standard-workflow.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "docs",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning docs/architecture maintainer to verify",
+      "consumer_hint": "material/architecture diagnostics; machine consumers to verify",
+      "risk_cluster": null
+    },
+    {
+      "path": "runtime/review/canonical-review-result.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/review/ocr-delegation-adapter.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/review/review-packet-identity.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/review/review-record-route.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/review/schemas/attempt.schema.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/review/schemas/result.schema.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "runtime/stage/completion-predicates.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/stage/protocol-error-whitelist.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/stage/stage-agent-outcome-adapter.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/stage/stage-context.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/stage/stage-end-report.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P5 report owner",
+      "consumer_hint": "P6/P13 authenticated report consumers",
+      "risk_cluster": "p5_report"
+    },
+    {
+      "path": "runtime/stage/stage-end-report.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P5 report owner",
+      "consumer_hint": "P6/P13 authenticated report consumers",
+      "risk_cluster": "p5_report"
+    },
+    {
+      "path": "runtime/stage/stage-handoff.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/stage/stage-runner.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04/CARD05 stage runtime owner to verify",
+      "consumer_hint": "official run/status and acceptance fact consumers",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/task/task-kernel-implementation.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "WorkflowHub runtime/task owner",
+      "consumer_hint": "official stage CLI and Task fact writer/reader",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "runtime/task/task-store.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "runtime",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "WorkflowHub runtime/task owner",
+      "consumer_hint": "official stage CLI and Task fact writer/reader",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "skills/architect-code-review/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/architect-code-review/skill-bundle.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/catalog.yaml",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/decision-log/SKILL.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/decision-log/templates/decision-log-template.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/dsh-code-review/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/dsh-code-review/skill-bundle.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/reuse-registry.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/spec-analyze/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/spec-analyze/packet-lens.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/spec-analyze/skill-bundle.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/spec-specify/skill-bundle.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/spec-specify/templates/spec-template.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "skills/wh-review/contracts/build-code.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/contracts/verify-code.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/scripts/review-materials.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/scripts/simple-review-runner.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/scripts/wh-review-cli.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "skills/wh-review/skill-bundle.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "skills",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 review owner",
+      "consumer_hint": "official review and verify-code evidence consumer",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/decision-log.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/P1.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/P2.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/P3.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/P4.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/P5.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/phases/index.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/EXP-arm-a-kimi-cli-review.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/EXP-arm-b-dsh-subagent-review.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/RF-16-step6-timestamps.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/RF-18-ocr-delegate-packet-recipe.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/SD08-independent-alternative-review.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/SPEC-ANALYZE-lens-findings-make-decision.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/STEP12-stage-end-spec-analyze-gap.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/build-plan-merged-review-execution.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/build-plan-step-audit.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/card02-merged-review-audit.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/code-diff-baseline-packet.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/post-build-plan-runtime-readiness.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/P21/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T002/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T003/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T005/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006-candidate/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006-candidate/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006-candidate/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T006/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T009/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/exit.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/T010/manifest.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/index.json",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/oracle-p2-plain-path-20260922.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/t008/broker-test-source.mjs",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/t008/command.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/t008/exit-code.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/t008/stderr.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/research/red-evidence/t008/stdout.txt",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/archive/workflowhub-thin-core-card-05-20260919/spec.md",
+      "origin_bucket": "card05_archive_committed",
+      "surface_bucket": "specs_archive_card05",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05 archive owner",
+      "consumer_hint": "historical provenance reader; active consumer requires separate proof",
+      "risk_cluster": null
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P13.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/index.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/spec.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 material/Phase owner",
+      "consumer_hint": "build-code and verify-code current material reader",
+      "risk_cluster": "current_material"
+    },
+    {
+      "path": "tests/contract/acceptance-execution-tier.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/acceptance-result-machine-classes.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/acceptance-verdict-independence.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-case-reconciliation.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-case-selection.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-change-scope.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-preexecution-source.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-targeted-capture.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-targeted-runner.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-test-inventory.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/build-code-test-registry.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/business-case-catalog.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/business-case-source-binding.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/card04-final-aggregate.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/census-upstream-authoring.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/close-sidecar-and-archive.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/confirmation-authorization.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/decision-freeze-current-oi.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/decision-log-census.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/diff-evidence-capture-point.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-ac001-013-experiments.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-ac006-011-experiments.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-ac006-wallclock.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-delegation-adapter.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-delegation-route.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/ocr-production-cutover.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/oracle-mirror.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/p5-same-run-report-source.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-build-plan-missing-index.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-business-browser-reconciliation.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-phase-contract.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-phase-official-handler.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-quality-fact-scope.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/post-spec-analyze-original-source.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/repository-inventory.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/review-history-canonical-reader.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/review-material-change-redispatch.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/review-materials-contract.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/review-public-entrypoints.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/spec-analyze-truthfulness.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-agent-outcome-post-cohort.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-completion.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-handoff.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-progress-contract.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-routing-and-concrete-testing.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-runtime-material-check.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/stage-skill-invocation-contract.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/status-derivation.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/task-bootstrap-integrity.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/upstream-coverage-ledger.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/verify-architect-acceptance.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/verify-authority-boundary.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/verify-code-binding-derivation.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/verify-code-business-handoff.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/verify-code-dsh-public-run.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/workflow-synchronization-consumer.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/contract/workspace-binding.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/e2e/card-04-real-entry-chain-e2e.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/fixtures/protocol-errors/close-authorization.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/fixtures/protocol-errors/verify-code-binding.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/helpers/formal-review.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/helpers/stage-outcome.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/integration/minimal-task-storage.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/m15-stage-outcome-stop-hook.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/official-component-receipts.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/official-make-decision-cli.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/review/dsh-code-review-publication.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/review/ocr-ac002-007-experiments.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/review/review-foreign-pair-history.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/review/review-managed-lifecycle.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/review/review-record-route.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tests/stage-review-cost-policy.test.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tests",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "owning test/Phase maintainer to verify",
+      "consumer_hint": "targeted test gate and verify-code review",
+      "risk_cluster": null
+    },
+    {
+      "path": "tools/cli/stage-runtime.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tools",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "WorkflowHub runtime/task owner",
+      "consumer_hint": "official stage CLI and Task fact writer/reader",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "tools/cli/task-bootstrap.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tools",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "WorkflowHub runtime/task owner",
+      "consumer_hint": "official stage CLI and Task fact writer/reader",
+      "risk_cluster": "stage_task_runtime"
+    },
+    {
+      "path": "tools/host/workflowhub-stage-agent-protocol.mjs",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "tools",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "vitest.config.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "root",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "workflows/build-code/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/case-reconciliation.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/case-selection.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/change-scope.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/skill-deps.yaml",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/steps.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/targeted-capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/targeted-runner.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-code/test-asset-inventory.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD04 P9/P10 build-code owner",
+      "consumer_hint": "official build-code capture and P13 readback",
+      "risk_cluster": "p8_p9_p10"
+    },
+    {
+      "path": "workflows/build-plan/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "workflows/make-decision/SKILL.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": false,
+      "dirty_at_index_read": true,
+      "owner_hint": "file owner to verify",
+      "consumer_hint": "consumer to verify from reverse references",
+      "risk_cluster": null
+    },
+    {
+      "path": "workflows/verify-code/SKILL.md",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": true,
+      "owner_hint": "CARD05/CARD04 verify-code owner to verify",
+      "consumer_hint": "verify-code stage and final handoff",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "workflows/verify-code/skill-deps.yaml",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05/CARD04 verify-code owner to verify",
+      "consumer_hint": "verify-code stage and final handoff",
+      "risk_cluster": "card05_review"
+    },
+    {
+      "path": "workflows/verify-code/steps.json",
+      "origin_bucket": "card05_merge_nonarchive_committed",
+      "surface_bucket": "workflows",
+      "in_committed_start_to_head_delta": true,
+      "dirty_at_index_read": false,
+      "owner_hint": "CARD05/CARD04 verify-code owner to verify",
+      "consumer_hint": "verify-code stage and final handoff",
+      "risk_cluster": "card05_review"
+    }
+  ]
+}

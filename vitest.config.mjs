@@ -22,6 +22,9 @@ export default defineConfig({
       "specs/**/*.test.mjs",
       "skills/**/*.test.mjs",
       "workflows/build-code/__tests__/**/*.test.mjs",
+      // CARD-04 (workflowhub-thin-core-card-04-20260919): runtime 模块的就近共置
+      // 单测（CLARIFY-BP-001 甲裁定，规则见 docs/architecture/test-asset-governance-rules.md）。
+      "runtime/**/*.test.mjs",
     ],
     exclude: [
       "node_modules/**",

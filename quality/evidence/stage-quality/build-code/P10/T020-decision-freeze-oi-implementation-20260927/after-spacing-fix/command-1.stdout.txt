@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/decision-freeze-current-oi.test.mjs (26 tests) 13ms
+
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+   Start at  22:58:17
+   Duration  281ms (transform 84ms, setup 0ms, collect 160ms, tests 13ms, environment 0ms, prepare 33ms)
+

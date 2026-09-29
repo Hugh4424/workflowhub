@@ -1,0 +1,206 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-1 build-code 阶段末报告事实文件落盘于 P5 约定路径
+AssertionError: 阶段末报告事实文件缺失：/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/store/Projects/workflowhub/tasks/card04-e2e-1-69621/quality/evidence/stage-quality/build-code/P5/report-facts.json
+实际找到的 report-facts.json：[]
+stage-quality/build-code 目录内容：["acceptance_criteria-f45b8f0bd9643a507a5ca90dd61ff025ff71ff967c51dbc4d7af235c22646d3f.json","acceptance_execution-0c25a39a239ce28b06aff2e1729f2167e14aa6c717ee043f8a630dd2f3e34895.json","finding_dispositions-a327dc68e78e732c5dc7f10046ae839b794c592c8ce119a3f1ea7d740ffa4af1.json","stage_end_spec_analyze-380a8eb7c1f157511d4b896c6a9a1b69a32951046ccea327dbddeaf695a14dba.json"]
+quality/evidence 目录内容：["acceptance","handoff","stage-quality","stage-quality-missing","stage-reflection-availability"]
+
+# run --action=execute --stage=build-code
+$ (cwd=/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/worktree) node tools/cli/stage-runtime.mjs run --action=execute --stage=build-code --project=workflowhub --task=card04-e2e-1-69621 --task-path=/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/store/Projects/workflowhub/tasks/card04-e2e-1-69621
+exit=0 signal=null durationMs=5862
+--- stdout ---
+{
+  "schema_version": "stage-runtime-result.vnext",
+  "stage": "build-code",
+  "status": "in_progress",
+  "work_status": "ready",
+  "continuation_allowed": true,
+  "readiness": {
+    "stage": "build-code",
+    "work_status": "ready",
+    "continuation_allowed": true,
+    "work_authority": "current-spec-and-indexed-phases",
+    "readiness_source": "current-material-presence",
+    "required_materials": [
+      "decision-log.md",
+      "spec.md",
+      "phases/index.md",
+      "phases/P1.md"
+    ],
+    "missing_materials": []
+  },
+  "completion": {
+    "stage": "build-code",
+    "status": "in_progress",
+    "predicates": {
+      "risk_tests_fresh": {
+        "kind": "test",
+        "status": "missing",
+        "fact_ref": null
+      },
+      "acceptance_criteria": {
+        "kind": "acceptance_criterion",
+        "status": "missing",
+        "fact_ref": null
+      },
+      "finding_dispositions": {
+        "kind": "acceptance_criterion",
+        "status": "missing",
+        "fact_ref": null
+      }
+    },
+    "fact_refs": [],
+    "missing": [
+      "risk_tests_fresh",
+      "acceptance_criteria",
+      "finding_dispositions"
+    ]
+  },
+  "quality_status": "incomplete",
+  "quality_warnings": [
+    "risk_tests_fresh:missing",
+    "acceptance_criteria:missing",
+    "finding_dispositions:missing",
+    "current implementation/test facts are unavailable; record them when available",
+    "post Phase acceptance contract requires one acceptance_role=acceptance Task",
+    "post Phase acceptance contract requires exactly one acceptance_role card (found 0)",
+    "post Phase acceptance contract requires exactly one acceptance_data card (found 0)",
+    "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace",
+    "current review result is unavailable for finding disposition",
+    "UI applicability is missing: record the three input facts in decision-log.md",
+    "UI applicability is missing: ask the user whether this task changes a page, interaction, or frontend component",
+    "browser QA applicability is unknown: derive ui/fullstack impact before execution"
+  ],
+  "quality_fact_refs": [
+    "quality/facts/e66b56585dfd345b984066fe776db658f78b63acbeb447d58ddc5d946a483970.json",
+    "quality/facts/d484436a2f8fcda583881dd4403182852c49f973dc50e232a584ad18d24fd60d.json",
+    "quality/facts/8706d6869a9800bd9c9fd290c743db9d01ade2a4649e9fbaeb426a4ab0a43a1f.json",
+    "quality/facts/64edd4b2fc375c3fc36540ef3a1e45e321519cd3a384da7df911e4103bfde864.json",
+    "quality/facts/c6dbff9c30697ab60a36a955e75cd36db7df0bd3300e3fc3ced8860f71f9ad50.json"
+  ],
+  "quality_advisory_fact_refs": [
+    "quality/facts/5dccc303f40f1482f3084ae3bc05fe1086f6fa75ed92c3bdeac1184fee31a40f.json",
+    "quality/facts/64edd4b2fc375c3fc36540ef3a1e45e321519cd3a384da7df911e4103bfde864.json",
+    "quality/facts/c6dbff9c30697ab60a36a955e75cd36db7df0bd3300e3fc3ced8860f71f9ad50.json"
+  ],
+  "quality_advisories": [
+    "stage-end-spec-analyze:material_incomplete",
+    "acceptance_execution:missing",
+    "phase_review:missing"
+  ],
+  "missing_items": [
+    "current implementation/test facts are unavailable; record them when available",
+    "post Phase acceptance contract requires one acceptance_role=acceptance Task",
+    "post Phase acceptance contract requires exactly one acceptance_role card (found 0)",
+    "post Phase acceptance contract requires exactly one acceptance_data card (found 0)",
+    "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace",
+    "current review result is unavailable for finding disposition",
+    "UI applicability is missing: record the three input facts in decision-log.md",
+    "UI applicability is missing: ask the user whether this task changes a page, interaction, or frontend component",
+    "browser QA applicability is unknown: derive ui/fullstack impact before execution"
+  ],
+  "stage_reflection": {
+    "status": "unavailable",
+    "step_status": "unavailable",
+    "reflection_status": "unavailable",
+    "ref": null,
+    "sha256": "2eca2d3057a005886a31c2a13a791d1f0ebe128f10007fa84d6dc01db4e08ae0",
+    "persisted": false,
+    "availability": {
+      "ref": "quality/evidence/stage-reflection-availability/2eca2d3057a005886a31c2a13a791d1f0ebe128f10007fa84d6dc01db4e08ae0.json",
+      "sha256": "2eca2d3057a005886a31c2a13a791d1f0ebe128f10007fa84d6dc01db4e08ae0",
+      "status": "published",
+      "idempotent": false,
+      "state": "unavailable",
+      "reason_code": "executor_absent",
+      "value": {
+        "schema_version": "stage-reflection-availability.v1",
+        "record_kind": "availability",
+        "task_id": "card04-e2e-1-69621",
+        "stage": "build-code",
+        "state": "unavailable",
+        "reason_code": "executor_absent",
+        "observed_at": "2026-09-26T23:58:49.272Z",
+        "task_identity": {
+          "task_id": "card04-e2e-1-69621",
+          "worktree": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/worktree",
+          "branch": "task/workflowhub/card04-e2e-1-69621",
+          "attempt": null,
+          "snapshot_tree": null,
+          "material_revision": null
+        }
+      }
+    },
+    "availability_ref": "quality/evidence/stage-reflection-availability/2eca2d3057a005886a31c2a13a791d1f0ebe128f10007fa84d6dc01db4e08ae0.json",
+    "availability_sha256": "2eca2d3057a005886a31c2a13a791d1f0ebe128f10007fa84d6dc01db4e08ae0",
+    "stage_handoff": {
+      "status": "published",
+      "reflection_status": "unavailable",
+      "path": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/store/Projects/workflowhub/tasks/card04-e2e-1-69621/quality/evidence/handoff/build-code.md",
+      "ref": "quality/evidence/handoff/build-code.md",
+      "sha256": "094aa9612fbaab0a3d313b9c63b07855223b85ab0a7c172e7777b714977ad925",
+      "current": true,
+      "section_count": 13,
+      "readback_sha256
+…[truncated 639 chars]
+--- stderr ---
+: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/e2e/card-04-real-entry-chain-e2e.test.mjs:460:9
+    458|           + `quality/evidence 目录内容：${JSON.stringify(listFiles(joi…
+    459|           + transcript(c),
+    460|       ).toBe(true);
+       |         ^
+    461|     });
+    462| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-2 报告事实含 not_done 逐条清单且状态词是机器判定类
+AssertionError: 阶段末报告事实文件缺失：/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/store/Projects/workflowhub/tasks/card04-e2e-1-69621/quality/evidence/stage-quality/build-code/P5/report-facts.json（无法校验 not_done 清单）: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/e2e/card-04-real-entry-chain-e2e.test.mjs:468:74
+    466|       const reportFactsPath = join(chain.taskPath, REPORT_FACTS_RELATI…
+    467|       const exists = existsSync(reportFactsPath);
+    468|       expect(exists, `阶段末报告事实文件缺失：${reportFactsPath}（无法…
+       |                                                                          ^
+    469|       if (!exists) return;
+    470|       const facts = readJsonFile(reportFactsPath);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 五、诚实性：不得把不可用写成通过 > 诚实性-1 语义核查事实：分析器的机器判决必须可见（不是被通用 missing 抹平）
+AssertionError: 语义核查事实的机器判决必须可见：/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-sRXqsb/store/Projects/workflowhub/tasks/card04-e2e-1-69621/quality/evidence/acceptance/build-code/stage_end_spec_analyze-990ae785180cd860a2e5876c6c603b6a19518811a4ef0f4536b7065d81bcdb34.json
+acceptance.result="deferred" summary.actual_outcome="missing"
+stageQuality.status="missing" subject_fact.status="missing" subject_fact.detail="current stage-end spec-analyze is material_incomplete"
+分析器判决 analysis_result.status="material_incomplete"
+subject_fact.evidence_state=undefined
+
+actual_outcome 必须等于分析器判决，而不是通用 missing: expected 'missing' to be 'material_incomplete' // Object.is equality
+
+Expected: "material_incomplete"
+Received: "missing"
+
+ ❯ tests/e2e/card-04-real-entry-chain-e2e.test.mjs:512:107
+    510|         expect(analyzerStatus, `${detail}\n\n分析器必须给出机器判决`).…
+    511|         // ① 验收投影的实际结果必须等于分析器判决（今天被抹成与 status…
+    512|         expect(acceptance.summary?.actual_outcome, `${detail}\n\nactua…
+       |                                                                                                           ^
+    513|         // ② stage-quality 事实必须暴露同类机器判决槽位（今天不存在）
+    514|         expect(stageQuality.subject_fact?.evidence_state, `${detail}\n…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

@@ -1,0 +1,170 @@
+COMMAND=npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+FROZEN_TARGET_SHA256=8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f
+FROZEN_GUARD_SHA256=0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e
+STARTED_AT_UTC=2026-09-26T12:16:24.197334+00:00
+COMPLETED_AT_UTC=2026-09-26T12:16:25.789779+00:00
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests | 13 failed) 20ms
+   × acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result missing and returns a frozen value 5ms
+     → expected 'REJECTED: Error: acceptance evidence …' to be 'missing' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result inconsistent and returns a frozen value 1ms
+     → expected 'REJECTED: Error: acceptance evidence …' to be 'inconsistent' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result incomplete and returns a frozen value 0ms
+     → expected 'REJECTED: Error: acceptance evidence …' to be 'incomplete' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result unavailable and returns a frozen value 0ms
+     → expected 'REJECTED: Error: acceptance evidence …' to be 'unavailable' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > rejects an unknown result with a message that names every allowed result 1ms
+     → rejection message must list the allowed value missing: expected 'Error: acceptance evidence result mus…' to contain 'missing'
+   × acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class missing incomplete instead of passed 1ms
+     → expected 'REJECTED: TypeError: verify criterion…' to be 'incomplete' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class inconsistent incomplete instead of passed 1ms
+     → expected 'REJECTED: TypeError: verify criterion…' to be 'incomplete' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class incomplete incomplete instead of passed 0ms
+     → expected 'REJECTED: TypeError: verify criterion…' to be 'incomplete' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class unavailable incomplete instead of passed 1ms
+     → expected 'REJECTED: TypeError: verify criterion…' to be 'incomplete' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result missing 1ms
+     → dependencies: {"fact":"current","evidence:quality/evidence/ac-21.json":"stale"}: expected 'unavailable' to be 'recorded' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result inconsistent 0ms
+     → dependencies: {"fact":"current","evidence:quality/evidence/ac-21.json":"stale"}: expected 'unavailable' to be 'recorded' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result incomplete 0ms
+     → dependencies: {"fact":"current","evidence:quality/evidence/ac-21.json":"stale"}: expected 'unavailable' to be 'recorded' // Object.is equality
+   × acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result unavailable 0ms
+     → dependencies: {"fact":"current","evidence:quality/evidence/ac-21.json":"stale"}: expected 'unavailable' to be 'recorded' // Object.is equality
+ ✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 7ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  13 failed | 30 passed (43)
+   Start at  20:16:24
+   Duration  969ms (transform 338ms, setup 0ms, collect 1.23s, tests 27ms, environment 0ms, prepare 92ms)
+
+STDOUT_END
+STDERR_BEGIN
+WebSocket server error: Port is already in use
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result missing and returns a frozen value
+AssertionError: expected 'REJECTED: Error: acceptance evidence …' to be 'missing' // Object.is equality
+
+Expected: "missing"
+Received: "REJECTED: Error: acceptance evidence result must be pass, fail, inconclusive, or deferred"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:200:9
+    198|       expect(
+    199|         validated.ok ? validated.value.result : `REJECTED: ${validated…
+    200|       ).toBe(result);
+       |         ^
+    201|       expect(Object.isFrozen(validated.value)).toBe(true);
+    202|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result inconsistent and returns a frozen value
+AssertionError: expected 'REJECTED: Error: acceptance evidence …' to be 'inconsistent' // Object.is equality
+
+Expected: "inconsistent"
+Received: "REJECTED: Error: acceptance evidence result must be pass, fail, inconclusive, or deferred"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:200:9
+    198|       expect(
+    199|         validated.ok ? validated.value.result : `REJECTED: ${validated…
+    200|       ).toBe(result);
+       |         ^
+    201|       expect(Object.isFrozen(validated.value)).toBe(true);
+    202|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result incomplete and returns a frozen value
+AssertionError: expected 'REJECTED: Error: acceptance evidence …' to be 'incomplete' // Object.is equality
+
+Expected: "incomplete"
+Received: "REJECTED: Error: acceptance evidence result must be pass, fail, inconclusive, or deferred"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:200:9
+    198|       expect(
+    199|         validated.ok ? validated.value.result : `REJECTED: ${validated…
+    200|       ).toBe(result);
+       |         ^
+    201|       expect(Object.isFrozen(validated.value)).toBe(true);
+    202|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result unavailable and returns a frozen value
+AssertionError: expected 'REJECTED: Error: acceptance evidence …' to be 'unavailable' // Object.is equality
+
+Expected: "unavailable"
+Received: "REJECTED: Error: acceptance evidence result must be pass, fail, inconclusive, or deferred"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:200:9
+    198|       expect(
+    199|         validated.ok ? validated.value.result : `REJECTED: ${validated…
+    200|       ).toBe(result);
+       |         ^
+    201|       expect(Object.isFrozen(validated.value)).toBe(true);
+    202|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > rejects an unknown result with a message that names every allowed result
+AssertionError: rejection message must list the allowed value missing: expected 'Error: acceptance evidence result mus…' to contain 'missing'
+
+Expected: "missing"
+Received: "Error: acceptance evidence result must be pass, fail, inconclusive, or deferred"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:209:84
+    207|       const message = rejected.ok ? "" : rejected.error;
+    208|       for (const result of ACCEPTANCE_RESULTS) {
+    209|         expect(message, `rejection message must list the allowed value…
+       |                                                                                    ^
+    210|       }
+    211|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class missing incomplete instead of passed
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class inconsistent incomplete instead of passed
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class incomplete incomplete instead of passed
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class unavailable incomplete instead of passed
+AssertionError: expected 'REJECTED: TypeError: verify criterion…' to be 'incomplete' // Object.is equality
+
+Expected: "incomplete"
+Received: "REJECTED: TypeError: verify criterion 0 is incomplete or duplicated"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:217:73
+    215|     it.each(MACHINE_RESULTS)("keeps machine class %s incomplete instea…
+    216|       const outcome = asOutcome(() => validateVerifyLeaves([verifyLeaf…
+    217|       expect(outcome.ok ? outcome.value : `REJECTED: ${outcome.error}`…
+       |                                                                         ^
+    218|     });
+    219| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result missing
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result inconsistent
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result incomplete
+ FAIL  tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result unavailable
+AssertionError: dependencies: {"fact":"current","evidence:quality/evidence/ac-21.json":"stale"}: expected 'unavailable' to be 'recorded' // Object.is equality
+
+Expected: "recorded"
+Received: "unavailable"
+
+ ❯ tests/contract/acceptance-result-machine-classes.test.mjs:234:80
+    232|       (result) => {
+    233|         const evaluated = authenticateBoundAcceptanceLeaf("missing", r…
+    234|         expect(evaluated.status, `dependencies: ${dependenciesOf(evalu…
+       |                                                                                ^
+    235|         expect(evaluated.authenticated, `dependencies: ${dependenciesO…
+    236|       },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+STDERR_END
+EXIT=1

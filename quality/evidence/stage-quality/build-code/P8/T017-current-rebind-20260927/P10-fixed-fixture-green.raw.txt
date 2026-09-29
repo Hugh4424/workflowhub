@@ -1,0 +1,57 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (10 tests | 1 failed | 9 skipped) 20706ms
+   × P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 20706ms
+     → expected { status: 'unavailable', …(11) } to match object { status: 'unavailable', …(7) }
+(4 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts
+AssertionError: expected { status: 'unavailable', …(11) } to match object { status: 'unavailable', …(7) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "business_effect_reason": "missing_current_business_effect",
++   "business_effect_reason": "invalid_business_effect_binding",
+    "entries": Array [
+      Object {
+        "case_id": "CASE-PRODUCT",
+        "status": "observed_this_call",
+      },
+      Object {
+        "case_id": "CASE-PRODUCT-2",
+        "status": "observed_this_call",
+      },
+      Object {
+        "case_id": "CASE-PRODUCT-3",
+        "status": "observed_this_call",
+      },
+    ],
+    "execution_freshness": "observed_now",
+    "manifest_ref": "quality/evidence/build-code-targeted/manifest-e6707d54948b923af7daef5e7ac6ae6c8d1037b02f6b0a95711a91ddc84ec6da.json",
+    "reason": "business_effect_unavailable",
+    "receipt_ref": "quality/tests/targeted/adb8d1d4-6314-477f-a520-179696177bdb.json",
+    "status": "unavailable",
+    "task_id": "targeted-418e7aa7-595b-4bff-880c-643f8047c23d",
+  }
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:174:42
+    172|       expect(pointer.reports).toHaveLength(3);
+    173|       expect(pointer.reports.map((entry) => entry.record_hash)).toEqua…
+    174|       expect(result.case_reconciliation).toMatchObject({ status: "unav…
+       |                                          ^
+    175|         reason: "business_effect_unavailable", execution_freshness: "o…
+    176|         business_effect_reason: "missing_current_business_effect",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  17:24:51
+   Duration  21.17s (transform 152ms, setup 0ms, collect 356ms, tests 20.71s, environment 0ms, prepare 29ms)
+

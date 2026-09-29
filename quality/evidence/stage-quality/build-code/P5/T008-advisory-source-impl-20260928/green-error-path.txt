@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/p5-same-run-report-source.test.mjs (34 tests | 31 skipped) 30483ms
+   ✓ P5 same-run report source > surfaces advisory original read EACCES before writing a P5 report 10572ms
+   ✓ P5 same-run report source > surfaces advisory original read EPERM before writing a P5 report 10006ms
+   ✓ P5 same-run report source > surfaces advisory original read EIO before writing a P5 report 9905ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 31 skipped (34)
+   Start at  04:36:02
+   Duration  31.24s (transform 280ms, setup 0ms, collect 641ms, tests 30.48s, environment 0ms, prepare 27ms)
+

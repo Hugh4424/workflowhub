@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs (52 tests | 51 skipped) 21187ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > does not reuse a genuine older test receipt as this run's effect 21186ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 51 skipped (52)
+   Start at  17:24:04
+   Duration  21.65s (transform 155ms, setup 0ms, collect 354ms, tests 21.19s, environment 0ms, prepare 25ms)
+

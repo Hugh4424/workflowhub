@@ -1,0 +1,645 @@
+{
+  "schema": "card04-p10-worktree-only-61-readonly-audit.v1",
+  "scope_definition": "exact origin_bucket=worktree_only_at_run from source index; no path added or removed",
+  "source_index": {
+    "path": "quality/evidence/stage-quality/build-code/P10/T020-unmapped-206-census-20260927/index.json",
+    "sha256": "2125e618b10ac49fdfbc50bc9a1acee9485c999f4a6874eb485e9eb90ba76a30",
+    "count": 61,
+    "run_identity": {
+      "task_id": "workflowhub-thin-core-card-04-20260919",
+      "start_ref": "identity/executions/bootstrap-workflowhub-thin-core-card-04-20260919.json",
+      "start_commit": "35a881ac3c3288249677597a9079d445949de778",
+      "start_tree": "61b56b594f5c22c71c8743ca908fad85c017574f",
+      "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+      "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+      "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+      "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+      "catalog_revision": "2026-09-27.card04-current-source-rebind.10",
+      "catalog_sha256": "f4f5dc307b83e4f73d4bd4b6479d1030fa1efa56473c8ded3282c44a74445306"
+    }
+  },
+  "evidence_refs": {
+    "p2": "quality/evidence/stage-quality/build-code/P2/T004-official-current-20260927-7340305f/summary.md",
+    "p3": "quality/evidence/stage-quality/build-code/P3/T005-official-current-20260927-7e11566a/summary.md",
+    "p4": "quality/evidence/stage-quality/build-code/P4/T006-official-current-20260927-fbcf6094/summary.md",
+    "p6": "quality/evidence/stage-quality/build-code/P6/T012-L0-eight-file-20260927/summary.md",
+    "p7": "quality/evidence/stage-quality/build-code/P7/T016-current-contract-20260927/summary.md",
+    "p8": "quality/evidence/stage-quality/build-code/P8/T017-ui-source-rebind-20260927/summary.md",
+    "p9": "quality/evidence/stage-quality/build-code/P9/handoff.md",
+    "p10_contract": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-current-contract-official-20260927/summary.md",
+    "p10_real": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/summary.md",
+    "p11": "quality/evidence/stage-quality/build-code/P11/T022-current-v3-scoped-20260927/summary.md"
+  },
+  "entries": [
+    {
+      "path": "docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P1 文档 owner",
+      "real_consumer": "P1 文档 gate / 架构导航",
+      "existing_test_fact_or_gap": "P1 ADR0033 当前文档 gate exit0；只核文档，不核业务效果",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "docs/architecture/complexity-baseline.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P2/T004",
+      "real_consumer": "复杂度基线诊断",
+      "existing_test_fact_or_gap": "P2 当前正式定向 receipt 1/1，8 skipped；不证明 P8 三例",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "docs/architecture/real-entry-inventory.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P1 文档 owner",
+      "real_consumer": "P1 文档 gate / 架构导航",
+      "existing_test_fact_or_gap": "P1 ADR0033 当前文档 gate exit0；只核文档，不核业务效果",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "docs/architecture/test-asset-governance-rules.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P1 文档 owner",
+      "real_consumer": "P1 文档 gate / 架构导航",
+      "existing_test_fact_or_gap": "P1 ADR0033 当前文档 gate exit0；只核文档，不核业务效果",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "docs/architecture/test-asset-inventory.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T019",
+      "real_consumer": "P10 targeted-capture 的独立测试库存",
+      "existing_test_fact_or_gap": "P9 旧正式 8/8 绑定旧树；P10 真 fixed 捕获读 registry limited.1",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "docs/quality/business-case-catalog.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P8/T017",
+      "real_consumer": "P9 selector 与 P10 case reconciliation",
+      "existing_test_fact_or_gap": "P8 当前本地来源绑定 10/10、目录 2/2；P10 真 fixed 捕获读 .10",
+      "p8_three_case_relation": "catalog_metadata_three_cases"
+    },
+    {
+      "path": "docs/quality/test-asset-registry.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "docs",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T019",
+      "real_consumer": "P10 targeted-capture 的独立测试库存",
+      "existing_test_fact_or_gap": "P9 旧正式 8/8 绑定旧树；P10 真 fixed 捕获读 registry limited.1",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "runtime/stage/stage-context.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P3/T005 与 stage runtime",
+      "real_consumer": "public stage-runtime bootstrap / 材料认证",
+      "existing_test_fact_or_gap": "P3 当前正式定向 receipt 4/4；仅材料入口",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "runtime/stage/stage-end-report.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P5/T007-T008",
+      "real_consumer": "stage-runner 的阶段末报告 / P5 报告读者",
+      "existing_test_fact_or_gap": "P5 历史 8/8 正式 receipt 旧源码；当前真实 T008 报告缺，不能当同版业务证据",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "runtime/stage/stage-end-report.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P5/T007-T008",
+      "real_consumer": "stage-runner 的阶段末报告 / P5 报告读者",
+      "existing_test_fact_or_gap": "P5 历史 8/8 正式 receipt 旧源码；当前真实 T008 报告缺，不能当同版业务证据",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "runtime/stage/stage-runner.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "runtime",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P4/T006",
+      "real_consumer": "stage acceptanceChain / Vitest 路由",
+      "existing_test_fact_or_gap": "P4 当前正式定向 receipt 7/7；配置为共用测试路由",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "skills/decision-log/SKILL.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P7/T016 与 decision-log authoring",
+      "real_consumer": "make-decision 写入当前 decision-log 的技能/模板",
+      "existing_test_fact_or_gap": "P7 当前本地四文件 62/62；真实 Task 是否按模板写入仍需来源核查",
+      "p8_three_case_relation": "upstream_authoring_AC26"
+    },
+    {
+      "path": "skills/decision-log/templates/decision-log-template.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P7/T016 与 decision-log authoring",
+      "real_consumer": "make-decision 写入当前 decision-log 的技能/模板",
+      "existing_test_fact_or_gap": "P7 当前本地四文件 62/62；真实 Task 是否按模板写入仍需来源核查",
+      "p8_three_case_relation": "upstream_authoring_AC26"
+    },
+    {
+      "path": "skills/dsh-code-review/skill-bundle.json",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "skills",
+      "dirty_at_index_read": false,
+      "source_owner": "CARD05 review/verify owner；CARD04 不可代写",
+      "real_consumer": "当前独立 review 能力装载",
+      "existing_test_fact_or_gap": "需 CARD05 owner 的正式来源/版本与真实 review 结果；本卡三例不直接覆盖",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P1 材料 owner",
+      "real_consumer": "P1 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10 材料 owner",
+      "real_consumer": "P10 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "相应 Phase 有当前同版正式定向测试；只核局部合同",
+      "p8_three_case_relation": "execution_contract_three_cases"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P11 材料 owner",
+      "real_consumer": "P11 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P12 材料 owner",
+      "real_consumer": "P12 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P13.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P13 材料 owner",
+      "real_consumer": "P13 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P2 材料 owner",
+      "real_consumer": "P2 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "相应 Phase 有当前同版正式定向测试；只核局部合同",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P3 材料 owner",
+      "real_consumer": "P3 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "相应 Phase 有当前同版正式定向测试；只核局部合同",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P4 材料 owner",
+      "real_consumer": "P4 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "相应 Phase 有当前同版正式定向测试；只核局部合同",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P5 材料 owner",
+      "real_consumer": "P5 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P8 材料 owner",
+      "real_consumer": "P8 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "catalog_governance"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9 材料 owner",
+      "real_consumer": "P9 实现/测试；stage-runtime 材料读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/phases/index.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 build-plan 材料 owner",
+      "real_consumer": "stage-runtime 当前材料/导航读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "specs/workflowhub-thin-core-card-04-20260919/spec.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "specs_current_card04",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 build-plan 材料 owner",
+      "real_consumer": "stage-runtime 当前材料/导航读取",
+      "existing_test_fact_or_gap": "该材料参与16份 material_revision；本路径未由三例单独认证业务效果",
+      "p8_three_case_relation": "material_revision_only"
+    },
+    {
+      "path": "tests/contract/acceptance-result-machine-classes.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P7/T015；CARD05 四类 producer 另有 owner",
+      "real_consumer": "P10 三例第二例测试目标 / 质量值读者",
+      "existing_test_fact_or_gap": "P10 真实 fixed 捕获本例 28/28；官方四类 producer 未证",
+      "p8_three_case_relation": "registered_target_AC27"
+    },
+    {
+      "path": "tests/contract/build-code-case-reconciliation.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021",
+      "real_consumer": "固定选测、执行、逐例读回",
+      "existing_test_fact_or_gap": "P10 当前同版正式三文件 78/78；仍有206未映射",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-case-selection.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021",
+      "real_consumer": "固定选测、执行、逐例读回",
+      "existing_test_fact_or_gap": "P10 当前同版正式三文件 78/78；仍有206未映射",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-change-scope.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "change-scope / test inventory / registry；P10 固定入口",
+      "existing_test_fact_or_gap": "P9 旧正式双文件 8/8 旧树；当前完整四文件同版正式回执未见",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-preexecution-source.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "change-scope / test inventory / registry；P10 固定入口",
+      "existing_test_fact_or_gap": "P9 旧正式双文件 8/8 旧树；当前完整四文件同版正式回执未见",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-targeted-capture.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020",
+      "real_consumer": "fixed targeted capture 端到端合同",
+      "existing_test_fact_or_gap": "P10 当前同版正式单文件 23/23；真实三例49叶另存",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-targeted-runner.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021",
+      "real_consumer": "固定选测、执行、逐例读回",
+      "existing_test_fact_or_gap": "P10 当前同版正式三文件 78/78；仍有206未映射",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-test-inventory.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "change-scope / test inventory / registry；P10 固定入口",
+      "existing_test_fact_or_gap": "P9 旧正式双文件 8/8 旧树；当前完整四文件同版正式回执未见",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "tests/contract/build-code-test-registry.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "change-scope / test inventory / registry；P10 固定入口",
+      "existing_test_fact_or_gap": "P9 旧正式双文件 8/8 旧树；当前完整四文件同版正式回执未见",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "tests/contract/business-case-catalog.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P8/T017",
+      "real_consumer": "P8 catalog 结构与 source/rule revision 合同",
+      "existing_test_fact_or_gap": "P8 当前本地 2/2 + 10/10；仅绑定，不是效果",
+      "p8_three_case_relation": "catalog_metadata_three_cases"
+    },
+    {
+      "path": "tests/contract/business-case-source-binding.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P8/T017",
+      "real_consumer": "P8 catalog 结构与 source/rule revision 合同",
+      "existing_test_fact_or_gap": "P8 当前本地 2/2 + 10/10；仅绑定，不是效果",
+      "p8_three_case_relation": "catalog_metadata_three_cases"
+    },
+    {
+      "path": "tests/contract/card04-final-aggregate.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P13/T024",
+      "real_consumer": "全卡最终聚合读者",
+      "existing_test_fact_or_gap": "当前全卡三文件/真实 P5 报告与业务效果缺；不能用局部测试替代",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/census-upstream-authoring.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P7/T016",
+      "real_consumer": "上述模板→正式 parser",
+      "existing_test_fact_or_gap": "P7 当前本地 T016 19/19；夹具护栏，不是当前业务效果",
+      "p8_three_case_relation": "upstream_authoring_AC26"
+    },
+    {
+      "path": "tests/contract/decision-log-census.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009",
+      "real_consumer": "deriveDecisionLogOriginalSourceCensus；P10 三例第一例测试目标",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79 包含本测试；P10 真实 fixed 捕获本例 6/6",
+      "p8_three_case_relation": "registered_target_AC26"
+    },
+    {
+      "path": "tests/contract/oracle-mirror.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009-T012",
+      "real_consumer": "上游来源、审查历史、独立 oracle 与暂存 Task E2E",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79；E2E 夹具，非 CARD04 真业务",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/p5-same-run-report-source.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P5/T007-T008",
+      "real_consumer": "stage-runner 的阶段末报告 / P5 报告读者",
+      "existing_test_fact_or_gap": "P5 历史 8/8 正式 receipt 旧源码；当前真实 T008 报告缺，不能当同版业务证据",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/post-build-plan-missing-index.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P3/T005",
+      "real_consumer": "post build-plan CLI 缺索引处理",
+      "existing_test_fact_or_gap": "P3 本地补测 4/4；当前正式 P3 receipt 只跑 stage-runtime-material-check",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/post-business-browser-reconciliation.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P11/T022",
+      "real_consumer": "真实浏览器/页面来源→acceptance browser 对账",
+      "existing_test_fact_or_gap": "P11 当前本地 5/5 与过滤24/56跳过；真实页面、服务、浏览器来源缺",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/repository-inventory.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P2/T004",
+      "real_consumer": "复杂度基线诊断",
+      "existing_test_fact_or_gap": "P2 当前正式定向 receipt 1/1，8 skipped；不证明 P8 三例",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/review-history-canonical-reader.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009-T012",
+      "real_consumer": "上游来源、审查历史、独立 oracle 与暂存 Task E2E",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79；E2E 夹具，非 CARD04 真业务",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/spec-analyze-truthfulness.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009-T012",
+      "real_consumer": "上游来源、审查历史、独立 oracle 与暂存 Task E2E",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79；E2E 夹具，非 CARD04 真业务",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/stage-runtime-material-check.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P3/T005 与 stage runtime",
+      "real_consumer": "public stage-runtime bootstrap / 材料认证",
+      "existing_test_fact_or_gap": "P3 当前正式定向 receipt 4/4；仅材料入口",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/upstream-coverage-ledger.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009-T012",
+      "real_consumer": "上游来源、审查历史、独立 oracle 与暂存 Task E2E",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79；E2E 夹具，非 CARD04 真业务",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/contract/verify-code-business-handoff.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P12/T023",
+      "real_consumer": "verify-code 业务抽样与授权交接",
+      "existing_test_fact_or_gap": "未见当前同版正式 receipt；真实 verify-code 人工/业务样本需独立来源",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "tests/e2e/card-04-real-entry-chain-e2e.test.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "tests",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P6/T009-T012",
+      "real_consumer": "上游来源、审查历史、独立 oracle 与暂存 Task E2E",
+      "existing_test_fact_or_gap": "P6 当前本地八文件 79/79；E2E 夹具，非 CARD04 真业务",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "vitest.config.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "root",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P4/T006",
+      "real_consumer": "stage acceptanceChain / Vitest 路由",
+      "existing_test_fact_or_gap": "P4 当前正式定向 receipt 7/7；配置为共用测试路由",
+      "p8_three_case_relation": "none"
+    },
+    {
+      "path": "workflows/build-code/capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021，capture 与 P9 共用",
+      "real_consumer": "public verify 固定入口→选择→执行→效果读回",
+      "existing_test_fact_or_gap": "P10 正式合同 78/78+23/23；真实三例49/49，但整体 unavailable、业务 unknown",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "workflows/build-code/case-reconciliation.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021，capture 与 P9 共用",
+      "real_consumer": "public verify 固定入口→选择→执行→效果读回",
+      "existing_test_fact_or_gap": "P10 正式合同 78/78+23/23；真实三例49/49，但整体 unavailable、业务 unknown",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "workflows/build-code/case-selection.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021，capture 与 P9 共用",
+      "real_consumer": "public verify 固定入口→选择→执行→效果读回",
+      "existing_test_fact_or_gap": "P10 正式合同 78/78+23/23；真实三例49/49，但整体 unavailable、业务 unknown",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "workflows/build-code/change-scope.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "P10 targeted-capture / case-reconciliation",
+      "existing_test_fact_or_gap": "P9 旧正式回执；P10 真实 fixed 捕获现读范围与测试库存",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "workflows/build-code/targeted-capture.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021，capture 与 P9 共用",
+      "real_consumer": "public verify 固定入口→选择→执行→效果读回",
+      "existing_test_fact_or_gap": "P10 正式合同 78/78+23/23；真实三例49/49，但整体 unavailable、业务 unknown",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "workflows/build-code/targeted-runner.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P10/T020-T021，capture 与 P9 共用",
+      "real_consumer": "public verify 固定入口→选择→执行→效果读回",
+      "existing_test_fact_or_gap": "P10 正式合同 78/78+23/23；真实三例49/49，但整体 unavailable、业务 unknown",
+      "p8_three_case_relation": "execution_consumer_three_cases"
+    },
+    {
+      "path": "workflows/build-code/test-asset-inventory.mjs",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P9/T018-T019",
+      "real_consumer": "P10 targeted-capture / case-reconciliation",
+      "existing_test_fact_or_gap": "P9 旧正式回执；P10 真实 fixed 捕获现读范围与测试库存",
+      "p8_three_case_relation": "execution_inventory_three_cases"
+    },
+    {
+      "path": "workflows/make-decision/SKILL.md",
+      "origin_bucket": "worktree_only_at_run",
+      "surface_bucket": "workflows",
+      "dirty_at_index_read": true,
+      "source_owner": "CARD04 P7/T016 与 decision-log authoring",
+      "real_consumer": "make-decision 写入当前 decision-log 的技能/模板",
+      "existing_test_fact_or_gap": "P7 当前本地四文件 62/62；真实 Task 是否按模板写入仍需来源核查",
+      "p8_three_case_relation": "upstream_authoring_AC26"
+    }
+  ]
+}

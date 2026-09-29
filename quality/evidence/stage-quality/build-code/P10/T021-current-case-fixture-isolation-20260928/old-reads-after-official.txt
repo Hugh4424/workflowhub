@@ -1,0 +1,50 @@
+
+ RUN  v2.1.9 /private/tmp/workflowhub-p10-fixture-baseline.8Hax8i
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 1 failed | 55 skipped) 17239ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown 6343ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1461ms
+     → expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(5) }
+(4 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown
+AssertionError: expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(5) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "business_effect_reason": "missing_current_business_effect",
++   "business_effect_reason": "current_effect_receipt_mismatch",
+    "entries": Array [
+      Object {
+        "acceptance_criterion_id": "AC-26",
+        "case_id": "CURRENT-AC-26",
+        "leaf_count": 2,
+        "status": "readback",
+      },
+    ],
+    "execution_freshness": "unknown",
+    "reason": "current_execution_unverified",
+    "status": "unavailable",
+    "task_id": "p10-current-5dfc6999-f658-4a38-9635-e460ff771d6d",
+  }
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:518:20
+    516|   it("reads all bound reporter leaves, then keeps the missing business…
+    517|     const result = current();
+    518|     expect(result).toMatchObject({ status: "unavailable", reason: "cur…
+       |                    ^
+    519|       execution_freshness: "unknown", business_effect_reason: "missing…
+    520|       task_id: state.task.identity.taskId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 55 skipped (57)
+   Start at  04:57:55
+   Duration  17.92s (transform 241ms, setup 0ms, collect 575ms, tests 17.24s, environment 0ms, prepare 26ms)
+

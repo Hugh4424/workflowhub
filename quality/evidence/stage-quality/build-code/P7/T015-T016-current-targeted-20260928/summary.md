@@ -1,0 +1,7 @@
+# P7 current targeted official capture
+
+- Command: `npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs`, invoked once through public `stage-runtime.mjs verify --action=execute --stage=build-code` with `request.json`.
+- CLI exit 0; canonical test receipt exit 0; 4 files and 62 tests passed. Raw CLI stdout/stderr, process result, canonical receipt/output byte copies, hashes, and before/after identity are in this directory.
+- Snapshot tree `4381e90d43a7072ba12d1a4359ba757c3ddd5786`; material revision `revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6`; HEAD `ef920f1fbd415fe87d50930359059b661e141acd`. The pre/post Task identity, 16 material hashes, four test hashes, three production hashes, facts hash, branch, and HEAD matched.
+- Canonical receipt: `quality/tests/card04-P7-L0-current-68412f31-061c-4c7c-ac9b-9b45980bc1f8.json`, SHA-256 `2265b8798295c007feb775ac931c5ccce85de1b0d4ee3e9363f7fb39e333085c`. Canonical output: `quality/tests/output/card04-P7-L0-current-68412f31-061c-4c7c-ac9b-9b45980bc1f8.output`, SHA-256 `ac7d920b0db423730c886d7dd976deb99223f167e00a6e0a414a5f378d01e202`. Both match the CLI's claimed hashes.
+- CLI stdout extends the canonical receipt with diagnostic fields, so `copy_matches=false` is expected. This result does not prove historical 123-file byte compatibility, all four machine outcomes in real production, or P7 completion.

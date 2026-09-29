@@ -1,0 +1,19 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/business-case-catalog.test.mjs (2 tests) 6ms
+ ❯ tests/contract/business-case-source-binding.test.mjs (19 tests | 4 failed) 34ms
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect 5ms
+     → expected [ Array(1) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE selects its case when only its own test file changes and rejects a removed trigger 1ms
+     → expected 'unavailable' to be 'selected' // Object.is equality
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect 2ms
+     → expected [ Array(1) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY selects its case when only its own test file changes and rejects a removed trigger 0ms
+     → expected 'unavailable' to be 'selected' // Object.is equality
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  4 failed | 17 passed (21)
+   Start at  06:02:14
+   Duration  167ms (transform 25ms, setup 0ms, collect 29ms, tests 40ms, environment 0ms, prepare 74ms)
+

@@ -1,0 +1,5 @@
+3c8795b1380b2a88906db5644c76f62a712e72c09dce10ff5856984dfd04e2e1  tests/contract/build-code-case-reconciliation.test.mjs
+9a357f2ef2006281a3f8079a43990801c01703480c2222f6106eadacd70a317e  specs/workflowhub-thin-core-card-04-20260919/phases/P10.md
+151a77ae6842fd27b7b87ceee5f43c08e57dcb89c92879b44a08ce48cd413784  workflows/build-code/case-reconciliation.mjs
+4ea52d936efd63df47aa7c3d176c789084b97f514a9d28491952e21662aaa265  quality/evidence/stage-quality/build-code/P10/T021-synthetic-fixture-truth-20260927/before-full-52-stdout.raw.txt
+42199c61d383493cc55c586504b3de521b241e8f3a3ae4ab7370d683a58dd77f  quality/evidence/stage-quality/build-code/P10/T021-synthetic-fixture-truth-20260927/before-full-52-stderr.raw.txt

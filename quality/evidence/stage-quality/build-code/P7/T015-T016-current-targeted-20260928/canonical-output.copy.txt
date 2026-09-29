@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/census-upstream-authoring.test.mjs (15 tests) 6ms
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms
+ ✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 8ms
+ ✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 4ms
+
+ Test Files  4 passed (4)
+      Tests  62 passed (62)
+   Start at  01:07:36
+   Duration  883ms (transform 282ms, setup 0ms, collect 832ms, tests 21ms, environment 0ms, prepare 113ms)
+
+

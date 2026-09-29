@@ -1,0 +1,21 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P11/T022 v2 actual private browser producer > does not start a browser on a self-consistent test receipt from an unrelated producer
+AssertionError: expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs:501:19
+    499|   it("does not start a browser on a self-consistent test receipt from …
+    500|     const { calls, error } = await runPostBrowserSource({ receiptMode:…
+    501|     expect(calls).toHaveLength(0);
+       |                   ^
+    502|     expect(error).toBeDefined();
+    503|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

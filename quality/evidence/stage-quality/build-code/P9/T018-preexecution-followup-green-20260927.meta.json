@@ -1,0 +1,16 @@
+{
+  "command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs tests/contract/build-code-change-scope.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T01:01:45.205Z",
+  "completed_at": "2026-09-27T01:02:04.549Z",
+  "exit_code": 0,
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "source_sha256": "da79f207228cf38abd92513c5bcc29b0bd14a54cfe3556a4d77f4ee7788adcf8",
+  "test_sha256": "e5ec0396366b1936784e2736265de74b9d4733cbe47dc6265920853d130d76af",
+  "adjacent_test_sha256": "21601f344a9ac8c2cbbcc54e5b534d25370d07c25b3e44c41069738a7a57030e",
+  "stdout_sha256": "0d0820ca445e4acfb848227ca28168adf9b0c45be1db5649d5cb7c8f69c530c3",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "red_history_ref": "quality/evidence/stage-quality/build-code/P9/T018-preexecution-red-20260927.meta.json",
+  "note": "Three additional cases passed immediately against the previously implemented source; no new failing implementation state was manufactured."
+}

@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+      API started at http://localhost:51204/
+
+ ✓ runtime/stage/stage-end-report.test.mjs (56 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  56 passed (56)
+   Start at  04:10:15
+   Duration  124ms (transform 17ms, setup 0ms, collect 11ms, tests 17ms, environment 0ms, prepare 25ms)
+

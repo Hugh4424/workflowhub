@@ -1,0 +1,4 @@
+CARD04-DECISION-LOG-CENSUS ids=6 exact_catalog_crosscheck_raw=yes statuses=passed raw_sha256=8b68bcab0243fa6d17d008c76c41aae09fbc8027a424e508c227192d77edfc36
+CARD04-ACCEPTANCE-MACHINE-CLASSES ids=28 exact_catalog_crosscheck_raw=yes statuses=passed raw_sha256=41d64ecfa4fba1c7f35aeab87d64cfb60b475e1f02dc88d60640d18754270de6
+CARD04-DEFERRED-ACCEPTANCE-REGRESSION ids=15 exact_catalog_crosscheck_raw=yes statuses=passed raw_sha256=843f7d8c90f234ccaf88bdb1ce61b0b9aeb7e3dd53a7be6ad360d738879ce849
+TOTAL=49 EXIT=0

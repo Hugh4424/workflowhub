@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ runtime/stage/stage-end-report.test.mjs (14 tests | 5 failed) 16ms
+   × stage-end-report current vNext result disclosure > itemizes incomplete status and every completion gap even when materials are ready and quality passed 5ms
+     → expected [ …(5) ] to deeply equal ArrayContaining{…}
+   × stage-end-report current vNext result disclosure > itemizes blocked work and each named missing material with its source 1ms
+     → expected [ …(6) ] to deeply equal ArrayContaining{…}
+   × stage-end-report current vNext result disclosure > reports per-AC missing evidence for empty object 1ms
+     → expected [ …(4) ] to deeply equal ArrayContaining{…}
+   × stage-end-report current vNext result disclosure > reports per-AC missing evidence for blank ref 0ms
+     → expected [ …(4) ] to deeply equal ArrayContaining{…}
+   × stage-end-report current vNext result disclosure > reports per-AC missing evidence for invalid hash 0ms
+     → expected [ …(4) ] to deeply equal ArrayContaining{…}
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 9 passed (14)
+   Start at  08:39:56
+   Duration  131ms (transform 17ms, setup 0ms, collect 10ms, tests 16ms, environment 0ms, prepare 32ms)
+

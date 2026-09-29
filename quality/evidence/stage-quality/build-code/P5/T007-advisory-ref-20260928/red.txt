@@ -1,0 +1,38 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ runtime/stage/stage-end-report.test.mjs (56 tests | 1 failed | 55 skipped) 13ms
+   × stage-end-report（阶段末报告事实层） > 负控：不同 advisory 的位置不得把 spec-analyze 指向另一份质量事实 12ms
+     → expected { …(4) } to match object { status: 'inconsistent', …(1) }
+(2 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 负控：不同 advisory 的位置不得把 spec-analyze 指向另一份质量事实
+AssertionError: expected { …(4) } to match object { status: 'inconsistent', …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "source": "quality/facts/a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4.json",
++   "source": "quality/facts/0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c.json",
+    "status": "inconsistent",
+  }
+
+ ❯ runtime/stage/stage-end-report.test.mjs:422:24
+    420|     const entries = specAnalyzeEntries(build(input));
+    421|     expect(entries).toHaveLength(1);
+    422|     expect(entries[0]).toMatchObject({ status: "inconsistent", source:…
+       |                        ^
+    423|     expect(entries[0].source).not.toBe(otherFact);
+    424|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 55 skipped (56)
+   Start at  04:03:57
+   Duration  121ms (transform 17ms, setup 0ms, collect 12ms, tests 13ms, environment 0ms, prepare 25ms)
+

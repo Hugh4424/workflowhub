@@ -1,0 +1,12 @@
+{
+  "source": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/e2e/card-04-real-entry-chain-e2e.test.mjs",
+  "archive": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/prewritten-red/P6-T012-original-test.mjs",
+  "sha256": "f470c1ff4885196c9d775c9bb9a6d88e612ef78b5c58fe29af66c4049a0f125e",
+  "bytes": 34767,
+  "recorded_at": "2026-09-26T23:36:46.826581+00:00",
+  "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "note": "Pre-revision exact test bytes; no T012 assertion has been modified by this archive action."
+}

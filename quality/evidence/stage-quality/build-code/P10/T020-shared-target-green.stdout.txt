@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (4 tests | 3 skipped) 6428ms
+   ✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6427ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  10:30:46
+   Duration  6.83s (transform 130ms, setup 0ms, collect 308ms, tests 6.43s, environment 0ms, prepare 24ms)
+

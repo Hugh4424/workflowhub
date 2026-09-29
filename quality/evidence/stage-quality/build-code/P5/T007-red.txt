@@ -1,0 +1,135 @@
+COMMAND=npx vitest run runtime/stage/stage-end-report.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+SNAPSHOT_TREE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+UTC=2026-09-26T11:59:50.953930+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P5
+TASK_IN_PHASE=T007
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ runtime/stage/stage-end-report.test.mjs (8 tests | 7 failed) 9ms
+   × stage-end-report（阶段末报告事实层） > enumerates not_done item by item with machine status, reason and source 3ms
+     → expected 0 to be greater than 0
+   × stage-end-report（阶段末报告事实层） > emits per-AC route applicability with reason and recorded hard requirements 1ms
+     → Cannot read properties of undefined (reading 'applicable')
+   × stage-end-report（阶段末报告事实层） > rejects empty coverage_limits and exceptions and never mixes machine status into declarations 0ms
+     → expected 0 to be greater than 0
+   × stage-end-report（阶段末报告事实层） > renders not_done first, then route applicability and executions, each with a source path 0ms
+     → expected -1 to be greater than or equal to 0
+   × stage-end-report（阶段末报告事实层） > collects from a real stage result file and records a missing file instead of throwing 2ms
+     → expected false to be true // Object.is equality
+   × stage-end-report（阶段末报告事实层） > spec-analyze 判决逐条入账 1ms
+     → expected [] to have a length of 3 but got +0
+   × stage-end-report（阶段末报告事实层） > 负控：spec-analyze 判决通过时不得出现该条 not_done 0ms
+     → expected 0 to be greater than 0
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed (8)
+   Start at  19:59:50
+   Duration  120ms (transform 12ms, setup 0ms, collect 10ms, tests 9ms, environment 0ms, prepare 28ms)
+STDOUT_END
+STDERR_BEGIN
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > enumerates not_done item by item with machine status, reason and source
+AssertionError: expected 0 to be greater than 0
+ ❯ runtime/stage/stage-end-report.test.mjs:98:29
+     96|     const facts = build(BASE_INPUT);
+     97|     const statuses = facts.not_done.map((entry) => entry.status);
+     98|     expect(statuses.length).toBeGreaterThan(0);
+       |                             ^
+     99|     for (const status of statuses) expect(MACHINE_STATUS).toContain(st…
+    100|     const missingItems = facts.not_done.filter((entry) => entry.item =…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > emits per-AC route applicability with reason and recorded hard requirements
+TypeError: Cannot read properties of undefined (reading 'applicable')
+ ❯ runtime/stage/stage-end-report.test.mjs:121:17
+    119|     const facts = build(BASE_INPUT);
+    120|     const ac20 = facts.route_applicability.find((entry) => entry.ac ==…
+    121|     expect(ac20.applicable).toBe(true);
+       |                 ^
+    122|     expect(ac20.hard_requirements).toEqual({ command: true, exit: true…
+    123|     const ac19 = facts.route_applicability.find((entry) => entry.ac ==…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > rejects empty coverage_limits and exceptions and never mixes machine status into declarations
+AssertionError: expected 0 to be greater than 0
+ ❯ runtime/stage/stage-end-report.test.mjs:132:42
+    130|     expect(typeof build).toBe("function");
+    131|     const facts = build({ ...BASE_INPUT, declared: { ...DECLARED, limi…
+    132|     expect(facts.coverage_limits.length).toBeGreaterThan(0);
+       |                                          ^
+    133|     expect(facts.exceptions.length).toBeGreaterThan(0);
+    134|     for (const entry of facts.exceptions) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > renders not_done first, then route applicability and executions, each with a source path
+AssertionError: expected -1 to be greater than or equal to 0
+ ❯ runtime/stage/stage-end-report.test.mjs:149:23
+    147|     const routeAt = markdown.indexOf("路线适用");
+    148|     const executionAt = markdown.indexOf("执行事实");
+    149|     expect(notDoneAt).toBeGreaterThanOrEqual(0);
+       |                       ^
+    150|     expect(routeAt).toBeGreaterThan(notDoneAt);
+    151|     expect(executionAt).toBeGreaterThan(routeAt);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > collects from a real stage result file and records a missing file instead of throwing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ runtime/stage/stage-end-report.test.mjs:179:88
+    177|     });
+    178|     expect(facts.schema_version).toBe("stage-end-report-facts.v1");
+    179|     expect(facts.executions.some((entry) => String(entry.command).incl…
+       |                                                                                        ^
+    180|     expect(facts.coverage_limits.length).toBeGreaterThan(0);
+    181|     const absent = await collect({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > spec-analyze 判决逐条入账
+AssertionError: expected [] to have a length of 3 but got +0
+
+- Expected
++ Received
+
+- 3
++ 0
+
+ ❯ runtime/stage/stage-end-report.test.mjs:258:21
+    256|     // ① 逐条枚举：三条非通过机器判决 → 三条 not_done，不得被总结（合…
+    257|     const entries = specAnalyzeEntries(facts);
+    258|     expect(entries).toHaveLength(SPEC_ANALYZE_VERDICTS.length);
+       |                     ^
+    259|     // ② 状态值只能取机器判定类五值，且每条判决各自的机器词面必须可见…
+    260|     expect(entries.map((entry) => entry.status).sort()).toEqual(SPEC_A…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 负控：spec-analyze 判决通过时不得出现该条 not_done
+AssertionError: expected 0 to be greater than 0
+ ❯ runtime/stage/stage-end-report.test.mjs:288:37
+    286|     // 通过夹具本身仍有其它没做到项（human_confirmation / AC-21 / 非零…
+    287|     // 证明这条断言不是靠「not_done 本来就非空」蒙过去的
+    288|     expect(passing.not_done.length).toBeGreaterThan(0);
+       |                                     ^
+    289|     // 通过判决不得产生任何 spec-analyze 条目（否则第 1 条靠「总是加一…
+    290|     expect(specAnalyzeEntries(passing)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+STDERR_END
+EXIT=1

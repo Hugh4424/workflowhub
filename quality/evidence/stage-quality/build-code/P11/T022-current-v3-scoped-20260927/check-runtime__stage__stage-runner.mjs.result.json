@@ -1,0 +1,8 @@
+{
+  "command": "node --check runtime/stage/stage-runner.mjs",
+  "started_at_utc": "2026-09-27T11:34:20.216Z",
+  "ended_at_utc": "2026-09-27T11:34:20.236Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null
+}

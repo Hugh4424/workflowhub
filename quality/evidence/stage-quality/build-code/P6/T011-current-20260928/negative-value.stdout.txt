@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/oracle-mirror.test.mjs (9 tests | 1 failed) 18ms
+   × CARD-04 仓库外只读 oracle 镜像契约 > ORACLE.json 机器事实键：错误模式 / 报告章节 / 机器状态 4ms
+     → expected [ 'missing' ] to have a length of 5 but got 1
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  05:05:00
+   Duration  120ms (transform 9ms, setup 0ms, collect 7ms, tests 18ms, environment 0ms, prepare 24ms)
+

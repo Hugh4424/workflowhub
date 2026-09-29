@@ -1,0 +1,38 @@
+COMMAND=/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest run tests/contract/census-upstream-authoring-fault-red.test.mjs -t T1e 当前模板填入测试来源后
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/census-upstream-authoring-fault-red.test.mjs (14 tests | 1 failed | 13 skipped) 5ms
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1e 当前模板填入测试来源后，可由真实普查器读取非空分母且三类行各在本节 4ms
+     → expected [ Array(2) ] to deeply equal []
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 skipped (14)
+   Start at  17:11:36
+   Duration  266ms (transform 77ms, setup 0ms, collect 155ms, tests 5ms, environment 0ms, prepare 27ms)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/census-upstream-authoring-fault-red.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1e 当前模板填入测试来源后，可由真实普查器读取非空分母且三类行各在本节
+AssertionError: expected [ Array(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "parser_errors",
++   "U_outside_section",
++ ]
+
+ ❯ tests/contract/census-upstream-authoring-fault-red.test.mjs:113:57
+    111| describe("普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1）…
+    112|   it("T1e 当前模板填入测试来源后，可由真实普查器读取非空分母且三类行各…
+    113|     expect(generatedTemplateProblems(filledTemplate())).toEqual([]);
+       |                                                         ^
+    114|   });
+    115| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+EXIT=1

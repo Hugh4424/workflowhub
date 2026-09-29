@@ -111,7 +111,7 @@
     },
     "review_policy": {
       "type": "object",
-      "required": ["source", "mode", "minimum_heterologous", "requested_profiles", "eligible_profiles", "same_source_exclusions", "effective_profiles"],
+      "required": ["source", "mode", "minimum_heterologous", "requested_profiles", "eligible_profiles", "effective_profiles"],
       "properties": {
         "source": { "enum": ["wh_review.v2", "legacy_3rd_review"] },
         "mode": { "enum": ["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"] },
@@ -133,7 +133,11 @@
           }
         },
         "eligible_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "same_source_exclusions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "same_source_exclusions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Legacy read-only field; current writers do not create reviewer-independence exclusions."
+        },
         "effective_profiles": {
           "type": "array",
           "items": {

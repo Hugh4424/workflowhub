@@ -1,0 +1,17 @@
+command=npx vitest run tests/contract/business-case-catalog.test.mjs
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+utc=2026-09-26T12:23:14Z
+head=ef920f1fbd415fe87d50930359059b661e141acd
+9dc4435b117d52b2148b4373b61201a7f24a858335ddd36e9ad720c2ec907231  tests/contract/business-case-catalog.test.mjs
+5d12d35196d961f6c4e06c5ad365f7e3d1a3044c2a8a352f408128716951377f  docs/quality/business-case-catalog.json
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/business-case-catalog.test.mjs (2 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  20:23:14
+   Duration  141ms (transform 16ms, setup 0ms, collect 11ms, tests 6ms, environment 0ms, prepare 39ms)
+
+EXIT=0

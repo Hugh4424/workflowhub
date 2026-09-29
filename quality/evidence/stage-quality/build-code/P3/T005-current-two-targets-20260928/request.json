@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/stage-runtime-material-check.test.mjs tests/contract/post-build-plan-missing-index.test.mjs",
+  "receipt_ref": "quality/tests/card04-P3-T005-two-targets-2ec04542-fc3c-4f75-8bfb-ec87394bf9da.json",
+  "output_ref": "quality/tests/output/card04-P3-T005-two-targets-2ec04542-fc3c-4f75-8bfb-ec87394bf9da.output",
+  "timeout_ms": 180000
+}

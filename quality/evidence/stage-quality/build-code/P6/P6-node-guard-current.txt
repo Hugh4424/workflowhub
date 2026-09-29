@@ -1,0 +1,18 @@
+COMMAND=node -e 'const [maj,min]=process.versions.node.split(".").map(Number);if(maj!==24||min<14){console.error(`Node >=24.14.0 <25 required, got ${process.versions.node}`);process.exit(1)}console.log(process.versions.node)'
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+input_hashes_stable=true
+recorded_at=2026-09-26T12:20:26.692299+00:00
+stdout:
+24.14.0
+stderr:
+
+EXIT=0

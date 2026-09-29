@@ -68,7 +68,7 @@ describe("DSH code-review canonical publication", () => {
     });
     expect(result.material_id).toBe(createHash("sha256").update(materialBinding).digest("hex"));
     expect(attempt.provider_attempts[0].identity.model).toBe("unknown");
-    expect(attempt.review_policy.effective_profiles[0].model).toBeNull();
+    expect(attempt).not.toHaveProperty("review_policy");
     expect(task.readRecord(refs.report_ref)).toContain('"coverage": "satisfied"');
   });
 

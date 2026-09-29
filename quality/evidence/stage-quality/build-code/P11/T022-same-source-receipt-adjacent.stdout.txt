@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (79 tests | 69 skipped) 83098ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation receipt 6904ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-tests receipt 6741ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-stale-snapshot receipt 6989ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-semantic-tests receipt 6968ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-missing-output receipt 7109ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-output-hash receipt 7034ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation-head receipt 6782ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on a self-consistent test receipt from an unrelated producer 6860ms
+   ✓ acceptance execution tiers > keeps the pre-cohort tests producer available to the historical build-code receipt path 8404ms
+   ✓ acceptance execution tiers > keeps the current stage runnable without an upstream host outcome 19306ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed | 69 skipped (79)
+   Start at  13:42:54
+   Duration  83.84s (transform 293ms, setup 0ms, collect 636ms, tests 83.10s, environment 0ms, prepare 25ms)
+

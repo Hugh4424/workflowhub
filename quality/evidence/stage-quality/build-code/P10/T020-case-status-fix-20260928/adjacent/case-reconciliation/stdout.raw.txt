@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs (53 tests | 52 skipped) 9285ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 52 skipped (53)
+   Start at  01:37:51
+   Duration  9.73s (transform 146ms, setup 0ms, collect 346ms, tests 9.28s, environment 0ms, prepare 24ms)
+

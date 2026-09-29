@@ -1,0 +1,27 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (78 tests | 8 failed | 69 skipped) 88455ms
+   × P11/T022 v3 acceptance browser and UI QA share one source > uses the exact current browser ref and hash for one QA projection 9859ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps task browser source from a same-run QA pass 9659ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps tree browser source from a same-run QA pass 9642ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps attempt browser source from a same-run QA pass 9952ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps ref browser source from a same-run QA pass 9893ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps hash browser source from a same-run QA pass 9877ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps blocked browser source from a same-run QA pass 9743ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps old-receipt browser source from a same-run QA pass 10144ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9685ms
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 1 passed | 69 skipped (78)
+   Start at  13:36:27
+   Duration  89.31s (transform 339ms, setup 0ms, collect 741ms, tests 88.45s, environment 0ms, prepare 29ms)
+

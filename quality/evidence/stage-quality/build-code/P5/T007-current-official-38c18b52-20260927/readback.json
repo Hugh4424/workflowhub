@@ -1,0 +1,21 @@
+{
+  "receipt_ref": "quality/tests/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.json",
+  "receipt_sha256": "5f8a951358cbc9f8ca4df88f7448f7334b12dd7a8c3626ee04ffb06a0b990509",
+  "output_ref": "quality/tests/output/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.output",
+  "output_sha256": "c26497aa46893448eeec7e283167456324e3e448ba4798c1dc656ea9d903a25f",
+  "receipt_internal_exit": 0,
+  "receipt_command": "npx vitest run runtime/stage/stage-end-report.test.mjs",
+  "receipt_task_id": "workflowhub-thin-core-card-04-20260919",
+  "receipt_snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "receipt_source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "receipt_output_hash_claim": "c26497aa46893448eeec7e283167456324e3e448ba4798c1dc656ea9d903a25f",
+  "cli_exit": 0,
+  "runner_summary": [
+    " Test Files  1 passed (1)",
+    "      Tests  20 passed (20)",
+    "   Duration  143ms (transform 19ms, setup 0ms, collect 12ms, tests 16ms, environment 0ms, prepare 29ms)"
+  ],
+  "read_error": null,
+  "source_unchanged": true,
+  "identity_unchanged": true
+}

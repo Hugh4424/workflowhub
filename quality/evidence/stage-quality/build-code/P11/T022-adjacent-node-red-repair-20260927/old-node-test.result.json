@@ -1,0 +1,8 @@
+{
+  "command": "node --test tests/contract/ui-stage-integration.test.mjs",
+  "started_at_utc": "2026-09-27T12:02:23.592Z",
+  "ended_at_utc": "2026-09-27T12:02:23.737Z",
+  "exit_code": 1,
+  "signal": null,
+  "error": null
+}

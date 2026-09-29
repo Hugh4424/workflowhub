@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/business-case-source-binding.test.mjs (9 tests) 8ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  09:02:12
+   Duration  138ms (transform 16ms, setup 0ms, collect 16ms, tests 8ms, environment 0ms, prepare 31ms)
+
+
+--- STDERR ---

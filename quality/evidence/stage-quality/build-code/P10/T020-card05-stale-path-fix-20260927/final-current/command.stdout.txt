@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/decision-freeze-current-oi.test.mjs (26 tests) 11ms
+ ✓ tests/contract/post-phase-contract.test.mjs (16 tests) 896ms
+   ✓ post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 884ms
+
+ Test Files  2 passed (2)
+      Tests  42 passed (42)
+   Start at  23:00:08
+   Duration  1.51s (transform 226ms, setup 0ms, collect 666ms, tests 907ms, environment 0ms, prepare 51ms)
+

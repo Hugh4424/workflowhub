@@ -154,7 +154,7 @@ async function record(state, label, request) {
 
 const phaseRequest = (state, materials = plainMaterials(state)) => ({
   stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1",
-  host_provider: "claude-code/host", materials,
+  materials,
 });
 
 // These are separate public requests because snapshot/material revision are host-owned
@@ -202,7 +202,7 @@ describe("AC-REVIEW-001/013 isolated public review experiments", () => {
   it("ORACLE-AC001-single-round: dispatches only the two configured initial routes", async () => {
     const state = fixture("single-round");
     const request = {
-      stage: "verify-code", subject_kind: "worktree", host_provider: "claude-code/host",
+      stage: "verify-code", subject_kind: "worktree",
       materials: {
         changed_files: "src/reviewed.mjs",
         implementation_assessment: "Controlled transport experiment; no quality judgment.",
@@ -228,7 +228,7 @@ describe("AC-REVIEW-001/013 isolated public review experiments", () => {
   it("ORACLE-AC013-plain-path: dispatches without caller identity/hash/sha/snapshot/receipt facts", async () => {
     const state = fixture("plain-path");
     const input = phaseRequest(state);
-    expect(Object.keys(input).sort()).toEqual(["host_provider", "materials", "phase_id", "review_scope", "stage", "subject_kind"]);
+    expect(Object.keys(input).sort()).toEqual(["materials", "phase_id", "review_scope", "stage", "subject_kind"]);
     const { calls, attempt, result, refs } = await record(state, "plain-path", input);
     expect(calls).toBe(2);
     expect(JSON.parse(readFileSync(refs.input, "utf8")).request.materials).toEqual(plainMaterials(state));

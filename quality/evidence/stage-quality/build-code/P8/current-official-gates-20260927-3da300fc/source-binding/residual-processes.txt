@@ -1,0 +1,14 @@
+52546 /bin/bash -lc node --input-type=module <<'NODE'
+import { openTask } from '/Users/Hugh/Hugh/Project/workflowhub/runtime/task/task-handle.mjs';
+import { openCurrentTaskWorkspace } from '/Users/Hugh/Hugh/Project/workflowhub/runtime/task/workspace.mjs';
+import { assertTaskWriteIdentity } from '/Users/Hugh/Hugh/Project/workflowhub/tools/cli/stage-runtime.mjs';
+import { writeCurrentImplementationReceipt } from '/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/canonical-receipt-writer.mjs';
+const project = 'PaperBuilder';
+const taskId = 'paperbuilder-live-simulation-durability-post-20260925';
+const taskPath = '/Users/Hugh/Hugh/Knowledge/Projects/PaperBuilder/tasks/paperbuilder-live-simulation-durability-post-20260925';
+const task = openTask(taskPath, project, taskId);
+const workspace = openCurrentTaskWorkspace(task);
+assertTaskWriteIdentity({ task, project, taskId, taskPath, workspace });
+const receipt = writeCurrentImplementationReceipt({ task, workspace });
+console.log(JSON.stringify({ref: receipt.ref, sha256: receipt.sha256, snapshot_tree: receipt.value.snapshot_tree, changed_file_count: receipt.value.diff_summary?.changed_file_count}));
+NODE

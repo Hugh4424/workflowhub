@@ -1,0 +1,22 @@
+{
+  "receipt_ref": "quality/tests/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.json",
+  "receipt_sha256": "bf4ad3e38e5336dd065cd256057e17620628197ad457414102943d8616ab21ca",
+  "output_ref": "quality/tests/output/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.output",
+  "output_sha256": "462b6ff9aa7f2bea7e938fc6e78c239d2cf480e69c39c1d43fe79747f815196c",
+  "receipt_internal_exit": 0,
+  "receipt_command": "npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs",
+  "receipt_task_id": "workflowhub-thin-core-card-04-20260919",
+  "receipt_snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "receipt_source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "receipt_output_hash_claim": "462b6ff9aa7f2bea7e938fc6e78c239d2cf480e69c39c1d43fe79747f815196c",
+  "cli_exit": 0,
+  "runner_counts": [
+    " Test Files  1 passed (1)",
+    "      Tests  5 passed (5)",
+    "   Duration  257ms (transform 77ms, setup 0ms, collect 151ms, tests 3ms, environment 0ms, prepare 27ms)"
+  ],
+  "count_ok": true,
+  "read_error": null,
+  "source_unchanged": true,
+  "identity_unchanged": true
+}

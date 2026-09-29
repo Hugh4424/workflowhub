@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { deriveDecisionLogOriginalSourceCensus, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 
-const root = "specs/workflowhub-thin-core-card-05-20260919";
+const root = "specs/archive/workflowhub-thin-core-card-05-20260919";
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 function currentPacket(overrides = {}) {

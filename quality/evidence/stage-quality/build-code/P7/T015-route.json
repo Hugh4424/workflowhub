@@ -1,0 +1,6 @@
+{
+  "routing_tier": "feature",
+  "routing_rationale": "P7/T015 实际修改 runtime/evidence/acceptance-evidence-validator.mjs、freshness.mjs、quality-store.mjs 同一后端证据功能域的枚举、身份认证和状态投影；无 UI、API、数据库迁移或部署变化。按计划使用定向合同与相邻 deferred 语义护栏。",
+  "result": "pass",
+  "ts": "2026-09-26T12:18:17.388580Z"
+}

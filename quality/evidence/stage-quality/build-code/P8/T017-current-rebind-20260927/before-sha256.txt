@@ -1,0 +1,3 @@
+60288229ae854083d62c9cfefca3778db7752d78a1d48f29a0698d78014bd41b  quality/evidence/stage-quality/build-code/P8/T017-current-rebind-20260927/before-business-case-catalog.json
+15b286c3892dd151b18d2cb6335ef32af7e088f8456dd3a123252c53d2f92b1c  quality/evidence/stage-quality/build-code/P8/T017-current-rebind-20260927/before-P8.md
+b6cbed445ecedb3fb10cbe88ea916abe1eb2a523ba251d6e78e752e87de8c7fd  tests/contract/business-case-source-binding.test.mjs

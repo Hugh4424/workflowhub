@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-27T02:03:12.631Z",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "project": "workflowhub",
+  "worktree_root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "snapshot_tree": "ab6f4627fc7b7a52d1991766c3502e73e6543471",
+  "snapshot_commit": "9c39d4390997de155c64610911a76befe0b05349",
+  "source_digest": "53046d28fdea1fff9ed052cb2678a1fb20c9bcf2016070b2445f6411fe08d9e3",
+  "material_revision": "revision-812c468d50c4424449f207303a02b3b2527cf86af3305fd08bc3cf08027fbde9",
+  "spec_sha256": "c36b335ddb432aea67653daf8577fc222e0f3b12168eed4383f4fe20f50378f7",
+  "phase_sha256": "b0a23fb9dacf4cf9acb78d5d59d983b426c0598c65094c6dcf605640ad7fc23b",
+  "source_sha256": "1a95529154bdd79e72e6f7edc0ff4a11dffd8a207076cc75cc8f5931ce2790c6",
+  "test_sha256": "bef13670afae41a8acb670534059bc21661756d2057fa94cefa284b97eec6a16"
+}

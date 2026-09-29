@@ -1,0 +1,19 @@
+utc=2026-09-26T12:24:54Z
+node=v24.14.0
+head=ef920f1fbd415fe87d50930359059b661e141acd
+POSITIVE: 3 sourced cases, 7 unknown/not_done obligations, reciprocal relations, source SHA-256 and exact runner targets valid
+SOURCE CARD04-DECISION-LOG-CENSUS: specs/workflowhub-thin-core-card-04-20260919/decision-log.md sha256:e7ddb0f1398ee675b4a8c0411283fe24b39b43736d6916e1da32bb5984a45268 anchor=## 原始需求索引
+SOURCE CARD04-ACCEPTANCE-MACHINE-CLASSES: specs/workflowhub-thin-core-card-04-20260919/phases/P7.md sha256:f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa anchor=FR-27
+SOURCE CARD04-DEFERRED-ACCEPTANCE-REGRESSION: tests/deferred-acceptance-semantics.test.mjs sha256:0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e anchor=describe("deferred acceptance semantics"
+OBLIGATION P9/T018: tests/contract/build-code-change-scope.test.mjs -> workflows/build-code/capture.mjs not_done/not_implemented
+OBLIGATION P9/T019: tests/contract/build-code-test-inventory.test.mjs -> workflows/build-code/capture.mjs not_done/not_implemented
+OBLIGATION P10/T020: tests/contract/build-code-case-selection.test.mjs -> workflows/build-code/case-selection.mjs not_done/not_implemented
+OBLIGATION P10/T020: tests/contract/build-code-targeted-runner.test.mjs -> workflows/build-code/targeted-runner.mjs not_done/not_implemented
+OBLIGATION P10/T021: tests/contract/build-code-case-reconciliation.test.mjs -> workflows/build-code/case-reconciliation.mjs not_done/not_implemented
+OBLIGATION P11/T022: tests/contract/post-business-browser-reconciliation.test.mjs -> runtime/stage/stage-content-contracts.mjs not_done/unknown
+OBLIGATION P12/T023: tests/contract/verify-code-business-handoff.test.mjs -> workflows/verify-code/SKILL.md not_done/test_only
+CONSUMER BOUNDARY: P10 selection/runner/reconciliation are not_implemented stubs; no live catalog reader proven
+NEGATIVE broken relation: broken reciprocal relation: CARD04-ACCEPTANCE-MACHINE-CLASSES->CARD04-DEFERRED-ACCEPTANCE-REGRESSION
+NEGATIVE false covered: false-covered legacy
+NEGATIVE false active: false-active B2 obligation
+EXIT=0

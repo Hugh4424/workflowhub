@@ -1,0 +1,287 @@
+--- runtime/stage/stage-runner.mjs	2026-09-27 08:11:34
++++ /private/tmp/card04-ac17-p5-EDQKMp/src/runtime/stage/stage-runner.mjs	2026-09-27 11:17:36
+@@ -1,3 +1,4 @@
++import { buildStageEndReportFacts, renderStageEndReportMarkdown } from "./stage-end-report.mjs";
+ import { assertTaskHandle } from "../task/task-handle.mjs";
+ import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
+ import { assertTaskKernel } from "../task/task-kernel.mjs";
+@@ -5,7 +6,7 @@
+ import { createHash, randomUUID } from "node:crypto";
+ import { execFileSync } from "node:child_process";
+ import { Buffer } from "node:buffer";
+-import { existsSync, readFileSync, realpathSync } from "node:fs";
++import { existsSync, readFileSync, realpathSync, lstatSync, mkdirSync, openSync, closeSync, fsyncSync, constants, writeFileSync, unlinkSync } from "node:fs";
+ import { fileURLToPath, pathToFileURL } from "node:url";
+ import { dirname, join, relative, isAbsolute, sep } from "node:path";
+ import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
+@@ -4239,7 +4240,7 @@
+   });
+ }
+ 
+-async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, runSpecAnalyze = null) {
++async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, runSpecAnalyze = null, retainReportSource = null) {
+   const current = currentMaterialTexts(ctx) ?? {};
+   const phases = Object.fromEntries(Object.entries(current).filter(([name]) => /^phases\/P\d+\.md$/.test(name)));
+   const decisionLog = current["decision-log.md"] ?? "";
+@@ -4335,6 +4336,7 @@
+     taskId: ctx.identity.taskId,
+     tests,
+   });
++  retainReportSource?.(structuredClone({ acceptanceChain, preflight, handlerResult }));
+   const packet = {
+     activation_cohort: "post",
+     work_summary: "当前 build-code 实现、测试和逐 AC 事实的一致性检查",
+@@ -4469,6 +4471,216 @@
+   });
+ }
+ 
++/** Private T008 producer. Owner: official build-code; consumers: P5/T008,
++ * P6/T012 and P13/T024. Replace this with the reviewed single report path when
++ * that path exists. These immutable attachments are not progress or permits. */
++async function publishSameRunP5Report(ctx, retained, stageResult) {
++  const digest = (raw) => createHash("sha256").update(raw).digest("hex");
++  const serialize = (value) => JSON.stringify(value, null, 2) + "\n";
++  const prepare = (kind, value) => {
++    const raw = serialize(value);
++    const sha256 = digest(raw);
++    const ref = "quality/evidence/stage-end-report/" + kind + "/" + sha256 + ".json";
++    return { ref, sha256, raw };
++  };
++  const store = (kind, value) => {
++    const record = prepare(kind, value);
++    publishVNextEvidence(ctx, record.ref, record.raw);
++    if (ctx.task.readRecord(record.ref) !== record.raw) throw new Error("T008 immutable record readback mismatch");
++    return { ref: record.ref, sha256: record.sha256 };
++  };
++  const readBound = (entry) => {
++    if (!entry || typeof entry.ref !== "string" || !SHA256_HEX.test(entry.sha256 ?? "")) {
++      throw new Error("T008 canonical ref/hash unavailable");
++    }
++    validateOutputRefs([entry.ref], "T008 source");
++    const raw = ctx.task.readRecordBytes(entry.ref);
++    if (digest(raw) !== entry.sha256) throw new Error("T008 canonical raw hash mismatch");
++    return raw;
++  };
++  try {
++    if (!retained) throw new Error("same-run acceptance chain unavailable");
++    const { acceptanceChain, preflight, handlerResult } = retained;
++    const { snapshot, materials } = preflight;
++    const reviewRef = evidenceCandidate(handlerResult, "review", "phase_review", "build-code");
++    const review = reviewRef ? JSON.parse(readBound(reviewRef)) : null;
++    if (review?.phase_id !== "P5" || review?.review_scope !== "phase" || review?.subject_kind !== "phase") {
++      throw new Error("current P5 phase review unavailable; no P5 checkpoint");
++    }
++    assertContext(ctx, "build-code");
++    assertWriteBoundary(ctx);
++    assertVNextSourceStable(ctx, snapshot, { fresh: true });
++    if (currentMaterialBinding(ctx).revision !== materials.revision) throw new Error("T008 current materials changed");
++    if (review.task_id !== ctx.identity.taskId || review.stage !== "build-code"
++        || review.snapshot_tree !== snapshot.tree || review.material_revision !== materials.revision
++        || !reviewEvidenceStatus(ctx.task, reviewRef, { stage: "build-code", subject: "phase_review",
++          currentPhaseId: "P5", snapshotTree: snapshot.tree, materialRevision: materials.revision }).evidence_valid) {
++      throw new Error("T008 P5 review is not authenticated for the current source");
++    }
++    const implementationRef = handlerResult.evidence_refs?.find((entry) => /\/implementation\//.test(entry.ref));
++    const implementation = JSON.parse(readBound(implementationRef));
++    const testsRef = evidenceCandidate(handlerResult, "test", "tests", "build-code");
++    const tests = JSON.parse(readBound(testsRef));
++    const modulePath = "runtime/stage/stage-end-report.mjs";
++    if (implementation.task_id !== ctx.identity.taskId || implementation.stage !== "build-code"
++        || implementation.snapshot_tree !== snapshot.tree
++        || !handlerResult.facts?.changed?.includes(modulePath)
++        || !implementation.changed?.includes(modulePath)
++        || !tests.command?.includes("runtime/stage/stage-end-report.test.mjs")) {
++      throw new Error("T008 current T007 implementation/test scope unavailable");
++    }
++    for (const receipt of [implementation, tests]) {
++      if ((receipt.material_revision !== undefined && receipt.material_revision !== materials.revision)
++          || (receipt.source_digest !== undefined && receipt.source_digest !== snapshot.source_digest)) {
++        throw new Error("T008 receipt material/source mismatch");
++      }
++    }
++    validateCanonicalTestReceipt(tests, { taskId: ctx.identity.taskId, stage: "build-code",
++      snapshotTree: snapshot.tree, requirePassed: true });
++    const outputRef = { ref: tests.output_ref, sha256: tests.output_hash };
++    readBound(outputRef);
++    const diffRef = { ref: implementation.diff_ref, sha256: implementation.diff_hash };
++    readBound(diffRef);
++    if (!Array.isArray(acceptanceChain) || acceptanceChain.length === 0
++        || acceptanceChain.some((row) => row.task_id !== ctx.identity.taskId
++          || row.material_revision !== materials.revision || row.snapshot_tree !== snapshot.tree)) {
++      throw new Error("T008 same-run acceptance chain is incomplete or foreign");
++    }
++    // The material and receipt aliases inside the chain were built in this
++    // invocation; external AC evidence still needs a raw-byte recheck.
++    for (const row of acceptanceChain) {
++      for (const entry of row.evidence_refs ?? []) {
++        if (entry.ref.startsWith("quality/")) readBound({ ref: entry.ref, sha256: entry.hash });
++      }
++    }
++    const reflection = stageResult.stage_reflection;
++    if (!reflection || reflection.stage_row_error || reflection.error || reflection.status === "failed"
++        || stageResult.stage_handoff?.status !== "published" || stageResult.stage_handoff?.current !== true) {
++      throw new Error("T008 publication/reflection/row did not finish successfully");
++    }
++    const handoff = stageResult.stage_handoff;
++    if (digest(ctx.task.readRecordBytes(handoff.ref)) !== handoff.sha256) throw new Error("T008 handoff readback mismatch");
++    const reflectionRef = reflection.ref
++      ? { ref: reflection.ref, sha256: reflection.sha256 }
++      : { ref: reflection.availability_ref, sha256: reflection.availability_sha256 };
++    // An honestly published unavailable reflection is a fact, not a business pass.
++    // Its immutable availability record is retained alongside the final result.
++    const reflectionRaw = ctx.task.readRecordBytes(reflectionRef.ref);
++    if (!SHA256_HEX.test(reflectionRef.sha256 ?? "") || digest(reflectionRaw) !== reflectionRef.sha256) {
++      throw new Error("T008 reflection readback mismatch");
++    }
++    const row = currentStageRow(ctx.task.taskPath, ctx.identity.taskId, "build-code");
++    if (!row || row.snapshot_tree?.value !== snapshot.tree
++        || row.material_digest?.value !== materials.material_scope_revision.replace(/^revision-/, "")
++        || row.source !== "stage-end:build-code"
++        || (reflection.ref && row.spec_analyze?.value?.ref !== reflection.ref)) {
++      throw new Error("T008 stage row readback mismatch");
++    }
++    const qualityRefs = [...(stageResult.quality_fact_refs ?? []), ...(stageResult.quality_advisory_fact_refs ?? [])];
++    const qualityFacts = qualityRefs.map((ref) => {
++      const raw = ctx.task.readRecordBytes(ref);
++      const fact = JSON.parse(raw);
++      if (fact.task_id !== ctx.identity.taskId || fact.stage !== "build-code"
++          || fact.snapshot_tree !== snapshot.tree || fact.material_revision !== materials.revision
++          || qualityFactDigest(fact) !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) {
++        throw new Error("T008 published quality fact readback mismatch");
++      }
++      return { ref, sha256: digest(raw), value: fact };
++    });
++    if (![testsRef, reviewRef].every((receipt) => qualityFacts.some(({ value }) =>
++      value.evidence?.some((entry) => entry.ref === receipt.ref && entry.sha256 === receipt.sha256)))) {
++      throw new Error("T008 current tests/P5 review were not published");
++    }
++    const workspace = ctx.candidateWorkspace ?? ctx.workspace;
++    const root = realpathSync(workspace.worktreeRoot);
++    const branch = execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
++    if (!branch || (workspace.branch && workspace.branch !== branch)) throw new Error("T008 authenticated branch mismatch");
++    const binding = { task_id: ctx.identity.taskId, project_name: ctx.task.manifest.project_name,
++      stage: "build-code", phase_id: "P5", worktree: root, branch,
++      material_revision: materials.revision, snapshot_tree: snapshot.tree, source_digest: snapshot.source_digest };
++    const stageResultRaw = serialize(stageResult);
++    const sourceRecord = prepare("sources", {
++      schema_version: "workflowhub-stage-end-report-source.v1", ...binding,
++      serialization: "private stage result object; not CLI stdout bytes",
++      acceptance_chain: acceptanceChain, stage_result: stageResult,
++      stage_result_raw: stageResultRaw, stage_result_sha256: digest(stageResultRaw),
++      materials: materials.values.map(([path, value]) => ({ path, sha256: value === null ? null : digest(value) })),
++      receipts: { implementation: implementationRef, tests: testsRef, phase_review: reviewRef, test_output: outputRef, implementation_diff: diffRef },
++      quality_facts: qualityFacts.map(({ ref, sha256 }) => ({ ref, sha256 })),
++      stage_row: row, stage_row_serialization_sha256: digest(serialize(row)), reflection: reflectionRef,
++      handoff: { ref: handoff.ref, sha256: handoff.sha256 },
++    });
++    const source = { ref: sourceRecord.ref, sha256: sourceRecord.sha256 };
++    const facts = buildStageEndReportFacts({ chainRows: acceptanceChain, stageResult,
++      stageResultPath: source.ref + "#stage_result", evidenceIndex: [implementationRef, testsRef, reviewRef, outputRef].map(({ ref }) => ({ path: ref, kind: "canonical_evidence" })) });
++    const factsRaw = serialize(facts);
++    const markdown = renderStageEndReportMarkdown(facts);
++    const certificateRecord = prepare("certificates", {
++      schema_version: "workflowhub-stage-end-report-certificate.v1", ...binding,
++      source_ref: source.ref, source_sha256: source.sha256,
++      report_facts_sha256: digest(factsRaw), report_markdown_sha256: digest(markdown),
++      disclosure: "Source authentication only; transformer source_binding remains unavailable. No CLI stdout or business pass claim.",
++    });
++    const certificate = { ref: certificateRecord.ref, sha256: certificateRecord.sha256 };
++    const files = [["report-facts.json", factsRaw], ["report.md", markdown], ["T008-delivery.txt", serialize({
++      checkpoint: "P5/T008 intermediate source checkpoint", source, certificate,
++      report_facts_sha256: digest(factsRaw), report_markdown_sha256: digest(markdown),
++      limitation: "Not CLI stdout; not P5 or whole-task business completion. Re-read certificate and source bytes before consumption.",
++    })]];
++    // Fixed paths are indexes only. Never overwrite a prior source, follow a
++    // symlink, or leave this attempt's partially written checkpoint files.
++    let directory = root;
++    for (const part of ["quality", "evidence", "stage-quality", "build-code", "P5"]) {
++      directory = join(directory, part);
++      try { mkdirSync(directory); } catch (error) { if (error.code !== "EEXIST") throw error; }
++      const stat = lstatSync(directory);
++      if (!stat.isDirectory() || stat.isSymbolicLink() || !inside(root, realpathSync(directory))) throw new Error("T008 unsafe checkpoint directory");
++    }
++    for (const [name, raw] of files) {
++      const path = join(directory, name);
++      try {
++        if (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink() || readFileSync(path, "utf8") !== raw) {
++          throw new Error("T008 immutable checkpoint conflict: " + name);
++        }
++      } catch (error) { if (error.code !== "ENOENT") throw error; }
++    }
++    // All source, render and destination checks precede immutable publication.
++    assertVNextSourceStable(ctx, snapshot, { fresh: true });
++    if (currentMaterialBinding(ctx).revision !== materials.revision
++        || !sameJson(currentStageRow(ctx.task.taskPath, ctx.identity.taskId, "build-code"), row)) {
++      throw new Error("T008 source or stage row changed before checkpoint publication");
++    }
++    for (const record of [sourceRecord, certificateRecord]) {
++      publishVNextEvidence(ctx, record.ref, record.raw);
++      if (ctx.task.readRecord(record.ref) !== record.raw) throw new Error("T008 source/certificate readback mismatch");
++    }
++    const created = [];
++    try {
++      for (const [name, raw] of files) {
++        const path = join(directory, name);
++        let fd;
++        try {
++          fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
++          created.push(path);
++          writeFileSync(fd, raw);
++          fsyncSync(fd);
++        } catch (error) {
++          if (error.code !== "EEXIST" || lstatSync(path).isSymbolicLink() || readFileSync(path, "utf8") !== raw) throw error;
++        } finally { if (fd !== undefined) closeSync(fd); }
++        if (readFileSync(path, "utf8") !== raw) throw new Error("T008 checkpoint readback mismatch");
++      }
++    } catch (error) {
++      for (const path of created.reverse()) unlinkSync(path);
++      throw error;
++    }
++  } catch (error) {
++    // An auxiliary report cannot become a new stage gate. Preserve the actual
++    // gap in the existing evidence area without altering the public result.
++    store("gaps", { task_id: ctx.identity.taskId, stage: "build-code", phase_id: "P5",
++      status: "incomplete", reason: error.message, source_binding: "unavailable" });
++  }
++}
++
+ /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
+ export function runOfficialStage(stage, context, invocation, publication, { signal, allowLegacyStageOutcome = false } = {}) {
+   const ctx = assertContext(context, stage);
+@@ -4476,6 +4688,7 @@
+   const input = Object.freeze(structuredClone(invocation));
+   const handlerInput = structuredClone(input);
+   const stageReflectionInput = {};
++  let reportSource = null;
+   // Direct callers of this low-level export may still replay an explicitly
+   // supplied historical outcome. The public CLI rejects that field before it
+   // reaches this function, so this compatibility branch cannot become the
+@@ -4490,7 +4703,7 @@
+   // is consumed only by the stage-end transaction after publication and must
+   // never cross the official handler boundary.
+   delete handlerInput.stage_reflection;
+-  return runStage(
++  const officialRun = runStage(
+     stage,
+     ctx,
+     async (worker, _upstream, preflight) => {
+@@ -4689,7 +4902,7 @@
+       const currentSpecAnalyze = !stageOutcome.value
+         && stage === "build-code"
+         && ctx.manifest?.activation_cohort === "post"
+-        ? await currentPostBuildCodeSpecAnalyze(ctx, preflight, result, publication?.runSpecAnalyze)
++        ? await currentPostBuildCodeSpecAnalyze(ctx, preflight, result, publication?.runSpecAnalyze, (source) => { reportSource = source; })
+         : null;
+       return {
+         ...result,
+@@ -4722,4 +4935,10 @@
+       },
+     },
+   );
++  return officialRun.then(async (stageResult) => {
++    if (stage === "build-code" && ctx.manifest?.activation_cohort === "post") {
++      await publishSameRunP5Report(ctx, reportSource, stageResult);
++    }
++    return stageResult;
++  });
+ }

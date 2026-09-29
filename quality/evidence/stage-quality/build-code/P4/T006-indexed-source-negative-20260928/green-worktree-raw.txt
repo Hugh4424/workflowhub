@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/post-acceptance-chain-source-index.test.mjs (1 test) 19ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  02:01:22
+   Duration  673ms (transform 233ms, setup 0ms, collect 543ms, tests 19ms, environment 0ms, prepare 27ms)
+

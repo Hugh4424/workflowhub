@@ -1,0 +1,22 @@
+COMMAND=npx vitest run runtime/stage/stage-runner.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+TEST_SHA256=b9e790d61bb556fec620e79678426f401b0ed98f87acf211ac469f8dda47559e
+STARTED_AT_UTC=2026-09-26T11:54:08.087663+00:00
+COMPLETED_AT_UTC=2026-09-26T11:54:09.087336+00:00
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ runtime/stage/stage-runner.test.mjs (5 tests) 539ms
+   ✓ buildPostAcceptanceChainRows（acceptanceChain 真实事实接回） > exports a callable builder from stage-runner.mjs 537ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  19:54:08
+   Duration  651ms (transform 228ms, setup 0ms, collect 7ms, tests 539ms, environment 0ms, prepare 27ms)
+
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0

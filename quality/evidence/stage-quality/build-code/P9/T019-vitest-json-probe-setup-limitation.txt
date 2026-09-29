@@ -1,0 +1,19 @@
+CLEANUP isolated clone and task-store removed
+node:fs:3104
+  binding.copyFile(
+          ^
+
+Error: ENOENT: no such file or directory, copyfile '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-04-20260919/decision-log.md' -> '/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t019-vitest-26PWzt/repo/specs/workflowhub-thin-core-card-04-20260919/decision-log.md'
+    at copyFileSync (node:fs:3104:11)
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P9/T019-vitest-json-probe.mjs:27:3
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'copyfile',
+  path: '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-04-20260919/decision-log.md',
+  dest: '/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t019-vitest-26PWzt/repo/specs/workflowhub-thin-core-card-04-20260919/decision-log.md'
+}
+
+Node.js v24.14.0

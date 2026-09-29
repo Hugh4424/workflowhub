@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs (4 tests | 1 failed) 9ms
+   × uses the current YAML OI authority instead of append-only historical prose 8ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+ ✓ tests/contract/post-phase-contract.test.mjs (16 tests) 913ms
+   ✓ post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 902ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 19 passed (20)
+   Start at  22:18:51
+   Duration  1.62s (transform 260ms, setup 0ms, collect 749ms, tests 922ms, environment 0ms, prepare 82ms)
+

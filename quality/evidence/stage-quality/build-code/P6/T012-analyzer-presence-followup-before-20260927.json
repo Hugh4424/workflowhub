@@ -1,0 +1,11 @@
+{
+  "recorded_utc": "2026-09-27T00:24:58.736014+00:00",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "sha256": {
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs": "b65512e3bd6d4e688dbe749f6b7f51050a2ae10959ce85f48466c96b6a7a2e10",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74",
+    "specs/workflowhub-thin-core-card-04-20260919/spec.md": "80901099c5690df9072c85033f8c4b1a2a57b3407b29be9fb6c03f0b9547e086",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "359539307ac264384e8332013c3a1733ac04ba5620171361e76d4b60bc8a40c0",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "e52bf879fe87cf6d21d6c4326b9147c0b33027d14ba32c173bc14061627efab6"
+  }
+}

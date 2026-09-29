@@ -1,0 +1,39 @@
+COMMAND=node --input-type=module - (stdin script follows)
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+SOURCE_SHA256=workflows/build-code/change-scope.mjs:fffd96e11820881f09a4b5914a668daf9eca95e556d1a3baf7f4886bb08d4de1;workflows/build-code/capture.mjs:85de1d860331f8e1ff26fcb7552edda858c1068fbb0d4aff240ce91415ff5f76
+UTC=2026-09-26T12:33:32.344395+00:00
+SCRIPT_BEGIN
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { openTask } from "./runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace } from "./runtime/task/workspace.mjs";
+import { canonical, sha256 } from "./runtime/evidence/canonical-utils.mjs";
+import { taskWorkspaceMatches } from "./workflows/build-code/change-scope.mjs";
+const taskId = "workflowhub-thin-core-card-04-20260919";
+const taskPath = `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/${taskId}`;
+const task = openTask(taskPath, { projectName: "workflowhub", taskId });
+const workspace = openCurrentTaskWorkspace(task);
+assert.equal(workspace.worktreeRoot, process.cwd());
+assert.equal(taskWorkspaceMatches({ task, workspace }), true);
+const ref = `identity/executions/bootstrap-${taskId}.json`;
+const identity = JSON.parse(task.readRecord(ref));
+const { execution_manifest_hash, ...unsigned } = identity;
+assert.equal(sha256(canonical(unsigned)), execution_manifest_hash);
+assert.equal(identity.command, "task-bootstrap");
+assert.equal(identity.transaction.status, "closed");
+assert.equal(identity.creation_result.task_path, taskPath);
+assert.equal(identity.creation_result.workspace.worktree_root, workspace.worktreeRoot);
+const start = identity.creation_result.workspace.baseline_commit;
+const git = (...args) => execFileSync("git", args, { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim();
+const tree = git("rev-parse", `${start}^{tree}`);
+assert.equal(git("merge-base", start, "HEAD"), start);
+console.log(JSON.stringify({ ref, start_commit: start, start_tree: tree, current_head: git("rev-parse", "HEAD"), match: true }));
+SCRIPT_END
+STDOUT_BEGIN
+{"ref":"identity/executions/bootstrap-workflowhub-thin-core-card-04-20260919.json","start_commit":"35a881ac3c3288249677597a9079d445949de778","start_tree":"61b56b594f5c22c71c8743ca908fad85c017574f","current_head":"ef920f1fbd415fe87d50930359059b661e141acd","match":true}
+STDOUT_END
+STDERR_BEGIN
+
+STDERR_END
+EXIT=0

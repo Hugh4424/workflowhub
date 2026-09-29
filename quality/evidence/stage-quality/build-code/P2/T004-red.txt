@@ -1,0 +1,44 @@
+COMMAND=npx vitest run tests/contract/repository-inventory.test.mjs -t "complexity baseline"
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+STARTED_AT_UTC=2026-09-26T11:43:38.429123+00:00
+COMPLETED_AT_UTC=2026-09-26T11:43:40.291813+00:00
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/repository-inventory.test.mjs (9 tests | 1 failed | 8 skipped) 759ms
+   × repository architecture inventory > keeps the published complexity baseline immutable and diagnoses the current tree in memory 758ms
+     → expected 20292 to be 83996 // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  19:43:39
+   Duration  1.00s (transform 43ms, setup 0ms, collect 46ms, tests 759ms, environment 0ms, prepare 70ms)
+
+STDOUT_END
+STDERR_BEGIN
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/repository-inventory.test.mjs > repository architecture inventory > keeps the published complexity baseline immutable and diagnoses the current tree in memory
+AssertionError: expected 20292 to be 83996 // Object.is equality
+
+- Expected
++ Received
+
+- 83996
++ 20292
+
+ ❯ tests/contract/repository-inventory.test.mjs:175:53
+    173|     const actual = JSON.parse(readFileSync("docs/architecture/complexi…
+    174|     const current = buildReport();
+    175|     expect(actual.budgets.formal_test_lines.actual).toBe(current.budge…
+       |                                                     ^
+    176|     expect(actual.budgets.formal_test_lines.within_limit).toBe(false);
+    177|     expect(actual.budgets.formal_test_lines.caliber).toEqual(expect.st…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+STDERR_END
+EXIT=1

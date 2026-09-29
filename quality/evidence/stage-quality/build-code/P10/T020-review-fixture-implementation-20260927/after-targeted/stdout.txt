@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/freeze-classification-budget-usage-protocol.test.mjs (36 tests | 28 skipped) 16ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed | 28 skipped (36)
+   Start at  23:16:49
+   Duration  590ms (transform 209ms, setup 0ms, collect 475ms, tests 16ms, environment 0ms, prepare 25ms)
+

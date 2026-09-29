@@ -1,0 +1,13 @@
+--- P10.md.before
++++ P10.md.after
+@@ -1,6 +1,10 @@
+ # Phase P10 — B2 定向执行与逐例事实对账（合同测试通过，业务验收未完成）
+ 
+ **2026-09-28 现行口径**：本卡已有用户授权继续完整 build-code；下文 2026-09-27 以前的“仅空骨架”“不得改产品”“另获产品授权”“三个模块只返回 unavailable”“26/29、29/29 RED”等均是旧轮次的时点记录，不是当前阻塞或当前源码断言。现有私有选择、固定入口、runner、对账代码与定向测试已有实现；`P10/T020-case-status-fix-20260928/` 又保存了状态遗漏/未知被误选的目标 RED、修复 GREEN、相邻检查及独立复核。当前真实 Task 的完整变化/业务效果、现有受信回执与本次官方 `run` 的精确消费绑定仍未证实，P10 仍未完成。以下精确来源修订和原「2026-09-27 当前实施修订」共同构成现行写面；历史旧段只供追溯，不作当下禁止继续的规则。
++
++**2026-09-28 A1/A2 只读对账范围：** P10 owner 在现有 `workflows/build-code/case-reconciliation.mjs` 为 P8 待登记的 A1 `CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE` 与 A2 `CARD04-INDEPENDENT-TEST-INVENTORY` 加各自独立规则观察，唯一消费者为现有 build-code 固定入口及本 Task 的逐例对账；原 `decision-log.md` U-006/R-011..R-014 与 FR/AC-30/32/33 判据不改。每例须核当前 Task/树/材料、原始 Git/bootstrap、当前唯一 catalog/独立 registry、**指定** receipt→output→manifest→case record→原始 JSON 报告的 ref/hash 和实际 argv；共享 AC 质量事实不能代替每例自己的业务规则，逐 AC 事实必须真实来自当前认证来源，不填假 acceptance 数据。A1 当前最多证明独立重算的应测路径、应选 case 与 manifest/实报一致；外层当次 `change_scope.changed_paths/changes` 尚无同次受信持久绑定，保持 `unknown/not_yet_observed`。A2 只证明已登记、已选、已实跑目标的源码 hash、命令形状、全叶与状态；未跑为 `not_run`，其余入口 `outside_scope=unknown`。两例不替代旧三例、P9/T018/T019 原目标、七条旧义务及其 RED。
++
++现有 `partial` 分支在验证报告后提前返回 `unmapped_changed_path`；可只在该分支附逐例**只读诊断**，分别标出“原件身份已核／独立规则已观察／逐 AC 当前质量事实已绑定”，但保留未映射原路径、整体 `status=unavailable` 和 `business_effect_status=unknown`，绝不由局部正例放行。错 Task/旧树、漏 Git 改动或改名一边、删改漏记、错 ref/hash/argv、报告漏/多/skip/重复/零叶、同 AC 多 case 错配都须拒绝局部通过。实施写集仅现有 `case-reconciliation.mjs` 与 P10 既有定向测试；经审查的等价只读对账接管并保留旧证据后可替代。若需持久证明 A1 外层数组、新公共字段/schema/文件或跨 owner 写入，先停该步并补 owner、唯一消费者、替代/删除条件与 move-map 登记。当前 Task 尚缺对应正式成功回执、逐 AC 效果及本次官方 `run` 精确消费；其它未映射变化每次按当前快照重算，未清完时整体仍不可用，AC-30/32/33 与 P10 保持 `not_done`；不新增 stage、gate、账本。
+ 
+ ## L0
+ 

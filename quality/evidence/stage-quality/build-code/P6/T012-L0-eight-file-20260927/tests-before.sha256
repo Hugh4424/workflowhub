@@ -1,0 +1,8 @@
+c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386  tests/contract/decision-log-census.test.mjs
+407d02f2b6b4d87ed7d5de207c54fb548b7e897008db8eb9b453ca2c3a79b900  tests/contract/upstream-coverage-ledger.test.mjs
+add4d7d8d371cbcda53b6a0a1a767b0d874ea283636463db51b8b23207ec1f38  tests/contract/spec-analyze-truthfulness.test.mjs
+32648915051252fdb8bfec7ac677f432a3d3448d7e0ed76fe04bf2cd89258781  tests/contract/review-history-canonical-reader.test.mjs
+b7f6fb9944ae17fdbe8192cae6f1af7e871bdf6d4bffc2783d6e8045845c1a70  tests/contract/oracle-mirror.test.mjs
+76f5d6def5e33bfd8e27769316952fb31fb1263bb19356833915169e2be8d06b  tests/e2e/card-04-real-entry-chain-e2e.test.mjs
+21921bba541d5cf9516304ec7235d893580d8e9754062ca6ec3e7bb8fd18ebf1  tests/contract/post-phase-official-handler.test.mjs
+13665f92e313a2fa0b7d30813d1def8df38ae64744a3207f5f9cd7c4701756be  tests/contract/post-spec-analyze-original-source.test.mjs

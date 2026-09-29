@@ -1,0 +1,76 @@
+✔ UI applicability merges the three trusted inputs and rejects caller downgrade (1.288542ms)
+✔ UI applicability validates the derived conclusion from all three source facts (0.518459ms)
+✔ build-spec UI path is init then readiness then the existing plan-design-review (3.868417ms)
+✔ component quality has one conditional owner across plan, code, and verify (1.751459ms)
+✖ runtime and review contracts add UI fields without a new stage, gate, or material (2.203625ms)
+✔ canonical namespaced ACs and legacy compact ACs share the parser (0.920333ms)
+✔ Chinese acceptance checklist tables exclude historical AC references outside the section (0.379083ms)
+✔ table AC identities reject overlong digits and attached letters (0.135542ms)
+✖ acceptance body state examples do not defer the criterion (0.370583ms)
+✔ explicit acceptance title and status metadata defer the criterion (0.345875ms)
+✔ acceptance title and table identity prose do not act as deferred labels (0.05525ms)
+✔ structured deferred metadata remains explicit when ordinary prose follows (0.064416ms)
+✔ design gaps remain unknown facts and never become a UI gate (0.456542ms)
+✔ UI alignment requires current sources and census, while non-UI and update-required remain explicit (5.43975ms)
+✔ T009 RED / T010 GREEN: dual-phase fixture retains deferred gaps and accepts explicit non-UI/Luna handoff (0.112125ms)
+✔ UI validators require state evidence, confirmation consistency, and component ownership facts (0.48975ms)
+✔ executable UI project init and Design.md readiness preserve unknown facts (0.479417ms)
+✔ executable short prompt and design-loop facts cover recovery states (0.294625ms)
+✔ P1 RED: project standards must have distinct identity and responsibilities (0.667083ms)
+✔ P1 RED: census, impact, and conclusion preserve unknown facts (0.943875ms)
+✔ P1 RED: UI/backend/fullstack delivery contracts expose layer failures (0.340833ms)
+✔ UI delivery binds the declared contract to the current Design/Experience, census, and evidence identities (0.166125ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 20
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 119.66975
+
+✖ failing tests:
+
+test at tests/contract/ui-stage-integration.test.mjs:196:1
+✖ runtime and review contracts add UI fields without a new stage, gate, or material (2.203625ms)
+  AssertionError [ERR_ASSERTION]: workflows/build-code/SKILL.md: missing no new stage
+      at requireTerms (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/contract/ui-stage-integration.test.mjs:35:12)
+      at TestContext.<anonymous> (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/contract/ui-stage-integration.test.mjs:255:5)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: "---\nname: build-code\ndescription: Implement the current cohort's Phase contract in the verified task worktree.\nversion: 2.2.0\n---\n\n# Build Code\n\n## 统一回退协议\n\n五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的\n`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在\npre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应\nowner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。\n\n## Goal\n\nImplement the current task with the smallest correct change, real tests,\nper-AC evidence, independent review, and explicit finding disposition.\n\n## 阶段末遗漏披露\n\n阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。\n若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。\n\n阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`\nmanifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；\n若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；\n产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、\n`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；\n不得用一条阶段结论均摊到所有 step/skill。\n\n## 阶段末复盘（必须执行）\n\n阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。\n\nJSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。\n\n消费实际返回的 `quality/stage-reflection/<stage>/<semantic-key>.json` 与原始 bytes 的 `sha256`；key 与 bytes hash 含义不同。同来源同判断重试复用首次 ref、时间和 bytes，来源或判断变化产生新原件；旧 `<stage>.json` 只作显式历史读取。复盘异常、lesson 合并失败和原 stage 错误分别保留，不覆盖原件，也不改变原 stage 失败。\n\n`validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。\n\nThe current WorkflowHub session owns delivery. It performs the smallest real\nverification needed for the current task and publishes the current facts through\nthe existing public `run` behavior. No external Stage Agent, bridge,\n`WORKFLOWHUB_STAGE_OUTCOME_PATH`, transcript, or session/outcome packet is\nneeded. Any step not actually performed is recorded as `incomplete` with its\nreal reason; quality facts remain separate from the permission to continue.\n\n## Authority and entry\n\nCurrent materials are cohort-specific. For pre/history, read `decision-log.md`,\n`spec.md`, `plan.md`, and `tasks.md`. For post, read `decision-log.md`, the\nproduct/global-design `spec.md`, `phases/index.md`, and every physical\n`phases/P<n>.md` referenced by the index. On resume, read the current\n`phase_progress` returned by `status --action=begin`; if its material revision\nmatches, continue at that Phase/Task. If absent or stale, derive the next\nincomplete task from the physical Phase files and current task facts. The index\nis navigation only; never use a copied index body or absent post\n`plan.md`/`tasks.md`. Old reviews, execution records, provider state, audit\nhistory, and other auxiliary objects are facts, not work permits. Missing,\nstale, failed, or unavailable auxiliary facts never require a new task and\nnever freeze implementation or same-task repair.\n\n`make-decision` exclusively owns Talk, Grill, and `decision-log.md`.\nThe owning spec-authoring stage owns specification research and\n`spec-clarify` (`build-spec` for pre/history; `build-plan` for post). Build-code does not replay them or ask the user to reconstruct\nthe decision process. If implementation exposes a direction-changing gap, keep\nthe same task and return that decision to `make-decision`. Build-code does not\nauthor or rewrite current authoring materials: a post `spec.md` or Phase\ncorrection belongs to `build-plan`; a pre `spec.md` correction belongs to\n`build-spec` and pre plan/tasks authoring to `build-plan`. For pre/history,\nthe existing task card's `执行状态填写区` remains the same-task exception for\nactual executor facts. For post, execution status, commands, AC and review\nfacts go to existing task facts/quality evidence; `phases/index.md` remains\npure pointers and Phase design remains unchanged. Record the concrete material\ngap and continue safe code, task-fact, or quality-fact repair in the same task;\ndo not silently change the material owner or invent a new task.\n\n## Portable dependencies\n\nUse the dependency packages declared in `skill-deps.yaml` directly: open each\nselected dependency's declared `SKILL.md` and follow it in the current agent\ncontext. Do not route dependency use through a dispatcher, invocation protocol,\nor auxiliary progress gate.\n\n- Use `test-routing-advisor` once for every behavior Phase against the actual\n  changed-file boundary. If the actual boundary matches the planned route,\n  record the same route; if it differs, record the reroute and reason. The\n  advisor is stateless and never executes tests or grants permission.\n- Use exactly one applicable concrete testing skill directly:\n  `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.\n- Use the existing OCR delegation adapter through public `review --action=record`\n  once for each Phase. The adapter selects the packet; the independent host\n  returns findings. Verify-code owns the one final worktree review.\n\nIf a dependency is unavailable, preserve that fact and use any safe repository\ntest commands already specified in the owning pre task card or post Phase file. The missing dependency limits the\nquality or completion claim; it does not prohibit code or material repair.\n\n## Affected business cases\n\nWhen a Phase calls for P8/P9 business-case selection, authenticate the current\nTask start, source snapshot, catalog revision, and independent runnable-test\ninventory before using them. Start the Phase's fixed trusted capture command\nonce; its inner selection must derive cases and related regressions from the\nactual changed paths, then run validated test targets with argv and `shell:false`.\nThe agent supplies the fixed command, not a hand-picked list of case paths.\n`selectAffectedCases`, `runTargetedCases`, and `reconcileCases` are importable\nseams, not a fixed launcher or independent authentication authority. If the\nfixed consumer, exact inventory identity, or canonical binding is absent,\nrecord the attempted route and `unknown`/`unavailable` for affected ACs.\n\nFor each selected case, retain the rule and catalog revision, AC, test file and\nfull runnable identity, argv, child exit, raw report/ref/hash, source snapshot,\nobservable business inputs and before/after effect refs. Check the supplied\neffect against a project-owned oracle and its source revision; a passing TAP\nname, exit 0, or a matching fixture field cannot establish a business pass.\nRecord structural and risk gaps with their owners. On same-task repair, retain\nthe old failure ref, take a new snapshot, recompute the affected set, rerun\nadjacent regressions, and link the new receipt to the old fact without\noverwriting either. Complete the AC claim only after current authenticated\ncase evidence and the independent review facts have been recorded.\n\n## Conditional UI implementation handoff\n\nWhen the current phase has `ui_applicability=ui`, consume the existing\n`frontend-component-quality` Component Quality Map before editing. For every\nentry, check the real consumer, state owner, typed ViewModel, CSS/token owner,\nand any `story_or_test_update` against the actual diff. Preserve `unknown`, `unavailable`, and `N/A +\nreason` when a planned consumer, design source, browser, fixture, viewport, or\nscreenshot fact is missing; these facts are not a gate and do not authorize a\nnew stage or public command.\n\nBuild-code is the owner that executes `frontend-testing` for the changed UI\nbehavior. The implementation order remains static composition, state and\ninteraction, then DTO-to-typed-ViewModel wiring; the test route must observe\nthe real consumer and recovery behavior rather than a component snapshot.\nNon-UI phases keep the existing backend or fullstack route and record the UI\nskill as not applicable.\n\nFor an applicable UI phase, the official `build-code` handler is the only\nexecution seam for controlled browser QA. It may invoke the existing\n`isolated-browser-qa` adapter once for the current attempt, with the current\ntask, material revision, snapshot, AC, Design.md/Experience.md identities, and\nservice/API/DTO identities. A retry is a new invocation and keeps the previous\nfailure. Success requires the adapter's real evidence, cancellation state, and\ncleanup result to validate against `browser-qa-evidence.v1`; a fixture-only\nreturn, identity mismatch, browser failure, cancellation, or cleanup failure\nis retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.\nNo public Runner, QA command, or persistent QA control object is created.\n\nFor a declared browser acceptance scenario, build-code passes the four-field\n`acceptance_scenario` to the private controlled-QA adapter. The adapter must\nfirst persist direct `browser-qa-evidence.v1` bytes, then return the matching\ncanonical `{ref,sha256}` and payload. Missing or mismatched source, sample,\nscenario, tier, task, attempt, material, snapshot, or invocation remains\n`unavailable`; a normal QA run remains compatible without this optional field.\n\n## Real acceptance and review inputs\n\nFor a Task with `acceptance_role=acceptance`, consume its declared `acceptance_data`:\ncommand scenarios supply `execution.command`, `args`, and `timeout_ms`; service\nscenarios supply worktree-relative `module_ref`, `export_name`, `input`, and\n`timeout_ms`. The official build-code handler invokes the private r"... 11867 more characters,
+    expected: /no new stage/i,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/contract/ui-stage-integration.test.mjs:301:1
+✖ acceptance body state examples do not defer the criterion (0.370583ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'AC-STATE-001'
+  - ]
+  
+      at TestContext.<anonymous> (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/contract/ui-stage-integration.test.mjs:306:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'AC-STATE-001' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

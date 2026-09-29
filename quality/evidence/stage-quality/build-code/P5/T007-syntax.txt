@@ -1,0 +1,16 @@
+COMMAND=node --check runtime/stage/stage-end-report.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE_BASELINE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+SOURCE_SHA256=1269ecf8bb7c6dc6dbc2884bc144ca748ddad1f957fc2c1bdb849c5623ee8c25
+UTC=2026-09-26T12:09:37.754539+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P5
+TASK_IN_PHASE=T007
+STDOUT_BEGIN
+
+STDOUT_END
+STDERR_BEGIN
+
+STDERR_END
+EXIT=0

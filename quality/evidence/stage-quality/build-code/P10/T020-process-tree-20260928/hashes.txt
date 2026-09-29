@@ -1,0 +1,13 @@
+ebbb9f4ab78dfa074c088a79fd3bdab0873ec1150c4375455e31a57a6304d0f2  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/red/targeted-runner.mjs
+e0e1d94e5f72b1054577dc8c0c38e53a9c62bbee8b718b5c4f3b10919eecd794  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/red/targeted-capture.mjs
+2da71029f5da992768c506fbdfaa6f4a4dafc1561b3a3f7f7d488daedf9564d7  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/red/capture.mjs
+f0f8783b80d77e2c411f26f52186fdf9a3f11af7c8bfd0455b4a88bb5b66da6c  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/red/build-code-targeted-capture.test.mjs
+1f48d7b6a9d8779c4f705d9ecbad85ae69486d2df98b7c4bc2441bf1a62eae41  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/red/test-output.txt
+091844048033dac7574f628cf344a1751e4b8202813e1d0f895ec10adb314af8  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/targeted-runner.mjs
+4b275832963cdc54002ba2cff15296d83b960ef9550d6337ee442d0ab293533f  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/targeted-capture.mjs
+8fbfc5faa32866c42c488e1a8f7590b89576c33f25636290ab5090a4a2a61fe5  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/capture.mjs
+e80637757bcbcc6f802a67d52d01a2e78a243bf3548074a125e5c5d7c2bca196  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/build-code-targeted-capture.test.mjs
+f32f35c1619eae1793805732e114c16425b1cc5fcac05c0720e4eb63e82f8f0d  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/build-code-targeted-runner.test.mjs
+f44dc1e54f9d900052454210b1f0ea61ac60f9180d932003255cb6d7c4077ef3  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/runner-output.txt
+0a5a7f529f8b192ec443a37e906710f7a2e09783505e3db163a3ba287de23638  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/capture-output.txt
+a923750e2b69daeeac2aab6610da3378ab02a9e67c79c80c53b85a2e3d4af1e8  quality/evidence/stage-quality/build-code/P10/T020-process-tree-20260928/green/focused-output.txt

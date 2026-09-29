@@ -1,0 +1,4 @@
+38e44dac5e65bb4f1faff294a09d263a1846855cdf9a5b7adbfb544874194150  workflows/build-code/targeted-capture.mjs
+402a1768869be4339cf1f35d00cedc8b5e8c947694e0bc654d696ca1c69b80c8  workflows/build-code/capture.mjs
+72672a00dc1bd467592fe22cf54f1bb09e29c37d97c4d95626f4fb56391019c7  tests/contract/build-code-targeted-capture.test.mjs
+d754a38bb46cb344ed342f2716b214e0109b177618a560fc567b66b168537f11  specs/workflowhub-thin-core-card-04-20260919/phases/P10.md

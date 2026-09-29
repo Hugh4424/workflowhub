@@ -1,0 +1,29 @@
+COMMAND=npx vitest run tests/contract/decision-log-census.test.mjs
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+task_id_card=T009
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+test_sha256=c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386
+material_ref=specs/workflowhub-thin-core-card-04-20260919/decision-log.md
+material_sha256=e7ddb0f1398ee675b4a8c0411283fe24b39b43736d6916e1da32bb5984a45268
+node_version=v24.14.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+classification=current_targeted_gate_not_origin_or_semantic_proof
+recorded_at=2026-09-26T12:02:15.773154+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/decision-log-census.test.mjs (6 tests) 19ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  20:02:15
+   Duration  304ms (transform 85ms, setup 0ms, collect 172ms, tests 19ms, environment 0ms, prepare 35ms)
+stderr:
+
+EXIT=0

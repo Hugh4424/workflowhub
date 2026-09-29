@@ -1,0 +1,78 @@
+{
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "node": "v24.14.0",
+  "vitest": "vitest/2.1.9 darwin-arm64 node-v24.14.0",
+  "environment": {
+    "npm_config_offline": "true",
+    "npm_config_yes": "false"
+  },
+  "sha256": {
+    "runtime/stage/stage-runner.mjs": "e02b613b5723c08ca1c4bb417aa804f32d5bf60e47fd3fb73d57f774f96128f9",
+    "runtime/stage/stage-runner.test.mjs": "b9e790d61bb556fec620e79678426f401b0ed98f87acf211ac469f8dda47559e",
+    "quality/evidence/stage-quality/build-code/P4/T006-array-limits-probe.mjs": "60f08a6bda928a22c77deb27d25d443a8804b72f3e8d322e891c06a261e1d362",
+    "quality/evidence/stage-quality/build-code/P4/T006-array-limits-red.json": "9bf6c252b01df90c3799b898ecbeb82d7b08bb0ea057999cfcdf85c0d1414af1"
+  },
+  "inputs_unchanged_during_run": true,
+  "runs": {
+    "probe": {
+      "command": "node quality/evidence/stage-quality/build-code/P4/T006-array-limits-probe.mjs",
+      "argv": [
+        "node",
+        "quality/evidence/stage-quality/build-code/P4/T006-array-limits-probe.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-probe.stdout.txt",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-probe.stderr.txt",
+      "stdout_sha256": "25fb8b499de4bf02b80cb9143c2bb56774df0a28f82c01db9f4f7a79de451ff7",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "frozen": {
+      "command": "npx vitest run runtime/stage/stage-runner.test.mjs",
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "runtime/stage/stage-runner.test.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-frozen.stdout.txt",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-frozen.stderr.txt",
+      "stdout_sha256": "c527b64d5ebaffe8538b58c7ef5a5c50a967b6e9fa109f0253097bd70dfa0e3f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "syntax": {
+      "command": "node --check runtime/stage/stage-runner.mjs",
+      "argv": [
+        "node",
+        "--check",
+        "runtime/stage/stage-runner.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-syntax.stdout.txt",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-syntax.stderr.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "diffcheck": {
+      "command": "git diff --check -- runtime/stage/stage-runner.mjs",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "runtime/stage/stage-runner.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-diffcheck.stdout.txt",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P4/T006-array-limits-green-diffcheck.stderr.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "official_P4_OCR_limit": "Earlier official P4 OCR and receipt bind the pre-fix source snapshot; this focused post-fix evidence does not replace or retroactively update that review."
+}

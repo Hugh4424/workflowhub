@@ -1,0 +1,65 @@
+COMMAND=npx vitest run tests/contract/card04-final-aggregate.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-24T06:48:29Z
+TEST_SHA256=8529e57fa3148f506bcdd01208b99f2ca9ec1cd8ab4bf39d336dda6b67fb8a71
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/card04-final-aggregate.test.mjs (3 tests | 2 failed) 11ms
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 4ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 0ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities
+AssertionError: source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ source tests/contract/card04-final-aggregate.test.mjs:81:55
+     79|   const allowed = isAbsolute(path) ? taskRoot : root;
+     80|   expect(within(allowed, full), `source outside authenticated ${isAbso…
+     81|   expect(existsSync(full), `source missing: ${path}`).toBe(true);
+       |                                                       ^
+     82|   expect(within(realpathSync(allowed), realpathSync(full)), `source sy…
+     83|   return readFileSync(full);
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:191:21
+ ❯ tests/contract/card04-final-aggregate.test.mjs:224:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative
+AssertionError: source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ source tests/contract/card04-final-aggregate.test.mjs:81:55
+     79|   const allowed = isAbsolute(path) ? taskRoot : root;
+     80|   expect(within(allowed, full), `source outside authenticated ${isAbso…
+     81|   expect(existsSync(full), `source missing: ${path}`).toBe(true);
+       |                                                       ^
+     82|   expect(within(realpathSync(allowed), realpathSync(full)), `source sy…
+     83|   return readFileSync(full);
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:191:21
+ ❯ tests/contract/card04-final-aggregate.test.mjs:228:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  14:48:29
+   Duration  149ms (transform 16ms, setup 0ms, collect 11ms, tests 11ms, environment 0ms, prepare 42ms)
+
+
+EXIT=1

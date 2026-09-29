@@ -1,0 +1,15 @@
+5d0d0fabcb08865e90dc3d55feb4030e46991060d37edae1c0b0f0d37e0520f7  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-red.stdout.txt
+770e30ccc4f232b195aaacea33291359712fcd887f5b8459ee80b6774382173c  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-red.stderr.txt
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-red.exit.txt
+e1173231ca43ab344446ffdce835544f74e74da908d59fad50df708dcf26fadb  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-green.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-green.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-green.exit.txt
+7b467fbf42a9cb6cba03e70d081d4001e822787839998b91a56348263617551a  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-pre.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-pre.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-pre.exit.txt
+7d17e22bec129b5e701a39f751b6e8f9f05335b373f7f17b22cadd3ee9b4a379  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-adjacent.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-adjacent.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-adjacent.exit.txt
+bd60d4527428f4e63e534d13adfaeaf5e2cb7e5914613403169574a0d082edec  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-no-receipt.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-no-receipt.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-producer-no-receipt.exit.txt

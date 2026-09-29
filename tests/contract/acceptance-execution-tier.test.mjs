@@ -62,7 +62,7 @@ function evidence(suffix) {
   return [{ ref: `quality/evidence/browser-qa/${suffix.repeat(64)}.json`, sha256: suffix.repeat(64) }];
 }
 
-function officialBrowserFixture({ prepare, acceptanceData, recordModel = "vnext-single-write" } = {}) {
+function officialBrowserFixture({ prepare, acceptanceData, recordModel = "vnext-single-write", activationCohort = "pre" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-browser-acceptance-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -79,6 +79,7 @@ function officialBrowserFixture({ prepare, acceptanceData, recordModel = "vnext-
     manifest: {
       schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "browser-acceptance",
       created_at: "2026-08-30T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: recordModel,
+      ...(activationCohort === "post" ? { activation_cohort: "post" } : {}),
     },
   });
   const candidate = prepareTaskWorkspace(task);
@@ -361,7 +362,486 @@ function publishControlledBrowserResult(state, input, { mutateStored, mutatePayl
   };
 }
 
+// P11/T022 v2 uses runOfficialStage's real privateAcceptanceScenario producer.
+// The schema-shaped adapter is a protocol fixture; no page or service is run.
+function postBrowserSourceFixture({ scenarios = [{ source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" }],
+  declareAcceptance = true, acIds = ["AC-EXE-001"], attemptId = "p11-post-browser-attempt" } = {}) {
+  const state = officialBrowserFixture({ activationCohort: "post", prepare: ({ artifacts, candidate }) => {
+    if (acIds.length > 1) artifacts.writeAtomic("spec.md", `# Spec\n\n## Acceptance Criteria\n\n${acIds.map((id) => `- **${id}**：browser acceptance.`).join("\n")}\n`);
+    const source = { conclusion: "ui", reason: "contract fixture declares a page consumer; real consumer remains unverified" };
+    artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n## UI applicability\n\n\`\`\`json\n${JSON.stringify({ result: "ui", sources: {
+      raw_requirement: source, project_inventory: source, planned_or_changed_frontend_fact: source,
+    } })}\n\`\`\`\n`);
+    artifacts.writeAtomic("phases/index.md", "## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n");
+    artifacts.writeAtomic("phases/P1.md", `# Phase P1\n\n## L1 — acceptance\n\n### T022 — browser consumer\n\n- **Source / FR / AC**：R-001 / FR-001 / ${acIds.join(" / ")}\n${declareAcceptance ? `- **acceptance_role**：acceptance\n- **ui_scope**：ui\n- **acceptance_data**：\`${JSON.stringify(scenarios)}\`\n` : ""}`);
+    if (scenarios.some((entry) => entry.tier === "command")) {
+      writeFileSync(join(candidate.worktreeRoot, "acceptance-command.mjs"),
+        'process.stdout.write(JSON.stringify({entries:[{acceptance_criterion_id:"AC-EXE-001",assertions:[{id:"command-proof",expected:1,actual:1}]}]}));\n');
+    }
+  } });
+  const sample = browserPayload({ task_id: state.task.identity.taskId, stage: "build-code", attempt_id: attemptId,
+    invocation_id: "binding-only", material_revision: state.context.kernel.currentVNextMaterialRevision(),
+    snapshot_tree: state.context.kernel.currentVNextSnapshot().tree, acceptance_criterion_ids: ["AC-EXE-001"] });
+  const contractFacts = {
+    impact: "ui", impact_inputs: { raw_requirement: "ui" },
+    component_quality_map: [{ action: "reuse", component: "Settings", real_consumer: "settings-page",
+      state_owner: "Settings", typed_view_model: "SettingsViewModel", css_token_owner: "Settings tokens",
+      story_or_test_update: "protocol fixture only" }],
+    qa_binding: {
+      attempt_id: attemptId, acceptance_criterion_id: "AC-EXE-001",
+      design_identity: sample.design_identity, experience_identity: sample.experience_identity,
+      service_identity: sample.service_identity, api_identity: sample.api_identity,
+      dto_identity: sample.dto_identity, browser_profile: sample.browser_profile,
+      route: sample.route, page: sample.page, scenario: sample.scenario,
+    },
+  };
+  return { state, attemptId, contractFacts };
+}
+
+async function runPostBrowserSource(options = {}) {
+  const { state, attemptId, contractFacts } = postBrowserSourceFixture(options);
+  const calls = [];
+  const oldBrowser = options.browserFault === "old-receipt"
+    ? publishControlledBrowserResult(state, {
+      task_id: state.task.identity.taskId, stage: "build-code", attempt_id: attemptId,
+      invocation_id: "previous-browser-invocation",
+      material_revision: state.context.kernel.currentVNextMaterialRevision(),
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      acceptance_criterion_ids: ["AC-EXE-001"],
+      acceptance_scenario: { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
+    }, { mutateStored: (stored) => ({ ...stored, data_identity: { ...stored.data_identity,
+      source: "CASE-001", dataset_id: "protocol fixture" } }) })
+    : null;
+  const receipts = {};
+  if (["valid", "invalid-implementation", "invalid-tests", "invalid-stale-snapshot", "invalid-semantic-tests",
+    "invalid-missing-output", "invalid-output-hash", "invalid-implementation-head", "invalid-test-producer"].includes(options.receiptMode)) {
+    state.context.workspace = openCurrentTaskWorkspace(state.task);
+    const implementation = writeOfficialComponentReceipt({ task: state.task, workspace: state.context.workspace,
+      stage: "build-code", component: "implementation", payload: {} });
+    const tests = createCanonicalReceiptWriter({ task: state.task, workspace: state.context.workspace,
+      stage: "build-code", component: "build-code-test-capture" }).captureTests({ command: "true",
+      receiptRef: "quality/tests/p11-browser-source.json", outputRef: "quality/tests/output/p11-browser-source.txt" });
+    receipts.implementation = implementation.ref;
+    receipts.tests = tests.receipt_ref;
+  }
+  if (options.receiptMode === "invalid-implementation") receipts.implementation = "quality/evidence/implementation/missing.json";
+  if (options.receiptMode === "invalid-tests") receipts.tests = "quality/tests/missing.json";
+  if (options.receiptMode === "invalid-stale-snapshot") {
+    writeFileSync(join(state.context.workspace.worktreeRoot, "changed-after-receipt.txt"), "new source after receipt\n");
+  }
+  if (options.receiptMode === "invalid-semantic-tests") {
+    const stored = JSON.parse(state.task.readRecord(receipts.tests));
+    receipts.tests = publishContentAddressedJson(state.context.kernel, "quality/tests", {
+      ...stored, command_hash: "0".repeat(64),
+    }).ref;
+  }
+  if (options.receiptMode === "invalid-missing-output" || options.receiptMode === "invalid-output-hash") {
+    const stored = JSON.parse(state.task.readRecord(receipts.tests));
+    receipts.tests = publishContentAddressedJson(state.context.kernel, "quality/tests", {
+      ...stored,
+      ...(options.receiptMode === "invalid-missing-output"
+        ? { output_ref: "quality/tests/output/absent-original-output" }
+        : { output_hash: "0".repeat(64) }),
+    }).ref;
+  }
+  if (options.receiptMode === "invalid-implementation-head") {
+    const stored = JSON.parse(state.task.readRecord(receipts.implementation));
+    receipts.implementation = publishContentAddressedJson(state.context.kernel, "quality/evidence/implementation", {
+      ...stored, snapshot_head: "0".repeat(40),
+    }).ref;
+  }
+  if (options.receiptMode === "invalid-test-producer") {
+    const stored = JSON.parse(state.task.readRecord(receipts.tests));
+    receipts.tests = publishContentAddressedJson(state.context.kernel, "quality/tests", {
+      ...stored, producer: { ...stored.producer, component: "arbitrary" },
+    }).ref;
+  }
+  let result;
+  try { result = await runOfficialStage("build-code", state.context,
+    { attempt_id: attemptId, receipts, contract_facts: contractFacts }, {
+      runControlledUiQa: async (input) => {
+        const normalized = { ...input, acceptance_criterion_ids: input.acceptance_criterion_ids ?? [input.acceptance_criterion_id ?? "AC-EXE-001"] };
+        const published = publishControlledBrowserResult(state, normalized, { mutateStored: (stored) => ({
+          ...stored,
+          ...(input.acceptance_scenario ? { data_identity: { ...stored.data_identity,
+            source: input.acceptance_scenario.source, dataset_id: input.acceptance_scenario.sample } } : {}),
+          ...(options.fixtureOnly ? { fixture: { ...stored.fixture, fixture_only: true } } : {}),
+          ...(options.browserFault === "task" ? { task_id: "other-task" } : {}),
+          ...(options.browserFault === "tree" ? { snapshot_tree: "0".repeat(40) } : {}),
+          ...(options.browserFault === "attempt" ? { attempt_id: "older-attempt" } : {}),
+          ...(options.browserFault === "blocked" || (options.browserFault === "second-blocked" && input.acceptance_scenario?.source === "CASE-002") ? { result: "blocked", failure_reason: "fixture browser was blocked",
+            test: { ...stored.test, exit_code: 1 } } : {}),
+        }) });
+        const returned = options.browserFault === "old-receipt" ? oldBrowser
+          : options.browserFault === "ref" ? { ...published, evidence_ref: `quality/evidence/browser-qa/${"0".repeat(64)}.json` }
+            : options.browserFault === "hash" ? { ...published, evidence_hash: "0".repeat(64) }
+              : published;
+        calls.push({ input, ref: returned.evidence_ref, sha256: returned.evidence_hash });
+        return returned;
+      },
+    }); }
+  catch (error) {
+    if (!String(options.receiptMode).startsWith("invalid-")) throw error;
+    return { state, calls, attemptId, error };
+  }
+  return { state, result, calls, attemptId };
+}
+
+describe("P11/T022 v2 actual private browser producer", () => {
+  it("dispatches one browser case once and lets UI QA reuse its canonical source", async () => {
+    const { state, result, calls, attemptId } = await runPostBrowserSource({ receiptMode: "valid" });
+    const execution = acceptanceExecutionSubjectFact(state, result);
+    expect(execution.execution_items).toHaveLength(1);
+    expect(execution.execution_items[0], JSON.stringify(execution.execution_items[0])).toMatchObject({ tier: "browser", status: "executed", executor: "controlled-browser-qa" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].input).toMatchObject({ task_id: state.task.identity.taskId,
+      attempt_id: attemptId, material_revision: state.context.kernel.currentVNextMaterialRevision(),
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      acceptance_scenario: { source: "CASE-001", tier: "browser" } });
+    expect(execution.execution_items[0].evidence_refs).toEqual([{ ref: calls[0].ref, sha256: calls[0].sha256 }]);
+    expect(result.status).not.toBe("completed");
+  });
+
+  it.each(["invalid-implementation", "invalid-tests"])("does not start a browser on %s receipt", async (receiptMode) => {
+    const { calls, error } = await runPostBrowserSource({ receiptMode });
+    expect(error?.code).toBe("MATERIAL_INCOMPLETE");
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(["invalid-stale-snapshot", "invalid-semantic-tests"])("does not start a browser on %s receipt", async (receiptMode) => {
+    const { calls, error } = await runPostBrowserSource({ receiptMode });
+    expect(calls).toHaveLength(0);
+    expect(error).toBeDefined();
+  });
+
+  it.each(["invalid-missing-output", "invalid-output-hash", "invalid-implementation-head"])("does not start a browser on %s receipt", async (receiptMode) => {
+    const { calls, error } = await runPostBrowserSource({ receiptMode });
+    expect(calls).toHaveLength(0);
+    expect(error).toBeDefined();
+  });
+
+  it("does not start a browser on a self-consistent test receipt from an unrelated producer", async () => {
+    const { calls, error } = await runPostBrowserSource({ receiptMode: "invalid-test-producer" });
+    expect(calls).toHaveLength(0);
+    expect(error).toBeDefined();
+  });
+
+  it("does not treat fixture-only browser bytes as a passing acceptance", async () => {
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid", fixtureOnly: true });
+    const execution = acceptanceExecutionSubjectFact(state, result);
+    expect(execution.status).not.toBe("passed");
+    expect(execution.execution_items[0].status).not.toBe("executed");
+  });
+
+  it("keeps two browser cases on one AC distinct without a third QA dispatch", async () => {
+    const scenarios = [
+      { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
+      { source: "CASE-002", sample: "protocol fixture", scenario: "reject invalid settings", tier: "browser" },
+    ];
+    const multiple = await runPostBrowserSource({ receiptMode: "valid", scenarios });
+    const execution = acceptanceExecutionSubjectFact(multiple.state, multiple.result);
+    expect(execution.execution_items.map((item) => item.source)).toEqual(["CASE-001", "CASE-002"]);
+    expect(execution.execution_items.every((item) => item.acceptance_criterion_ids?.join() === "AC-EXE-001")).toBe(true);
+    expect(multiple.calls).toHaveLength(2);
+    expect(multiple.calls.map(({ input }) => input.acceptance_scenario?.source)).toEqual(["CASE-001", "CASE-002"]);
+    expect(execution.ui_qa_projection.status).toBe("passed");
+    expect(execution.ui_qa_projection.items).toHaveLength(2);
+    expect(execution.status).toBe("passed");
+  });
+
+  it("does not borrow a passed command leaf for a required unavailable browser case", async () => {
+    const scenarios = [
+      { source: "CASE-COMMAND", sample: "protocol fixture", scenario: "check settings API", tier: "command",
+        execution: { command: process.execPath, args: ["acceptance-command.mjs"], timeout_ms: 5000 } },
+      { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
+    ];
+    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid", scenarios, browserFault: "blocked" });
+    const execution = acceptanceExecutionSubjectFact(state, result);
+    expect(execution.execution_items.map((item) => item.status)).toEqual(["executed", "unavailable"]);
+    expect(calls).toHaveLength(1);
+    const passedCommandRef = execution.execution_items[0].evidence_refs[0];
+    const fact = p9Fact(state, result, "AC-EXE-001");
+    expect(fact.status).toBe("missing");
+    const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
+    const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+    expect(stageValue.subject_fact.evidence_refs).toContainEqual(passedCommandRef);
+    expect(stageValue.subject_fact.detail).toContain("CASE-001");
+    expect(p9Fresh(state, fact)).toMatchObject({ status: "current", authenticated: true });
+  });
+
+  it("uses the existing standalone QA route when no acceptance scenario is declared", async () => {
+    const noScenario = await runPostBrowserSource({ declareAcceptance: false });
+    expect(noScenario.calls).toHaveLength(1);
+    expect(noScenario.calls[0].input.acceptance_scenario).toBeUndefined();
+  });
+});
+
+describe("P11/T022 v3 acceptance browser and UI QA share one source", () => {
+  it("uses the exact current browser ref and hash for one QA projection", async () => {
+    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid" });
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    const browserSource = aggregate.execution_items[0].evidence_refs[0];
+    expect(calls).toHaveLength(1);
+    expect(aggregate.status).toBe("passed");
+    expect(aggregate.ui_qa_projection).toMatchObject({ status: "passed", items: [
+      { evidence_ref: browserSource.ref, evidence_hash: browserSource.sha256, status: "passed" },
+    ] });
+    expect({ ref: calls[0].ref, sha256: calls[0].sha256 }).toEqual(browserSource);
+    expect(JSON.parse(state.task.readRecord(browserSource.ref))).toMatchObject({
+      task_id: state.task.identity.taskId, attempt_id: calls[0].input.attempt_id,
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+    });
+  });
+
+  it("does not assign one browser source to two acceptance requirements", async () => {
+    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid",
+      acIds: ["AC-EXE-001", "AC-EXE-002"] });
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(calls).toHaveLength(1);
+    expect(aggregate.execution_items[0].acceptance_criterion_ids).toEqual(["AC-EXE-001", "AC-EXE-002"]);
+    expect(aggregate.ui_qa_projection).toMatchObject({ status: "unknown", items: [] });
+    expect(aggregate.status).toBe("missing");
+  });
+
+  it.each(["task", "tree", "attempt", "ref", "hash", "blocked", "old-receipt"])("keeps %s browser source from a same-run QA pass", async (browserFault) => {
+    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid", browserFault });
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(calls).toHaveLength(1);
+    expect(aggregate.status).not.toBe("passed");
+    expect(aggregate.ui_qa_projection).toMatchObject({ status: "unknown", items: [] });
+  });
+
+  it("independent reader rejects absent or wrong projection and accepts a matching raw browser source", async () => {
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid" });
+    const executionFact = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.kind === "acceptance_criterion" && fact.subject === "acceptance_execution");
+    const acceptance = JSON.parse(state.task.readRecord(executionFact.evidence[0].ref));
+    const aggregate = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+    const item = aggregate.subject_fact.execution_items[0];
+    const source = item.evidence_refs[0];
+    const browser = JSON.parse(state.task.readRecord(source.ref));
+    const projectionItem = {
+      case: { source: item.source, sample: item.sample, scenario: item.scenario, tier: "browser" },
+      acceptance_criterion_ids: item.acceptance_criterion_ids,
+      task_id: browser.task_id, attempt_id: browser.attempt_id,
+      material_revision: browser.material_revision, snapshot_tree: browser.snapshot_tree,
+      evidence_ref: source.ref, evidence_hash: source.sha256,
+      result: browser.result, status: "passed",
+      service_identity: browser.service_identity, api_identity: browser.api_identity, dto_identity: browser.dto_identity,
+    };
+    const { ui_qa_projection: _currentProjection, ...withoutProjection } = aggregate.subject_fact;
+    const base = { ...aggregate, status: "passed", subject_fact: { ...withoutProjection, status: "passed" } };
+    const read = (ref) => state.task.readRecord(ref);
+    expect(() => authenticateAcceptanceExecutionAggregate(base, executionFact, read)).toThrow(/projection/i);
+    const matching = { ...base, subject_fact: { ...base.subject_fact,
+      ui_qa_projection: { status: "passed", items: [projectionItem] } } };
+    expect(() => authenticateAcceptanceExecutionAggregate(matching, executionFact, read)).not.toThrow();
+    for (const broken of [
+      { ...projectionItem, evidence_hash: "0".repeat(64) },
+      { ...projectionItem, evidence_ref: "quality/evidence/browser-qa/missing.json" },
+      { ...projectionItem, status: "failed" },
+      { ...projectionItem, attempt_id: "old-attempt" },
+      { ...projectionItem, service_identity: { name: "other-service" } },
+    ]) {
+      const altered = { ...matching, subject_fact: { ...matching.subject_fact,
+        ui_qa_projection: { status: "passed", items: [broken] } } };
+      expect(() => authenticateAcceptanceExecutionAggregate(altered, executionFact, read)).toThrow(/projection/i);
+    }
+  });
+});
+
+describe("P11/T022 browser proof reaches each acceptance requirement", () => {
+  function publishAcVariant(state, original, mutateStage) {
+    const acceptance = JSON.parse(state.task.readRecord(original.evidence[0].ref));
+    const stage = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+    const changedStage = publishContentAddressedJson(state.context.kernel,
+      "quality/evidence/stage-quality/build-code", mutateStage(stage));
+    const changedAcceptance = publishContentAddressedJson(state.context.kernel,
+      "quality/evidence/acceptance/build-code", {
+        ...acceptance,
+        refs: [changedStage],
+        freshness: { ...acceptance.freshness,
+          evidence_freshness: [{ ...changedStage, status: "current" }] },
+      });
+    const published = state.context.kernel.publishVNextQualityFact("build-code", {
+      kind: "acceptance_criterion", status: "passed", subject: original.subject,
+      evidence: [{ ...changedAcceptance, evidence_type: "acceptance_evidence" }],
+    });
+    const raw = state.task.readRecord(published.ref);
+    return { ...JSON.parse(raw), ref: published.ref, sha256: p9Hash(raw) };
+  }
+
+  function readAcross(primary, alternate = null) {
+    return (ref) => {
+      try { return primary.task.readRecord(ref); }
+      catch (error) {
+        if (error?.code !== "ENOENT" || !alternate) throw error;
+        return alternate.task.readRecord(ref);
+      }
+    };
+  }
+
+  it("binds a passed AC to this run's aggregate wrapper and its one raw browser source", async () => {
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid" });
+    const aggregateFact = p9Fact(state, result, "acceptance_execution");
+    const aggregateWrapper = JSON.parse(state.task.readRecord(aggregateFact.evidence[0].ref));
+    const aggregateRef = aggregateWrapper.refs[0];
+    const aggregate = JSON.parse(state.task.readRecord(aggregateRef.ref));
+    const browserRef = aggregate.subject_fact.execution_items[0].evidence_refs[0];
+    const acFact = p9Fact(state, result, "AC-EXE-001");
+    const acWrapper = JSON.parse(state.task.readRecord(acFact.evidence[0].ref));
+    const acStage = JSON.parse(state.task.readRecord(acWrapper.refs[0].ref));
+    expect(aggregate.status).toBe("passed");
+    expect(acFact.status).toBe("passed");
+    expect(acStage.subject_fact.evidence_refs).toEqual([
+      { ref: aggregateFact.evidence[0].ref, sha256: aggregateFact.evidence[0].sha256 }, browserRef,
+    ]);
+    expect(p9Fresh(state, acFact)).toMatchObject({ status: "current", authenticated: true });
+  });
+
+  it("does not pass either AC when one browser source declares two ACs", async () => {
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid",
+      acIds: ["AC-EXE-001", "AC-EXE-002"] });
+    for (const id of ["AC-EXE-001", "AC-EXE-002"]) {
+      const fact = p9Fact(state, result, id);
+      expect(fact.status).toBe("missing");
+    }
+  });
+
+  it("does not pass an AC when one of its two browser scenarios has no unique QA projection", async () => {
+    const scenarios = [
+      { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
+      { source: "CASE-002", sample: "protocol fixture", scenario: "reject invalid settings", tier: "browser" },
+    ];
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid", scenarios, browserFault: "second-blocked" });
+    expect(acceptanceExecutionSubjectFact(state, result).execution_items.map((item) => item.status)).toEqual(["executed", "unavailable"]);
+    expect(p9Fact(state, result, "AC-EXE-001").status).toBe("missing");
+  });
+
+  it("keeps both command and browser proof when both satisfy one AC", async () => {
+    const scenarios = [
+      { source: "CASE-COMMAND", sample: "protocol fixture", scenario: "check settings API", tier: "command",
+        execution: { command: process.execPath, args: ["acceptance-command.mjs"], timeout_ms: 5000 } },
+      { source: "CASE-001", sample: "protocol fixture", scenario: "save settings", tier: "browser" },
+    ];
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid", scenarios });
+    const aggregateFact = p9Fact(state, result, "acceptance_execution");
+    const aggregateWrapper = JSON.parse(state.task.readRecord(aggregateFact.evidence[0].ref));
+    const aggregate = JSON.parse(state.task.readRecord(aggregateWrapper.refs[0].ref));
+    const [commandItem, browserItem] = aggregate.subject_fact.execution_items;
+    const acFact = p9Fact(state, result, "AC-EXE-001");
+    const acWrapper = JSON.parse(state.task.readRecord(acFact.evidence[0].ref));
+    const acStage = JSON.parse(state.task.readRecord(acWrapper.refs[0].ref));
+    expect(aggregate.status).toBe("passed");
+    expect(acFact.status).toBe("passed");
+    expect(acStage.subject_fact.execution).toBeUndefined();
+    expect(acStage.subject_fact.evidence_refs).toEqual([
+      { ref: aggregateFact.evidence[0].ref, sha256: aggregateFact.evidence[0].sha256 },
+      commandItem.evidence_refs[0], browserItem.evidence_refs[0],
+    ]);
+    expect(p9Fresh(state, acFact)).toMatchObject({ status: "current", authenticated: true });
+    for (const omitted of ["acceptance_execution", "browser-qa", "/AC-EXE-001-"]) {
+      const altered = publishAcVariant(state, acFact, (stage) => ({ ...stage,
+        subject_fact: { ...stage.subject_fact,
+          evidence_refs: stage.subject_fact.evidence_refs.filter((reference) => !reference.ref.includes(omitted)) } }));
+      expect(authenticateQualityFactRecord(altered, { read: readAcross(state) }).authenticated,
+        `mixed AC must reject omitted ${omitted}`).toBe(false);
+    }
+  });
+
+  it("rejects a passed AC that drops its aggregate wrapper or raw browser source", async () => {
+    const { state, result } = await runPostBrowserSource({ receiptMode: "valid" });
+    const original = p9Fact(state, result, "AC-EXE-001");
+    const repackaged = publishAcVariant(state, original, (stage) => stage);
+    expect(authenticateQualityFactRecord(repackaged, { read: readAcross(state) }).authenticated).toBe(true);
+    for (const kept of ["browser-qa", "acceptance_execution", "no-current-source"]) {
+      const altered = publishAcVariant(state, original, (stage) => ({ ...stage,
+        subject_fact: { ...stage.subject_fact,
+          evidence_refs: stage.subject_fact.evidence_refs.filter((reference) => reference.ref.includes(kept)) } }));
+      expect(authenticateQualityFactRecord(altered, { read: readAcross(state) }).authenticated).toBe(false);
+    }
+  });
+
+  it("rejects a wrapper from another run on the same tree when the AC retains this run's browser source", async () => {
+    const current = await runPostBrowserSource({ receiptMode: "valid" });
+    const other = await runPostBrowserSource({ receiptMode: "valid", attemptId: "other-p11-attempt" });
+    expect(current.state.context.kernel.currentVNextSnapshot().tree)
+      .toBe(other.state.context.kernel.currentVNextSnapshot().tree);
+    expect(current.state.context.kernel.currentVNextMaterialRevision())
+      .toBe(other.state.context.kernel.currentVNextMaterialRevision());
+    const original = p9Fact(current.state, current.result, "AC-EXE-001");
+    const otherAggregate = p9Fact(other.state, other.result, "acceptance_execution");
+    expect(readAcross(current.state, other.state)(otherAggregate.evidence[0].ref))
+      .toBe(other.state.task.readRecord(otherAggregate.evidence[0].ref));
+    const altered = publishAcVariant(current.state, original, (stage) => ({ ...stage,
+      subject_fact: { ...stage.subject_fact,
+        evidence_refs: [{ ref: otherAggregate.evidence[0].ref, sha256: otherAggregate.evidence[0].sha256 },
+          stage.subject_fact.evidence_refs.find((reference) => reference.ref.includes("browser-qa"))] } }));
+    expect(authenticateQualityFactRecord(altered, {
+      read: readAcross(current.state, other.state),
+    }).authenticated).toBe(false);
+  });
+});
+
+describe("P11/T022 blocked browser missing readback", () => {
+  it("authenticates the real unavailable browser item as missing while rejecting fabricated pass shapes", async () => {
+    const { state, result, calls } = await runPostBrowserSource({ receiptMode: "valid", browserFault: "blocked" });
+    expect(calls).toHaveLength(1);
+    const blockedRaw = state.task.readRecord(calls[0].ref);
+    expect(createHash("sha256").update(blockedRaw).digest("hex")).toBe(calls[0].sha256);
+    expect(JSON.parse(blockedRaw).result).toBe("blocked");
+
+    const factRef = result.quality_fact_refs.find((ref) => {
+      const value = JSON.parse(state.task.readRecord(ref));
+      return value.kind === "acceptance_criterion" && value.subject === "acceptance_execution";
+    });
+    const factRaw = state.task.readRecord(factRef);
+    const fact = JSON.parse(factRaw);
+    const read = (ref) => state.task.readRecord(ref);
+    const wrapper = JSON.parse(read(fact.evidence[0].ref));
+    const aggregate = JSON.parse(read(wrapper.refs[0].ref));
+    expect(fact.status).toBe("missing");
+    expect(aggregate).toMatchObject({ status: "missing", subject_fact: {
+      status: "missing", execution_items: [{ tier: "browser", status: "unavailable", evidence_refs: [] }],
+      ui_qa_projection: { status: "unknown", items: [], reason: expect.any(String) },
+    } });
+
+    const noBrowserItem = { ...aggregate, subject_fact: { ...aggregate.subject_fact, execution_items: [] } };
+    expect(() => authenticateAcceptanceExecutionAggregate(noBrowserItem, fact, read)).toThrow(/projection/i);
+    const fabricatedPass = { ...aggregate, status: "passed", subject_fact: { ...aggregate.subject_fact,
+      status: "passed", execution_items: [{ ...aggregate.subject_fact.execution_items[0], status: "executed" }] } };
+    expect(() => authenticateAcceptanceExecutionAggregate(fabricatedPass, fact, read)).toThrow(/invalid|evidence/i);
+    const { ui_qa_projection: _projection, ...historicalFact } = aggregate.subject_fact;
+    expect(() => authenticateAcceptanceExecutionAggregate({ ...aggregate, subject_fact: historicalFact }, fact, read)).not.toThrow();
+
+    expect(() => authenticateAcceptanceExecutionAggregate(aggregate, fact, read)).not.toThrow();
+    const authenticated = authenticateQualityFactRecord({ ...fact, ref: factRef,
+      sha256: createHash("sha256").update(factRaw).digest("hex") }, { read });
+    expect(authenticated).toMatchObject({ status: "recorded", authenticated: true });
+    const acFact = p9Fact(state, result, "AC-EXE-001");
+    expect(acFact.status).toBe("missing");
+    expect(p9Fresh(state, acFact)).toMatchObject({ status: "current", authenticated: true });
+    expect(fact.status).toBe("missing");
+  });
+});
+
 describe("acceptance execution tiers", () => {
+  it("keeps the pre-cohort tests producer available to the historical build-code receipt path", async () => {
+    const state = officialBrowserFixture();
+    const workspace = openCurrentTaskWorkspace(state.task);
+    state.context.workspace = workspace;
+    const implementation = writeOfficialComponentReceipt({ task: state.task, workspace,
+      stage: "build-code", component: "implementation", payload: {} });
+    const tests = createCanonicalReceiptWriter({ task: state.task, workspace,
+      stage: "build-code", component: "tests" }).captureTests({ command: "true",
+      receiptRef: "quality/tests/pre-history-component.json", outputRef: "quality/tests/output/pre-history-component.txt" });
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: "pre-history-component", receipts: { implementation: implementation.ref, tests: tests.receipt_ref },
+    }, {});
+    expect(result).toMatchObject({ stage: "build-code", work_status: "ready" });
+  });
+
   it("projects the one strict acceptance_data source and never invents a second Markdown parser", () => {
     expect(projectAcceptanceExecutionData(tasks)).toMatchObject({
       status: "ready",
@@ -661,7 +1141,7 @@ function p9Actor(state, { missing = false, tamper = false, attemptId = "p9-attem
   return { ref, sha256: p9Hash(raw), value };
 }
 
-function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, mutateMaterialDuringExecution = false, recordModel = "vnext-single-write" } = {}) {
+function p9Fixture({ tier = "command", rows = p9Rows(), raw = null, rawBytes = null, exitCode = 0, timeoutMs = 3000, hanging = false, missingActor = false, tamperActor = false, independent = false, executionOverride, acceptanceData, futureStageAcIds = [], futureStageAcText = "条件=机器逐 AC 测试事实与独立于实现者的 verify-code 审查均已产生；行为=在 verify-code 按风险独立语义抽查与最终授权；度量=保留完整分母并交接；失败场景=真实审查或授权未发生却宣称完成即失败。", mutateMaterialDuringExecution = false, recordModel = "vnext-single-write" } = {}) {
   let output, execution, marker;
   const state = officialBrowserFixture({ recordModel, prepare: ({ root, candidate, artifacts }) => {
     marker = join(root, "observations");
@@ -705,8 +1185,9 @@ export async function accept(input) {
       project_inventory: { conclusion: "non_ui", reason: "fixture has no page consumer" },
       planned_or_changed_frontend_fact: { conclusion: "non_ui", reason: "fixture has no frontend changes" },
     } })}\n\`\`\`\n`);
-    artifacts.writeAtomic("spec.md", `# Spec\n${independent ? "D-001 requires independent review of local service execution.\n" : ""}\n## Acceptance Criteria\n\n${p9Ids.map((id) => `- **${id}**：runtime JSON equality must match the declared fixture oracle.`).join("\n")}\n`);
-    artifacts.writeAtomic("tasks.md", `# Tasks\n\n- **Template version**：\`plan-task.v4\`\n\n#### T019 — real acceptance\n- **ID**：T019\n- **ui_scope**：non_ui\n- **acceptance_role**：acceptance\n- **e2e_scope**：${independent ? "high_risk_user_visible" : "not_required"}\n${independent ? '- **e2e_decision_refs**：`["D-001"]`\n- **e2e_risk_decision_ref**：D-001\n' : ""}- **AC**：${p9Ids.join(", ")}\n- **acceptance_data**：\`${JSON.stringify([{ source: "descriptive source; never execute this", sample: "real local data", scenario: "two AC runtime oracle", tier, execution }])}\`\n`);
+    artifacts.writeAtomic("spec.md", `# Spec\n${independent ? "D-001 requires independent review of local service execution.\n" : ""}\n## Acceptance Criteria\n\n${p9Ids.map((id) => `- **${id}**：${futureStageAcIds.includes(id) ? futureStageAcText : "runtime JSON equality must match the declared fixture oracle."}`).join("\n")}\n`);
+    const scenarios = acceptanceData?.(execution) ?? [{ source: "descriptive source; never execute this", sample: "real local data", scenario: "two AC runtime oracle", tier, execution }];
+    artifacts.writeAtomic("tasks.md", `# Tasks\n\n- **Template version**：\`plan-task.v4\`\n\n#### T019 — real acceptance\n- **ID**：T019\n- **ui_scope**：non_ui\n- **acceptance_role**：acceptance\n- **e2e_scope**：${independent ? "high_risk_user_visible" : "not_required"}\n${independent ? '- **e2e_decision_refs**：`["D-001"]`\n- **e2e_risk_decision_ref**：D-001\n' : ""}- **AC**：${p9Ids.join(", ")}\n- **acceptance_data**：\`${JSON.stringify(scenarios)}\`\n`);
   } });
   state.context.workspace = openCurrentTaskWorkspace(state.task);
   const outcome = p9Actor(state, { missing: missingActor, tamper: tamperActor });
@@ -779,6 +1260,40 @@ function p9KillOwnedProcesses(marker) {
 }
 
 describe("P3 T009 real command and service acceptance", () => {
+  it("CARD04 completion repair executes explicit verify-code deferred AC without claiming its business acceptance passed", async () => {
+    const rows = p9Rows();
+    rows[1] = { ...rows[1], outcome: "deferred", owner: "verify-code", reason: "original spec requires verify-code semantic spot-check and final authorization" };
+    const state = p9Fixture({ rows, futureStageAcIds: [p9Ids[1]] });
+    const result = await p9Execute(state);
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    const { records } = p9PerAc(state, result);
+    expect(records).toHaveLength(2);
+    expect(records.map(({ subject_fact }) => subject_fact.status)).toEqual(["passed", "deferred"]);
+    expect(records[1].subject_fact).toMatchObject({ outcome: "deferred", outcome_owner: "verify-code", execution: { exit_code: 0, cleanup: { status: "completed" } } });
+    expect(records.every(({ subject_fact }) => subject_fact.assertions.every(({ result: value }) => value === "passed"))).toBe(true);
+    expect(p9Fact(state, result, "acceptance_criteria").status).toBe("missing");
+    expect(p9Fact(state, result, p9Ids[1]).status).not.toBe("passed");
+    expect(result.quality_status).toBe("incomplete");
+  });
+
+  it.each([
+    ["current AC relabeled verify-code", { futureStageAcIds: [] }],
+    ["wrong future owner", { owner: "CARD-10" }],
+    ["false assertion in future AC", { assertion: { id: "future-check", expected: "checked", actual: "not-checked" } }],
+    ["nonzero executor", { exitCode: 9 }],
+    ["verify-code mentioned only in current AC failure clause", { futureStageAcText: "条件=当前 build-code 完成真实 command；行为=核对当前输出；度量=全部当前断言通过；失败场景=verify-code 阶段审查被冒充当前执行即失败。" }],
+    ["verify-code is only a required output literal in a current AC", { futureStageAcText: "条件=当前 build-code 运行真实 command；行为=必须在当前输出中保留 verify-code 这个普通词；度量=全部当前断言通过；失败场景=输出遗漏该词即失败。" }],
+    ["a current command must print the verify-code review result", { futureStageAcText: "verify-code 阶段审查结果必须由当前 build-code command 原样打印；度量=当前输出逐字相等；失败场景=当前输出缺失或不等即失败。" }],
+  ])("CARD04 completion repair rejects %s", async (_caseName, options) => {
+    const rows = p9Rows();
+    rows[1] = { ...rows[1], outcome: "deferred", owner: options.owner ?? "verify-code", reason: "original spec requires future semantic spot-check", ...(options.assertion ? { assertions: [options.assertion] } : {}) };
+    const state = p9Fixture({ rows, futureStageAcIds: options.futureStageAcIds ?? [p9Ids[1]], exitCode: options.exitCode ?? 0, ...(options.futureStageAcText ? { futureStageAcText: options.futureStageAcText } : {}) });
+    const result = await p9Execute(state);
+    expect(acceptanceExecutionSubjectFact(state, result)).toMatchObject({ status: "missing", execution_items: [{ status: "failed" }] });
+    expect(p9Fact(state, result, "acceptance_criteria").status).not.toBe("passed");
+  });
+
   it("projects the explicit argv and service contracts without executing source text", () => {
     for (const tier of ["command", "service"]) {
       const state = p9Fixture({ tier });
@@ -817,6 +1332,60 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(aggregate).toMatchObject({ status: "missing", execution_items: [{ status: "failed" }] });
     const records = p9PerAc(state, result).records.sort((left, right) => left.subject.localeCompare(right.subject));
     expect(records.map(({ subject_fact }) => subject_fact.status)).toEqual(["passed", "failed"]);
+    expect(p9Fact(state, result, p9Ids[0]).status).toBe("passed");
+    expect(p9Fact(state, result, p9Ids[1]).status).toBe("failed");
+  });
+
+  it("keeps a passed AC leaf but does not cover a second required scenario with no ref", async () => {
+    const state = p9Fixture({ acceptanceData: (execution) => [
+      { source: "CASE-A", sample: "real local data", scenario: "run command", tier: "command", execution },
+      { source: "CASE-B", sample: "real local data", scenario: "run missing service", tier: "service",
+        execution: { module_ref: "missing-acceptance-service.mjs", export_name: "accept", input: {}, timeout_ms: 5000 } },
+    ] });
+    const result = await p9Execute(state);
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate.execution_items.map((item) => item.status)).toEqual(["executed", "unavailable"]);
+    expect(aggregate.execution_items[1].evidence_refs).toEqual([]);
+    for (const acId of p9Ids) {
+      const passedRef = aggregate.execution_items[0].evidence_refs.find((entry) => entry.ref.includes(`/${acId}-`));
+      expect(passedRef).toBeDefined();
+      const fact = p9Fact(state, result, acId);
+      expect(fact.status).toBe("missing");
+      const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
+      expect(acceptance.result).not.toBe("pass");
+      const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+      expect(stageValue.status).toBe("missing");
+      expect(stageValue.subject_fact.evidence_refs).toContainEqual(passedRef);
+      expect(stageValue.subject_fact.detail).toContain("CASE-B");
+      expect(p9Fresh(state, fact)).toMatchObject({ status: "current", authenticated: true });
+    }
+  });
+
+  it("rejects duplicate declared scenarios instead of counting one content-addressed leaf twice", async () => {
+    const state = p9Fixture({ acceptanceData: (execution) => [
+      { source: "CASE-DUP", sample: "real local data", scenario: "same command", tier: "command", execution },
+      { source: "CASE-DUP", sample: "real local data", scenario: "same command", tier: "command", execution },
+    ] });
+    await expect(p9Execute(state)).rejects.toThrow(/duplicate acceptance scenario/i);
+  });
+
+  it("covers two required scenarios only when each has its own AC leaf", async () => {
+    const state = p9Fixture({ acceptanceData: (execution) => [
+      { source: "CASE-A", sample: "real local data", scenario: "run command", tier: "command", execution },
+      { source: "CASE-B", sample: "real local data", scenario: "run service", tier: "service",
+        execution: { module_ref: "acceptance-service.mjs", export_name: "accept", input: { value: { amount: 7, label: "fixture" } }, timeout_ms: 5000 } },
+    ] });
+    const result = await p9Execute(state);
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate.execution_items.map((item) => item.status)).toEqual(["executed", "executed"]);
+    for (const acId of p9Ids) {
+      const fact = p9Fact(state, result, acId);
+      expect(fact.status).toBe("passed");
+      const acceptance = JSON.parse(state.task.readRecord(fact.evidence[0].ref));
+      const stageValue = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+      expect(stageValue.subject_fact.evidence_refs).toHaveLength(2);
+      expect(p9Fresh(state, fact).status).toBe("current");
+    }
   });
 
   it("keeps an unavailable AC outcome out of coverage while an independent review receives the executed command evidence", async () => {
@@ -1097,6 +1666,33 @@ describe("P3 T009 real command and service acceptance", () => {
 
     const aggregate = acceptanceExecutionSubjectFact(state, result);
     expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    const currentBinding = {
+      kind: "workflowhub-current-session",
+      task_id: state.task.identity.taskId,
+      stage: "build-code",
+      attempt_id: "p9-attempt-A",
+      run_id: state.context.kernel.deriveStageWorkflowRunId("build-code"),
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      material_revision: state.context.kernel.currentVNextMaterialRevision(),
+    };
+    expect(aggregate.execution_binding).toEqual(currentBinding);
+    expect(existsSync(join(state.marker, "started.json"))).toBe(true);
+    const { records } = p9PerAc(state, result);
+    expect(records).toHaveLength(2);
+    for (const record of records) {
+      expect(record.subject_fact.executor_actor).toEqual({
+        source_kind: "workflowhub-session",
+        source_id: "workflowhub-current-session",
+        run_id: currentBinding.run_id,
+      });
+      expect(record.subject_fact.execution_binding).toEqual(currentBinding);
+      expect(record.subject_fact.execution_binding).not.toHaveProperty("stage_outcome_ref");
+      expect(record.subject_fact.execution_binding).not.toHaveProperty("stage_outcome_hash");
+    }
+    for (const acId of p9Ids) {
+      const fact = p9Fact(state, result, acId);
+      expect(p9Fresh(state, fact)).toMatchObject({ status: "current", authenticated: true });
+    }
     expect(result.quality_fact_refs.some((ref) => {
       const fact = JSON.parse(state.task.readRecord(ref));
       return fact.kind === "acceptance_criterion" && fact.subject === "acceptance_execution" && fact.status === "passed";
@@ -1481,9 +2077,20 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(trace.bundles[0].bytes["authenticated-evidence.json"]).toBeDefined();
     const authenticatedEvidence = JSON.parse(trace.bundles[0].bytes["authenticated-evidence.json"]);
     expect(authenticatedEvidence.runtime_execution.raw).toContain("acceptance_execution");
-    expect(authenticatedEvidence.runtime_execution_outputs).toEqual(expect.arrayContaining([
+    const outputs = authenticatedEvidence.runtime_execution_outputs;
+    expect(outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({ text: expect.stringContaining("service-response") }),
     ]));
+    const referencedOutputs = new Set(authenticatedEvidence.runtime_execution_records.flatMap(({ raw }) => {
+      const execution = JSON.parse(raw).subject_fact.execution;
+      return execution ? ["stdout", "stderr"].map((stream) => `${execution[`${stream}_ref`]}\u0000${execution[`${stream}_hash`]}`) : [];
+    }));
+    expect(new Set(outputs.map(({ ref, sha256 }) => `${ref}\u0000${sha256}`)).size).toBe(outputs.length);
+    expect(outputs).toHaveLength(referencedOutputs.size);
+    for (const output of outputs) {
+      expect(output.bytes).toBeGreaterThanOrEqual(0);
+      if (Object.hasOwn(output, "text")) expect(output).not.toHaveProperty("content_base64");
+    }
     expect(trace.bundles[0].bytes["review-instructions.md"]).toContain("identify false-green behavior");
     const attempt = JSON.parse(state.task.readRecord(review.attempt_ref));
     expect(attempt.authenticated_evidence_sha256).toMatch(/^[a-f0-9]{64}$/);
@@ -1648,14 +2255,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const execution = await p9Execute(state);
     const review = await p9PublicReview(state, trace, p9ExecutionInput(state, execution));
     expect(trace.dispatches).toBeLessThanOrEqual(1);
-    if (!review.result_ref) {
-      const attempt = JSON.parse(state.task.readRecord(review.attempt_ref));
-      expect(condition, JSON.stringify({ review, error: attempt.error })).toBe("same source");
-      expect(trace.rounds).toBe(0);
-      expect(trace.dispatches).toBe(0);
-      expect(attempt.error?.code).toBe("REVIEW_EXECUTOR_SOURCE_NOT_INDEPENDENT");
-      return;
-    }
+    expect(typeof review.result_ref, JSON.stringify({ review, error: review.attempt_ref && JSON.parse(state.task.readRecord(review.attempt_ref)).error })).toBe("string");
     let selectedReview = review.result_ref;
     if (condition === "ordinary result alias") {
       selectedReview = `quality/reviews/results/${"c".repeat(64)}.json`;
@@ -1668,11 +2268,11 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     }
     const result = await p9Verify(state, { quality_review: selectedReview, confirmation: confirmation.ref });
     const factStatus = p9Fact(state, result, "e2e_acceptance").status;
-    if (condition === "ordinary result alias") expect(factStatus).toBe("passed");
+    if (condition === "ordinary result alias" || condition === "same source") expect(factStatus).toBe("passed");
     else expect(factStatus).not.toBe("passed");
   });
 
-  it.each([false, true])("retains the whole selected round and derives an actor only from independent completed members (onlySameCompletes=%s)", async (onlySameCompletes) => {
+  it.each([false, true])("retains the whole selected round and derives an actor from any completed provider (onlySameCompletes=%s)", async (onlySameCompletes) => {
     const state = p9Fixture({ tier: "service", independent: true });
     const trace = p9ConfigureReview(state, { mixedSources: true, onlySameCompletes });
     const profiles = JSON.parse(readFileSync(join(state.root, "broker.json"), "utf8")).providers;
@@ -1685,15 +2285,11 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const attempt = JSON.parse(state.task.readRecord(review.attempt_ref));
     expect(attempt.provider_attempts.map((entry) => entry.provider)).toEqual(["kimi/reviewer", "codex/independent"]);
     expect(trace.providerCalls.map((entry) => entry.provider)).toEqual(["kimi/reviewer", "codex/independent"]);
-    expect(attempt.review_policy.minimum_heterologous).toBe(1);
+    expect(attempt).not.toHaveProperty("review_policy");
     expect(typeof review.result_ref, JSON.stringify({ review, error: attempt.error })).toBe("string");
     const record = JSON.parse(state.task.readRecord(review.result_ref));
-    if (onlySameCompletes) {
-      expect(record).not.toHaveProperty("e2e_binding");
-      expect(attempt.provider_attempts[1]).toMatchObject({ status: "failed", error: { code: "PROCESS_FAILED" } });
-    } else {
-      expect(record.e2e_binding.reviewer_actor).toEqual({ source_kind: "review_provider", source_id: "codex/p9-independent", run_id: trace.runtimeId });
-    }
+    if (onlySameCompletes) expect(attempt.provider_attempts[1]).toMatchObject({ status: "failed", error: { code: "PROCESS_FAILED" } });
+    expect(record.e2e_binding.reviewer_actor).toEqual({ source_kind: "review_provider", source_id: "workflowhub-current-session", run_id: trace.runtimeId });
   });
 
   it("runs the reversed dependency order without requiring an external producer", async () => {
@@ -1704,4 +2300,125 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(input.ref).toMatch(/acceptance_execution-/);
     expect(JSON.parse(readFileSync(join(state.marker, "service-data.json"), "utf8")).count).toBe(1);
   }, 60_000);
+});
+
+
+// Actual review repair: protocol fixtures exercise the existing writer/reader,
+// not a real webpage or completed CARD04 acceptance.
+describe("P11/T022 v3 acceptance browser and UI QA share one source formal boundary", () => {
+  async function proof() {
+    const run = await runPostBrowserSource({ receiptMode: "valid" });
+    const fact = p9Fact(run.state, run.result, "acceptance_execution");
+    const wrapper = JSON.parse(run.state.task.readRecord(fact.evidence[0].ref));
+    const aggregate = JSON.parse(run.state.task.readRecord(wrapper.refs[0].ref));
+    expect(aggregate.status).toBe("passed");
+    expect(aggregate.subject_fact.execution_items).toHaveLength(1);
+    const browser = JSON.parse(run.state.task.readRecord(aggregate.subject_fact.execution_items[0].evidence_refs[0].ref));
+    const observed = { ...aggregate.subject_fact.ui_qa_projection.items[0], invocation_id: browser.invocation_id };
+    return { ...run, fact, aggregate, observed };
+  }
+
+  async function actualProjectionWriter() {
+    const text = readFileSync(join(import.meta.dirname, "../../runtime/stage/stage-runner.mjs"), "utf8");
+    const functionBytes = (name) => {
+      const start = text.indexOf(`function ${name}(`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const end = text.indexOf("\nfunction ", start + 1);
+      expect(end).toBeGreaterThan(start);
+      return text.slice(start, end);
+    };
+    const { validateBrowserQaEvidence } = await import("../../runtime/evidence/stage-content-evidence.mjs");
+    const { SHA256_HEX } = await import("../../runtime/evidence/canonical-utils.mjs");
+    const { WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND } = await import("../../runtime/evidence/canonical-evidence-validators.mjs");
+    return new Function("createHash", "validateBrowserQaEvidence", "SHA256_HEX", "WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND",
+      `${functionBytes("canonicalJson")}\n${functionBytes("sameAcceptanceScenario")}\n${functionBytes("projectAcceptanceBrowserUiQa")}\nreturn projectAcceptanceBrowserUiQa;`)(
+      createHash, validateBrowserQaEvidence, SHA256_HEX, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND);
+  }
+
+  const nonpassingSources = [
+    ["cancelled", (raw) => ({ ...raw, cancellation: { status: "cancelled", reason: "test cancellation" } })],
+    ["cleanup incomplete", (raw) => ({ ...raw, cleanup: { status: "incomplete", app_service_running: false, reason: "test cleanup failure" } })],
+    ["fixture.fixture_only", (raw) => ({ ...raw, fixture: { ...raw.fixture, fixture_only: true } })],
+    ["data_identity.fixture_only", (raw) => ({ ...raw, data_identity: { ...raw.data_identity, fixture_only: true } })],
+  ];
+
+  function sourceVariant(base, mutate) {
+    const aggregate = structuredClone(base.aggregate);
+    const item = aggregate.subject_fact.execution_items[0];
+    const oldSource = item.evidence_refs[0];
+    const raw = JSON.parse(base.state.task.readRecord(oldSource.ref));
+    const changed = publishContentAddressedJson(base.state.context.kernel, "quality/evidence/browser-qa", mutate(raw));
+    item.evidence_refs = [changed];
+    aggregate.subject_fact.ui_qa_projection.items[0].evidence_ref = changed.ref;
+    aggregate.subject_fact.ui_qa_projection.items[0].evidence_hash = changed.sha256;
+    const observed = structuredClone(base.observed);
+    observed.evidence_ref = changed.ref; observed.evidence_hash = changed.sha256;
+    return { aggregate, observed, changed };
+  }
+
+  it("rejects cancellation cleanup and both fixture-only raw sources at the actual writer", async () => {
+    const base = await proof();
+    const writer = await actualProjectionWriter();
+    const snapshot = base.state.context.kernel.currentVNextSnapshot();
+    const binding = base.aggregate.subject_fact.execution_binding;
+    expect(writer(base.state.context, snapshot, base.aggregate.subject_fact.execution_items,
+      binding, base.observed).status).toBe("passed");
+    for (const [name, mutate] of nonpassingSources) {
+      const altered = sourceVariant(base, mutate);
+      expect(writer(base.state.context, snapshot, altered.aggregate.subject_fact.execution_items,
+        binding, altered.observed).status, name).toBe("unknown");
+    }
+    expect(writer(base.state.context, snapshot, [], binding, base.observed)).toBeNull();
+  });
+
+  it("independent reader rejects cancellation cleanup fixture-only and zero browser execution leaves", async () => {
+    const base = await proof();
+    const read = (ref) => base.state.task.readRecord(ref);
+    expect(() => authenticateAcceptanceExecutionAggregate(base.aggregate, base.fact, read)).not.toThrow();
+    for (const [name, mutate] of nonpassingSources) {
+      const altered = sourceVariant(base, mutate);
+      expect(() => authenticateAcceptanceExecutionAggregate(altered.aggregate, base.fact, read), name).toThrow();
+    }
+    const zero = structuredClone(base.aggregate);
+    zero.subject_fact.execution_items = [];
+    expect(() => authenticateAcceptanceExecutionAggregate(zero, base.fact, read)).toThrow(/browser|projection|execution/i);
+  });
+
+  it.each(["service_identity", "api_identity", "dto_identity"])("actual writer rejects missing %s in both raw source and matching observation", async (field) => {
+    const base = await proof();
+    const writer = await actualProjectionWriter();
+    const altered = sourceVariant(base, (raw) => {
+      const changed = { ...raw }; delete changed[field]; return changed;
+    });
+    delete altered.observed[field];
+    const projection = writer(base.state.context, base.state.context.kernel.currentVNextSnapshot(),
+      altered.aggregate.subject_fact.execution_items, base.aggregate.subject_fact.execution_binding, altered.observed);
+    expect(projection.status).toBe("unknown");
+  });
+
+  it("consumes two distinct browser cases with one canonical source and one dispatch per case", async () => {
+    const scenarios = [
+      { source: "CASE-001", sample: "first protocol data", scenario: "save settings", tier: "browser" },
+      { source: "CASE-002", sample: "second protocol data", scenario: "save settings", tier: "browser" },
+    ];
+    const run = await runPostBrowserSource({ receiptMode: "valid", scenarios });
+    const fact = p9Fact(run.state, run.result, "acceptance_execution");
+    const wrapper = JSON.parse(run.state.task.readRecord(fact.evidence[0].ref));
+    const aggregate = JSON.parse(run.state.task.readRecord(wrapper.refs[0].ref));
+    expect(run.calls).toHaveLength(2);
+    expect(aggregate.status).toBe("passed");
+    expect(aggregate.subject_fact.execution_items).toHaveLength(2);
+    expect(aggregate.subject_fact.ui_qa_projection).toMatchObject({ status: "passed", items: [
+      { status: "passed", evidence_ref: run.calls[0].ref, evidence_hash: run.calls[0].sha256 },
+      { status: "passed", evidence_ref: run.calls[1].ref, evidence_hash: run.calls[1].sha256 },
+    ] });
+    expect(new Set(run.calls.map((call) => call.ref)).size).toBe(2);
+    for (const [index, item] of aggregate.subject_fact.execution_items.entries()) {
+      expect(item.acceptance_criterion_ids).toEqual(["AC-EXE-001"]);
+      expect(item.evidence_refs).toEqual([{ ref: run.calls[index].ref, sha256: run.calls[index].sha256 }]);
+    }
+    expect(() => authenticateAcceptanceExecutionAggregate(aggregate, fact,
+      (ref) => run.state.task.readRecord(ref))).not.toThrow();
+    expect(p9Fact(run.state, run.result, "AC-EXE-001").status).toBe("passed");
+  });
 });

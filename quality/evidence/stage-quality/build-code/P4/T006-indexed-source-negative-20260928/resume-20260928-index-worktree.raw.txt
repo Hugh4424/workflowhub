@@ -1,0 +1,11 @@
+COMMAND=npx vitest run tests/contract/post-acceptance-chain-source-index.test.mjs
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/post-acceptance-chain-source-index.test.mjs (1 test) 21ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  07:24:02
+   Duration  923ms (transform 320ms, setup 0ms, collect 771ms, tests 21ms, environment 0ms, prepare 34ms)
+EXIT=0

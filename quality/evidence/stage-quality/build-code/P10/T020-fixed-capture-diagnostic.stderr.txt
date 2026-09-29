@@ -1,0 +1,16 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts
+Error: test command changed the bound Git HEAD/tree snapshot; receipt rejected; git status=M product.mjs
+?? .vite/vitest/results.json
+?? node_modules
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:107:27
+    105|     let first;
+    106|     try { first = await runCapture(fixedCommand(), "quality/tests/targ…
+    107|     catch (error) { throw new Error(`${error.message}; git status=${gi…
+       |                           ^
+    108|     const second = await runCapture(fixedCommand(), "quality/tests/tar…
+    109|     for (const result of [first, second]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

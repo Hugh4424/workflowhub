@@ -1,0 +1,16 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (69 tests | 3 failed | 66 skipped) 25625ms
+   × P11/T022 v2 actual private browser producer > does not start a browser on invalid-missing-output receipt 8111ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+   × P11/T022 v2 actual private browser producer > does not start a browser on invalid-output-hash receipt 8044ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+   × P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation-head receipt 9470ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 66 skipped (69)
+   Start at  13:15:47
+   Duration  26.37s (transform 293ms, setup 0ms, collect 645ms, tests 25.63s, environment 0ms, prepare 23ms)
+

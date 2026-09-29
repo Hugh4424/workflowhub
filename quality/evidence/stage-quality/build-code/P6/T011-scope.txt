@@ -1,0 +1,8 @@
+COMMAND=ls -ld /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md
+dr-xr-xr-x@ 4 Hugh  staff   128 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04
+-r--r--r--@ 1 Hugh  staff   548 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json
+-r--r--r--@ 1 Hugh  staff  1048 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md
+EXIT=0
+ORACLE_EXACT_KEYS_AND_VALUES=true
+REPO_QUALITY_ORACLE_ABSENT=true
+FROZEN_TEST_SHA256=b7f6fb9944ae17fdbe8192cae6f1af7e871bdf6d4bffc2783d6e8045845c1a70

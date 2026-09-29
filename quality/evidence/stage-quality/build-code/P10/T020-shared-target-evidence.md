@@ -1,0 +1,8 @@
+# T020 共享测试目标的 case 归属负控
+
+P9 正式 OCR 的 F-15099745c7b1 指出：两个 case 共用同一测试文件时，原 runner 把文件的每个 leaf 分别归到两个 case。用 P8 目录第一条真实 Vitest 目标复制一个新 case ID 构造歧义输入；探针只改变 case ID，保留相同 `target` 和 6 个登记 ID。
+
+- RED：`node /tmp/card04-P10-duplicate-target-probe.mjs` 在修复前执行，工具记录 exit **1**，输出 `{"status":"completed","observation_count":12,"test_count":12,"canonical_receipt":false}`。这是该次调用的可见输出摘录；当时未写原始输出文件，故不将此摘录称为 canonical/raw receipt。
+- 修复：`workflows/build-code/targeted-runner.mjs` 在所有 target 经 `realpathSync` 校验后、`vitestCli()` 与 `runChild()` 之前对实际路径去重。重复路径返回 `unavailable/reporter_identity_mismatch`、空 observations、无 execution；不会给两个 case 伪造同一组 leaf。
+- GREEN：[可复跑探针](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-shared-target-probe.mjs) 与[原始输出](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-shared-target-green.output)、[命令/exit/哈希](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-shared-target-green.meta.json)：exit **0**，`{"status":"unavailable","reason":"reporter_identity_mismatch","observation_count":0}`；runner SHA256 `f9d47017fe0feab4a1301702b99b12b663708f64c7a6e09b7366998520da2005`。同一变更后定向冻结门 `npx vitest run tests/contract/build-code-targeted-runner.test.mjs` 为 **9/9**、exit 0，`node --check workflows/build-code/targeted-runner.mjs` exit 0；这两条检查的输出仅在本轮工具记录，未单独写 canonical receipt。
+- 独立只读复核确认拒绝发生在任何子进程启动前，现有 P8 三个互异目标的 6/28/15 leaf 不受影响。合法的两个 case 共用一个文件且各绑定不同 leaf 目前也会被拒；完整支持需独立的逐 case leaf 映射并只执行一次文件。此修复阻止假归属，不实现 AC-33 的固定入口、canonical receipt 或业务效果 oracle；P10 三文件冻结门此前仍为 **26/29**，尚未因本修复宣称转绿。

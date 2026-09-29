@@ -1,0 +1,13 @@
+file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/T025-ac17-host-prep-20260927.mjs:32
+function fail(message) { throw new Error(`AC17 host preparation stopped: ${message}`); }
+                               ^
+
+Error: AC17 host preparation stopped: host before test did not meet its behavior oracle; raw preserved at /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/T025-p5-host-1790478087485-before.raw.txt
+    at fail (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/T025-ac17-host-prep-20260927.mjs:32:32)
+    at hostTest (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/T025-ac17-host-prep-20260927.mjs:245:15)
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/T025-ac17-host-prep-20260927.mjs:374:43
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.14.0

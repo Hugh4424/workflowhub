@@ -1,0 +1,30 @@
+# P13 source ledger current-status addendum
+
+This addendum preserves `index.json`, `summary.md`, and `p1-current-correction.md` as written. It records later evidence that the final aggregation must consume. It does not declare any Phase, task, acceptance criterion, or CARD04 complete.
+
+## Identity
+
+- Task: `workflowhub-thin-core-card-04-20260919`.
+- HEAD: `ef920f1fbd415fe87d50930359059b661e141acd`.
+- Current material revision: `revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044`.
+- Current source tree: `a8ba4bcc213c29f78aec61e4f64139444d3b0d1b`.
+
+## Later evidence to include
+
+1. P1 current Phase and T001–T003 checks are in `p1-current-correction.md`. The exact task transcripts were also transferred create-only to the external Task quality tree. Its index is `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/T001-T003-command-transfer-1b05b2e91e54d69bad47f1b8ea88374e6bdac0c3783e39cae81ee2a00cf0a778.json`. Passed P1 task rows must cite these external raw transcripts; local copies alone do not satisfy the current P13 test contract.
+2. P10 fixed targeted capture ran three suites and 49 test leaves successfully. The current immutable receipt is `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/targeted/52466118-7b21-4a12-9043-f966732a04cb.json`; run evidence is in external Task `quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/`. The overall selector and business-effect result remains `unavailable`/`unknown`: 206 of 215 changed paths are unmapped. The 49 passing leaves must not become a CARD04 business-pass claim.
+3. The first official `build-code` stage row was written once. Its raw evidence is `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/first-official-stage-row-20260927-2eb140c3/summary.md`. The canonical `facts.jsonl` row has `implementation_completion=partial`, `stage_quality=incomplete`, `review_origin=not_run`, and no phase cursor. The public outcome is `in_progress`, with zero completed attempts. This is a current incomplete fact, not a completion receipt.
+4. One official P10 Phase review attempt timed out after 20 minutes. Evidence is in external Task `quality/evidence/stage-quality/build-code/P10/T020-phase-review-official-20260927-b6498394/`. No canonical review result was produced; state is `unavailable`, not passed.
+5. Current P11 checks cover protocol and adjacent code only. There is no authenticated real page/service/browser outcome; UI applicability remains `unknown`. P5/T008 lacks an authenticated same-run report and user exception declaration. P12 business risk sampling, all-phase review, AC results, and the three final P13 files remain absent or incomplete.
+6. The 206 unmapped paths split into 51 CARD05 archive paths, 94 other CARD05 merge paths, and 61 current-worktree paths. The read-only audits are `quality/evidence/stage-quality/build-code/P10/T020-unmapped-206-census-20260927/index.json`, `quality/evidence/stage-quality/build-code/P10/T020-runtime-workflows-31-audit-20260927/audit.md`, and `quality/evidence/stage-quality/build-code/P10/T020-worktree-only-61-audit-20260927/summary.md`. No path is yet supported by enough source/consumer evidence to exclude it safely from CARD04 selection; an archive path is actually read by a current test. Preserve the original 215-path scope and any future per-path exclusion grounds.
+7. Read-only timeout diagnosis found that the P10 review input contained 59 files and 788,404 bytes, including 51 diff parts spanning 77 changes. The review driver waits for both providers with no internal managed-review deadline; the outer 1,200-second limit ended first. These input facts may explain long latency but do not prove why either provider failed to finish. The timed-out attempt remains `unavailable`; a later attempt must retain the full authorized scope and be observed without silently converting elapsed time into a pass.
+
+## Aggregation rule
+
+Read each cited original and its hash before using it in a passed row. Preserve the original ledger's older observations as historical. Place the missing items above passing local checks in the final human report. Do not infer how many of the 27 planned tasks are fully complete from the number of green unit tests.
+
+## Later source revision after the P13 multi-command fix
+
+The implementation above and the P1 correction describe the earlier source tree `a8ba4bcc213c29f78aec61e4f64139444d3b0d1b`. P13 material and its existing contract test have since changed to fix multi-command gate reading. The official read-only `status --action=begin` now reports material revision `revision-3ce06a4d0f1643e8d3ffda4b49baa9ac9df8a23081cf34d71d99b244f2805646` and source tree `870b92175454f8b7691149b8eb672c12d8814665`; it explicitly marks the previous build-code stage row `stale`. The prior rows and scoped test receipts remain historical evidence, not current-version passes. The new targeted RED and after runs are in `quality/evidence/stage-quality/build-code/P13/multi-gate-implementation-20260927/`: the multi-command contract changed from failing to passing, while two final-artifact tests still fail because those artifacts have not been created. The entire P13 gate is not green.
+
+An official fixed P10 targeted capture then ran against this new tree. Its external Task evidence is `quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-current-20260927-c30b3ddd/summary.md`, with canonical receipt `quality/tests/targeted/be3c2242-a877-4b1c-a5eb-e527428a2d41.json`. The 49 selected test leaves passed, while the current 215-path scope still has 206 unmapped paths and the overall business effect remains unknown. This new receipt replaces the old-tree capture for **current targeted-test execution only**, not for overall selection, AC, review, or build-code completion.

@@ -1,0 +1,35 @@
+WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp"))
+2026-09-27T01:38:14.497351Z ERROR codex_models_manager::manager: failed to refresh available models: Connection failed: error sending request
+2026-09-27T01:38:14.659024Z ERROR codex_models_manager::manager: failed to refresh available models: Connection failed: error sending request
+2026-09-27T01:38:17.774789Z ERROR codex_models_manager::manager: failed to refresh available models: Connection failed: error sending request
+OpenAI Codex v0.157.0
+--------
+workdir: /workspace
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 01a0e083-522f-7263-86f4-bfa7c7b842e1
+--------
+user
+Reply with exactly READY and no other text.
+2026-09-27T01:38:17.800890Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+2026-09-27T01:38:18.058237Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+2026-09-27T01:38:19.070146Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+2026-09-27T01:38:19.074043Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+2026-09-27T01:38:19.330218Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+ERROR: Reconnecting... 2/5
+ERROR: Reconnecting... 3/5
+2026-09-27T01:38:20.343454Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Client(HttpRequest(HttpRequest("http/request failed: error sending request for url (https://chatgpt.com/backend-api/ps/mcp)")))
+ERROR: Reconnecting... 4/5
+ERROR: Reconnecting... 5/5
+warning: Falling back from WebSockets to HTTPS transport. workspace routing discovery failed
+ERROR: Reconnecting... 1/5
+ERROR: Reconnecting... 2/5
+ERROR: Reconnecting... 3/5
+ERROR: Reconnecting... 4/5
+ERROR: Reconnecting... 5/5
+ERROR: workspace routing discovery failed
+ERROR: workspace routing discovery failed

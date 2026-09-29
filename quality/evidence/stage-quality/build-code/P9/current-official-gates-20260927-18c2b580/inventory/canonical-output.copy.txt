@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-test-inventory.test.mjs (3 tests) 4105ms
+   ✓ ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP 3863ms
+ ✓ tests/contract/build-code-test-registry.test.mjs (8 tests) 22511ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reads an authenticated private registry and accepts exactly the two passing Node TAP leaves 4655ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports missing leaves instead of certifying the reporter 3836ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports extra leaves instead of certifying the reporter 3790ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports skipped leaves instead of certifying the reporter 3994ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects duplicate registered identities before testing 1534ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects a receipt command for a file outside the registered target 3214ms
+   ✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects source drift even if the old registry still lists a runnable name 1486ms
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+   Start at  20:48:24
+   Duration  23.00s (transform 168ms, setup 0ms, collect 732ms, tests 26.62s, environment 0ms, prepare 65ms)
+
+

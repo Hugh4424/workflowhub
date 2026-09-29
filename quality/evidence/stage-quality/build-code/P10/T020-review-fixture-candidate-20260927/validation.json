@@ -1,0 +1,86 @@
+{
+  "source_sha256": "e4197528887d296211f69fd6f2b5f70a821d0cf80a500886a1991ddce420e17e",
+  "checks": [
+    {
+      "name": "git-apply-check-tests-first",
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/tests-first.patch"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "git-apply-check-combined",
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/candidate.patch"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "node-check-tests-first.candidate.mjs",
+      "argv": [
+        "node",
+        "--check",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/tests-first.candidate.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "node-check-final.candidate.mjs",
+      "argv": [
+        "node",
+        "--check",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/final.candidate.mjs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "git-apply-tests-first-in-isolation",
+      "argv": [
+        "git",
+        "apply",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/tests-first.patch"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "git-apply-check-followup-in-isolation",
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/implementation-followup.patch"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "git-apply-followup-in-isolation",
+      "argv": [
+        "git",
+        "apply",
+        "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-review-fixture-candidate-20260927/implementation-followup.patch"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "formal_tests_run": false
+}

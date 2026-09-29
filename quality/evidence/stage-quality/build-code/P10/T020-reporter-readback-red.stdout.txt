@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (10 tests | 5 failed | 5 skipped) 5ms
+   × P10 outer readback of actual per-target reporter bytes > accepts only the three original, complete reporter documents and exact aggregate bytes 4ms
+     → expected undefined to be type of 'function'
+   × P10 outer readback of actual per-target reporter bytes > rejects missing actual leaves even when the manifest hashes are recalculated 0ms
+     → expected undefined to be type of 'function'
+   × P10 outer readback of actual per-target reporter bytes > rejects extra actual leaves even when the manifest hashes are recalculated 0ms
+     → expected undefined to be type of 'function'
+   × P10 outer readback of actual per-target reporter bytes > rejects skipped actual leaves even when the manifest hashes are recalculated 0ms
+     → expected undefined to be type of 'function'
+   × P10 outer readback of actual per-target reporter bytes > rejects a self-hashed aggregate that differs from ordered per-target raw bytes 0ms
+     → expected undefined to be type of 'function'
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 5 skipped (10)
+   Start at  10:35:03
+   Duration  432ms (transform 135ms, setup 0ms, collect 325ms, tests 5ms, environment 0ms, prepare 29ms)
+

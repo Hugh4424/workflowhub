@@ -1,0 +1,38 @@
+{
+  "schema_version": "workflowhub-receipt.v1",
+  "task_id": "targeted-b6c27aff-4c83-4734-9c9a-af1589ab871b",
+  "stage": "build-code",
+  "producer": {
+    "stage": "build-code",
+    "component": "build-code-test-capture",
+    "version": "1.0.0"
+  },
+  "command": "'/usr/local/bin/node' '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/targeted-capture.mjs'",
+  "command_hash": "3ffb38877738c017deed585f75527171793e6132a8922e4773a2797d024ab228",
+  "exit_code": 0,
+  "snapshot_head": "bef406c8b3a06e98514aa587f68780702651f3b5",
+  "snapshot_tree": "9ad4eb2cc9ee7bc8eaf143890a5eca411aaf0186",
+  "snapshot_commit": "a78526f56b78be1cdc603ec4d2df25d8fc75ae3d",
+  "source_digest": "fe98c489e636715555781d328250a4e3df48be95d53dd630363895e8b4ffeff1",
+  "started_at": "2026-09-27T02:24:48.045Z",
+  "completed_at": "2026-09-27T02:24:52.507Z",
+  "output_ref": "quality/tests/output/targeted-241cb725-9361-44bc-b744-a4ff3b9ff250.output",
+  "output_hash": "74d38fee711cd2c3f476954cd8745510669edad0a15c1db805b9cf29d9310fad",
+  "lease": {
+    "status": "released",
+    "ref": "locks/test-capture.execution.lock",
+    "wait_ms": 10000
+  },
+  "behavior_fingerprint": {
+    "task_id": "targeted-b6c27aff-4c83-4734-9c9a-af1589ab871b",
+    "snapshot_tree": "9ad4eb2cc9ee7bc8eaf143890a5eca411aaf0186",
+    "source_digest": "fe98c489e636715555781d328250a4e3df48be95d53dd630363895e8b4ffeff1",
+    "material_revision": "revision-9bf49d3ee399aeecd63ee600685fe760b39df351156243b2ef661ff48670b928",
+    "catalog_revision": "fixture.1",
+    "catalog_sha256": "6add9f67abd23f22a83b8fcd215e078427ac40ecf4def25e181dedf5893a564a",
+    "registry_revision": "fixture.1",
+    "registry_sha256": "eef6d07583f710f1ca86974b954cf4c8ad260293251a9844688e32f30aef17d3",
+    "run_id": "241cb725-9361-44bc-b744-a4ff3b9ff250"
+  },
+  "duration_ms": 4462
+}

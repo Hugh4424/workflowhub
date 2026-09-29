@@ -1,0 +1,15 @@
+COMMAND=npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/census-upstream-authoring.test.mjs (15 tests) 7ms
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms
+ ✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 8ms
+ ✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 4ms
+
+ Test Files  4 passed (4)
+      Tests  62 passed (62)
+   Start at  17:15:48
+   Duration  918ms (transform 302ms, setup 0ms, collect 879ms, tests 23ms, environment 0ms, prepare 103ms)
+
+EXIT=0

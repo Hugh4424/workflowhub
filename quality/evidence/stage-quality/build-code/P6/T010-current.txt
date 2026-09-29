@@ -1,0 +1,29 @@
+COMMAND=npx vitest run tests/contract/upstream-coverage-ledger.test.mjs
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+task_id_card=T010
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+test_sha256=407d02f2b6b4d87ed7d5de207c54fb548b7e897008db8eb9b453ca2c3a79b900
+material_ref=specs/workflowhub-thin-core-card-04-20260919/spec.md
+material_sha256=41b61a820c95f4ae489ee96f1a47e683abed54f387acb4dce37cee2d3fb2f328
+node_version=v24.14.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+classification=current_targeted_gate_not_origin_or_semantic_proof
+recorded_at=2026-09-26T12:02:16.424721+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  20:02:16
+   Duration  301ms (transform 78ms, setup 0ms, collect 161ms, tests 19ms, environment 0ms, prepare 28ms)
+stderr:
+
+EXIT=0

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "node",
+    "tools/cli/stage-runtime.mjs",
+    "review",
+    "--action=record",
+    "--stage=build-code",
+    "--project=workflowhub",
+    "--task=workflowhub-thin-core-card-04-20260919",
+    "--input=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P3/T005-phase-review-current-20260928/request.json"
+  ],
+  "started_at_utc": "2026-09-27T16:44:31.834470+00:00",
+  "ended_at_utc": "2026-09-27T16:57:50.320524+00:00",
+  "exit_code": 0,
+  "raw_process_returncode": 0,
+  "timed_out": false,
+  "error": null,
+  "stdout_sha256": "1987fb5ebc4a49422906dc750cc72c62b66e6bbda7931e76d91ab1a66474d315",
+  "stderr_sha256": "bc1b465003f7fc72904f76f516961674f9e66e744d49a12af6fbd1741fcb0128"
+}

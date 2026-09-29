@@ -1,0 +1,91 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (84 tests | 1 failed) 916277ms
+   ✓ P11/T022 v2 actual private browser producer > dispatches one browser case once and lets UI QA reuse its canonical source 10354ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation receipt 6830ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-tests receipt 6902ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-stale-snapshot receipt 6871ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-semantic-tests receipt 6990ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-missing-output receipt 6962ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-output-hash receipt 6840ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation-head receipt 6753ms
+   ✓ P11/T022 v2 actual private browser producer > does not start a browser on a self-consistent test receipt from an unrelated producer 6909ms
+   ✓ P11/T022 v2 actual private browser producer > does not treat fixture-only browser bytes as a passing acceptance 9750ms
+   ✓ P11/T022 v2 actual private browser producer > keeps two browser cases on one AC distinct without a third QA dispatch 10078ms
+   ✓ P11/T022 v2 actual private browser producer > does not borrow a passed command leaf for a required unavailable browser case 11766ms
+   ✓ P11/T022 v2 actual private browser producer > uses the existing standalone QA route when no acceptance scenario is declared 7052ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > uses the exact current browser ref and hash for one QA projection 10479ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > does not assign one browser source to two acceptance requirements 10227ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps task browser source from a same-run QA pass 9776ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps tree browser source from a same-run QA pass 9885ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps attempt browser source from a same-run QA pass 10073ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps ref browser source from a same-run QA pass 10243ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps hash browser source from a same-run QA pass 9546ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps blocked browser source from a same-run QA pass 9856ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps old-receipt browser source from a same-run QA pass 10342ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9799ms
+   ✓ P11/T022 blocked browser missing readback > authenticates the real unavailable browser item as missing while rejecting fabricated pass shapes 10099ms
+   ✓ acceptance execution tiers > keeps the pre-cohort tests producer available to the historical build-code receipt path 8682ms
+   ✓ acceptance execution tiers > executes browser acceptance only after callback and canonical bytes share the complete scenario binding 7232ms
+   ✓ acceptance execution tiers > keeps the current stage runnable without an upstream host outcome 21310ms
+   ✓ acceptance execution tiers > rejects a retired nested stage outcome before current stage execution can start 2249ms
+   ✓ acceptance execution tiers > keeps verify-code browser execution unavailable when current canonical data identity does not bind the declared scenario 11493ms
+   ✓ acceptance execution tiers > keeps browser acceptance unavailable for every payload-binding mutation 19073ms
+   ✓ acceptance execution tiers > keeps browser acceptance unavailable without a controlled QA adapter 7928ms
+   ✓ P3 T009 real command and service acceptance > projects the explicit argv and service contracts without executing source text 4751ms
+   ✓ P3 T009 real command and service acceptance > executes two command ACs with incomplete authenticated actor and preserves literal argv plus raw output 14350ms
+   ✓ P3 T009 real command and service acceptance > does not let one failed AC assertion hide a passed sibling leaf 14954ms
+   ✓ P3 T009 real command and service acceptance > keeps a passed AC leaf but does not cover a second required scenario with no ref 13070ms
+   ✓ P3 T009 real command and service acceptance > rejects duplicate declared scenarios instead of counting one content-addressed leaf twice 12106ms
+   ✓ P3 T009 real command and service acceptance > covers two required scenarios only when each has its own AC leaf 14546ms
+   ✓ P3 T009 real command and service acceptance > keeps an unavailable AC outcome out of coverage while an independent review receives the executed command evidence 17010ms
+   ✓ P3 T009 real command and service acceptance > does not pass the execution aggregate when an AC outcome is incomplete 12493ms
+   ✓ P3 T009 real command and service acceptance > does not pass the execution aggregate when an AC outcome is deferred 12521ms
+   ✓ P3 T009 real command and service acceptance > does not pass the execution aggregate when an AC assertion compares not-read placeholders 12634ms
+   ✓ P3 T009 real command and service acceptance > executes command ACs with a runtime-owned current-session binding when no stage outcome is supplied 10920ms
+   ✓ P3 T009 real command and service acceptance > accepts nested numeric at-least assertions without weakening strict JSON comparison 10424ms
+   ✓ P3 T009 real command and service acceptance > authenticates the complete current aggregate before review consumers can use it 10285ms
+   ✓ P3 T009 real command and service acceptance > expands only the authenticated task directory in command argv 10253ms
+   ✓ P3 T009 real command and service acceptance > rejects the cached pre-command identity when execution changes a build-code material 8188ms
+   ✓ P3 T009 real command and service acceptance > executes a real service module with one loopback request and releases its port 12526ms
+   × P3 T009 real command and service acceptance > publishes the acceptance execution aggregate for the implementation/tests receipt branch 10556ms
+     → runtime acceptance evidence binding mismatch
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for array order despite child self-reported pass 12309ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for strict JSON type despite child self-reported pass 12448ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for nonzero child despite child self-reported pass 12724ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for empty stdout despite child self-reported pass 12378ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for malformed JSON despite child self-reported pass 12414ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for non UTF8 stdout despite child self-reported pass 12462ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for non-finite JSON number despite child self-reported pass 12637ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for empty entries despite child self-reported pass 12564ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for empty assertions despite child self-reported pass 12315ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for missing AC despite child self-reported pass 12323ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for unknown AC despite child self-reported pass 12368ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for duplicate AC despite child self-reported pass 12532ms
+   ✓ P3 T009 real command and service acceptance > retains actual failed/missing evidence for duplicate assertion id despite child self-reported pass 12273ms
+   ✓ P3 T009 real command and service acceptance > starts a command with absent producer because the current session is the producer 8627ms
+   ✓ P3 T009 real command and service acceptance > starts a command with rehash actor with old proof because the current session is the producer 10248ms
+   ✓ P3 T009 real command and service acceptance > timeout terminates the actual child and grandchild and releases the listening port 13240ms
+   ✓ P3 T009 real command and service acceptance > private AbortSignal cancels a running command process group after readiness 12583ms
+   ✓ P3 T009 real command and service acceptance > private AbortSignal cancels a running service process group after readiness 12296ms
+   ✓ P3 T009 ordinary public review consumes actual execution > selects the confirmed E2E review without consuming the OCR or Phase review receipt 2927ms
+   ✓ P3 T009 ordinary public review consumes actual execution > rejects an unauthenticated explicit execution before the ordinary provider dispatch 5786ms
+   ✓ P3 T009 ordinary public review consumes actual execution > rejects a pre-dispatch-shaped result whose material id is not the frozen provider bundle 13168ms
+   ✓ P3 T009 ordinary public review consumes actual execution > ORACLE-AC003-CURRENT-EXECUTION-NO-LEGACY-RETRY: dispatches after an older verify-code snapshot 18153ms
+   ✓ P3 T009 ordinary public review consumes actual execution > dispatches once, freezes the actual execution/oracle bundle and consumes post-review typed confirmation 25576ms
+   ✓ P3 T009 ordinary public review consumes actual execution > binds an execution review to the provider-projected material after host evidence is frozen 14096ms
+   ✓ P3 T009 ordinary public review consumes actual execution > reconsumes canonical provider output with an invalid unanchored finding 16689ms
+   ✓ P3 T009 ordinary public review consumes actual execution > preserves content-bound acceptance semantics for same source 13749ms
+   ✓ P3 T009 ordinary public review consumes actual execution > preserves content-bound acceptance semantics for wrong confirmation subject 18742ms
+   ✓ P3 T009 ordinary public review consumes actual execution > preserves content-bound acceptance semantics for old review after source change 19050ms
+   ✓ P3 T009 ordinary public review consumes actual execution > preserves content-bound acceptance semantics for ordinary result alias 18559ms
+   ✓ P3 T009 ordinary public review consumes actual execution > retains the whole selected round and derives an actor only from independent completed members (onlySameCompletes=false) 14322ms
+   ✓ P3 T009 ordinary public review consumes actual execution > retains the whole selected round and derives an actor only from independent completed members (onlySameCompletes=true) 14273ms
+   ✓ P3 T009 ordinary public review consumes actual execution > runs the reversed dependency order without requiring an external producer 8509ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 83 passed (84)
+   Start at  23:55:28
+   Duration  917.05s (transform 320ms, setup 0ms, collect 672ms, tests 916.28s, environment 0ms, prepare 24ms)
+

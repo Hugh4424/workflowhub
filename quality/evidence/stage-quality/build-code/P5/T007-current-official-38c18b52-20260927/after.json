@@ -1,0 +1,42 @@
+{
+  "snapshot": {
+    "time_utc": "2026-09-27T12:52:15.394Z",
+    "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+    "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "task_sha256": "fb0a4fd764318e988be1f111507c9104934fba44175589252f22c30e78d3c91d",
+    "facts_sha256": "5b323de258d1628bf1aebf98a9c5ceddb06ea40db0b1c4544553654ec096ae78",
+    "files": {
+      "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40",
+      "specs/workflowhub-thin-core-card-04-20260919/spec.md": "ef1e45942e1d95bb7d0b6b37ab53d3f2441d766a8767c3ccd383371738f7810a",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "123f9f99f76d2718632d8527fc891f54e251958bf371e4c3de5128f429af28ad",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md": "84b286a4749e63b9bd59db270b52053e4b1cc006aca02091b2bd4244d21af545",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md": "5e4cb0bfbb76adf21a588a113bd8113056ccb9db1b2f0745ca6e1290fa65ec73",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md": "fa318313588454ceff87fe8b726bbe2ffe470be47b35dc10d6a6fd42ae19e7c8",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md": "d714d9e07bf0baffd77ab4333633fbd0ab266a34661710edd640794a93ac18a8",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md": "33873942388466ff6754c4a10b77e7f33d4b2b9140e24b5da5c5e41aa63e9490",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md": "dcfd25eaab81f7e6adc8a01adbf37f81757010d14cb7b9299e7de39f396e488a",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md": "d6dc63d3e350e6047ef666d497a65dbe0faafc5b986b92c4743a7bf06cdd8c27",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md": "896f2ca748fcd495104b7716e03f43c3e9a38ad6f4e35e3e3961f3899916f5dd",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md": "581668358956ed078259175b6fda8c88b1170929ca65c5804495d370212913ec",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P13.md": "8abe3827356186e53416f7aaaf77201a270a202c18b65c0257545936ab6e11ff",
+      "runtime/stage/stage-end-report.mjs": "7828fe354db7cc4507ddd5a503ad9cd97279d81ac1e2d51291b48dab11ba6b43",
+      "runtime/stage/stage-end-report.test.mjs": "3882d202565978f5e4d3d6a4985bcabccac907263e4e3f53782c79928c353428",
+      "runtime/stage/stage-runner.mjs": "9ee916e5692042df9535a1f278efce14a84ddf2dd61c87f9dadef5362337cc84",
+      "runtime/evidence/freshness.mjs": "c0cfb6b0743d5f32f14b0c2ad73fcd36c1b98d91031153398c7f3921c1a8a1d6",
+      "tools/cli/stage-runtime.mjs": "a926c3217456cfa3397252945b483f78260009cdc9b393e265b921480eab079f",
+      "vitest.config.mjs": "8ef9d87dfaa029d308bf4435d3435b037da362b5f19c8063860648c024cf734c"
+    }
+  },
+  "status": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+    "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b"
+  },
+  "status_error": null,
+  "files_unchanged": true,
+  "task_facts_unchanged": true,
+  "identity_unchanged": true
+}

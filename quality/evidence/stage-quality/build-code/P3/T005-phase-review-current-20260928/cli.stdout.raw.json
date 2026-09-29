@@ -1,0 +1,8 @@
+{
+  "status": "recorded",
+  "reused": false,
+  "dispatch_state": "dispatched",
+  "attempt_ref": "quality/reviews/attempts/4f2643f1-2185-507d-ad19-ec19bedb433b/attempt.json",
+  "result_ref": "quality/reviews/results/build-code-simple-4f2643f1-2185-507d-ad19-ec19bedb433b.json",
+  "report_ref": "quality/reviews/reports/build-code-simple-4f2643f1-2185-507d-ad19-ec19bedb433b.md"
+}

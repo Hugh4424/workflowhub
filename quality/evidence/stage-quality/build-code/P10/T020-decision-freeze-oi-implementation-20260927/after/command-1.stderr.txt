@@ -1,0 +1,21 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > accepts a no-status CF with the same current D decision and confirmed OI
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:119:72
+    117|   expect(fact.coverage).toEqual(["user_flow", "data_states", "success_…
+    118|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+    119|   expect(fact.errors.some((error) => error.startsWith("current CF ")))…
+       |                                                                        ^
+    120|   expect(fact.errors).not.toContain("direction-level questions remain …
+    121|   expect(fact.ok).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

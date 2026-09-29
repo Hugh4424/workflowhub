@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (79 tests | 78 skipped) 9941ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > does not assign one browser source to two acceptance requirements 9940ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 78 skipped (79)
+   Start at  13:42:23
+   Duration  10.73s (transform 320ms, setup 0ms, collect 675ms, tests 9.94s, environment 0ms, prepare 32ms)
+

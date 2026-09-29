@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/integration/vnext-official-stage-run.test.mjs (108 tests | 107 skipped) 739ms
+   ✓ vNext official stage completion > ORACLE-P10-PROFILE compares separately parsed runtime profile and capability proof values 738ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs (56 tests | 54 skipped) 16456ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown 6382ms
+
+ Test Files  2 passed (2)
+      Tests  3 passed | 161 skipped (164)
+   Start at  03:25:39
+   Duration  17.07s (transform 361ms, setup 0ms, collect 1.18s, tests 17.19s, environment 0ms, prepare 48ms)
+

@@ -1,0 +1,29 @@
+{
+  "cli_exit_code": 0,
+  "elapsed_seconds": 991.7299988750019,
+  "status_after_exit_code": 0,
+  "identity_stable": true,
+  "stable": {
+    "branch": true,
+    "head": true,
+    "source_sha256": true,
+    "request_sha256": true,
+    "test_receipt_sha256": true,
+    "task_json_sha256": true,
+    "facts_jsonl_sha256": true
+  },
+  "request_sha256": "3b43d8d6d6e27fa1b1016885f2269da7013a1bc34489add6bbb31abc461cc6f6",
+  "test_receipt_ref": "quality/tests/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.json",
+  "test_receipt_sha256": "c7685c8a1c7616740f724c81912274851c0ec2d7572d2848d3921f5e3f478c72",
+  "cli_response": {
+    "status": "recorded",
+    "reused": false,
+    "dispatch_state": "dispatched",
+    "attempt_ref": "quality/reviews/attempts/1258c827-37b6-5f95-a408-d4028e3f1eb1/attempt.json",
+    "result_ref": "quality/reviews/results/build-code-simple-1258c827-37b6-5f95-a408-d4028e3f1eb1.json",
+    "report_ref": "quality/reviews/reports/build-code-simple-1258c827-37b6-5f95-a408-d4028e3f1eb1.md"
+  },
+  "attempt_ref_sha256": "ed11ad541b3dd2d2dbdeec48c6041e16de0d13e4c01c5488b7e030d15d604a25",
+  "result_ref_sha256": "fa28d5e0668c05e700e690f53fc84aec5d135c373f7e7f1abe9d4c8b8a7e1b8c",
+  "report_ref_sha256": "5b4f9c5359e69ab81f31b24192d497cd0a5517120c2ee7b35f9a07a2bd1d0a10"
+}

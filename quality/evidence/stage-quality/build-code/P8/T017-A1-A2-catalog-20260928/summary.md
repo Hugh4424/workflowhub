@@ -1,0 +1,10 @@
+# P8/T017 A1/A2 有限业务目录实施记录
+
+- 工作树：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`；分支 `task/workflowhub/workflowhub-thin-core-card-04-20260919`；基底 HEAD `ef920f1fbd415fe87d50930359059b661e141acd`。
+- 写面仅现有 `docs/quality/business-case-catalog.json` 与 `tests/contract/business-case-source-binding.test.mjs`。旧 `business-case-catalog.test.mjs`、旧三例业务含义、七条 `phase_obligations` 原条目、P9 registry 和历史原件未改。目录 JSON 结构无新增字段类型，仅在既有 `cases[]` 增两例；顶层版本、有限覆盖说明及总影响文字随五例更新。
+- 起步原件：`before/`、`before.sha256`、`baseline.stdout.txt`、`baseline.stderr.txt`、`baseline.exit.txt`。起步两目标 11/12，唯一失败是旧 census 的 P6 rule SHA 陈旧。当前 P6 与此前保存的 `P8/T017-p6-status-rebind-20260927/current-P6.md` 差异仅 T011 镜像和 T027 文档样例；T009 的 U/V/R 三节、非零分母、零解析错误、R-001..R-008 规则未改。故旧例仅同步 `rule.revision` 与 `effect_observation.rule_revision`；`census-rebound.*` 记同两目标 12/12、exit 0。
+- 新来源目标先改测试，再运行 `npx vitest run tests/contract/business-case-source-binding.test.mjs`：`a1a2.red.*` 原件为 17 收集、7 个缺 A1/A2 案例断言失败、10 个旧断言通过、exit 1。测试字节存 `a1a2.frozen-test.mjs`，输入哈希见 `a1a2.red-input.sha256`。其后目录按当前 decision-log U-006/R-011..R-014 与 P9/T018/T019、真实 `targeted-capture.mjs` 调用登记两例。
+- 首次补目录后两条失败来自新测试误用并不存在的 P9 文本标记 `registered_test_ids`（`green.*`）。只把标记改为现有规则原文 `完整 ID/status`；未修改产品规则或调低业务判断。最终同两目标 `green-final.*`：19/19、exit 0；`node --check` 与 JSON 解析 exit 0。
+- 为排除 RED 与最终测试字节不同的影响，另将最终测试与所需来源复制到隔离目录，只从复制的目录里删去新两例；正式工作树目录和测试 SHA 前后不变。隔离第一次因漏复制 P6.md 多出 1 个环境失败，原件 `isolated-red.setup-attempt.*` 保留；补入原 P6.md 后 `isolated-red.*` 同两目标 7 fail/12 pass、exit 1，7 个失败均指向两条新例不存在，旧 12 项全过。最终同测试 SHA `6c423f95...` 的当前五例重跑 `green-final-same-bytes.*` 19/19、exit 0。隔离旧目录及最终测试原字节分别存 `isolated-red.catalog.json`、`isolated-red.final-test.mjs`，输入哈希存 `isolated-red.input-final.sha256`；复制的完整隔离环境搬至 `/tmp/card04-p8-a1a2-isolated-fixture-20260928`，不参与当前工作树变化。
+- A1 完整 7 叶、A2 完整 8 叶逐项等于经独立复核的 `P9/T019-A1-A2-real-leaf-discovery-20260928/leaf-inventory.json`，两目标源码 SHA 仍等于该原件的候选时点值。两例均 `not_yet_observed`，A1 外层当次返回数组没有受信持久绑定，A2 未发现全项目其余入口；任何 AC、P8/P9/P10 或全卡完成不得由本次局部绿推断。
+- `catalog.diff`、`final.sha256` 保存本轮差异及最终输入哈希。后续 P9 owner 若改 A2 测试或 P9 材料，必须重新核 runner 全叶与规则语义，并更新对应期望/哈希后重测；本轮原件不覆盖。

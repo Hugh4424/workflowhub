@@ -1,0 +1,52 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > accepts only the three original, complete reporter documents and exact aggregate bytes
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:231:49
+    229| 
+    230|   it("accepts only the three original, complete reporter documents and…
+    231|     expect(capture.verifyFixedTargetedReporter).toBeTypeOf("function");
+       |                                                 ^
+    232|     expect(capture.verifyFixedTargetedReporter(sample())).toBe(true);
+    233|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects missing actual leaves even when the manifest hashes are recalculated
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects extra actual leaves even when the manifest hashes are recalculated
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects skipped actual leaves even when the manifest hashes are recalculated
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:236:49
+    234| 
+    235|   it.each(["missing", "extra", "skipped"])("rejects %s actual leaves e…
+    236|     expect(capture.verifyFixedTargetedReporter).toBeTypeOf("function");
+       |                                                 ^
+    237|     const input = sample();
+    238|     const report = JSON.parse(input.rawReports[0]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects a self-hashed aggregate that differs from ordered per-target raw bytes
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:263:49
+    261| 
+    262|   it("rejects a self-hashed aggregate that differs from ordered per-ta…
+    263|     expect(capture.verifyFixedTargetedReporter).toBeTypeOf("function");
+       |                                                 ^
+    264|     const input = sample();
+    265|     input.aggregateRaw = `${input.aggregateRaw}\nextra`;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+

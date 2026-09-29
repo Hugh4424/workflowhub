@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (71 tests | 70 skipped) 8625ms
+   ✓ acceptance execution tiers > keeps the pre-cohort tests producer available to the historical build-code receipt path 8624ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 70 skipped (71)
+   Start at  13:24:39
+   Duration  9.35s (transform 290ms, setup 0ms, collect 624ms, tests 8.62s, environment 0ms, prepare 25ms)
+

@@ -1,0 +1,6 @@
+{
+  "checked_at_utc": "2026-09-27T12:44:08.846Z",
+  "command": "ps -axo pid,ppid,stat,etime,command",
+  "matching_p6_p7_processes": [],
+  "matching_count": 0
+}

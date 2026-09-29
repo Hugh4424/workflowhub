@@ -1,0 +1,18 @@
+COMMAND=npx vitest run tests/contract/build-code-test-inventory.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-23T10:31:04Z
+CLASSIFICATION=G2 characterization only; no missing-module RED claimed
+--- raw stdout+stderr ---
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-test-inventory.test.mjs (2 tests) 272ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  18:31:04
+   Duration  415ms (transform 15ms, setup 0ms, collect 15ms, tests 272ms, environment 0ms, prepare 34ms)
+
+
+EXIT=0

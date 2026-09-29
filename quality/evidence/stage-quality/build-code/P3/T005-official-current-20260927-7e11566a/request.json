@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/stage-runtime-material-check.test.mjs",
+  "receipt_ref": "quality/tests/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.json",
+  "output_ref": "quality/tests/output/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.output",
+  "timeout_ms": 180000
+}

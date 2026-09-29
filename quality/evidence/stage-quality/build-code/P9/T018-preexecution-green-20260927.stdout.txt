@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-preexecution-source.test.mjs (4 tests) 11128ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt 3935ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace 2669ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing 1780ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot 2744ms
+ ✓ tests/contract/build-code-change-scope.test.mjs (5 tests) 17628ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start 2949ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start 3429ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots 5680ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists 2511ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start 3059ms
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  08:51:46
+   Duration  18.08s (transform 148ms, setup 0ms, collect 687ms, tests 28.76s, environment 0ms, prepare 56ms)
+

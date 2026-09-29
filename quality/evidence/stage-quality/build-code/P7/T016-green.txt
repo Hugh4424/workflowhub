@@ -1,0 +1,25 @@
+COMMAND=npx vitest run tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE_BASELINE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+SOURCE_SHA256=skills/decision-log/templates/decision-log-template.md:a8f3ce6318d94987c861a974475eab882de8756ab10bacb43341f14c40fce567;skills/decision-log/SKILL.md:9f0c3bc10e4f510933b9f8f0a3e38839e60ee8221144a746c4b58c25b81d2ed8;workflows/make-decision/SKILL.md:f0439433901922dba07f77ceaddb5cd60302873e9680de8a215b971be71a1698
+UTC=2026-09-26T12:18:39.768623+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P7
+TASK_IN_PHASE=T016
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 5ms
+ ✓ tests/contract/census-upstream-authoring.test.mjs (9 tests) 6ms
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  20:18:39
+   Duration  356ms (transform 106ms, setup 0ms, collect 205ms, tests 11ms, environment 0ms, prepare 101ms)
+STDOUT_END
+STDERR_BEGIN
+
+STDERR_END
+EXIT=0

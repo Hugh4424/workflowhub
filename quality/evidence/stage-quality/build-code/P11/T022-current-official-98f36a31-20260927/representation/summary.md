@@ -1,0 +1,6 @@
+# P11 representation current official protocol test
+
+- Command: `npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs`; public verify capture, new receipt/output refs, timeout 1200000 ms. Task workflowhub-thin-core-card-04-20260919, branch task/workflowhub/workflowhub-thin-core-card-04-20260919, HEAD ef920f1fbd415fe87d50930359059b661e141acd, tree a8ba4bcc213c29f78aec61e4f64139444d3b0d1b, material revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044. Double preflight stable.
+- CLI exit 0; receipt internal exit 0; count oracle true;  Test Files  1 passed (1);       Tests  5 passed (5);    Duration  257ms (transform 77ms, setup 0ms, collect 151ms, tests 3ms, environment 0ms, prepare 27ms).
+- Receipt quality/tests/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.json SHA-256 bf4ad3e38e5336dd065cd256057e17620628197ad457414102943d8616ab21ca; output quality/tests/output/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.output SHA-256 462b6ff9aa7f2bea7e938fc6e78c239d2cf480e69c39c1d43fe79747f815196c. 16 materials, relevant sources/tests and facts before/after are in this directory; hashes stable true, identity stable true.
+- This tests the protocol in fixtures only. No real page, service, browser run or business effect was authenticated; P11 remains not done.

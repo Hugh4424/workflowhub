@@ -1,0 +1,39 @@
+{
+  "request": {
+    "command": "npx vitest run tests/contract/oracle-mirror.test.mjs",
+    "receipt_ref": "quality/tests/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.json",
+    "output_ref": "quality/tests/output/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.output",
+    "timeout_ms": 1200000
+  },
+  "cli_exit_code": 0,
+  "receipt_internal_exit_code": 0,
+  "receipt_ref": "quality/tests/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.json",
+  "receipt_sha256": "18b0fe7e1012677b8920b0a6b7a150f8914267241461f9a5b26038139304c1d7",
+  "receipt_stdout_hash_matches": true,
+  "output_ref": "quality/tests/output/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.output",
+  "output_sha256": "2f54dc47ddebf72ee8ce776695087a7161fe0c0c6544c0004644877eda705007",
+  "output_receipt_hash_matches": true,
+  "runner_file_line": "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 16ms",
+  "runner_test_line": "Tests  9 passed (9)",
+  "before_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "material_revision": "revision-4e8fec6ee25373d66986926b22f6124f8635c14c32156b2b37eeae4f02c9b08f",
+    "snapshot_tree": "b2c331cdfbdddca013a98b95f12fa15c96ee7c3b"
+  },
+  "after_identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "material_revision": "revision-4e8fec6ee25373d66986926b22f6124f8635c14c32156b2b37eeae4f02c9b08f",
+    "snapshot_tree": "b2c331cdfbdddca013a98b95f12fa15c96ee7c3b"
+  },
+  "identity_stable": true,
+  "source_files_stable": true,
+  "task_facts_stable": true,
+  "quality_status_before": "in_progress",
+  "quality_status_after": "in_progress",
+  "quality_missing_before": [
+    "acceptance_criteria"
+  ],
+  "quality_missing_after": [
+    "acceptance_criteria"
+  ]
+}

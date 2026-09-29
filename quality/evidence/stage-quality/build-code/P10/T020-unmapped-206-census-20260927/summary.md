@@ -1,0 +1,8 @@
+# P10 206 条未映射路径人工归属索引
+
+- 正式输入：外置 Task `quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/cli-stdout.raw.txt`，SHA-256 `b21bdb32d7e09bc4b92ef3a0cd213f29d60c5d058cab5d400889332b759ae8f2`，JSON 指针 `/targeted_capture/unmapped_changed_paths`；与 `/case_reconciliation/unmapped_changed_paths` 逐条相同。完整 206 条在 `unmapped-paths.txt` 与 `index.json.entries`，没有删减或重排。
+- 运行身份：Task `workflowhub-thin-core-card-04-20260919`，起点 `35a881ac3c3288249677597a9079d445949de778`，当次 HEAD `ef920f1fbd415fe87d50930359059b661e141acd`，工作树快照 `a8ba4bcc213c29f78aec61e4f64139444d3b0d1b`，材料 `revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044`。索引读取时 HEAD `ef920f1fbd415fe87d50930359059b661e141acd`、HEAD tree `2a0e21e65488fba4e4507e4491f9edcab8e4585b`；HEAD tree 与含未提交修改的运行快照不同，不可混称。索引未重算当前工作树快照。
+- 互斥来源：CARD05 只读归档 **51**；起点至 HEAD 两次 CARD05 合并/归档提交的其余路径 **94**；未出现在该提交差分、但在当次工作树快照里的路径 **61**。其中已提交路径有 **8** 条在索引读取时也有未提交改动，名单在 `index.json.git_provenance.committed_and_dirty_overlap_paths`；这个时间点晚于正式运行。
+- 路径面计数：CARD05 归档 51、当前 CARD04 材料 13、测试 72、docs 11、skills 21、runtime 16、workflows 15、tools 3、core 1、根目录 3，合计 206。归类仅按路径前缀，不等于业务影响裁定。
+- 最先查真实消费者的几组：P8/P9/P10 的 catalog、registry 与固定捕获模块 → 官方 build-code 定向捕获/P13；CARD05 review 的 `runtime/review/**`、`skills/wh-review/**` 与 CLI → 官方审查/verify-code；Task/stage 核心 → 官方 run/status/质量事实；P5 报告转换器 → P6/P13。owner/consumer 是逐路径待核提示，见 `index.json.entries`，不能以提示替代源码反向引用或其它 Task 的认证事实。
+- 当前选择器仍把这 206 条作为 `unmapped_changed_path`，三已知用例的 49 个测试叶仅是部分实跑；整体选择、捕获、对账均 `unavailable`，业务效果 `unknown`。此索引**不供选择器过滤**，不改 catalog、baseline 或正式回执，也不证明质量通过。下一步由各 owner 对每条路径核真实消费者/业务关系与非业务依据，再决定是否补真实 case 关系或修正产品范围；CARD05 合并路径需 CARD05 owner 原件，P11 页面关系需实际项目调用链，P5 人工例外需真实用户来源。

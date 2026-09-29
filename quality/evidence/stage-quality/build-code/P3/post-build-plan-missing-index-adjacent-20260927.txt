@@ -1,0 +1,16 @@
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/post-cohort-authoring-files.test.mjs (3 tests) 4ms
+ ✓ tests/contract/stage-runtime-material-check.test.mjs (4 tests) 4947ms
+   ✓ stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 1189ms
+   ✓ stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 1520ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 1128ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 1109ms
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+   Start at  06:44:29
+   Duration  6.18s (transform 460ms, setup 0ms, collect 1.07s, tests 4.95s, environment 0ms, prepare 93ms)
+

@@ -1,0 +1,19 @@
+{
+  "command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs --reporter=json",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T00:54:51.205Z",
+  "completed_at": "2026-09-27T00:54:51.919Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null,
+  "parse_error": null,
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "target": "tests/contract/acceptance-result-machine-classes.test.mjs",
+  "target_sha256": "8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f",
+  "assertion_count": 28,
+  "passed_count": 28,
+  "failed_count": 0,
+  "stdout_sha256": "3e25e2c25c40fecd83d4ebe78c23f88c8dd2518a92308580312062a864d0a9ca",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

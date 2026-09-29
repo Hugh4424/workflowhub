@@ -1,0 +1,40 @@
+COMMAND=npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+input_hashes_stable=true
+sha256 tests/contract/acceptance-result-machine-classes.test.mjs=8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f
+sha256 tests/deferred-acceptance-semantics.test.mjs=0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e
+sha256 tests/contract/census-upstream-authoring.test.mjs=cff065cf42e5c6c695cf862cc3f29c16682cc487bcd5690d074d2f1bc7c4b0ba
+sha256 tests/decision-log-content-contract.test.mjs=1a518c532e057bd83bc98abe26200d70740bc13f0d42a07902ca38cd9e7e25ce
+sha256 runtime/evidence/acceptance-evidence-validator.mjs=c4f2a033b3e00b2575b2d1152661789da74adb8a0d1a3909f0868606f37614a4
+sha256 runtime/evidence/freshness.mjs=0d3d0993405384cfac884e91a26131fcdb2851a7003ed08c6c534f3fae15fea9
+sha256 runtime/evidence/quality-store.mjs=9c4f78410f519aa365b556a6c7a449229af4fee21e4a25800d5569f306a7e9ff
+sha256 core/task-close.mjs=e9fbdacfa9fe00e57eee0782b37d0d9293072343ae66c64f0d4a3cf861fd7675
+sha256 skills/decision-log/templates/decision-log-template.md=a8f3ce6318d94987c861a974475eab882de8756ab10bacb43341f14c40fce567
+sha256 skills/decision-log/SKILL.md=9f0c3bc10e4f510933b9f8f0a3e38839e60ee8221144a746c4b58c25b81d2ed8
+sha256 workflows/make-decision/SKILL.md=f0439433901922dba07f77ceaddb5cd60302873e9680de8a215b971be71a1698
+recorded_at=2026-09-26T12:22:54.301618+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/census-upstream-authoring.test.mjs (9 tests) 8ms
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 5ms
+ ✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 8ms
+ ✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 6ms
+
+ Test Files  4 passed (4)
+      Tests  56 passed (56)
+   Start at  20:22:53
+   Duration  1.07s (transform 342ms, setup 0ms, collect 1.00s, tests 27ms, environment 0ms, prepare 132ms)
+stderr:
+
+EXIT=0

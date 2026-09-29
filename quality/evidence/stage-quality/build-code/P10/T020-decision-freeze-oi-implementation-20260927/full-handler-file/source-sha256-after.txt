@@ -1,0 +1,4 @@
+4f8483d1d874ba07f588bfa40b4b9700a0d6f8920ce81e22293072dab2cec962  specs/workflowhub-thin-core-card-04-20260919/phases/P10.md
+d3449bb5a66960fdc84f0555051f5d821abb1804c9bfefd311c26366626b6e40  runtime/stage/stage-handlers.mjs
+6e5a423ef48b18a52113e9ad698bac0c65797e6286e78069b0da24ef9fda12e2  runtime/stage/stage-content-contracts.mjs
+09fd79d0587e173c5f66f4d56966263f98804095cdf2b525edb47462bf1cb6da  tests/integration/vnext-official-stage-run.test.mjs

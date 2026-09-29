@@ -1,0 +1,15 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-selection.test.mjs (21 tests | 16 skipped) 11532ms
+   ✓ P10 pre-run registered case selection > rejects a business case with missing status before it can run 2371ms
+   ✓ P10 pre-run registered case selection > rejects a business case with unknown status before it can run 2328ms
+   ✓ P10 pre-run registered case selection > rejects a business case with invalid status before it can run 2323ms
+   ✓ P10 pre-run registered case selection > rejects an unknown related case even when the directly changed case is active 2163ms
+   ✓ P10 pre-run registered case selection > keeps a retired case out of the runnable selection 2346ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 16 skipped (21)
+   Start at  01:34:50
+   Duration  12.00s (transform 160ms, setup 0ms, collect 358ms, tests 11.53s, environment 0ms, prepare 34ms)
+

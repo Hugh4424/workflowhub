@@ -1,0 +1,21 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/oracle-mirror.test.mjs > CARD-04 仓库外只读 oracle 镜像契约 > ORACLE.json 机器事实键：错误模式 / 报告章节 / 机器状态
+AssertionError: expected [ 'missing' ] to have a length of 5 but got 1
+
+- Expected
++ Received
+
+- 5
++ 1
+
+ ❯ tests/contract/oracle-mirror.test.mjs:135:20
+    133|     }
+    134|     const states = expectStringArray(facts.machine_not_done_states, "O…
+    135|     expect(states).toHaveLength(MACHINE_NOT_DONE_STATES.length);
+       |                    ^
+    136|     expect([...states].sort()).toEqual([...MACHINE_NOT_DONE_STATES].so…
+    137|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

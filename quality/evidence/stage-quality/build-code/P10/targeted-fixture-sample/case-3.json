@@ -1,0 +1,34 @@
+{
+  "schema_version": "workflowhub-targeted-case-execution.v1",
+  "run_id": "c64fdd6d-52ab-48b5-9e98-51d97c43812f",
+  "task_id": "targeted-bab51889-d66e-461c-8b1d-7a4dccc4814a",
+  "snapshot_tree": "dcbd94149d7f388ef14ebb129e289b3712a0624c",
+  "material_revision": "revision-9bf49d3ee399aeecd63ee600685fe760b39df351156243b2ef661ff48670b928",
+  "case_id": "CASE-PRODUCT-3",
+  "target": "tests/contract/product-3.test.mjs",
+  "registered_test_ids": [
+    "tests/contract/product-3.test.mjs > product effect"
+  ],
+  "argv": [
+    "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.pnpm/vitest@2.1.9/node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/contract/product-3.test.mjs",
+    "--reporter=json"
+  ],
+  "exit_code": 0,
+  "raw_output_ref": "quality/evidence/build-code-targeted/raw-7f01d40fa4a841ac29209fff465729304a17b02c40965e4e362cd61e42101222.txt",
+  "raw_output_sha256": "7f01d40fa4a841ac29209fff465729304a17b02c40965e4e362cd61e42101222",
+  "observations": [
+    {
+      "case_id": "CASE-PRODUCT-3",
+      "test_file": "tests/contract/product-3.test.mjs",
+      "full_id": "tests/contract/product-3.test.mjs > product effect",
+      "status": "passed",
+      "exit_code": 0,
+      "raw_report_sha256": "7f01d40fa4a841ac29209fff465729304a17b02c40965e4e362cd61e42101222",
+      "source": "direct_vitest_json",
+      "canonical_receipt": false
+    }
+  ],
+  "canonical_receipt": false
+}

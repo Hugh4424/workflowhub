@@ -1,0 +1,19 @@
+{
+  "command": "npx vitest run tests/contract/decision-log-census.test.mjs --reporter=json",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T00:54:50.290Z",
+  "completed_at": "2026-09-27T00:54:51.178Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null,
+  "parse_error": null,
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "target": "tests/contract/decision-log-census.test.mjs",
+  "target_sha256": "c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386",
+  "assertion_count": 6,
+  "passed_count": 6,
+  "failed_count": 0,
+  "stdout_sha256": "7d962ad1636d9e83ba42f02c035c46c53dfe5ab2dd074f46b4cf70d87edcbddb",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

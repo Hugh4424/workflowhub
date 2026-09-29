@@ -1,0 +1,31 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-runner.test.mjs (9 tests) 1059ms
+ ❯ tests/contract/build-code-case-selection.test.mjs (7 tests | 1 failed) 12778ms
+   ✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic alpha product and linked regression, excluding unrelated dynamic product 3309ms
+   ✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic beta product and linked regression, excluding unrelated dynamic product 3084ms
+   ✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects head_as_start against a real task baseline, Git diff and capture receipt 3224ms
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt 3159ms
+     → expected 'selected' not to be 'selected' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt
+AssertionError: expected 'selected' not to be 'selected' // Object.is equality
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:65:29
+     63| }
+     64| function rejectsFor(result, reason) {
+     65|   expect(result.status).not.toBe("selected");
+       |                             ^
+     66|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+     67|   expect(result.cases ?? []).toEqual([]);
+ ❯ tests/contract/build-code-case-selection.test.mjs:127:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 15 passed (16)
+   Start at  20:43:49
+   Duration  13.31s (transform 176ms, setup 0ms, collect 428ms, tests 13.84s, environment 0ms, prepare 59ms)
+

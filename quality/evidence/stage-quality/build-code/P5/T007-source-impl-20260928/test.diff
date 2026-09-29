@@ -1,0 +1,61 @@
+--- quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/before-stage-end-report.test.mjs	2026-09-28 04:21:53
++++ runtime/stage/stage-end-report.test.mjs	2026-09-28 04:24:59
+@@ -4,7 +4,7 @@
+ import { describe, expect, it } from "vitest";
+ 
+ // CARD-04 / P5 / T007 — 阶段末报告事实层（D-003/D-004/D-005）。
+-// 本文件由 build-plan 预置并冻结，实现者只读。
++// 本文件由 build-plan 预置；P5/T007 判决来源断言按 2026-09-28 材料窄修。
+ // RED 证据：行为空壳下「没做到逐条枚举 / 路线适用 / 空数组非法 / 渲染顺序 / 缺文件不抛错」
+ // 五组断言失败（exit 1），属目标断言失败而非 collection error。
+ // GREEN 信号：三个导出实现后六组断言全绿。
+@@ -322,7 +322,7 @@
+   //   阶段名在 `stageResult.stage`（`stage-runtime-result.vnext`，同文件 `:3012`）。
+   // 判决值域：runtime/stage/stage-content-contracts.mjs:6685
+   //   （consistent / inconsistent / material_incomplete / skipped）。
+-  // 底层事实（source 指向）：
++  // 底层事实候选，待 T008 认证（T007 source 只指向阶段结果中的判决位置）：
+   //   quality/evidence/acceptance/<stage>/stage_end_spec_analyze-<sha256>.json 的 summary.actual_outcome
+   //   quality/evidence/stage-quality/<stage>/stage_end_spec_analyze-<sha256>.json 的 subject_fact.analysis_result.status
+   // 注意：`status` 投影（tools/cli/stage-runtime.mjs:1258-1287）里没有这三个键，只能从 run 结果读
+@@ -384,14 +384,25 @@
+       expect(typeof entry.reason).toBe("string");
+       expect(entry.reason.length).toBeGreaterThan(0);
+     }
+-    // ④ 来源非空且指向底层事实/路径（质量事实 ref 或验收证据路径），不得是结论复述
+-    for (const entry of entries) {
++    // ④ 每条只指向自己的判决位置，并逐条披露原始质量事实来源未核。
++    for (const [index, entry] of entries.entries()) {
+       expect(typeof entry.source).toBe("string");
+       expect(entry.source.trim().length).toBeGreaterThan(0);
+-      expect(
+-        [...SPEC_ANALYZE_FACT_REFS, SPEC_ANALYZE_ACCEPTANCE_REF].some((known) => entry.source.includes(known)),
+-      ).toBe(true);
++      expect(entry.source).toBe(`input.stageResult#quality_advisories[${index}]`);
++      expect(facts.coverage_limits).toContainEqual(expect.objectContaining({
++        source: entry.source,
++        reason: expect.stringMatching(/spec-analyze.*原始质量事实来源未核/),
++      }));
+     }
++    const stageResultPath = "quality/evidence/stage-result.json";
++    const pathFacts = build({ ...specAnalyzeInput(specAnalyzeAdvisories()), stageResultPath });
++    for (const [index, entry] of specAnalyzeEntries(pathFacts).entries()) {
++      expect(entry.source).toBe(`${stageResultPath}#quality_advisories[${index}]`);
++      expect(pathFacts.coverage_limits).toContainEqual(expect.objectContaining({
++        source: entry.source,
++        reason: expect.stringMatching(/spec-analyze.*原始质量事实来源未核/),
++      }));
++    }
+   });
+ 
+   it("负控：spec-analyze 判决通过时不得出现该条 not_done", async () => {
+@@ -419,7 +430,8 @@
+ 
+     const entries = specAnalyzeEntries(build(input));
+     expect(entries).toHaveLength(1);
+-    expect(entries[0]).toMatchObject({ status: "inconsistent", source: specFact });
++    expect(entries[0]).toMatchObject({ status: "inconsistent", source: "input.stageResult#quality_advisories[1]" });
++    expect(entries[0].source).not.toBe(specFact);
+     expect(entries[0].source).not.toBe(otherFact);
+   });
+ 

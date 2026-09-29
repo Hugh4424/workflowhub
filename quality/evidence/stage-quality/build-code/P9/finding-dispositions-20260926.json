@@ -1,0 +1,75 @@
+{
+  "authority": "task_quality_evidence_only",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P9",
+  "official_test_receipt_ref": "quality/tests/card04-P9-L0-current-20260926.json",
+  "official_test_receipt_sha256": "afaeef6d86b9ca0d88d91c72d48771e7ed2b07ec23865b4566014b87d42830ee",
+  "review_result_ref": "quality/reviews/results/build-code-simple-99581ac4-c4d0-5061-ae6d-47e699a1b302.json",
+  "review_result_sha256": "c1eee5c531d059102f0572a705aecce0ce02622b182ed92a389ec6efb6d6ad6a",
+  "review_snapshot_tree": "844acfd8a689f57c231a05b89251b3f07f7654c6",
+  "statuses": {
+    "fixed": 1,
+    "rejected_invalid": 1,
+    "accepted_risk": 0,
+    "needs_human": 5
+  },
+  "limitation": "The official receipt and OCR bind the pre-P10-fix snapshot. The fixed disposition is a later scoped fail-closed repair, not a rerun of P9 OCR or proof of per-case business effects. Neither P9 8/8 nor this triage proves AC-30/32/33.",
+  "findings": [
+    {
+      "finding_id": "F-0094f2528fe4",
+      "path": "tests/contract/card04-final-aggregate.test.mjs",
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P13/T024 aggregate test owner",
+      "basis": "The task-store root assumes this host checkout layout; current host resolves correctly, but portability and existsSync coverage require P13 owner."
+    },
+    {
+      "finding_id": "F-15099745c7b1",
+      "path": "workflows/build-code/targeted-runner.mjs",
+      "severity": "major",
+      "disposition": "fixed",
+      "owner": "P10/T020 targeted runner owner",
+      "basis": "A direct shared-target probe returned completed with 12 observations for two case IDs before repair. The runner now rejects repeated realpaths before spawn with unavailable/reporter_identity_mismatch and zero observations; post-fix probe exit 0, frozen runner 9/9, syntax exit 0. This prevents false attribution but does not support legitimate shared-file leaf partitioning or finish AC-33."
+    },
+    {
+      "finding_id": "F-1788376e97c2",
+      "path": "tests/e2e/card-04-real-entry-chain-e2e.test.mjs",
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P6/T012 frozen E2E/test-asset owner",
+      "basis": "The E2E default oracle path and required external mirror conflict with its self-contained fixture description; same-host existence does not prove portable setup."
+    },
+    {
+      "finding_id": "F-73f87ce2f07b",
+      "path": "workflows/build-code/test-asset-inventory.mjs",
+      "severity": "major",
+      "disposition": "needs_human",
+      "owner": "P8/P9 catalog-registration and P10 consumer owner",
+      "basis": "Caller-provided registeredTestIds are shape/duplicate checked but their independent registry source and revision are not authenticated. The current document discloses this limit; a catalog-to-capture version contract requires owner approval, not another self-hash."
+    },
+    {
+      "finding_id": "F-893cb161ea60",
+      "path": "tests/contract/repository-inventory.test.mjs",
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P2/T004 frozen baseline-test/material owner",
+      "basis": "The frozen test hardcodes within_limit=false and no longer asserts the full historical bytes. Future within-budget measurements would fail; change needs the P2 material/test owner."
+    },
+    {
+      "finding_id": "F-b52ce6ea2019",
+      "path": "workflows/build-code/change-scope.mjs",
+      "severity": "major",
+      "disposition": "needs_human",
+      "owner": "Task bootstrap authority and P9/T018 owner",
+      "basis": "The bootstrap digest authenticates bytes only against a value stored in the same rewritable record. No external immutable anchor or attacker authority has been proven; the Task bootstrap owner must specify the trust boundary before changing the contract."
+    },
+    {
+      "finding_id": "F-ef13ec18b503",
+      "path": "tests/contract/oracle-mirror.test.mjs",
+      "severity": "major",
+      "disposition": "rejected_invalid",
+      "owner": "P6/T011 oracle-test owner",
+      "basis": "The claimed wrong default path on this host is false: os.homedir() is /Users/Hugh and both default and task-store convention resolve /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04. This rejects the claimed current-host mismatch only; host portability remains a separate P6 issue."
+    }
+  ]
+}

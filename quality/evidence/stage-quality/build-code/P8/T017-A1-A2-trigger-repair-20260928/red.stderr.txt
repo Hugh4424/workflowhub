@@ -1,0 +1,41 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "test target is not a change trigger",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:263:60
+    261|     it(`${id} binds the finite business rule, real consumer, all runne…
+    262|       expect(cases.has(id)).toBe(true);
+    263|       expect(finiteP9CaseErrors(cases.get(id), authority)).toEqual([]);
+       |                                                            ^
+    264|     });
+    265|     it(`${id} selects its case when only its own test file changes and…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE selects its case when only its own test file changes and rejects a removed trigger
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY selects its case when only its own test file changes and rejects a removed trigger
+AssertionError: expected 'unavailable' to be 'selected' // Object.is equality
+
+Expected: "selected"
+Received: "unavailable"
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:279:36
+    277|       const select = (candidate) => selectAffectedCases({ changeScope,
+    278|         catalog: { revision: "P8 target-trigger fixture", cases: [cand…
+    279|       expect(select(entry).status).toBe("selected");
+       |                                    ^
+    280|       const withoutTarget = { ...entry,
+    281|         change_triggers: entry.change_triggers.filter((trigger) => tri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+

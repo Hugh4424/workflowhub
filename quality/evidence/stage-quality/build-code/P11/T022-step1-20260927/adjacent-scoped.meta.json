@@ -1,0 +1,12 @@
+{
+  "command": "npx vitest run tests/contract/post-phase-contract.test.mjs -t ^(?!.*keeps CARD-05 D-044 acceptance incomplete)",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "recorded_at": "2026-09-27T00:50:10.389397+00:00",
+  "exit_code": 0,
+  "input_sha256": {
+    "tests/contract/post-business-browser-reconciliation.test.mjs": "e80dddce1095838c7d9f698d1c53c67e49415b023518fa10cf4940e08910a194",
+    "runtime/stage/stage-content-contracts.mjs": "8e74dcaa19343545c762264ef34124ef8b424d6202628f7d0f2d7778217029cf"
+  },
+  "stdout_sha256": "6288068e02eb3a2da223372dfb0d50a225815f1dbad8763fdd508af2a4348ec1",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

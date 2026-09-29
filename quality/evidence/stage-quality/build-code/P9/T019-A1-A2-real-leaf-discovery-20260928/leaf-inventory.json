@@ -1,0 +1,131 @@
+{
+  "schema": "p9-a1-a2-real-leaf-discovery.v1",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "runner": "vitest",
+  "runner_version": "2.1.9",
+  "runner_cli": "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.pnpm/vitest@2.1.9/node_modules/vitest/vitest.mjs",
+  "runner_cli_sha256": "39db22f579acf5639bbb17a261408debbde03f4692c0c439e77e7f13aeba74d6",
+  "node_version": "v24.14.0",
+  "before_tree_sha256": "d6c8ffe1caa76ce0bd76e811ba697fcc3cbf17c368f75a58ee85cd27f3dc602b",
+  "after_tree_sha256": "d6c8ffe1caa76ce0bd76e811ba697fcc3cbf17c368f75a58ee85cd27f3dc602b",
+  "same_working_source_tree": true,
+  "targets": [
+    {
+      "key": "A1",
+      "target": "tests/contract/build-code-preexecution-source.test.mjs",
+      "command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs --reporter=json",
+      "exit_code": 0,
+      "source_sha256": "e5ec0396366b1936784e2736265de74b9d4733cbe47dc6265920853d130d76af",
+      "before_source_sha256": "e5ec0396366b1936784e2736265de74b9d4733cbe47dc6265920853d130d76af",
+      "after_source_sha256": "e5ec0396366b1936784e2736265de74b9d4733cbe47dc6265920853d130d76af",
+      "source_stable": true,
+      "stdout_sha256": "35baf20e6aeb092ca23709305c41696800a0eb301f16902cc69ab9e033e710f6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reported_total": 7,
+      "reported_passed": 7,
+      "reported_failed": 0,
+      "reported_pending": 0,
+      "reported_todo": 0,
+      "reported_success": true,
+      "leaf_count": 7,
+      "statuses": {
+        "passed": 7
+      },
+      "no_duplicate_full_id": true,
+      "no_skipped_or_todo": true,
+      "nonzero_leaves": true,
+      "leaves": [
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > finds committed product changes in a clean worktree without changing Task store bytes",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed hash",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed workspace_binding",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "key": "A2",
+      "target": "tests/contract/build-code-test-registry.test.mjs",
+      "command": "npx vitest run tests/contract/build-code-test-registry.test.mjs --reporter=json",
+      "exit_code": 0,
+      "source_sha256": "9afc2b3bb98103f09b0e0f77053e130b6532b6c1d8131fb3dc502f0f27661d2e",
+      "before_source_sha256": "9afc2b3bb98103f09b0e0f77053e130b6532b6c1d8131fb3dc502f0f27661d2e",
+      "after_source_sha256": "9afc2b3bb98103f09b0e0f77053e130b6532b6c1d8131fb3dc502f0f27661d2e",
+      "source_stable": true,
+      "stdout_sha256": "58f10090c70c7ca7460305d82cde809299468709f7ebee9caee3419a690bba25",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reported_total": 8,
+      "reported_passed": 8,
+      "reported_failed": 0,
+      "reported_pending": 0,
+      "reported_todo": 0,
+      "reported_success": true,
+      "leaf_count": 8,
+      "statuses": {
+        "passed": 8
+      },
+      "no_duplicate_full_id": true,
+      "no_skipped_or_todo": true,
+      "nonzero_leaves": true,
+      "leaves": [
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > registers only three real repository targets with current source hashes and a finite unknown boundary",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reads an authenticated private registry and accepts exactly the two passing Node TAP leaves",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports missing leaves instead of certifying the reporter",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports extra leaves instead of certifying the reporter",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports skipped leaves instead of certifying the reporter",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects duplicate registered identities before testing",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects a receipt command for a file outside the registered target",
+          "status": "passed"
+        },
+        {
+          "full_id": "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects source drift even if the old registry still lists a runnable name",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

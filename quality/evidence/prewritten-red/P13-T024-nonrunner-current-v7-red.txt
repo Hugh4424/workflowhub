@@ -1,0 +1,20 @@
+COMMAND=npx vitest run tests/contract/card04-final-aggregate.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-24T08:13:38Z
+TEST_SHA256=ecd1a9ae871899a31c98227b4bc77c8dcd85d888342ec57182120bf0ca8d22e2
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/card04-final-aggregate.test.mjs (3 tests | 2 failed) 11ms
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 4ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 0ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  16:13:38
+   Duration  129ms (transform 17ms, setup 0ms, collect 12ms, tests 11ms, environment 0ms, prepare 33ms)
+
+EXIT=1

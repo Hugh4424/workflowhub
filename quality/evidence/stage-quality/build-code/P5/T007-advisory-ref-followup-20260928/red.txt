@@ -1,0 +1,106 @@
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ runtime/stage/stage-end-report.test.mjs (60 tests | 4 failed | 56 skipped) 16ms
+   × stage-end-report（阶段末报告事实层） > 负控：首项属于别的主题时不得猜它是 spec-analyze 来源 12ms
+     → expected 'quality/facts/0f1e2d3c0f1e2d3c0f1e2d3…' to be 'input.stageResult#quality_advisories[…' // Object.is equality
+   × stage-end-report（阶段末报告事实层） > 负控：首项缺失时不得借用相似文件名作为判决来源 1ms
+     → expected 'quality/evidence/acceptance/build-pla…' to be 'input.stageResult#quality_advisories[…' // Object.is equality
+   × stage-end-report（阶段末报告事实层） > 负控：多条非通过判决不得共用一份未核来源 1ms
+     → expected [ …(3) ] to deeply equal [ …(3) ]
+   × stage-end-report（阶段末报告事实层） > 当前生产者单条非通过判决仍须逐条披露真实机器状态 1ms
+     → expected [ { …(4) } ] to deeply equal [ ObjectContaining{…} ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 负控：首项属于别的主题时不得猜它是 spec-analyze 来源
+AssertionError: expected 'quality/facts/0f1e2d3c0f1e2d3c0f1e2d3…' to be 'input.stageResult#quality_advisories[…' // Object.is equality
+
+Expected: "input.stageResult#quality_advisories[0]"
+Received: "quality/facts/0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c.json"
+
+ ❯ runtime/stage/stage-end-report.test.mjs:434:49
+    432|     ];
+    433|     const facts = build(input);
+    434|     expect(specAnalyzeEntries(facts)[0].source).toBe("input.stageResul…
+       |                                                 ^
+    435|     expect(facts.coverage_limits.some((entry) => /spec-analyze.*来源.*…
+    436|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 负控：首项缺失时不得借用相似文件名作为判决来源
+AssertionError: expected 'quality/evidence/acceptance/build-pla…' to be 'input.stageResult#quality_advisories[…' // Object.is equality
+
+Expected: "input.stageResult#quality_advisories[0]"
+Received: "quality/evidence/acceptance/build-plan/stage_end_spec_analyze-9e8d7c6b9e8d7c6b9e8d7c6b9e8d7c6b9e8d7c6b9e8d7c6b9e8d7c6b9e8d7c6b.json"
+
+ ❯ runtime/stage/stage-end-report.test.mjs:443:49
+    441|     input.stageResult.quality_advisory_fact_refs = [];
+    442|     const facts = build(input);
+    443|     expect(specAnalyzeEntries(facts)[0].source).toBe("input.stageResul…
+       |                                                 ^
+    444|     expect(facts.coverage_limits.some((entry) => /spec-analyze.*来源.*…
+    445|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 负控：多条非通过判决不得共用一份未核来源
+AssertionError: expected [ …(3) ] to deeply equal [ …(3) ]
+
+- Expected
++ Received
+
+  Array [
+-   "input.stageResult#quality_advisories[0]",
+-   "input.stageResult#quality_advisories[1]",
+-   "input.stageResult#quality_advisories[2]",
++   "quality/facts/a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4.json",
++   "quality/facts/a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4.json",
++   "quality/facts/a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4.json",
+  ]
+
+ ❯ runtime/stage/stage-end-report.test.mjs:452:50
+    450|     const entries = specAnalyzeEntries(facts);
+    451|     expect(entries).toHaveLength(3);
+    452|     expect(entries.map((entry) => entry.source)).toEqual([
+       |                                                  ^
+    453|       "input.stageResult#quality_advisories[0]",
+    454|       "input.stageResult#quality_advisories[1]",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report（阶段末报告事实层） > 当前生产者单条非通过判决仍须逐条披露真实机器状态
+AssertionError: expected [ { …(4) } ] to deeply equal [ ObjectContaining{…} ]
+
+- Expected
++ Received
+
+  Array [
+-   ObjectContaining {
++   Object {
+      "item": "build-plan/stage-end-spec-analyze/0",
+-     "reason": StringContaining "spec-analyze 机器判决为 inconsistent",
+-     "source": "input.stageResult#quality_advisories[0]",
++     "reason": "spec-analyze 机器判决为 inconsistent；此项仍为 advisory",
++     "source": "quality/facts/a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4.json",
+      "status": "inconsistent",
+    },
+  ]
+
+ ❯ runtime/stage/stage-end-report.test.mjs:463:39
+    461|     const { build } = await loadReport();
+    462|     const facts = build(specAnalyzeInput(["stage-end-spec-analyze:inco…
+    463|     expect(specAnalyzeEntries(facts)).toEqual([expect.objectContaining…
+       |                                       ^
+    464|       item: "build-plan/stage-end-spec-analyze/0", status: "inconsiste…
+    465|       reason: expect.stringContaining("spec-analyze 机器判决为 inconsi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 56 skipped (60)
+   Start at  04:11:15
+   Duration  132ms (transform 19ms, setup 0ms, collect 14ms, tests 16ms, environment 0ms, prepare 27ms)
+

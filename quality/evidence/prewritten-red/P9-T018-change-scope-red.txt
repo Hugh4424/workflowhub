@@ -1,0 +1,56 @@
+COMMAND=npx vitest run tests/contract/build-code-change-scope.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-23T10:30:04Z
+--- raw stdout+stderr ---
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-change-scope.test.mjs (3 tests | 2 failed) 2859ms
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — task-start baseline and repair > retains the certified task-start commit across a clean committed existing workspace 942ms
+     → certified task-start commit must not silently become current HEAD: expected 'fce161975ce74afaed1126c67fb14ebfaa246…' to be 'bac3ecf8b220946a8c27005ec813f26e34e3f…' // Object.is equality
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — task-start baseline and repair > retains the certified task-start commit across a clean committed created workspace 957ms
+     → certified task-start commit must not silently become current HEAD: expected '0baa30683b01fbeb91263df7f9fe7e8a8c0ca…' to be '153fa411a7ac77ce324913dd0467bc728fe85…' // Object.is equality
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — task-start baseline and repair > captures staged, unstaged, untracked, renamed and deleted source bytes after repair 960ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — task-start baseline and repair > retains the certified task-start commit across a clean committed existing workspace
+AssertionError: certified task-start commit must not silently become current HEAD: expected 'fce161975ce74afaed1126c67fb14ebfaa246…' to be 'bac3ecf8b220946a8c27005ec813f26e34e3f…' // Object.is equality
+
+Expected: "bac3ecf8b220946a8c27005ec813f26e34e3ffa6"
+Received: "fce161975ce74afaed1126c67fb14ebfaa246ef1"
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:61:105
+     59|     ensureGitSnapshotObjectStore(worktree);
+     60|     const actualChanged = git(worktree, "diff", "--name-only", current…
+     61|     expect(current.baselineCommit, "certified task-start commit must n…
+       |                                                                                                         ^
+     62|     expect(actualChanged, "a clean committed implementation still chan…
+     63|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — task-start baseline and repair > retains the certified task-start commit across a clean committed created workspace
+AssertionError: certified task-start commit must not silently become current HEAD: expected '0baa30683b01fbeb91263df7f9fe7e8a8c0ca…' to be '153fa411a7ac77ce324913dd0467bc728fe85…' // Object.is equality
+
+Expected: "153fa411a7ac77ce324913dd0467bc728fe85049"
+Received: "0baa30683b01fbeb91263df7f9fe7e8a8c0ca694"
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:61:105
+     59|     ensureGitSnapshotObjectStore(worktree);
+     60|     const actualChanged = git(worktree, "diff", "--name-only", current…
+     61|     expect(current.baselineCommit, "certified task-start commit must n…
+       |                                                                                                         ^
+     62|     expect(actualChanged, "a clean committed implementation still chan…
+     63|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  18:30:04
+   Duration  3.31s (transform 140ms, setup 0ms, collect 333ms, tests 2.86s, environment 0ms, prepare 32ms)
+
+
+EXIT=1

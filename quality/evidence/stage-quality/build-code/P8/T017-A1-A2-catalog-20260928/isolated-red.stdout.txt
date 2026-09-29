@@ -1,0 +1,25 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P8/T017-A1-A2-catalog-20260928/isolated-red-fixture
+
+ ✓ tests/contract/business-case-catalog.test.mjs (2 tests) 5ms
+ ❯ tests/contract/business-case-source-binding.test.mjs (17 tests | 7 failed) 11ms
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds its source and rule revision to current material bytes 4ms
+     → expected false to be true // Object.is equality
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds its source and rule revision to current material bytes 0ms
+     → expected false to be true // Object.is equality
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE records a source-bound future observation without claiming an effect 1ms
+     → expected [ 'missing observation contract' ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY records a source-bound future observation without claiming an effect 0ms
+     → expected [ 'missing observation contract' ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect 0ms
+     → expected false to be true // Object.is equality
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect 0ms
+     → expected false to be true // Object.is equality
+   × CARD-04 P8 case source binding > rejects A1/A2 wrong origin, stale rule bytes, absent consumer, missing leaf and fake effect 0ms
+     → expected undefined to be defined
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  7 failed | 12 passed (19)
+   Start at  05:56:09
+   Duration  126ms (transform 20ms, setup 0ms, collect 25ms, tests 17ms, environment 0ms, prepare 53ms)
+

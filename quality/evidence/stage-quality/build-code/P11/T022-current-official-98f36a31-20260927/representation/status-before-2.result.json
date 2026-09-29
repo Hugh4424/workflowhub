@@ -1,0 +1,8 @@
+{
+  "command": "node tools/cli/stage-runtime.mjs status --action=begin --stage=build-code --project=workflowhub --task=workflowhub-thin-core-card-04-20260919",
+  "started_at_utc": "2026-09-27T12:55:31.067Z",
+  "ended_at_utc": "2026-09-27T12:55:32.393Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null
+}

@@ -1,0 +1,132 @@
+--- runtime/stage/stage-handlers.mjs	2026-09-26 17:39:05
++++ /private/tmp/card04-ac17-p11-6QkqAh/src/runtime/stage/stage-handlers.mjs	2026-09-27 12:06:13
+@@ -1037,9 +1037,9 @@
+   }
+ }
+ 
+-async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null) {
++async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null, acceptanceExecution = null) {
+   const suppliedRef = invocation.receipts?.ui_qa;
+-  const adapter = worker.runControlledUiQa;
++  let adapter = worker.runControlledUiQa;
+   const uiSource = readUiApplicabilityFromDecisionLog(worker.readArtifact("decision-log.md"));
+   const usableDerivedImpact = ["non_ui", "ui", "backend", "fullstack", "unknown"].includes(derivedImpact) && derivedImpact !== "unknown"
+     ? derivedImpact
+@@ -1132,14 +1132,6 @@
+     };
+   }
+   recordConsumerInvocation(worker, "stage-handlers#controlledBrowserQaFacts");
+-  if (typeof adapter !== "function") {
+-    return {
+-      facts: { status: "unknown", applicability: impact, reason: "applicable UI/fullstack change has no controlled browser QA executor" },
+-      evidence: null,
+-      missing_items: ["controlled browser QA unavailable for an applicable UI/fullstack change"],
+-    };
+-  }
+-
+   const snapshot = typeof worker.snapshotWorkspace === "function"
+     ? worker.snapshotWorkspace()
+     : typeof worker.candidateWorkspace?.captureSnapshot === "function"
+@@ -1166,13 +1158,53 @@
+   const expectedPage = qaBinding.page ?? contractFacts.page ?? deliveryUi.page;
+   const expectedScenario = qaBinding.scenario ?? contractFacts.scenario ?? deliveryUi.scenario;
+   const expectedFixture = qaBinding.fixture ?? contractFacts.fixture ?? deliveryUi.fixture;
++  // Acceptance owns execution for declared browser cases. UI QA consumes the
++  // same canonical observation, including an unavailable result, in this call.
++  // Nothing is cached across attempts, material revisions, or code snapshots.
++  const acceptanceScenario = qaBinding.acceptance_scenario ?? contractFacts.acceptance_scenario;
++  const browserCases = (acceptanceExecution?.items ?? []).filter((item) => item.tier === "browser"
++    && (expectedAcceptanceId === undefined || item.acceptance_criterion_ids?.includes(expectedAcceptanceId))
++    && (acceptanceScenario === undefined || ["source", "sample", "scenario", "tier"]
++      .every((field) => item[field] === acceptanceScenario[field])));
++  if (browserCases.length > 0) {
++    adapter = async () => {
++      if (browserCases.length !== 1) throw new Error("browser QA acceptance case is ambiguous");
++      const executionBinding = acceptanceExecution.execution_binding;
++      if (!executionBinding || ["task_id", "stage", "attempt_id", "material_revision", "snapshot_tree"]
++        .some((field) => !binding[field] || executionBinding[field] !== binding[field])) {
++        throw new Error("browser QA acceptance execution binding is not current");
++      }
++      const item = browserCases[0];
++      if (item.status !== "executed" || item.executor !== "controlled-browser-qa") {
++        throw new Error(item.reason ?? "browser acceptance has no real page result");
++      }
++      if (item.evidence_refs?.length !== 1) throw new Error("browser acceptance requires one canonical result");
++      const reference = item.evidence_refs[0];
++      const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
++      if (typeof readBrowserEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
++      const stored = readBrowserEvidence(reference.ref);
++      if (stored.sha256 !== reference.sha256) throw new Error("controlled QA evidence hash mismatch");
++      const payload = JSON.parse(stored.bytes);
++      if (!["source", "sample", "scenario", "tier"].every((field) => payload.acceptance_scenario?.[field] === item[field])
++          || !item.acceptance_criterion_ids?.includes(payload.acceptance_criterion_id)) {
++        throw new Error("canonical browser QA acceptance case mismatch");
++      }
++      return { payload, invocation_id: payload.invocation_id, evidence_ref: reference.ref, evidence_hash: reference.sha256 };
++    };
++  }
++  if (typeof adapter !== "function") {
++    return {
++      facts: { status: "unknown", applicability: impact, reason: "applicable UI/fullstack change has no controlled browser QA executor" },
++      evidence: null,
++      missing_items: ["controlled browser QA unavailable for an applicable UI/fullstack change"],
++    };
++  }
+   let evidence = null;
+   let payload;
+   let invocationId = null;
+   let failure = null;
+-  // A previous ui_qa receipt is diagnostic only.  Every applicable attempt
+-  // must execute the current controlled adapter so an old pass cannot be
+-  // reused after the implementation, material, or service changes.
++  // A previous ui_qa receipt is diagnostic only. Reuse is limited to the
++  // current acceptance execution above; otherwise invoke the current adapter.
+   invocationId = `ui-qa-${randomUUID()}`;
+   try {
+     const adapterBinding = {
+@@ -1197,7 +1229,6 @@
+     payload = result.payload ?? result.browser_qa ?? result.evidence;
+     if (result.evidence_ref !== undefined || result.evidence_hash !== undefined) {
+       if (typeof result.evidence_ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(result.evidence_ref) || !SHA256_HEX.test(result.evidence_hash ?? "")) throw new Error("controlled QA evidence_ref/evidence_hash binding is invalid");
+-      if (typeof worker.readEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
+       const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
+       if (typeof readBrowserEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
+       const stored = readBrowserEvidence(result.evidence_ref);
+@@ -3974,16 +4005,16 @@
+   const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
+   if (worker.manifest?.record_model === "vnext-single-write"
+       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
+-    const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
++    const snapshot = captureWorkerSnapshot(worker);
++    const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
++    const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact, acceptanceExecution);
+     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
+     const current = currentMaterialContent(worker, worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md");
+-    const snapshot = captureWorkerSnapshot(worker);
+     const review = safeReviewFacts(worker, input, "review", undefined, "build-code", {
+       requireRiskAcceptance: false,
+       requireDispositions: false,
+     });
+     const dispositions = findingDispositions(review.facts.review_scope === "phase" ? [review] : [], input, worker.currentMaterialRevision);
+-    const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
+     const acceptanceCoverage = acceptanceExecution.requires_execution
+       ? acceptanceCoverageForExecution(worker, input, snapshot?.tree ?? null, acceptanceExecution)
+       : input.acceptance_coverage === undefined
+@@ -4047,7 +4078,8 @@
+     });
+   }
+   const missingItems = [];
+-  const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact);
++  const acceptanceExecution = await acceptanceExecutionFacts(worker, currentSnapshotTree);
++  const uiQa = await controlledBrowserQaFacts(worker, input, contractFactsBase.change_impact?.impact, acceptanceExecution);
+   const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
+   if (uiQa?.missing_items?.length) missingItems.push(...uiQa.missing_items);
+   const auditGaps = [];
+@@ -4076,7 +4108,6 @@
+   // An unavailable Phase review remains an explicit quality gap, while
+   // implementation, tests, and AC work can continue in the same task.
+   if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
+-  const acceptanceExecution = await acceptanceExecutionFacts(worker, currentFactsSnapshot);
+   if (acceptanceExecution.status !== "executed" && acceptanceExecution.status !== "not_applicable") {
+     missingItems.push(...acceptanceExecution.missing_items);
+   }

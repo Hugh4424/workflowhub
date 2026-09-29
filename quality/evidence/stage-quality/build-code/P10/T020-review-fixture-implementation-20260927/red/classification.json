@@ -1,0 +1,96 @@
+{
+  "run": {
+    "command": "npx vitest run tests/contract/freeze-classification-budget-usage-protocol.test.mjs",
+    "argv": [
+      "npx",
+      "vitest",
+      "run",
+      "tests/contract/freeze-classification-budget-usage-protocol.test.mjs"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+    "test_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/contract/freeze-classification-budget-usage-protocol.test.mjs",
+    "test_sha256": "93da7957f3783bb1e517d152678ebb99874bce8d8dd3415489c7c5ae1aee3cf6",
+    "p10_material_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+    "p10_material_sha256": "4f8483d1d874ba07f588bfa40b4b9700a0d6f8920ce81e22293072dab2cec962",
+    "started_utc": "2026-09-27T15:15:22.922398+00:00",
+    "ended_utc": "2026-09-27T15:15:36.315234+00:00",
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout_sha256": "5245f6f9c4e23304cafe8673793861d85ca601859440725be8bdca908fa398de",
+    "stderr_sha256": "f5d5c9aa15852a815ad4a3566c9193f1d6cf47e2f5bd68e64fdca968c1464767"
+  },
+  "total_tests": 36,
+  "passed": 29,
+  "failed": 7,
+  "target_red": {
+    "is_red": true,
+    "is_valid_target_red": false,
+    "reason": "正控目标是同一有效直接锚点；实际聚合输出为无效锚点，故当前 RED 是夹具/期望失配，不能作为生产实现 RED。"
+  },
+  "cause": "buildSpecRoutingFixture 默认 providerEvidenceAnchors=[true]，但 aggregateEvidenceAnchors=undefined 时未传 evidenceAnchors 给 aggregateCanonicalProviderResults；聚合出的锚点为 false。",
+  "individual_cases": [
+    {
+      "group": "新正控",
+      "identity": "uses the same valid direct evidence anchor in the provider original and canonical result",
+      "status": "failed",
+      "finding": "聚合结果实际为 invalid_evidence/invalid_anchor/evidence_anchor_valid=false；正控前提没有成立。测试停在自身期待，未证明实现缺陷。"
+    },
+    {
+      "group": "新增负控",
+      "identity": "rejects an anchor changed on the provider original only",
+      "status": "passed (inferred)",
+      "finding": "未列在失败清单；需同锚点正控成立后才可解释负控意义。"
+    },
+    {
+      "group": "新增负控",
+      "identity": "rejects an anchor changed on the canonical aggregate only",
+      "status": "passed (inferred)",
+      "finding": "未列在失败清单；需同锚点正控成立后才可解释负控意义。"
+    },
+    {
+      "group": "新增负控",
+      "identity": "keeps matching invalid anchors out of valid direct evidence routing",
+      "status": "passed (inferred)",
+      "finding": "未列在失败清单；匹配无效锚点仅证明拒绝路径。"
+    },
+    {
+      "group": "旧路由",
+      "identity": "publishes handler routing facts and blocks an invalid gap identity",
+      "status": "failed",
+      "finding": "REVIEW_EVIDENCE_INVALID；有效锚点夹具缺省不一致，处理器在路由前拒绝。"
+    },
+    {
+      "group": "旧路由",
+      "identity": "accepts a fixed direction change only for the current material revision",
+      "status": "failed",
+      "finding": "REVIEW_EVIDENCE_INVALID；同上。"
+    },
+    {
+      "group": "旧路由",
+      "identity": "T014 keeps a handler completion incomplete when the supplied fallback route is wrong",
+      "status": "failed",
+      "finding": "REVIEW_EVIDENCE_INVALID；同上。"
+    },
+    {
+      "group": "旧路由",
+      "identity": "keeps an otherwise valid active fallback incomplete until its continuation is consumed",
+      "status": "failed",
+      "finding": "REVIEW_EVIDENCE_INVALID；同上。"
+    },
+    {
+      "group": "其他旧失败",
+      "identity": "AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections",
+      "status": "failed",
+      "finding": "ENOENT：缺少 specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md。"
+    },
+    {
+      "group": "其他旧失败",
+      "identity": "AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area",
+      "status": "failed",
+      "finding": "现有 build-plan 文本不匹配旧断言 /确认后唯一可写区是 tasks\\.md 的执行状态填写区/。"
+    }
+  ],
+  "limits": "29 passed 只据 36 总数和 7 个明确失败推知其余用例未失败；本次未用额外 reporter 单独重跑。"
+}

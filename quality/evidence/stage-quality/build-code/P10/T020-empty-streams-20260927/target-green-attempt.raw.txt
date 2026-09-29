@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (19 tests | 17 skipped) 15228ms
+   ✓ P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence 7813ms
+   ✓ P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence 7414ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 17 skipped (19)
+   Start at  18:16:57
+   Duration  15.76s (transform 173ms, setup 0ms, collect 421ms, tests 15.23s, environment 0ms, prepare 27ms)
+

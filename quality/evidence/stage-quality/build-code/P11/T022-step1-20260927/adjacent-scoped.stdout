@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/post-phase-contract.test.mjs (16 tests | 1 skipped) 11ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed | 1 skipped (16)
+   Start at  08:50:09
+   Duration  616ms (transform 222ms, setup 0ms, collect 504ms, tests 11ms, environment 0ms, prepare 25ms)
+

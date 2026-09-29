@@ -1,0 +1,10 @@
+{
+  "exit_code": 1,
+  "utc": "2026-09-27T09:14:59.529052+00:00",
+  "current_test_sha256": "c787a8b3d033e0421beb76dda0d4779c0ab161b13d5859673608e9356d47d017",
+  "fault_test_sha256": "d3c446e96d160083af718b3e32873c96f16855344eefbae018320b967826f016",
+  "template_sha256": "a8f3ce6318d94987c861a974475eab882de8756ab10bacb43341f14c40fce567",
+  "raw_sha256": "457f855f6f439a42fe594d71d200a0cd01635d1b75236eb9ece8420eedf9bd3c",
+  "fault": "move intact R row outside the R index section in a temporary test copy; current production template untouched",
+  "temp_removed": true
+}

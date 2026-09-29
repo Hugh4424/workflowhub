@@ -1,0 +1,30 @@
+COMMAND=node quality/evidence/stage-quality/build-code/P5/T007-markdown-injection-probe.mjs
+STARTED_AT_UTC=2026-09-26T14:19:39.487087+00:00
+SOURCE_SHA256=bda85c210f77df38a042c4866f9d1c52359c8e0d7d2abe9703131da6ec96987c
+PROBE_SHA256=4a81e4a01fe449ae785ef36270c52b693e820228abc6b497c8a72fe7036d0158
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: caller text must not create a new section
+
+12 !== 6
+
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-markdown-injection-probe.mjs:25:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 12,
+  expected: 6,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.0
+STDERR_END
+EXIT=1

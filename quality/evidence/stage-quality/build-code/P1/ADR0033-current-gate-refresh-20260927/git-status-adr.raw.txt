@@ -1,0 +1,1 @@
+A  docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md

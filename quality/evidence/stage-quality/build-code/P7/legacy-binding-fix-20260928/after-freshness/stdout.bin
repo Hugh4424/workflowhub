@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (84 tests | 83 skipped) 14945ms
+   ✓ P3 T009 real command and service acceptance > publishes the acceptance execution aggregate for the implementation/tests receipt branch 14945ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 83 skipped (84)
+   Start at  00:23:52
+   Duration  15.74s (transform 326ms, setup 0ms, collect 679ms, tests 14.95s, environment 0ms, prepare 34ms)
+

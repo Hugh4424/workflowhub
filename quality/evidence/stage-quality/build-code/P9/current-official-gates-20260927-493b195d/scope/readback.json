@@ -1,0 +1,21 @@
+{
+  "receipt_ref": "quality/tests/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.json",
+  "receipt_sha256": "38575a091b19ce0204cbc26ab00e43e81945e399d36ca11130e21af36055e16a",
+  "output_ref": "quality/tests/output/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.output",
+  "output_sha256": "67e59d5a1d79f181ec2cbeec935a41d6f34edeccf60dd7818487cc49d7b47df0",
+  "receipt_internal_exit": 0,
+  "receipt_command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs tests/contract/build-code-change-scope.test.mjs",
+  "receipt_task_id": "workflowhub-thin-core-card-04-20260919",
+  "receipt_snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "receipt_source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "receipt_output_hash_claim": "67e59d5a1d79f181ec2cbeec935a41d6f34edeccf60dd7818487cc49d7b47df0",
+  "cli_exit": 0,
+  "runner_summary": [
+    " Test Files  2 passed (2)",
+    "      Tests  12 passed (12)",
+    "   Duration  19.12s (transform 158ms, setup 0ms, collect 726ms, tests 36.54s, environment 0ms, prepare 55ms)"
+  ],
+  "read_error": null,
+  "source_unchanged": true,
+  "identity_unchanged": true
+}

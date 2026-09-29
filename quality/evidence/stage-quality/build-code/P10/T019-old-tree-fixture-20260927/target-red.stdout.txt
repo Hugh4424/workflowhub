@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-selection.test.mjs (16 tests | 1 failed | 15 skipped) 3201ms
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt 3200ms
+     → expected 'selected' not to be 'selected' // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 skipped (16)
+   Start at  19:14:57
+   Duration  3.64s (transform 154ms, setup 0ms, collect 339ms, tests 3.20s, environment 0ms, prepare 31ms)
+

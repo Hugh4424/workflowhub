@@ -1,0 +1,35 @@
+{
+  "schema": "card04-p9-real-three-target-capture.v1",
+  "started_at": "2026-09-27T01:06:19.217Z",
+  "source_root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "temporary_fixture": "/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-p9-real-three-pDfd8L",
+  "targets": [],
+  "source_anchor_before": {
+    "tests/contract/decision-log-census.test.mjs": "c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386",
+    "tests/contract/acceptance-result-machine-classes.test.mjs": "8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f",
+    "tests/deferred-acceptance-semantics.test.mjs": "0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e",
+    "docs/quality/test-asset-registry.json": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "790d009a07600a9d23e64e6a20dfa0d55804d18abcb6975cbee47aaa43b9c652",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa",
+    "runtime/stage/stage-content-contracts.mjs": "8e74dcaa19343545c762264ef34124ef8b424d6202628f7d0f2d7778217029cf",
+    "runtime/evidence/acceptance-evidence-validator.mjs": "c4f2a033b3e00b2575b2d1152661789da74adb8a0d1a3909f0868606f37614a4",
+    "runtime/evidence/freshness.mjs": "0d3d0993405384cfac884e91a26131fcdb2851a7003ed08c6c534f3fae15fea9",
+    "runtime/evidence/quality-store.mjs": "9c4f78410f519aa365b556a6c7a449229af4fee21e4a25800d5569f306a7e9ff"
+  },
+  "source_anchor_after_copy": {
+    "tests/contract/decision-log-census.test.mjs": "c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386",
+    "tests/contract/acceptance-result-machine-classes.test.mjs": "8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f",
+    "tests/deferred-acceptance-semantics.test.mjs": "0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e",
+    "docs/quality/test-asset-registry.json": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "790d009a07600a9d23e64e6a20dfa0d55804d18abcb6975cbee47aaa43b9c652",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa",
+    "runtime/stage/stage-content-contracts.mjs": "8e74dcaa19343545c762264ef34124ef8b424d6202628f7d0f2d7778217029cf",
+    "runtime/evidence/acceptance-evidence-validator.mjs": "c4f2a033b3e00b2575b2d1152661789da74adb8a0d1a3909f0868606f37614a4",
+    "runtime/evidence/freshness.mjs": "0d3d0993405384cfac884e91a26131fcdb2851a7003ed08c6c534f3fae15fea9",
+    "runtime/evidence/quality-store.mjs": "9c4f78410f519aa365b556a6c7a449229af4fee21e4a25800d5569f306a7e9ff"
+  },
+  "fixture_baseline_commit": "f3ca018db422885739590364590a2a786cad2e1e",
+  "fixture_baseline_tree": "5f149a76d3753260109a0a666ca2cf54a8e319e6",
+  "error": "storageRoot contains a symlink: /var",
+  "completed_at": "2026-09-27T01:06:20.656Z"
+}

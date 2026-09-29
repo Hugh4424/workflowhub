@@ -70,16 +70,14 @@ export function resolveReviewRouteIdentity(input, { loadConfig, resolveRoute, se
   const track = identity.reviewTrack;
   const scope = identity.reviewScope;
   const kind = identity.reviewKind;
-  const host = input.host_provider ?? input.hostProvider;
-  if (typeof host !== "string" || !host.trim()) throw new TypeError("host_provider is required for trusted route identity");
   const trusted = loadConfig({ requestedStage: input.stage, requestedTrack: track, requestedReviewKind: kind });
   const route = resolveRoute(trusted.whReview, input.stage, track, kind, scope);
   if (!route) throw new Error("ROUTE_UNAVAILABLE: no trusted review route");
-  const selection = providerSelectionShape(selectProviders(trusted.config, host, route));
+  const selection = providerSelectionShape(selectProviders(trusted.config, route));
   const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === "object"
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
   return Object.freeze({
-    route_identity: hash(JSON.stringify(stable({ stage: input.stage, review_track: track, review_scope: scope, review_kind: kind, host_provider: host, route, selection }))),
+    route_identity: hash(JSON.stringify(stable({ stage: input.stage, review_track: track, review_scope: scope, review_kind: kind, route, selection }))),
     provider_selection: selection,
   });
 }

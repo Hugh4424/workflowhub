@@ -1,0 +1,51 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { listDeliveryFiles, listUntrackedFiles } from "../../tools/architecture/inventory.mjs";
+
+// G2 characterization, NOT a RED for a nonexistent runnable-ID inventory API.
+// `test-asset-inventory.mjs` will own the future contract; do not import a
+// missing production module or assert that a delivery manifest is a test runner.
+const roots = [];
+const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+function fixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p9-test-assets-")));
+  roots.push(root);
+  git(root, "init", "-q", "-b", "main");
+  git(root, "config", "user.name", "Inventory fixture");
+  git(root, "config", "user.email", "inventory@example.test");
+  mkdirSync(join(root, "tests"));
+  writeFileSync(join(root, "tests", "two-entries.test.mjs"),
+    'import { it } from "vitest";\nit("AC-30 registered", () => {});\nit("AC-32 unregistered", () => {});\n');
+  git(root, "add", "tests/two-entries.test.mjs");
+  git(root, "commit", "-qm", "tracked tests");
+  writeFileSync(join(root, "tests", "new-entry.test.mjs"), 'import { it } from "vitest";\nit("new entry", () => {});\n');
+  return root;
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("ORACLE-P9-INVENTORY-G2 — existing path discovery is not test-identity proof", () => {
+  it("reports real tracked and untracked test assets as distinct path sources", () => {
+    const root = fixture();
+    expect(listDeliveryFiles({ root })).toContain("tests/two-entries.test.mjs");
+    expect(listUntrackedFiles({ root })).toContain("tests/new-entry.test.mjs");
+    expect(listDeliveryFiles({ root })).not.toContain("tests/new-entry.test.mjs");
+  });
+
+  it("exposes the actual limitation: one discovered test file is not two verified runnable IDs", () => {
+    const root = fixture();
+    const discoveredPaths = [...listDeliveryFiles({ root }), ...listUntrackedFiles({ root })];
+    expect(discoveredPaths.filter((path) => path === "tests/two-entries.test.mjs")).toHaveLength(1);
+    expect(discoveredPaths).not.toContain("tests/two-entries.test.mjs > AC-30 registered");
+    expect(discoveredPaths).not.toContain("tests/two-entries.test.mjs > AC-32 unregistered");
+    // Path enumeration alone cannot decide whether an indexed test ID was
+    // skipped/renamed/duplicated, nor whether the runner actually collected it.
+  });
+});

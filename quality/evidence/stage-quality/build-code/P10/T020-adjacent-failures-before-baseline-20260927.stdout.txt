@@ -1,0 +1,27 @@
+
+ RUN  v2.1.9 /private/tmp/card04-oi-before.hdMFrs
+
+ ✓ tests/contract/post-phase-contract.test.mjs (16 tests) 528ms
+   ✓ post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 516ms
+ ❯ tests/contract/freeze-classification-budget-usage-protocol.test.mjs (32 tests | 6 failed) 11973ms
+   × Phase 1 freeze and classification contracts > publishes handler routing facts and blocks an invalid gap identity 15ms
+     → review result canonical authentication failed: REVIEW_EVIDENCE_INVALID: semantic result does not exactly match completed provider evidence and aggregation
+   × Phase 1 freeze and classification contracts > accepts a fixed direction change only for the current material revision 1ms
+     → review result canonical authentication failed: REVIEW_EVIDENCE_INVALID: semantic result does not exactly match completed provider evidence and aggregation
+   × P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections 1ms
+     → ENOENT: no such file or directory, open '/private/tmp/card04-oi-before.hdMFrs/specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md'
+   × P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area 1ms
+     → expected '---\nname: build-plan\ndescription: T…' to match /确认后唯一可写区是 tasks\.md 的执行状态填写区/
+   ✓ Phase 3 canonical review reuse and explicit retry contracts > redispatches changed material and accepts one explicit retry 4731ms
+   ✓ Phase 3 canonical review reuse and explicit retry contracts > does not trust caller-only retry, budget, or narrow-diff fields 3290ms
+   ✓ Phase 3 canonical review reuse and explicit retry contracts > keeps phase review lineage separate from the integration review lineage 3918ms
+   × Phase 4 unified fallback protocol [P4] > T014 keeps a handler completion incomplete when the supplied fallback route is wrong 1ms
+     → review result canonical authentication failed: REVIEW_EVIDENCE_INVALID: semantic result does not exactly match completed provider evidence and aggregation
+   × Phase 4 unified fallback protocol [P4] > keeps an otherwise valid active fallback incomplete until its continuation is consumed 0ms
+     → review result canonical authentication failed: REVIEW_EVIDENCE_INVALID: semantic result does not exactly match completed provider evidence and aggregation
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  6 failed | 42 passed (48)
+   Start at  23:00:23
+   Duration  12.65s (transform 356ms, setup 0ms, collect 1.12s, tests 12.50s, environment 0ms, prepare 55ms)
+

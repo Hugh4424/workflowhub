@@ -1,0 +1,11 @@
+TypeError: preflight accepts only --stage and --input
+    at stageRuntimeMain (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tools/cli/stage-runtime.mjs:1336:69)
+    at invokeRuntimeCommand.skillBundleContract.skillBundleContract (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tools/cli/stage-runtime.mjs:2046:35)
+    at Proxy.<anonymous> (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/interface/runtime-facade.mjs:45:14)
+    at invokeRuntimeCommand (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/interface/runtime-facade.mjs:73:26)
+    at stageRuntimeCliMain (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tools/cli/stage-runtime.mjs:2043:12)
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tools/cli/stage-runtime.mjs:2092:3
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)

@@ -1,0 +1,30 @@
+[
+  {
+    "file": "specs/workflowhub-thin-core-card-04-20260919/spec.md",
+    "before_sha256": "cd75ee933bc1d9eff265581126d40170867cf15f9dd8abfc9b9e4a83fb4f0524",
+    "after_sha256": "fa6f1727269b8b6894ed1e5243122c0bbcce2a0533ecd71975112121a6becc17",
+    "changed": true,
+    "diff_file": "spec.md.diff"
+  },
+  {
+    "file": "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md",
+    "before_sha256": "33873942388466ff6754c4a10b77e7f33d4b2b9140e24b5da5c5e41aa63e9490",
+    "after_sha256": "13fba7b8ae9ad156be2ea83029bb144cbcab7b0c4457a693ef01e641ee5fdfcb",
+    "changed": true,
+    "diff_file": "P8.md.diff"
+  },
+  {
+    "file": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+    "before_sha256": "dcfd25eaab81f7e6adc8a01adbf37f81757010d14cb7b9299e7de39f396e488a",
+    "after_sha256": "8aa1643131eeb8992b904184ed9fdb673c84d9039f58bb027a7f7452db040bb1",
+    "changed": true,
+    "diff_file": "P9.md.diff"
+  },
+  {
+    "file": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+    "before_sha256": "cd0b89a093961acad7a3e8cf9139edaeef6691c984d11fb2e857fba3d01994c7",
+    "after_sha256": "d32748518883d17443da08189c0a9843f7c50615292747c1cdc8aa346539fcdf",
+    "changed": true,
+    "diff_file": "P10.md.diff"
+  }
+]

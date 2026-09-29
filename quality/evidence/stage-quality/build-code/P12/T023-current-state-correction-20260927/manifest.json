@@ -1,0 +1,46 @@
+{
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "scope": "P12 current-status wording only; no test rerun or formal quality claim",
+  "before_p12": {
+    "path": "quality/evidence/stage-quality/build-code/P12/T023-current-state-correction-20260927/before-P12.md",
+    "sha256": "57d40a5791f8b79562a9c60f270c70654c104b2ca5f3b27d3c043d9991f0ccdc"
+  },
+  "after_p12": {
+    "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+    "sha256": "581668358956ed078259175b6fda8c88b1170929ca65c5804495d370212913ec"
+  },
+  "current_skill": {
+    "path": "workflows/verify-code/SKILL.md",
+    "sha256": "cb2ac0a1ce29e104440a2afe1ab7fe56fa3caa86944ce73753d0820fe869b114"
+  },
+  "current_test": {
+    "path": "tests/contract/verify-code-business-handoff.test.mjs",
+    "sha256": "d372df9472de6443983583a3e3b26a94acfccc52aac53e203722b5beb62ccebf"
+  },
+  "target_red": {
+    "path": "quality/evidence/stage-quality/build-code/P12/T023-red.txt",
+    "sha256": "bac128e3c6c6e8832540ca64a00faa8935108760e9bcaef23324c871e5c46ce1",
+    "tests_failed": 3,
+    "exit_code": 1
+  },
+  "local_green": {
+    "path": "quality/evidence/stage-quality/build-code/P12/T023-green.txt",
+    "sha256": "5670b0eb8118a7361c1c3c28a119ba4582f41263f21de5bdd1dd29c5f81f81e0",
+    "tests_passed": 3,
+    "exit_code": 0,
+    "skill_and_test_sha_match_current_bytes": true
+  },
+  "format_check": {
+    "command": "git diff --no-index --check quality/evidence/stage-quality/build-code/P12/T023-current-state-correction-20260927/before-P12.md specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+    "exit_code": 1,
+    "stdout": "",
+    "interpretation": "Exit 1 reports the expected content difference; empty output reports no whitespace errors."
+  },
+  "limitations": [
+    "The RED and GREEN only check the verify-code skill wording.",
+    "No real business sampling, authorized user reply, independent current review, or formal Task quality fact is established by this change."
+  ]
+}

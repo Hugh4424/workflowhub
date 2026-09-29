@@ -1,0 +1,11 @@
+# AC16–34 审计补充：2026-09-27
+
+本补充只更新 [2026-09-26 逐项矩阵](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/AC16-34-audit-20260926.md)的三处证据，不覆盖原报告或把新发现回写为旧时点已知事实。认证 worktree 仍为 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`，Task store 仍为 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919`；具体源字节身份见各原件。
+
+| AC | 新证据及状态 | 尚缺 |
+| --- | --- | --- |
+| 16 | [旧六行局部样本](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/AC16-real-task-semantic-audit-20260926.md)只覆盖 decision-log 的 AC16–21。[补做的完整范围审计](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/AC16-full-acceptance-set-audit-20260927.md)绑定 spec/decision SHA，识别 Appendix A **AC16–34 共 19 个互异 ID**、定义层四要素 19/19 可失败。`spec.md:506` 所指 `decision-log.md:1313-1340` 实为 D-006/D-007 叙述、没有 AC 行；真实六行表在 `:1413-1420` 且与前六项重叠。错误来源指针未明标 incomplete，故 AC16 整体仍 **incomplete**。 | 材料 owner 应更正/澄清指针，再按真实全集重核分母；尚未注入失败样本、跑语义负控或发布正式质量事实。P1 卡面的检查命令位置参数也不被当前 CLI 消费。 |
+| 25 | [真实 d1 pair 的只读读回](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/AC25-d1-real-pair-readback-20260927.md)绑定 TaskHandle、11 个记录 refs/hash 和当前 reader 源，单次命令 exit **1**：blue 保存 `coverage=incomplete`，当前 reader 重建 `satisfied` 并报 `canonical review report binding is invalid`。[独立复核](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P6/AC25-d1-independent-review-20260927.md)确认已声明 quorum 使单改历史 flag 无效。状态从原矩阵 **unknown → incomplete**。 | CARD-05 reader 的受限历史读回修复及真 d1 成功正控；缺成员/报告/ref/raw、伪造语义和请求身份的 fail-closed 负控。P6/T014 合成 6/6 不覆盖它。 |
+| 27 | [原 A1 设计报告](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/reviews/a1-acceptance-enum-design-20260923.md)实际存在，记录当时 123 条（pass94/deferred29）聚合统计；当前 Task store 172 条内容寻址文件自洽。历史逐字基线仍 **unavailable**。 | 报告没有当时 123 条成员路径、逐文件 SHA 或不可变快照。不能从当前 172 条或 mtime 倒推历史集合。 |
+
+按这三处补查，矩阵状态成为 **2 项限定判据 proven、16 项 incomplete、0 项 unknown、1 项 unavailable**。这仍不证明任何 Phase 或 CARD-04 全卡完成；外置 `facts.jsonl` 也尚无 build-code 完成行。后续若源材料、reader 或 Task store 记录变化，需再绑定新身份重核，不修改此不可变补充。

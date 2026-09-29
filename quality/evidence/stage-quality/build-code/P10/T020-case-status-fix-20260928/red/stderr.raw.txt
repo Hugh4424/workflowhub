@@ -1,0 +1,131 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > P10 pre-run registered case selection > rejects a business case with missing status before it can run
+ FAIL  tests/contract/build-code-case-selection.test.mjs > P10 pre-run registered case selection > rejects a business case with unknown status before it can run
+ FAIL  tests/contract/build-code-case-selection.test.mjs > P10 pre-run registered case selection > rejects a business case with invalid status before it can run
+AssertionError: expected { status: 'selected', …(12) } to deeply equal { status: 'unavailable', …(2) }
+
+- Expected
++ Received
+
+  Object {
+-   "cases": Array [],
+-   "reason": "missing_inventory_identity",
+-   "status": "unavailable",
++   "cases": Array [
++     Object {
++       "change_triggers": Array [
++         "product.mjs",
++       ],
++       "execution": Object {
++         "expected_test_identity": "effect holds",
++         "machine_command": "npx vitest run tests/contract/product.test.mjs --reporter=json",
++         "registered_test_ids": Array [
++           "tests/contract/product.test.mjs > effect holds",
++         ],
++         "target": "tests/contract/product.test.mjs",
++       },
++       "id": "CASE-PRODUCT",
++       "related_case_ids": Array [],
++     },
++   ],
++   "catalog_revision": "fixture.1",
++   "changed_paths": Array [
++     "product.mjs",
++   ],
++   "inventory_basis": "registered_pre_run",
++   "provenance": "supplied_unverified",
++   "registry_ref": "docs/quality/test-asset-registry.json",
++   "registry_revision": "fixture.1",
++   "registry_sha256": "1853bb1bcf90a17cc715852cb630fcf22162d7257fba291e650d73c769ca682c",
++   "snapshot_tree": "0418940acb1883d14570bc69c598eeddf7e4339e",
++   "source_digest": "dec2c8c2bab6dc44a197158e0a2b7c252f89196f8ec0c2bf839a1ae2eab68767",
++   "status": "selected",
++   "task_id": "prerun-b81227ba-42b9-4b19-a5d9-0ca4f446e5e3",
++   "test_execution_status": "not_run",
+  }
+
+ ❯ tests/contract/build-code-case-selection.test.mjs:205:20
+    203|     else candidate.status = status;
+    204|     const result = selectAffectedCases({ changeScope, catalog: { ...ca…
+    205|     expect(result).toEqual({ status: "unavailable", reason: "missing_i…
+       |                    ^
+    206|   });
+    207| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > P10 pre-run registered case selection > rejects an unknown related case even when the directly changed case is active
+AssertionError: expected { status: 'selected', …(12) } to deeply equal { status: 'unavailable', …(2) }
+
+- Expected
++ Received
+
+  Object {
+-   "cases": Array [],
+-   "reason": "missing_inventory_identity",
+-   "status": "unavailable",
++   "cases": Array [
++     Object {
++       "change_triggers": Array [
++         "product.mjs",
++       ],
++       "execution": Object {
++         "expected_test_identity": "effect holds",
++         "machine_command": "npx vitest run tests/contract/product.test.mjs --reporter=json",
++         "registered_test_ids": Array [
++           "tests/contract/product.test.mjs > effect holds",
++         ],
++         "target": "tests/contract/product.test.mjs",
++       },
++       "id": "CASE-PRODUCT",
++       "related_case_ids": Array [
++         "CASE-RELATED",
++       ],
++       "status": "active",
++     },
++     Object {
++       "change_triggers": Array [
++         "unrelated.mjs",
++       ],
++       "execution": Object {
++         "expected_test_identity": "effect holds",
++         "machine_command": "npx vitest run tests/contract/product.test.mjs --reporter=json",
++         "registered_test_ids": Array [
++           "tests/contract/product.test.mjs > effect holds",
++         ],
++         "target": "tests/contract/product.test.mjs",
++       },
++       "id": "CASE-RELATED",
++       "related_case_ids": Array [
++         "CASE-PRODUCT",
++       ],
++       "status": "unknown",
++     },
++   ],
++   "catalog_revision": "fixture.1",
++   "changed_paths": Array [
++     "product.mjs",
++   ],
++   "inventory_basis": "registered_pre_run",
++   "provenance": "supplied_unverified",
++   "registry_ref": "docs/quality/test-asset-registry.json",
++   "registry_revision": "fixture.1",
++   "registry_sha256": "1853bb1bcf90a17cc715852cb630fcf22162d7257fba291e650d73c769ca682c",
++   "snapshot_tree": "0418940acb1883d14570bc69c598eeddf7e4339e",
++   "source_digest": "dec2c8c2bab6dc44a197158e0a2b7c252f89196f8ec0c2bf839a1ae2eab68767",
++   "status": "selected",
++   "task_id": "prerun-423d93bb-ec01-41e4-b699-ed14f94da0eb",
++   "test_execution_status": "not_run",
+  }
+
+ ❯ tests/contract/build-code-case-selection.test.mjs:215:20
+    213|     const result = selectAffectedCases({ changeScope,
+    214|       catalog: { ...catalog, cases: [direct, related] }, registry });
+    215|     expect(result).toEqual({ status: "unavailable", reason: "missing_i…
+       |                    ^
+    216|   });
+    217| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+

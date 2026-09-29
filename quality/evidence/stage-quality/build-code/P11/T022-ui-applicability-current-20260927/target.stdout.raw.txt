@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms
+ ✓ tests/contract/ui-applicability-must-ask.test.mjs (3 tests) 36003ms
+   ✓ make-decision UI applicability must ask > records UI and non-UI conclusions, but keeps missing, unknown, and conflicting evidence incomplete 36002ms
+ ✓ tests/contract/ui-applicability-contract.test.mjs (4 tests) 2ms
+
+ Test Files  3 passed (3)
+      Tests  11 passed (11)
+   Start at  20:00:58
+   Duration  36.89s (transform 230ms, setup 0ms, collect 634ms, tests 36.01s, environment 0ms, prepare 83ms)
+

@@ -1,0 +1,15 @@
+{
+  "canonical-output.copy.txt": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2",
+  "canonical-receipt.copy.json": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d",
+  "capture-script.copy.mjs": "b0b4d29c062bd6c7bb9d627116edd8bc4094b09ed4baf43ce0d077705e3142e0",
+  "child-process-cleanup.json": "7246ea6b360e383b74df09e63eec1cf9dc7499706aefae3f9debfb2ee1726340",
+  "cli.result.json": "7552b6f1148904fa947970c164e7522c9a9d7e82929665b9104a36c8bcf1dfaa",
+  "cli.stderr.raw.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cli.stdout.raw.json": "c15991180f85bc6cb00ccce4634233cac4daa2d9973c39618d8dfd72b28f25f6",
+  "identity-after.json": "d71c7e8fa0b67f0be0cd362982d2729e5119cb12b29ac7c71738613a7bd6cc13",
+  "identity-before-first.json": "7d276d077a268bd79fc75a067ebd635a2efd84b9c1071448e076381857eb1ce7",
+  "identity-before-second.json": "fbf4e85eab5099772c630e9895ea11753615b41b6d75e804bae14869c7d41c0b",
+  "readback.json": "71bafc2f0f652a3be76e2030a8d57575726cdc6112d348a9502138b7917246d9",
+  "request.json": "d6688fc8d6379ccaa521ab7fa8e82c225d1e827893323f65a9bffc0aaab320a3",
+  "summary.md": "6a2e2a0b7f2b3194cd180c475dd17242fe4d07d4633d9f3b342856e6039d899c"
+}

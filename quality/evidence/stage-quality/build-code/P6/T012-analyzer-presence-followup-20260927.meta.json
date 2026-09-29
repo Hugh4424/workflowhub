@@ -1,0 +1,23 @@
+{
+  "command": "npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_utc": "2026-09-27T00:25:24.351672+00:00",
+  "ended_utc": "2026-09-27T00:25:49.117042+00:00",
+  "exit_code": 0,
+  "before_sha256": {
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs": "dd57cf5ee5c715d33ac412bfb50e2d6dad4d4c142c78e1e9775366f006103bf4",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74",
+    "specs/workflowhub-thin-core-card-04-20260919/spec.md": "80901099c5690df9072c85033f8c4b1a2a57b3407b29be9fb6c03f0b9547e086",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "359539307ac264384e8332013c3a1733ac04ba5620171361e76d4b60bc8a40c0",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "e52bf879fe87cf6d21d6c4326b9147c0b33027d14ba32c173bc14061627efab6"
+  },
+  "after_sha256": {
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs": "dd57cf5ee5c715d33ac412bfb50e2d6dad4d4c142c78e1e9775366f006103bf4",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74",
+    "specs/workflowhub-thin-core-card-04-20260919/spec.md": "80901099c5690df9072c85033f8c4b1a2a57b3407b29be9fb6c03f0b9547e086",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "359539307ac264384e8332013c3a1733ac04ba5620171361e76d4b60bc8a40c0",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "e52bf879fe87cf6d21d6c4326b9147c0b33027d14ba32c173bc14061627efab6"
+  },
+  "stdout_sha256": "b1e4baa3a039da3a1ec280df8eaebfeaa1f96f348d67fbc58d4a0a081af34101",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

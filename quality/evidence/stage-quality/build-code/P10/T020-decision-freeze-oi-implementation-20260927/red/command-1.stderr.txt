@@ -1,0 +1,167 @@
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > uses the current YAML OI authority instead of append-only historical prose
+AssertionError: expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+    "user_flow",
+-   "data_states",
+    "success_failure_boundaries",
+    "non_goals",
+  ]
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:20:25
+     18|   const decisionLog = readFileSync(fileURLToPath(new URL("../../specs/…
+     19|   const fact = validateDecisionFreeze({ decisionLog, ...identity });
+     20|   expect(fact.coverage).toEqual(["user_flow", "data_states", "success_…
+       |                         ^
+     21|   expect(fact.errors).not.toContain("direction-level questions remain …
+     22|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > does not fill a missing current OI from historical prose or YAML
+AssertionError: expected [ 'user_flow', 'data_states', …(2) ] to not include 'data_states'
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:52:29
+     50|   const decisionLog = authority().replace(oi("OI-002", "data_state", "…
+     51|   const fact = validateDecisionFreeze({ decisionLog, ...identity });
+     52|   expect(fact.coverage).not.toContain("data_states");
+       |                             ^
+     53|   expect(fact.errors).toContain("freeze packet is missing data_states"…
+     54| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for broken YAML even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for duplicate OI even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for missing category even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for invalid category even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for missing status even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for invalid status even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for empty authority even when old text claims completion
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed for duplicate authority heading even when old text claims completion
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:75:82
+     73|   const fact = validateDecisionFreeze({ decisionLog: `${decisionLog}\n…
+     74|   expect(fact.ok).toBe(false);
+     75|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+       |                                                                                  ^
+     76| });
+     77| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed when current CF status is missing
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > fails closed when current CF status is ambiguous
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:85:72
+     83|   const fact = validateDecisionFreeze({ decisionLog, ...identity });
+     84|   expect(fact.ok).toBe(false);
+     85|   expect(fact.errors.some((error) => error.startsWith("current CF ")))…
+       |                                                                        ^
+     86| });
+     87| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > rejects unsupported fence even after four valid current OI categories
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > rejects unclosed fence even after four valid current OI categories
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > rejects stray close even after four valid current OI categories
+AssertionError: expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+    "user_flow",
+-   "data_states",
+    "success_failure_boundaries",
+    "non_goals",
+  ]
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:95:25
+     93|   const decisionLog = authority().replace("## 历史说明", `${badFence}\…
+     94|   const fact = validateDecisionFreeze({ decisionLog, ...identity });
+     95|   expect(fact.coverage).toEqual(["user_flow", "data_states", "success_…
+       |                         ^
+     96|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+     97| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > accepts a no-status CF with the same current D decision and confirmed OI
+AssertionError: expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+    "user_flow",
+-   "data_states",
+    "success_failure_boundaries",
+    "non_goals",
+  ]
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:117:25
+    115|   const cf = "\n## 独立替代审查发现的未决冲突（须用户裁决）\n### CF-5…
+    116|   const fact = validateDecisionFreeze({ decisionLog: `${currentOi}${de…
+    117|   expect(fact.coverage).toEqual(["user_flow", "data_states", "success_…
+       |                         ^
+    118|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+    119|   expect(fact.errors.some((error) => error.startsWith("current CF ")))…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > rejects double backtick typo outside complete fences after all four categories
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > rejects bare OI record outside complete fences after all four categories
+AssertionError: expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+    "user_flow",
+-   "data_states",
+    "success_failure_boundaries",
+    "non_goals",
+  ]
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:131:25
+    129|   const decisionLog = authority().replace("## 历史说明", `${malformed}…
+    130|   const fact = validateDecisionFreeze({ decisionLog, ...identity });
+    131|   expect(fact.coverage).toEqual(["user_flow", "data_states", "success_…
+       |                         ^
+    132|   expect(fact.errors.some((error) => error.startsWith("current OI auth…
+    133| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/19]⎯
+
+ FAIL  tests/contract/decision-freeze-current-oi.test.mjs > requires the named D decision to approve the same OI in one current sentence
+AssertionError: expected [ …(10) ] to include 'current CF CF-5 has no verified curre…'
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs:140:23
+    138|   const cf = "\n## 独立替代审查发现的未决冲突（须用户裁决）\n### CF-5…
+    139|   const fact = validateDecisionFreeze({ decisionLog: `${currentOi}${wr…
+    140|   expect(fact.errors).toContain("current CF CF-5 has no verified curre…
+       |                       ^
+    141| });
+    142| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/19]⎯
+

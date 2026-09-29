@@ -1,0 +1,16 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (10 tests | 1 failed) 39976ms
+   ✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 17219ms
+   ✓ P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 2707ms
+   ✓ P10 fixed targeted capture > rejects a source snapshot changed by the selected test 6331ms
+   ✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6463ms
+   × P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 7253ms
+     → expected false to be true // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  10:36:08
+   Duration  40.58s (transform 161ms, setup 0ms, collect 388ms, tests 39.98s, environment 0ms, prepare 49ms)
+

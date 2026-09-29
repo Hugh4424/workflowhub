@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+    "run",
+    "tests/contract/repository-inventory.test.mjs",
+    "-t",
+    "complexity baseline"
+  ],
+  "command_display": "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest run tests/contract/repository-inventory.test.mjs -t \"complexity baseline\"",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "started_utc": "2026-09-27T16:36:32.981334+00:00",
+  "ended_utc": "2026-09-27T16:36:33.607048+00:00",
+  "exit_code": 1,
+  "build_report_actual": 84649,
+  "published_json_actual": 84399,
+  "build_report_probe_exit_code": 0,
+  "test_sha256": "6a27b37386882378d20f4e725dd3fee43918536d9be12a0381960844a49158ba",
+  "json_sha256": "12d4e7b391b209eb86dd4cce98bb7b51269697ce7593bc688d7d65cc579862d6",
+  "stdout_sha256": "eba150d7640491a4bd14952dfe993868533cf1832ca468a52068727b8a7fc559",
+  "stderr_sha256": "8c26d138a33b9d9e52f2a712fa53444a5874e2dfa20494ec6e12042c556c698c"
+}

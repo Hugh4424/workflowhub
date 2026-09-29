@@ -1,4 +1,4 @@
-# ADR-0032：审查链以「委托模式 + 逐路独立审查 + 审查层契约」接入
+# ADR-0032：审查链以「委托模式 + 逐路审查 + 审查层契约」接入
 
 ## 状态
 
@@ -9,13 +9,19 @@
 
 **上一轮修订（2026-09-25，decision-log D-043；三面范围由 D-044 覆盖）**：用户撤销比较选型目标。本 ADR 中原 go/no-go、相对阈值、Architect/wh-review 对照和 `candidate_experiment` 的执行顺序均为历史设计；旧 T011 no-go 仍是历史事实。D-043 当时要求 build-code phase、build-code integration、verify-code 三面正常 OCR 委托的逐面真实能力和官方质量事实。P1–P4 不重启，历史原件只读；该轮修订不证明能力已经实跑。
 
-**现行修订（2026-09-25，decision-log D-044）**：正常 build-code 流程不再自动派发重复的 integration review，也不把它作为 build-code 完成要求。当前仅验收 build-code 每 Phase 的 OCR 审查与 verify-code 一次 OCR 终末代码审查，两面均须有真实输入、独立执行、诚实终态及官方读回。跨 Phase 集成测试、最终聚合、逐 AC 验收与 verify-code 功能验收仍分别保留；旧 integration attempts/results、D-043 原决策及 P1–P4 原件只读保留，不充作两面通过。显式 CLI integration 请求与历史 API/reader 兼容仍保留，本文不宣称所有显式请求被禁止。P5 Phase OCR attempt `3fece791-ee35-5b57-a634-f226bc3c2a6e` 已执行但不等于 AC 通过；verify-code 终末审查尚未执行，两面尚未全部读回/验收。D-044 材料修订本身不证明流程/runtime 已完成切换；缺证据保持 incomplete/unavailable，不恢复比较或 go/no-go。
+**现行修订（2026-09-25，decision-log D-044）**：正常 build-code 流程不再自动派发重复的 integration review，也不把它作为 build-code 完成要求。当前仅验收 build-code 每 Phase 的 OCR 审查与 verify-code 一次 OCR 终末代码审查，两面均须有真实输入、真实执行、诚实终态及官方读回。跨 Phase 集成测试、最终聚合、逐 AC 验收与 verify-code 功能验收仍分别保留；旧 integration attempts/results、D-043 原决策及 P1–P4 原件只读保留，不充作两面通过。显式 CLI integration 请求与历史 API/reader 兼容仍保留，本文不宣称所有显式请求被禁止。P5 Phase OCR attempt `3fece791-ee35-5b57-a634-f226bc3c2a6e` 已执行但不等于 AC 通过；verify-code 终末审查尚未执行，两面尚未全部读回/验收。D-044 材料修订本身不证明流程/runtime 已完成切换；缺证据保持 incomplete/unavailable，不恢复比较或 go/no-go。
+
+**现行修订（2026-09-28，用户确认）**：撤销“同源 reviewer 必须排除”的要求。OCR 派发不再要求或读取调用方提供的 `host_provider`，不再以 reviewer/host 的 source、model、adapter 是否相同阻止派发，也不再以 `minimum_heterologous` 作为 OCR 结果的完成条件。provider/source/config 仍可作为诊断 provenance 保存，但不成为 stage caller 的输入、route gate 或质量完成门。历史 `host_provider`、独立性和 quorum 字段只读兼容；新 writer 不应新增对应的阻塞对象。
+
+**现行修订（2026-09-29，直接 provider 增量处理）**：direct OCR provider 不受 WorkflowHub 额外固定 wall-clock deadline；provider 到自己的终态或调用方明确取消前持续运行，liveness/输出采样只作诊断。首个 provider 到终态后立即通过增量结果回调进入 findings 处理，后续 provider 继续运行，迟到 findings 到达时再次进入同一处理回调；不得因首个结果取消 sibling。完整 round 返回值保留所有终态 provider provenance，部分成功记 `available-with-failures`，全路失败才记 `unavailable`。显式取消直接终止已登记的 provider process group，再终止 supervisor；Kimi 通过 packet-local、只开放 `Read` 的 agent file 运行；只有当前 OpenCode direct CLI 没有可强制只读工具边界，才记 `OCR_PROVIDER_UNSUPPORTED`。reviewed execution 的输出按 `ref+hash` 去重，UTF-8 流只传一次文本表示，provider packet 的当前材料拆为可按需读取的 context 文件，完整 canonical evidence 仍保留在 task store；不新增 caller 配置、route identity、review policy、stage、gate 或持久对象。
+
+**现行更正（2026-09-29）**：上一段关于“Kimi direct CLI 直接 `OCR_PROVIDER_UNSUPPORTED`”的能力判断已被真实 CLI 验证推翻。Kimi 通过 packet-local agent file 只开放 `Read`，并禁用 user/project skill 自动发现；因此它与 Codex/Antigravity 一样可以进入 direct OCR。reviewed execution 的 stdout/stderr 按 `ref+hash` 去重，UTF-8 流只传一次文本表示，临时 packet 的 `.git` 内部文件不进入 manifest；canonical 原始记录仍完整保留。只有当前 OpenCode direct CLI 没有可强制只读工具边界，仍保留 `OCR_PROVIDER_UNSUPPORTED`。
 
 ## 决定
 
 1. **接入形态 = OCR（open-code-review）的「委托模式」**。OCR 只做确定性工程（文件筛选 + 规则解析），
    **实际审查推理由 workflowhub 侧按 `~/.config/workflowhub/config.json` 的
-   `wh_review.stages.<stage>.initial[]` 起的独立子代理，用其自身 LLM 完成**；OCR 端不调用 LLM、
+   `wh_review.stages.<stage>.initial[]` 起可配置 provider 路径完成**；OCR 端不调用 LLM、
    不需要 API key。委托模式下 **OCR 不产出 finding，也不提供 finding schema**，两者均由 workflowhub 自定义。
 2. **派发判据 = any-of-N，结果 = 全部成功路并集**（D-035 对旧表述的修正）。任一路成功即可记录审查发生；所有已派发路在有界终态后，其成功 findings 全部入账。同 file:line 与同一 claim 才合并；多路一致为 `corroborated`，单路为 `single_source`，均保留原始来源。失败路不抹除已成功结果，不新增固定审查轮次。
 3. **修复层次 = 修「审查层」行为契约，不是给旧工具打补丁**。修复面为
@@ -23,7 +29,7 @@
 4. **现行范围 = 2 个代码审查面替换 + 7 个保留审查面问题修复**；D-043 的 3+7 面集及 build-code/integration 改 diff 决定只作历史，正常 build-code 流程不再自动派发 integration 审查或要求其完成；显式 CLI/API 兼容保留；wh-review 物理删除与
    身份/哈希/快照/回执校验机制的移除**仍归 CARD-06**。
 
-**现行实施顺序**：P3 的隔离候选调用和原对照设计保留为历史；P5 将 OCR 委托适配接入 build-code/phase 与 verify-code 终末两个普通审查面，并分别在真实当前 diff 上验收输入、独立执行、终态、finding/覆盖和官方读回；正常 build-code 不自动追加 integration 审查或要求其完成，集成测试与验收保留。零 finding 不自动失败，但必须有真实完成与覆盖声明并与零派发区分。任一面缺失或不可用时保留 incomplete/unavailable 并在同一任务修复；工具 unavailable 的路径为恰一次由未参与实现者完成的独立替代审查，替代也不可用则记 unverified。两个代码面不再执行旧 wh-review/broker，也不以它们作 fallback；七个保留审查面及 P4 的既有 broker 路径仍可执行，其历史原件只读。
+**现行实施顺序**：P3 的隔离候选调用和原对照设计保留为历史；P5 将 OCR 委托适配接入 build-code/phase 与 verify-code 终末两个普通审查面，并分别在真实当前 diff 上验收输入、真实执行、终态、finding/覆盖和官方读回；正常 build-code 不自动追加 integration 审查或要求其完成，集成测试与验收保留。零 finding 不自动失败，但必须有真实完成与覆盖声明并与零派发区分。任一面缺失或不可用时保留 incomplete/unavailable 并在同一任务修复；工具 unavailable 的路径为恰一次真实替代审查，替代也不可用则记 unverified。两个代码面不再执行旧 wh-review/broker，也不以它们作 fallback；七个保留审查面及 P4 的既有 broker 路径仍可执行，其历史原件只读。
 
 CARD-05 承担 **review 派发面** 的 FR-57/AC-58：送审输入以纯文本路径引用，不把材料身份、哈希、sha、快照或回执读回变派发许可证；派发后的 provenance 及正式 stage 发布认证仍要如实记录。CARD-06 才删除其它通用机制。临时 `candidate_experiment:true` 是 P3 历史隔离标志，P5 收束该选择逻辑，普通请求直接走 OCR 委托；不留下第二个常设 public command、review store 或机器 gate。
 
@@ -37,7 +43,7 @@ CARD-05 承担 **review 派发面** 的 FR-57/AC-58：送审输入以纯文本�
 | finding schema | WorkflowHub 自有；OCR LlmComment 骨架 path/content/start_line/end_line/category/severity，外加非空 suggestion_code、file:line 与可复现证据、来源集合和强度 | canonical result；锚点无效不得标 true |
 | 等待/健康语义 | 两个代码面的 direct OCR executor 以直接子进程的启动、输出、存活采样、退出和取消结果为健康/进度依据，等待真实终态；内部采样默认间隔 5 秒、可配置，不是 3rd-review managed-status 轮询或执行期限。不以运行时长或暂时无输出杀进程。明确取消时清理子进程及 packet，未确认退出不得记 clean；采样结果的官方持续读回和 owner 失联清理尚待实现或验证，覆盖保持 unknown。七个保留面/P4 继续各自的 broker managed-status 契约。 | 两代码面：WorkflowHub direct OCR executor；七个保留面/P4：3rd-review broker/runtime 与 managed-status client/runner；等待时长不是健康判据 |
 | unavailable 状态集合 | 下表按派发状态与覆盖维度分类；原始 error_code/warning 原样保留，未知码走同一结构分支 | review record；任何未分类原始信号不得变成功 |
-| provider 身份 | initial[] 每项一独立子代理/上下文，宿主记录 provider/model/adapter/attempt；mode 仅校验，不改变路数 | host；身份缺失记 unavailable |
+| provider 身份 | initial[] 每项一个可配置 provider 路径，宿主记录 provider/model/adapter/attempt；身份仅作诊断 provenance | OCR adapter；身份缺失不阻止派发 |
 | 审查事实位置 | 沿用 quality/reviews/，新原件 append-only，日期+序号+描述命名；旧原件只读 | canonical writer；不得双写或覆盖旧 ref |
 
 新 verify-code OCR packet 按 D-041 **携带验收标准全文**。旧 wh-review reviewed_execution 的 `forbidden: acceptance_criteria` 是旧路径合同，不能套用新 OCR packet；若新 packet 缺 AC，只能记 `cannot_review_requirement_fidelity`，不得宣称该维度已审。
@@ -60,11 +66,11 @@ CARD-05 承担 **review 派发面** 的 FR-57/AC-58：送审输入以纯文本�
 
 ### 并集与入账时点
 
-每个 `initial[]` route 有独立终态；any-of-N 仅决定至少一路成功已发生，**不能**提前丢弃仍在运行的路。两个代码面的 direct OCR executor 等待所派子进程真实退出后提交最终并集；活跃路未结束时保持该 request 进行中，不因总耗时或暂时无进展自动终止。七个保留面仍由既有 broker managed status 观察。去重键为归一化仓内 path、起止行和同一可复现 claim；只按 file:line 而 claim 不同的两条不得合并。`corroborated` 仅在至少两个不同来源报告同一去重键时成立；其它为 `single_source`。来源强度不代替 finding 严重度。任何一路失败、明确取消或未确认清理，只影响该路状态，不删除成功路 finding。
+每个 `initial[]` route 有独立终态；direct OCR 会等待每个已选 provider 到终态，任何一路产生合法 findings JSON 后继续接收其它路结果，并汇总所有 provider findings。部分 provider 失败或超时只影响整体状态和诊断，不删除成功路或后续路 finding；全路失败才不可用。七个保留面仍由既有 broker managed status 观察。去重键为归一化仓内 path、起止行和同一可复现 claim；只按 file:line 而 claim 不同的两条不得合并。`corroborated` 仅在至少两个不同来源报告同一去重键时成立；其它为 `single_source`。来源强度不代替 finding 严重度。明确取消仍只由调用者触发，不能由首个 provider 结果隐式触发。
 
 ### 对 ADR-0031 的覆盖边界（D-024）
 
-本卡按用户 D-024 裁决承担等待/取消契约与 ADR 覆盖。原 ADR-0031 固定 20 分钟的旧决定由 2026-09-23 用户当前指示更新：审查执行没有墙钟终止上限。两个代码面由 direct OCR executor 观察子进程并等待真实退出；活跃但暂时无新输出不因墙钟被杀，明确取消走 direct executor 的进程终止与清理链，未确认退出如实记账。该路径内部默认每 5 秒采样存活与输出进度，但不调用 3rd-review managed status 或 cancelManaged；采样结果的官方持续读回及 owner 失联清理尚待实现或验证。七个保留面/P4 的 broker 路径继续按既有 managed-status/cancelManaged 契约处理。P2/P4 的既有跨旧 10/20 分钟阈值、真实状态回读、明确取消和 owner-loss 验证属于其原路径，不证明 direct OCR 路径覆盖；不实际等待 20 分钟。旧的 600,000/30,000 ms route policy 与 1,200,000 ms managed wait cap 保留为历史决策，被本段 supersede。ADR-0031 其它不相关决定维持原边界。
+本卡按用户 D-024 裁决承担等待/取消契约与 ADR 覆盖。当前 direct OCR 不增加 provider wall-clock deadline；活跃但暂时无新输出只保留 liveness/输出诊断，直到 provider 自己终态或调用方明确取消。首个终态结果立即进入增量 findings 处理，迟到 provider 结果继续进入同一处理回调；明确取消直接终止已登记的 provider process group，再终止 supervisor；未确认退出和清理结果如实记账。该路径内部默认每 5 秒采样存活与输出进度，但不调用 3rd-review managed status 或 cancelManaged。七个保留面/P4 的 broker 路径继续按既有 managed-status/cancelManaged 契约处理。历史 deadline 字段只读保留，不成为 direct OCR 当前行为。ADR-0031 其它不相关决定维持原边界。
 
 ## 背景：为什么不是「修工具」
 
@@ -109,7 +115,7 @@ CARD-05 承担 **review 派发面** 的 FR-57/AC-58：送审输入以纯文本�
 - **用 OCR 自管 LLM 路径（`ocr review` / `scan`）**：本机未配置任何 LLM provider；
   且该路径与「用 config.json 的 provider 作为审查者」的用户诉求不符；还引入一类新凭据。
 - **保留 wh-review/broker 作为可执行 fallback**：母 PRD OI-006 明确旧路径只读，
-  **不构成可执行 fallback**，也不得换名搬进 Skill。fallback 改为「一次由未参与实现者完成的独立替代审查」。
+  **不构成可执行 fallback**，也不得换名搬进 Skill。fallback 改为「一次真实替代审查」。
 - **双写 finding schema**（内部一套 + 导出映射一套）：AGENTS.md 明令禁止新增双写与永久 compatibility bridge。
 - **10 个审查面全部换成 OCR 委托**：与 card-02 已承接的「①build-plan 合并审查 + 适配合同文档审查档」重叠，
   且需为每类文档材料另写 rubric，超出本卡可交付范围。

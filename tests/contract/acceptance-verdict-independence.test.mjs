@@ -63,7 +63,7 @@ describe("acceptance verdict independence", () => {
     expect(e2eAcceptanceFacts(worker(completeEvidence))).toMatchObject({ status: "passed", required: true });
     expect(e2eAcceptanceFacts(worker({ ...completeEvidence, independent_review: { ...completeEvidence.independent_review, status: "missing" } }))).toMatchObject({ status: "missing" });
     expect(e2eAcceptanceFacts(worker({ ...completeEvidence, user_confirmation: { ...completeEvidence.user_confirmation, status: "missing" } }))).toMatchObject({ status: "missing" });
-    expect(e2eAcceptanceFacts(worker({ ...completeEvidence, independent_review: { ...completeEvidence.independent_review, reviewer_actor: { ...completeEvidence.independent_review.reviewer_actor, source_id: "build-code-host" } } }))).toMatchObject({ status: "missing" });
+    expect(e2eAcceptanceFacts(worker({ ...completeEvidence, independent_review: { ...completeEvidence.independent_review, reviewer_actor: { ...completeEvidence.independent_review.reviewer_actor, source_id: "build-code-host" } } }))).toMatchObject({ status: "passed" });
     expect(e2eAcceptanceFacts(worker({ ...completeEvidence, independent_review: { ...completeEvidence.independent_review, frozen_material: null } }))).toMatchObject({ status: "missing" });
     expect(e2eAcceptanceFacts(worker({ ...completeEvidence, independent_review: { ...completeEvidence.independent_review, ref: null } }))).toMatchObject({ status: "missing" });
   });

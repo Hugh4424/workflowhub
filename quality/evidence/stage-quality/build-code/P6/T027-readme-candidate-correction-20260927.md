@@ -1,0 +1,8 @@
+# P6/T027 纯文档候选状态更正
+
+- 只修改 `specs/workflowhub-thin-core-card-04-20260919/phases/P6.md` 的 T027 当前候选一行。原 P6 完整字节保存在 `T027-before-readme-candidate-correction-20260927.md`，SHA-256 `70528388801bff43fcb6341ca2b5fa25fa3978a0f3d12790cb11fdeea91db033`；新 P6 SHA-256 `5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b`。旧历史/失败原件不变。
+- 新候选是独立 Task `workflowhub-readme-post-materials-20260927`，工作树 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-readme-post-materials-20260927`。其证据索引绝对路径 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-readme-post-materials-20260927/quality/evidence/card04-ac19-readme-evidence-index.json`，读回 SHA-256 `1c1a214dc6580e2112d0dc47296516c00eeaef4ea99393076e87408af6a2c05b`。
+- 索引列出四个阶段行，README 产品差分一行及本 Task 四份 Markdown 材料。同一脚本 SHA-256 `704274831658937bd3f89a42207a4177ecdf55e71c05f8a4507304a71064e225` 的 RED exit 1（raw SHA-256 `29943d233a4c8a4016fda38e6a6bdd776c8e59a0f5ccceaedf7c993db5315782`）与 GREEN exit 0（raw SHA-256 `844848bc1bcf068092d9f4eb71eedc5b34e31acb78fb908d7717f4aab64a23b7`）均可读。索引中的脚本、两份 raw、build-code 与 verify-code 异源 review ref/hash 已逐一读回匹配。
+- build-code/verify-code 的最终 run 为 completed/passed；make-decision/build-plan 的 run quality 仍 incomplete；交付与关闭仍 unavailable。故此仅是 AC-19 候选，完整样例与 AC-19 仍未判通过。当前 CARD-04 自身也无 build-code 阶段行。本侧车不代替独立 T027 语义裁决。
+- `git diff --check -- specs/workflowhub-thin-core-card-04-20260919/phases/P6.md` exit 0，但 P6 当前未跟踪；以旧备份对新 P6 执行 `git diff --no-index --check` 仅因内容差异 exit 1，无空白诊断，差分为一行替换。未跑测试；未改 README Task、代码或旧证据。
+- 连带限制：P8 catalog 之前绑定 P6 旧 SHA，本次 P6 字节变化使 `CARD04-DECISION-LOG-CENSUS` 的 rule revision 过期。P8 owner 应读当前规则后另版重绑；本 T027 写面不改 P8 catalog，也不能据过期绑定运行 P10 选择器求绿。

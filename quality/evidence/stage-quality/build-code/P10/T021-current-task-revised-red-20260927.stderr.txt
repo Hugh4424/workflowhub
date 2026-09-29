@@ -1,0 +1,116 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC
+AssertionError: stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+
+Expected: "reconciled"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:134:72
+    132|     expect(JSON.parse(readFileSync(account)).balance_cents).toBe(JSON.…
+    133|     const result = reconcile(v, [observation], [evidence]);
+    134|     expect(result.status, "stub is not a business-effect attestation")…
+       |                                                                        ^
+    135|     expect(result.entries).toEqual(expect.arrayContaining([expect.obje…
+    136|       case_id: v.caseId, acceptance_criterion_id: v.criterion, status:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown
+AssertionError: current Task outer and per-target reader is missing: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ current tests/contract/build-code-case-reconciliation.test.mjs:237:62
+    235|   const current = (override = {}) => {
+    236|     expect(taskReconciliation.reconcileCurrentTaskCases,
+    237|       "current Task outer and per-target reader is missing").toBeTypeO…
+       |                                                              ^
+    238|     return taskReconciliation.reconcileCurrentTaskCases({ task: state.…
+    239|       capture, oracleEvidence: [], ...override });
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:243:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash
+AssertionError: current Task outer and per-target reader is missing: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ current tests/contract/build-code-case-reconciliation.test.mjs:237:62
+    235|   const current = (override = {}) => {
+    236|     expect(taskReconciliation.reconcileCurrentTaskCases,
+    237|       "current Task outer and per-target reader is missing").toBeTypeO…
+       |                                                              ^
+    238|     return taskReconciliation.reconcileCurrentTaskCases({ task: state.…
+    239|       capture, oracleEvidence: [], ...override });
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:253:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding
+AssertionError: current Task outer and per-target reader is missing: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ current tests/contract/build-code-case-reconciliation.test.mjs:237:62
+    235|   const current = (override = {}) => {
+    236|     expect(taskReconciliation.reconcileCurrentTaskCases,
+    237|       "current Task outer and per-target reader is missing").toBeTypeO…
+       |                                                              ^
+    238|     return taskReconciliation.reconcileCurrentTaskCases({ task: state.…
+    239|       capture, oracleEvidence: [], ...override });
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:258:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:275:53
+    273|         task: other.task, workspace: other.workspace,
+    274|       });
+    275|       const rawRef = result.targeted_capture.targets[0].raw_output_ref;
+       |                                                     ^
+    276|       rmSync(join(other.task.taskPath, rawRef)); // Only this isolated…
+    277|       expect(current({ task: other.task, workspace: other.workspace, c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect
+AssertionError: current Task outer and per-target reader is missing: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ current tests/contract/build-code-case-reconciliation.test.mjs:237:62
+    235|   const current = (override = {}) => {
+    236|     expect(taskReconciliation.reconcileCurrentTaskCases,
+    237|       "current Task outer and per-target reader is missing").toBeTypeO…
+       |                                                              ^
+    238|     return taskReconciliation.reconcileCurrentTaskCases({ task: state.…
+    239|       capture, oracleEvidence: [], ...override });
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:283:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent
+AssertionError: current Task outer and per-target reader is missing: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ current tests/contract/build-code-case-reconciliation.test.mjs:237:62
+    235|   const current = (override = {}) => {
+    236|     expect(taskReconciliation.reconcileCurrentTaskCases,
+    237|       "current Task outer and per-target reader is missing").toBeTypeO…
+       |                                                              ^
+    238|     return taskReconciliation.reconcileCurrentTaskCases({ task: state.…
+    239|       capture, oracleEvidence: [], ...override });
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:297:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+

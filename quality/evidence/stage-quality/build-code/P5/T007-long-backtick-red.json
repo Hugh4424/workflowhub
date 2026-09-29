@@ -1,0 +1,10 @@
+{
+  "at_utc": "2026-09-26T14:53:17Z",
+  "command": "node quality/evidence/stage-quality/build-code/P5/T007-long-backtick-probe.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "source_sha256": "3ade366d04e63118039a9f36746db271f96ea3b6fcbae5d943dd40e02a57d2bd",
+  "probe_sha256": "15c338f4f4ec3b69e0dafd3c54ab3e21197e4daaf1a3e23347e5f91ef0c0009b",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/stage/stage-end-report.mjs:228\n    const longestBacktickRun = Math.max(0, ...(escaped.match(/`+/g) ?? []).map((run) => run.length));\n                                    ^\n\nRangeError: Maximum call stack size exceeded\n    at inline (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/stage/stage-end-report.mjs:228:37)\n    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/stage/stage-end-report.mjs:241:125\n    at Array.map (<anonymous>)\n    at renderStageEndReport (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/runtime/stage/stage-end-report.mjs:241:54)\n    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-long-backtick-probe.mjs:11:18\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n\nNode.js v24.14.0\n"
+}

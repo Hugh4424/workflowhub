@@ -1,0 +1,52 @@
+COMMAND=npx vitest run tests/contract/stage-runtime-material-check.test.mjs
+kind=command_checks
+check_id=P3-T005-CONTRACT
+task_id=workflowhub-thin-core-card-04-20260919
+cwd=/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-p3-vdts3z23/checkout
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+test_sha256=7369285cde321c82180e9b07254e1295a3360771235d1bec11c03ae2849192d5
+source_sha256=46adacd537e0eb9a8242f970b1eee4a582451a7313f5f09356745120873fd7a5
+package_lock_sha256=a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=2.1.9
+npm_config_offline=true
+validation=target_valid
+isolated_git_status=?? tests/contract/stage-runtime-material-check.test.mjs
+temporary_checkout_cleanup=removed
+recorded_at=2026-09-26T11:48:52.402678+00:00
+stdout:
+
+ RUN  v2.1.9 /private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-p3-vdts3z23/checkout
+
+ ❯ tests/contract/stage-runtime-material-check.test.mjs (4 tests | 2 failed) 2984ms
+   × stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 618ms
+     → current task material missing or unreadable: spec.md
+   × stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 841ms
+     → current task material missing or unreadable: spec.md
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 754ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 771ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  19:48:43
+   Duration  3.84s (transform 336ms, setup 0ms, collect 741ms, tests 2.98s, environment 0ms, prepare 30ms)
+stderr:
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/stage-runtime-material-check.test.mjs > stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent
+ FAIL  tests/contract/stage-runtime-material-check.test.mjs > stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent
+Error: current task material missing or unreadable: spec.md
+ ❯ Module.stageRuntimeMain tools/cli/stage-runtime.mjs:1489:15
+    1487|       const missingMaterials = materialFiles.filter((file) => typeof m…
+    1488|       if (missingMaterials.length > 0) {
+    1489|         throw new Error(`current task material missing or unreadable: …
+       |               ^
+    1490|       }
+    1491|     }
+ ❯ runStatus tests/contract/stage-runtime-material-check.test.mjs:65:32
+ ❯ tests/contract/stage-runtime-material-check.test.mjs:79:30
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+EXIT=1

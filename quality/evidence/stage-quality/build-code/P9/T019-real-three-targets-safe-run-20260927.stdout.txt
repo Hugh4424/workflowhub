@@ -1,0 +1,7 @@
+{
+  "status": "unavailable",
+  "error": "Git redirection/config environment is set: GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "manifest_sha256": "84552ba28927afbc8ee3896882786ea4ad2928d5e736aec7a3b1b6bb298970c6",
+  "target_count": 0,
+  "temporary_retained": true
+}

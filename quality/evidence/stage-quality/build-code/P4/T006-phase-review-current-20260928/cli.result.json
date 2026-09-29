@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "node",
+    "tools/cli/stage-runtime.mjs",
+    "review",
+    "--action=record",
+    "--stage=build-code",
+    "--project=workflowhub",
+    "--task=workflowhub-thin-core-card-04-20260919",
+    "--input=quality/evidence/stage-quality/build-code/P4/T006-phase-review-current-20260928/request.json"
+  ],
+  "exit_code": 0,
+  "captured_at_utc": "2026-09-27T17:21:43.224667+00:00"
+}

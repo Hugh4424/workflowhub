@@ -1,0 +1,27 @@
+{
+  "receipt_ref": "quality/tests/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.json",
+  "output_ref": "quality/tests/output/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.output",
+  "verify_exit_code": 0,
+  "status_after_exit_code": 0,
+  "same_status_identity": true,
+  "same_branch_head_sources_task_facts": {
+    "branch": true,
+    "head": true,
+    "source_sha256": true,
+    "task_json_sha256": true,
+    "facts_jsonl_sha256": true
+  },
+  "receipt_sha256": "c7685c8a1c7616740f724c81912274851c0ec2d7572d2848d3921f5e3f478c72",
+  "output_sha256": "9833cbea5eb8e735eda3eded8e716dd650a5a0660b74f7e3d1567a57fe8b243a",
+  "receipt_exit_code": 0,
+  "receipt_snapshot_tree": "4381e90d43a7072ba12d1a4359ba757c3ddd5786",
+  "receipt_snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "receipt_source_digest": "63ad8223a48d08a805686516940a039eb52774f4f78aebb7ca0b3880abae7b6f",
+  "output_hash_claimed": "9833cbea5eb8e735eda3eded8e716dd650a5a0660b74f7e3d1567a57fe8b243a",
+  "output_hash_matches": true,
+  "receipt_command": "npx vitest run runtime/stage/stage-runner.test.mjs",
+  "receipt_output_ref": "quality/tests/output/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.output",
+  "receipt_ref_matches": true,
+  "receipt_task_matches": true,
+  "receipt_tree_matches": true
+}

@@ -1,0 +1,17 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 29620ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 1252ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 13498ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 3332ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 3892ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 2501ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 2193ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2952ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  07:00:30
+   Duration  30.45s (transform 292ms, setup 0ms, collect 658ms, tests 29.62s, environment 0ms, prepare 46ms)
+

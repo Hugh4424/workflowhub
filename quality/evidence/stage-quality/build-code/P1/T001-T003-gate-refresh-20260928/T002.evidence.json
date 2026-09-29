@@ -1,0 +1,26 @@
+{
+  "id": "T002",
+  "start_utc": "2026-09-27T16:55:38.133222Z",
+  "end_utc": "2026-09-27T16:55:38.153780Z",
+  "command": "node -e \"const fs=require('fs');const f='docs/architecture/real-entry-inventory.md';const ss=['显式入口','间接入口','未跑过入口','冻结接口面','CARD-10'];let t='';try{t=fs.readFileSync(f,'utf8')}catch{console.error('断言失败: '+f+' 不存在');process.exit(1)}let bad=0;for(const s of ss){if(!t.includes(s)){console.error('断言失败: 缺 '+s);bad=1}}if(!bad)console.log('entry inventory OK');process.exit(bad)\"",
+  "exit_code": 0,
+  "stdout_sha256": "e9ed865c914f41dd1ecb036d57713893a88604ed4294eb74f8134d1712d229ba",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "transcript_sha256": "ac5ddbe7a663bcbe64722041d760cdabff8ca5a7c01fddb64585cfc5529b2af3",
+  "expected_stdout": "entry inventory OK\n",
+  "valid": true,
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P1",
+  "task_id_in_phase": "T002",
+  "kind": "command_checks",
+  "check_ids": [
+    "P1-ENTRY-INVENTORY"
+  ],
+  "material_revision": "revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6",
+  "snapshot_tree": "4381e90d43a7072ba12d1a4359ba757c3ddd5786",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "output_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T002.transcript.txt",
+  "stdout_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T002.stdout.raw.txt",
+  "stderr_ref": "quality/evidence/stage-quality/build-code/P1/T001-T003-gate-refresh-20260928/T002.stderr.raw.txt"
+}

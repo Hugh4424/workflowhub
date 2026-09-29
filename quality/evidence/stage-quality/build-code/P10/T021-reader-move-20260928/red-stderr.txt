@@ -1,0 +1,18 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-T021: explicit current run consumption source > reader move: authenticates the exact locator and facts through the single runtime reader
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:330:55
+    328|       const facts = [{ ref: testFacts[0].ref, sha256: sha256(testFacts…
+    329|       const source = publishConsumptionFixture(state, capture, facts, …
+    330|       expect(freshness.authenticateP10RunConsumption).toBeTypeOf("func…
+       |                                                       ^
+    331|       const direct = (locator, acIds = new Set(["AC-26"])) =>
+    332|         freshness.authenticateP10RunConsumption({ task: state.task, lo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

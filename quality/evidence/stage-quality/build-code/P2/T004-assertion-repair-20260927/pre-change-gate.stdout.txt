@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/repository-inventory.test.mjs (9 tests | 8 skipped) 492ms
+   ✓ repository architecture inventory > keeps the published complexity baseline immutable and diagnoses the current tree in memory 491ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 8 skipped (9)
+   Start at  07:19:12
+   Duration  712ms (transform 35ms, setup 0ms, collect 38ms, tests 492ms, environment 0ms, prepare 52ms)
+

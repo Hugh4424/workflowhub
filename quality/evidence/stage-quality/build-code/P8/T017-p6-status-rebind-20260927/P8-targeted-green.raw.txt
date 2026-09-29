@@ -1,0 +1,12 @@
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/business-case-catalog.test.mjs (2 tests) 7ms
+ ✓ tests/contract/business-case-source-binding.test.mjs (10 tests) 8ms
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  17:44:18
+   Duration  140ms (transform 20ms, setup 0ms, collect 25ms, tests 15ms, environment 0ms, prepare 64ms)
+

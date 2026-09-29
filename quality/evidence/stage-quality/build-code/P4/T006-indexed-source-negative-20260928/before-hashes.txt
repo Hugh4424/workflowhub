@@ -1,0 +1,6 @@
+76e20fa6eca21ada108a6a0632fd8b6d57ac02587da053697ffdcf93eefcdf84  tests/contract/post-acceptance-chain-source-index.test.mjs
+76e20fa6eca21ada108a6a0632fd8b6d57ac02587da053697ffdcf93eefcdf84  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/frozen-test.mjs
+38e2a7067c5b640a3ad18266b1ff478cf257a7f6e507f0c6ccc18f34a310e0c0  runtime/stage/stage-runner.mjs
+38e2a7067c5b640a3ad18266b1ff478cf257a7f6e507f0c6ccc18f34a310e0c0  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/stage-runner-before.mjs
+01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40  specs/workflowhub-thin-core-card-04-20260919/decision-log.md
+38bc36f7944549e39f8ef51d37ad7d1029598e4805b18a24a4d6810516e9daa9  specs/workflowhub-thin-core-card-04-20260919/spec.md

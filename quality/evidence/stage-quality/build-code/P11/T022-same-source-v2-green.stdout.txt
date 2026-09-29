@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (78 tests | 75 skipped) 29859ms
+   ✓ P11/T022 v2 actual private browser producer > dispatches one browser case once and lets UI QA reuse its canonical source 11246ms
+   ✓ P11/T022 v2 actual private browser producer > keeps two browser cases on one AC distinct without a third QA dispatch 11227ms
+   ✓ P11/T022 v2 actual private browser producer > uses the existing standalone QA route when no acceptance scenario is declared 7385ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 75 skipped (78)
+   Start at  13:39:52
+   Duration  30.67s (transform 318ms, setup 0ms, collect 686ms, tests 29.86s, environment 0ms, prepare 34ms)
+

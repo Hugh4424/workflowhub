@@ -1,0 +1,29 @@
+
+ RUN  v2.1.9 /private/tmp/workflowhub-p10-fixture-baseline.8Hax8i
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 57 skipped) 464ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts
+Error: runnerRoot Git validation failed: fatal: not a git repository (or any of the parent directories): .git
+ ❯ Module.inspectRunnerIdentity runtime/evidence/runner-identity.mjs:32:11
+     30|     })).trim());
+     31|   } catch (error) {
+     32|     throw new Error(`runnerRoot Git validation failed: ${error.stderr?…
+       |           ^
+     33|   }
+     34|   if (top !== root) throw new Error("runnerRoot must be a Git toplevel…
+ ❯ Module.inspectOfficialInvocation runtime/evidence/invocation-identity.mjs:37:18
+ ❯ recordBootstrapTransaction tools/cli/task-bootstrap.mjs:88:21
+ ❯ Module.bootstrapTask tools/cli/task-bootstrap.mjs:207:29
+ ❯ taskCaseFixture tests/contract/build-code-case-reconciliation.test.mjs:243:24
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:430:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  57 skipped (57)
+   Start at  04:57:20
+   Duration  1.13s (transform 245ms, setup 0ms, collect 556ms, tests 464ms, environment 0ms, prepare 33ms)
+

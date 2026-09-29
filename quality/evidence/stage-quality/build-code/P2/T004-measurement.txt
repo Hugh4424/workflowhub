@@ -1,0 +1,9 @@
+COMMAND=node --input-type=module -e "import {buildReport} from './tools/architecture/complexity-report.mjs'; console.log(JSON.stringify(buildReport().budgets.formal_test_lines));"
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+AT_UTC=2026-09-26T11:43:56.954819+00:00
+STDOUT_BEGIN
+{"actual":83996,"target":10000,"limit":12000,"delta_from_target":73996,"within_limit":false}
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0

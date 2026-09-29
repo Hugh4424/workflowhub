@@ -1,0 +1,23 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS binds its source and rule revision to current material bytes
+AssertionError: expected [ 'stale rule.revision' ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "stale rule.revision",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:120:55
+    118|     it(`${id} binds its source and rule revision to current material b…
+    119|       expect(cases.has(id)).toBe(true);
+    120|       expect(bindingErrors(cases.get(id), authority)).toEqual([]);
+       |                                                       ^
+    121|     });
+    122|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

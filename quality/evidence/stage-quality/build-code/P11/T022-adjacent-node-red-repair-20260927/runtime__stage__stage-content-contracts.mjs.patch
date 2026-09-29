@@ -1,0 +1,22 @@
+--- quality/evidence/stage-quality/build-code/P11/T022-adjacent-node-red-repair-20260927/runtime__stage__stage-content-contracts.mjs.before	2026-09-27 20:07:51
++++ runtime/stage/stage-content-contracts.mjs	2026-09-27 20:08:12
+@@ -8190,7 +8190,9 @@
+   const headingIds = [...listIds, ...headingEntries, ...tableIds];
+   const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
+   const explicitDeferredAnnotation = /^\s*[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）](?=$|[\s:：—–-])/i;
+-  const explicitMetadata = /(?:^|[\s（(【[])(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
++  // A disposition marker must lead the text immediately after the AC title;
++  // a sentence that merely discusses "status: deferred" remains an active AC.
++  const explicitMetadata = /^\s*(?:[（(【[]\s*)?(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
+   const inactiveIds = new Set();
+   const deferredIds = new Set();
+   for (const [, label, suffix] of listEntries) {
+@@ -8199,7 +8201,7 @@
+     const annotation = suffix.trim().replace(/^[:：—–-]\s*/, "");
+     if (explicitDeferredLabel.test(match[2].trim())
+       || explicitDeferredAnnotation.test(annotation)
+-      || explicitMetadata.test(suffix)) {
++      || explicitMetadata.test(annotation)) {
+       inactiveIds.add(match[1]);
+       if (!/not_applicable/i.test(match[2])
+           && !/(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*not_applicable\b|^[\s:：—–-]*[[(（]\s*not_applicable\b/i.test(suffix)) deferredIds.add(match[1]);

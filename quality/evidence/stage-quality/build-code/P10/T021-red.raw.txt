@@ -1,0 +1,178 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (13 tests | 13 failed) 629ms
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a pending result 5ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a skipped result 1ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a todo result 0ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a failed result 1ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies duplicate passed identities alongside a real successful effect 73ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'duplicate_runner_identity' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a passing reporter name without an independent business oracle 72ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_business_oracle' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual charged effect 75ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual active effect 79ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies forged-report rather than trusting claimed success 74ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'report_digest_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies wrong-identity rather than trusting claimed success 64ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'runner_identity_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies missing-effect rather than trusting claimed success 60ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_effect_artifact' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC 61ms
+     → stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC 64ms
+     → stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a pending result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a skipped result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a todo result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a failed result
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+
+Expected: "nonpassing_runner_status"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:84:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies duplicate passed identities alongside a real successful effect
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'duplicate_runner_identity' // Object.is equality
+
+Expected: "duplicate_runner_identity"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:90:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a passing reporter name without an independent business oracle
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_business_oracle' // Object.is equality
+
+Expected: "missing_business_oracle"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:95:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual charged effect
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual active effect
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+
+Expected: "business_effect_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:107:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies forged-report rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'report_digest_mismatch' // Object.is equality
+
+Expected: "report_digest_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies wrong-identity rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'runner_identity_mismatch' // Object.is equality
+
+Expected: "runner_identity_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies missing-effect rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_effect_artifact' // Object.is equality
+
+Expected: "missing_effect_artifact"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC
+AssertionError: stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+
+Expected: "reconciled"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:129:72
+    127|     expect(JSON.parse(readFileSync(account)).balance_cents).toBe(JSON.…
+    128|     const result = reconcile(v, [observation], [evidence]);
+    129|     expect(result.status, "stub is not a business-effect attestation")…
+       |                                                                        ^
+    130|     expect(result.entries).toEqual(expect.arrayContaining([expect.obje…
+    131|       case_id: v.caseId, acceptance_criterion_id: v.criterion, status:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ Test Files  1 failed (1)
+      Tests  13 failed (13)
+   Start at  20:46:25
+   Duration  774ms (transform 17ms, setup 0ms, collect 14ms, tests 629ms, environment 0ms, prepare 40ms)
+

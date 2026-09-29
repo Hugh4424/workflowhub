@@ -1,0 +1,353 @@
+--- a/tests/contract/card04-final-aggregate.test.mjs
++++ b/tests/contract/card04-final-aggregate.test.mjs
+@@ -3,7 +3,10 @@
+ import { isAbsolute, relative, resolve } from "node:path";
+ import { describe, expect, it } from "vitest";
+ import { authenticateP5StageEndReport } from "../../runtime/evidence/freshness.mjs";
++import { captureWorkspaceSnapshot } from "../../runtime/evidence/canonical-receipt-writer.mjs";
++import { validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
+ import { openTask } from "../../runtime/task/task-handle.mjs";
++import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+ 
+ // Public seam: the ordinary, final CARD-04 report artifact, not a mock stage run.
+ // This test does not write a receipt or infer that a passing contract means business acceptance.
+@@ -93,13 +96,124 @@
+   expect(sha(source(ref.path)), `stale or wrongly bound source: ${ref.path}`).toBe(ref.sha256);
+   expect(ref.path).not.toMatch(/(?:^|\/)(?:prewritten-red|fixtures?)(?:\/|$)/);
+ }
++function multiCommands(phase, line) {
++  const quoted = [...line.matchAll(/`([^`]+)`/g)];
++  const before = (index) => line.slice(index === 0 ? 0 : quoted[index - 1].index + quoted[index - 1][0].length, quoted[index]?.index);
++  if (phase === "P8") {
++    expect(quoted).toHaveLength(2);
++    expect(before(0)).toContain("旧目录结构目标");
++    expect(before(1)).toContain("来源/未来观察合同目标");
++    return quoted.map((match) => match[1]);
++  }
++  if (phase === "P9") {
++    expect(quoted).toHaveLength(3);
++    expect(before(0)).toContain("旧定向合同");
++    expect(before(1)).toContain("原件照留；当前 T018");
++    expect(before(2)).toContain("T019");
++    return quoted.slice(1).map((match) => match[1]);
++  }
++  if (phase === "P11") {
++    expect(quoted).toHaveLength(2);
++    expect(before(0)).toContain("第一步");
++    expect(before(1)).toContain("第二步");
++    return quoted.map((match) => match[1]);
++  }
++  throw new Error(`${phase} is not a declared multi-command gate`);
++}
+ function authoritative(phase) {
+   const text = source(`specs/${card}/phases/${phase}.md`).toString("utf8");
+-  const gate = text.match(/^- \*\*gate_cmd\*\*: `([^`]+)`/m)?.[1];
++  const gateLine = text.match(/^- \*\*gate_cmd\*\*: (.+)$/m)?.[1];
++  const commands = new Set(["P8", "P9", "P11"]).has(phase)
++    ? multiCommands(phase, gateLine ?? "")
++    : [text.match(/^- \*\*gate_cmd\*\*: `([^`]+)`/m)?.[1]];
++  const gate = commands[0];
+   const tasks = [...text.matchAll(/^### (T\d{3}) —/gm)].map((m) => m[1]);
+   expect(gate, `${phase} missing phase gate`).toBeTruthy();
++  expect(commands.every((command) => typeof command === "string" && command.length > 0)).toBe(true);
+   expect(tasks.length, `${phase} missing task identity`).toBeGreaterThan(0);
+-  return { gate, tasks };
++  return { gate, additional: commands.slice(1), tasks };
++}
++function currentCaptureIdentity() {
++  const handle = openTask(taskRoot, "workflowhub", card);
++  const workspace = openCurrentTaskWorkspace(handle);
++  const snapshot = captureWorkspaceSnapshot(workspace, card, handle.manifest.activation_cohort ?? "pre");
++  return { tree: snapshot.tree, source_digest: snapshot.source_digest };
++}
++function observedVitestIds(raw, command) {
++  // Deliberately accept a complete JSON reporter, not file/count-only default output.
++  const report = JSON.parse(raw.toString("utf8").trim());
++  expect(report.success).toBe(true);
++  expect(report.numTotalTests).toBeGreaterThan(0);
++  expect(report.numPassedTests).toBe(report.numTotalTests);
++  expect(report.numFailedTests).toBe(0);
++  expect(report.numPendingTests).toBe(0);
++  expect(report.numTodoTests).toBe(0);
++  expect(report.numTotalTestSuites).toBeGreaterThan(0);
++  expect(report.numPassedTestSuites).toBe(report.numTotalTestSuites);
++  expect(report.numFailedTestSuites).toBe(0);
++  expect(report.numPendingTestSuites).toBe(0);
++  const commandedFiles = [...command.matchAll(/tests\/[^\s"']+\.test\.mjs/g)].map((match) => match[0]).sort();
++  expect(commandedFiles.length).toBeGreaterThan(0);
++  expect(new Set(commandedFiles).size).toBe(commandedFiles.length);
++  expect(Array.isArray(report.testResults)).toBe(true);
++  // Vitest suite counts are describe groups, not the number of files.
++  const reportedFiles = report.testResults.map((result) => relative(root, resolve(root, result.name))).sort();
++  expect(reportedFiles).toEqual(commandedFiles);
++  const ids = report.testResults.flatMap((result) => {
++    const file = relative(root, resolve(root, result.name));
++    expect(result.status).toBe("passed");
++    expect(Array.isArray(result.assertionResults)).toBe(true);
++    expect(result.assertionResults.length, `${file} must contribute a real leaf`).toBeGreaterThan(0);
++    return result.assertionResults.map((assertion) => {
++      expect(assertion.status).toBe("passed");
++      expect(Array.isArray(assertion.ancestorTitles)).toBe(true);
++      expect(assertion.ancestorTitles.every((title) => typeof title === "string" && title.trim())).toBe(true);
++      expect(assertion.title).toEqual(expect.any(String));
++      expect(assertion.title.trim().length).toBeGreaterThan(0);
++      expect(assertion.fullName).toBe([...assertion.ancestorTitles, assertion.title].join(" "));
++      return `${file} > ${[...assertion.ancestorTitles, assertion.title].join(" > ")}`;
++    });
++  });
++  expect(ids).toHaveLength(report.numTotalTests);
++  expect(new Set(ids).size).toBe(ids.length);
++  return ids;
++}
++function assertMultiGateEvidence(observed, commands, identity, readBytes = (ref) => {
++  authenticated(ref);
++  return source(ref.path);
++}) {
++  expect(observed?.commands).toHaveLength(commands.length);
++  const receipts = new Set(), outputs = new Set();
++  for (const [index, entry] of observed.commands.entries()) {
++    const receiptPath = entry.receipt_ref?.path;
++    const outputPath = entry.output_ref?.path;
++    expect(receiptPath).toBe(resolve(taskRoot, relative(taskRoot, receiptPath)));
++    expect(outputPath).toBe(resolve(taskRoot, relative(taskRoot, outputPath)));
++    expect(relative(taskRoot, receiptPath)).toMatch(/^quality\/tests\/(?!output\/).+\.json$/);
++    expect(relative(taskRoot, outputPath)).toMatch(/^quality\/tests\/output\/.+\.output$/);
++    expect(receipts.has(receiptPath)).toBe(false);
++    expect(outputs.has(outputPath)).toBe(false);
++    receipts.add(receiptPath); outputs.add(outputPath);
++    const receiptRaw = readBytes(entry.receipt_ref), outputRaw = readBytes(entry.output_ref);
++    expect(sha(receiptRaw)).toBe(entry.receipt_ref.sha256);
++    expect(sha(outputRaw)).toBe(entry.output_ref.sha256);
++    const receipt = JSON.parse(receiptRaw.toString("utf8"));
++    validateCanonicalTestReceipt(receipt, {
++      taskId: card, stage: "build-code", snapshotTree: identity.tree,
++      expectedProducerComponent: "build-code-test-capture",
++      expectedCommand: commands[index], requirePassed: true,
++    });
++    expect(receipt.task_id).toBe(card);
++    expect(receipt.stage).toBe("build-code");
++    expect(receipt.producer?.component).toBe("build-code-test-capture");
++    expect(receipt.command).toBe(commands[index]);
++    expect(receipt.exit_code).toBe(0);
++    expect(receipt.snapshot_tree).toBe(identity.tree);
++    expect(receipt.source_digest).toBe(identity.source_digest);
++    expect(receipt.output_ref).toBe(relative(taskRoot, outputPath));
++    expect(receipt.output_hash).toBe(sha(outputRaw));
++    expect(entry.test_ids).toEqual(observedVitestIds(outputRaw, commands[index]));
++  }
+ }
+ function assertP5T008Report(task, observed) {
+   expect(["recorded", "missing", "unavailable"]).toContain(observed?.status);
+@@ -127,26 +241,35 @@
+   expect(states.has(actual.overall_status)).toBe(true);
+   for (const [index, phase] of actual.phases.entries()) {
+     const phaseId = ids[index];
+-    const { gate, tasks } = authoritative(phaseId);
++    const { gate, additional, tasks } = authoritative(phaseId);
+     expect(phase.phase_id).toBe(phaseId);
+     expect(phase.gate_cmd).toBe(gate);
++    if (additional.length > 0) expect(phase.additional_gate_cmds).toEqual(additional);
++    else expect(phase.additional_gate_cmds ?? []).toEqual([]);
+     expect(states.has(phase.status)).toBe(true);
+     expect(phase.tasks.map((task) => task.task_id)).toEqual(tasks);
+     expect(states.has(phase.gate_status)).toBe(true);
+     if (phase.gate_status === "passed") {
+-      expect(phase.gate_evidence.command).toBe(gate);
+-      expect(phase.gate_evidence.exit_code).toBe(0);
+-      assertExecutionIds(phaseId, phase.gate_evidence, p1PhaseChecks);
+-      authenticated(phase.gate_evidence);
+-      if (phaseId === "P1") assertP1RawCheck(phase.gate_evidence, p1PhaseSuccess);
+-      // A hashed plan, arbitrary file, or task.json is NOT raw runner proof.
+-      const gateSource = phase.gate_evidence.path;
+-      expect(gateSource).toMatch(/(?:^quality\/evidence\/stage-quality\/build-code\/|\/quality\/(?:tests|evidence)\/)/);
+-      expect(gateSource).not.toMatch(/(?:task\.json|facts\.jsonl|\/phases\/|\/spec\.md)$/);
+-      expect(phase.gate_evidence.snapshot).toMatch(/^[a-f0-9]{40,64}$/);
+-      expect(phase.gate_evidence.task_id).toBe(card);
++      if (additional.length > 0) {
++        assertMultiGateEvidence(phase.gate_evidence, [gate, ...additional], currentCaptureIdentity());
++      } else {
++        expect(phase.gate_evidence.command).toBe(gate);
++        expect(phase.gate_evidence.exit_code).toBe(0);
++        assertExecutionIds(phaseId, phase.gate_evidence, p1PhaseChecks);
++        authenticated(phase.gate_evidence);
++        if (phaseId === "P1") assertP1RawCheck(phase.gate_evidence, p1PhaseSuccess);
++        // A hashed plan, arbitrary file, or task.json is NOT raw runner proof.
++        const gateSource = phase.gate_evidence.path;
++        expect(gateSource).toMatch(/(?:^quality\/evidence\/stage-quality\/build-code\/|\/quality\/(?:tests|evidence)\/)/);
++        expect(gateSource).not.toMatch(/(?:task\.json|facts\.jsonl|\/phases\/|\/spec\.md)$/);
++        expect(phase.gate_evidence.snapshot).toMatch(/^[a-f0-9]{40,64}$/);
++        expect(phase.gate_evidence.task_id).toBe(card);
++      }
+     } else {
+-      expect(phase.gate_evidence?.exit_code).not.toBe(0);
++      if (additional.length > 0) {
++        expect(phase.gate_evidence?.commands ?? []).toHaveLength(0);
++        (phase.partial_gate_evidence ?? []).forEach(authenticated);
++      } else expect(phase.gate_evidence?.exit_code).not.toBe(0);
+       expect(phase.gate_status_reason).toEqual(expect.any(String));
+       expect(phase.gate_status_owner).toEqual(expect.any(String));
+     }
+@@ -386,6 +509,163 @@
+       expect(taskText?.match(/^- \*\*RED\/GREEN gate_cmd\*\*: `([^`]+)`/m)?.[1], `${id} must have its own executable check`).toBeTruthy();
+       expect(p1TaskSuccess[id]).toEqual(expect.any(String));
+     }
++    // Multi-gate examples are in-memory contract vectors, never Task receipts.
++    const p8 = authoritative("P8"), p9 = authoritative("P9"), p11 = authoritative("P11");
++    expect([p8.gate, ...p8.additional]).toHaveLength(2);
++    expect([p9.gate, ...p9.additional]).toHaveLength(2);
++    expect([p11.gate, ...p11.additional]).toHaveLength(2);
++    expect(p9.gate).toContain("build-code-preexecution-source.test.mjs");
++    expect(p9.additional[0]).toContain("build-code-test-registry.test.mjs");
++    expect(p11.additional[0]).toBe("npx vitest run tests/contract/acceptance-execution-tier.test.mjs");
++    const p9Line = source(`specs/${card}/phases/P9.md`).toString("utf8").match(/^- \*\*gate_cmd\*\*: (.+)$/m)[1];
++    expect(() => multiCommands("P9", p9Line.replace("当前 T018", "旧 T018"))).toThrow();
++    expect(() => multiCommands("P8", "旧目录结构目标 `only-one-command`" )).toThrow();
++
++    const registered = JSON.parse(source("docs/quality/test-asset-registry.json").toString("utf8"));
++    const registeredTargets = ["tests/contract/decision-log-census.test.mjs",
++      "tests/contract/acceptance-result-machine-classes.test.mjs"].map((file) => {
++      const target = registered.targets.find((item) => item.path === file);
++      expect(target).toBeTruthy();
++      expect(sha(source(file))).toBe(target.sha256);
++      expect(target.registered_test_ids.length).toBeGreaterThan(0);
++      expect(target.registered_test_ids.every((id) => id.startsWith(`${file} > `))).toBe(true);
++      return target;
++    });
++    // The positive vector uses every registered leaf of two real target files.
++    // It proves the in-memory reader contract, not execution of a P8/P9/P11 gate.
++    const registeredCommands = registeredTargets.map((target) => target.command);
++    const registeredLeaves = Object.fromEntries(registeredTargets.map((target) =>
++      [target.path, target.registered_test_ids]));
++    const registeredReporterBytes = Object.fromEntries(registeredTargets.map((target) => {
++      const raw = source(target.discovery.output_ref);
++      expect(sha(raw)).toBe(target.discovery.output_sha256);
++      return [target.path, raw];
++    }));
++    function memoryGate(commands, leavesByFile = {}, reporterByFile = {}) {
++      const identity = { tree: "a".repeat(40), source_digest: "b".repeat(64) };
++      const bytes = new Map(), entries = [];
++      for (const [index, command] of commands.entries()) {
++        const files = [...command.matchAll(/tests\/[^\s"']+\.test\.mjs/g)].map((match) => match[0]);
++        const testResults = files.map((file) => {
++          const leafIds = leavesByFile[file] ?? [`${file} > negative vector only`];
++          return { name: resolve(root, file), status: "passed",
++            assertionResults: leafIds.map((id) => {
++              const titles = id.slice(`${file} > `.length).split(" > ");
++              return { ancestorTitles: titles.slice(0, -1), title: titles.at(-1),
++                fullName: titles.join(" "), status: "passed" };
++            }) };
++        });
++        const leafCount = testResults.reduce((sum, result) => sum + result.assertionResults.length, 0);
++        const report = {
++          success: true, numTotalTests: leafCount, numPassedTests: leafCount,
++          numFailedTests: 0, numPendingTests: 0, numTodoTests: 0,
++          numTotalTestSuites: files.length, numPassedTestSuites: files.length,
++          numFailedTestSuites: 0, numPendingTestSuites: 0, testResults,
++        };
++        const outputRef = `quality/tests/output/memory-${index}.output`;
++        const outputRaw = files.length === 1 && reporterByFile[files[0]]
++          ? reporterByFile[files[0]] : Buffer.from(JSON.stringify(report));
++        const receipt = {
++          schema_version: "workflowhub-receipt.v1", task_id: card, stage: "build-code",
++          producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
++          command, command_hash: sha(Buffer.from(command)), exit_code: 0,
++          snapshot_tree: identity.tree, source_digest: identity.source_digest,
++          output_ref: outputRef, output_hash: sha(outputRaw),
++        };
++        const receiptPath = resolve(taskRoot, `quality/tests/memory-${index}.json`);
++        const outputPath = resolve(taskRoot, outputRef);
++        const receiptRaw = Buffer.from(JSON.stringify(receipt));
++        bytes.set(receiptPath, receiptRaw); bytes.set(outputPath, outputRaw);
++        entries.push({ receipt_ref: { path: receiptPath, sha256: sha(receiptRaw) },
++          output_ref: { path: outputPath, sha256: sha(outputRaw) },
++          test_ids: files.length === 1 && leavesByFile[files[0]]
++            ? leavesByFile[files[0]] : testResults.flatMap((result) => {
++            const file = relative(root, result.name);
++            return result.assertionResults.map((assertion) =>
++              `${file} > ${[...assertion.ancestorTitles, assertion.title].join(" > ")}`);
++          }) });
++      }
++      const read = (ref) => { const raw = bytes.get(ref.path); expect(raw).toBeTruthy(); return raw; };
++      const changeReceipt = (index, change) => {
++        const ref = entries[index].receipt_ref;
++        const old = JSON.parse(bytes.get(ref.path).toString("utf8"));
++        const raw = Buffer.from(JSON.stringify({ ...old, ...change }));
++        bytes.set(ref.path, raw); ref.sha256 = sha(raw);
++      };
++      const changeOutput = (index, change) => {
++        const ref = entries[index].output_ref;
++        const report = JSON.parse(bytes.get(ref.path).toString("utf8"));
++        change(report);
++        const raw = Buffer.from(JSON.stringify(report));
++        bytes.set(ref.path, raw); ref.sha256 = sha(raw);
++        changeReceipt(index, { output_hash: sha(raw) });
++      };
++      return { identity, entries, read, changeReceipt, changeOutput, bytes };
++    }
++    const complete = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes);
++    expect(complete.entries[0].test_ids).toEqual(registeredTargets[0].registered_test_ids);
++    expect(complete.entries[1].test_ids).toEqual(registeredTargets[1].registered_test_ids);
++    expect(() => assertMultiGateEvidence({ commands: complete.entries }, registeredCommands,
++      complete.identity, complete.read)).not.toThrow();
++    expect(() => assertMultiGateEvidence({ commands: complete.entries.slice(0, 1) }, registeredCommands,
++      complete.identity, complete.read)).toThrow();
++    expect(() => assertMultiGateEvidence({ commands: [complete.entries[0], complete.entries[0]] }, registeredCommands,
++      complete.identity, complete.read)).toThrow();
++    const absentOutput = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes);
++    absentOutput.bytes.delete(absentOutput.entries[1].output_ref.path);
++    expect(() => assertMultiGateEvidence({ commands: absentOutput.entries }, registeredCommands,
++      absentOutput.identity, absentOutput.read)).toThrow();
++    const fakeIds = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes);
++    fakeIds.entries[0].test_ids = ["caller supplied false pass"];
++    expect(() => assertMultiGateEvidence({ commands: fakeIds.entries }, registeredCommands,
++      fakeIds.identity, fakeIds.read)).toThrow();
++    const badHash = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes);
++    badHash.entries[0].output_ref.sha256 = "0".repeat(64);
++    expect(() => assertMultiGateEvidence({ commands: badHash.entries }, registeredCommands,
++      badHash.identity, badHash.read)).toThrow();
++    // P9's first current command targets two files. Give one zero leaves while
++    // the other contributes the missing leaf, keeping aggregate counts self-consistent.
++    const p9Commands = [p9.gate, ...p9.additional];
++    const p9Files = [...p9.gate.matchAll(/tests\/[^\s"']+\.test\.mjs/g)].map((match) => match[0]);
++    expect(p9Files).toHaveLength(2);
++    const shifted = memoryGate(p9Commands, Object.fromEntries(p9Files.map((file) =>
++      [file, [`${file} > negative vector only`]])));
++    shifted.changeOutput(0, (report) => {
++      report.testResults[0].assertionResults = [];
++      report.testResults[1].assertionResults.push({ fullName: "compensating leaf", status: "passed" });
++    });
++    expect(() => assertMultiGateEvidence({ commands: shifted.entries }, p9Commands,
++      shifted.identity, shifted.read)).toThrow();
++    for (const mutate of [
++      (report) => { report.numTodoTests = 1; },
++      (report) => { report.success = false; },
++      (report) => { report.testResults[0].status = "failed"; },
++      (report) => { report.testResults[0].assertionResults[0].status = "pending"; },
++      (report) => { report.numFailedTests = 1; },
++      (report) => { report.testResults[0].assertionResults = []; report.numTotalTests = 0; report.numPassedTests = 0; },
++    ]) {
++      const bad = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes);
++      bad.changeOutput(0, mutate);
++      expect(() => assertMultiGateEvidence({ commands: bad.entries }, registeredCommands,
++        bad.identity, bad.read)).toThrow();
++    }
++    for (const change of [{ schema_version: "bad-schema" }, { command_hash: "0".repeat(64) },
++      { task_id: "foreign" }, { snapshot_tree: "c".repeat(40) },
++      { source_digest: "d".repeat(64) }, { command: "wrong command" }, { exit_code: 1 },
++      { output_hash: "0".repeat(64) }]) {
++      const bad = memoryGate(registeredCommands, registeredLeaves, registeredReporterBytes); bad.changeReceipt(0, change);
++      expect(() => assertMultiGateEvidence({ commands: bad.entries }, registeredCommands,
++        bad.identity, bad.read)).toThrow();
++    }
++    const p11Commands = [p11.gate, ...p11.additional];
++    const filtered = memoryGate(p11Commands); // Negative only; no full P11 reporter exists.
++    filtered.changeReceipt(1, { command: `${p11Commands[1]} -t "affected subset"` });
++    expect(() => assertMultiGateEvidence({ commands: filtered.entries }, p11Commands,
++      filtered.identity, filtered.read)).toThrow();
++    const oldP9 = memoryGate(p9Commands); // Negative only; old command is not current T018.
++    oldP9.changeReceipt(0, { command: p9Line.match(/`([^`]+)`/)[1] });
++    expect(() => assertMultiGateEvidence({ commands: oldP9.entries }, p9Commands,
++      oldP9.identity, oldP9.read)).toThrow();
+     // Pure negative controls on known plan bytes, never presented as an execution receipt.
+     for (const actual of [
+       { overall_status: "passed", phases: [{ status: "unknown", gate_status: "passed", tasks: [] }] },

@@ -1,0 +1,57 @@
+{
+  "schema_version": "workflowhub-invocation-identity.v1",
+  "project_name": "P9Real",
+  "task_id": "p9-real-three-targets",
+  "run_id": "bootstrap-p9-real-three-targets",
+  "stage": "make-decision",
+  "source_kind": "git_invocation",
+  "source_clean": false,
+  "source": {
+    "git_oid": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "git_tree": "214c80e4adb622e72351601bb1aa40bb7214a793",
+    "git_branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919"
+  },
+  "release": {
+    "content_id": "aa82c5dee2e58f0429905d7f532114c1b5e92384a1451eb94d9d1bf669998eae"
+  },
+  "contracts": {
+    "agents": {
+      "ref": "AGENTS.md",
+      "sha256": "b3443c17474745920839672727a6bffb063a2f65d3a74f6c465b35c0029af3c0"
+    },
+    "stage_skill": {
+      "ref": "workflows/make-decision/SKILL.md",
+      "sha256": "f0439433901922dba07f77ceaddb5cd60302873e9680de8a215b971be71a1698"
+    },
+    "constitution": {
+      "ref": "CONSTITUTION.md",
+      "sha256": "1799a2282bb8209954909d21683a8eb8fcc72756e7961ff426d2f990306559a2"
+    }
+  },
+  "capabilities": [
+    "task-handle",
+    "task-kernel",
+    "stage:make-decision"
+  ],
+  "command": "task-bootstrap",
+  "creation_result": {
+    "status": "completed",
+    "task_path": "/private/tmp/workflowhub-p9-real-three-mSlzA6/storage/Projects/P9Real/tasks/p9-real-three-targets",
+    "project": "P9Real",
+    "task": "p9-real-three-targets",
+    "workspace": {
+      "worktree_root": "/private/tmp/workflowhub-p9-real-three-mSlzA6/repo-p9-real-three-targets",
+      "branch": "task/P9Real/p9-real-three-targets",
+      "baseline_commit": "5f6fde9970b62933e609e0467a871152ef269d16"
+    },
+    "store": {
+      "record_ref": "facts.jsonl"
+    }
+  },
+  "transaction": {
+    "status": "closed",
+    "closed_at": "2026-09-27T01:48:28.320Z"
+  },
+  "execution_manifest_hash": "57c03ac27e97e132bc09e9acf417f3a96d331dfb7bbd35a1beb10a3a0d0384bc"
+}
+

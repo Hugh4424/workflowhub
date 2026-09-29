@@ -77,6 +77,33 @@ Phase 正文或当前证据时不得由索引行、绿灯命令或旧 review 代
 新的验收 gate；不重写上游材料，不重复运行已执行测试。代码问题在同一 task
 修复，上游材料缺口交回 owner，质量缺口如实降低完成声明。
 
+### 独立业务语义风险选样
+
+先为每个受影响 AC 读回 build-code 的应测与实测 case/测试身份、当前快照、
+原始 stdout、receipt/hash 和未执行原因。由 verify-code 执行者基于独立冻结证据，
+按金钱、隐私/权限、不可逆后果与恢复、外部副作用、跨 Phase 旅程、
+失败反例的风险选样；逐项列 **已抽查 case/AC ID 与理由**，以及
+**未抽查 case/AC ID 与理由**。未抽查项保留机器事实和覆盖限制，不写成已做
+独立语义复核。完成条件：每个受影响 ID 都归入两类之一并指向当前原件；
+缺原件的 ID 标 `unknown` 或 `unavailable` 与 owner。
+
+对已抽查样本，从原始需求和业务规则版本，经 case/AC、Phase/Task 追到
+真实入口、消费者、测试断言、实际业务效果及能推翻结论的反例。分别记录
+业务效果 `business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`；
+测试语义充分性 `semantic_test_adequacy=adequate|inadequate|unknown`；
+代码审查 `code_review=clean|resolved|incomplete|failed`。核对代码 exit 0
+但业务效果错误的可能性，不从 review clean 推出业务通过。逐 AC 注明真实
+依赖与模拟 mock 的边界、供应商/外部服务的 API 与版本、环境权限及数据、
+超时/故障/回滚日志。模拟效果不充作真实外部效果；低置信假设与来源冲突、
+未盘点旧案例须写可反驳的独立证据和影响，不造统一置信度阈值。
+完成条件：三类结论各有自身证据；缺服务、来源或可观察结果保留
+`unknown`/`unavailable` 和 owner，不借代码审查结论补空。
+
+高风险样本写明影响面、负向拒绝与失败恢复 oracle，以及严重 finding 的
+修复复测、附证误报、明确接受具体风险或待裁定处置。P11 真实 UI 入口受阻
+仍记 `unknown`/`unavailable` 与责任人，不能按 N/A 或通过。完成条件：
+每个严重残余风险都有受影响 case/AC、证据、owner 和下一步处置。
+
 ## Conditional UI consumer alignment
 
 For `ui_applicability=ui`, consume the existing
@@ -105,23 +132,23 @@ verify-code does not rewrite either project standard or invent a browser pass.
 
 ## 审查依赖
 
-通过现有 public `review --action=record` 派发一次 OCR delegation 独立代码审查。OCR 选择认证 packet，独立 host executor 输出 findings；保留真实 provider、model、session、transport、错误及 provenance。审查结束后不为得到空 findings 或补齐证据再次调用；`unavailable` 不改写为空 findings。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，把当前阶段结果记为 `resolved`。
+通过现有 public `review --action=record` 派发一次 OCR delegation 代码审查。OCR 选择认证 packet，host executor 输出 findings；保留真实 provider、model、session、transport、错误及 provenance。审查结束后不为得到空 findings 或补齐证据再次调用；`unavailable` 不改写为空 findings。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，把当前阶段结果记为 `resolved`。
 
 review 结果只是质量事实，不是继续工作的许可证。缺质量事实只限制完成声明，不限制继续验收和修复；发现代码 finding 就回同一 task 修复，不新建任务。
 
-### AC-REVIEW-011：终末 OCR 工具不可用时的独立替代
+### AC-REVIEW-011：终末 OCR 工具不可用时的替代审查
 
 当前 WorkflowHub 主会话读取本次终末代码审查的 OCR canonical attempt：
 工具 `unavailable` 且零成功审查路时，在同一 verify-code 范围内恰好调用一次
-`skills/architect-code-review/SKILL.md`。执行者须未参与当前实现，使用全新
-独立上下文并能读当前仓库；调用前核对真实身份及参与记录。将当前最终 diff、
+`skills/architect-code-review/SKILL.md`。执行者只需能读当前仓库；调用前核对真实
+输入范围和执行能力。将当前最终 diff、
 完整 AC、逐项验收原件、可读的 OCR packet 和原始失败原因作为输入。
 本分支由主会话显式读取技能，不增加固定审查轮次或旧 broker 依赖。
-独立性或执行能力不可确认时记替代 unavailable，不由当前实现者代审。
+执行能力不可确认时记替代 unavailable；reviewer 与实现者是否同源不构成阻塞。
 明确的人为取消只保留取消事实；已有成功 OCR 路时不追加替代调用。
 
 一次调用后保存 task/stage、材料版本和代码快照、OCR `attempt_ref`、执行者
-身份与未参与实现的依据、实际 invocation/exit、原始输出、findings、覆盖、
+身份、实际 invocation/exit、原始输出、findings、覆盖、
 错误及原件 hash。替代完成时逐条处置真实 finding，并披露 OCR 缺口；
 替代也不可用时明确记 `unverified`，列出两路原因及未审维度，不重派、
 不写空 findings 假绿。旧 wh-review/broker 只读，不充当替代审查。
@@ -134,30 +161,32 @@ wh-review attempt/result；原 OCR unavailable attempt 原样保留。
 `code_review` 保持 `incomplete/unverified`；单独的 `capture-evidence`
 附件或当前会话陈述不能冒充正式审查结果。
 AC-REVIEW-011 另按该终末 scope 的原始 OCR unavailable attempt、恰好一次
-未参与实现者的独立调用与身份/原始输出/exit、缺口和披露判定：这些原件齐全
+真实替代调用与身份/原始输出/exit、缺口和披露判定：这些原件齐全
 即可单独记 achieved；替代也不可用时须有一次真实失败调用和 `unverified`
 披露。缺项记 incomplete。这不增加推进 gate，也不把替代输出写成 OCR result。
 
 ## 固定流程：最多四个动作
 
-1. **OCR 独立代码审查一次**：以当前 diff、完整 AC 文本、真实入口和 `reviewed_execution={ref,sha256,quality_fact_ref}` 发起 `review --action=record`；其 result 或 unavailable attempt 绑定当前代码快照与材料。工具 unavailable 且零成功路时，按上述 AC-REVIEW-011 分支在当前会话调用一次独立替代。
+1. **OCR 代码审查一次**：以当前 diff、完整 AC 文本和真实入口发起 `review --action=record`；其 result 或 unavailable attempt 绑定当前代码快照与材料。若调用方另有已认证的 `reviewed_execution`，它只是可选的执行对照 provenance，不是 OCR 派发前置条件或 reviewer 资格条件。工具 unavailable 且零成功路时，按上述 AC-REVIEW-011 分支在当前会话调用一次替代。
 2. **主 Agent 修复一次**：只修复影响当前代码交付的有效 finding；每个 finding 记录 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`。
 3. **必要定向复验**：只针对本次有效 finding 的修复和受影响行为运行检查，并保留 finding 处置与实际结果。
 4. **正式发布**：通过 `run` 的 `receipts.quality_review` 消费 OCR canonical result_ref、unavailable attempt_ref，或符合上述条件的 Architect canonical result_ref，读回 `code_review` 质量事实；替代调用记录单列证据和限制，正式绑定缺失时保持 `incomplete/unverified`。
 
-普通请求不依赖 `candidate_experiment`。host 在派发前认证 actor、逐项原件、材料及 snapshot，将真实 bytes 放入同一 provider bundle；该次审查形成 E2E binding，不补绑旧结果。
+普通请求不依赖 `candidate_experiment`。adapter 在派发前准备当前材料及 snapshot，将真实 bytes 放入同一 provider bundle；宿主身份不是请求必填项，也不参与审查是否能够派发。该次审查形成 E2E binding，不补绑旧结果。
+
+直接 provider 不受 WorkflowHub 额外的固定 wall-clock deadline。provider 到达自己的终态或调用方明确取消前，host 保持其运行；健康/输出采样只作诊断，不触发取消。首个 provider 到终态后立即解析并通过增量结果回调交给调用方处理，剩余 provider 继续运行；后续 provider 到终态时，再把迟到 findings 交给同一回调决定合并、处置或保留，不能因首个结果取消 sibling。完整 round 返回值仍保留所有已到终态的 provider provenance；单路失败保留为该路事实，已有成功路保持 `available-with-failures`，全部失败才记 `unavailable`。Kimi 使用 packet-local、只开放 `Read` 的 agent profile，并禁用 user/project skill 自动发现；只有无法提供真实只读工具边界的 provider（当前 OpenCode direct CLI）才记 `OCR_PROVIDER_UNSUPPORTED`，不能只靠 prompt 继续派发。reviewed execution 的 stdout/stderr 按 `ref+hash` 去重，UTF-8 只传一次文本表示；provider packet 使用 evidence index、分片当前材料和按需 raw execution output。
 
 调用方把 review 返回的 canonical ref 作为 `receipts.quality_review` 交给现有 `stage-runtime run`；runtime 认证真实结果并由 `codeReviewFacts` 消费。`receipts.review` 仅用于跨 stage 的 build-code Phase 审查，不能充当 verify-code 的 advisory 第二次审查。验收确认沿已有 `confirm` 记录实际用户回复，在 review 之后通过 `receipts.confirmation` 交给 verify；不代答、不重复请求同一确认。`readCurrentE2eAcceptanceEvidence` 核对同次 review、confirmation 和 nested freshness。缺 review、确认或执行原件时保持 missing/incomplete，不推断验收或 release。旧 finding 已逐条修复时，后续 `run` 可提交 `code_review_repairs`；runtime 校验当前源码 hash、受影响通过测试和完整覆盖后标记为 `resolved`。
 
 当前 WorkflowHub session 发布绑定当前 task、stage、材料和快照的代码审查结果。真实修复可为 resolved，原 review 仍保留其旧身份；未修复 finding 或 unavailable 限制完成声明，保留同 task 修复。commit、push、merge、archive、cleanup 和 close 仍由已有独立授权流程处理。
 
-OCR 只负责确定性 packet/file 选择；独立 host executor 负责 LLM findings，OCR 不生成 finding。普通 verify-code 请求必须带当前代码 diff 与完整 AC 文本； malformed 请求直接报错。
+OCR 只负责确定性 packet/file 选择；host executor 负责 LLM findings，OCR 不生成 finding。普通 verify-code 请求必须带当前代码 diff 与完整 AC 文本； malformed 请求直接报错。
 
 ## 范围边界
 
 build-spec、build-plan、build-code 各自负责自己的材料、计划、任务、阶段测试和阶段收尾。verify-code 不替它们兜底，也不把“最后发现”改写成 verify 的责任。
 
-build-code 的执行与测试原件作为本次独立复核输入，由既有 runtime 认证当前身份和 freshness。逐项结果、缺失项和 coverage limits 均保留；只复跑有疑点的受影响部分，不为 verify 重跑完整上游流程。代码质量、功能验收、product release 和 physical close 分别报告。
+build-code 的执行与测试原件作为本次复核输入，由既有 runtime 认证当前身份和 freshness。逐项结果、缺失项和 coverage limits 均保留；只复跑有疑点的受影响部分，不为 verify 重跑完整上游流程。代码质量、功能验收、product release 和 physical close 分别报告。
 
 发现真实代码 finding 就在同一 task 修复。发现上游材料问题就保留风险并交回对应 owner；不创建 successor、recovery、rebind 或 continuation task。
 
@@ -176,7 +205,17 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 
 ## 阶段末交接
 
-用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
+用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、OCR review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
+
+机器测试与上述独立审查之后，把仍需真人观察的业务效果交给**既有最后授权确认**：
+向非实施者的授权业务验收者写出环境和安全权限、数据准备、精确真实入口与
+操作步骤、成功判据、失败拒绝与故障回滚判据、应回传的日志、截图、交易号、
+时间和原件引用，并列残余风险、责任人以及失败后的修复或明确接受路径。
+记录其真实接受、拒绝或延期答复与证据；无回复、未实测、服务不可用或
+证据冲突不得报业务通过。授权者不承担日常选测、跑测和逐例对账；这些
+仍由 build-code 的现有执行与事实链完成。完成条件：交接步骤可由授权者
+按真实环境操作，答复只经现有 `confirm` 和 `receipts.confirmation` 绑定；
+没有答复就保留待确认，不创建另一确认槽。
 
 不再要求用户重复 Talk/Grill 或重复确认，消费现有真实执行证据；用户确认仅沿上述既有验收确认语义，不重复确认代码审查结论。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。
 对上游材料本身，本阶段不重新裁决其完整性；按上文抽查原始需求到实际结果的链路并披露 `missing`，不重列全量 AC 结论。不要要求用户补交 verify-code 证据，不把交接确认当作代码 review 的证据门禁。

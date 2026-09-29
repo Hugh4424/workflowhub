@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (78 tests | 1 failed | 77 skipped) 9846ms
+   × P11/T022 v3 acceptance browser and UI QA share one source > keeps blocked browser source from a same-run QA pass 9846ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of 1 but got 2
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 77 skipped (78)
+   Start at  13:38:16
+   Duration  10.62s (transform 315ms, setup 0ms, collect 662ms, tests 9.85s, environment 0ms, prepare 31ms)
+

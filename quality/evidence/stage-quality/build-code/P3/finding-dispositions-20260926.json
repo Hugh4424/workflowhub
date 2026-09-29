@@ -1,0 +1,48 @@
+{
+  "authority": "task_quality_evidence_only",
+  "phase_id": "P3",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "review_result_ref": "quality/reviews/results/build-code-simple-e0d109e4-be5d-5ad1-a137-cb7d47c5696c.json",
+  "review_result_sha256": "9532018068653b0950affc090b9bf40d3423f62c6380b7b86e6a0f076106e7dc",
+  "review_snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+  "recorded_at_utc": "2026-09-26T14:48:11.535171+00:00",
+  "statuses": {
+    "fixed": 1,
+    "rejected_invalid": 0,
+    "accepted_risk": 0,
+    "needs_human": 4
+  },
+  "limitation": "This records dispositions and owners only; it does not certify current Phase, AC, or overall completion. Later repairs keep this reviewed snapshot and need a new evidence version.",
+  "findings": [
+    {
+      "finding_id": "F-43f84486636f",
+      "disposition": "needs_human",
+      "owner": "P6/T011/T012 frozen contract owner（build-plan）",
+      "basis": "外置 ORACLE.json:2-3 当前同时有 schema 与 schema_version，T011/T012 局部绿不消除两测试未交叉验证同一标识的漂移风险；冻结测试改动属材料 owner。"
+    },
+    {
+      "finding_id": "F-446100afc988",
+      "disposition": "needs_human",
+      "owner": "P2 frozen test material owner（build-plan）",
+      "basis": "与 P2 F-b998734e4761 同根因：repository-inventory.test.mjs:175-177 钉死 false 而不验 delta/其余字段；P2 实现只可改 JSON，不能擅改冻结 oracle。"
+    },
+    {
+      "finding_id": "F-b06de78e4d06",
+      "disposition": "needs_human",
+      "owner": "P5/T008 capture/provenance owner（build-plan）；T007 module owner可加未认证披露",
+      "basis": "P5/T007 已用 source_binding: unavailable + coverage limit 阻止 caller JSON/exit0 被当认证执行，伪造 task/snapshot 与现存输出负控 RED→GREEN，冻结 gate 8/8。但 T008 缺真正 task/stage/snapshot/receipt 生产者，故此 finding 完整来源认证仍 needs_human，未改称 fixed。"
+    },
+    {
+      "finding_id": "F-e14a80e3213d",
+      "disposition": "needs_human",
+      "owner": "make-decision A-7 direction owner + P6/T012 frozen test owner",
+      "basis": "spec.md:627 把 required_materials=[] 列无卡认领 F-07 观测；E2E:293 却硬断言 []。两者冲突真实，不能改冻结测试或把缺陷判有效合同。"
+    },
+    {
+      "finding_id": "F-ef43871ce16b",
+      "disposition": "fixed",
+      "owner": "P5/T007 report renderer",
+      "basis": "runtime/stage/stage-end-report.mjs 对所有插值做 render-only 单行控制符转义、HTML encoding 与 code 包裹；T007-markdown-injection-probe.mjs 目标 RED exit1→GREEN exit0，伪标题/列表/raw HTML 被拒，冻结 P5 gate 8/8、node --check 0。该修复在 P3 OCR 修前快照之后，P3 OCR 不认证新字节。"
+    }
+  ]
+}

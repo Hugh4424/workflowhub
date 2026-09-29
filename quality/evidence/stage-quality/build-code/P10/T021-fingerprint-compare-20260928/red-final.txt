@@ -1,0 +1,68 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/integration/vnext-official-stage-run.test.mjs (108 tests | 1 failed | 107 skipped) 866ms
+   × vNext official stage completion > ORACLE-P10-PROFILE compares separately parsed runtime profile and capability proof values 865ms
+     → expected [Function] to not throw an error but 'Error: test receipt and facts.runtime…' was thrown
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (56 tests | 2 failed | 54 skipped) 14949ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-STRUCTURAL accepts the real fixed receipt after two JSON reads and rejects nested or old-tree mismatch 5ms
+     → expected [Function] to not throw an error but 'Error: test receipt and facts.behavio…' was thrown
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown 4828ms
+     → test receipt and facts.behavior_fingerprint are not bound
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/vnext-official-stage-run.test.mjs > vNext official stage completion > ORACLE-P10-PROFILE compares separately parsed runtime profile and capability proof values
+AssertionError: expected [Function] to not throw an error but 'Error: test receipt and facts.runtime…' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: test receipt and facts.runtime_profile are not bound"
+
+ ❯ tests/integration/vnext-official-stage-run.test.mjs:2095:36
+    2093|     expect(copied.runtime_profile).not.toBe(receipt.runtime_profile);
+    2094|     expect(copied.capability_proof).not.toBe(receipt.capability_proof);
+    2095|     expect(() => check(tests)).not.toThrow();
+       |                                    ^
+    2096|     const wrongProfile = structuredClone(tests);
+    2097|     wrongProfile.runtime_profile.permissions.network = "deny";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-STRUCTURAL accepts the real fixed receipt after two JSON reads and rejects nested or old-tree mismatch
+AssertionError: expected [Function] to not throw an error but 'Error: test receipt and facts.behavio…' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: test receipt and facts.behavior_fingerprint are not bound"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:389:38
+    387|       facts: { tests }, evidence_refs: [{ ref: capture.receipt_ref, sh…
+    388|     });
+    389|     expect(() => checked(facts)).not.toThrow();
+       |                                      ^
+    390|     const wrongRun = structuredClone(facts);
+    391|     wrongRun.behavior_fingerprint.run_id = `wrong-${randomUUID()}`;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown
+Error: test receipt and facts.behavior_fingerprint are not bound
+ ❯ verifyOfficialEvidence runtime/stage/stage-runner.mjs:3960:51
+
+ ❯ runStage.stageReflectionInput.stageReflectionInput runtime/stage/stage-runner.mjs:4940:37
+ ❯ runStage runtime/stage/stage-runner.mjs:3562:26
+ ❯ Module.runOfficialStage runtime/stage/stage-runner.mjs:4784:23
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:407:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 161 skipped (164)
+   Start at  03:25:07
+   Duration  15.62s (transform 421ms, setup 0ms, collect 1.32s, tests 15.82s, environment 0ms, prepare 59ms)
+

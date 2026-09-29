@@ -1,0 +1,62 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a pending result
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a skipped result
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a todo result
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a failed result
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies duplicate passed identities alongside a real successful effect
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a passing reporter name without an independent business oracle
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual charged effect
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual active effect
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies forged-report rather than trusting claimed success
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies wrong-identity rather than trusting claimed success
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies missing-effect rather than trusting claimed success
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a blanket unavailable result with no observed account or source entries
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps the three current CARD-04 case leaf partitions and effect limits explicit
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1587ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash 1482ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim 1536ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > counts one target reporter once when one case maps to two accepted ACs 12895ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC 12084ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback 11922ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback 11455ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding 3780ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass 11438ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect 1582ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent 11275ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid census evidence chain unknown without the official stage binding 12403ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects zero source denominator despite a passing reporter and a passed fact 12487ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing requirement link despite a passing reporter and a passed fact 12589ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing source section despite a passing reporter and a passed fact 12357ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects too few U sources despite a passing reporter and a passed fact 12309ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing user V source despite a passing reporter and a passed fact 12448ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects unindexed atom despite a passing reporter and a passed fact 12250ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects R cites absent source despite a passing reporter and a passed fact 12359ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a current fact that binds a different test receipt 12369ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > accepts several official coverage refs when exactly one binds this test receipt 12486ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a duplicate receipt ref with a conflicting hash 12428ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested task mismatch in the canonical chain 12319ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested snapshot mismatch in the canonical chain 12511ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested material mismatch in the canonical chain 12403ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a damaged current acceptance wrapper hash 12305ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > does not reuse a genuine older test receipt as this run's effect 21158ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid deferred evidence chain unknown without the official stage binding 12508ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a falsely passed deferred subject 12418ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies real current source while keeping the real Task effect unknown 12666ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies forged derived source while keeping the real Task effect unknown 12470ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten derived meaning while keeping the real Task effect unknown 12690ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten original source field while keeping the real Task effect unknown 12363ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID before the genuine row while keeping the real Task effect unknown 12411ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with no cell padding while keeping the real Task effect unknown 12500ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with extra cell padding while keeping the real Task effect unknown 12662ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies missing indexed atom while keeping the real Task effect unknown 12416ms
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies broken direct source link while keeping the real Task effect unknown 12471ms
+
+ Test Files  1 passed (1)
+      Tests  53 passed (53)
+   Start at  18:51:22
+   Duration  437.16s (transform 159ms, setup 0ms, collect 357ms, tests 436.69s, environment 0ms, prepare 32ms)
+

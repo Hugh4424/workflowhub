@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (70 tests | 1 failed | 69 skipped) 9903ms
+   × P11/T022 v2 actual private browser producer > does not start a browser on a self-consistent test receipt from an unrelated producer 9903ms
+     → expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 69 skipped (70)
+   Start at  13:23:03
+   Duration  10.65s (transform 300ms, setup 0ms, collect 647ms, tests 9.90s, environment 0ms, prepare 25ms)
+

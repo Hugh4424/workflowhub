@@ -1,0 +1,28 @@
+AT_UTC=2026-09-26T12:18:03.773378+00:00
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+COMMAND=node --check runtime/evidence/acceptance-evidence-validator.mjs
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0
+COMMAND=node --check runtime/evidence/freshness.mjs
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0
+COMMAND=node --check runtime/evidence/quality-store.mjs
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0
+COMMAND=git diff --check -- runtime/evidence/acceptance-evidence-validator.mjs runtime/evidence/freshness.mjs runtime/evidence/quality-store.mjs
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0
+FROZEN_SHA256 tests/contract/acceptance-result-machine-classes.test.mjs 8945810b8a2814cf59c1f65d8bbd5ff2c8af6a3785cecc12fb59475778284d2f
+FROZEN_SHA256 tests/deferred-acceptance-semantics.test.mjs 0fe0ac6f829245779a85c69f0c3c93f70afc697bc2a27fefa96d902e7ed6ee8e

@@ -1,0 +1,22 @@
+{
+  "command": "npx vitest run tests/contract/freeze-classification-budget-usage-protocol.test.mjs",
+  "argv": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/contract/freeze-classification-budget-usage-protocol.test.mjs"
+  ],
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "test_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/tests/contract/freeze-classification-budget-usage-protocol.test.mjs",
+  "test_sha256": "93da7957f3783bb1e517d152678ebb99874bce8d8dd3415489c7c5ae1aee3cf6",
+  "p10_material_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+  "p10_material_sha256": "4f8483d1d874ba07f588bfa40b4b9700a0d6f8920ce81e22293072dab2cec962",
+  "started_utc": "2026-09-27T15:15:22.922398+00:00",
+  "ended_utc": "2026-09-27T15:15:36.315234+00:00",
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout_sha256": "5245f6f9c4e23304cafe8673793861d85ca601859440725be8bdca908fa398de",
+  "stderr_sha256": "f5d5c9aa15852a815ad4a3566c9193f1d6cf47e2f5bd68e64fdca968c1464767"
+}

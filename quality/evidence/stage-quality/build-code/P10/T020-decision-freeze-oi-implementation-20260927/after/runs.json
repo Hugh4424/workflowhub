@@ -1,0 +1,71 @@
+{
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "files_sha256": {
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md": "239fd8a4b24ed4cd168a8cc396c7b7d2cf568d6a6b38def251c5f424b815d98c",
+    "specs/workflowhub-thin-core-card-04-20260919/spec.md": "ef1e45942e1d95bb7d0b6b37ab53d3f2441d766a8767c3ccd383371738f7810a",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40",
+    "tests/contract/decision-freeze-current-oi.test.mjs": "36f6053f75960611e024fce59e9a4a73ddb0f444f4d19e7343e2fc313823d99f",
+    "tests/integration/vnext-official-stage-run.test.mjs": "09fd79d0587e173c5f66f4d56966263f98804095cdf2b525edb47462bf1cb6da",
+    "tests/contract/freeze-classification-budget-usage-protocol.test.mjs": "e4197528887d296211f69fd6f2b5f70a821d0cf80a500886a1991ddce420e17e",
+    "tests/contract/post-phase-contract.test.mjs": "b31d564a6e7d9971e2260af999f119eba5323c4794c0126770e06deb453bf161",
+    "runtime/stage/stage-content-contracts.mjs": "db11f5fe4bb13f138df7985d880d4d8097fcc83d64c3cd3f6b4466cb1f5e649e",
+    "runtime/stage/stage-handlers.mjs": "d3449bb5a66960fdc84f0555051f5d821abb1804c9bfefd311c26366626b6e40"
+  },
+  "runs": [
+    {
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "tests/contract/decision-freeze-current-oi.test.mjs"
+      ],
+      "command": "npx vitest run tests/contract/decision-freeze-current-oi.test.mjs",
+      "started_utc": "2026-09-27T14:54:50.654748+00:00",
+      "ended_utc": "2026-09-27T14:54:51.300839+00:00",
+      "exit_code": 1,
+      "timed_out": false,
+      "stdout_ref": "command-1.stdout.txt",
+      "stderr_ref": "command-1.stderr.txt",
+      "stdout_sha256": "cd6b3594c7726cd57973f32e47a940226a72bd3f05605bb7c5e82feac91cb47b",
+      "stderr_sha256": "649c8c9708900c316f6450a8d7f876b46fb30479bd98e7a339094d491215786b"
+    },
+    {
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "tests/integration/vnext-official-stage-run.test.mjs",
+        "-t",
+        "keeps a current OI content failure"
+      ],
+      "command": "npx vitest run tests/integration/vnext-official-stage-run.test.mjs -t 'keeps a current OI content failure'",
+      "started_utc": "2026-09-27T14:54:51.301287+00:00",
+      "ended_utc": "2026-09-27T14:55:01.718659+00:00",
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout_ref": "command-2.stdout.txt",
+      "stderr_ref": "command-2.stderr.txt",
+      "stdout_sha256": "78089e56deef2697822ad8d4b2d97237869fc944130e0bf966b1ffdad32de5ce",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "tests/contract/freeze-classification-budget-usage-protocol.test.mjs",
+        "tests/contract/post-phase-contract.test.mjs"
+      ],
+      "command": "npx vitest run tests/contract/freeze-classification-budget-usage-protocol.test.mjs tests/contract/post-phase-contract.test.mjs",
+      "started_utc": "2026-09-27T14:55:01.719088+00:00",
+      "ended_utc": "2026-09-27T14:55:15.665598+00:00",
+      "exit_code": 1,
+      "timed_out": false,
+      "stdout_ref": "command-3.stdout.txt",
+      "stderr_ref": "command-3.stderr.txt",
+      "stdout_sha256": "ba4dad76eae69e08c0df34b80d2da80fb542b8c6218cca0e63ca04df50637cd6",
+      "stderr_sha256": "ff17a48c94e26870185d9b5ee9a2d9ac0651ba400436e72552d95e352b00afa0"
+    }
+  ]
+}

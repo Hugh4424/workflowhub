@@ -1,0 +1,15 @@
+WebSocket server error: Port is already in use
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/review-history-canonical-reader.test.mjs > canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝
+AssertionError: 合法同快照 pair 不应被判为损坏：{"threw":{"code":"REVIEW_RECORD_INCOMPLETE","message":"canonical review report binding is invalid"},"result":null,"dispatches":0}: expected 'REVIEW_RECORD_INCOMPLETE' not to be 'REVIEW_RECORD_INCOMPLETE' // Object.is equality
+ ❯ tests/contract/review-history-canonical-reader.test.mjs:450:72
+    448|     const verdict = verdictOf(readable, readable.dispatches);
+    449|     expect(verdictCode(readable), `合法同快照 pair 不应被判为损坏：${v…
+    450|     expect(verdictCode(readable), `合法同快照 pair 不应被判为损坏：${v…
+       |                                                                        ^
+    451|     expect(verdictMessage(readable), `合法同快照 pair 报告绑定错误：${…
+    452|     expect(task.readRecord(blue.attempt_ref)).toBe(originalAttempt);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

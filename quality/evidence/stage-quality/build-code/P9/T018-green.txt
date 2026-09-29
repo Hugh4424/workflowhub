@@ -1,0 +1,29 @@
+COMMAND=npx vitest run tests/contract/build-code-change-scope.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE_BASELINE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+SOURCE_SHA256=workflows/build-code/change-scope.mjs:fffd96e11820881f09a4b5914a668daf9eca95e556d1a3baf7f4886bb08d4de1;workflows/build-code/capture.mjs:85de1d860331f8e1ff26fcb7552edda858c1068fbb0d4aff240ce91415ff5f76
+UTC=2026-09-26T12:34:03.548967+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P9
+TASK_IN_PHASE=T018
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-change-scope.test.mjs (5 tests) 18638ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start 3272ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start 3456ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots 6025ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists 2801ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start 3083ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  20:33:44
+   Duration  19.12s (transform 148ms, setup 0ms, collect 364ms, tests 18.64s, environment 0ms, prepare 32ms)
+STDOUT_END
+STDERR_BEGIN
+
+STDERR_END
+EXIT=0

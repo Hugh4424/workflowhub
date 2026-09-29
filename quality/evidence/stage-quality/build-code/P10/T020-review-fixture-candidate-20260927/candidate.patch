@@ -1,0 +1,71 @@
+--- a/tests/contract/freeze-classification-budget-usage-protocol.test.mjs
++++ b/tests/contract/freeze-classification-budget-usage-protocol.test.mjs
+@@ -52,7 +52,7 @@
+   };
+ }
+ 
+-function buildSpecRoutingFixture({ gap, fallback_protocol, direction_change = false } = {}) {
++function buildSpecRoutingFixture({ gap, fallback_protocol, direction_change = false, providerEvidenceAnchors = [true], aggregateEvidenceAnchors } = {}) {
+   const taskId = "handler-routing-task";
+   const tree = "a".repeat(40);
+   const materialId = "b".repeat(64);
+@@ -72,7 +72,10 @@
+       evidence: "fixture evidence",
+     }],
+   };
+-  const aggregation = aggregateCanonicalProviderResults([{ provider, review: providerReview }], 1);
++  const aggregation = aggregateCanonicalProviderResults([{
++    provider, review: providerReview,
++    evidenceAnchors: aggregateEvidenceAnchors === undefined ? providerEvidenceAnchors : aggregateEvidenceAnchors,
++  }], 1);
+   const result = {
+     version: "wh-review-result.v1",
+     task_id: taskId,
+@@ -121,7 +124,7 @@
+       provider,
+       content: outputContent,
+       content_hash: hash(outputContent),
+-      evidence_anchor_valid: [true],
++      evidence_anchor_valid: providerEvidenceAnchors,
+     }, sha256: "c".repeat(64) }],
+   ]);
+   const spec = "# Spec\n";
+@@ -289,6 +292,38 @@
+     });
+     expect(oldResult.facts.finding_dispositions.routing.items[0].errors.join("; ")).toMatch(/material_revision/);
+   });
++  it("uses the same valid direct evidence anchor in the provider original and canonical result", () => {
++    const fixture = buildSpecRoutingFixture();
++    expect(fixture.result.findings[0]).toMatchObject({
++      disposition: "actionable",
++      evidence_status: "direct",
++      provider_findings: [{ evidence_anchor_valid: true }],
++    });
++  });
++
++  it.each([
++    ["provider original only", [false], [true]],
++    ["canonical aggregate only", [true], [false]],
++  ])("rejects an anchor changed on the %s", async (_side, providerEvidenceAnchors, aggregateEvidenceAnchors) => {
++    const fixture = buildSpecRoutingFixture({ providerEvidenceAnchors, aggregateEvidenceAnchors });
++    await expect(officialStageHandler("build-spec")(fixture.worker, fixture.input))
++      .rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
++  });
++
++  it("keeps matching invalid anchors out of valid direct evidence routing", async () => {
++    const fixture = buildSpecRoutingFixture({ providerEvidenceAnchors: [false], aggregateEvidenceAnchors: [false] });
++    expect(fixture.result.adjudication.clusters[0]).toMatchObject({
++      disposition: "invalid_evidence",
++      evidence_status: "invalid_anchor",
++      provider_findings: [{ evidence_anchor_valid: false }],
++    });
++    const result = await officialStageHandler("build-spec")(fixture.worker, fixture.input);
++    expect(result.facts.finding_dispositions.routing).toMatchObject({
++      status: "incomplete",
++      items: [{ status: "incomplete" }],
++    });
++    expect(result.facts.finding_dispositions.routing.items[0].errors.join("; ")).toMatch(/classification does not match/);
++  });
+ });
+ 
+ describe("P7 AC-REBIND-001..003 freeze and confirmation text contracts", () => {

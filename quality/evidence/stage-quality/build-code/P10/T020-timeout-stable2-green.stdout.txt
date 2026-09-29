@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (10 tests | 9 skipped) 13389ms
+   ✓ P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 13389ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  10:37:55
+   Duration  13.81s (transform 133ms, setup 0ms, collect 312ms, tests 13.39s, environment 0ms, prepare 29ms)
+

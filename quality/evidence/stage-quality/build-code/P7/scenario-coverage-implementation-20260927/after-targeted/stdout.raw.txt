@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (84 tests | 80 skipped) 45233ms
+   ✓ P11/T022 v2 actual private browser producer > does not borrow a passed command leaf for a required unavailable browser case 11892ms
+   ✓ P3 T009 real command and service acceptance > keeps a passed AC leaf but does not cover a second required scenario with no ref 11067ms
+   ✓ P3 T009 real command and service acceptance > rejects duplicate declared scenarios instead of counting one content-addressed leaf twice 10209ms
+   ✓ P3 T009 real command and service acceptance > covers two required scenarios only when each has its own AC leaf 12066ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 80 skipped (84)
+   Start at  23:53:03
+   Duration  46.10s (transform 352ms, setup 0ms, collect 744ms, tests 45.23s, environment 0ms, prepare 39ms)
+

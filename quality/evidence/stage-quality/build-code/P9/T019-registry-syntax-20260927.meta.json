@@ -1,0 +1,17 @@
+{
+  "command": "node --check workflows/build-code/test-asset-inventory.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T00:59:57.496Z",
+  "completed_at": "2026-09-27T00:59:57.514Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null,
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "source_sha256": "29d10bc7a49a3f71864781bc3f0f6b831357dcfc4c929ca29b2040ed82a2a1b2",
+  "registry_sha256": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957",
+  "new_test_sha256": "9afc2b3bb98103f09b0e0f77053e130b6532b6c1d8131fb3dc502f0f27661d2e",
+  "adjacent_test_sha256": "448b803d2ceaf8f6256878f32a68dc36ce19fec34c631024e80f25111818c725",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": "workflowhub-receipt.v1",
+  "task_id": "targeted-46131ae8-42b2-43a5-83c6-5756ce6f8707",
+  "stage": "build-code",
+  "producer": {
+    "stage": "build-code",
+    "component": "build-code-test-capture",
+    "version": "1.0.0"
+  },
+  "command": "WORKFLOWHUB_TARGETED_INHERIT_GROUP=1 '/usr/local/bin/node' '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/targeted-capture.mjs'",
+  "command_hash": "024b1f66861de6fd36f54dc62658d6cc78174d4bedc66e0ad548289acda31bca",
+  "exit_code": 1,
+  "snapshot_head": "f7db25f8d13f27b309fad6e60158b69df80087bc",
+  "snapshot_tree": "2ffc22b18f2bc519dc683137967b479fe464cb21",
+  "snapshot_commit": "9eca7edc01917203aeaa221a60bc6086083141cb",
+  "source_digest": "aeefdd2180fe3183659f3456322f8e7791703c3f41a235524aac69d93bad7af9",
+  "started_at": "2026-09-27T10:20:13.891Z",
+  "completed_at": "2026-09-27T10:20:16.572Z",
+  "output_ref": "quality/tests/output/targeted-e9cd06c4-a62c-4d6a-94b3-27a8c329ed21.output",
+  "output_hash": "e781806b737bc8f975b80e488b71078fb72fff66912d8c18c2f7da6dfb01f01d",
+  "lease": {
+    "status": "released",
+    "ref": "locks/test-capture.execution.lock",
+    "wait_ms": 10000
+  },
+  "behavior_fingerprint": {
+    "task_id": "targeted-46131ae8-42b2-43a5-83c6-5756ce6f8707",
+    "snapshot_tree": "2ffc22b18f2bc519dc683137967b479fe464cb21",
+    "source_digest": "aeefdd2180fe3183659f3456322f8e7791703c3f41a235524aac69d93bad7af9",
+    "material_revision": "revision-9bf49d3ee399aeecd63ee600685fe760b39df351156243b2ef661ff48670b928",
+    "catalog_revision": "fixture.1",
+    "catalog_sha256": "1ccc8d640a75c0f33a746fe8f6d0c7442deee98bd3cbc12ff3697076e2d5593e",
+    "registry_revision": "fixture.1",
+    "registry_sha256": "6770f5e24c23fdb62b3b8b895116e71105e12b15a16250be3938c644696c0341",
+    "run_id": "e9cd06c4-a62c-4d6a-94b3-27a8c329ed21"
+  },
+  "duration_ms": 2681,
+  "failure_attribution": {
+    "status": "failed",
+    "category": "test_command",
+    "code": "EXIT_1",
+    "exit_code": 1,
+    "reason": "test command exited non-zero"
+  }
+}

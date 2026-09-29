@@ -1,0 +1,7 @@
+76e20fa6eca21ada108a6a0632fd8b6d57ac02587da053697ffdcf93eefcdf84  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/frozen-test.mjs
+38e2a7067c5b640a3ad18266b1ff478cf257a7f6e507f0c6ccc18f34a310e0c0  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/stage-runner-before.mjs
+77367cdfabfa534471c650642304fa7d9acb205cac5126eff6443e6dea0bdb9b  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/stage-runner-mutated.mjs
+2784c648f2c9f4546b79448d0da4e9ae8db3e54ec3ca7d190cedd2bd79e170dc  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/red-raw.txt
+e48852cca1c91ecbc24cab8220407f0eecc36bb64239fd0c2ab0ffed95deb64e  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/green-isolated-raw.txt
+76651873a41cd95b1418416999ff2fb91ff2a718502e9b3e34d18d11329e7cfa  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/green-worktree-raw.txt
+8173dec3a17b889c05fb292a5ef1432353cee28d781f55ef8696e85b869f18cc  quality/evidence/stage-quality/build-code/P4/T006-indexed-source-negative-20260928/existing-seven-raw.txt

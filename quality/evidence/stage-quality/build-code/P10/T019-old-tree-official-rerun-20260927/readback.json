@@ -1,0 +1,37 @@
+{
+  "request": {
+    "command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
+    "receipt_ref": "quality/tests/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.json",
+    "output_ref": "quality/tests/output/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.output",
+    "timeout_ms": 1200000
+  },
+  "cli_exit": 0,
+  "cli_receipt_ref": "quality/tests/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.json",
+  "cli_receipt_hash": "70ffbfa1b51d520918ebc34e28b1a2a0d2709a236f8c4bdd96ba0920444efe5d",
+  "receipt_task_id": "workflowhub-thin-core-card-04-20260919",
+  "receipt_stage": "build-code",
+  "receipt_command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
+  "receipt_exit_code": 0,
+  "receipt_hash": "70ffbfa1b51d520918ebc34e28b1a2a0d2709a236f8c4bdd96ba0920444efe5d",
+  "receipt_hash_matches_cli": true,
+  "receipt_output_ref": "quality/tests/output/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.output",
+  "receipt_output_hash": "6794df3df92e3fe58f7d0322a04304491540356323c4562afaf5a78c8efd6518",
+  "output_hash": "6794df3df92e3fe58f7d0322a04304491540356323c4562afaf5a78c8efd6518",
+  "output_hash_matches_receipt": true,
+  "receipt_ref_matches_request": true,
+  "output_ref_matches_request": true,
+  "command_matches_request": true,
+  "source_digest": "1b06fd0d21b990d788f237719c8ab5d39489c97bd6e2f99e254d2d74296353d1",
+  "snapshot_tree": "702cf3d443d142a967642f4460a1d6247e05ae99",
+  "snapshot_commit": "982978704af34c0bb23fdd84329d3bf035eb18b5",
+  "duration_ms": 473129,
+  "counts": [
+    " Test Files  3 passed (3)",
+    "      Tests  78 passed (78)"
+  ],
+  "file_identities": [
+    " ✓ tests/contract/build-code-case-selection.test.mjs (16 tests) 33737ms",
+    " ✓ tests/contract/build-code-case-reconciliation.test.mjs (53 tests) 471055ms",
+    " ✓ tests/contract/build-code-targeted-runner.test.mjs (9 tests) 1060ms"
+  ]
+}

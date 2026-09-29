@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run runtime/stage/stage-end-report.test.mjs",
+  "receipt_ref": "quality/tests/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.json",
+  "output_ref": "quality/tests/output/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.output",
+  "timeout_ms": 1200000
+}

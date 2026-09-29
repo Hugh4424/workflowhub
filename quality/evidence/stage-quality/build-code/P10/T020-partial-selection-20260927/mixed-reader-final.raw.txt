@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (15 tests | 14 skipped) 14366ms
+   ✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 14365ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 14 skipped (15)
+   Start at  17:50:08
+   Duration  14.80s (transform 143ms, setup 0ms, collect 333ms, tests 14.37s, environment 0ms, prepare 24ms)
+

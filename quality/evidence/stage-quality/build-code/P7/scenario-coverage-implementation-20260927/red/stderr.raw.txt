@@ -1,0 +1,187 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P11/T022 v2 actual private browser producer > does not borrow a passed command leaf for a required unavailable browser case
+AssertionError: expected 'passed' to be 'missing' // Object.is equality
+
+Expected: "missing"
+Received: "passed"
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs:564:25
+    562|     const passedCommandRef = execution.execution_items[0].evidence_ref…
+    563|     const fact = p9Fact(state, result, "AC-EXE-001");
+    564|     expect(fact.status).toBe("missing");
+       |                         ^
+    565|     const acceptance = JSON.parse(state.task.readRecord(fact.evidence[…
+    566|     const stageValue = JSON.parse(state.task.readRecord(acceptance.ref…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P3 T009 real command and service acceptance > keeps a passed AC leaf but does not cover a second required scenario with no ref
+AssertionError: expected 'passed' to be 'missing' // Object.is equality
+
+Expected: "missing"
+Received: "passed"
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs:1183:27
+    1181|       expect(passedRef).toBeDefined();
+    1182|       const fact = p9Fact(state, result, acId);
+    1183|       expect(fact.status).toBe("missing");
+       |                           ^
+    1184|       const acceptance = JSON.parse(state.task.readRecord(fact.evidenc…
+    1185|       expect(acceptance.result).not.toBe("pass");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P3 T009 real command and service acceptance > rejects duplicate declared scenarios instead of counting one content-addressed leaf twice
+AssertionError: promise resolved "{ …(15) }" instead of rejecting
+
+- Expected
++ Received
+
+- [Error: rejected promise]
++ Object {
++   "completion": Object {
++     "fact_refs": Array [],
++     "missing": Array [
++       "risk_tests_fresh",
++       "acceptance_criteria",
++       "finding_dispositions",
++     ],
++     "predicates": Object {
++       "acceptance_criteria": Object {
++         "fact_ref": null,
++         "kind": "acceptance_criterion",
++         "status": "missing",
++       },
++       "finding_dispositions": Object {
++         "fact_ref": null,
++         "kind": "acceptance_criterion",
++         "status": "missing",
++       },
++       "risk_tests_fresh": Object {
++         "fact_ref": null,
++         "kind": "test",
++         "status": "missing",
++       },
++     },
++     "stage": "build-code",
++     "status": "in_progress",
++   },
++   "continuation_allowed": true,
++   "missing_items": Array [
++     "current implementation/test facts are unavailable; record them when available",
++     "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace",
++     "current review result is unavailable for finding disposition",
++   ],
++   "quality_advisories": Array [
++     "stage-end-spec-analyze:unavailable",
++     "phase_review:missing",
++   ],
++   "quality_advisory_fact_refs": Array [
++     "quality/facts/4d1c7c1274b49505b3e5af92a489ba02041133c7349369b94f7cbefdbb6957fb.json",
++     "quality/facts/2b4a3e48775e00b4ce649e56f7c7f96d52b188c541fd5f444ca1182cec6d1a9a.json",
++     "quality/facts/9d2637d8dd046c5dc77d5f5ba695e79cd219ecdbe5ce0a7a35e73bb013c3d5ba.json",
++   ],
++   "quality_fact_refs": Array [
++     "quality/facts/2d98997b4fe42fef9c962f5529d7f52071cc3ed4b2b426cac0e2bb1f0539cb5d.json",
++     "quality/facts/bbe64d3e8d67df0d4ec6e1dcf2247c5cf795f73c83dd74fc288cbf21167b8b82.json",
++     "quality/facts/5dadff9152feca91f84f17350d2112671df6020a339082be037af5c890b0dfe1.json",
++     "quality/facts/2b4a3e48775e00b4ce649e56f7c7f96d52b188c541fd5f444ca1182cec6d1a9a.json",
++     "quality/facts/9d2637d8dd046c5dc77d5f5ba695e79cd219ecdbe5ce0a7a35e73bb013c3d5ba.json",
++     "quality/facts/7bbc998706858b86aebcfcecae0128474528b39a9c5d94b811f8f2ef8da44519.json",
++     "quality/facts/98c98458e77da600670ec9e3f3a1570f109afae9e2c2138ab2f93c32bcb19646.json",
++   ],
++   "quality_status": "incomplete",
++   "quality_warnings": Array [
++     "risk_tests_fresh:missing",
++     "acceptance_criteria:missing",
++     "finding_dispositions:missing",
++     "current implementation/test facts are unavailable; record them when available",
++     "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace",
++     "current review result is unavailable for finding disposition",
++   ],
++   "readiness": Object {
++     "continuation_allowed": true,
++     "missing_materials": Array [],
++     "readiness_source": "current-material-presence",
++     "required_materials": Array [
++       "decision-log.md",
++       "spec.md",
++       "plan.md",
++       "tasks.md",
++     ],
++     "stage": "build-code",
++     "work_authority": "current-four-materials-and-plan-tasks",
++     "work_status": "ready",
++   },
++   "schema_version": "stage-runtime-result.vnext",
++   "stage": "build-code",
++   "stage_handoff": Object {
++     "current": true,
++     "path": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-browser-acceptance-9Or20T/Projects/WorkflowHub/tasks/browser-acceptance/quality/evidence/handoff/build-code.md",
++     "readback_sha256": "397a1e36e69e05f23d88833346fb0412eec2b363cd7315c9d6b35f53beb74453",
++     "ref": "quality/evidence/handoff/build-code.md",
++     "reflection_status": "unavailable",
++     "section_count": 13,
++     "sha256": "397a1e36e69e05f23d88833346fb0412eec2b363cd7315c9d6b35f53beb74453",
++     "status": "published",
++   },
++   "stage_reflection": Object {
++     "availability": Object {
++       "idempotent": false,
++       "reason_code": "executor_absent",
++       "ref": "quality/evidence/stage-reflection-availability/71ee407f97a2681600d403708da871d89ca256183046eec161cacc855fdb9421.json",
++       "sha256": "71ee407f97a2681600d403708da871d89ca256183046eec161cacc855fdb9421",
++       "state": "unavailable",
++       "status": "published",
++       "value": Object {
++         "observed_at": "2026-09-27T15:51:40.176Z",
++         "reason_code": "executor_absent",
++         "record_kind": "availability",
++         "schema_version": "stage-reflection-availability.v1",
++         "stage": "build-code",
++         "state": "unavailable",
++         "task_id": "browser-acceptance",
++         "task_identity": Object {
++           "attempt": null,
++           "branch": "task/WorkflowHub/browser-acceptance",
++           "material_revision": null,
++           "snapshot_tree": null,
++           "task_id": "browser-acceptance",
++           "worktree": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-browser-acceptance-9Or20T/repo-browser-acceptance",
++         },
++       },
++     },
++     "availability_ref": "quality/evidence/stage-reflection-availability/71ee407f97a2681600d403708da871d89ca256183046eec161cacc855fdb9421.json",
++     "availability_sha256": "71ee407f97a2681600d403708da871d89ca256183046eec161cacc855fdb9421",
++     "persisted": false,
++     "ref": null,
++     "reflection_status": "unavailable",
++     "sha256": "71ee407f97a2681600d403708da871d89ca256183046eec161cacc855fdb9421",
++     "stage_handoff": Object {
++       "current": true,
++       "path": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-browser-acceptance-9Or20T/Projects/WorkflowHub/tasks/browser-acceptance/quality/evidence/handoff/build-code.md",
++       "readback_sha256": "397a1e36e69e05f23d88833346fb0412eec2b363cd7315c9d6b35f53beb74453",
++       "ref": "quality/evidence/handoff/build-code.md",
++       "reflection_status": "unavailable",
++       "section_count": 13,
++       "sha256": "397a1e36e69e05f23d88833346fb0412eec2b363cd7315c9d6b35f53beb74453",
++       "status": "published",
++     },
++     "status": "unavailable",
++     "step_status": "unavailable",
++   },
++   "status": "in_progress",
++   "work_status": "ready",
++ }
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs:1199:35
+    1197|       { source: "CASE-DUP", sample: "real local data", scenario: "same…
+    1198|     ] });
+    1199|     await expect(p9Execute(state)).rejects.toThrow(/duplicate acceptan…
+       |                                   ^
+    1200|   });
+    1201| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

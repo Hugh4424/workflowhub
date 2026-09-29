@@ -294,7 +294,7 @@ describe("post-cohort independent Phase authority", () => {
   });
 
   it("keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent", () => {
-    const phase = readFileSync(new URL("../../specs/workflowhub-thin-core-card-05-20260919/phases/P5.md", import.meta.url), "utf8");
+    const phase = readFileSync(new URL("../../specs/archive/workflowhub-thin-core-card-05-20260919/phases/P5.md", import.meta.url), "utf8");
     const line = phase.split("\n").find((value) => value.startsWith("- **acceptance_data**："));
     const data = JSON.parse(line.match(/`(.+)`/)[1]);
     expect(data).toHaveLength(1);

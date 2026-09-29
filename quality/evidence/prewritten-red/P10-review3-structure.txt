@@ -1,0 +1,28 @@
+UTC: 2026-09-23T15:08:04Z
+CWD: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD: 35a881ac3c3288249677597a9079d445949de778
+Checks: node --check for exactly three scoped tests and three untouched P10 stubs
+PASS node --check tests/contract/build-code-case-selection.test.mjs
+PASS node --check tests/contract/build-code-targeted-runner.test.mjs
+PASS node --check tests/contract/build-code-case-reconciliation.test.mjs
+PASS node --check workflows/build-code/case-selection.mjs
+PASS node --check workflows/build-code/targeted-runner.mjs
+PASS node --check workflows/build-code/case-reconciliation.mjs
+Prior bytes archived before revision:
+60a8d271ec77d81cd2c8308a7dd6798bf89b40114887cbf2dcce345da54f9ed3  quality/evidence/prewritten-red/P10-frozen-before-review3-case-reconciliation.test.mjs
+0880394b400254617a3802aa40dcdef6cee510986fcbbd719e8a022e5c6f362d  quality/evidence/prewritten-red/P10-frozen-before-review3-case-selection.test.mjs
+17707fb6e541fe7b23998af1817975f9102ab82e968b5ea710593bd7ad921382  quality/evidence/prewritten-red/P10-frozen-before-review3-scoped-red.txt
+27addc4a131f087155034626a8cb4a6e6fd4178a34295bcbbbfe0392ff4e0ec3  quality/evidence/prewritten-red/P10-frozen-before-review3-targeted-runner.test.mjs
+Prior RED archive equals prior original: PASS
+Runner and reconciliation stayed identical to before-revision archive:
+PASS targeted-runner
+PASS case-reconciliation
+Current test hashes and RED hash:
+5493e3cbe1b8ca0561486f544aa19024e967a49bad68f71ed18b8c3a192805e5  tests/contract/build-code-case-selection.test.mjs
+27addc4a131f087155034626a8cb4a6e6fd4178a34295bcbbbfe0392ff4e0ec3  tests/contract/build-code-targeted-runner.test.mjs
+60a8d271ec77d81cd2c8308a7dd6798bf89b40114887cbf2dcce345da54f9ed3  tests/contract/build-code-case-reconciliation.test.mjs
+a4b1bd051bc39ae6e55014361556e8c2612f4e287c41ef0c261cbe5ffef01446  quality/evidence/prewritten-red/P10-review3-scoped-red.txt
+RED summary:
+ Test Files  3 failed (3)
+      Tests  29 failed (29)
+EXIT_CODE: 1

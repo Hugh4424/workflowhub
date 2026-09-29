@@ -1,0 +1,16 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/card04-final-aggregate.test.mjs (3 tests | 3 failed) 17ms
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 4ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 0ms
+     → source missing: quality/evidence/stage-quality/build-code/P13/final-aggregate.json: expected false to be true // Object.is equality
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts 12ms
+     → P8 missing phase gate: expected undefined to be truthy
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  21:56:41
+   Duration  512ms (transform 152ms, setup 0ms, collect 352ms, tests 17ms, environment 0ms, prepare 38ms)
+

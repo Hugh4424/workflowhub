@@ -1,0 +1,102 @@
+{
+  "authority": "task_quality_evidence_only",
+  "phase_id": "P2",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "review_result_ref": "quality/reviews/results/build-code-simple-68ef7817-c3bd-5b84-a444-4e2304423403.json",
+  "review_result_sha256": "dfb66eb222505a357d59490795180329f01eec694ee1be06fd08ee19afe854a9",
+  "review_snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+  "recorded_at_utc": "2026-09-26T14:48:11.533375+00:00",
+  "statuses": {
+    "fixed": 0,
+    "rejected_invalid": 4,
+    "accepted_risk": 0,
+    "needs_human": 10
+  },
+  "limitation": "This records dispositions and owners only; it does not certify current Phase, AC, or overall completion. Later repairs keep this reviewed snapshot and need a new evidence version.",
+  "findings": [
+    {
+      "finding_id": "F-193d68e4c6db",
+      "disposition": "rejected_invalid",
+      "owner": "P5/T007 report reader",
+      "basis": "stage-runner.mjs:2994-3001 首先写入 stageAnalyzeFact ref，且只有判决非 consistent/reported 才首先写 stage-end-spec-analyze advisory；该 advisory 若存在其 index 恒为 0，对应 fact ref[0]。随后才加入 machine_gate/其它 advisory。所称此前通过事实导致 stage-end ref 错位的具体路径不存在；不推断其它 advisory 的通用索引正确。"
+    },
+    {
+      "finding_id": "F-342a76db9e88",
+      "disposition": "rejected_invalid",
+      "owner": "P4/T006 test governance",
+      "basis": "当前规则 docs/architecture/test-asset-governance-rules.md「真实入口联通与资产落点」准许 runtime 模块按 <module>.test.mjs 就近共置，并未规定只能收两文件；P4.md:5,24 明示 runtime/**/*.test.mjs include。更广目录收集是可见设计，无越权证据。"
+    },
+    {
+      "finding_id": "F-3ccd854c1549",
+      "disposition": "needs_human",
+      "owner": "P10/T021 + build-plan product oracle owner",
+      "basis": "case-reconciliation.mjs:82-96 只对 cancellation fixture 检查效果，其余 proof 可进入 observed；最终仍 status=unavailable/unauthenticated_business_oracle，不能称业务 pass。P10 材料只授权骨架，真实 oracle/消费者尚缺。"
+    },
+    {
+      "finding_id": "F-5ab95427d427",
+      "disposition": "rejected_invalid",
+      "owner": "P5/T007 report reader",
+      "basis": "stage-runner.mjs:2994-3001 首先写入 stageAnalyzeFact ref，且只有判决非 consistent/reported 才首先写 stage-end-spec-analyze advisory；该 advisory 若存在其 index 恒为 0，对应 fact ref[0]。随后才加入 machine_gate/其它 advisory。所称此前通过事实导致 stage-end ref 错位的具体路径不存在；不推断其它 advisory 的通用索引正确。"
+    },
+    {
+      "finding_id": "F-6e12fda83e65",
+      "disposition": "needs_human",
+      "owner": "P5/T008 build-plan capture owner；P6/T012 test owner",
+      "basis": "P5.md:49-56 与 T008-blocker.md 明定真实 capture 未认证且禁止生成三文件；T012 动态夹具要 P5 路径、P5 没有 producer。缺口真实，但不能越写面擅接 stage-runner/CLI。"
+    },
+    {
+      "finding_id": "F-88e6d61ca847",
+      "disposition": "needs_human",
+      "owner": "build-code whole-task AC-20/21 owner；P13 aggregate owner",
+      "basis": "P2 精确 gate 只证 T004，P2/T004-summary.md 已披露不能推出 AC-20/全量；其它相位各有局部测试，不应为本 finding 跑无范围 vitest。review packet 的全工作树证据/真实入口仍缺，保留整体限制。"
+    },
+    {
+      "finding_id": "F-8bf991a3bada",
+      "disposition": "rejected_invalid",
+      "owner": "P4/T006 mapping owner",
+      "basis": "当前 spec.md:32-34 的「来源与决策映射」是代码读取的四列表；:455 的五列表属另一个 Requirement-to-Task Trace，非该输入。stage-runner.mjs:4195-4198 对无 source/FR 已逐 AC 披露，非当前生产静默成功；未来表形漂移风险另记。"
+    },
+    {
+      "finding_id": "F-b1274b745159",
+      "disposition": "needs_human",
+      "owner": "P9/T018 bootstrap/canonical trust owner",
+      "basis": "change-scope.mjs:50-78 从 task bootstrap record 校验 hash、task/worktree/branch/commit，但同权限能改 record 并重算 hash 的威胁模型未获独立不可变锚；不能把自哈希称不可篡改。需 owner 决定信任根，保留 unknown。"
+    },
+    {
+      "finding_id": "F-b6f9b8877d24",
+      "disposition": "needs_human",
+      "owner": "P10/T020 + P9 authenticated inventory owner",
+      "basis": "case-selection.mjs:49-70 只有 status=recorded 的 inventory 才比 snapshot/source/task；其他 caller-owned scope 无独立 receipt 校验。材料 P10 只准骨架，真实 provenance 承诺尚未建立。"
+    },
+    {
+      "finding_id": "F-b7523f1d451d",
+      "disposition": "needs_human",
+      "owner": "P9/P10 official consumer + canonical receipt owner",
+      "basis": "targeted-runner.mjs 首注释明确 importable seam 非 CLI/canonical receipt；没有 P9→P10 固定可信消费者链，AC-32/33 仍 not_done。需材料/owner 确认入口，不以模块可导入作完成。"
+    },
+    {
+      "finding_id": "F-b998734e4761",
+      "disposition": "needs_human",
+      "owner": "P2 frozen test material owner（build-plan）",
+      "basis": "repository-inventory.test.mjs:175-177 当前只比较 actual、硬写 within_limit=false、查 caliber；delta 和其它 baseline 字段未被该 gate 钉住。P2.md:8,22 限 build-code 只改 JSON，故不能由实现者改冻结测试。"
+    },
+    {
+      "finding_id": "F-bc9fba8e686e",
+      "disposition": "needs_human",
+      "owner": "P5/T007 module owner",
+      "basis": "stage-end-report.mjs:227-231 ENOENT 早退，未检查 evidenceDir，正常分支 :251 才披露目录不存在；是可局部补的真实遗漏。未修/未复测。"
+    },
+    {
+      "finding_id": "F-c4e133a158fe",
+      "disposition": "needs_human",
+      "owner": "P10/T021 + business oracle owner",
+      "basis": "case-reconciliation.mjs:99 当前始终返回 unavailable/unauthenticated_business_oracle，是 P10 骨架的有意 fail-closed，但正向业务交付仍缺；不能把无法 GREEN 判为误报或声称已修。"
+    },
+    {
+      "finding_id": "F-d29b61613d48",
+      "disposition": "needs_human",
+      "owner": "P6/T011 frozen test material owner（build-plan）",
+      "basis": "oracle-mirror.test.mjs:166 的 tracked.length>1000 是硬编码规模代理，不能普遍证明 git ls-files 读取成功；当前 9/9 GREEN 仅表当前仓库，冻结测试不在本卡实施写面。"
+    }
+  ]
+}

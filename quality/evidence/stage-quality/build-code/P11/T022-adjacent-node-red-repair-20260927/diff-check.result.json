@@ -1,0 +1,7 @@
+{
+  "command": "git diff --check -- workflows/build-code/SKILL.md runtime/stage/stage-content-contracts.mjs",
+  "exit_code": 0,
+  "signal": null,
+  "error": null,
+  "captured_at_utc": "2026-09-27T12:08:26.596Z"
+}

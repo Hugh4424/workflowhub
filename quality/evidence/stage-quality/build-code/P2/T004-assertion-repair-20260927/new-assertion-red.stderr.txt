@@ -1,0 +1,22 @@
+WebSocket server error: Port is already in use
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/repository-inventory.test.mjs > repository architecture inventory > keeps the published complexity baseline immutable and diagnoses the current tree in memory
+AssertionError: expected 83996 to be 84015 // Object.is equality
+
+- Expected
++ Received
+
+- 84015
++ 83996
+
+ ❯ tests/contract/repository-inventory.test.mjs:190:27
+    188|     expect(formal.limit).toBe(oldFormal.limit);
+    189|     const current = buildReport();
+    190|     expect(formal.actual).toBe(current.budgets.formal_test_lines.actua…
+       |                           ^
+    191|     expect(formal.delta_from_target).toBe(formal.actual - formal.targe…
+    192|     expect(formal.within_limit).toBe(formal.actual <= formal.limit);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

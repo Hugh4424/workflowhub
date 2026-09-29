@@ -1,0 +1,30 @@
+{
+  "findings": [
+    {
+      "severity": "major",
+      "path": "quality/evidence/stage-quality/build-code/P1/T002-green.txt",
+      "line": 2,
+      "issue": "T002 的 GREEN 记录只有命令、成功标记和退出码，缺少 P1 契约要求随证据记录的 task_id 与 snapshot_tree，无法从该原件核对执行身份。",
+      "root_cause": "证据采集未写入规定的身份字段。",
+      "evidence_kind": "inferred",
+      "evidence": "entry inventory OK",
+      "recommendation": "按同一检查命令重新采集完整 transcript，写入 task_id、snapshot_tree、原始输出和 EXIT；保留现有记录。"
+    },
+    {
+      "severity": "major",
+      "path": "docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md",
+      "line": 11,
+      "issue": "ADR 宣称该方向不新增文件或 schema，但当前 spec 的 DER-06/08 明确规划新增 stage-end-report.mjs 和 stage-end-report-facts.v1。实施者无法同时遵守这两份契约。",
+      "root_cause": "ADR 的实施边界未随已确定的报告事实层方案更新。",
+      "evidence_kind": "direct",
+      "evidence": "WorkflowHub 的验收事实必须**照实呈现给人看**，而不是靠机器把流程判绿。据此定下三件事。其一，build-code 结束时对逐条验收链做的机器核查**不再按 activation cohort 分叉**：原先只有 post 卡会执行这一核查（`runtime/stage/stage-runner.mjs:4289-4293`，build-plan 同形分支在 `:4297-4298`），pre 卡永远不执行，而 pre 卡的逐条验收链恰恰是空槽最集中的地方。其二，阶段结束时由**独立子代理**（独立上下文、未参与实现）依据机器事实写一份大白话验收报告，主会话**原样贴进聊天**交给用户；用户此前明确表示不看 handoff 文件、不经过命令行，因此交付现场是聊天而不是产物文件。其三，报告结构不对称：没做到、失败、没跑过的一律由机器事实逐条枚举、原样列出、**不许总结**；通过的压成一行汇总并配可展开的步骤清单；每条结论挂它的来源。这三件事只**填充已经存在、已经被运行时构造、已经被一个在跑的校验器要求非空**的槽位——`acceptanceChain` 的 `source_ids`/`decision_ids`/`fr_ids`（`runtime/stage/stage-runner.mjs:3930-3949` 现写死为空）、`stage-quality-evidence.v1` 的 `subject_fact.execution`、以及 `coverage_limits`（`runtime/evidence/acceptance-evidence-validator.mjs:63,73`）——不新增文件、schema、计数器或阻断门。",
+      "recommendation": "把 ADR 的决定与后续已确认的事实层方案对齐，准确区分不新增阻断门与新增报告文件及事实层 schema。"
+    },
+    {
+      "severity": "minor",
+      "path": "docs/architecture/real-entry-inventory.md",
+      "issue": "库存将 2026-09-26 11:29 的 --help 列为有原始输出的实跑，但 P1 证据没有该次输出的引用；当前重新运行 --help 只能验证路由，不能补证当时的执行。",
+      "recommendation": "补上该次原始输出的可回读路径；若原件已丢失，将最后实跑改为未核实。"
+    }
+  ]
+}

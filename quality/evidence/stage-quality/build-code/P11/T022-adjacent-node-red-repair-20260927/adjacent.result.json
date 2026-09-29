@@ -1,0 +1,8 @@
+{
+  "command": "npx vitest run tests/contract/post-phase-contract.test.mjs tests/deferred-acceptance-semantics.test.mjs",
+  "started_at_utc": "2026-09-27T12:09:03.492Z",
+  "ended_at_utc": "2026-09-27T12:09:04.694Z",
+  "exit_code": 1,
+  "signal": null,
+  "error": null
+}

@@ -1,0 +1,45 @@
+{
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "project_name": "workflowhub",
+  "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "captured_utc": "2026-09-27T09:27:09.569992+00:00",
+  "before_catalog_sha256": "60288229ae854083d62c9cfefca3778db7752d78a1d48f29a0698d78014bd41b",
+  "before_p8_sha256": "15b286c3892dd151b18d2cb6335ef32af7e088f8456dd3a123252c53d2f92b1c",
+  "current_files_sha256": {
+    "docs/quality/business-case-catalog.json": "52ff4e9cef411c96133946d7d3315b7e2dd6ae199c473e82336ec4bef6ec1c8d",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md": "a55ca447e235dd5ec8ee88de90b756bf141204924fddd3c574be37d465c18190",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "4376f8a7e4a269aa5db35bc2b128593cfba469be57fbbdffc0b925c23f6c785e",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "70528388801bff43fcb6341ca2b5fa25fa3978a0f3d12790cb11fdeea91db033",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+    "tests/contract/business-case-source-binding.test.mjs": "b6cbed445ecedb3fb10cbe88ea916abe1eb2a523ba251d6e78e752e87de8c7fd",
+    "tests/contract/business-case-catalog.test.mjs": "9dc4435b117d52b2148b4373b61201a7f24a858335ddd36e9ad720c2ec907231",
+    "tests/contract/build-code-targeted-capture.test.mjs": "2f88e9cd299df9959d838e383f40563b42526f7fd0616ce2cf0d24bd4b4085ec",
+    "workflows/build-code/targeted-capture.mjs": "ed05b3b73d515874268ffb3c5449285a60ec2f2a53e39a962d9b1493bfd812e3",
+    "workflows/build-code/capture.mjs": "659d92c3c766b86303b87461a40a38de2d5ab5eaa1109a35a3e663a40ea83ea4",
+    "workflows/build-code/case-reconciliation.mjs": "7d205cbdb24126d0c24106e48dc414c347ddb5decd407eaf1362f282bd91dadf",
+    "docs/quality/test-asset-registry.json": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957"
+  },
+  "runs": {
+    "target-source-binding-red": {
+      "exit_code": 1,
+      "raw_sha256": "bf63a9e8dd752b7335f4d5a0a51b084b5c0eb66aa8828ce80ca41d514ceea3d4"
+    },
+    "P8-targeted-green": {
+      "exit_code": 0,
+      "raw_sha256": "8390cca97543cc7c903969750d1ec2d77e38df313a3d50c264ac60e3d734ae11"
+    },
+    "P10-fixed-fixture-green": {
+      "exit_code": 1,
+      "raw_sha256": "df6a8402941cc293b140e80d5f2945da10c45b2b07eeeafb78146e61785c1f7d"
+    },
+    "P10-current-preexecution-probe": {
+      "exit_code": 0,
+      "raw_sha256": "a6453a1b0e12193a8db04e54b0005876640cc479df702a5ceedfa898fbf49cf9"
+    }
+  },
+  "no_canonical_task_fact_written": true,
+  "move_map_change_required": false
+}

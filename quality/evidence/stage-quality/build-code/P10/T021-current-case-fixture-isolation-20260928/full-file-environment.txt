@@ -1,0 +1,9 @@
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+start_utc=2026-09-27T21:06:09Z
+platform=Darwin 25.5.0 arm64
+node=v24.14.0
+npm=11.9.0
+npx=/usr/local/bin/npx
+original_node_modules=Directory node_modules
+temporary_node_modules_target=/Users/Hugh/Hugh/Project/workflowhub/node_modules
+end_utc=2026-09-27T21:14:55Z

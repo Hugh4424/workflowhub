@@ -16,12 +16,22 @@ const compliantReviewPrompt = [
   "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.",
 ].join("\n");
 
+function directProviderOutput(provider, findings) {
+  const review = JSON.stringify({ findings });
+  return provider.startsWith("codex/")
+    ? [
+      JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: review } }),
+      JSON.stringify({ type: "turn.completed" }),
+    ].join("\n")
+    : JSON.stringify({ role: "assistant", content: [{ type: "text", text: review }] });
+}
+
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
 describe("configured OCR direct host execution", () => {
-  it("excludes a reviewer sharing the trusted host source despite different provider and model", async () => {
+  it("dispatches configured reviewers without requiring a host identity", async () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-shared-source-"));
     roots.push(root);
     const hostDir = join(root, ".config", "workflowhub");
@@ -47,27 +57,27 @@ describe("configured OCR direct host execution", () => {
     const previousHome = process.env.HOME;
     process.env.HOME = root;
     try {
-      const input = { ...request, host_provider: "codex/host" };
+      const input = { ...request };
       const context = prepareConfiguredOcrHostContext(input);
-      expect(context.selection.eligibleProfiles).toEqual(["kimi/coding"]);
+      expect(context.selection.eligibleProfiles).toEqual(["codex/luna", "kimi/coding"]);
       const dispatched = [];
       const result = await runConfiguredOcrHostReview({ request: input, packet: configuredPacket() }, {
         trustedContext: context,
         providerExecutor: async ({ provider }) => {
           dispatched.push(provider);
-          return { status: "completed", output: JSON.stringify({ role: "assistant", content: [{ type: "text", text: JSON.stringify({ findings: [] }) }] }) };
+          return { status: "completed", output: directProviderOutput(provider, []) };
         },
       });
-      expect(dispatched).toEqual(["kimi/coding"]);
-      expect(result).toMatchObject({ status: "unavailable", error: { code: "OCR_INDEPENDENCE_INCOMPLETE" },
-        provider_results: [{ status: "failed", error: { code: "OCR_PROVIDER_NOT_INDEPENDENT" } }, { status: "completed" }] });
+      expect(dispatched).toEqual(["codex/luna", "kimi/coding"]);
+      expect(result).toMatchObject({ status: "available", outcome: "completed",
+        provider_results: [{ status: "completed" }, { status: "completed" }] });
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
     }
   });
 
-  it("selects every route while preserving the independent-model coverage boundary", async () => {
+  it("selects every configured route without an independence boundary", async () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-trusted-route-"));
     roots.push(root);
     const hostDir = join(root, ".config", "workflowhub");
@@ -92,7 +102,7 @@ describe("configured OCR direct host execution", () => {
     const previousHome = process.env.HOME;
     process.env.HOME = root;
     try {
-      const input = { ...request, host_provider: "codex/host" };
+      const input = { ...request };
       const context = prepareConfiguredOcrHostContext(input);
       expect(context.selection.providers).toEqual(["codex/luna", "kimi/coding"]);
       expect(context.selection.eligibleProfiles).toEqual(["codex/luna", "kimi/coding"]);
@@ -105,7 +115,7 @@ describe("configured OCR direct host execution", () => {
       }));
       const sameModel = prepareConfiguredOcrHostContext(input);
       expect(sameModel.selection.providers).toEqual(["codex/luna", "kimi/coding"]);
-      expect(sameModel.selection.eligibleProfiles).toEqual(["codex/luna"]);
+      expect(sameModel.selection.eligibleProfiles).toEqual(["codex/luna", "kimi/coding"]);
       expect(sameModel.selection.provider_identities["codex/luna"].source_id).toBe("codex/luna");
       expect(sameModel.selection.provider_identities["kimi/coding"].source_id).toBe("kimi/coding");
       let calls = 0;
@@ -119,12 +129,12 @@ describe("configured OCR direct host execution", () => {
       const sameModelResult = await runConfiguredOcrHostReview({ request: input, packet: configuredPacket() }, {
         trustedContext: sameModel, providerExecutor: completedProvider,
       });
-      expect(calls).toBe(1);
+      expect(calls).toBe(2);
       expect(sameModelResult).toMatchObject({
-        status: "unavailable", outcome: "failed", error: { code: "OCR_INDEPENDENCE_INCOMPLETE" },
+        status: "available", outcome: "completed",
         provider_results: [
           { status: "completed" },
-          { status: "failed", error: { code: "OCR_PROVIDER_NOT_INDEPENDENT" } },
+          { status: "completed" },
         ],
       });
       calls = 0;
@@ -132,12 +142,12 @@ describe("configured OCR direct host execution", () => {
         trustedContext: { ...sameModel, route: { ...sameModel.route, minimum_heterologous: 1 } },
         providerExecutor: completedProvider,
       });
-      expect(calls).toBe(1);
+      expect(calls).toBe(2);
       expect(sameModelMinimumOne).toMatchObject({
-        status: "available-with-failures", outcome: "completed",
+        status: "available", outcome: "completed",
         provider_results: [
           { status: "completed" },
-          { status: "failed", error: { code: "OCR_PROVIDER_NOT_INDEPENDENT" } },
+          { status: "completed" },
         ],
       });
 
@@ -208,7 +218,7 @@ if (args[0] !== "exec" || !args.includes("--json")
     || !args.includes("--skip-git-repo-check") || !args.includes("--ephemeral")
     || !entry.includes("If no Read tool is available")
     || !entry.includes("read-only file-view commands")
-    || !entry.includes("review-prompt.md and those relative paths inside this isolated packet cwd")
+    || !entry.includes("selected relative packet paths inside this isolated packet cwd")
     || !entry.includes("Never write, use Git or network commands, or access parent paths")
     || !prompt.includes("Codex CLI only:")
     || !prompt.includes("cat or sed -n")
@@ -272,24 +282,42 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     });
   });
 
-  it("does not dispatch a configured provider that shares the host source", async () => {
+  it("runs Kimi through a packet-local read-only agent profile", async () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-kimi-profile-"));
+    roots.push(root);
+    const executable = join(root, "fake-kimi");
+    writeFileSync(executable, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const agentIndex = args.indexOf("--agent-file");
+const skillsIndex = args.indexOf("--skills-dir");
+if (agentIndex < 0 || skillsIndex < 0
+    || !fs.readFileSync(args[agentIndex + 1], "utf8").includes("tools:\\n  - Read")
+    || fs.readdirSync(args[skillsIndex + 1]).length !== 0) process.exit(8);
+process.stdout.write(JSON.stringify({ role: "assistant", content: [{ type: "text", text: JSON.stringify({ findings: [] }) }] }) + "\\n");
+`, { mode: 0o700 });
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["kimi/coding"], executable),
+    });
+    expect(result).toMatchObject({
+      status: "available", outcome: "completed",
+      provider_results: [{ status: "completed", error: null }],
+    });
+  });
+
+  it("dispatches every configured provider even when sources overlap", async () => {
     let calls = 0;
     const trustedContext = configuredContext(["kimi/coding", "codex/luna"], "/unused/provider");
-    trustedContext.selection.eligibleProfiles = ["kimi/coding"];
     const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
       trustedContext,
-      providerExecutor: async () => {
+      providerExecutor: async ({ provider }) => {
         calls += 1;
-        return { status: "completed", output: JSON.stringify({
-          role: "assistant", content: [{ type: "text", text: JSON.stringify({ findings: [] }) }],
-        }) };
+        return { status: "completed", output: directProviderOutput(provider, []) };
       },
     });
-    expect(calls).toBe(1);
-    expect(result.status).toBe("available-with-failures");
-    expect(result.provider_results[1]).toMatchObject({
-      status: "failed", error: { code: "OCR_PROVIDER_NOT_INDEPENDENT" },
-    });
+    expect(calls).toBe(2);
+    expect(result.status).toBe("available");
+    expect(result.provider_results.map(({ status }) => status)).toEqual(["completed", "completed"]);
   });
 
   it("fails before dispatch when the trusted provider configuration changes", async () => {
@@ -308,7 +336,7 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     expect(calls).toBe(0);
   });
 
-  it("uses an unbounded direct Antigravity print session for the verify-code provider", async () => {
+  it("lets Antigravity use its print mode without a host provider deadline", async () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-agy-"));
     roots.push(root);
     const executable = join(root, "fake-agy");
@@ -317,7 +345,7 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 const prompt = fs.readFileSync("review-prompt.md", "utf8");
 if (!args.includes("--print-timeout=0") || !prompt.includes("verify-code")
-    || args.at(-1) !== "Read review-prompt.md in this directory, then read every listed packet file. Return only the requested JSON object."
+    || args.at(-1) !== "Read review-prompt.md in this directory, then use the packet indexes to inspect the implementation and evidence files needed for this review. Do not blindly dump every listed file; inspect all implementation and test changes relevant to findings, and read raw execution output only when a claim depends on it. Return only the requested JSON object."
     || !prompt.includes("All other providers must use a read tool only.")) process.exit(8);
 process.stdout.write(JSON.stringify({findings:[]}));
 `, { mode: 0o700 });
@@ -365,6 +393,34 @@ setTimeout(() => {
     expect(Number.isSafeInteger(member.execution.health.last_output_at_ms)).toBe(true);
     expect(observed.some((item) => item.status === "running"
       && item.last_output_at_ms !== null && item.progress_events > 0)).toBe(true);
+  });
+
+  it("keeps a silent direct provider live until explicit cancellation and cleans up", async () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-no-deadline-"));
+    roots.push(root);
+    const executable = join(root, "fake-codex");
+    writeFileSync(executable, `#!/usr/bin/env node
+process.on("SIGTERM", () => {});
+setInterval(() => {}, 1000);
+`, { mode: 0o700 });
+    const priorHostDirs = new Set(readdirSync(tmpdir()).filter((name) =>
+      name.startsWith("workflowhub-ocr-host-") && !name.startsWith("workflowhub-ocr-host-test-")));
+    const controller = new AbortController();
+    const pending = runConfiguredOcrHostReview({ request, packet: configuredPacket(), signal: controller.signal }, {
+      trustedContext: configuredContext(["codex/luna"], executable),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    controller.abort(new Error("operator cancelled"));
+    const result = await pending;
+    expect(result).toMatchObject({
+      status: "unavailable",
+      outcome: "cancelled",
+      provider_results: [{ status: "cancelled", error: { code: "OCR_PROVIDER_CANCELLED" } }],
+    });
+    expect(result.provider_results[0].execution.health.status).toBe("cancelled");
+    expect(readdirSync(tmpdir()).filter((name) => name.startsWith("workflowhub-ocr-host-")
+      && !name.startsWith("workflowhub-ocr-host-test-")
+      && !priorHostDirs.has(name))).toEqual([]);
   });
 
   it("treats 16 MiB as a provider-output capture limit, after file input dispatch", async () => {

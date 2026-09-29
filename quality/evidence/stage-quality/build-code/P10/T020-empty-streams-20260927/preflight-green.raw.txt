@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (19 tests | 15 skipped) 16818ms
+   ✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 3343ms
+   ✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 3190ms
+   ✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 6957ms
+   ✓ P10 fixed targeted capture > does not start a mixed case with a foreign task workspace 3328ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 15 skipped (19)
+   Start at  18:19:23
+   Duration  17.29s (transform 153ms, setup 0ms, collect 356ms, tests 16.82s, environment 0ms, prepare 31ms)
+

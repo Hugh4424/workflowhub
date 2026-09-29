@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 1 failed | 56 skipped) 24004ms
+   × ORACLE-P10-T021: explicit current run consumption source > reader move: authenticates the exact locator and facts through the single runtime reader 24003ms
+     → expected undefined to be type of 'function'
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 56 skipped (57)
+   Start at  05:20:51
+   Duration  24.74s (transform 272ms, setup 0ms, collect 619ms, tests 24.00s, environment 0ms, prepare 33ms)
+

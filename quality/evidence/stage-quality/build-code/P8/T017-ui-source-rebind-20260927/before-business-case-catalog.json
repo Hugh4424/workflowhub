@@ -1,0 +1,555 @@
+{
+  "schema": "workflowhub-business-case-catalog.v1",
+  "project": "workflowhub",
+  "revision": "2026-09-27.card04-current-source-rebind.9",
+  "owner": "CARD-04 build-code catalog maintainer",
+  "consumers": [
+    "P9",
+    "P10"
+  ],
+  "retirement_policy": "Retire a case only after recording its reason, former source revision and dependent case IDs; update both relationship directions and preserve the prior catalog revision in task evidence.",
+  "uncharted_legacy": {
+    "status": "unknown",
+    "reason": "Three sourced CARD-04 seeds are a finite sample; no authenticated project-wide business-rule and runnable-test inventory is available.",
+    "owner": "P9/T019 inventory and P10/T020 case-selection owners"
+  },
+  "cases": [
+    {
+      "id": "CARD04-DECISION-LOG-CENSUS",
+      "intent": "feature",
+      "status": "active",
+      "owner": "CARD-04 P6/T009 material owner",
+      "source": {
+        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "revision": "sha256:4376f8a7e4a269aa5db35bc2b128593cfba469be57fbbdffc0b925c23f6c785e"
+      },
+      "rule": {
+        "id": "CARD-04-RULING-P6-FULL-EXEC / FR-26",
+        "revision": "sha256:5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b",
+        "statement": "The current decision-log original-source census must parse its U/V/R sections with a nonzero U/V denominator, no parser errors, and R-001..R-008 index entries."
+      },
+      "scenarios": {
+        "normal": {
+          "precondition": "The authenticated current decision-log contains all three required source sections.",
+          "input": "Parse the actual decision-log through deriveDecisionLogOriginalSourceCensus.",
+          "observable_success": "status=present, errors=[], entries and source_units each >=8, and R-001..R-008 indexed.",
+          "observable_failure": "A missing source section, empty denominator, or parser error is observable."
+        },
+        "failure": {
+          "precondition": "A source section is missing from an in-memory copy.",
+          "input": "Remove the verbatim section before invoking the same parser.",
+          "observable_success": "The parser reports a named missing-section error.",
+          "observable_failure": "The mutated material yields errors=[] or is counted as covered."
+        },
+        "boundary": {
+          "precondition": "U/V source lines and R index rows occupy distinct namespaces.",
+          "input": "Parse the U/V/R rows in the current decision-log.",
+          "observable_success": "U/V entries form the denominator; R entries are trace links, not added source units.",
+          "observable_failure": "R rows inflate the source denominator or a required R ID is absent."
+        },
+        "recovery": {
+          "precondition": "A missing section has been restored using authenticated material.",
+          "input": "Reparse the corrected decision-log without changing the parser.",
+          "observable_success": "The previously missing source section is recognized and parser errors clear.",
+          "observable_failure": "The repaired text remains unparseable or the denominator stays zero."
+        }
+      },
+      "risk": "A zero or inflated original-source denominator could make later coverage claims misleading; the focused parser test alone does not prove the official AC-26 diagnostic or phase conclusion. Independent business-effect evidence remains unknown because no separate before/after reader has been authenticated.",
+      "environment": "Local Node v24.14.0 and Vitest 2.1.9; current decision-log bytes, no network service.",
+      "change_triggers": [
+        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+        "runtime/stage/stage-content-contracts.mjs"
+      ],
+      "implementation_interfaces": [
+        "runtime/stage/stage-content-contracts.mjs#deriveDecisionLogOriginalSourceCensus"
+      ],
+      "consumers": [
+        "runtime/stage/stage-content-contracts.mjs",
+        "tests/contract/decision-log-census.test.mjs"
+      ],
+      "related_case_ids": [],
+      "ac_ids": [
+        "AC-26"
+      ],
+      "task_ids": [
+        "T009"
+      ],
+      "phase_ids": [
+        "P6"
+      ],
+      "execution": {
+        "target": "tests/contract/decision-log-census.test.mjs",
+        "runner_identity": "Vitest 2.1.9 / Node v24.14.0 / repository-local test file",
+        "command": "npx vitest run tests/contract/decision-log-census.test.mjs",
+        "mode": "automatic",
+        "expected_test_identity": "decision-log 原始来源普查：分母非零（T009 gate）",
+        "machine_command": "npx vitest run tests/contract/decision-log-census.test.mjs --reporter=json",
+        "registered_test_ids": [
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 普查状态是 present（材料存在且被识别）",
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 普查 errors 为空数组",
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 原始来源 entries / source_units 分母非零（>= 8）",
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 原始需求索引覆盖 R-001..R-008",
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 逐字 U 层至少 3 节，且逐字声明层至少 1 条「用户」V 行",
+          "tests/contract/decision-log-census.test.mjs > decision-log 原始来源普查：分母非零（T009 gate） > 负控：删掉「## 逐字声明层（verbatim）」整节后普查必须报错"
+        ]
+      },
+      "effect_observation": {
+        "schema_version": "workflowhub-business-effect-observation.v1",
+        "observation_status": "not_yet_observed",
+        "rule_revision": "sha256:5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b",
+        "canonical_source": {
+          "type": "current_task_acceptance_quality_fact_chain",
+          "stage": "build-code",
+          "subject": "AC-26",
+          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+          "quality_fact_schema": "quality-fact.v1",
+          "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
+          "acceptance_schema": "acceptance-evidence.v1",
+          "acceptance_ref_template": "quality/evidence/acceptance/build-code/AC-26-{acceptance_sha256}.json",
+          "required_binding": [
+            "task_id",
+            "snapshot_tree",
+            "material_revision",
+            "ref_sha256"
+          ]
+        },
+        "reader": {
+          "owner": "CARD-04 P10/T021",
+          "interface": "proposed read-only TaskHandle reader of current quality fact, acceptance wrapper and nested raw refs; never infer from the test title or parser output",
+          "implementation_status": "not_implemented",
+          "consumers": [
+            "P10/T021 case reconciliation",
+            "verify-code read-only sampling"
+          ]
+        },
+        "positive_predicate": "For the same authenticated Task, material revision and snapshot, independently read raw decision-log U/V/R sections without calling deriveDecisionLogOriginalSourceCensus; require nonzero U/V source units, R-001..R-008 links and no missing section, then require a bound build-code AC-26 fact and acceptance wrapper reporting the matching successful outcome. A source-only parser GREEN is insufficient.",
+        "negative_predicate": "Reject a bound AC-26 pass if a required U/V/R section is absent, the independently counted source denominator is zero, an R link is missing, or the raw stage evidence disagrees with the fact.",
+        "missing_evidence_outcome": "unknown",
+        "stale_evidence_outcome": "unknown",
+        "ac_ids": [
+          "AC-26"
+        ]
+      }
+    },
+    {
+      "id": "CARD04-ACCEPTANCE-MACHINE-CLASSES",
+      "intent": "feature",
+      "status": "active",
+      "owner": "CARD-04 P7/T015 evidence-value owner",
+      "source": {
+        "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+        "revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674"
+      },
+      "rule": {
+        "id": "CARD-04-RULING-A1-TRUTH / FR-27",
+        "revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+        "statement": "Acceptance evidence admits the eight listed result values; missing, inconsistent, incomplete and unavailable remain incomplete in quality-store verification, while invalid values are rejected."
+      },
+      "scenarios": {
+        "normal": {
+          "precondition": "An acceptance leaf carries one of the eight allowed results.",
+          "input": "Validate the leaf and pass it through the focused quality-store helper.",
+          "observable_success": "The value is accepted; the four machine classes map to incomplete rather than passed.",
+          "observable_failure": "An allowed machine class is rejected or silently mapped to passed."
+        },
+        "failure": {
+          "precondition": "The result value is not in the eight-value list.",
+          "input": "Submit a bogus value such as timed_out.",
+          "observable_success": "Validation rejects the value and identifies the allowed values.",
+          "observable_failure": "The bogus value becomes pass, fail, or an accepted ninth value."
+        },
+        "boundary": {
+          "precondition": "Freshness checks encounter a new nonterminal machine class.",
+          "input": "Evaluate missing, inconsistent, incomplete and unavailable at the existing freshness call site.",
+          "observable_success": "No acceptance outcome mismatch is thrown merely because the value is a listed nonterminal class.",
+          "observable_failure": "The validator accepts a value that freshness rejects or quality-store marks passed."
+        },
+        "recovery": {
+          "precondition": "A previously deferred leaf receives a later valid recorded result.",
+          "input": "Re-evaluate through the existing evidence helpers without rewriting the earlier fact.",
+          "observable_success": "The new result is evaluated on its own evidence while the prior deferred fact remains intact.",
+          "observable_failure": "The old result is overwritten or the new result is silently declared passed."
+        }
+      },
+      "risk": "Helper-level acceptance does not prove CARD-05 production-stage emission or historical 123-record byte compatibility; the authenticated historical baseline is unavailable. Independent business-effect evidence remains unknown because no separate before/after reader has been authenticated.",
+      "environment": "Local Node v24.14.0 and Vitest 2.1.9, in-memory acceptance and quality-fact fixtures; no external service.",
+      "change_triggers": [
+        "runtime/evidence/acceptance-evidence-validator.mjs",
+        "runtime/evidence/freshness.mjs",
+        "runtime/evidence/quality-store.mjs",
+        "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md"
+      ],
+      "implementation_interfaces": [
+        "runtime/evidence/acceptance-evidence-validator.mjs#validateAcceptanceEvidence",
+        "runtime/evidence/freshness.mjs#expectedPassed",
+        "runtime/evidence/quality-store.mjs#validateVerifyLeaves"
+      ],
+      "consumers": [
+        "runtime/evidence/freshness.mjs",
+        "runtime/evidence/quality-store.mjs",
+        "tests/contract/acceptance-result-machine-classes.test.mjs"
+      ],
+      "related_case_ids": [
+        "CARD04-DEFERRED-ACCEPTANCE-REGRESSION"
+      ],
+      "ac_ids": [
+        "AC-27"
+      ],
+      "task_ids": [
+        "T015"
+      ],
+      "phase_ids": [
+        "P7"
+      ],
+      "execution": {
+        "target": "tests/contract/acceptance-result-machine-classes.test.mjs",
+        "runner_identity": "Vitest 2.1.9 / Node v24.14.0 / repository-local test file",
+        "command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs",
+        "mode": "automatic",
+        "expected_test_identity": "acceptance result machine classes / 28 focused assertions",
+        "machine_command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs --reporter=json",
+        "registered_test_ids": [
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result pass and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result fail and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result inconclusive and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result deferred and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result missing and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result inconsistent and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result incomplete and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > accepts acceptance result unavailable and returns a frozen value",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > A. 共享校验器接受 8 值（runtime/evidence/acceptance-evidence-validator.mjs） > rejects an unknown result with a message that names every allowed result",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class missing incomplete instead of passed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class inconsistent incomplete instead of passed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class incomplete incomplete instead of passed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps machine class unavailable incomplete instead of passed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps the terminal result pass as passed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > B. quality-store 不得把机器判定类当成 passed（runtime/evidence/quality-store.mjs） > keeps the terminal result fail as failed",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result inconclusive",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result deferred",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result missing",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result inconsistent",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result incomplete",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > authenticates a missing quality fact bound to nonterminal result unavailable",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > still authenticates a passed fact bound to its own terminal result pass",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > still authenticates a failed fact bound to its own terminal result fail",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > never authenticates a missing quality fact bound to terminal result pass",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > C. 非终态不得被当通过（runtime/evidence/freshness.mjs:297-306 经 :713 真实生效） > never authenticates a missing quality fact bound to terminal result fail",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > D. core/task-close.mjs 侧口径：只用共享校验器，不得自建 result 白名单 > imports the shared acceptance evidence validator instead of owning the enum",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > D. core/task-close.mjs 侧口径：只用共享校验器，不得自建 result 白名单 > carries no local acceptance result whitelist",
+          "tests/contract/acceptance-result-machine-classes.test.mjs > acceptance result enum — D-004 machine verdict classes > D. core/task-close.mjs 侧口径：只用共享校验器，不得自建 result 白名单 > compares acceptance.result only against pass and treats every other value as missing"
+        ]
+      },
+      "effect_observation": {
+        "schema_version": "workflowhub-business-effect-observation.v1",
+        "observation_status": "not_yet_observed",
+        "rule_revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+        "canonical_source": {
+          "type": "current_task_acceptance_quality_fact_chain",
+          "stage": "build-code",
+          "subject": "AC-27",
+          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "quality_fact_schema": "quality-fact.v1",
+          "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
+          "acceptance_schema": "acceptance-evidence.v1",
+          "acceptance_ref_template": "quality/evidence/acceptance/build-code/AC-27-{acceptance_sha256}.json",
+          "required_binding": [
+            "task_id",
+            "snapshot_tree",
+            "material_revision",
+            "ref_sha256"
+          ]
+        },
+        "reader": {
+          "owner": "CARD-04 P10/T021",
+          "interface": "proposed read-only TaskHandle reader of current quality fact, acceptance wrapper and nested raw refs; never infer from the test title or parser output",
+          "implementation_status": "not_implemented",
+          "consumers": [
+            "P10/T021 case reconciliation",
+            "verify-code read-only sampling"
+          ]
+        },
+        "positive_predicate": "Current helper and validator capability only: the P7 acceptance validator accepts missing, inconsistent, incomplete and unavailable, and the quality-store helper can classify those four as non-passing without silently returning passed. This does not prove that the official build-code AC-27 writer emitted any of them.",
+        "negative_predicate": "Reject deferred as proof of any of the four machine classes; stage_end_spec_analyze under a different subject is not AC-27 evidence. Also reject any helper result silently converted to passed or used as a current Task business effect.",
+        "missing_evidence_outcome": "unknown",
+        "stale_evidence_outcome": "unknown",
+        "ac_ids": [
+          "AC-27"
+        ],
+        "producer_status": "not_implemented",
+        "producer_owner": "CARD-05 acceptance publication owner",
+        "capability_scope": "helper_validator_only"
+      }
+    },
+    {
+      "id": "CARD04-DEFERRED-ACCEPTANCE-REGRESSION",
+      "intent": "regression",
+      "status": "active",
+      "owner": "CARD-04 P7/T015 regression maintainer",
+      "source": {
+        "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+        "revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674"
+      },
+      "rule": {
+        "id": "CARD-04-RULING-A1-TRUTH / FR-27",
+        "revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+        "statement": "P7/T015 requires the existing deferred acceptance semantics regression guard to remain green while the eight-value acceptance result whitelist and six-value nonterminal handling are introduced; quality-fact.v1.status remains unchanged."
+      },
+      "scenarios": {
+        "normal": {
+          "precondition": "An existing acceptance subject has a listed status.",
+          "input": "Map passed, failed, inconclusive, deferred and missing through the stage result mapper.",
+          "observable_success": "Each maps to the explicit expected acceptance result, including missing to deferred.",
+          "observable_failure": "A listed status falls through to generic fail."
+        },
+        "failure": {
+          "precondition": "An unlisted subject or evidence result is supplied.",
+          "input": "Use timed_out in the existing stage mappers.",
+          "observable_success": "The mapper throws an unsupported-value error.",
+          "observable_failure": "The unexpected value is silently converted to failed."
+        },
+        "boundary": {
+          "precondition": "The evidence result is inconclusive or deferred.",
+          "input": "Validate a verify leaf with the existing nested evidence fixture.",
+          "observable_success": "The quality-store status is incomplete for both values.",
+          "observable_failure": "Either value is marked passed."
+        },
+        "recovery": {
+          "precondition": "A prior inconclusive or deferred quality fact has canonical refs and evidence bytes.",
+          "input": "Read it through authenticateQualityFactRecord.",
+          "observable_success": "The recorded fact authenticates as recorded without altering prior bytes.",
+          "observable_failure": "Readback drops the record or treats its nonterminal result as a passed fact."
+        }
+      },
+      "risk": "Regression tests protect existing semantics at named helpers; they do not prove a live new-card producer or every legacy record. Independent business-effect evidence remains unknown because no separate before/after reader has been authenticated.",
+      "environment": "Local Node v24.14.0 and Vitest 2.1.9; in-memory quality facts and stage helper imports.",
+      "change_triggers": [
+        "runtime/evidence/freshness.mjs",
+        "runtime/evidence/quality-store.mjs",
+        "runtime/stage/stage-runner.mjs",
+        "runtime/stage/stage-handlers.mjs"
+      ],
+      "implementation_interfaces": [
+        "runtime/stage/stage-runner.mjs#acceptanceResultForSubjectStatus",
+        "runtime/stage/stage-handlers.mjs#classifyAcceptanceEvidenceResult",
+        "runtime/evidence/freshness.mjs#authenticateQualityFactRecord"
+      ],
+      "consumers": [
+        "runtime/evidence/freshness.mjs",
+        "runtime/evidence/quality-store.mjs",
+        "tests/deferred-acceptance-semantics.test.mjs"
+      ],
+      "related_case_ids": [
+        "CARD04-ACCEPTANCE-MACHINE-CLASSES"
+      ],
+      "ac_ids": [
+        "AC-27"
+      ],
+      "task_ids": [
+        "T015"
+      ],
+      "phase_ids": [
+        "P7"
+      ],
+      "execution": {
+        "target": "tests/deferred-acceptance-semantics.test.mjs",
+        "runner_identity": "Vitest 2.1.9 / Node v24.14.0 / repository-local test file",
+        "command": "npx vitest run tests/deferred-acceptance-semantics.test.mjs",
+        "mode": "automatic",
+        "expected_test_identity": "deferred acceptance semantics / existing 15 regression assertions",
+        "machine_command": "npx vitest run tests/deferred-acceptance-semantics.test.mjs --reporter=json",
+        "registered_test_ids": [
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > maps subject status passed to pass without a catch-all failure",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > maps subject status failed to fail without a catch-all failure",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > maps subject status inconclusive to inconclusive without a catch-all failure",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > maps subject status deferred to deferred without a catch-all failure",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > maps subject status missing to deferred without a catch-all failure",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > rejects an unlisted subject status instead of silently writing fail",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps verify-code evidence result pass as passed",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps verify-code evidence result fail as failed",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps verify-code evidence result inconclusive as inconclusive",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps verify-code evidence result deferred as deferred",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > rejects an unlisted evidence result instead of treating it as failed",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps inconclusive incomplete in quality-store verification",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > keeps deferred incomplete in quality-store verification",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > authenticates a missing quality fact bound to inconclusive",
+          "tests/deferred-acceptance-semantics.test.mjs > deferred acceptance semantics > authenticates a missing quality fact bound to deferred"
+        ]
+      },
+      "effect_observation": {
+        "schema_version": "workflowhub-business-effect-observation.v1",
+        "observation_status": "not_yet_observed",
+        "rule_revision": "sha256:76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+        "canonical_source": {
+          "type": "current_task_acceptance_quality_fact_chain",
+          "stage": "build-code",
+          "subject": "AC-27",
+          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "quality_fact_schema": "quality-fact.v1",
+          "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
+          "acceptance_schema": "acceptance-evidence.v1",
+          "acceptance_ref_template": "quality/evidence/acceptance/build-code/AC-27-{acceptance_sha256}.json",
+          "required_binding": [
+            "task_id",
+            "snapshot_tree",
+            "material_revision",
+            "ref_sha256"
+          ]
+        },
+        "reader": {
+          "owner": "CARD-04 P10/T021",
+          "interface": "proposed read-only TaskHandle reader of current quality fact, acceptance wrapper and nested raw refs; never infer from the test title or parser output",
+          "implementation_status": "not_implemented",
+          "consumers": [
+            "P10/T021 case reconciliation",
+            "verify-code read-only sampling"
+          ]
+        },
+        "positive_predicate": "For an authenticated current-Task missing-subject sample under the P7 rule, independently read the bound raw acceptance wrapper; its result remains deferred and the matching quality fact does not claim the missing subject passed. A prior-stage historical deferred record is only a baseline sample.",
+        "negative_predicate": "Reject a missing-subject sample converted to pass, a valid deferred wrapper rejected by the current consumer, or a wrapper/fact hash mismatch.",
+        "missing_evidence_outcome": "unknown",
+        "stale_evidence_outcome": "unknown",
+        "ac_ids": [
+          "AC-27"
+        ]
+      }
+    }
+  ],
+  "evolution": {
+    "unmapped_b2_status": "unknown",
+    "owner": "P9 test-inventory and P10 case-reconciliation owners",
+    "impact": "The three seed cases cannot establish full business-case coverage, change-scope selection, runner execution, browser reconciliation or verify-code handoff.",
+    "promotion_policy": "Promote an obligation only with an authenticated business source and version, a real caller and consumer, positive and negative business oracles observed through the runner, target and trigger alignment, and an independent review ref; record a stable case ID and preserve prior unknown evidence.",
+    "phase_obligations": [
+      {
+        "phase_id": "P9",
+        "task_id": "T018",
+        "test_target": "tests/contract/build-code-change-scope.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "consumer_path": "workflows/build-code/capture.mjs",
+        "change_trigger": "workflows/build-code/capture.mjs",
+        "ac_ids": [
+          "AC-32"
+        ],
+        "status": "not_done",
+        "consumer_status": "not_implemented",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P9/T018 implementation and review owner",
+        "impact": "Trusted task-start change scope is not yet bound to a real catalog case or executable selection.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P9",
+        "task_id": "T019",
+        "test_target": "tests/contract/build-code-test-inventory.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "consumer_path": "workflows/build-code/capture.mjs",
+        "change_trigger": "workflows/build-code/capture.mjs",
+        "ac_ids": [
+          "AC-30"
+        ],
+        "status": "not_done",
+        "consumer_status": "not_implemented",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P9/T019 implementation and review owner",
+        "impact": "A TAP test identity inventory is not yet connected to actual catalog registrations or bidirectional runnable IDs.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P10",
+        "task_id": "T020",
+        "test_target": "tests/contract/build-code-case-selection.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "consumer_path": "workflows/build-code/case-selection.mjs",
+        "change_trigger": "workflows/build-code/case-selection.mjs",
+        "ac_ids": [
+          "AC-32"
+        ],
+        "status": "not_done",
+        "consumer_status": "not_implemented",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P10/T020 implementation and review owner",
+        "impact": "Change-to-case selection and stale/unmatched handling have not been verified on a real caller.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P10",
+        "task_id": "T020",
+        "test_target": "tests/contract/build-code-targeted-runner.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "consumer_path": "workflows/build-code/targeted-runner.mjs",
+        "change_trigger": "workflows/build-code/targeted-runner.mjs",
+        "ac_ids": [
+          "AC-32"
+        ],
+        "status": "not_done",
+        "consumer_status": "not_implemented",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P10/T020 implementation and review owner",
+        "impact": "Case targets have not been executed with authenticated runner and snapshot identity.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P10",
+        "task_id": "T021",
+        "test_target": "tests/contract/build-code-case-reconciliation.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "consumer_path": "workflows/build-code/case-reconciliation.mjs",
+        "change_trigger": "workflows/build-code/case-reconciliation.mjs",
+        "ac_ids": [
+          "AC-33"
+        ],
+        "status": "not_done",
+        "consumer_status": "not_implemented",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P10/T021 implementation and review owner",
+        "impact": "Per-case business effect and two-way test result reconciliation remain unproved.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P11",
+        "task_id": "T022",
+        "test_target": "tests/contract/post-business-browser-reconciliation.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md",
+        "consumer_path": "runtime/stage/stage-content-contracts.mjs",
+        "change_trigger": "tests/contract/post-business-browser-reconciliation.test.mjs",
+        "ac_ids": [
+          "AC-32"
+        ],
+        "status": "not_done",
+        "consumer_status": "unknown",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P11/T022 implementation and review owner",
+        "impact": "No authenticated real page/API service trigger or browser result is identified; a fixture cannot establish business coverage.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      },
+      {
+        "phase_id": "P12",
+        "task_id": "T023",
+        "test_target": "tests/contract/verify-code-business-handoff.test.mjs",
+        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+        "consumer_path": "workflows/verify-code/SKILL.md",
+        "change_trigger": "workflows/verify-code/SKILL.md",
+        "ac_ids": [
+          "AC-34"
+        ],
+        "status": "not_done",
+        "consumer_status": "test_only",
+        "business_rule_status": "unknown",
+        "case_id": null,
+        "owner": "CARD-04 P12/T023 implementation and review owner",
+        "impact": "Skill text and a contract test do not prove live verify-code review consumption of business case results.",
+        "promotion_trigger": "Authenticate source revision, real consumer and caller, runner identity, positive and negative oracle observations, then independent review before case activation."
+      }
+    ]
+  }
+}

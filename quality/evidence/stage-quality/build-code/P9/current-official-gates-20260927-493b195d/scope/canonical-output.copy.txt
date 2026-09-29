@@ -1,0 +1,24 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-preexecution-source.test.mjs (7 tests) 17891ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > finds committed product changes in a clean worktree without changing Task store bytes 2008ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt 4316ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace 2956ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing 1941ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed hash 1934ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed workspace_binding 1903ms
+   ✓ ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot 2832ms
+ ✓ tests/contract/build-code-change-scope.test.mjs (5 tests) 18651ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start 3118ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start 3768ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots 6040ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists 2652ms
+   ✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start 3072ms
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  20:47:56
+   Duration  19.12s (transform 158ms, setup 0ms, collect 726ms, tests 36.54s, environment 0ms, prepare 55ms)
+
+

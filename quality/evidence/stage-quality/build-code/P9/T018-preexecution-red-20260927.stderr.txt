@@ -1,0 +1,70 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt
+AssertionError: ORACLE-P9-PREEXECUTION: authenticated change source must exist before a test receipt: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ beforeTests tests/contract/build-code-preexecution-source.test.mjs:42:93
+     40| function beforeTests(task, workspace = openCurrentTaskWorkspace(task))…
+     41|   expect(changeScope.capturePreExecutionTaskChangeScope,
+     42|     "ORACLE-P9-PREEXECUTION: authenticated change source must exist be…
+       |                                                                                             ^
+     43|   return changeScope.capturePreExecutionTaskChangeScope({ task, worksp…
+     44| }
+ ❯ tests/contract/build-code-preexecution-source.test.mjs:63:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace
+AssertionError: ORACLE-P9-PREEXECUTION: authenticated change source must exist before a test receipt: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ beforeTests tests/contract/build-code-preexecution-source.test.mjs:42:93
+     40| function beforeTests(task, workspace = openCurrentTaskWorkspace(task))…
+     41|   expect(changeScope.capturePreExecutionTaskChangeScope,
+     42|     "ORACLE-P9-PREEXECUTION: authenticated change source must exist be…
+       |                                                                                             ^
+     43|   return changeScope.capturePreExecutionTaskChangeScope({ task, worksp…
+     44| }
+ ❯ tests/contract/build-code-preexecution-source.test.mjs:87:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing
+AssertionError: ORACLE-P9-PREEXECUTION: authenticated change source must exist before a test receipt: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ beforeTests tests/contract/build-code-preexecution-source.test.mjs:42:93
+     40| function beforeTests(task, workspace = openCurrentTaskWorkspace(task))…
+     41|   expect(changeScope.capturePreExecutionTaskChangeScope,
+     42|     "ORACLE-P9-PREEXECUTION: authenticated change source must exist be…
+       |                                                                                             ^
+     43|   return changeScope.capturePreExecutionTaskChangeScope({ task, worksp…
+     44| }
+ ❯ tests/contract/build-code-preexecution-source.test.mjs:102:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot
+AssertionError: ORACLE-P9-PREEXECUTION: authenticated change source must exist before a test receipt: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ beforeTests tests/contract/build-code-preexecution-source.test.mjs:42:93
+     40| function beforeTests(task, workspace = openCurrentTaskWorkspace(task))…
+     41|   expect(changeScope.capturePreExecutionTaskChangeScope,
+     42|     "ORACLE-P9-PREEXECUTION: authenticated change source must exist be…
+       |                                                                                             ^
+     43|   return changeScope.capturePreExecutionTaskChangeScope({ task, worksp…
+     44| }
+ ❯ tests/contract/build-code-preexecution-source.test.mjs:110:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+

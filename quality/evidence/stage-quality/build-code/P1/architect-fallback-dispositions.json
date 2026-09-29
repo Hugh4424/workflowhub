@@ -1,0 +1,54 @@
+{
+  "schema_version": "card04-phase-finding-dispositions.v1",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P1",
+  "review_source": "quality/evidence/stage-quality/build-code/P1/architect-fallback-output.json",
+  "canonical_ocr_result_ref": null,
+  "canonical_ocr_attempt_ref": "quality/reviews/attempts/e7623be1-6f1d-5258-aded-9b1e72812074/attempt.json",
+  "dispositions": [
+    {
+      "finding_id": "P1-ALT-01",
+      "original_fact": "T002 的 GREEN 记录只有命令、成功标记和退出码，缺少 P1 契约要求随证据记录的 task_id 与 snapshot_tree，无法从该原件核对执行身份。",
+      "source": "quality/evidence/stage-quality/build-code/P1/architect-fallback-output.json",
+      "consequence": "P1 语义或来源事实不足以支持无条件完成声明",
+      "status": "fixed",
+      "next_action": "在当前最终快照重采正式 P1 receipt，并核对修后文件与审查时 SHA 的差分",
+      "evidence_ref": [
+        "quality/evidence/stage-quality/build-code/P1/T002-green.meta.json",
+        "quality/evidence/stage-quality/build-code/P1/T002-green-before-fallback.txt"
+      ],
+      "owner": "CARD-04 build-code main session",
+      "consumer": "P1 handoff and P13 final aggregate",
+      "retain_or_delete": "retain original finding and pre-fix evidence"
+    },
+    {
+      "finding_id": "P1-ALT-02",
+      "original_fact": "ADR 宣称该方向不新增文件或 schema，但当前 spec 的 DER-06/08 明确规划新增 stage-end-report.mjs 和 stage-end-report-facts.v1。实施者无法同时遵守这两份契约。",
+      "source": "quality/evidence/stage-quality/build-code/P1/architect-fallback-output.json",
+      "consequence": "P1 语义或来源事实不足以支持无条件完成声明",
+      "status": "fixed",
+      "next_action": "在当前最终快照重采正式 P1 receipt，并核对修后文件与审查时 SHA 的差分",
+      "evidence_ref": [
+        "docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md"
+      ],
+      "owner": "CARD-04 build-code main session",
+      "consumer": "P1 handoff and P13 final aggregate",
+      "retain_or_delete": "retain original finding and pre-fix evidence"
+    },
+    {
+      "finding_id": "P1-ALT-03",
+      "original_fact": "库存将 2026-09-26 11:29 的 --help 列为有原始输出的实跑，但 P1 证据没有该次输出的引用；当前重新运行 --help 只能验证路由，不能补证当时的执行。",
+      "source": "quality/evidence/stage-quality/build-code/P1/architect-fallback-output.json",
+      "consequence": "P1 语义或来源事实不足以支持无条件完成声明",
+      "status": "fixed",
+      "next_action": "在当前最终快照重采正式 P1 receipt，并核对修后文件与审查时 SHA 的差分",
+      "evidence_ref": [
+        "docs/architecture/real-entry-inventory.md",
+        "quality/evidence/stage-quality/build-code/P1/T002-help.txt"
+      ],
+      "owner": "CARD-04 build-code main session",
+      "consumer": "P1 handoff and P13 final aggregate",
+      "retain_or_delete": "retain original finding and pre-fix evidence"
+    }
+  ]
+}

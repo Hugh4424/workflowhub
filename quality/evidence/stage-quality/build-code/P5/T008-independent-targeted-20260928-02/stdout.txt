@@ -1,0 +1,21 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/p5-same-run-report-source.test.mjs (18 tests | 6 skipped) 96485ms
+   ✓ P5 same-run report source > does not publish a formal report from CARD04-shaped Task identity with fixture_only text 9556ms
+   ✓ P5 same-run report source > does not publish a formal report from unsupported human approval claim in the isolated fixture 9508ms
+   ✓ P5 same-run report source > writes no P5 report for a P1-only task even with a P5 cursor claim 8712ms
+   ✓ P5 same-run report source > writes no P5 report when the current P5 review is unavailable 8499ms
+   ✓ P5 same-run report source > writes no P5 report without an explicit human exception declaration 9448ms
+   ✓ P5 same-run report source > does not apply an AC-0010 declaration to the distinct AC-001 9384ms
+   ✓ P5 same-run report source > does not apply an exception that expired before P5 9462ms
+   ✓ P5 same-run report source > writes no P5 report for a stale implementation and test snapshot 7779ms
+   ✓ P5 same-run report source > writes no P5 report when the claimed review ref has no original record 6166ms
+   ✓ P5 same-run report source > writes no P5 report when the real stage row writer fails after publication 8191ms
+   ✓ P5 same-run report source > keeps complete same-run fixture inputs unreported without a confirmed human source 9779ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed | 6 skipped (18)
+   Start at  00:28:27
+   Duration  97.24s (transform 283ms, setup 0ms, collect 641ms, tests 96.49s, environment 0ms, prepare 32ms)
+

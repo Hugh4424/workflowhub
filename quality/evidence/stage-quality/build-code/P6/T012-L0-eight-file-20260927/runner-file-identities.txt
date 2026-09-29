@@ -1,0 +1,8 @@
+ ✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 17994ms
+ ✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 38599ms
+ ✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 11ms
+ ✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 21ms
+ ✓ tests/contract/oracle-mirror.test.mjs (9 tests) 16ms
+ ✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 23ms
+ ✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 139211ms
+ ✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms

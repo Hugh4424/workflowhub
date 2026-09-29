@@ -1,0 +1,15 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt
+AssertionError: expected 'selected' not to be 'selected' // Object.is equality
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:67:29
+     65| }
+     66| function rejectsFor(result, reason) {
+     67|   expect(result.status).not.toBe("selected");
+       |                             ^
+     68|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+     69|   expect(result.cases ?? []).toEqual([]);
+ ❯ tests/contract/build-code-case-selection.test.mjs:129:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

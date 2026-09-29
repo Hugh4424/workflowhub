@@ -1,0 +1,23 @@
+{
+  "target": "tests/contract/decision-log-census.test.mjs",
+  "command": "npx vitest run tests/contract/decision-log-census.test.mjs --reporter=json",
+  "receipt_ref": "quality/tests/p9-real-three-target-1.json",
+  "receipt_sha256": "53aeab613b74d5d3936dd7b8ca3e6984fc79972e05b89dee92ba2d8fc9f86724",
+  "output_ref": "quality/tests/output/p9-real-three-target-1.output",
+  "output_sha256": "93a36d7d91d1b244320a96a9993a019f06db75dd235cd9209696661f0c189a54",
+  "dispatch_state": "executed",
+  "exit_code": 0,
+  "snapshot_head": "5f6fde9970b62933e609e0467a871152ef269d16",
+  "snapshot_tree": "0a146bbdebbc8497228a18606d3bbeb5c324168c",
+  "snapshot_commit": "6d3904f156301e3007ba740c4ba211172808e29d",
+  "source_digest": "e51d09ec3cca4489b9eebd72ae969551f84ad05e0ce5771f198cc493e948a7b5",
+  "registry_revision": "2026-09-27.card04-limited.1",
+  "registry_sha256": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957",
+  "inventory_status": "recorded",
+  "leaf_count": 6,
+  "passed_count": 6,
+  "missing": [],
+  "unmatched": [],
+  "skipped": [],
+  "target_sha256": "c28dd0fdc329f98552016800ef7a1f4e90839e8afe27178b0bc8483028b8b386"
+}

@@ -217,19 +217,40 @@ function prepareExecutionReviewRequest(task, request, identity, materialIdForReq
   const diff = runWorkspaceCommand(workspace, "git", ["diff", "--no-ext-diff", "--binary", identity.source.target_commit, identity.tree, "--"]);
   if (diff.error || diff.status !== 0) throw new Error(`reviewed_execution implementation diff unavailable: ${diff.error?.message ?? diff.stderr}`);
   const records = execution.aggregate.subject_fact.execution_items.flatMap((item) => item.evidence_refs).map((reference) => ({ ...reference, raw: task.readRecord(reference.ref) }));
-  const outputs = records.flatMap(({ raw }) => {
+  // An acceptance command can be referenced by many AC rows.  The old
+  // projection expanded every row independently, so one stdout/stderr pair
+  // was copied once per AC and each UTF-8 stream was copied as both text and
+  // base64.  That made the provider packet grow linearly with references,
+  // rather than with actual evidence bytes, and eventually made otherwise
+  // healthy OCR providers hit their external deadline.  Keep the canonical
+  // record refs unchanged, but deliver each exact stream once.
+  const outputByIdentity = new Map();
+  for (const { raw } of records) {
     const value = JSON.parse(raw);
-    return value.subject_fact?.execution ? ["stdout", "stderr"].map((stream) => {
-      const ref = value.subject_fact.execution[`${stream}_ref`], sha256 = value.subject_fact.execution[`${stream}_hash`];
+    if (!value.subject_fact?.execution) continue;
+    for (const stream of ["stdout", "stderr"]) {
+      const ref = value.subject_fact.execution[`${stream}_ref`];
+      const sha256 = value.subject_fact.execution[`${stream}_hash`];
+      const identity = `${ref}\u0000${sha256}`;
+      if (outputByIdentity.has(identity)) continue;
       const bytes = task.readRecordBytes(ref);
       let text;
       try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { /* non-text bytes remain exact base64 */ }
-      return { ref, sha256, content_base64: bytes.toString("base64"), ...(text === undefined ? {} : { text }) };
-    }) : [];
-  });
+      outputByIdentity.set(identity, {
+        ref, sha256, bytes: bytes.length,
+        ...(text === undefined ? { content_base64: bytes.toString("base64") } : { text }),
+      });
+    }
+  }
+  const outputs = [...outputByIdentity.values()];
   const prepared = {
     ...request,
     authenticated_evidence: {
+      // The caller's ordinary materials are intentionally small and do not
+      // necessarily contain the authenticated current stage files or the
+      // implementation diff.  Keep those exact inputs in the authenticated
+      // projection once so the provider can review the real code/materials;
+      // only repeated execution records/streams are deduplicated below.
       runtime_current_materials: materials,
       runtime_implementation_diff: diff.stdout,
       runtime_execution: { ...request.reviewed_execution, raw: execution.aggregateRaw, actor: execution.actor },
@@ -272,8 +293,7 @@ function executionBindingForResult(task, result, identity, context, { allowHisto
   const execution = readExecutionSource(task, request.reviewed_execution, identity, authenticatedEvidence?.runtime_current_materials);
   if (canonicalJson(context.reviewed_execution) !== canonicalJson({ ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor })
       || authenticatedEvidence?.runtime_execution?.raw !== execution.aggregateRaw) throw new Error("frozen execution review binding mismatch");
-  const provider = result.provider_results.find((item) => item.status === "completed" && item.error === null
-    && normalizeIdentity(item.identity, item.provider)?.source_id.split("/")[0] !== execution.actor.source_id.split("/")[0]);
+  const provider = result.provider_results.find((item) => item.status === "completed" && item.error === null);
   if (!provider) return null;
   const identityValue = normalizeIdentity(provider.identity, provider.provider);
   if (!identityValue || typeof result.runtime_id !== "string" || !result.runtime_id.trim()) return null;
@@ -493,7 +513,6 @@ function requestLockHash(request, materialId, routeIdentity) {
     subject_kind: request.subject_kind ?? null,
     phase_id: request.phase_id ?? null,
     route_identity: routeIdentity,
-    host_provider: request.host_provider ?? request.hostProvider ?? null,
     material_id: materialId,
     authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
     // Free-form retry explanations are provenance, not request identity. A
@@ -526,6 +545,15 @@ function semanticOriginFromRecord(value) {
   // is not a reconstructable classification.
   if (reviewScope === null && subjectKind !== "worktree") return null;
   return `${reviewScope ?? "stage"}:${subjectKind}`;
+}
+
+function isOcrCodeReviewRequest(request) {
+  const scope = request?.review_scope ?? request?.reviewScope ?? null;
+  const kind = request?.review_kind ?? request?.reviewKind ?? null;
+  const track = request?.review_track ?? request?.reviewTrack ?? null;
+  return kind === null && track === null && (
+    (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
+    || (request?.stage === "verify-code" && scope === null));
 }
 
 // A retry is a caller-owned judgment, not a counter or a material-derived
@@ -630,16 +658,18 @@ function subjectMatchesAttempt(attempt, subject) {
     : actual === reviewSubjectHash(subject);
 }
 
-function findReusableReview({ history, request, routeIdentity = null, snapshotTree = null, requestKey = null, retry = null, materialId = null }) {
+function findReusableReview({ history, request, routeIdentity = null, snapshotTree = null, requestKey = null, retry = null,
+  materialId = null, reuseUnavailable = true, requireCurrentSnapshot = false, singleReviewScope = false }) {
   const requestOrigin = semanticOriginFromRecord(request);
   // An origin that cannot be reconstructed from the record fails closed: the
   // request is dispatched only when no authenticated reusable attempt exists
   // whose canonical identity is unprovable.
   if (requestOrigin === null) return null;
-  // Reuse is an authenticated transport decision. If the current route could
-  // not be resolved, a legacy attempt with a null route identity must not be
-  // mistaken for an equivalent reusable result.
-  if (!SHA256_HEX.test(routeIdentity ?? "")) return null;
+  // Ordinary authoring reviews still require a currently resolved route before
+  // they can be reused. CARD-05 code-review scopes are deliberately different:
+  // the cadence is one review per stage/phase, and route/material/snapshot
+  // changes are provenance, not permission to dispatch a second review.
+  if (!singleReviewScope && !SHA256_HEX.test(routeIdentity ?? "")) return null;
   const requestTrack = request.review_track ?? request.reviewTrack ?? null;
   const requestKind = request.review_kind ?? request.reviewKind ?? null;
   const requestPhaseId = request.phase_id ?? null;
@@ -651,40 +681,32 @@ function findReusableReview({ history, request, routeIdentity = null, snapshotTr
     // it is never a material id, route identity, provider identity or evidence
     // hash, and it is not the K2 review_origin lifecycle value.
     //
-    // The tuple names *which* canonical review this is. It deliberately does
-    // not name what was reviewed, so it is not by itself a sufficient reuse
-    // key: D-007 requires that a change to the submitted material must never
-    // read back the earlier review (CONTEXT.md:412, "大纲变更后旧方向审查结果
-    // 作废" -- after the outline changes the earlier direction review result is
-    // void). The recorded material identity is therefore a mandatory
-    // currentness precondition below, not a sixth dedup dimension.
+    // The tuple names *which* canonical review this is. Ordinary authoring
+    // reviews add material identity below because their explicit retry model
+    // permits a new review after a judged material change. Direct OCR code
+    // review is the CARD-05 strict-one-shot exception: its first record is
+    // reused for the scope even after the inspected bytes change.
     if (attempt.stage !== request.stage
         || (attempt.phase_id ?? null) !== requestPhaseId
         || (attempt.review_track ?? null) !== requestTrack
         || (attempt.review_kind ?? null) !== requestKind
         || semanticOriginFromRecord(attempt) !== requestOrigin) continue;
-    // D-007 material identity guard. The canonical attempt envelope persists
-    // `material_id`, so the submitted material of the current request must be
-    // byte-identical to the material of the recorded attempt before that
-    // attempt may be reused. Both sides must be provable: an unauthenticated
-    // current material id or a legacy attempt that predates material
-    // persistence stays fail-closed and is never reused.
-    if (!SHA256_HEX.test(materialId ?? "") || attempt.material_id !== materialId) continue;
-    // The identity matched, so this entry is the same canonical review of the
-    // same material. The checks below are transport and integrity
-    // preconditions on the recorded attempt as a reuse target; they are
-    // deliberately not part of the key.
-    // The recorded route identity remains provenance. A route change does not
-    // silently invalidate a historical review; an explicit judged retry gets
-    // a distinct request key and is handled below.
+    // Ordinary reviews are reused only for byte-identical material. Direct
+    // OCR code-review scopes are strict one-shot review scopes: the first
+    // attempt remains the sole review fact after code/material changes.
+    if (!singleReviewScope && (!SHA256_HEX.test(materialId ?? "") || attempt.material_id !== materialId)) continue;
+    // The identity matched. The checks below are transport/integrity
+    // preconditions for ordinary reuse; the one-shot OCR path deliberately
+    // treats route/material/snapshot changes as provenance only.
     if (!subjectMatchesAttempt(attempt, request.subject)) continue;
-    if ((attempt.authenticated_evidence_sha256 ?? null) !== authenticatedEvidenceHash(request.authenticated_evidence)) continue;
-    // `material_revision` (the specification bundle revision) stays provenance
-    // rather than a reuse-key dimension: the authenticated material identity
-    // above already decides whether the reviewed bytes are the same, and the
-    // remaining currentness guard is the verify-code terminal review's
-    // authenticated code snapshot.
-    if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
+    if (!singleReviewScope && (attempt.authenticated_evidence_sha256 ?? null) !== authenticatedEvidenceHash(request.authenticated_evidence)) continue;
+    // `material_revision`, snapshot and evidence are provenance for a
+    // one-shot direct OCR review, never a reason to dispatch another review.
+    if (!singleReviewScope && (requireCurrentSnapshot || request.stage === "verify-code")
+        && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
+    // A direct OCR scope reuses even an unavailable attempt. Provider failure
+    // is a recorded quality fact; it must not create an implicit retry loop.
+    if (!reuseUnavailable && attempt.terminal_status !== "semantic") continue;
     // Legacy REVIEW_WAIT_EXCEEDED attempts are historical non-terminal facts;
     // they do not prove the managed broker/runtime stopped. Reuse their
     // exact-material attempt so a later request cannot create a second live
@@ -901,18 +923,6 @@ async function resolveReviewRouteState({ request, executionContext, resolveRoute
     const trustedRoute = await resolveRouteIdentity(request, routeDependencies ?? undefined);
     routeIdentity = trustedRoute?.route_identity;
     if (!SHA256_HEX.test(routeIdentity ?? "")) throw new TypeError("trusted route identity is missing or invalid");
-    if (executionContext) {
-      const selection = trustedRoute.provider_selection;
-      const executorFamily = executionContext.reviewed_execution.actor.source_id.split("/")[0];
-      if (!Array.isArray(selection?.providers) || !selection.providers.some((provider) => {
-        const sourceId = selection.provider_identities?.[provider]?.source_id;
-        return typeof sourceId === "string" && sourceId.trim() && sourceId.split("/")[0] !== executorFamily;
-      })) {
-        const error = new Error("execution review has no independent source candidate for the authenticated executor actor");
-        error.code = "REVIEW_EXECUTOR_SOURCE_NOT_INDEPENDENT";
-        throw error;
-      }
-    }
   } catch (error) { routeError = reviewRequestError(error); }
   return Object.freeze({ routeIdentity: routeIdentity ?? null, routeError });
 }
@@ -950,7 +960,6 @@ function buildPolicy(result) {
     minimum_heterologous: minimum,
     requested_profiles: providers,
     eligible_profiles: providers,
-    same_source_exclusions: [],
     effective_profiles: effectiveProfiles,
     requested_profile_specs: specs,
   };
@@ -1141,6 +1150,91 @@ function matchesReviewRecord(stored, expected) {
   return storedProjection !== null && storedProjection === reviewRecordProjection(expected);
 }
 
+// Older adjudication bytes did not emit source_strength. Reconstruct exactly
+// that one prior projection only for the bounded pair shape below. This is
+// structural compatibility, not proof of an immutable writer epoch: a fully
+// coordinated rewrite of the task store cannot be distinguished here. Other
+// fields, refs and report bytes must still match; the current writer is unchanged.
+function historicalSourceStrengthProjection(expected, ref) {
+  const drop = (value) => {
+    let removed = 0;
+    for (const finding of value.findings ?? []) {
+      if (Object.hasOwn(finding, "source_strength")) { delete finding.source_strength; removed++; }
+    }
+    for (const cluster of value.adjudication?.clusters ?? []) {
+      if (Object.hasOwn(cluster, "source_strength")) { delete cluster.source_strength; removed++; }
+    }
+    return removed;
+  };
+  if (/^quality\/reviews\/results\/[^/]+\.json$/.test(ref)) {
+    const value = JSON.parse(expected);
+    return drop(value) ? JSON.stringify(value) : null;
+  }
+  if (/^quality\/reviews\/reports\/[^/]+\.md$/.test(ref)) {
+    const first = /```json\n([^\n]+)\n```/.exec(expected);
+    if (!first) return null;
+    const value = JSON.parse(first[1]);
+    if (!drop(value)) return null;
+    return expected.slice(0, first.index) + "```json\n" + JSON.stringify(value) + "\n```"
+      + expected.slice(first.index + first[0].length);
+  }
+  return null;
+}
+
+function matchesLegacyPartialPairShape(task, attempt, attemptRef, identity) {
+  if (!attempt.pair_id || !["red", "blue"].includes(attempt.role)
+      || attempt.terminal_status !== "semantic" || typeof attempt.result_ref !== "string") return false;
+  try {
+    const pairRef = pairedReportRef(attempt.stage, task.identity.taskId, identity,
+      attempt.pair_id, attempt.request_key ?? null);
+    const pairReport = task.readRecord(pairRef);
+    const pair = JSON.parse(pairReport.match(/```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
+    const otherRole = attempt.role === "red" ? "blue" : "red";
+    const own = pair?.role_results?.[attempt.role];
+    const other = pair?.role_results?.[otherRole];
+    if (pair?.status !== "recorded" || pair.pair_id !== attempt.pair_id
+        || pair.report_ref !== pairRef || pair.partial !== true
+        || own?.attempt_ref !== attemptRef || own?.result_ref !== attempt.result_ref
+        || own?.report_ref !== attempt.report_ref || own?.coverage !== "satisfied"
+        || other?.coverage !== "incomplete" || other?.semantic_status !== "available"
+        || other?.result_ref !== null || typeof other?.attempt_ref !== "string") return false;
+    const otherAttempt = JSON.parse(task.readRecord(other.attempt_ref));
+    if (other.attempt_ref !== `quality/reviews/attempts/${otherAttempt.attempt_id}/attempt.json`
+        || otherAttempt.role !== otherRole || otherAttempt.pair_id !== attempt.pair_id
+        || otherAttempt.stage !== attempt.stage || otherAttempt.task_id !== attempt.task_id
+        || otherAttempt.request_key !== attempt.request_key
+        || otherAttempt.snapshot_tree !== attempt.snapshot_tree
+        || otherAttempt.material_revision !== attempt.material_revision
+        || otherAttempt.material_id !== attempt.material_id
+        || otherAttempt.terminal_status !== "unavailable"
+        || Object.hasOwn(otherAttempt, "result_ref")
+        || otherAttempt.report_ref !== other.report_ref) return false;
+    const omittedResultRef = `quality/reviews/results/${otherAttempt.stage}-simple-${otherAttempt.attempt_id}.json`;
+    if (task.listCanonicalReviewResultRefs().includes(omittedResultRef)) return false;
+    const otherReport = task.readRecord(other.report_ref);
+    const saved = JSON.parse(otherReport.match(/## Public result and coverage\n\n```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
+    if (saved?.semantic_status !== "available" || saved.coverage !== "incomplete"
+        || saved.public_result?.outcome !== "partial") return false;
+    // The saved partial form differs from today's writer only if today's
+    // writer would publish the same input. A genuinely below-quorum current
+    // pair must not gain this source_strength exception.
+    const currentProjection = prepareSimpleReviewRecord(task, saved.public_result, {
+      tree: otherAttempt.snapshot_tree, materialRevision: otherAttempt.material_revision, source: otherAttempt.source,
+    }, otherAttempt.request_key ?? null, {
+      paired: true, legacyReviewContext: saved.budget_context ?? null,
+      executionContext: saved.execution_context ?? null,
+      allowHistoricalPreDispatchMaterialFailure: true,
+      closureManifest: otherAttempt.closure_manifest ?? null,
+    });
+    return currentProjection.coverage === "satisfied"
+      && currentProjection.refs.attempt_ref === other.attempt_ref
+      && currentProjection.refs.result_ref === omittedResultRef
+      && currentProjection.refs.report_ref === other.report_ref;
+  } catch {
+    return false;
+  }
+}
+
 function readCanonicalReviewHistory(task, scope = null) {
   if (typeof task.listCanonicalReviewAttemptRefs !== "function") throw new Error("canonical attempt inventory is unavailable");
   const refs = task.listCanonicalReviewAttemptRefs();
@@ -1195,15 +1289,31 @@ function readCanonicalReviewHistory(task, scope = null) {
     if (!saved?.public_result) return readLegacyReviewAttempt(task, ref, raw, attempt, report);
     const identity = { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source };
     const context = saved.budget_context ?? null;
+    // The writer's partial-coverage rule changed without a persisted epoch.
+    // The attempt terminal and result_ref are the old writer's own projection:
+    // a paired partial round that was unavailable and unpublished must remain
+    // uncovered on readback even if the current writer would publish it.
+    // Report coverage is deliberately not used to select this rule; it is
+    // checked against the reconstructed value below.
+    const historicalUncoveredPartial = Boolean(attempt.pair_id)
+      && saved.public_result.outcome === "partial"
+      && attempt.terminal_status === "unavailable"
+      && !Object.hasOwn(attempt, "result_ref");
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
       { paired: Boolean(attempt.pair_id), legacyReviewContext: context, executionContext: saved.execution_context ?? null,
         allowHistoricalPreDispatchMaterialFailure: true,
-        allowHistoricalPartialCoverage: scope !== null && attempt.snapshot_tree !== scope.snapshotTree,
+        allowHistoricalPartialCoverage: attempt.terminal_status === "semantic",
+        historicalUncoveredPartial,
+        ...(attempt.review_policy ? { policyOverride: { policy: attempt.review_policy, policy_snapshot_hash: attempt.policy_snapshot_hash ?? policyHash(attempt.review_policy) } } : {}),
         closureManifest: attempt.closure_manifest ?? null });
     if (prepared.refs.attempt_ref !== ref || prepared.refs.report_ref !== attempt.report_ref
         || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical review report binding is invalid");
     for (const [recordRef, expected] of prepared.records) {
-      if (!matchesReviewRecord(task.readRecord(recordRef), expected)) throw new Error("canonical review evidence is incomplete or changed");
+      const stored = task.readRecord(recordRef);
+      if (matchesReviewRecord(stored, expected)) continue;
+      const legacy = matchesLegacyPartialPairShape(task, attempt, ref, identity)
+        ? historicalSourceStrengthProjection(expected, recordRef) : null;
+      if (legacy === null || !matchesReviewRecord(stored, legacy)) throw new Error("canonical review evidence is incomplete or changed");
     }
     if (attempt.dispatch_state === "blocked_before_dispatch" && attempt.provider_attempts.length !== 0) throw new Error("blocked review contains provider attempts");
     return { attempt, saved, prepared, identity, fact: {
@@ -1299,18 +1409,26 @@ export function bindBuildPlanReviewCohort(request, taskManifest) {
 
 export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null,
   resolveRouteIdentity = resolveReviewRouteIdentity, routeDependencies = null,
-  reviewRoundTimeoutMs = DEFAULT_REVIEW_ROUND_TIMEOUT_MS, signal = null } = {}) {
+  reviewRoundTimeoutMs = DEFAULT_REVIEW_ROUND_TIMEOUT_MS, onProviderResult = null, signal = null } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("review request must be an object");
   if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");
   rejectBuildPrdCanonicalPersistence(request, "review request");
   request = normalizeReviewIdentity(request, "review request");
   request = bindBuildPlanReviewCohort(request, taskHandle.manifest);
+  const directOcrRequest = isOcrCodeReviewRequest(request);
+  if (directOcrRequest && Object.hasOwn(request, "retry")) {
+    const { retry: _retry, ...withoutRetry } = request;
+    request = withoutRetry;
+  }
   for (const field of ["snapshot_tree", "material_revision", "task_id", "task_path", "project_name"]) {
     if (Object.hasOwn(request, field)) throw new TypeError(`review request identity field is host-owned: ${field}`);
   }
   if (typeof request.stage !== "string" || request.stage.trim() === "") throw new TypeError("review request stage is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
+  if (onProviderResult !== null && typeof onProviderResult !== "function") {
+    throw new TypeError("onProviderResult must be a function");
+  }
   if (reviewRoundTimeoutMs !== null && (!Number.isSafeInteger(reviewRoundTimeoutMs) || reviewRoundTimeoutMs < 0)) {
     throw new TypeError("reviewRoundTimeoutMs must be null or a non-negative safe integer");
   }
@@ -1330,7 +1448,9 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     // throwing after a route has been accepted with no original record.
     executionPreparationFailure = executionPreparationError(error);
   }
-  const retryRequest = retryDecision(request);
+  const retryRequest = directOcrRequest
+    ? Object.freeze({ requested: false, admitted: false, basis: null, reason: null })
+    : retryDecision(request);
   let materialId;
   let materialPreparationError = null;
   try {
@@ -1448,7 +1568,9 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     const retry = authenticateRetryDecision(retryRequest, {
       history, request, materialId, routeIdentity: routeIdentity ?? null, requestKey,
     });
-    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, snapshotTree: lockedIdentity.tree, requestKey, retry, materialId });
+    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, snapshotTree: lockedIdentity.tree,
+      requestKey, retry, materialId, reuseUnavailable: true, requireCurrentSnapshot: false,
+      singleReviewScope: directOcrRequest });
     const retryResult = retry.requested ? {
       requested: true,
       admitted: retry.admitted,
@@ -1496,7 +1618,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     // A current-session reviewed_execution already authenticates this exact
     // snapshot and its acceptance source. Historical verify reviews must not
     // turn that first current OCR dispatch into a legacy judged retry.
-    if (executionContext === null && hasPriorVerifySnapshot(request, history, lockedIdentity.tree) && !retry.admitted) {
+    if (!directOcrRequest && executionContext === null && hasPriorVerifySnapshot(request, history, lockedIdentity.tree) && !retry.admitted) {
       return recordUnavailableRequest({
         task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: {
@@ -1528,7 +1650,10 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         let settled = null;
         try {
           if (dispatch.signal.aborted) throw reviewCancelledError(dispatch.signal);
-          const round = Promise.resolve(runRound(structuredClone(dispatchRequest), { signal: dispatch.signal }));
+          const round = Promise.resolve(runRound(structuredClone(dispatchRequest), {
+            signal: dispatch.signal,
+            ...(onProviderResult === null ? {} : { onProviderResult }),
+          }));
           // Handle both outcomes so a non-cooperating runner that settles
           // after the timeout cannot produce an unhandled rejection.
           settled = round.then(() => undefined, () => undefined);
@@ -1616,7 +1741,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       }
       const expectedEvidenceHash = authenticatedEvidenceHash(request.authenticated_evidence);
       if ((result.authenticated_evidence_sha256 ?? null) !== expectedEvidenceHash) {
-        const error = new Error("review result authenticated evidence does not match the authenticated request evidence");
+        const error = new Error(`review result authenticated evidence does not match the authenticated request evidence (expected ${expectedEvidenceHash ?? "null"}, received ${result.authenticated_evidence_sha256 ?? "null"})`);
         error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
         throw error;
       }
@@ -1665,6 +1790,8 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   executionContext = null,
   allowHistoricalPreDispatchMaterialFailure = false,
   allowHistoricalPartialCoverage = false,
+  historicalUncoveredPartial = false,
+  policyOverride = null,
   closureManifest = null,
 } = {}) {
   rejectBuildPrdCanonicalPersistence(result, "review result");
@@ -1743,9 +1870,15 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
     records.push([outputRef, JSON.stringify({ schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: attemptId, provider: item.provider, content, content_hash: textHash(content), evidence_anchor_valid: item.evidence_anchor_valid })]);
     return { provider: item.provider, identity: item.identity, evidenceAnchors: item.evidence_anchor_valid, review: JSON.parse(content) };
   });
-  const policy = buildPolicy(result);
-  const aggregation = aggregateCanonicalProviderResults(outputs, policy.policy.minimum_heterologous, { profilePriority: completed.map((item) => item.provider), requireIdentity: true, requireSourceId: true });
-  // Invalid semantic output is an input error. Insufficient independent sources
+  // Direct OCR needs only one successful configured provider. Do not create a
+  // legacy quorum/policy object for new direct attempts; an old attempt that
+  // already has one is supplied through policyOverride so immutable history
+  // remains readable byte-for-byte.
+  const directOcr = !paired && isOcrCodeReviewRequest(result);
+  const policy = policyOverride ?? (directOcr ? null : buildPolicy(result));
+  const minimumReviewers = policy?.policy?.minimum_heterologous ?? 1;
+  const aggregation = aggregateCanonicalProviderResults(outputs, minimumReviewers, { profilePriority: completed.map((item) => item.provider), requireIdentity: true, requireSourceId: true });
+  // Invalid semantic output is an input error. Insufficient provider coverage
   // is a coverage fact: keep every valid member and its immutable output.
   if (aggregation.invalid_members?.length || aggregation.valid.length !== completed.length) throw new TypeError("simple-review provider output or source identity is invalid");
   const allIdentified = completed.every((item) => item.identity?.provider === item.provider
@@ -1761,12 +1894,13 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   // Historical readback may explicitly opt into the old projection after the
   // current snapshot changed; a live result may not silently do so.
   const hasDeclaredQuorum = Number.isSafeInteger(result.minimum_heterologous) && result.minimum_heterologous >= 1;
-  const covered = result.status !== "unavailable"
+  const covered = !historicalUncoveredPartial && result.status !== "unavailable"
     && (result.outcome === "completed" || (result.outcome === "partial" && (hasDeclaredQuorum || allowHistoricalPartialCoverage)))
     && !hasRunningProvider
     && aggregation.status === "available"
     && allIdentified;
-  // A failed OCR independence quorum does not erase completed members. Keep
+  // A failed legacy OCR coverage threshold does not erase completed members.
+  // Keep
   // their canonical findings, but leave the attempt unavailable and the
   // coverage incomplete so stage/quality consumers cannot treat it as clean.
   const partial = !covered && result.status === "unavailable" && result.outcome === "failed"
@@ -1813,13 +1947,13 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
     ...(closureManifest ? { closure_manifest: closureManifest } : {}),
     ...(partial ? { coverage: { mode: result.provider_results.length > 1 ? "parallel_external" : "single_external",
       selected_profiles: result.provider_results.map((item) => item.provider), selected_count: result.provider_results.length,
-      valid_provider_count: aggregation.valid.length, minimum_required: policy.policy.minimum_heterologous,
+      valid_provider_count: aggregation.valid.length, minimum_required: minimumReviewers,
       group_outcome: "partial" } } : {}),
     provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, outputRefs.get(item.provider) ?? null)),
     terminal_status: covered ? "semantic" : "unavailable",
     dispatch_state: ["blocked_before_dispatch", "sent_unparsed"].includes(result.dispatch_state) ? result.dispatch_state : "dispatched",
-    error: covered ? null : recordError(result.error, { code: completed.length ? "REVIEW_QUORUM_INCOMPLETE" : "REVIEW_ALL_PROVIDERS_FAILED", message: completed.length ? "semantic member outputs retained; independent review coverage is incomplete" : "all provider results failed" }),
-    ...(!noDispatch ? { review_policy: policy.policy, policy_snapshot_hash: policy.policy_snapshot_hash } : {}), report_ref: reportRef,
+    error: covered ? null : recordError(result.error, { code: completed.length ? "REVIEW_QUORUM_INCOMPLETE" : "REVIEW_ALL_PROVIDERS_FAILED", message: completed.length ? "semantic member outputs retained; review coverage is incomplete" : "all provider results failed" }),
+    ...(!noDispatch && policy ? { review_policy: policy.policy, policy_snapshot_hash: policy.policy_snapshot_hash } : {}), report_ref: reportRef,
   };
   const canonical = published ? {
     version: "wh-review-result.v1", ...binding, attempt_ref: attemptRef,
@@ -2280,7 +2414,6 @@ export function recordDshCodeReviewResult(input = {}) {
       review_scope: subject.review_scope,
       material_id: materialId,
       outcome: "completed",
-      minimum_heterologous: 1,
       provider_results: [{
         provider,
         status: "completed",

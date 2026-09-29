@@ -1,0 +1,24 @@
+COMMAND=npx vitest run runtime/stage/stage-end-report.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE_BASELINE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+SOURCE_SHA256=bda85c210f77df38a042c4866f9d1c52359c8e0d7d2abe9703131da6ec96987c
+UTC=2026-09-26T12:12:56.761298+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P5
+TASK_IN_PHASE=T007
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ runtime/stage/stage-end-report.test.mjs (8 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  20:12:56
+   Duration  162ms (transform 21ms, setup 0ms, collect 14ms, tests 15ms, environment 0ms, prepare 43ms)
+STDOUT_END
+STDERR_BEGIN
+WebSocket server error: Port is already in use
+STDERR_END
+EXIT=0

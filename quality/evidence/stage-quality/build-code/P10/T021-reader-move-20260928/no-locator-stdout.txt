@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 56 skipped) 29729ms
+   ✓ ORACLE-P10-T021: final stage-row identity without inferred receipt consumption > retains the exact final row write privately and leaves the supplied receipt unverified 29729ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 56 skipped (57)
+   Start at  05:25:22
+   Duration  30.46s (transform 264ms, setup 0ms, collect 616ms, tests 29.73s, environment 0ms, prepare 27ms)
+

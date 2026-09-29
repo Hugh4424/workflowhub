@@ -1,0 +1,32 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 8ms
+ ✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 139190ms
+   ✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1108ms
+   ✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 5796ms
+   ✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5540ms
+   ✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 9473ms
+   ✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7527ms
+   ✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 7613ms
+   ✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 7539ms
+   ✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 7994ms
+   ✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 7910ms
+   ✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 6985ms
+   ✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 7702ms
+   ✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 7905ms
+   ✓ post build-plan official handler > rejects a portable lens result with stale material revision 5639ms
+   ✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 5907ms
+   ✓ post build-plan official handler > rejects a portable lens result with forged status 5699ms
+   ✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14000ms
+   ✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7176ms
+   ✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7204ms
+   ✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7294ms
+   ✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3177ms
+ ✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 4ms
+
+ Test Files  3 passed (3)
+      Tests  64 passed (64)
+   Start at  08:14:31
+   Duration  140.14s (transform 250ms, setup 0ms, collect 1.01s, tests 139.20s, environment 0ms, prepare 78ms)
+

@@ -327,7 +327,8 @@ export function renderReviewReport({ attempt, result = null }) {
     const pins = attempt.review_policy.requested_profile_specs ?? [];
     if (pins.length > 0) lines.push(`- requested profile pins: ${pins.map((profile) => `\`${profile.provider}\` priority=${profile.priority}; model=${profile.model ?? "null"}; effort=${profile.effort ?? "null"}; thinking=${profile.thinking ?? "null"}`).join(" | ")}`);
     lines.push(`- eligible profiles: ${attempt.review_policy.eligible_profiles.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
-    lines.push(`- same-source exclusions: ${attempt.review_policy.same_source_exclusions.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
+    const historicalSameSourceExclusions = attempt.review_policy.same_source_exclusions ?? [];
+    lines.push(`- historical same-source exclusions: ${historicalSameSourceExclusions.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
   }
   if (attempt.coverage) {
     lines.push(`- coverage: \`${attempt.coverage.mode}\`; ${attempt.coverage.valid_provider_count}/${attempt.coverage.minimum_required} valid reviewers`);

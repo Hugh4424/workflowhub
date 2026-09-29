@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run runtime/stage/stage-runner.test.mjs",
+  "receipt_ref": "quality/tests/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.json",
+  "output_ref": "quality/tests/output/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.output",
+  "timeout_ms": 180000
+}

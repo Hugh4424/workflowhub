@@ -1,0 +1,31 @@
+COMMAND=node quality/evidence/stage-quality/build-code/P5/T007-markdown-link-probe.mjs
+STARTED_AT_UTC=2026-09-26T14:50:19.084541+00:00
+SOURCE_SHA256=184e33569d5a5ded8e32d7b1ded228469fce0b547a5139cf6c0d9659be045288
+PROBE_SHA256=6d163cd1d234739871a4bf5644645751fdcdda294e515c91c47ec249e2f8f4ad
+STDOUT_BEGIN
+{"markdown_it":"14.1.0","modes":[{"html":false,"links":2,"images":2},{"html":true,"links":2,"images":2}],"facts_unchanged":true}
+STDOUT_END
+STDERR_BEGIN
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: html=false: caller link must remain inert
+
+2 !== 0
+
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P5/T007-markdown-link-probe.mjs:22:10
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.0
+STDERR_END
+EXIT=1

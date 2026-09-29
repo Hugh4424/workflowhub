@@ -1,0 +1,10 @@
+{
+  "command": [
+    "node",
+    "--check",
+    "tests/contract/repository-inventory.test.mjs"
+  ],
+  "exit_code": 0,
+  "utc": "2026-09-26T23:19:59.583903+00:00",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+}

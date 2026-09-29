@@ -1,0 +1,6 @@
+{
+  "routing_tier": "simple",
+  "routing_rationale": "P2/T004 仅改 docs/architecture/complexity-baseline.json 的 formal_test_lines 静态预算数据；无运行时、接口、权限或构建链变化；按相位预判运行单条限定 contract Vitest。backend-testing 不适用。",
+  "result": "pass",
+  "ts": "2026-09-26T11:43:56.955407Z"
+}

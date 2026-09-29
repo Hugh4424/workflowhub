@@ -1,0 +1,19 @@
+COMMAND=npx vitest run runtime/stage/stage-end-report.test.mjs
+STARTED_AT_UTC=2026-09-26T14:20:44.019614+00:00
+SOURCE_SHA256=f67d8792606a076fe29e8f4cbbacf042557fbe50bf4c9e2fa7e1641da84ae2a1
+FROZEN_TEST_SHA256=c6273eb0272b6f12914da2b2dcf15282ae4e471f84f27701325d39b06a376165
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ runtime/stage/stage-end-report.test.mjs (8 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  22:20:44
+   Duration  200ms (transform 22ms, setup 0ms, collect 14ms, tests 15ms, environment 0ms, prepare 43ms)
+
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0

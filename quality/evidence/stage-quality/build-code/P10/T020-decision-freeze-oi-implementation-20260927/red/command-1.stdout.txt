@@ -1,0 +1,48 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/decision-freeze-current-oi.test.mjs (26 tests | 19 failed) 13ms
+   × uses the current YAML OI authority instead of append-only historical prose 8ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × does not fill a missing current OI from historical prose or YAML 1ms
+     → expected [ 'user_flow', 'data_states', …(2) ] to not include 'data_states'
+   × fails closed for broken YAML even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for duplicate OI even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for missing category even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for invalid category even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for missing status even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for invalid status even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for empty authority even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed for duplicate authority heading even when old text claims completion 0ms
+     → expected false to be true // Object.is equality
+   × fails closed when current CF status is missing 0ms
+     → expected false to be true // Object.is equality
+   × fails closed when current CF status is ambiguous 0ms
+     → expected false to be true // Object.is equality
+   × rejects unsupported fence even after four valid current OI categories 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × rejects unclosed fence even after four valid current OI categories 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × rejects stray close even after four valid current OI categories 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × accepts a no-status CF with the same current D decision and confirmed OI 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × rejects double backtick typo outside complete fences after all four categories 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × rejects bare OI record outside complete fences after all four categories 0ms
+     → expected [ 'user_flow', …(2) ] to deeply equal [ 'user_flow', 'data_states', …(2) ]
+   × requires the named D decision to approve the same OI in one current sentence 0ms
+     → expected [ …(10) ] to include 'current CF CF-5 has no verified curre…'
+
+ Test Files  1 failed (1)
+      Tests  19 failed | 7 passed (26)
+   Start at  22:52:41
+   Duration  309ms (transform 82ms, setup 0ms, collect 184ms, tests 13ms, environment 0ms, prepare 35ms)
+

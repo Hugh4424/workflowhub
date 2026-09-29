@@ -1,0 +1,1 @@
+npx vitest run tests/integration/vnext-official-stage-run.test.mjs

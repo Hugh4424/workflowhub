@@ -1,0 +1,303 @@
+diff --git a/quality/evidence/stage-quality/build-code/P8/T017-A1-A2-catalog-20260928/before/business-case-catalog.json b/docs/quality/business-case-catalog.json
+index 86df3700..dac9c4e2 100644
+--- a/quality/evidence/stage-quality/build-code/P8/T017-A1-A2-catalog-20260928/before/business-case-catalog.json
++++ b/docs/quality/business-case-catalog.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": "workflowhub-business-case-catalog.v1",
+   "project": "workflowhub",
+-  "revision": "2026-09-28.card04-current-source-rebind.12",
++  "revision": "2026-09-28.card04-finite-a1-a2.13",
+   "owner": "CARD-04 build-code catalog maintainer",
+   "consumers": [
+     "P9",
+@@ -10,7 +10,7 @@
+   "retirement_policy": "Retire a case only after recording its reason, former source revision and dependent case IDs; update both relationship directions and preserve the prior catalog revision in task evidence.",
+   "uncharted_legacy": {
+     "status": "unknown",
+-    "reason": "Three sourced CARD-04 seeds are a finite sample; no authenticated project-wide business-rule and runnable-test inventory is available.",
++    "reason": "Five sourced CARD-04 cases are a finite sample; no authenticated project-wide business-rule and runnable-test inventory is available.",
+     "owner": "P9/T019 inventory and P10/T020 case-selection owners"
+   },
+   "cases": [
+@@ -25,7 +25,7 @@
+       },
+       "rule": {
+         "id": "CARD-04-RULING-P6-FULL-EXEC / FR-26",
+-        "revision": "sha256:35b15b6739106d5f4e2ac8e2e0f69b3c1b365f81ce45bf4efcfd9471b85967c3",
++        "revision": "sha256:8c92d7597e70686145230e3e255daf1cf97c0a38dee55870a3c6d61cbf2491dd",
+         "statement": "The current decision-log original-source census must parse its U/V/R sections with a nonzero U/V denominator, no parser errors, and R-001..R-008 index entries."
+       },
+       "scenarios": {
+@@ -97,7 +97,7 @@
+       "effect_observation": {
+         "schema_version": "workflowhub-business-effect-observation.v1",
+         "observation_status": "not_yet_observed",
+-        "rule_revision": "sha256:35b15b6739106d5f4e2ac8e2e0f69b3c1b365f81ce45bf4efcfd9471b85967c3",
++        "rule_revision": "sha256:8c92d7597e70686145230e3e255daf1cf97c0a38dee55870a3c6d61cbf2491dd",
+         "canonical_source": {
+           "type": "current_task_acceptance_quality_fact_chain",
+           "stage": "build-code",
+@@ -416,12 +416,261 @@
+           "AC-27"
+         ]
+       }
++    },
++    {
++      "id": "CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE",
++      "intent": "feature",
++      "status": "active",
++      "owner": "CARD-04 P9/T018 business rule owner",
++      "source": {
++        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++        "revision": "sha256:01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40"
++      },
++      "rule": {
++        "id": "P9/T018 / FR-32",
++        "revision": "sha256:8aa1643131eeb8992b904184ed9fdb673c84d9039f58bb027a7f7452db040bb1",
++        "statement": "Before a test receipt exists, read the authenticated Task bootstrap and current Git source snapshot; include committed clean, staged, dirty, relevant untracked, rename and delete paths, then compare the finite expected selection with the specified current run. The outer returned change_scope arrays are not yet bound to a canonical receipt."
++      },
++      "scenarios": {
++        "normal": {
++          "precondition": "The current Task and worktree share an authenticated bootstrap commit/tree.",
++          "input": "Change a product file after task start, including a clean committed change, and recompute current Git paths before a receipt.",
++          "observable_success": "The changed source and its finite selected case/target are independently recoverable for the same Task and snapshot.",
++          "observable_failure": "A clean committed change disappears or the selected target omits the mapped case."
++        },
++        "failure": {
++          "precondition": "Task bootstrap identity or hash has been changed.",
++          "input": "Read a wrong Task/workspace or tampered bootstrap before selection.",
++          "observable_success": "The source reader rejects the wrong identity or marks change scope unknown.",
++          "observable_failure": "The wrong Task yields an empty green selection."
++        },
++        "boundary": {
++          "precondition": "Current changes mix staged, dirty, untracked, rename and delete paths.",
++          "input": "Compare both sides of a rename and the deleted path against the authenticated start.",
++          "observable_success": "Each affected path appears with the correct current snapshot identity; unknown unmapped paths remain unknown.",
++          "observable_failure": "A rename side, deletion or untracked eligible source is silently omitted."
++        },
++        "recovery": {
++          "precondition": "A first snapshot was captured and the product source is repaired.",
++          "input": "Re-read the new snapshot and recompute affected cases without reusing the old source digest or receipt.",
++          "observable_success": "The new digest and selection reflect repaired bytes; earlier evidence remains readable.",
++          "observable_failure": "The stale first snapshot or receipt is reused as a current pass."
++        }
++      },
++      "risk": "Only finite authenticated change-source and selection consistency can be checked today. The outer call's returned changed_paths/changes arrays lack same-run trusted persistence, and unmapped changes remain unknown; AC-32 is not proved.",
++      "environment": "Authenticated CARD-04 Task worktree, local Git, Node v24.14.0 and Vitest 2.1.9; no network service.",
++      "change_triggers": [
++        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++        "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
++        "workflows/build-code/change-scope.mjs",
++        "workflows/build-code/capture.mjs",
++        "workflows/build-code/targeted-capture.mjs"
++      ],
++      "implementation_interfaces": [
++        "workflows/build-code/change-scope.mjs#capturePreExecutionTaskChangeScope",
++        "workflows/build-code/targeted-capture.mjs#capturePreExecutionTaskChangeScope"
++      ],
++      "consumers": [
++        "workflows/build-code/targeted-capture.mjs",
++        "workflows/build-code/capture.mjs",
++        "tests/contract/build-code-preexecution-source.test.mjs"
++      ],
++      "related_case_ids": [],
++      "ac_ids": [
++        "AC-32"
++      ],
++      "task_ids": [
++        "T018"
++      ],
++      "phase_ids": [
++        "P9"
++      ],
++      "execution": {
++        "target": "tests/contract/build-code-preexecution-source.test.mjs",
++        "runner_identity": "Vitest 2.1.9 / Node v24.14.0 / repository-local test file",
++        "command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs",
++        "mode": "automatic",
++        "expected_test_identity": "ORACLE-P9-PREEXECUTION: current change source before test capture / 7 current discovered leaves",
++        "machine_command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs --reporter=json",
++        "registered_test_ids": [
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > finds committed product changes in a clean worktree without changing Task store bytes",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed hash",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed workspace_binding",
++          "tests/contract/build-code-preexecution-source.test.mjs > ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot"
++        ]
++      },
++      "effect_observation": {
++        "schema_version": "workflowhub-business-effect-observation.v1",
++        "observation_status": "not_yet_observed",
++        "rule_revision": "sha256:8aa1643131eeb8992b904184ed9fdb673c84d9039f58bb027a7f7452db040bb1",
++        "canonical_source": {
++          "type": "current_task_acceptance_quality_fact_chain",
++          "stage": "build-code",
++          "subject": "AC-32",
++          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
++          "quality_fact_schema": "quality-fact.v1",
++          "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
++          "acceptance_schema": "acceptance-evidence.v1",
++          "acceptance_ref_template": "quality/evidence/acceptance/build-code/AC-32-{acceptance_sha256}.json",
++          "required_binding": [
++            "task_id",
++            "snapshot_tree",
++            "material_revision",
++            "ref_sha256"
++          ]
++        },
++        "reader": {
++          "owner": "CARD-04 P10/T021",
++          "interface": "proposed read-only TaskHandle reader of independently recomputed current source and specified case receipt/output/raw refs; per-case effect remains unknown until independently authenticated",
++          "implementation_status": "not_implemented",
++          "consumers": [
++            "P10/T021 case reconciliation",
++            "verify-code read-only sampling"
++          ]
++        },
++        "positive_predicate": "Independently recompute current authenticated Git paths and finite expected case selection from the same Task bootstrap/snapshot, then verify the specified manifest and raw target execution agree. This does not prove the outer returned change_scope arrays were persisted.",
++        "negative_predicate": "Reject wrong Task/bootstrap, omitted clean-committed or rename/delete paths, stale source digest, missing selected case, or a receipt not bound to the current snapshot. Keep the unpersisted outer arrays unknown.",
++        "missing_evidence_outcome": "unknown",
++        "stale_evidence_outcome": "unknown",
++        "ac_ids": [
++          "AC-32"
++        ]
++      }
++    },
++    {
++      "id": "CARD04-INDEPENDENT-TEST-INVENTORY",
++      "intent": "feature",
++      "status": "active",
++      "owner": "CARD-04 P9/T019 business rule owner",
++      "source": {
++        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++        "revision": "sha256:01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40"
++      },
++      "rule": {
++        "id": "P9/T019 / FR-30",
++        "revision": "sha256:8aa1643131eeb8992b904184ed9fdb673c84d9039f58bb027a7f7452db040bb1",
++        "statement": "For finite registered, selected and actually executed test targets, bind current file hashes and declared commands to the independent test registry, then compare every full runnable leaf and status against the raw runner report; unrun targets and all other project entry points remain unknown."
++      },
++      "scenarios": {
++        "normal": {
++          "precondition": "A selected target is independently registered with current source hash and complete runnable IDs.",
++          "input": "Run that exact physical target with the trusted repository Vitest CLI and read its raw JSON report.",
++          "observable_success": "The actual target, runner argv, exit, all full leaf IDs and statuses match the independent registration and selected case.",
++          "observable_failure": "A file path alone or a copied P8 expected list is accepted without real runner leaves."
++        },
++        "failure": {
++          "precondition": "An executed target report loses or adds a leaf, or reports skip/todo.",
++          "input": "Compare the changed raw report with the independent finite registration.",
++          "observable_success": "Mismatch remains failed or unknown with the raw report retained.",
++          "observable_failure": "A zero/skip/extra/missing leaf count is certified as passed."
++        },
++        "boundary": {
++          "precondition": "Only the registered selected targets have run.",
++          "input": "Ask whether a different test entry or an unrun registered target is covered.",
++          "observable_success": "Unrun targets are not_run and all other entry points remain outside_scope=unknown.",
++          "observable_failure": "The finite list is presented as complete project-wide test discovery."
++        },
++        "recovery": {
++          "precondition": "A registered target source hash or command is stale after repair.",
++          "input": "Re-read current test bytes, rerun with a new bound receipt, and compare every new raw leaf.",
++          "observable_success": "The corrected registration and new report agree while the old mismatch remains available.",
++          "observable_failure": "An old report or old hash is reused to mark the new source passed."
++        }
++      },
++      "risk": "Finite registration does not discover all real test entry points. Registry/readback only proves a selected executed target; unrun files, uncharted business rules, and AC-30-wide coverage remain unknown.",
++      "environment": "Authenticated CARD-04 Task worktree, repository Node v24.14.0/Vitest 2.1.9 CLI and raw JSON reporter; no network service.",
++      "change_triggers": [
++        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++        "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
++        "docs/quality/test-asset-registry.json",
++        "workflows/build-code/test-asset-inventory.mjs",
++        "workflows/build-code/targeted-capture.mjs"
++      ],
++      "implementation_interfaces": [
++        "workflows/build-code/test-asset-inventory.mjs#readCurrentTestAssetRegistry",
++        "workflows/build-code/targeted-capture.mjs#readCurrentTestAssetRegistry"
++      ],
++      "consumers": [
++        "workflows/build-code/targeted-capture.mjs",
++        "workflows/build-code/capture.mjs",
++        "tests/contract/build-code-test-registry.test.mjs"
++      ],
++      "related_case_ids": [],
++      "ac_ids": [
++        "AC-30"
++      ],
++      "task_ids": [
++        "T019"
++      ],
++      "phase_ids": [
++        "P9"
++      ],
++      "execution": {
++        "target": "tests/contract/build-code-test-registry.test.mjs",
++        "runner_identity": "Vitest 2.1.9 / Node v24.14.0 / repository-local test file",
++        "command": "npx vitest run tests/contract/build-code-test-registry.test.mjs",
++        "mode": "automatic",
++        "expected_test_identity": "ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves / 8 current discovered leaves",
++        "machine_command": "npx vitest run tests/contract/build-code-test-registry.test.mjs --reporter=json",
++        "registered_test_ids": [
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > registers only three real repository targets with current source hashes and a finite unknown boundary",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reads an authenticated private registry and accepts exactly the two passing Node TAP leaves",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports missing leaves instead of certifying the reporter",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports extra leaves instead of certifying the reporter",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports skipped leaves instead of certifying the reporter",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects duplicate registered identities before testing",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects a receipt command for a file outside the registered target",
++          "tests/contract/build-code-test-registry.test.mjs > ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects source drift even if the old registry still lists a runnable name"
++        ]
++      },
++      "effect_observation": {
++        "schema_version": "workflowhub-business-effect-observation.v1",
++        "observation_status": "not_yet_observed",
++        "rule_revision": "sha256:8aa1643131eeb8992b904184ed9fdb673c84d9039f58bb027a7f7452db040bb1",
++        "canonical_source": {
++          "type": "current_task_acceptance_quality_fact_chain",
++          "stage": "build-code",
++          "subject": "AC-30",
++          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
++          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
++          "quality_fact_schema": "quality-fact.v1",
++          "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
++          "acceptance_schema": "acceptance-evidence.v1",
++          "acceptance_ref_template": "quality/evidence/acceptance/build-code/AC-30-{acceptance_sha256}.json",
++          "required_binding": [
++            "task_id",
++            "snapshot_tree",
++            "material_revision",
++            "ref_sha256"
++          ]
++        },
++        "reader": {
++          "owner": "CARD-04 P10/T021",
++          "interface": "proposed read-only TaskHandle reader of independently recomputed current source and specified case receipt/output/raw refs; per-case effect remains unknown until independently authenticated",
++          "implementation_status": "not_implemented",
++          "consumers": [
++            "P10/T021 case reconciliation",
++            "verify-code read-only sampling"
++          ]
++        },
++        "positive_predicate": "Only for a selected and actually executed registered target, independently authenticate current test file hash, normalized declared command, actual trusted Node/Vitest argv, canonical receipt/output/raw report and every full leaf ID/status against the registry. A green candidate test alone is insufficient.",
++        "negative_predicate": "Reject a stale file hash, wrong target or CLI argv, omitted/extra/duplicate/skipped leaf, wrong Task/snapshot/ref/hash, or an unrun target claimed passed; keep uncharted project entries outside_scope=unknown.",
++        "missing_evidence_outcome": "unknown",
++        "stale_evidence_outcome": "unknown",
++        "ac_ids": [
++          "AC-30"
++        ]
++      }
+     }
+   ],
+   "evolution": {
+     "unmapped_b2_status": "unknown",
+     "owner": "P9 test-inventory and P10 case-reconciliation owners",
+-    "impact": "The three seed cases cannot establish full business-case coverage, change-scope selection, runner execution, browser reconciliation or verify-code handoff.",
++    "impact": "The five finite cases cannot establish full business-case coverage, change-scope selection, runner execution, browser reconciliation or verify-code handoff.",
+     "promotion_policy": "Promote an obligation only with an authenticated business source and version, a real caller and consumer, positive and negative business oracles observed through the runner, target and trigger alignment, and an independent review ref; record a stable case ID and preserve prior unknown evidence.",
+     "phase_obligations": [
+       {

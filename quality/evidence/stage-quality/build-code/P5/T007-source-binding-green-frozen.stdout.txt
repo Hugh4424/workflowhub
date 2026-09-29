@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ runtime/stage/stage-end-report.test.mjs (8 tests) 12ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  22:28:02
+   Duration  146ms (transform 21ms, setup 0ms, collect 11ms, tests 12ms, environment 0ms, prepare 39ms)
+

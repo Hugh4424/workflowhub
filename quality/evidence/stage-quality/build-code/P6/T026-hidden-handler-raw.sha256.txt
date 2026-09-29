@@ -1,0 +1,15 @@
+2aa1b7874356a70c125a6e68a09286341b29ec0c433ef77d269ffbee25391499  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-red.stdout.txt
+94752fb2d25e27052553ecd4526bb65d9de38a5c09d9fa62abc988b1fcf49fd7  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-red.stderr.txt
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-red.exit.txt
+9f15675365ba36f845d4e2967aae4fad94ec2bda44e347d0f0928133340b1ebd  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-green.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-green.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-green.exit.txt
+bdbea2eaf0e60f8e34901c4728ef6d6f24864f05eca299d3c885b1b1f0cf0e9a  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-tier.stdout.txt
+10bb2ad1f1e663648d6bf3dee22e1d9c8646b5344dbe259aede3f42833160e41  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-tier.stderr.txt
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-tier.exit.txt
+2cf263ea8482ef699a158a28cf057fe5f2fa400bb9308ff9809025b6750bda78  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-projection.stdout.txt
+e79feac8ffbbe3182f8ad165dcc9d7f79f082f3f073cb63cbffea5eb10562d92  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-projection.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-adjacent-projection.exit.txt
+f46a8239a8ea36b821c2664dfa054f083bf0b25353147c5f9c02c2bdba645a8b  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-pre-no-receipt.stdout.txt
+e79feac8ffbbe3182f8ad165dcc9d7f79f082f3f073cb63cbffea5eb10562d92  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-pre-no-receipt.stderr.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  quality/evidence/stage-quality/build-code/P6/T026-hidden-handler-pre-no-receipt.exit.txt

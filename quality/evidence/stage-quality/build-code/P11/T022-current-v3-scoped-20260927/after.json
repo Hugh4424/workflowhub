@@ -1,0 +1,17 @@
+{
+  "captured_at_utc": "2026-09-27T11:34:36.510Z",
+  "files": {
+    "runtime/stage/stage-content-contracts.mjs": "8e74dcaa19343545c762264ef34124ef8b424d6202628f7d0f2d7778217029cf",
+    "runtime/stage/stage-handlers.mjs": "88760292bc8b78d6a13e848fddc5ba9ce1fa4708cd422d404045c8820c21e5c9",
+    "runtime/stage/stage-runner.mjs": "9ee916e5692042df9535a1f278efce14a84ddf2dd61c87f9dadef5362337cc84",
+    "runtime/evidence/freshness.mjs": "c0cfb6b0743d5f32f14b0c2ad73fcd36c1b98d91031153398c7f3921c1a8a1d6",
+    "tests/contract/post-business-browser-reconciliation.test.mjs": "e80dddce1095838c7d9f698d1c53c67e49415b023518fa10cf4940e08910a194",
+    "tests/contract/acceptance-execution-tier.test.mjs": "ab2280b53d52bd9a798a1743d345112a96a8951b9018d7e3bce0e8fb27b57b01",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md": "049def3865f6f642d1c904780c9b6027a73e73684d3f9b429029b3f549d46b58"
+  },
+  "task_facts_sha256": "5b323de258d1628bf1aebf98a9c5ceddb06ea40db0b1c4544553654ec096ae78",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "same_files": true,
+  "same_task_facts": true,
+  "same_head": true
+}

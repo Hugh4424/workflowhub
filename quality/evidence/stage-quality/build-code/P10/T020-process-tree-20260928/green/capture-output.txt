@@ -1,0 +1,25 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (24 tests) 124650ms
+   ✓ P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence 7474ms
+   ✓ P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence 7376ms
+   ✓ P10 fixed targeted capture > preserves first pass and second real failure raw and stderr through the failed outer receipt 7226ms
+   ✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 14159ms
+   ✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 3050ms
+   ✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 2777ms
+   ✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 6642ms
+   ✓ P10 fixed targeted capture > does not start a mixed case with a foreign task workspace 3388ms
+   ✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 23227ms
+   ✓ P10 fixed targeted capture > keeps a missing canonical effect subject unavailable after a real fixture test run 11139ms
+   ✓ P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 2798ms
+   ✓ P10 fixed targeted capture > rejects a source snapshot changed by the selected test 6076ms
+   ✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6723ms
+   ✓ P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 13352ms
+   ✓ P10 fixed targeted capture > releases a TERM-resistant grandchild and its listening port on outer timeout 9235ms
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  01:49:54
+   Duration  125.14s (transform 164ms, setup 0ms, collect 381ms, tests 124.65s, environment 0ms, prepare 29ms)
+

@@ -1,0 +1,1 @@
+node -e 'const [maj,min]=process.versions.node.split(".").map(Number);if(maj!==24||min<14){console.error(`Node >=24.14.0 <25 required, got ${process.versions.node}`);process.exit(1)}console.log(process.versions.node)'

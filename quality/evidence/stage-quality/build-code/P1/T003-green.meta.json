@@ -1,0 +1,22 @@
+{
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P1",
+  "task_card": "T003",
+  "snapshot_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "kind": "command_checks",
+  "phase_card_check_ids": [
+    "P1-ADR-TRACKED"
+  ],
+  "p13_task_check_ids": [
+    "P1-ADR-TRACKED"
+  ],
+  "transcript_path": "quality/evidence/stage-quality/build-code/P1/T003-green.txt",
+  "transcript_sha256": "7cc857fe6dbc6642bdbc06aee52b48ecde087ca0d9c3d1e6e77f8ee14f6622af",
+  "original_path": "quality/evidence/stage-quality/build-code/P1/T003-green-before-normalization.txt",
+  "original_sha256": "1bf62f8e82651858166563565f0133999a069d99f78fb1541c237a5d13104134",
+  "normalized_at_utc": "2026-09-26T11:54:12.118215+00:00",
+  "verified_at_utc": "2026-09-26T11:54:29.266308+00:00",
+  "stdout_sha256": "7e7abdeb35a8dd92cd223908bffe09ec5b4db936a1d60c73749e7b17afe3f1b0",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "verified_exit_code": 0
+}

@@ -1,0 +1,152 @@
+COMMAND=npx vitest run tests/contract/build-code-change-scope.test.mjs tests/contract/build-code-test-inventory.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-23T11:46:59Z
+EXIT=1
+=== STDOUT ===
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-test-inventory.test.mjs (3 tests | 1 failed) 2553ms
+   × ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > derives two distinct full test IDs, skipped status and unmatched target from real Node TAP 2303ms
+     → expected undefined to match object { status: 'recorded', …(3) }
+ ❯ tests/contract/build-code-change-scope.test.mjs (5 tests | 5 failed) 13008ms
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start 2651ms
+     → expected undefined to match object { status: 'recorded', …(5) }
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start 2225ms
+     → expected undefined to match object { status: 'recorded', …(5) }
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots 3082ms
+     → expected undefined to match object { status: 'recorded', …(5) }
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists 2078ms
+     → expected undefined to match object { status: 'unknown_change_scope' }
+   × ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start 2971ms
+     → expected undefined to match object { status: 'unknown_change_scope' }
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 2 passed (8)
+   Start at  19:47:00
+   Duration  13.49s (transform 162ms, setup 0ms, collect 716ms, tests 15.56s, environment 0ms, prepare 77ms)
+
+
+=== STDERR ===
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start
+AssertionError: expected undefined to match object { status: 'recorded', …(5) }
+
+- Expected: 
+Object {
+  "snapshot_tree": "cd2c3ff8feab0ffc9f2ca004bd5a094ca47d747e",
+  "source_digest": "3d00c743c36bb45eb739ac22e6dcdda15e7bad3cc96c93ad74d3d507a26dfded",
+  "start_commit": "896e2edf6283b17e6a1ec5812ea22ab2393d3541",
+  "start_tree": "911dca39950590c0b548878d8a56961e37230291",
+  "status": "recorded",
+  "task_id": "p9-existing",
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:80:34
+     78|     const receipt = await capture(state, `p9-clean-${mode}`);
+     79|     const saved = assertCanonicalReceipt(state, receipt, `p9-clean-${m…
+     80|     expect(receipt.change_scope).toMatchObject({
+       |                                  ^
+     81|       status: "recorded", task_id: state.task.identity.taskId,
+     82|       start_commit: state.startCommit, start_tree: state.startTree,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots
+AssertionError: expected undefined to match object { status: 'recorded', …(5) }
+
+- Expected: 
+Object {
+  "snapshot_tree": "44dcfad3ac2a1e751ada23ace07e70b6e2d697cf",
+  "source_digest": "8853dd06e358803b724ba10cffaeff77de62bc2dfc012d9ea8957f500b004f80",
+  "start_commit": "46ee4d54919e415cb77243e4e01c023714152f04",
+  "start_tree": "911dca39950590c0b548878d8a56961e37230291",
+  "status": "recorded",
+  "task_id": "p9-created",
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:104:33
+    102|     const second = await capture(state, "p9-second-repair");
+    103|     const secondSaved = assertCanonicalReceipt(state, second, "p9-seco…
+    104|     expect(second.change_scope).toMatchObject({
+       |                                 ^
+    105|       status: "recorded", task_id: state.task.identity.taskId,
+    106|       start_commit: state.startCommit, start_tree: state.startTree,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists
+AssertionError: expected undefined to match object { status: 'unknown_change_scope' }
+
+- Expected: 
+Object {
+  "status": "unknown_change_scope",
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:129:34
+    127|       task: unauthenticatedTask, workspace: openCurrentTaskWorkspace(u…
+    128|     });
+    129|     expect(receipt.change_scope).toMatchObject({ status: "unknown_chan…
+       |                                  ^
+    130|     expect(receipt.change_scope.changed_paths ?? []).not.toContain("pr…
+    131|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/contract/build-code-change-scope.test.mjs > ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start
+AssertionError: expected undefined to match object { status: 'unknown_change_scope' }
+
+- Expected: 
+Object {
+  "status": "unknown_change_scope",
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/build-code-change-scope.test.mjs:139:34
+    137|       task: other.task, workspace: openCurrentTaskWorkspace(state.task…
+    138|     });
+    139|     expect(receipt.change_scope).toMatchObject({ status: "unknown_chan…
+       |                                  ^
+    140|     expect(receipt.change_scope.changed_paths ?? []).toEqual([]);
+    141|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/contract/build-code-test-inventory.test.mjs > ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > derives two distinct full test IDs, skipped status and unmatched target from real Node TAP
+AssertionError: expected undefined to match object { status: 'recorded', …(3) }
+
+- Expected: 
+Object {
+  "snapshot_tree": "e9dec6bce5bc461cb11f144fbe8a90aa8519ae1f",
+  "source_digest": "3fc1ba51f0834d7a8b10d06f8d534cac3a535507b8aff7413b59e2dd6175b274",
+  "status": "recorded",
+  "task_id": "p9-node-runner",
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/build-code-test-inventory.test.mjs:99:36
+     97|     expect(rawOutput).toMatch(/# SKIP/);
+     98|     expect(saved).not.toHaveProperty("test_inventory");
+     99|     expect(receipt.test_inventory).toMatchObject({
+       |                                    ^
+    100|       status: "recorded", task_id: task.identity.taskId,
+    101|       snapshot_tree: saved.snapshot_tree, source_digest: saved.source_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+

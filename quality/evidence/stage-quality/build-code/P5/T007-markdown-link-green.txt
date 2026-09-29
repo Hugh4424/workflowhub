@@ -1,0 +1,10 @@
+COMMAND=node quality/evidence/stage-quality/build-code/P5/T007-markdown-link-probe.mjs
+STARTED_AT_UTC=2026-09-26T14:51:05.295168+00:00
+SOURCE_SHA256=3ade366d04e63118039a9f36746db271f96ea3b6fcbae5d943dd40e02a57d2bd
+PROBE_SHA256=6d163cd1d234739871a4bf5644645751fdcdda294e515c91c47ec249e2f8f4ad
+STDOUT_BEGIN
+{"markdown_it":"14.1.0","modes":[{"html":false,"links":0,"images":0},{"html":true,"links":0,"images":0}],"facts_unchanged":true}
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0

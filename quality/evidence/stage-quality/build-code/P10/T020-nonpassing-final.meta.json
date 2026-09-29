@@ -1,0 +1,62 @@
+{
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "node": "v24.14.0",
+  "vitest": "vitest/2.1.9 darwin-arm64 node-v24.14.0",
+  "environment": {
+    "npm_config_offline": "true",
+    "npm_config_yes": "false"
+  },
+  "sha256": {
+    "workflows/build-code/targeted-runner.mjs": "e30e55474aae28445d0ef2ccf5d589a2710a999581d2b92d38e3d2fec78ae32c",
+    "tests/contract/build-code-targeted-runner.test.mjs": "27addc4a131f087155034626a8cb4a6e6fd4178a34295bcbbbfe0392ff4e0ec3",
+    "quality/evidence/stage-quality/build-code/P10/T020-nonpassing-diagnostics-probe.mjs": "bbe02f0d891e8d60c8ccbb41da6f73b5e2ef056737c1ccc039474f3286debea1"
+  },
+  "inputs_unchanged_during_run": true,
+  "runs": {
+    "probe": {
+      "command": "node quality/evidence/stage-quality/build-code/P10/T020-nonpassing-diagnostics-probe.mjs green",
+      "argv": [
+        "node",
+        "quality/evidence/stage-quality/build-code/P10/T020-nonpassing-diagnostics-probe.mjs",
+        "green"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-probe.stdout.txt",
+      "stdout_sha256": "40984168de1da5488ccd4dde26427ac8afe5c5df791024bf74b01e5761914840",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-probe.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "frozen": {
+      "command": "npx vitest run tests/contract/build-code-targeted-runner.test.mjs",
+      "argv": [
+        "npx",
+        "vitest",
+        "run",
+        "tests/contract/build-code-targeted-runner.test.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-frozen.stdout.txt",
+      "stdout_sha256": "e1fa8b3ccd73997151c9babb6d94c5a9d7596d112000ff82ed4e14fae2b7eefb",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-frozen.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "syntax": {
+      "command": "node --check workflows/build-code/targeted-runner.mjs",
+      "argv": [
+        "node",
+        "--check",
+        "workflows/build-code/targeted-runner.mjs"
+      ],
+      "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+      "exit_code": 0,
+      "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-syntax.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-nonpassing-final-syntax.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "limit": "Nonpassing reports produce diagnostic observations only. No canonical receipt, selected-case reconciliation, or AC-33 pass is claimed."
+}

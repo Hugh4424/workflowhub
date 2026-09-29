@@ -1,0 +1,23 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P11/T022 v2 actual private browser producer > does not start a browser on invalid-missing-output receipt
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P11/T022 v2 actual private browser producer > does not start a browser on invalid-output-hash receipt
+ FAIL  tests/contract/acceptance-execution-tier.test.mjs > P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation-head receipt
+AssertionError: expected [ { input: { …(16) }, …(2) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs:489:19
+    487|   it.each(["invalid-missing-output", "invalid-output-hash", "invalid-i…
+    488|     const { calls, error } = await runPostBrowserSource({ receiptMode …
+    489|     expect(calls).toHaveLength(0);
+       |                   ^
+    490|     expect(error).toBeDefined();
+    491|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+

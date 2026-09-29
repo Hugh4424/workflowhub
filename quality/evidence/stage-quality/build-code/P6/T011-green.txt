@@ -1,0 +1,31 @@
+COMMAND=npx vitest run tests/contract/oracle-mirror.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+TEST_SHA256=b7f6fb9944ae17fdbe8192cae6f1af7e871bdf6d4bffc2783d6e8045845c1a70
+STARTED_AT_UTC=2026-09-26T12:03:16.676529+00:00
+COMPLETED_AT_UTC=2026-09-26T12:03:17.120012+00:00
+/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04 mode=0o555 sha256=N/A
+/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json mode=0o444 sha256=7c7e3fa520dd8c1761fe0a5605d6f2e76d5698cba2953b91f9e716d52e659dda
+/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md mode=0o444 sha256=df22e65c5d7ed342ad765523a9d3b4a659286da2ac93f97857aad51ad34926ea
+LS_MODE_COMMAND=ls -ld /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md
+LS_MODE_STDOUT_BEGIN
+dr-xr-xr-x@ 4 Hugh  staff   128 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04
+-r--r--r--@ 1 Hugh  staff   548 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json
+-r--r--r--@ 1 Hugh  staff  1048 Sep 26 20:03 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md
+LS_MODE_STDOUT_END
+LS_MODE_EXIT=0
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  20:03:16
+   Duration  126ms (transform 10ms, setup 0ms, collect 8ms, tests 17ms, environment 0ms, prepare 27ms)
+
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+EXIT=0

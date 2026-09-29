@@ -1,0 +1,45 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 1 failed | 43 skipped) 96067ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown 9999ms
+     → workspace Git command failed: fatal: Unable to hash node_modules
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1549ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash 1517ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim 1399ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > counts one target reporter once when one case maps to two accepted ACs 12292ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC 11091ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback 10690ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback 10802ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding 3670ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass 10721ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect 1502ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent 10637ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown
+Error: workspace Git command failed: fatal: Unable to hash node_modules
+ ❯ workspaceCommand runtime/evidence/canonical-receipt-writer.mjs:388:11
+    386|   const result = runWorkspaceCommand(workspace, command, args);
+    387|   if (result.error || result.status !== 0) {
+    388|     throw new Error(`${label} failed: ${result.stderr?.trim() || resul…
+       |           ^
+    389|   }
+    390|   return result.stdout;
+ ❯ workspaceGit runtime/evidence/canonical-receipt-writer.mjs:394:10
+ ❯ runtime/evidence/canonical-receipt-writer.mjs:406:71
+ ❯ currentImplementationReceipt runtime/evidence/canonical-receipt-writer.mjs:406:38
+ ❯ safeTask.withRecordLock.waitMs runtime/evidence/canonical-receipt-writer.mjs:425:21
+ ❯ withRecordLockAt runtime/task/task-handle.mjs:464:20
+ ❯ Object.withRecordLock runtime/task/task-handle.mjs:932:22
+ ❯ publishImplementationRecords runtime/evidence/canonical-receipt-writer.mjs:421:12
+ ❯ Module.writeCurrentImplementationReceipt runtime/evidence/canonical-receipt-writer.mjs:450:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 passed | 43 skipped (57)
+   Start at  04:59:59
+   Duration  96.75s (transform 258ms, setup 0ms, collect 564ms, tests 96.07s, environment 0ms, prepare 30ms)
+

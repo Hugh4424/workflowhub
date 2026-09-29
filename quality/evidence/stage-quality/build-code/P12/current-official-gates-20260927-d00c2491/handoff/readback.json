@@ -1,0 +1,21 @@
+{
+  "receipt_ref": "quality/tests/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.json",
+  "receipt_sha256": "3dd40a9d74556229012aef312a16492178cb23fac62db2c4ffa9e0551edb0e20",
+  "output_ref": "quality/tests/output/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.output",
+  "output_sha256": "49cfd376cfae63526cd2a185bdfebafe920d0e1455c40cebcea56866ef8eadfc",
+  "receipt_internal_exit": 0,
+  "receipt_command": "npx vitest run tests/contract/verify-code-business-handoff.test.mjs",
+  "receipt_task_id": "workflowhub-thin-core-card-04-20260919",
+  "receipt_snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "receipt_source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "receipt_output_hash_claim": "49cfd376cfae63526cd2a185bdfebafe920d0e1455c40cebcea56866ef8eadfc",
+  "cli_exit": 0,
+  "runner_summary": [
+    " Test Files  1 passed (1)",
+    "      Tests  3 passed (3)",
+    "   Duration  110ms (transform 10ms, setup 0ms, collect 7ms, tests 2ms, environment 0ms, prepare 27ms)"
+  ],
+  "read_error": null,
+  "source_unchanged": true,
+  "identity_unchanged": true
+}

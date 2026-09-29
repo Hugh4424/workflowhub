@@ -1,0 +1,42 @@
+COMMAND=node --input-type=module -
+SCRIPT_BEGIN
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {buildPostAcceptanceChainRows} from './runtime/stage/stage-runner.mjs';
+import {deriveDecisionLogOriginalSourceCensus} from './runtime/stage/stage-content-contracts.mjs';
+const spec=readFileSync('specs/workflowhub-thin-core-card-04-20260919/spec.md','utf8');
+const decisionLog=readFileSync('specs/workflowhub-thin-core-card-04-20260919/decision-log.md','utf8');
+const census=deriveDecisionLogOriginalSourceCensus(decisionLog);
+const accepted=new Set(census.entries.map(entry=>entry.id));
+const [row]=buildPostAcceptanceChainRows({rows:[{acceptance_criterion_id:'AC-29',coverage_limits:''}],spec,decisionLog,boundEvidenceRefs:[],materialRevision:'probe',snapshotTree:'a'.repeat(40),taskId:'card-04',tests:null});
+assert.ok(row.source_ids.length>0,'AC-29 should have an original source');
+assert.ok(row.source_ids.every(id=>accepted.has(id)),`non-census source_ids: ${row.source_ids.filter(id=>!accepted.has(id)).join(',')}`);
+console.log(JSON.stringify({source_ids:row.source_ids,census_count:accepted.size}));
+SCRIPT_END
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+AT_UTC=2026-09-26T12:05:41.204562+00:00
+STDOUT_BEGIN
+STDOUT_END
+STDERR_BEGIN
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: non-census source_ids: R-009,R-010,R-018
+    at file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/[eval1]:11:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:268:26)
+    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:265:20)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.0
+STDERR_END
+EXIT=1

@@ -1,0 +1,35 @@
+COMMAND=npx vitest run tests/contract/stage-runtime-material-check.test.mjs
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-p3-runner-fixed-3o198wba/checkout
+
+ ❯ tests/contract/stage-runtime-material-check.test.mjs (4 tests | 2 failed) 4485ms
+   × stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 890ms
+     → current task material missing or unreadable: spec.md
+   × stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 1262ms
+     → current task material missing or unreadable: spec.md
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 1157ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 1175ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/stage-runtime-material-check.test.mjs > stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent
+ FAIL  tests/contract/stage-runtime-material-check.test.mjs > stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent
+Error: current task material missing or unreadable: spec.md
+ ❯ Module.stageRuntimeMain tools/cli/stage-runtime.mjs:1489:15
+    1487|       const missingMaterials = materialFiles.filter((file) => typeof m…
+    1488|       if (missingMaterials.length > 0) {
+    1489|         throw new Error(`current task material missing or unreadable: …
+       |               ^
+    1490|       }
+    1491|     }
+ ❯ runStatus tests/contract/stage-runtime-material-check.test.mjs:65:32
+ ❯ tests/contract/stage-runtime-material-check.test.mjs:79:30
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  07:18:32
+   Duration  5.73s (transform 458ms, setup 0ms, collect 1.07s, tests 4.48s, environment 0ms, prepare 46ms)
+EXIT=1

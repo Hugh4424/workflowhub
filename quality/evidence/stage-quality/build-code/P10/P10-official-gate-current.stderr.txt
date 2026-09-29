@@ -1,0 +1,32 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC
+AssertionError: stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+
+Expected: "reconciled"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:129:72
+    127|     expect(JSON.parse(readFileSync(account)).balance_cents).toBe(JSON.…
+    128|     const result = reconcile(v, [observation], [evidence]);
+    129|     expect(result.status, "stub is not a business-effect attestation")…
+       |                                                                        ^
+    130|     expect(result.entries).toEqual(expect.arrayContaining([expect.obje…
+    131|       case_id: v.caseId, acceptance_criterion_id: v.criterion, status:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt
+AssertionError: expected 'selected' not to be 'selected' // Object.is equality
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:65:29
+     63| }
+     64| function rejectsFor(result, reason) {
+     65|   expect(result.status).not.toBe("selected");
+       |                             ^
+     66|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+     67|   expect(result.cases ?? []).toEqual([]);
+ ❯ tests/contract/build-code-case-selection.test.mjs:127:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+

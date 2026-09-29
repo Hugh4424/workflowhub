@@ -1,0 +1,64 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/business-case-source-binding.test.mjs (10 tests | 2 failed) 11ms
+   × CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES records a source-bound future observation without claiming an effect 4ms
+     → expected [ …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > does not let deferred or another subject stand in for AC-27 machine-class effects 1ms
+     → expected [ …(3) ] to deeply equal []
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 passed (10)
+   Start at  09:14:45
+   Duration  129ms (transform 14ms, setup 0ms, collect 9ms, tests 11ms, environment 0ms, prepare 36ms)
+
+
+--- STDERR ---
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES records a source-bound future observation without claiming an effect
+AssertionError: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "AC-27 machine-class producer falsely claimed ready",
++   "helper capability was presented as an official AC-27 effect",
++   "different-subject or deferred evidence could falsely satisfy AC-27",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:147:67
+    145|   for (const [id, authority] of Object.entries(expected)) {
+    146|     it(`${id} records a source-bound future observation without claimi…
+    147|       expect(observationContractErrors(cases.get(id), authority)).toEq…
+       |                                                                   ^
+    148|     });
+    149|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > does not let deferred or another subject stand in for AC-27 machine-class effects
+AssertionError: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "AC-27 machine-class producer falsely claimed ready",
++   "helper capability was presented as an official AC-27 effect",
++   "different-subject or deferred evidence could falsely satisfy AC-27",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:171:57
+    169|     expect(stageProducer).toContain('subject: "stage_end_spec_analyze"…
+    170|     expect(stageProducer).toContain('if (status === "deferred" || stat…
+    171|     expect(observationContractErrors(entry, authority)).toEqual([]);
+       |                                                         ^
+    172|     expect(observationContractErrors({ ...entry, effect_observation: {
+    173|       ...entry.effect_observation,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

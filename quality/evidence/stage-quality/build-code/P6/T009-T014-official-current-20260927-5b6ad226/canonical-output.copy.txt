@@ -1,0 +1,49 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms
+stdout | tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 三、缺料的精确错误 > 缺料-3（观测，不断言）缺料夹具上 build-plan 真实执行的原始形态
+[观测/非断言] run --action=execute --stage=build-plan（缺 phases/index.md）：exit=1 stderr 首行="Error: current task material missing or unreadable: spec.md; phases/index.md"
+
+ ✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms
+   ✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms
+ ✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms
+ ✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms
+ ✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms
+ ✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms
+ ✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms
+   ✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms
+   ✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms
+   ✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms
+   ✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms
+   ✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms
+   ✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms
+   ✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms
+   ✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms
+   ✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms
+   ✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms
+   ✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms
+   ✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms
+   ✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms
+   ✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms
+   ✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms
+   ✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms
+   ✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms
+   ✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms
+   ✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms
+   ✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms
+ ✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms
+
+ Test Files  8 passed (8)
+      Tests  79 passed (79)
+   Start at  20:39:56
+   Duration  169.66s (transform 316ms, setup 0ms, collect 1.23s, tests 207.66s, environment 1ms, prepare 234ms)
+
+

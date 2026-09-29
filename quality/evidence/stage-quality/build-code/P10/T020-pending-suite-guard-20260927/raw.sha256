@@ -1,0 +1,8 @@
+a603e65b953f3ed9f9eeac7e5037c13f586ffa6849565d8b929c5cdb10025bbb  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/target-red.stdout.txt
+f9ae0788ed017a5deb271a5865c0a513cc97e85c39753f1ac9f979a4a74eca82  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/target-red.stderr.txt
+481f9a105b748cf14b4cfc9551db0d04f2ccb937366cb05b5ebd47e646481bc4  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/target-green.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/target-green.stderr.txt
+35b47bb22e88c7909ef5026aa9a160039927d82fe5173588762de20054a4ef71  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/real-replay-green.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/real-replay-green.stderr.txt
+ea0595a2244d3dad6d2d06971ad5c8f5c68587a0158dc12beca55b609d0fd702  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/adjacent-green.stdout.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P10/T020-pending-suite-guard-20260927/adjacent-green.stderr.txt

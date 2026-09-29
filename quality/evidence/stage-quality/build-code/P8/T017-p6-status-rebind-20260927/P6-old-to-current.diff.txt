@@ -1,0 +1,13 @@
+diff --git a/quality/evidence/stage-quality/build-code/P6/T027-before-readme-candidate-correction-20260927.md b/specs/workflowhub-thin-core-card-04-20260919/phases/P6.md
+index 69dd4d0e..6601bf97 100644
+--- a/quality/evidence/stage-quality/build-code/P6/T027-before-readme-candidate-correction-20260927.md
++++ b/specs/workflowhub-thin-core-card-04-20260919/phases/P6.md
+@@ -181,7 +181,7 @@
+ 
+ - **Source / FR / AC**: D-015 / FR-19 / AC-19。按完整工作流 Task 核“纯文档”，当前 CARD-04 含代码，不能自己充当该样例。
+ - **Owner / write set**: 文档样例核验者仅写 `quality/evidence/stage-quality/build-code/P6/T027-*`；既有文档/测试不因取样而改写。真实消费者为 AC-19 验收与 P13/T024 汇总。
+-- **候选 / oracle**: 当前只读盘点没有找到可认证的外部完整纯文档 Task；需选择并实际完成一项有真实文档需求的独立 WorkflowHub Task。认证该 Task 的完整差分仅文档，专属检查删去必要内容时应非零，保存实施前后命令/exit/原始输出、语义独立审查及验收披露；或按现有 G-2 机制留下理由、风险和验收披露。P1/T001–T003 的检查仅供设计对照，不是此项通过样例。
++- **当前候选 / oracle（2026-09-27）**: 已有独立纯文档 Task `workflowhub-readme-post-materials-20260927`，工作树 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-readme-post-materials-20260927`；外置 Task 证据索引 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-readme-post-materials-20260927/quality/evidence/card04-ac19-readme-evidence-index.json`，当前 SHA-256 `1c1a214dc6580e2112d0dc47296516c00eeaef4ea99393076e87408af6a2c05b`。索引可回读四阶段记录：产品差分仅 README post 一行及该 Task 四份 Markdown 材料；同一检查脚本 SHA-256 `704274831658937bd3f89a42207a4177ecdf55e71c05f8a4507304a71064e225` 的旧行 RED `quality/evidence/readme-post-materials-build-plan-red.txt`（exit 1，SHA-256 `29943d233a4c8a4016fda38e6a6bdd776c8e59a0f5ccceaedf7c993db5315782`）和新行 GREEN `quality/evidence/readme-post-materials-build-code-green.txt`（exit 0，SHA-256 `844848bc1bcf068092d9f4eb71eedc5b34e31acb78fb908d7717f4aab64a23b7`）均在该 Task `quality/evidence/` 下。其 build-code/verify-code 正式 run 为 completed/passed，异源审查结果在索引 `independent_reviews` 带 ref/hash；但 make-decision/build-plan 的 run quality 仍 incomplete，四阶段 delivery/close 均 unavailable，不能把此候选称为完整样例或 AC-19 通过。须由 T027 独立核完整 Task、语义来源、风险与验收披露；或按现有 G-2 机制记录理由、风险和披露。P1/T001–T003 的检查仅供设计对照，不是此项通过样例。
+ - **Done / STOP**: 完整 Task 身份、纯文档差分和专属可失败检查均可回读，或该 Task 的专属 G-2 豁免含理由、风险与验收披露，且独立审查复核后，才可判 AC-19 样例成立；否则 incomplete。不得用本卡生产代码豁免、文档子工作项或结构关键词绿冒充。
+ 
+ ## 2026-09-27 同任务修订：T013/T014 遗留缺陷的精确接手

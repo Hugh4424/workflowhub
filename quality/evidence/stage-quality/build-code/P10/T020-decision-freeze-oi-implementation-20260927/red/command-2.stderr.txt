@@ -1,0 +1,23 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/vnext-official-stage-run.test.mjs > P3 T007 real bridge identity and decision approval consumers > keeps a current OI content failure after authenticated freeze sources are reconstructed
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   StringMatching /decision freeze: current OI authority contains invalid YAML or JSON/,
+- ]
++ Array []
+
+ ❯ tests/integration/vnext-official-stage-run.test.mjs:724:38
+    722|     const approved = p3ApprovedDecision(state, { decisionLogTail });
+    723|     const result = await runOfficialStage("build-plan", p3Context(stat…
+    724|     expect(p3FreezeWarnings(result)).toEqual(expect.arrayContaining([
+       |                                      ^
+    725|       expect.stringMatching(/decision freeze: current OI authority con…
+    726|     ]));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

@@ -1,0 +1,28 @@
+command=npx vitest run tests/contract/build-code-test-inventory.test.mjs
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+utc=2026-09-26T12:30:39Z
+head=ef920f1fbd415fe87d50930359059b661e141acd
+node=v24.14.0
+448b803d2ceaf8f6256878f32a68dc36ce19fec34c631024e80f25111818c725  tests/contract/build-code-test-inventory.test.mjs
+85de1d860331f8e1ff26fcb7552edda858c1068fbb0d4aff240ce91415ff5f76  workflows/build-code/capture.mjs
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-test-inventory.test.mjs (3 tests | 1 failed) 3241ms
+   × ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP 2997ms
+     → Failed to load url ./test-asset-inventory.mjs (resolved id: ./test-asset-inventory.mjs) in /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/capture.mjs. Does the file exist?
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-test-inventory.test.mjs > ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP
+Error: Failed to load url ./test-asset-inventory.mjs (resolved id: ./test-asset-inventory.mjs) in /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/capture.mjs. Does the file exist?
+ ❯ loadAndTransform ../workflowhub/node_modules/.pnpm/vite@5.0.0/node_modules/vite/dist/node/chunks/dep-T98iZFpD.js:47770:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  20:30:39
+   Duration  3.70s (transform 145ms, setup 0ms, collect 350ms, tests 3.24s, environment 0ms, prepare 26ms)
+
+EXIT=1

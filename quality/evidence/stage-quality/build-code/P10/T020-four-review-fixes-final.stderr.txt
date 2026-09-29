@@ -1,0 +1,22 @@
+WebSocket server error: Port is already in use
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:210:60
+    208|     expect(result.exit_code).toBe(124);
+    209|     expect(result.dispatch_state).not.toBe("executed");
+    210|     expect(existsSync(join(state.root, "started.marker"))).toBe(true);
+       |                                                            ^
+    211|     await new Promise((resolve) => setTimeout(resolve, 3500));
+    212|     expect(existsSync(join(state.root, "late.marker"))).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

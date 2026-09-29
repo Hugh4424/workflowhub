@@ -1,0 +1,11 @@
+task_id=workflowhub-thin-core-card-04-20260919
+phase_id=P1
+task_card=T003
+captured_at=2026-09-26T11:29:05Z
+snapshot_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+COMMAND=node -e "const{execFileSync}=require('child_process');const fs=require('fs');const f='docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md';let bad=0;try{execFileSync('git',['ls-files','--error-unmatch',f],{stdio:'ignore'})}catch{console.error('断言失败: '+f+' 未被 git 跟踪');bad=1}let t='';try{t=fs.readFileSync(f,'utf8')}catch{console.error('断言失败: '+f+' 不存在');bad=1}for(const s of ['## 背景','## 决策','## 后果']){if(t&&!t.includes(s)){console.error('断言失败: '+f+' 缺 '+s);bad=1}}if(!bad)console.log('ADR-0032 OK');process.exit(bad)"
+断言失败: docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md 未被 git 跟踪
+断言失败: docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md 缺 ## 背景
+断言失败: docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md 缺 ## 决策
+断言失败: docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md 缺 ## 后果
+EXIT=1

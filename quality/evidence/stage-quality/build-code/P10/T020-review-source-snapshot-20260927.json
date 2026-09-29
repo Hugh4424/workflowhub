@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-09-27T02:26:27.343Z",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "project": "workflowhub",
+  "worktree_root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "snapshot_tree": "244cdfdf4a7a8e6bdc0badfa8f6a5df085d7ced9",
+  "snapshot_commit": "dad9d31a6ff7499559345da41c57ab2d977b9ca7",
+  "source_digest": "f2adc4e1e211ecab0c8ee147b06b67471c079b1b874d4e1cbff2dd5ebdc8d075",
+  "material_revision": "revision-29e92b23b8d4392dd8336428bced5d0a87889d174c186f7c91c7ad539aade1dc",
+  "spec_sha256": "fde72d0e666c44da878c8a5ecaf745101567ca5474e31c6750f7446d198e2784",
+  "phase_sha256": "b0a23fb9dacf4cf9acb78d5d59d983b426c0598c65094c6dcf605640ad7fc23b",
+  "selector_sha256": "d918ed1ed84ca7975b157968ca0c51c96d849049933dc5bad6d7d87afbd22258",
+  "selector_test_sha256": "487af135f403551c58fe10af5d489c7dcb5e1f7e2631a3ab2cf1057eae0d3c09",
+  "capture_sha256": "568acb84a8364d8a421aefc16bc200760a34a5a9852695caff4578f8ca4d0a74",
+  "launcher_sha256": "c597f258e9f980ca8d33cad71c498c0a2136c89e1d1d54d6bd9f809650cca385",
+  "launcher_test_sha256": "60ff75c9a8e6ede13624cbb39e470d56349c3c5d70417eaa9f02695baf3979aa"
+}

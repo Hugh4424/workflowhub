@@ -451,10 +451,10 @@ describe("resolved code review through the real bridge and status consumers", ()
   });
 });
 
-function p3ApprovedDecision(state, { decisionId = "D-FIXTURE-1" } = {}) {
+function p3ApprovedDecision(state, { decisionId = "D-FIXTURE-1", decisionLogTail = "" } = {}) {
   const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
   for (const [name, bytes] of Object.entries(completeCanonicalStageMaterials())) artifacts.writeAtomic(name, bytes);
-  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n### M6\n${decisionId === null ? "" : `- decision_id: ${decisionId}\n`}- freeze packet covers 用户流程、数据状态、成败边界、非目标。\n`);
+  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n### M6\n${decisionId === null ? "" : `- decision_id: ${decisionId}\n`}- freeze packet covers 用户流程、数据状态、成败边界、非目标。\n${decisionLogTail}`);
   const confirmation = state.kernel.publishHumanConfirmation("make-decision", {
     decision: "accepted", subject_ref: artifacts.reference("decision-log.md"),
     reply_text: "fixture user approves the current decision scope", step_slug: "approve-decision",
@@ -714,6 +714,18 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
     });
     expect(sha256(state.task.readRecord(forged.ref))).toBe(forged.sha256);
     expect(() => authenticateStageOutcomeForProjection(p3Context(state, "build-code"), "build-code", forged.ref)).toThrow(/binding|hash/i);
+  });
+
+  it("keeps a current OI content failure after authenticated freeze sources are reconstructed", async () => {
+    const state = fixture("p3-current-oi-bad-yaml");
+    const decisionLogTail = `\n### OI 记录（解析器权威记录，YAML）\n\`\`\`yaml\noi_id: OI-001\ncategory: complete_user_flow\nstatus: confirmed\n\`\`\`\n\`\`\`yaml\noi_id: OI-002\ncategory: data_state\nstatus: confirmed\n\`\`\`\n\`\`\`yaml\noi_id: OI-003\ncategory: success_failure_boundary\nstatus: confirmed\n\`\`\`\n\`\`\`yaml\noi_id: OI-004\ncategory: non_goals\nstatus: confirmed\n\`\`\`\n\`\`\`yaml\noi_id: OI-099\ncategory: [\n\`\`\`\n`;
+    const approved = p3ApprovedDecision(state, { decisionLogTail });
+    const result = await runOfficialStage("build-plan", p3Context(state, "build-plan"), { decision_freeze: approved.input });
+    expect(p3FreezeWarnings(result)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/decision freeze: current OI authority contains invalid YAML or JSON/),
+    ]));
+    expect(p3FreezeWarnings(result).join("; ")).not.toMatch(/not for the current decision scope revision/);
+    expect(result.quality_status).toBe("incomplete");
   });
 
   it.each(["approved scope", "stale scope", "missing scope", "no sources", "existing ID"])("decision-scope identity through the real build-plan handler: %s", async (scenario) => {
@@ -2042,6 +2054,53 @@ describe("vNext official stage completion", () => {
     })).not.toThrow();
   });
 
+  it("ORACLE-P10-PROFILE compares separately parsed runtime profile and capability proof values", () => {
+    const state = fixture("p10-profile-structural-values");
+    const snapshot = state.candidate.captureSnapshot();
+    const permissions = { network: "localhost_only", db: "localhost_only",
+      filesystem: "worktree_temp_only", subprocess: "explicit_only", environment: "local_ci" };
+    const proof = { status: "passed", executor_id: "run-checks",
+      observations: Object.entries(permissions).map(([capability, policy]) => ({
+        capability, requested: policy, decision: policy, mechanism: "isolated fixture proof",
+        proof_ref: `quality/evidence/p10-${capability}.json`, proof_hash: "a".repeat(64), observed: true,
+      })) };
+    const fingerprint = { before: { selection_hash: "b".repeat(64), assertion_hash: "c".repeat(64) },
+      after: { selection_hash: "b".repeat(64), assertion_hash: "c".repeat(64) } };
+    const runtimeProfile = { runtime_profile: "phase", ceiling_ms: 300000, permissions,
+      executor_id: "run-checks", capability_proof: proof, behavior_fingerprint: fingerprint };
+    const receipt = { schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId,
+      stage: "build-code", producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+      command: "true", command_hash: sha256("true"), exit_code: 0,
+      snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
+      started_at: "2026-08-02T00:00:00.000Z", completed_at: "2026-08-02T00:00:01.000Z",
+      output_ref: "quality/tests/output/p10-profile-structural.output", output_hash: sha256("ok\n"),
+      runtime_profile: runtimeProfile, runtime_profile_status: "ready", runtime_profile_authenticated: true,
+      capability_proof: proof, behavior_fingerprint: fingerprint, behavior_fingerprint_status: "ready", duration_ms: 1000 };
+    const raw = `${JSON.stringify(receipt, null, 2)}\n`;
+    const ref = "quality/tests/build-code/p10-profile-structural.json";
+    state.kernel.publishCanonicalRecord(ref, raw);
+    state.kernel.publishCanonicalRecord(receipt.output_ref, "ok\n");
+    const copied = JSON.parse(state.task.readRecord(ref));
+    const fields = ["command", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit",
+      "started_at", "completed_at", "output_ref", "output_hash", "runtime_profile",
+      "runtime_profile_status", "runtime_profile_authenticated", "capability_proof",
+      "behavior_fingerprint", "behavior_fingerprint_status"];
+    const tests = { status: "passed", receipt_ref: ref, receipt_hash: sha256(raw),
+      ...Object.fromEntries(fields.map((key) => [key, copied[key]])) };
+    const check = (facts) => verifyOfficialEvidence(contextFor("build-code", state), {
+      facts: { tests: facts }, evidence_refs: [{ ref, sha256: sha256(raw) }],
+    });
+    expect(copied.runtime_profile).not.toBe(receipt.runtime_profile);
+    expect(copied.capability_proof).not.toBe(receipt.capability_proof);
+    expect(() => check(tests)).not.toThrow();
+    const wrongProfile = structuredClone(tests);
+    wrongProfile.runtime_profile.permissions.network = "deny";
+    expect(() => check(wrongProfile)).toThrow(/facts\.runtime_profile are not bound/);
+    const wrongProof = structuredClone(tests);
+    wrongProof.capability_proof.observations[0].proof_hash = "0".repeat(64);
+    expect(() => check(wrongProof)).toThrow(/facts\.capability_proof are not bound/);
+  });
+
   it("rejects an exit-zero test fact when its runtime profile is unavailable", async () => {
     const state = fixture("unavailable-runtime-profile");
     const receipt = {
@@ -2266,6 +2325,66 @@ describe("vNext official stage completion", () => {
     expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
     expect(state.kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
     expect(state.kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
+  });
+
+  it.each([
+    ["CARD04 completion repair keeps build-code quality incomplete despite real execution and unavailable Phase review", true],
+    ["CARD04 completion repair does not waive missing Phase review", false],
+  ])("%s", async (_reviewCase, hasReview) => {
+    const state = fixture("card04-completion-repair");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    appendNonUiApplicability(artifacts);
+    artifacts.writeAtomic("spec.md", "# Spec\n\n## Acceptance Criteria\n\n- **AC-REPAIR-001**：实际 command 返回输入字面量。\n- **AC-REPAIR-002**：条件=机器逐 AC 测试事实与独立于实现者的 verify-code 审查均已产生；行为=在 verify-code 按风险独立语义抽查与最终授权；度量=保留完整分母并交接；失败场景=真实审查或授权未发生却宣称完成即失败。\n");
+    const command = "card04-acceptance.mjs";
+    const entries = [
+      { acceptance_criterion_id: "AC-REPAIR-001", assertions: [{ id: "literal-result", expected: "real-command", actual: "real-command" }] },
+      { acceptance_criterion_id: "AC-REPAIR-002", outcome: "deferred", owner: "verify-code", reason: "spec requires verify-code semantic spot-check and final authorization", assertions: [{ id: "stage-denominator", expected: ["build-code", "verify-code"], actual: ["build-code", "verify-code"] }] },
+    ];
+    writeFileSync(join(workspace.worktreeRoot, command), `process.stdout.write(JSON.stringify(${JSON.stringify({ entries })}));\n`);
+    const data = [{ source: "command/runtime", sample: "real two-AC command", scenario: "execute current AC and preserve future stage leaf", tier: "command", execution: { command: process.execPath, args: [command], timeout_ms: 5000 } }];
+    artifacts.writeAtomic("tasks.md", `# Tasks\n\n- **Template version**：\`plan-task.v4\`\n\n## Phase P1\n\n#### T001 — real completion repair\n- **ID**：T001\n- **ui_scope**：non_ui\n- **acceptance_role**：acceptance\n- **e2e_scope**：not_required\n- **AC**：AC-REPAIR-001, AC-REPAIR-002\n- **acceptance_data**：\`${JSON.stringify(data)}\`\n`);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    const snapshot = kernel.currentVNextSnapshot();
+    const materialRevision = kernel.currentVNextMaterialRevision();
+    const implementation = writeOfficialComponentReceipt({ task: state.task, workspace, stage: "build-code", component: "implementation", payload: {} });
+    const tests = createCanonicalReceiptWriter({ task: state.task, workspace, stage: "build-code", component: "build-code-test-capture" }).captureTests({
+      command: `${JSON.stringify(process.execPath)} --version`, receiptRef: "quality/tests/card04-completion-repair.json", outputRef: "quality/tests/output/card04-completion-repair.output",
+    });
+    const attemptId = "card04-unavailable-phase";
+    const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
+    const attempt = {
+      version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: state.task.identity.taskId, stage: "build-code", review_track: null,
+      source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
+      snapshot_tree: snapshot.tree, material_revision: materialRevision, material_id: "1".repeat(64), subject_kind: "phase", phase_id: "P1", review_scope: "phase", base_tree: snapshot.tree, candidate_tree: snapshot.tree,
+      provider_attempts: [], terminal_status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_INPUT_TOO_LARGE", message: "complete provider packet exceeded dispatch limit" },
+    };
+    createCanonicalReviewWriter({ task: state.task, taskId: state.task.identity.taskId, stage: "build-code" }).writeAttempt(attemptRef, attempt);
+    const result = await runOfficialStage("build-code", { stage: "build-code", task: state.task, kernel, identity: state.task.identity, workflowRunId: kernel.deriveStageWorkflowRunId("build-code"), manifest: state.task.manifest, workspace, artifacts }, {
+      attempt_id: "card04-completion-repair", receipts: { implementation: implementation.ref, tests: tests.receipt_ref, ...(hasReview ? { review: attemptRef } : {}) },
+    });
+    if (!hasReview) {
+      expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete", completion: { missing: expect.arrayContaining(["finding_dispositions"]) } });
+      return;
+    }
+    expect(result).toMatchObject({
+      status: "in_progress",
+      work_status: "ready",
+      quality_status: "incomplete",
+      completion: { status: "in_progress", missing: expect.arrayContaining(["acceptance_criteria", "finding_dispositions"]) },
+    });
+    const facts = result.quality_fact_refs.map(ref => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find(fact => fact.subject === "phase_review")).toMatchObject({ status: "unavailable" });
+    expect(facts.find(fact => fact.subject === "acceptance_criteria").status).not.toBe("passed");
+    expect(facts.find(fact => fact.subject === "AC-REPAIR-002").status).not.toBe("passed");
+    expect(facts.find(fact => fact.subject === "finding_dispositions").status).not.toBe("passed");
+    expect(JSON.parse(state.task.readRecord(attemptRef))).toEqual(attempt);
+    const status = spawnSync(process.execPath, [join(process.cwd(), "tools", "cli", "stage-runtime.mjs"), "status", "--action=begin", "--stage=build-code", "--project=WorkflowHub", "--task=card04-completion-repair"], { cwd: process.cwd(), encoding: "utf8", env: taskScopedEnv(state.root) });
+    expect(status.status, status.stderr).toBe(0);
+    const parsed = JSON.parse(status.stdout);
+    expect(parsed.quality_status).toBe("in_progress");
+    expect(parsed.quality_missing).toEqual(expect.arrayContaining(["acceptance_criteria", "finding_dispositions"]));
+    expect(parsed.quality_advisories).toEqual([]);
   });
 
   it("review:unavailable stays visible without blocking the repository-owned build-spec run", async () => {
@@ -2743,5 +2862,81 @@ describe("CARD07 post journey", () => {
     }
     expect(handoff).toContain("当前 cohort 材料集合");
     expect(handoff).not.toMatch(/plan\.md\s*\/\s*tasks\.md/);
+  });
+});
+
+
+// P10 CLI post-run helper contract. This is caller wiring and real byte/hash
+// projection; mocked business-reader verdicts are not business acceptance.
+describe("P10 CLI post-run consumer", () => {
+  function callerFixture({ corruptOutput = false, failPublication = false, verdict } = {}) {
+    const hash = (raw) => createHash("sha256").update(raw).digest("hex");
+    const manifest = { schema_version: "workflowhub-targeted-capture.v1", run_id: "child-run",
+      material_revision: "revision-fixture", selection_status: "selected", selected_case_ids: ["fixture-case"],
+      execution: { raw_output_ref: "quality/evidence/build-code-targeted/report.json", raw_output_sha256: "b".repeat(64) }, reports: [] };
+    const manifestRaw = `${JSON.stringify(manifest)}\n`;
+    const manifestRef = `quality/evidence/build-code-targeted/manifest-${hash(manifestRaw)}.json`;
+    const pointer = { schema_version: "workflowhub-targeted-capture-pointer.v1", run_id: "child-run", manifest_ref: manifestRef, manifest_hash: hash(manifestRaw) };
+    const outputRaw = `${JSON.stringify(pointer)}\n`;
+    const receipt = { snapshot_tree: "fixture-tree", source_digest: "fixture-source", output_ref: "quality/tests/output/post-run.output",
+      output_hash: corruptOutput ? "f".repeat(64) : hash(outputRaw), behavior_fingerprint: { run_id: "parent-run" } };
+    const receiptRaw = `${JSON.stringify(receipt)}\n`;
+    const receiptRef = "quality/tests/post-run.json";
+    const records = new Map([[receiptRef, receiptRaw], [receipt.output_ref, outputRaw], [manifestRef, manifestRaw]]);
+    const task = { identity: { taskId: "fixture-task" }, readRecord: vi.fn((ref) => { if (!records.has(ref)) throw new Error(`missing original: ${ref}`); return records.get(ref); }) };
+    const publication = vi.fn((ref, raw) => { if (failPublication) throw new Error("post-run evidence storage unavailable"); records.set(ref, raw); });
+    const context = { task, workspace: { worktreeRoot: "/fixture" }, kernel: { publishCanonicalRecord: publication } };
+    const locator = { ref: "quality/evidence/p10-run-consumption/source.json", sha256: "a".repeat(64) };
+    const stageResult = Object.freeze({ schema_version: "stage-runtime-result.vnext", stage: "build-code", status: "completed", quality_status: "passed", quality_fact_refs: [], p10_consumption_evidence: locator });
+    const readback = verdict ?? { status: "unavailable", reason: "business_effect_unverified", run_consumption_status: "verified", business_effect_status: "unknown", receipt_ref: receiptRef, entries: [] };
+    const readCaseReconciliation = vi.fn(() => readback);
+    const selectCases = vi.fn(() => ({ status: "selected", cases: [{ id: "fixture-case" }] }));
+    return { context, stageResult, receiptRef, receiptRaw, receipt, pointer, readback, publication, readCaseReconciliation, selectCases, locator, records };
+  }
+  async function call(value, stageResult = value.stageResult) {
+    const cli = await import("../../tools/cli/stage-runtime.mjs");
+    return cli.consumeP10PostRunResult({ context: value.context, stageResult, testsReceiptRef: value.receiptRef },
+      { readCaseReconciliation: value.readCaseReconciliation, selectCases: value.selectCases });
+  }
+  it("passes the just-returned locator and specified receipt bytes to the existing reader", async () => {
+    const value = callerFixture();
+    const result = await call(value);
+    expect(value.readCaseReconciliation).toHaveBeenCalledTimes(1);
+    expect(value.readCaseReconciliation.mock.calls[0][0]).toMatchObject({ task: value.context.task, consumptionEvidence: value.locator,
+      capture: { receipt_ref: value.receiptRef, receipt_hash: createHash("sha256").update(value.receiptRaw).digest("hex"),
+        output_ref: value.receipt.output_ref, targeted_capture: { run_id: value.pointer.run_id, manifest_ref: value.pointer.manifest_ref, manifest_hash: value.pointer.manifest_hash } } });
+    expect(value.publication).toHaveBeenCalledTimes(1);
+    const [ref, raw] = value.publication.mock.calls[0];
+    expect(ref).toBe(`quality/evidence/build-code-targeted/reconciliation-${createHash("sha256").update(raw).digest("hex")}.json`);
+    expect(JSON.parse(raw)).toEqual(value.readback);
+    expect(result).toMatchObject({ schema_version: value.stageResult.schema_version, status: "completed", quality_status: "incomplete", quality_fact_refs: [] });
+    expect(result.quality_warnings.join(" ")).toContain("business_effect_unverified");
+    expect(result.quality_warnings.join(" ")).toContain(ref);
+    expect(result).not.toHaveProperty("case_reconciliation");
+  });
+  it("keeps ordinary runs without a locator unchanged without reading or publishing P10 evidence", async () => {
+    const value = callerFixture();
+    const original = Object.freeze({ schema_version: "stage-runtime-result.vnext", stage: "build-code", status: "completed", quality_status: "passed", quality_fact_refs: [] });
+    expect(await call(value, original)).toBe(original);
+    expect(value.context.task.readRecord).not.toHaveBeenCalled();
+    expect(value.readCaseReconciliation).not.toHaveBeenCalled();
+    expect(value.publication).not.toHaveBeenCalled();
+  });
+  it("surfaces an invalid locator rejection without claiming current consumption or business pass", async () => {
+    const value = callerFixture({ verdict: { status: "unavailable", reason: "current_execution_unverified", business_effect_reason: "invalid_run_consumption_source", business_effect_status: "unknown", entries: [] } });
+    await expect(call(value)).rejects.toThrow(/P10 post-run consumption.*current_execution_unverified/);
+    expect(value.readCaseReconciliation).toHaveBeenCalledTimes(1);
+    expect(value.publication).toHaveBeenCalledTimes(1);
+  });
+  it("rejects corrupted receipt output before calling the independent reader", async () => {
+    const value = callerFixture({ corruptOutput: true });
+    await expect(call(value)).rejects.toThrow(/P10 post-run.*output hash mismatch/);
+    expect(value.readCaseReconciliation).not.toHaveBeenCalled();
+    expect(value.publication).not.toHaveBeenCalled();
+  });
+  it("does not swallow immutable evidence publication failure", async () => {
+    const value = callerFixture({ failPublication: true });
+    await expect(call(value)).rejects.toThrow(/post-run evidence storage unavailable/);
+    expect(value.readCaseReconciliation).toHaveBeenCalledTimes(1);
   });
 });

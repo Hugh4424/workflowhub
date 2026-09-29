@@ -1,0 +1,6 @@
+{
+  "routing_tier": "feature",
+  "routing_rationale": "P3/build-code，phase_count=1；实际 changed_files 仅 tools/cli/stage-runtime.mjs，修改 post 阶段 CLI status 对缺失 spec.md 的行为守卫；目标命令 npx vitest run tests/contract/stage-runtime-material-check.test.mjs 覆盖早期放行与后期拒绝。属单一 CLI 功能域行为变化，无跨端、数据库、权限或部署改动。",
+  "result": "pass",
+  "ts": "2026-09-26T13:23:21Z"
+}

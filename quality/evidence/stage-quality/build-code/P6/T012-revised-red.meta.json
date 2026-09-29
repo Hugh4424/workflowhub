@@ -1,0 +1,21 @@
+{
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs"
+  ],
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "started_at": "2026-09-27T00:03:57.407379+00:00",
+  "ended_at": "2026-09-27T00:04:24.281716+00:00",
+  "exit_code": 1,
+  "before": {
+    "test_sha256": "71c357fad6ae2f40d3369971172f9b2380b7251b4f12c17928cab23c69da3c18",
+    "source_sha256": "e02b613b5723c08ca1c4bb417aa804f32d5bf60e47fd3fb73d57f774f96128f9"
+  },
+  "after": {
+    "test_sha256": "71c357fad6ae2f40d3369971172f9b2380b7251b4f12c17928cab23c69da3c18",
+    "source_sha256": "e02b613b5723c08ca1c4bb417aa804f32d5bf60e47fd3fb73d57f774f96128f9"
+  },
+  "output_sha256": "e3a01038f5f975abbd07192771203eb930dd1711da1697da2603ca3dc045d6f6"
+}

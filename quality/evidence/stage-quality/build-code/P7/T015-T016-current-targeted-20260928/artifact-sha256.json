@@ -1,0 +1,13 @@
+{
+  "canonical-output.copy.txt": "ac7d920b0db423730c886d7dd976deb99223f167e00a6e0a414a5f378d01e202",
+  "canonical-receipt.copy.json": "2265b8798295c007feb775ac931c5ccce85de1b0d4ee3e9363f7fb39e333085c",
+  "capture-script.copy.mjs": "a4b3ef6a39855dfe72dcb97420c04409cc303edf1663c8f0f0e6ce3641c62088",
+  "cli.result.json": "0d70a0bcb5a8854592d0e098d5d742d4494e5737b4ba99a8165284beeece8122",
+  "cli.stderr.raw.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cli.stdout.raw.json": "e9db36120cdb2e147c3afd932380b44014634b69306ddb45394ef8393b5cdf1a",
+  "identity-after.json": "fcb92da9c978970731724b000cb3541c15f80db4ab2e43e941d8c47c7b6f2d3d",
+  "identity-before-first.json": "ad1f7c2d84a3cf58ebcd1b76a83af49b2dc9fec3117bf875bdad1eb213121efa",
+  "identity-before-second.json": "4ff525d75f4168c89158a844a0d065eed001a7c4b155b8faa6a4ac5a64c9d09d",
+  "readback.json": "cc015428feea25e9bc2641285866fb25d44a64a1731f5018d62a31953ee5a73d",
+  "request.json": "d3feec5cb21576eec675462e03df590006b8d46b724eb03a5fcc034bce4ef896"
+}

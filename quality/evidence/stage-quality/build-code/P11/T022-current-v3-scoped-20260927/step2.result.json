@@ -1,0 +1,8 @@
+{
+  "command": "npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t \"P11/T022 v2 actual private browser producer|P11/T022 v3 acceptance browser and UI QA share one source|P11/T022 blocked browser missing readback|keeps the pre-cohort tests producer available to the historical build-code receipt path\"",
+  "started_at_utc": "2026-09-27T11:30:29.267Z",
+  "ended_at_utc": "2026-09-27T11:34:09.001Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null
+}

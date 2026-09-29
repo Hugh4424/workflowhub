@@ -1,0 +1,27 @@
+{
+  "schema_version": "workflowhub-receipt.v1",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "stage": "build-code",
+  "producer": {
+    "stage": "build-code",
+    "component": "build-code-test-capture",
+    "version": "1.0.0"
+  },
+  "command": "npx vitest run tests/contract/business-case-source-binding.test.mjs",
+  "command_hash": "8bfc23c11f8a75ce5fd3d7d7839dfc0068a0c3afb2c0c18210a3ab7d77be94ff",
+  "exit_code": 0,
+  "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "snapshot_commit": "4e717d2dad2e4085c5e6bf54e6df954b67fa5dcc",
+  "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "started_at": "2026-09-27T12:47:47.288Z",
+  "completed_at": "2026-09-27T12:47:47.854Z",
+  "output_ref": "quality/tests/output/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.output",
+  "output_hash": "ad2d449cbf7c1b404e830d5f507b94217265868c05d4f71e5297a9ada39bcbb5",
+  "lease": {
+    "status": "released",
+    "ref": "locks/test-capture.execution.lock",
+    "wait_ms": 10000
+  },
+  "duration_ms": 566
+}

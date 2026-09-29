@@ -1,0 +1,36 @@
+{
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/contract/build-code-targeted-capture.test.mjs"
+  ],
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "execution_scope": "isolated temporary fixture Tasks created by test; no CARD04 canonical receipt",
+  "started_at_utc": "2026-09-27T09:22:17.635875+00:00",
+  "completed_at_utc": "2026-09-27T09:23:09.876170+00:00",
+  "exit_code": 1,
+  "error": null,
+  "source_sha256_before": {
+    "workflows/build-code/capture.mjs": "659d92c3c766b86303b87461a40a38de2d5ab5eaa1109a35a3e663a40ea83ea4",
+    "workflows/build-code/targeted-capture.mjs": "ed05b3b73d515874268ffb3c5449285a60ec2f2a53e39a962d9b1493bfd812e3",
+    "workflows/build-code/targeted-runner.mjs": "ebbb9f4ab78dfa074c088a79fd3bdab0873ec1150c4375455e31a57a6304d0f2",
+    "workflows/build-code/case-reconciliation.mjs": "7d205cbdb24126d0c24106e48dc414c347ddb5decd407eaf1362f282bd91dadf",
+    "tests/contract/build-code-targeted-capture.test.mjs": "2f88e9cd299df9959d838e383f40563b42526f7fd0616ce2cf0d24bd4b4085ec",
+    "tests/contract/build-code-case-reconciliation.test.mjs": "3c8795b1380b2a88906db5644c76f62a712e72c09dce10ff5856984dfd04e2e1",
+    "docs/quality/business-case-catalog.json": "60288229ae854083d62c9cfefca3778db7752d78a1d48f29a0698d78014bd41b"
+  },
+  "source_sha256_after": {
+    "workflows/build-code/capture.mjs": "659d92c3c766b86303b87461a40a38de2d5ab5eaa1109a35a3e663a40ea83ea4",
+    "workflows/build-code/targeted-capture.mjs": "ed05b3b73d515874268ffb3c5449285a60ec2f2a53e39a962d9b1493bfd812e3",
+    "workflows/build-code/targeted-runner.mjs": "ebbb9f4ab78dfa074c088a79fd3bdab0873ec1150c4375455e31a57a6304d0f2",
+    "workflows/build-code/case-reconciliation.mjs": "7d205cbdb24126d0c24106e48dc414c347ddb5decd407eaf1362f282bd91dadf",
+    "tests/contract/build-code-targeted-capture.test.mjs": "2f88e9cd299df9959d838e383f40563b42526f7fd0616ce2cf0d24bd4b4085ec",
+    "tests/contract/build-code-case-reconciliation.test.mjs": "3c8795b1380b2a88906db5644c76f62a712e72c09dce10ff5856984dfd04e2e1",
+    "docs/quality/business-case-catalog.json": "60288229ae854083d62c9cfefca3778db7752d78a1d48f29a0698d78014bd41b"
+  },
+  "inputs_unchanged_during_run": true,
+  "stdout_sha256": "96c9ddcef84add2121d657f372a5567a49eaa734ba06889f6d25010546fcb63c",
+  "stderr_sha256": "e644006f12e3a02c2ff07ad435562fec8be9761ecd71937834bffbe802cf782e"
+}

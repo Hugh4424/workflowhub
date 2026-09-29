@@ -1,0 +1,7 @@
+PASS real Node TAP: distinct observed/registered, missing, and skipped classifications
+PASS duplicate registration rejected
+PASS tampered canonical output rejected
+PASS isolated synthetic TAP duplicate full ID rejected
+PASS isolated synthetic TAP zero tests rejected
+PASS isolated synthetic TAP missing result rejected
+CLEANUP isolated temp task/repo removed

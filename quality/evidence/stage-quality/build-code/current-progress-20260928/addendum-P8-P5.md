@@ -1,0 +1,9 @@
+# CARD-04 build-code progress addendum — 2026-09-28
+
+This addendum records later facts and does not overwrite the earlier time-bound snapshot or claim Phase completion.
+
+- P8/T017 source binding: the current P7 authority SHA-256 is `d8e15fd017d53ff91fcb3bd4197f424bcb0779deb156d7a7daef24de3e3bb097`. Before the catalog correction, `tests/contract/business-case-source-binding.test.mjs` exited 1 with 2 stale source/rule revision failures out of 10 tests. The catalog revision was advanced from `.10` to `.11`; its two P7 cases had their source, rule and effect-observation rule revisions updated to that same current SHA. The same focused command then exited 0 with 10/10 tests passing. Raw outputs and identities are in `../P8/T017-p7-source-rebind-20260928/red/` and `../P8/T017-p7-source-rebind-20260928/green/`. All three catalog business effects still say `not_yet_observed`; this is not P8 or P10 acceptance.
+- P5/T008 independent targeted run: `tests/contract/p5-same-run-report-source.test.mjs` had 12 passes, 6 skips, exit 0. The writer's human-exception lookup unconditionally returns `null` and the independent reader unconditionally returns `missing` after its checks. The three actual P5 report files are absent; therefore the passed negative cases do not prove a working P5 report. Raw run and review: `../P5/T008-independent-targeted-20260928-02/`. The earlier executable lookup failure is preserved in sibling `...-01/`.
+- AC-27 scope correction: current FR-27 and AC-27 require the four machine result values to be expressible and non-passing. They do not require this CARD-04 stage writer to produce all four values in live runs. Actual stage production remains a separate unproven concern; do not add that requirement to AC-27 by inference.
+
+No new official build-code completion, business effect observation, P5 report, commit, merge, push, release or close is claimed here.

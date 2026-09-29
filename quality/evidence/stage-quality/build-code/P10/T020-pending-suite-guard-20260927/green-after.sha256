@@ -1,0 +1,6 @@
+2da71029f5da992768c506fbdfaa6f4a4dafc1561b3a3f7f7d488daedf9564d7  workflows/build-code/capture.mjs
+89252e81c7e681a9d7f2ab5da52d0f3e1ade2a4ad867c67e3caf9acb93c1b33f  tests/contract/build-code-targeted-capture.test.mjs
+7956ea37fc73bf725e2425b6b1283a86da05034965829b73f70e54262f77b118  quality/evidence/stage-quality/build-code/P10/T020-reporter-suite-semantics-20260927/real-manifest.json
+e841207f1d7fb468be8199dbeb94e7b3d73d9f5846b334e753ff084bdaaca3dd  quality/evidence/stage-quality/build-code/P10/T020-reporter-suite-semantics-20260927/real-case-1.raw.json
+d6832c1806f716d592c8450947fed7eac57136df8a7a5628c17458cfb48f6367  quality/evidence/stage-quality/build-code/P10/T020-reporter-suite-semantics-20260927/real-case-2.raw.json
+173d423166ad90cb4f315e5e23d380c269463ee59fa013c8c7bf9886e9e7ee17  quality/evidence/stage-quality/build-code/P10/T020-reporter-suite-semantics-20260927/real-case-3.raw.json

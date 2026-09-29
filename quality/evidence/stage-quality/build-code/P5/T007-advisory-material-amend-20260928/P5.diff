@@ -1,0 +1,38 @@
+--- quality/evidence/stage-quality/build-code/P5/T007-advisory-material-amend-20260928/before-P5.md	2026-09-28 04:16:06
++++ specs/workflowhub-thin-core-card-04-20260919/phases/P5.md	2026-09-28 04:18:57
+@@ -22,6 +22,14 @@
+ 
+ `exceptions` 的诚实表示涉及既有 D-004/DER-05「空数组不合法」与「例外必须是真实人写声明」同时成立时的冲突。用户已收到简短选择题；答复前不改该字段契约、不生成假例外，也不把 T007/本 Phase 判完成。答复后须同步 decision-log、spec、规则文档、T007 测试/实现，再以真实声明或明确无例外规则取证。T008 同次来源接线还须合取当前 T007 实现差分、同快照八项测试 receipt/output、P5 专属独立审查、已发布的质量事实及单行阶段记录；不存在单独的「T007 完成收据」，不能从游标或 whole-task 完成推断。
+ 
++## 2026-09-28 T007 advisory 判决来源窄修订（当前）
++
++T007 纯转换器对 `stageResult.quality_advisories[]` 中每条非通过的 `stage-end-spec-analyze:<verdict>`，继续逐条列出阶段、主题、原始机器词面、映射后的机器状态及非空原因；`material_incomplete`→`incomplete`、`inconsistent`→`inconsistent`、`unavailable`→`unavailable` 三种原诉求逐项保留，`consistent` 不产生 `not_done`。合成三条夹具仅验证转换器不合并，不代表一次正式运行实际生成三条。
++
++转换器没有读取质量事实原字节，不能凭 `quality_advisory_fact_refs` 数组位置或 `evidenceIndex` 相似文件名把候选认作判决原件。没有经原件核实的同主题、同判决绑定时，`not_done.source` 仅指向本次 `${stageResultPath}#quality_advisories[原数组下标]`；无路径时指向 `input.stageResult#quality_advisories[原数组下标]`。每条同时写明“原始质量事实来源未核”的覆盖限制。裸 refs 可以另列候选，但不是该判断的认证来源；T007 不接受调用者自报 `verified`。这只证明逐条呈现，不证明底层事实来源或 P5 报告已认证。
++
++经独立材料审查准许的冻结测试窄修：仅把原第④项“每条 source 是任一质量 ref 或相似验收文件名”改为上述字段指针及逐条未核披露；第①逐条数目、第②各自状态和原词面、第③阶段/主题/非空原因及“通过时无该项”负控不变。新增“不同 advisory 的位置”正控也须以 `input.stageResult#quality_advisories[1]` 为 source，保留 source 不等于其它裸 ref 的断言，不再期望未经认证的 `specFact`。首项错主题/缺失、多条共用一份 ref、当前生产者单条判决的负控与正控保留。旧测试原字节/哈希及旧 RED 只读保留，新测试字节/哈希与同目标 RED→GREEN 另记；旧注释“底层事实（source 指向）”改为“底层事实候选，待 T008 认证”，旧“冻结不可改”说明标明由本次窄修覆盖。不得借此修改其它断言或宣布 T007/T008 完成。
++
+ ## L1
+ 
+ **2026-09-27 当前/历史分界**：下方 T007/T008 原任务字段保留 build-plan 预写时的 RED、冻结八项和旧 STOP provenance；其中「T007 空 stub/未运行」「T008 不准接线」「三文件只查存在即可」均是旧时点表述，不能覆盖本卡 L0 和末尾 `T008 同次真实来源修订`。当前 T007 纯转换器本地 8/8、尚缺同版正式审查；T008 生产者、真实 P5 正例和三文件未完成。实施者只按新修订的精确写面与认证负控推进，旧原件不删除、不改写成当时已完成。
+@@ -48,10 +56,10 @@
+ - **RED/GREEN gate_cmd**: `npx vitest run runtime/stage/stage-end-report.test.mjs`
+ - **expected_exit**: （planned target only）RED 目标 exit 非零（nonzero/1：八-it 中任一目标断言失败）；GREEN exit 0（all eight frozen `it` assertions pass against an authorized implementation）。Historical RED declarations conflict: this phase previously said `Tests 7 failed | 1 passed (8)`, while the task-store prewritten RED README lists `6 tests / 5 failed`; the cited `.txt` original was not found in the checked workspace/task-store directories. Neither count, test identity, attribution, nor run provenance is verified. No current T007 run was established in this audit.
+ - **RED target failure**: ORACLE-REPORT-FACTS-TRUTH 目标失败断言（未来形态）：对当前 stub 运行八-it gate 时导出面断言失败（expected 三个导出为可调用函数，实际为空 stub），exit nonzero。provenance 说明：本相位旧文曾称 `Tests 7 failed | 1 passed (8)`，task-store README 则列 `6 tests / 5 failed`；对应 `quality/evidence/prewritten-red/P5-T007-report-facts-red.txt` 在已检查 workspace 与 task-store 预置目录均未找到。两种历史说法互相矛盾，均不作当前 RED 证据；此为位置限定查找，不推断从未运行。本轮未运行 T007 gate，无本轮 RED/GREEN/exit；不涉及 T008 CLI 命令或 capture。
+-- **GREEN oracle**: ORACLE-REPORT-FACTS-TRUTH — future pass signal: all eight `it`s pass (all three exports callable; not-done itemization and machine states; route matrix with reasons and `hard_requirements={command,exit,output}` booleans; non-empty disclosure for `coverage_limits`/`exceptions`; correct render ordering and source paths; missing `stageResultPath` returns `missing`; itemized `spec-analyze` decisions enter `not_done` and passing decisions do not). The frozen test assertions do not establish full source completeness.
++- **GREEN oracle**: ORACLE-REPORT-FACTS-TRUTH — 原八项的非来源断言不变；advisory 来源断言只按上文 2026-09-28 经审查的窄修执行：每条非通过判断保留阶段/主题/原词面/各自机器状态/原因，source 指向 `stageResult` 原数组下标并逐条披露原始质量事实来源未核；通过值不入 `not_done`。三个导出、逐条缺口、路线矩阵、`coverage_limits`/`exceptions`、顺序、缺文件等其它原断言仍需通过。此门不证明底层质量原件或 T008 来源认证。
+ - **Evidence**: （planned locations/history only） Current audit did not find `quality/evidence/prewritten-red/P5-T007-report-facts-red.txt` or any `quality/evidence/stage-quality/build-code/P5/` files. The cited RED count and future build-code GREEN/negative-control paths are unverified declarations, not present evidence; preserve their expected location only and require exact raw runner output, identity, snapshot, and status if recreated after authorization.
+ - **STOP / recovery**: 若通过测试需要改 `stage-handoff` 形状或接入 stage-runner，停止并回报主会话（越界）；若负控不变红，说明断言无效，停止并重写断言；若定向 vitest 出现其它 runtime 文件被误收集，收窄 include 模式（禁止以无范围全量 vitest 代替）
+-- **Coverage limit**: （planned T007 scope; not current behavior） 获授权实现后只产事实层与渲染文本，不自动接线进阶段流程、不写回 stage 记录、不产聊天叙述（叙述由独立子代理按规则文档执笔）；运行时自动归档行为不在 T007 范围；**F-10 披露**：冻结测试对 `sources` 字段与 `exceptions[].status` 只有排除性断言，没有正向断言——「sources 是否收集齐全」不由机器保证；`spec-analyze` 判决入账只证明 advisory 结论逐条进 `not_done` 且不写入 `status` 投影，不改变 gating 语义，生产者侧是否生成 advisory 条目不在本任务范围。当前 stub 不提供这些行为。
++- **Coverage limit**: T007 只产事实层与渲染文本，不自动接线进阶段流程、不写回 stage 记录、不产聊天叙述；运行时自动归档行为不在 T007 范围。**F-10 披露**：冻结测试对 `sources` 字段与 `exceptions[].status` 只有排除性断言，没有正向断言；`sources` 是否收集齐全不由本门保证。`spec-analyze` 判决入账只证明 advisory 结论逐条进 `not_done` 且不写入 `status` 投影，不改变 gating 语义。`not_done.source` 的字段指针只认证转换器读到的判断，原始质量事实来源仍未核，须逐条披露；质量原件认证归 T008，生产者是否生成 advisory 不由 T007 证明。
+ - **Done**: （未来验收条件，当前未满足） T007 的 build-code implementation scope 仅在获授权实现三个导出、八个 frozen `it` 全绿并保存该任务要求的模块实现证据后才算完成；模块门不依赖、也不证明 T008 CLI provenance/capture。当前 T007 为空 stub，未建立 RED/GREEN run；T008 blocked/not_done/G2，P13/T024 最终交付另行验收。
+ 
+ ### T008 — P5 中途事实检查点：真实来源事实层落盘（非最终交付）
+@@ -101,6 +109,7 @@
+ - **Owner / 唯一读路 / 删除条件**：P5 evidence owner 在现有 `runtime/evidence/freshness.mjs` 增加一个私有只读 P5 报告认证函数，唯一消费者是 P6/T012 当前真实 E2E 与 P13/T024 最终聚合；定向测试只在现有 `tests/contract/p5-same-run-report-source.test.mjs` 增量验证读回。它不写 fact、收据、进度或公共 CLI，不新增 schema、stage、gate、状态账本。经独立审查的等价现有读路接管 P6/P13 且旧原件保留时删除此专用函数；与 P11 同文件读者的修改须串行，不能覆盖其投影。
+ - **认证次序**：先从已认证 Task 的固定 P5 路径读取 `report-facts.json` 原字节；没有该完成标记，即使 source/certificate/`report.md`/`T008-delivery.txt` 存在也只报 `missing`，不继续采信孤儿。存在时才逐字读 delivery、certificate、source、report、facts，核固定路径和内容寻址 ref/文件名/sha256 相互一致；从当前 Task/workspace **重新取得**材料 revision、Git snapshot/tree、阶段行及 P5 游标，不接受调用者自报绑定。source/certificate 还须逐条重读 implementation/tests/review 收据、tests output、quality fact 及 decision-log 声明原字节/哈希，核 Task、材料、tree、同次阶段行、P5 review 与来源身份；用已认证来源重算 T007 facts 和渲染正文，要求与固定文件字节一致。认证只说明这份中途报告的来源链可读，不把其中逐 AC 状态或 `source_binding=unavailable` 洗成通过，也不把夹具声明当 CARD-04 用户授权。
+ - **失败与目标**：缺 facts、坏/缺 certificate、错 ref/hash、错 Task/material/tree、报告正文篡改、半写孤儿均返回“没有可认证报告”的 `missing` 和具体原因；实际读取能力不可用单列 `unavailable`。先保存测试原字节，新增上述负控与同次真实 P5 夹具正例取得目标 RED，再做只读实现并复测；P6/P13 各自的消费者断言另归其 owner。旧三文件存在性门即使 exit 0 也不能作 T008 完成依据；当前 CARD-04 没有真实 P5 报告，P5 相位仍 `not_done`。
++- **Advisory 原件认证补界（2026-09-28）**：T008 现有 source/certificate 的 `quality_facts`/`quality_fact_refs` 只含 `stageResult.quality_fact_refs`，不含 `quality_advisory_fact_refs`，现有读者也未核后者；T007 字段指针不能补齐此链。写侧 owner=同次 build-code 官方 stage producer，只在既有私有 source/certificate 增加 advisory 事实 `{ref,sha256}` 列表，要求与本次 `stageResult.quality_advisory_fact_refs` 完全对应；读侧 owner=现有 `runtime/evidence/freshness.mjs` 私有 P5 认证者，唯一消费者仍为 P6/T012 与 P13/T024。读侧独立重读每份原始字节，核规范 ref、哈希、Task、stage、材料版本与代码树；按 `subject=stage_end_spec_analyze` 选取，缺失、重复或多条判决歧义都不得认证，不按数组位置猜。再沿选中质量事实的 `evidence` 所指 acceptance wrapper ref/hash，及 wrapper `refs` 所指 stage-quality 原件 ref/hash 逐层重读；核 `acceptance_criterion_id=stage_end_spec_analyze`、同树同材料、`summary.actual_outcome`、stage-quality `subject`、`subject_fact.analysis_result.status` 与 `stageResult.quality_advisories` 原始机器词面一致。quality fact 的通用 `status=missing` 不能替代判决。坏/缺原件或哈希、错主题/判决、旧树/材料、重复主体均保持未认证并给具体原因。此项只扩展既有同次来源认证，未建立当前 CARD-04 人工例外来源，正式报告仍不得发布；不得用通用 `human-confirmation.v3` 为例外背书，因为该类型还会被不可逆操作授权读路消费。等价的单一来源认证路径经审查接管且旧原件保留时删除此专用补界；不新增公共命令、进度账本或第二报告路径。
+ 
+ ## L2
+ 

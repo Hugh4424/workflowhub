@@ -1,0 +1,142 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (57 tests | 3 failed) 501922ms
+   ✓ ORACLE-P10-T021: explicit current run consumption source > reads only this run's receipt and exact AC fact, then rejects a swapped locator, missing AC and replaced row 47094ms
+   ✓ ORACLE-P10-T021: final stage-row identity without inferred receipt consumption > retains the exact final row write privately and leaves the supplied receipt unverified 28906ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown 6175ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1411ms
+     → expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(5) }
+(4 matching properties omitted from actual)
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash 1475ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim 1426ms
+     → expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(3) }
+(6 matching properties omitted from actual)
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > counts one target reporter once when one case maps to two accepted ACs 12598ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC 12659ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback 11868ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback 11677ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding 3449ms
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass 11176ms
+   × ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect 1418ms
+     → expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(2) }
+(7 matching properties omitted from actual)
+   ✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent 12149ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid census evidence chain unknown without the official stage binding 12079ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects zero source denominator despite a passing reporter and a passed fact 11724ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing requirement link despite a passing reporter and a passed fact 11786ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing source section despite a passing reporter and a passed fact 11795ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects too few U sources despite a passing reporter and a passed fact 12131ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing user V source despite a passing reporter and a passed fact 12278ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects unindexed atom despite a passing reporter and a passed fact 11685ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects R cites absent source despite a passing reporter and a passed fact 11755ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a current fact that binds a different test receipt 11900ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > accepts several official coverage refs when exactly one binds this test receipt 11666ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a duplicate receipt ref with a conflicting hash 11575ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested task mismatch in the canonical chain 12252ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested snapshot mismatch in the canonical chain 11662ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested material mismatch in the canonical chain 11684ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a damaged current acceptance wrapper hash 11981ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > does not reuse a genuine older test receipt as this run's effect 20078ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid deferred evidence chain unknown without the official stage binding 12112ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a falsely passed deferred subject 11541ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies real current source while keeping the real Task effect unknown 11612ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies forged derived source while keeping the real Task effect unknown 11960ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten derived meaning while keeping the real Task effect unknown 12314ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten original source field while keeping the real Task effect unknown 11620ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID before the genuine row while keeping the real Task effect unknown 11691ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with no cell padding while keeping the real Task effect unknown 11747ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with extra cell padding while keeping the real Task effect unknown 11781ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies missing indexed atom while keeping the real Task effect unknown 11900ms
+   ✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies broken direct source link while keeping the real Task effect unknown 11776ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown
+AssertionError: expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(5) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "business_effect_reason": "missing_current_business_effect",
++   "business_effect_reason": "current_effect_receipt_mismatch",
+    "entries": Array [
+      Object {
+        "acceptance_criterion_id": "AC-26",
+        "case_id": "CURRENT-AC-26",
+        "leaf_count": 2,
+        "status": "readback",
+      },
+    ],
+    "execution_freshness": "unknown",
+    "reason": "current_execution_unverified",
+    "status": "unavailable",
+    "task_id": "p10-current-b66aac26-d013-4e33-9c2c-8e2b331e3ace",
+  }
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:518:20
+    516|   it("reads all bound reporter leaves, then keeps the missing business…
+    517|     const result = current();
+    518|     expect(result).toMatchObject({ status: "unavailable", reason: "cur…
+       |                    ^
+    519|       execution_freshness: "unknown", business_effect_reason: "missing…
+    520|       task_id: state.task.identity.taskId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim
+AssertionError: expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(3) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "business_effect_reason": "missing_current_business_effect",
++   "business_effect_reason": "current_effect_receipt_mismatch",
+    "execution_freshness": "unknown",
+    "reason": "current_execution_unverified",
+    "status": "unavailable",
+  }
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:537:20
+    535|     oldReceipt.targeted_capture.status = "executed";
+    536|     const result = current({ capture: oldReceipt });
+    537|     expect(result).toMatchObject({ status: "unavailable", reason: "cur…
+       |                    ^
+    538|       execution_freshness: "unknown", business_effect_reason: "missing…
+    539|     expect(result.entries).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect
+AssertionError: expected { status: 'unavailable', …(9) } to match object { status: 'unavailable', …(2) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "business_effect_reason": "missing_current_business_effect",
++   "business_effect_reason": "current_effect_receipt_mismatch",
+    "reason": "current_execution_unverified",
+    "status": "unavailable",
+  }
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:625:20
+    623|       ac_id: "AC-26", quality_fact_ref: `quality/facts/${"a".repeat(64…
+    624|       quality_fact_sha256: "a".repeat(64) }] });
+    625|     expect(result).toMatchObject({ status: "unavailable", reason: "cur…
+       |                    ^
+    626|       business_effect_reason: "missing_current_business_effect" });
+    627|     expect(result.entries.some((entry) => entry.status === "passed")).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 54 passed (57)
+   Start at  04:11:10
+   Duration  502.73s (transform 275ms, setup 0ms, collect 688ms, tests 501.92s, environment 0ms, prepare 29ms)
+

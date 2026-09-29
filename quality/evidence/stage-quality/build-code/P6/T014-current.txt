@@ -1,0 +1,38 @@
+COMMAND=npx vitest run tests/contract/review-history-canonical-reader.test.mjs && node -e "const fs=require('fs');const s=fs.readFileSync('specs/workflowhub-thin-core-card-04-20260919/spec.md','utf8');const need=['跨卡重叠让出','评审历史读取器','ADR 编号碰撞'];const miss=need.filter(k=>!s.includes(k));if(miss.length){console.error('断言失败: 缺 '+miss.join(','));process.exit(1)}console.log('OK 三行风险登记齐备')"
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+task_card=T014
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+sha256 tests/contract/review-history-canonical-reader.test.mjs=f49dc6d4da6b7425845b7cf75289afbc99c2d80c47d3074f46d3624120730183
+sha256 specs/workflowhub-thin-core-card-04-20260919/spec.md=41b61a820c95f4ae489ee96f1a47e683abed54f387acb4dce37cee2d3fb2f328
+sha256 runtime/review/review-record-route.mjs=d6363c44b3772b3deddd3d2d7c1272edec8094f8781681e9852fa41489c8ee84
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+classification=current_targeted_gate_not_phase_completion
+recorded_at=2026-09-26T12:14:19.025125+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/review-history-canonical-reader.test.mjs (6 tests) 12998ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 1232ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 3130ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2825ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1803ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1590ms
+   ✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2417ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  20:14:05
+   Duration  13.77s (transform 278ms, setup 0ms, collect 609ms, tests 13.00s, environment 0ms, prepare 46ms)
+
+OK 三行风险登记齐备
+stderr:
+
+EXIT=0

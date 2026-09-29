@@ -1,0 +1,14 @@
+{
+  "scope_changed_paths": [
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md"
+  ],
+  "direct": {
+    "status": "unavailable",
+    "reason": "missing_inventory_identity"
+  },
+  "registered_only": {
+    "status": "unavailable",
+    "reason": "missing_inventory_identity"
+  },
+  "selector_requires_previous_passed_report": true
+}

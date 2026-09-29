@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/build-code-targeted-capture.test.mjs (17 tests | 14 skipped) 46319ms
+   ✓ P10 fixed targeted capture > preserves first pass and second real failure raw and stderr through the failed outer receipt 7612ms
+   ✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 14572ms
+   ✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 24135ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 14 skipped (17)
+   Start at  18:02:38
+   Duration  46.76s (transform 152ms, setup 0ms, collect 347ms, tests 46.32s, environment 0ms, prepare 25ms)
+

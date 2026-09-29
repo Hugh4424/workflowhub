@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/business-case-catalog.test.mjs (2 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  09:15:33
+   Duration  120ms (transform 12ms, setup 0ms, collect 10ms, tests 6ms, environment 0ms, prepare 28ms)
+
+
+--- STDERR ---

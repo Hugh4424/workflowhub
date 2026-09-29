@@ -1,0 +1,31 @@
+{
+  "kind": "P8-T017-machine-class-contract-RED",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/contract/business-case-source-binding.test.mjs"
+  ],
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "started_utc": "2026-09-27T01:14:45.179633+00:00",
+  "completed_utc": "2026-09-27T01:14:45.781870+00:00",
+  "exit_code": 1,
+  "sha256_before": {
+    "tests/contract/business-case-source-binding.test.mjs": "b6cbed445ecedb3fb10cbe88ea916abe1eb2a523ba251d6e78e752e87de8c7fd",
+    "docs/quality/business-case-catalog.json": "e8d75d2e51e17aab52a9272726295e85ff33d198f4c8a7a9df2f60e963bce090",
+    "docs/architecture/move-map.json": "283cf4e1bbe75dc20c20ec1d9f51a1f7676b36b81d07661880a3c4d4fe156b0b",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md": "7009aab51d88f472a6abf0bdbe88d1676c624a2043f21aa63ff284beb4696d6c",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74"
+  },
+  "sha256_after": {
+    "tests/contract/business-case-source-binding.test.mjs": "b6cbed445ecedb3fb10cbe88ea916abe1eb2a523ba251d6e78e752e87de8c7fd",
+    "docs/quality/business-case-catalog.json": "e8d75d2e51e17aab52a9272726295e85ff33d198f4c8a7a9df2f60e963bce090",
+    "docs/architecture/move-map.json": "283cf4e1bbe75dc20c20ec1d9f51a1f7676b36b81d07661880a3c4d4fe156b0b",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md": "7009aab51d88f472a6abf0bdbe88d1676c624a2043f21aa63ff284beb4696d6c",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74"
+  },
+  "stable_inputs": true
+}

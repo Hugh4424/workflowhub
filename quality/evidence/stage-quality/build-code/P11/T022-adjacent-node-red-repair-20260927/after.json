@@ -1,0 +1,14 @@
+{
+  "captured_at_utc": "2026-09-27T12:09:58.186Z",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "files": {
+    "workflows/build-code/SKILL.md": "60378a4987c37aa7cdf6421e9a2ba5950593cbf1182f63e54d3afaf825e9b6b9",
+    "runtime/stage/stage-content-contracts.mjs": "653a6f0d516cb7b66c4de0fb081122dbb06354dbaaa51044b1d7666c033d3245",
+    "tests/contract/ui-stage-integration.test.mjs": "6f4215a8a6ff95a823eab0fee7f9910b6759eaef114474c48068ddfcd5a3bd52",
+    "tests/contract/ui-applicability-must-ask.test.mjs": "f442e3cefdd05189d8f10a852925c181f551a36b0d617fa7539009818009c7c3",
+    "tests/contract/ui-applicability-contract.test.mjs": "35d5b6d5f5b229511d059e1ace76efa8b2b1ea7af99dd909f4072ec78ffc50c1",
+    "tests/contract/post-phase-contract.test.mjs": "f95517c3c88c43bd61b53c735b0d7394136f4972609b9c68e1f563e8f0362e75"
+  },
+  "same_head": true,
+  "tests_unchanged": true
+}

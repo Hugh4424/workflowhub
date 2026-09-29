@@ -1,0 +1,12 @@
+CLEANUP isolated clone and task-store removed
+file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/test-asset-inventory.mjs:59
+  catch { throw new Error("Vitest JSON reporter output is not one complete JSON document"); }
+                ^
+
+Error: Vitest JSON reporter output is not one complete JSON document
+    at parseVitestJson (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/test-asset-inventory.mjs:59:17)
+    at collectTestInventory (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/test-asset-inventory.mjs:184:7)
+    at runCapture (file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/workflows/build-code/capture.mjs:26:32)
+    at async file:///Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P9/T019-vitest-json-probe.mjs:35:17
+
+Node.js v24.14.0

@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/acceptance-execution-tier.test.mjs (79 tests | 1 failed | 76 skipped) 25976ms
+   ✓ P11/T022 v2 actual private browser producer > does not treat fixture-only browser bytes as a passing acceptance 9645ms
+   × P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9636ms
+     → expected [Function] to throw an error
+   ✓ acceptance execution tiers > executes browser acceptance only after callback and canonical bytes share the complete scenario binding 6695ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 76 skipped (79)
+   Start at  13:44:32
+   Duration  26.73s (transform 301ms, setup 0ms, collect 651ms, tests 25.98s, environment 0ms, prepare 29ms)
+

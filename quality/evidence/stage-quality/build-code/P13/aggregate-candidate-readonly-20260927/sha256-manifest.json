@@ -1,0 +1,324 @@
+{
+  "status_command": "node tools/cli/stage-runtime.mjs status --action=begin --stage=build-code --project=workflowhub --task=workflowhub-thin-core-card-04-20260919",
+  "status_exit_code": 0,
+  "identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "material_revision": "revision-3ce06a4d0f1643e8d3ffda4b49baa9ac9df8a23081cf34d71d99b244f2805646",
+    "snapshot_tree": "870b92175454f8b7691149b8eb672c12d8814665"
+  },
+  "candidate_files": {
+    "status-begin.stdout.json": "27e3e907656e932ddc96e3a61ac3fc302ea780e6a7e60547b0018eb3f3067329",
+    "status-begin.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-aggregate.json": "486c8c7197cced1ba9761df6d64d008a56dea153fce9ba9b6618350020a819e8",
+    "candidate-aggregate.md": "e3449cc1462378171eccdc6247dd73548d28356fe4a0eb4120b9eab7ce2c8029"
+  },
+  "validated_refs": [
+    {
+      "label": "P1/T001:ref",
+      "path": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+      "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30"
+    },
+    {
+      "label": "P1/T001:current_raw_transcript",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/T001-command-5fdd8f58bdb4dd2b863b8cbfa35a8396b35d5b9817f8e97e25184fea1fd56f72.transcript.txt",
+      "sha256": "5fdd8f58bdb4dd2b863b8cbfa35a8396b35d5b9817f8e97e25184fea1fd56f72"
+    },
+    {
+      "label": "P1/T002:ref",
+      "path": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+      "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30"
+    },
+    {
+      "label": "P1/T002:current_raw_transcript",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/T002-command-ac5ddbe7a663bcbe64722041d760cdabff8ca5a7c01fddb64585cfc5529b2af3.transcript.txt",
+      "sha256": "ac5ddbe7a663bcbe64722041d760cdabff8ca5a7c01fddb64585cfc5529b2af3"
+    },
+    {
+      "label": "P1/T003:ref",
+      "path": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+      "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30"
+    },
+    {
+      "label": "P1/T003:current_raw_transcript",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P1/T003-command-58954ceef4417ad7aa26bc999dcdf71a69fc58aad53b808af7bb6d0de14d0fe6.transcript.txt",
+      "sha256": "58954ceef4417ad7aa26bc999dcdf71a69fc58aad53b808af7bb6d0de14d0fe6"
+    },
+    {
+      "label": "P2/T004:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.json",
+      "sha256": "3cff7c896a5e81009bbb443f21823d84b8c3958499c57de0e648ac71230e905e"
+    },
+    {
+      "label": "P2/T004:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.output",
+      "sha256": "dc65afbc5431c1ef6f0a1664c75c6965ef57cc6af4729d21b3d5f9e7021caaec"
+    },
+    {
+      "label": "P3/T005:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.json",
+      "sha256": "929081f440eeef00321a4627b12dee87df57ec23d0611768b44cc74aceb2cb72"
+    },
+    {
+      "label": "P3/T005:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.output",
+      "sha256": "33c1d2914f3f3bd9fd07ee76bf429174363436c6aaef05ecb98a7449d82ac15d"
+    },
+    {
+      "label": "P4/T006:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P4-L0-current-fbcf6094-96e6-46f5-ab1f-ca622057b10a.json",
+      "sha256": "a9bae28f18aca3d781a581d44a19c010f93ce722a95bc066ecff7f7d25f84727"
+    },
+    {
+      "label": "P4/T006:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P4-L0-current-fbcf6094-96e6-46f5-ab1f-ca622057b10a.output",
+      "sha256": "34aa34efb9e9cb2d1b6113ab763f39470a9f1f76f8841f17ed3823d16aa4dc4e"
+    },
+    {
+      "label": "P5/T007:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.json",
+      "sha256": "5f8a951358cbc9f8ca4df88f7448f7334b12dd7a8c3626ee04ffb06a0b990509"
+    },
+    {
+      "label": "P5/T007:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.output",
+      "sha256": "c26497aa46893448eeec7e283167456324e3e448ba4798c1dc656ea9d903a25f"
+    },
+    {
+      "label": "P6/T009:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T009:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T010:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T010:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T011:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T011:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T012:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T012:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T013:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T013:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T014:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+      "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745"
+    },
+    {
+      "label": "P6/T014:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+      "sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5"
+    },
+    {
+      "label": "P6/T025:ref",
+      "path": "quality/evidence/stage-quality/build-code/P6/T025-T026-narrow-sample-20260927.md",
+      "sha256": "40a82d6fa6e194949d4e43f0669d58475dc06082bab8834d4b3af4eecf88c8b3"
+    },
+    {
+      "label": "P6/T026:ref",
+      "path": "quality/evidence/stage-quality/build-code/P6/T025-T026-narrow-sample-20260927.md",
+      "sha256": "40a82d6fa6e194949d4e43f0669d58475dc06082bab8834d4b3af4eecf88c8b3"
+    },
+    {
+      "label": "P7/T015:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
+      "sha256": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d"
+    },
+    {
+      "label": "P7/T015:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
+      "sha256": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2"
+    },
+    {
+      "label": "P7/T016:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
+      "sha256": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d"
+    },
+    {
+      "label": "P7/T016:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
+      "sha256": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2"
+    },
+    {
+      "label": "P8/T017:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.json",
+      "sha256": "925d1b7949807309203527957648e8d26290aeb909b7d3b22665ec7a10581ac0"
+    },
+    {
+      "label": "P8/T017:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.output",
+      "sha256": "e7dce228966d103a918d536095e42b5806ad8a2a6dd83072f2ff4db3fc59cee3"
+    },
+    {
+      "label": "P8/T017:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.json",
+      "sha256": "de9d973c8f69222c345dbbcda34d4d05904b392742421e42adc0759e76ce04c6"
+    },
+    {
+      "label": "P8/T017:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.output",
+      "sha256": "ad2d449cbf7c1b404e830d5f507b94217265868c05d4f71e5297a9ada39bcbb5"
+    },
+    {
+      "label": "P9/T018:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.json",
+      "sha256": "38575a091b19ce0204cbc26ab00e43e81945e399d36ca11130e21af36055e16a"
+    },
+    {
+      "label": "P9/T018:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.output",
+      "sha256": "67e59d5a1d79f181ec2cbeec935a41d6f34edeccf60dd7818487cc49d7b47df0"
+    },
+    {
+      "label": "P9/T019:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.json",
+      "sha256": "e9a5697087e3d527d232051a40390c47ebf41a5d5c94f2f91a92a72a4c00fff7"
+    },
+    {
+      "label": "P9/T019:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.output",
+      "sha256": "74ee4014027b98e27d4dafafe24027d79733d1854da197c5f30b5c37089fac3a"
+    },
+    {
+      "label": "P10/T020:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.json",
+      "sha256": "ef487dcbff88ad96fd2fd5b28e11241421e31cabb54420d014325cce53eb949d"
+    },
+    {
+      "label": "P10/T020:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.output",
+      "sha256": "7dcac16af403c84ed0f6379cb62d459ac2aac8331e5cf94332804a749605351e"
+    },
+    {
+      "label": "P10/T020:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.json",
+      "sha256": "2e6f0758602b8c6364a69b3d5624366a901f7f1b6a4fdaa8b3fda3894c57f5d3"
+    },
+    {
+      "label": "P10/T020:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.output",
+      "sha256": "9fd9768a0d23a3c71a9f964abbdcdc9f469227617c17bf9fc2f7c00eef20293f"
+    },
+    {
+      "label": "P10/T020:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/targeted/52466118-7b21-4a12-9043-f966732a04cb.json",
+      "sha256": "97fe2746cd9137babe4d0321b2c39c52b5210ddfa135fd3a914cdf1509f0e2ac"
+    },
+    {
+      "label": "P10/T020:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/targeted-52466118-7b21-4a12-9043-f966732a04cb.output",
+      "sha256": "db50358ce7e9d4f5c2d2b840d763924fe6cbdb536b76835c59d4af1683405d80"
+    },
+    {
+      "label": "P10/T021:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.json",
+      "sha256": "ef487dcbff88ad96fd2fd5b28e11241421e31cabb54420d014325cce53eb949d"
+    },
+    {
+      "label": "P10/T021:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.output",
+      "sha256": "7dcac16af403c84ed0f6379cb62d459ac2aac8331e5cf94332804a749605351e"
+    },
+    {
+      "label": "P10/T021:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.json",
+      "sha256": "2e6f0758602b8c6364a69b3d5624366a901f7f1b6a4fdaa8b3fda3894c57f5d3"
+    },
+    {
+      "label": "P10/T021:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.output",
+      "sha256": "9fd9768a0d23a3c71a9f964abbdcdc9f469227617c17bf9fc2f7c00eef20293f"
+    },
+    {
+      "label": "P10/T021:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/targeted/52466118-7b21-4a12-9043-f966732a04cb.json",
+      "sha256": "97fe2746cd9137babe4d0321b2c39c52b5210ddfa135fd3a914cdf1509f0e2ac"
+    },
+    {
+      "label": "P10/T021:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/targeted-52466118-7b21-4a12-9043-f966732a04cb.output",
+      "sha256": "db50358ce7e9d4f5c2d2b840d763924fe6cbdb536b76835c59d4af1683405d80"
+    },
+    {
+      "label": "P11/T022:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.json",
+      "sha256": "bf4ad3e38e5336dd065cd256057e17620628197ad457414102943d8616ab21ca"
+    },
+    {
+      "label": "P11/T022:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.output",
+      "sha256": "462b6ff9aa7f2bea7e938fc6e78c239d2cf480e69c39c1d43fe79747f815196c"
+    },
+    {
+      "label": "P11/T022:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.json",
+      "sha256": "326c58e900d6a05190916d63829ca111b558c2c75e2ede30384f3be0c5178c41"
+    },
+    {
+      "label": "P11/T022:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.output",
+      "sha256": "a9c006b293a1ef457494f6edeceb2a21849f15947448cf50039f09e97c972697"
+    },
+    {
+      "label": "P11/T022:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.json",
+      "sha256": "55e0fa3ef3caded4fb2a5092eb7bbfcce59927efb5aa9e0a5f2a23646b0fd5a1"
+    },
+    {
+      "label": "P11/T022:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.output",
+      "sha256": "cc6989615cd1a68a41964d8ada1a50a8c579d7a00952fe52406ff420d05b1dd7"
+    },
+    {
+      "label": "P12/T023:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.json",
+      "sha256": "3dd40a9d74556229012aef312a16492178cb23fac62db2c4ffa9e0551edb0e20"
+    },
+    {
+      "label": "P12/T023:output_ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/tests/output/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.output",
+      "sha256": "49cfd376cfae63526cd2a185bdfebafe920d0e1455c40cebcea56866ef8eadfc"
+    }
+  ],
+  "rejected_refs": [
+    {
+      "label": "P6/T027:ref",
+      "path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-readme-post-materials-20260927/quality/evidence/card04-ac19-readme-evidence-index.json",
+      "reason": "outside_authenticated_roots"
+    }
+  ]
+}

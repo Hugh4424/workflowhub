@@ -1,0 +1,57 @@
+--- quality/evidence/stage-quality/build-code/P10/T021-current-case-fixture-isolation-20260928/before-build-code-case-reconciliation.test.mjs	2026-09-28 05:02:42
++++ tests/contract/build-code-case-reconciliation.test.mjs	2026-09-28 05:01:50
+@@ -483,21 +483,39 @@
+   });
+ 
+   it("ORACLE-P10-OFFICIAL-FIXED lets official run authenticate the real fixed receipt and retains AC unknown", async () => {
+-    const implementation = writeCurrentImplementationReceipt({ task: state.task, workspace: state.workspace });
+-    const kernel = createTaskKernel(state.task, { workspace: state.workspace });
+-    const context = { stage: "build-code", task: state.task, kernel, identity: state.task.identity,
+-      workflowRunId: kernel.deriveStageWorkflowRunId("build-code"), manifest: state.task.manifest,
+-      candidateWorkspace: state.workspace, artifacts: ArtifactDir.open(state.workspace.worktreeRoot, state.task) };
+-    const result = await runOfficialStage("build-code", context, {
+-      receipts: { implementation: implementation.ref, tests: capture.receipt_ref } });
+-    const testFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)))
+-      .filter((fact) => fact.kind === "test" && fact.subject === "risk_tests_fresh");
+-    expect(testFacts).toEqual([expect.objectContaining({ status: "passed",
+-      evidence: [expect.objectContaining({ ref: capture.receipt_ref, sha256: capture.receipt_hash })] })]);
+-    expect(result).not.toHaveProperty("p10_consumption_evidence");
+-    expect(result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)))
+-      .filter((fact) => fact.kind === "acceptance_criterion" && fact.subject === "AC-26")
+-      .every((fact) => fact.status !== "passed")).toBe(true);
++    const priorHome = process.env.HOME, priorTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
++    const official = taskCaseFixture();
++    try {
++      const exclude = join(official.root, "p10-official-git-excludes");
++      writeFileSync(exclude, "node_modules\n");
++      git(official.workspace.worktreeRoot, "config", "core.excludesfile", exclude);
++      const { FIXED_TARGETED_CAPTURE_COMMAND } = await import("../../workflows/build-code/capture.mjs");
++      const officialCapture = await runCapture(FIXED_TARGETED_CAPTURE_COMMAND,
++        "quality/tests/current-case-official-fixed.json", { task: official.task, workspace: official.workspace });
++      expect(officialCapture.targeted_capture.status).toBe("executed");
++      const implementation = writeCurrentImplementationReceipt({ task: official.task, workspace: official.workspace });
++      const kernel = createTaskKernel(official.task, { workspace: official.workspace });
++      const context = { stage: "build-code", task: official.task, kernel, identity: official.task.identity,
++        workflowRunId: kernel.deriveStageWorkflowRunId("build-code"), manifest: official.task.manifest,
++        candidateWorkspace: official.workspace, artifacts: ArtifactDir.open(official.workspace.worktreeRoot, official.task) };
++      const result = await runOfficialStage("build-code", context, {
++        receipts: { implementation: implementation.ref, tests: officialCapture.receipt_ref } });
++      const testFacts = result.quality_fact_refs.map((ref) => JSON.parse(official.task.readRecord(ref)))
++        .filter((fact) => fact.kind === "test" && fact.subject === "risk_tests_fresh");
++      expect(testFacts).toEqual([expect.objectContaining({ status: "passed",
++        evidence: [expect.objectContaining({ ref: officialCapture.receipt_ref,
++          sha256: officialCapture.receipt_hash })] })]);
++      expect(result).not.toHaveProperty("p10_consumption_evidence");
++      expect(result.quality_fact_refs.map((ref) => JSON.parse(official.task.readRecord(ref)))
++        .filter((fact) => fact.kind === "acceptance_criterion" && fact.subject === "AC-26")
++        .every((fact) => fact.status !== "passed")).toBe(true);
++    } finally {
++      rmSync(official.root, { recursive: true, force: true });
++      if (priorTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
++      else process.env.WORKFLOWHUB_TASK_DIR = priorTaskDir;
++      if (priorHome === undefined) delete process.env.HOME;
++      else process.env.HOME = priorHome;
++    }
+   }, 90_000);
+ 
+   it("keeps the three current CARD-04 case leaf partitions and effect limits explicit", () => {

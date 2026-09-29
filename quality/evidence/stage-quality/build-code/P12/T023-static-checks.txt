@@ -1,0 +1,16 @@
+task_id=workflowhub-thin-core-card-04-20260919
+task_card=T023
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+recorded_at=2026-09-26T12:45:07.775206+00:00
+COMMAND_1=node --check tests/contract/verify-code-business-handoff.test.mjs
+STDOUT_1:
+
+STDERR_1:
+
+EXIT_1=0
+COMMAND_2=git diff --check -- workflows/verify-code/SKILL.md
+STDOUT_2:
+
+STDERR_2:
+
+EXIT_2=0

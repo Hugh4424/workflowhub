@@ -1,0 +1,12 @@
+{
+  "status": "recorded",
+  "stage": "build-code",
+  "phase_progress": {
+    "phase_id": "P3",
+    "task_id": "T005",
+    "material_revision": "revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6",
+    "recorded_at": "2026-09-27T17:28:44.872Z"
+  },
+  "record_ref": "facts.jsonl#3",
+  "action": "replaced"
+}

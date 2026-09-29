@@ -1,0 +1,27 @@
+{
+  "schema_version": "workflowhub-receipt.v1",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "stage": "build-code",
+  "producer": {
+    "stage": "build-code",
+    "component": "build-code-test-capture",
+    "version": "1.0.0"
+  },
+  "command": "npx vitest run tests/contract/build-code-test-registry.test.mjs tests/contract/build-code-test-inventory.test.mjs",
+  "command_hash": "ab8ee6eb526d26191a347c0304c716961acf3e23bdb745fef635369dd1fa3d3a",
+  "exit_code": 0,
+  "snapshot_head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+  "snapshot_commit": "4e717d2dad2e4085c5e6bf54e6df954b67fa5dcc",
+  "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+  "started_at": "2026-09-27T12:48:24.282Z",
+  "completed_at": "2026-09-27T12:48:47.712Z",
+  "output_ref": "quality/tests/output/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.output",
+  "output_hash": "74ee4014027b98e27d4dafafe24027d79733d1854da197c5f30b5c37089fac3a",
+  "lease": {
+    "status": "released",
+    "ref": "locks/test-capture.execution.lock",
+    "wait_ms": 10000
+  },
+  "duration_ms": 23430
+}

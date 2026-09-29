@@ -1,0 +1,31 @@
+{
+  "purpose": "AC-25 real historical d1 pair, read-only canonical reader diagnostic",
+  "date_local": "2026-09-27",
+  "command": "node quality/evidence/stage-quality/build-code/P6/AC25-d1-real-pair-readback-probe.mjs /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "node": "v24.14.0",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "task_identity": {
+    "projectName": "workflowhub",
+    "taskId": "workflowhub-thin-core-card-04-20260919"
+  },
+  "task_store": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919",
+  "probe_sha256": "a8a8f08276b8e76ac909bab0136003c947f0016f303d3bff3f471478d8c850dd",
+  "reader_source_sha256": "d6363c44b3772b3deddd3d2d7c1272edec8094f8781681e9852fa41489c8ee84",
+  "stdout": {
+    "path": "quality/evidence/stage-quality/build-code/P6/AC25-d1-real-pair-readback-20260927.stdout.json",
+    "sha256": "8cb2af6b0740707cf81f849b94e52d7e259d61b8153d94ed54a26137c67f61af"
+  },
+  "stderr": {
+    "path": "quality/evidence/stage-quality/build-code/P6/AC25-d1-real-pair-readback-20260927.stderr.txt",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "exit": {
+    "code": 1,
+    "path": "quality/evidence/stage-quality/build-code/P6/AC25-d1-real-pair-readback-20260927.exit.txt",
+    "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+  },
+  "boundary": "One invocation. The private reader was exported and diagnosed only in memory. No public route, official verify receipt, test suite, production edit, spec edit, or Task store write. HEAD tree is not a digest of dirty worktree files; reader and probe content hashes bind those files."
+}

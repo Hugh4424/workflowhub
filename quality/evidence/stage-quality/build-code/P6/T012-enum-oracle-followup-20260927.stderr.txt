@@ -1,0 +1,27 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/e2e/card-04-real-entry-chain-e2e.test.mjs > CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 五、诚实性：不得把不可用写成通过 > 诚实性-1 语义核查事实：分析器的机器判决必须可见（不是被通用 missing 抹平）
+AssertionError: 语义核查事实的机器判决必须可见：/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-card04-e2e-eE4knt/store/Projects/workflowhub/tasks/card04-e2e-1-36734/quality/evidence/acceptance/make-decision/stage_end_spec_analyze-d93d0b5eac61b96139ddab343ee96ce14d322fcb9841b6acfa939bd9ad822ccd.json
+acceptance.result="deferred" summary.actual_outcome="missing"
+stageQuality.status="missing" subject_fact.status="missing" subject_fact.detail="current stage-end spec-analyze is unavailable"
+分析器判决 analysis_result.status=undefined
+subject_fact.evidence_state=undefined
+
+分析器必须给出机器判决: expected undefined to be truthy
+
+- Expected: 
+true
+
++ Received: 
+undefined
+
+ ❯ tests/e2e/card-04-real-entry-chain-e2e.test.mjs:506:60
+    504|           + `分析器判决 analysis_result.status=${JSON.stringify(analyz…
+    505|           + `subject_fact.evidence_state=${JSON.stringify(stageQuality…
+    506|         expect(analyzerStatus, `${detail}\n\n分析器必须给出机器判决`).…
+       |                                                            ^
+    507|         // ① 验收投影的实际结果必须等于分析器判决（今天被抹成与 status…
+    508|         expect(acceptance.summary?.actual_outcome, `${detail}\n\nactua…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/build-code-test-registry.test.mjs tests/contract/build-code-test-inventory.test.mjs",
+  "receipt_ref": "quality/tests/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.json",
+  "output_ref": "quality/tests/output/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.output",
+  "timeout_ms": 1200000
+}

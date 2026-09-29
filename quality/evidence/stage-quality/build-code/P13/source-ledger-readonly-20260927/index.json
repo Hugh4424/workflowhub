@@ -1,0 +1,1368 @@
+{
+  "schema": "card04-p13-source-ledger.readonly.v1",
+  "purpose": "P13 source inventory only; not final-aggregate.json/md or delivery",
+  "identity": {
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+    "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+    "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+    "material_revision": "revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044",
+    "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+    "material_sha256": {
+      "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40",
+      "specs/workflowhub-thin-core-card-04-20260919/spec.md": "ef1e45942e1d95bb7d0b6b37ab53d3f2441d766a8767c3ccd383371738f7810a",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "123f9f99f76d2718632d8527fc891f54e251958bf371e4c3de5128f429af28ad",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md": "84b286a4749e63b9bd59db270b52053e4b1cc006aca02091b2bd4244d21af545",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md": "5e4cb0bfbb76adf21a588a113bd8113056ccb9db1b2f0745ca6e1290fa65ec73",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md": "fa318313588454ceff87fe8b726bbe2ffe470be47b35dc10d6a6fd42ae19e7c8",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md": "d714d9e07bf0baffd77ab4333633fbd0ab266a34661710edd640794a93ac18a8",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md": "76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md": "33873942388466ff6754c4a10b77e7f33d4b2b9140e24b5da5c5e41aa63e9490",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md": "dcfd25eaab81f7e6adc8a01adbf37f81757010d14cb7b9299e7de39f396e488a",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md": "d6dc63d3e350e6047ef666d497a65dbe0faafc5b986b92c4743a7bf06cdd8c27",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md": "896f2ca748fcd495104b7716e03f43c3e9a38ad6f4e35e3e3961f3899916f5dd",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md": "581668358956ed078259175b6fda8c88b1170929ca65c5804495d370212913ec",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P13.md": "8abe3827356186e53416f7aaaf77201a270a202c18b65c0257545936ab6e11ff"
+    },
+    "task_facts_ref": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/facts.jsonl",
+    "task_facts_sha256": "5b323de258d1628bf1aebf98a9c5ceddb06ea40db0b1c4544553654ec096ae78",
+    "build_code_stage_rows": 0,
+    "stage_quality": "in_progress",
+    "quality_missing": [
+      "risk_tests_fresh",
+      "acceptance_criteria",
+      "finding_dispositions"
+    ]
+  },
+  "phase_entries": [
+    {
+      "phase_id": "P1",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+      "material_sha256": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md:11",
+      "gate_cmd_line": "- **gate_cmd**: `node -e \"const fs=require('fs');let bad=0;const must={'docs/architecture/test-asset-governance-rules.md':['验收标准可执行形式','oracle 与实现分离','有效 RED','G-2 豁免','机器产物按路线适用','真实入口联通','模块×层级矩阵','就近共置','命名规则','规模预算只报不拦','覆盖率只诊断','负控抽查','不对称压缩','统计口径','provenance','exceptions','route_applicability','报告事实层','空数组不合法','DER-01','DER-03','DER-04','DER-05','DER-06','DER-11','DER-12','DER-13','DER-14'],'docs/architecture/real-entry-inventory.md':['显式入口','间接入口','未跑过入口','冻结接口面'],'docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md':['## 背景','## 决策','## 后果']};for(const[f,ss]of Object.entries(must)){let t='';try{t=fs.readFileSync(f,'utf8')}catch{console.error('断言失败: '+f+' 不存在');bad=1;continue}for(const s of ss){if(!t.includes(s)){console.error('断言失败: '+f+' 缺 '+s);bad=1}}}if(!bad)console.log('P1 doc assertions OK');process.exit(bad)\" && node -e \"const{execFileSync}=require('child_process');const f='docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md';try{execFileSync('git',['ls-files','--error-unmatch',f],{stdio:'ignore'});console.log('ADR-0033 tracked')}catch{console.error('断言失败: '+f+' 未被 git 跟踪');process.exit(1)}\"`",
+      "tasks": [
+        {
+          "task_id": "T001",
+          "title": "测试资产治理规则文档落盘",
+          "source_heading_line": 21,
+          "evidence": [
+            {
+              "kind": "document_gate_noncanonical",
+              "ref": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+              "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30",
+              "exit_code": 0,
+              "checked_docs": [
+                {
+                  "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+                  "sha256": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/test-asset-governance-rules.md",
+                  "sha256": "7522aded2bc14460c740ea2c42ab4775660c1249753f6201ba122e94f82ff128",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/real-entry-inventory.md",
+                  "sha256": "394a73b8007defd569d77280f76b7db92853348a922d71fc48b1efbeb7ac23a0",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md",
+                  "sha256": "77b43e75e1ca63ca565467a49f6bec34e880f39543a7de6e2f601ebb830c1c9f",
+                  "current_bytes_equal": true
+                }
+              ],
+              "snapshot_tree": "702cf3d443d142a967642f4460a1d6247e05ae99",
+              "material_revision": "revision-d07627dd39f3e86809dd0d3831b5e50d38500e3137e60a1c7088a691352b90ac",
+              "current_checked_docs_equal": true
+            }
+          ],
+          "remaining_unknown_or_missing": "治理规则文档存在；真实消费者实践未由此门证明。",
+          "owner": "CARD04 P1/T001 owner"
+        },
+        {
+          "task_id": "T002",
+          "title": "真实入口库存文档落盘",
+          "source_heading_line": 41,
+          "evidence": [
+            {
+              "kind": "document_gate_noncanonical",
+              "ref": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+              "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30",
+              "exit_code": 0,
+              "checked_docs": [
+                {
+                  "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+                  "sha256": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/test-asset-governance-rules.md",
+                  "sha256": "7522aded2bc14460c740ea2c42ab4775660c1249753f6201ba122e94f82ff128",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/real-entry-inventory.md",
+                  "sha256": "394a73b8007defd569d77280f76b7db92853348a922d71fc48b1efbeb7ac23a0",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md",
+                  "sha256": "77b43e75e1ca63ca565467a49f6bec34e880f39543a7de6e2f601ebb830c1c9f",
+                  "current_bytes_equal": true
+                }
+              ],
+              "snapshot_tree": "702cf3d443d142a967642f4460a1d6247e05ae99",
+              "material_revision": "revision-d07627dd39f3e86809dd0d3831b5e50d38500e3137e60a1c7088a691352b90ac",
+              "current_checked_docs_equal": true
+            }
+          ],
+          "remaining_unknown_or_missing": "真实入口清单文档存在；未跑入口仍须保留。",
+          "owner": "CARD04 P1/T002 owner"
+        },
+        {
+          "task_id": "T003",
+          "title": "ADR-0033 终稿核对并入库",
+          "source_heading_line": 61,
+          "evidence": [
+            {
+              "kind": "document_gate_noncanonical",
+              "ref": "quality/evidence/stage-quality/build-code/P1/ADR0033-current-gate-20260927/transcript.txt",
+              "sha256": "95e2f394f0ce94b2f4392c91fd0eddaff84da0ddab4bc0af6ccc5027eddb9a30",
+              "exit_code": 0,
+              "checked_docs": [
+                {
+                  "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md",
+                  "sha256": "dbec2499828cbfbf5e3cf4779fef29d5cdadea0c084ff1cd1ae3e095a5277057",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/test-asset-governance-rules.md",
+                  "sha256": "7522aded2bc14460c740ea2c42ab4775660c1249753f6201ba122e94f82ff128",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/architecture/real-entry-inventory.md",
+                  "sha256": "394a73b8007defd569d77280f76b7db92853348a922d71fc48b1efbeb7ac23a0",
+                  "current_bytes_equal": true
+                },
+                {
+                  "path": "docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md",
+                  "sha256": "77b43e75e1ca63ca565467a49f6bec34e880f39543a7de6e2f601ebb830c1c9f",
+                  "current_bytes_equal": true
+                }
+              ],
+              "snapshot_tree": "702cf3d443d142a967642f4460a1d6247e05ae99",
+              "material_revision": "revision-d07627dd39f3e86809dd0d3831b5e50d38500e3137e60a1c7088a691352b90ac",
+              "current_checked_docs_equal": true
+            }
+          ],
+          "remaining_unknown_or_missing": "ADR0033 跟踪与文档标记已证；整树现已变化。",
+          "owner": "CARD04 P1/T003 owner"
+        }
+      ],
+      "phase_limit": "文档门验证了文字/跟踪，未证明真实入口逐项使用；该门绑定旧整树，四份检查文档当前字节相同。owner: P1/T001-T003。"
+    },
+    {
+      "phase_id": "P2",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md",
+      "material_sha256": "84b286a4749e63b9bd59db270b52053e4b1cc006aca02091b2bd4244d21af545",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P2.md:11",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/repository-inventory.test.mjs -t \"complexity baseline\"`",
+      "tasks": [
+        {
+          "task_id": "T004",
+          "title": "基线数字修正与断言口径联动",
+          "source_heading_line": 19,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.json",
+              "sha256": "3cff7c896a5e81009bbb443f21823d84b8c3958499c57de0e648ac71230e905e",
+              "output_ref": "quality/tests/output/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.output",
+              "output_sha256": "dc65afbc5431c1ef6f0a1664c75c6965ef57cc6af4729d21b3d5f9e7021caaec",
+              "command": "npx vitest run tests/contract/repository-inventory.test.mjs -t \"complexity baseline\"",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/repository-inventory.test.mjs (9 tests | 8 skipped) 294ms",
+                "Test Files  1 passed (1)",
+                "Tests  1 passed | 8 skipped (9)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "仅 complexity baseline 1/1，8项未选。",
+          "owner": "CARD04 P2/T004 owner"
+        }
+      ],
+      "phase_limit": "复杂度数字与断言的局部测试；正式阶段质量和整卡效果缺。owner: P2/T004。"
+    },
+    {
+      "phase_id": "P3",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md",
+      "material_sha256": "5e4cb0bfbb76adf21a588a113bd8113056ccb9db1b2f0745ca6e1290fa65ec73",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P3.md:12",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/stage-runtime-material-check.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T005",
+          "title": "post 材料检查收窄两侧回归测试",
+          "source_heading_line": 20,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.json",
+              "sha256": "929081f440eeef00321a4627b12dee87df57ec23d0611768b44cc74aceb2cb72",
+              "output_ref": "quality/tests/output/card04-P3-L0-current-7e11566a-5a0b-4dce-8a03-58661a1f4334.output",
+              "output_sha256": "33c1d2914f3f3bd9fd07ee76bf429174363436c6aaef05ecb98a7449d82ac15d",
+              "command": "npx vitest run tests/contract/stage-runtime-material-check.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/stage-runtime-material-check.test.mjs (4 tests) 3079ms",
+                "✓ stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 853ms",
+                "✓ stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 909ms",
+                "✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 660ms",
+                "✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 658ms",
+                "Test Files  1 passed (1)",
+                "Tests  4 passed (4)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "材料检查 4/4；P3 post 缺索引补测是单独局部事实。",
+          "owner": "CARD04 P3/T005 owner"
+        }
+      ],
+      "phase_limit": "材料入口局部合同；不证明所有 post 路线实跑。owner: P3/T005。"
+    },
+    {
+      "phase_id": "P4",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md",
+      "material_sha256": "fa318313588454ceff87fe8b726bbe2ffe470be47b35dc10d6a6fd42ae19e7c8",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P4.md:14",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run runtime/stage/stage-runner.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T006",
+          "title": "acceptanceChain 行接回真实事实 + 就近单测 + vitest include",
+          "source_heading_line": 22,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P4-L0-current-fbcf6094-96e6-46f5-ab1f-ca622057b10a.json",
+              "sha256": "a9bae28f18aca3d781a581d44a19c010f93ce722a95bc066ecff7f7d25f84727",
+              "output_ref": "quality/tests/output/card04-P4-L0-current-fbcf6094-96e6-46f5-ab1f-ca622057b10a.output",
+              "output_sha256": "34aa34efb9e9cb2d1b6113ab763f39470a9f1f76f8841f17ed3823d16aa4dc4e",
+              "command": "npx vitest run runtime/stage/stage-runner.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ runtime/stage/stage-runner.test.mjs (7 tests) 107ms",
+                "Test Files  1 passed (1)",
+                "Tests  7 passed (7)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "就近单测 7/7；真实 CARD04 AC 行未落盘。",
+          "owner": "CARD04 P4/T006 owner"
+        }
+      ],
+      "phase_limit": "acceptanceChain 单测；当前 CARD04 真 build-code 阶段 AC 行缺。owner: P4/T006 / runtime。"
+    },
+    {
+      "phase_id": "P5",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md",
+      "material_sha256": "d714d9e07bf0baffd77ab4333633fbd0ab266a34661710edd640794a93ac18a8",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P5.md:11",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run runtime/stage/stage-end-report.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T007",
+          "title": "阶段末报告事实层与渲染（D-005 未决三条收口）",
+          "source_heading_line": 29,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.json",
+              "sha256": "5f8a951358cbc9f8ca4df88f7448f7334b12dd7a8c3626ee04ffb06a0b990509",
+              "output_ref": "quality/tests/output/card04-P5-T007-current-38c18b52-b225-4db0-8913-b1d54363b888.output",
+              "output_sha256": "c26497aa46893448eeec7e283167456324e3e448ba4798c1dc656ea9d903a25f",
+              "command": "npx vitest run runtime/stage/stage-end-report.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ runtime/stage/stage-end-report.test.mjs (20 tests) 16ms",
+                "Test Files  1 passed (1)",
+                "Tests  20 passed (20)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "报告转换器 20/20；不认证调用者输入或人工声明。",
+          "owner": "CARD04 P5/T007 owner"
+        },
+        {
+          "task_id": "T008",
+          "title": "P5 中途事实检查点：真实来源事实层落盘（非最终交付）",
+          "source_heading_line": 57,
+          "evidence": [],
+          "remaining_unknown_or_missing": "无真实 P5 中途三文件、同次认证来源或人工例外确认。",
+          "owner": "CARD04 P5/T008 owner"
+        }
+      ],
+      "phase_limit": "仅 T007 纯转换器 20/20；T008 真同次来源、P5 report-facts/report/delivery、真实人工例外声明均缺。owner: P5/T008 与 stage runtime。"
+    },
+    {
+      "phase_id": "P6",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+      "material_sha256": "5d146122be73a9a5dad6eba08f36c3f7d663e9206fefb01db7dded02f33daa6b",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md:13",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs`（八文件综合集合，包含 T013 定义的三文件依赖 gate；不替代按证据区分各子命令/测试的失败归因）；还必须执行并记录 Node guard：`node -e 'const [maj,min]=process.versions.node.split(\".\").map(Number);if(maj!==24||min<14){console.error(`Node >=24.14.0 <25 required, got ${process.versions.node}`);process.exit(1)}console.log(process.versions.node)'`。task-store 中的历史六文件 aggregate 是另一条旧命令，原件记 `21 failed | 29 passed (50)`、EXIT=1，不等于此八文件 L0；T013 三文件/A-9 另有独立预置记录。预置 RED 原件位于外部 task store 且 README 明示为 build-plan 预置、非 canonical runtime evidence；本审计未建立当前八文件 gate 的 canonical 执行或 GREEN。不得从 repo 中缺少 build-code 输出推断从未执行，也不可把历史 aggregate 的非零整体归称本轮目标 RED。",
+      "tasks": [
+        {
+          "task_id": "T009",
+          "title": "decision-log 原始来源普查三节补齐（分母修复）",
+          "source_heading_line": 22,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "decision-log census 6项；当前 Task AC26 原始 fact/wrapper/raw 效果链缺。",
+          "owner": "CARD04 P6/T009 owner"
+        },
+        {
+          "task_id": "T010",
+          "title": "spec.md 上游覆盖账本与本地编号空间自清",
+          "source_heading_line": 43,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "upstream ledger 9项；分母与全量业务规则关系仍须独立核。",
+          "owner": "CARD04 P6/T010 owner"
+        },
+        {
+          "task_id": "T011",
+          "title": "oracle 只读镜像与实现者隔离",
+          "source_heading_line": 64,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "oracle mirror 9项；独立业务效果不由夹具镜像证明。",
+          "owner": "CARD04 P6/T011 owner"
+        },
+        {
+          "task_id": "T012",
+          "title": "有界真实 CLI 子进程端到端验收资产",
+          "source_heading_line": 87,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "E2E 18项临时 Task；本 Task P5/T008 报告、四阶段真实交付仍缺。",
+          "owner": "CARD04 P6/T012 owner"
+        },
+        {
+          "task_id": "T013",
+          "title": "final spec-analyze 判决可见性消费核验（让出重叠实现后的消费/核验卡）",
+          "source_heading_line": 123,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "相邻三组测试 3+6+21 项在八文件内；专属 gate/当前真实消费者结论仍须单独对照。",
+          "owner": "CARD04 P6/T013 owner"
+        },
+        {
+          "task_id": "T014",
+          "title": "评审历史政策消费核验与跨卡重叠风险登记",
+          "source_heading_line": 144,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
+              "sha256": "d34245a56a6872a358ba785db842f5fa388641ebc3f6544984bb687b21cbd745",
+              "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
+              "output_sha256": "28832986e9fe249c1e1471da93afde61435fbe2ee226ae8ca69c31ff1f10cde5",
+              "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/review-history-canonical-reader.test.mjs (7 tests) 19164ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A① 形态自证（自始为绿）：夹具写出的合法历史形态 = unavailable 成员 + 摘要 available/incomplete/result_ref=null 826ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > AC-25 同快照合法 partial pair 可读，缺报告与伪造 canonical ref 仍拒绝 8409ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > A② 合法历史可读：快照推进后（同命名空间）的旧 pair 不得被当成损坏的历史 2149ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > B foreign 旧 pair 的成员在现快照下缺失时不得阻断当前请求（跨卡守卫） 2021ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > C 负控（自始为绿）：当前命名空间 pair 丢失 role binding 仍必须 fail-closed 且零派发 1721ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > D 负控（自始为绿）：当前 pair 的成员报告被伪造 coverage 仍必须 fail-closed 且零派发 1744ms",
+                "✓ canonical 评审历史读取器：政策对齐重写版（T014 gate） > E 形状自证（自始为绿）：结构完整的当前 pair 能正常读回并派发一次 2293ms",
+                "✓ tests/e2e/card-04-real-entry-chain-e2e.test.mjs (18 tests) 39248ms",
+                "✓ CARD-04 真实入口全链 E2E（真实 CLI 子进程） > 四、阶段末报告事实层 > 报告事实-3 真实同次夹具缺独立真人声明时不得有认证报告 13134ms",
+                "✓ tests/contract/spec-analyze-truthfulness.test.mjs (3 tests) 7ms",
+                "✓ tests/contract/upstream-coverage-ledger.test.mjs (9 tests) 19ms",
+                "✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms",
+                "✓ tests/contract/post-spec-analyze-original-source.test.mjs (6 tests) 22ms",
+                "✓ tests/contract/post-phase-official-handler.test.mjs (21 tests) 149163ms",
+                "✓ post build-plan official handler > reads the post native acceptance card and binds executed evidence per declared AC 1092ms",
+                "✓ post build-plan official handler > runs the current post build-code stage-end analyzer against indexed Phase materials 6279ms",
+                "✓ post build-plan official handler > keeps the build-code analyzer non-pass when its portable lens is absent 5793ms",
+                "✓ post build-plan official handler > post build-plan final analyze reports structure without semantic census 10687ms",
+                "✓ post build-plan official handler > publishes final analysis against one current snapshot, material revision, original source and skill bundle 7864ms",
+                "✓ post build-plan official handler > invokes the portable lens after the last Phase revision and publishes its bound semantic result 8173ms",
+                "✓ post build-plan official handler > preserves material_incomplete in the bound post build-plan analyzer fact 8270ms",
+                "✓ post build-plan official handler > preserves unavailable in the bound post build-plan analyzer fact 8027ms",
+                "✓ post build-plan official handler > preserves reported in the bound post build-plan analyzer fact 8139ms",
+                "✓ post build-plan official handler > reports the portable lens as unavailable when the publication callback is absent 7723ms",
+                "✓ post build-plan official handler > publishes a bound unavailable analyzer fact when the portable lens executor rejects 8081ms",
+                "✓ post build-plan official handler > keeps the structural result non-pass when the executed lens reports semantic unknown 8222ms",
+                "✓ post build-plan official handler > rejects a portable lens result with stale material revision 6443ms",
+                "✓ post build-plan official handler > rejects a portable lens result with self-asserted consistency 6317ms",
+                "✓ post build-plan official handler > rejects a portable lens result with forged status 6349ms",
+                "✓ post build-plan official handler > recomputes final analysis after the last Phase changes and leaves the old result bound to old materials 14981ms",
+                "✓ post build-plan official handler > keeps a weakened semantic statement for independent review rather than the structural report 7792ms",
+                "✓ post build-plan official handler > keeps a missing decision-log statement for independent review 7703ms",
+                "✓ post build-plan official handler > consumes physical Phase files and never requires plan/tasks placeholders 7571ms",
+                "✓ post build-plan official handler > refuses the old one-line Phase despite the same physical file set 3655ms",
+                "✓ tests/contract/decision-log-census.test.mjs (6 tests) 20ms",
+                "Test Files  8 passed (8)",
+                "Tests  79 passed (79)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "review-history 测试 7项在八文件内；附带 spec 三行断言未单独正式采集，CARD05 review 来源另证。",
+          "owner": "CARD04 P6/T014 owner"
+        },
+        {
+          "task_id": "T025",
+          "title": "真实实施者对测试文件的访问限制样例（D-015 / AC-17）",
+          "source_heading_line": 165,
+          "evidence": [
+            {
+              "kind": "bounded_external_sample_index",
+              "ref": "quality/evidence/stage-quality/build-code/P6/T025-T026-narrow-sample-20260927.md",
+              "sha256": "40a82d6fa6e194949d4e43f0669d58475dc06082bab8834d4b3af4eecf88c8b3"
+            }
+          ],
+          "remaining_unknown_or_missing": "受限实施者样例已留窄范围原件；不证明所有测试文件不可读。",
+          "owner": "CARD04 P6/T025 owner"
+        },
+        {
+          "task_id": "T026",
+          "title": "行为变化样例的同一测试先红后绿（D-015 / AC-18）",
+          "source_heading_line": 172,
+          "evidence": [
+            {
+              "kind": "bounded_external_sample_index",
+              "ref": "quality/evidence/stage-quality/build-code/P6/T025-T026-narrow-sample-20260927.md",
+              "sha256": "40a82d6fa6e194949d4e43f0669d58475dc06082bab8834d4b3af4eecf88c8b3"
+            }
+          ],
+          "remaining_unknown_or_missing": "同一冻结测试 2失败→2通过→2失败窄样；不证明 P11 全行为或当前正式效果。",
+          "owner": "CARD04 P6/T026 owner"
+        },
+        {
+          "task_id": "T027",
+          "title": "纯文档样例的检查或豁免（D-015 / AC-19）",
+          "source_heading_line": 180,
+          "evidence": [
+            {
+              "kind": "incomplete_independent_document_task_candidate",
+              "ref": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-readme-post-materials-20260927/quality/evidence/card04-ac19-readme-evidence-index.json",
+              "sha256": "1c1a214dc6580e2112d0dc47296516c00eeaef4ea99393076e87408af6a2c05b"
+            }
+          ],
+          "remaining_unknown_or_missing": "README 独立 Task 候选索引可读；make-decision/build-plan quality incomplete，交付/关闭不可用，AC19 未通过。",
+          "owner": "CARD04 P6/T027 owner"
+        }
+      ],
+      "phase_limit": "八文件 79/79 与 Node guard；夹具 E2E 不是本 Task 真业务。T025 受限样例只窄样；T026 同字节 RED→GREEN→RED 窄样；T027 README 候选四阶段质量/交付不完整。owner: P6/T009-T014,T025-T027 及独立 README Task。"
+    },
+    {
+      "phase_id": "P7",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+      "material_sha256": "76c50e199d13355efdc62d3995231577e0d6e5c07b6657336b0368200ff03674",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md:11",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T015",
+          "title": "验收结果机器判定类可表达（枚举与存储层一致）",
+          "source_heading_line": 19,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
+              "sha256": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d",
+              "output_ref": "quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
+              "output_sha256": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2",
+              "command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/census-upstream-authoring.test.mjs (15 tests) 7ms",
+                "✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms",
+                "✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 7ms",
+                "✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 4ms",
+                "Test Files  4 passed (4)",
+                "Tests  62 passed (62)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "28+15项存储/枚举测试；官方四类生产者归 CARD05，当前 AC27 缺事实。",
+          "owner": "CARD04 P7/T015 owner + CARD05 producer owner"
+        },
+        {
+          "task_id": "T016",
+          "title": "上游来源普查三节的写入契约前置（模板与技能文本）",
+          "source_heading_line": 40,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
+              "sha256": "a6bbaca8d5e40e683a5666b569041f7c5d3640ca4f8118953220f0fbde98105d",
+              "output_ref": "quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
+              "output_sha256": "d1e7b125ad89df559c651b1a8844fb3794e203c2b441a9662898c94da5cf8eb2",
+              "command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/census-upstream-authoring.test.mjs (15 tests) 7ms",
+                "✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms",
+                "✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 7ms",
+                "✓ tests/deferred-acceptance-semantics.test.mjs (15 tests) 4ms",
+                "Test Files  4 passed (4)",
+                "Tests  62 passed (62)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "模板/来源写入合同 15+4；真实决策来源链需当前 Task 独立核。",
+          "owner": "CARD04 P7/T016 owner"
+        }
+      ],
+      "phase_limit": "四文件 62/62；当前 CARD04 AC27 官方四类 producer/fact 未由本卡证实，CARD05 owner。"
+    },
+    {
+      "phase_id": "P8",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md",
+      "material_sha256": "33873942388466ff6754c4a10b77e7f33d4b2b9140e24b5da5c5e41aa63e9490",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P8.md:13",
+      "gate_cmd_line": "- **gate_cmd**: 旧目录结构目标 `npx vitest run tests/contract/business-case-catalog.test.mjs`（本轮相邻 2/2）；来源/未来观察合同目标 `npx vitest run tests/contract/business-case-source-binding.test.mjs`（当前 10/10）。它们核合同与能力边界，不证明官方 AC-27 四类结果已产出。",
+      "tasks": [
+        {
+          "task_id": "T017",
+          "title": "登记真实 CARD-04 业务 case 与已知旧回归的双向关系",
+          "source_heading_line": 35,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.json",
+              "sha256": "925d1b7949807309203527957648e8d26290aeb909b7d3b22665ec7a10581ac0",
+              "output_ref": "quality/tests/output/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.output",
+              "output_sha256": "e7dce228966d103a918d536095e42b5806ad8a2a6dd83072f2ff4db3fc59cee3",
+              "command": "npx vitest run tests/contract/business-case-catalog.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/business-case-catalog.test.mjs (2 tests) 5ms",
+                "Test Files  1 passed (1)",
+                "Tests  2 passed (2)"
+              ]
+            },
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.json",
+              "sha256": "de9d973c8f69222c345dbbcda34d4d05904b392742421e42adc0759e76ce04c6",
+              "output_ref": "quality/tests/output/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.output",
+              "output_sha256": "ad2d449cbf7c1b404e830d5f507b94217265868c05d4f71e5297a9ada39bcbb5",
+              "command": "npx vitest run tests/contract/business-case-source-binding.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/business-case-source-binding.test.mjs (10 tests) 8ms",
+                "Test Files  1 passed (1)",
+                "Tests  10 passed (10)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "目录结构和来源绑定绿；三例业务效果均未观察。",
+          "owner": "CARD04 P8/T017 owner"
+        }
+      ],
+      "phase_limit": "catalog 两条当前正式合同 2/2+10/10；三个 case effect_observation 仍 not_yet_observed，不能据来源绑定说业务效果通过。owner: P8/T017 与 P10/T021。"
+    },
+    {
+      "phase_id": "P9",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+      "material_sha256": "dcfd25eaab81f7e6adc8a01adbf37f81757010d14cb7b9299e7de39f396e488a",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md:12",
+      "gate_cmd_line": "- **gate_cmd**: 旧定向合同 `npx vitest run tests/contract/build-code-change-scope.test.mjs tests/contract/build-code-test-inventory.test.mjs` 的原件照留；当前 T018 与相邻旧合同 `npx vitest run tests/contract/build-code-preexecution-source.test.mjs tests/contract/build-code-change-scope.test.mjs` 本地 12/12，T019 与相邻旧合同 `npx vitest run tests/contract/build-code-test-registry.test.mjs tests/contract/build-code-test-inventory.test.mjs` 本地 11/11。它们是两次限定本地测试，不是同一份 P9 正式收口或 P10 实跑。",
+      "tasks": [
+        {
+          "task_id": "T018",
+          "title": "冻结任务起点并重算修复后的完整变化范围",
+          "source_heading_line": 37,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.json",
+              "sha256": "38575a091b19ce0204cbc26ab00e43e81945e399d36ca11130e21af36055e16a",
+              "output_ref": "quality/tests/output/card04-P9-scope-current-493b195d-edf9-4cb9-b881-6678192ca734.output",
+              "output_sha256": "67e59d5a1d79f181ec2cbeec935a41d6f34edeccf60dd7818487cc49d7b47df0",
+              "command": "npx vitest run tests/contract/build-code-preexecution-source.test.mjs tests/contract/build-code-change-scope.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-preexecution-source.test.mjs (7 tests) 17891ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > finds committed product changes in a clean worktree without changing Task store bytes 2008ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > reads the authenticated task start and committed, dirty, staged, untracked, rename and delete paths before a receipt 4316ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not accept another task's workspace 2956ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > does not invent a task start when the authenticated bootstrap record is missing 1941ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed hash 1934ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > rejects an existing bootstrap record with a changed workspace_binding 1903ms",
+                "✓ ORACLE-P9-PREEXECUTION: current change source before test capture > re-reads changed source bytes rather than reusing an earlier candidate snapshot 2832ms",
+                "✓ tests/contract/build-code-change-scope.test.mjs (5 tests) 18651ms",
+                "✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW existing task start 3118ms",
+                "✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > finds a committed-clean change since an authenticated NEW created task start 3768ms",
+                "✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports committed, staged, unstaged, untracked, renamed and deleted source across two snapshots 6040ms",
+                "✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > reports unknown_change_scope when no authenticated NEW task-start identity exists 2652ms",
+                "✓ ORACLE-P9-TRUSTED-CHANGE-SCOPE — return-only task-start and repair facts > does not authenticate a different task's workspace as its own task start 3072ms",
+                "Test Files  2 passed (2)",
+                "Tests  12 passed (12)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "预执行来源7项+变更范围5项；完整当前变更未全部关联 case。",
+          "owner": "CARD04 P9/T018 owner"
+        },
+        {
+          "task_id": "T019",
+          "title": "独立枚举真实测试资产与 runner 身份（以下记录为原规划时点；当前事实见 L0）",
+          "source_heading_line": 58,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.json",
+              "sha256": "e9a5697087e3d527d232051a40390c47ebf41a5d5c94f2f91a92a72a4c00fff7",
+              "output_ref": "quality/tests/output/card04-P9-inventory-current-18c2b580-6d2b-4053-8186-a00855cfbb73.output",
+              "output_sha256": "74ee4014027b98e27d4dafafe24027d79733d1854da197c5f30b5c37089fac3a",
+              "command": "npx vitest run tests/contract/build-code-test-registry.test.mjs tests/contract/build-code-test-inventory.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-test-inventory.test.mjs (3 tests) 4105ms",
+                "✓ ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity > separates independently registered, skipped, and unregistered IDs from real Node TAP 3863ms",
+                "✓ tests/contract/build-code-test-registry.test.mjs (8 tests) 22511ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reads an authenticated private registry and accepts exactly the two passing Node TAP leaves 4655ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports missing leaves instead of certifying the reporter 3836ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports extra leaves instead of certifying the reporter 3790ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > reports skipped leaves instead of certifying the reporter 3994ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects duplicate registered identities before testing 1534ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects a receipt command for a file outside the registered target 3214ms",
+                "✓ ORACLE-P9-REGISTRY: source-owned tests versus actual runnable leaves > rejects source drift even if the old registry still lists a runnable name 1486ms",
+                "Test Files  2 passed (2)",
+                "Tests  11 passed (11)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "registry8项+inventory3项；206 未映射测试/业务关系仍待核。",
+          "owner": "CARD04 P9/T019 owner"
+        }
+      ],
+      "phase_limit": "两对当前正式 12/12+11/11；真实完整变更/测试资产库存与 206 未映射仍未收口。owner: P9/T018-T019。"
+    },
+    {
+      "phase_id": "P10",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+      "material_sha256": "d6dc63d3e350e6047ef666d497a65dbe0faafc5b986b92c4743a7bf06cdd8c27",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md:15",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T020",
+          "title": "可信变更、B2 case 选择与安全定向实跑",
+          "source_heading_line": 71,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.json",
+              "sha256": "ef487dcbff88ad96fd2fd5b28e11241421e31cabb54420d014325cce53eb949d",
+              "output_ref": "quality/tests/output/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.output",
+              "output_sha256": "7dcac16af403c84ed0f6379cb62d459ac2aac8331e5cf94332804a749605351e",
+              "command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-case-selection.test.mjs (16 tests) 34485ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic alpha product and linked regression, excluding unrelated dynamic product 3385ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic beta product and linked regression, excluding unrelated dynamic product 3430ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects head_as_start against a real task baseline, Git diff and capture receipt 3051ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt 3138ms",
+                "✓ P10 pre-run registered case selection > selects an affected candidate from P9's pre-run registry without claiming a test ran 2410ms",
+                "✓ P10 pre-run registered case selection > keeps known cases and each unknown path visible without calling partial coverage selected 2461ms",
+                "✓ P10 pre-run registered case selection > keeps an entirely unknown change unavailable with no runnable case 2504ms",
+                "✓ P10 pre-run registered case selection > rejects missing registry hash before any selected-case execution 2411ms",
+                "✓ P10 pre-run registered case selection > rejects wrong registry source before any selected-case execution 2293ms",
+                "✓ P10 pre-run registered case selection > rejects stale snapshot before any selected-case execution 2336ms",
+                "✓ P10 pre-run registered case selection > rejects wrong task before any selected-case execution 2229ms",
+                "✓ P10 pre-run registered case selection > rejects unregistered leaf before any selected-case execution 2533ms",
+                "✓ P10 pre-run registered case selection > rejects duplicate expected leaf before any selected-case execution 2301ms",
+                "✓ tests/contract/build-code-case-reconciliation.test.mjs (53 tests) 447549ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1741ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash 1689ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim 1796ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > counts one target reporter once when one case maps to two accepted ACs 14123ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC 12140ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback 11591ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback 11516ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding 3928ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass 11699ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect 1606ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent 11575ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid census evidence chain unknown without the official stage binding 12513ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects zero source denominator despite a passing reporter and a passed fact 12596ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing requirement link despite a passing reporter and a passed fact 13329ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing source section despite a passing reporter and a passed fact 12898ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects too few U sources despite a passing reporter and a passed fact 12694ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing user V source despite a passing reporter and a passed fact 12433ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects unindexed atom despite a passing reporter and a passed fact 12601ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects R cites absent source despite a passing reporter and a passed fact 12638ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a current fact that binds a different test receipt 12736ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > accepts several official coverage refs when exactly one binds this test receipt 12708ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a duplicate receipt ref with a conflicting hash 12657ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested task mismatch in the canonical chain 12407ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested snapshot mismatch in the canonical chain 12576ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested material mismatch in the canonical chain 13661ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a damaged current acceptance wrapper hash 13677ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > does not reuse a genuine older test receipt as this run's effect 21951ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid deferred evidence chain unknown without the official stage binding 12646ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a falsely passed deferred subject 12765ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies real current source while keeping the real Task effect unknown 12698ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies forged derived source while keeping the real Task effect unknown 12540ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten derived meaning while keeping the real Task effect unknown 12734ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten original source field while keeping the real Task effect unknown 12483ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID before the genuine row while keeping the real Task effect unknown 12423ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with no cell padding while keeping the real Task effect unknown 12686ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with extra cell padding while keeping the real Task effect unknown 12398ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies missing indexed atom while keeping the real Task effect unknown 12415ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies broken direct source link while keeping the real Task effect unknown 12708ms",
+                "✓ tests/contract/build-code-targeted-runner.test.mjs (9 tests) 944ms",
+                "Test Files  3 passed (3)",
+                "Tests  78 passed (78)"
+              ]
+            },
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.json",
+              "sha256": "2e6f0758602b8c6364a69b3d5624366a901f7f1b6a4fdaa8b3fda3894c57f5d3",
+              "output_ref": "quality/tests/output/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.output",
+              "output_sha256": "9fd9768a0d23a3c71a9f964abbdcdc9f469227617c17bf9fc2f7c00eef20293f",
+              "command": "npx vitest run tests/contract/build-code-targeted-capture.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-targeted-capture.test.mjs (23 tests) 119423ms",
+                "✓ P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence 7589ms",
+                "✓ P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence 7175ms",
+                "✓ P10 fixed targeted capture > preserves first pass and second real failure raw and stderr through the failed outer receipt 7480ms",
+                "✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 15185ms",
+                "✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 2898ms",
+                "✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 3031ms",
+                "✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 6914ms",
+                "✓ P10 fixed targeted capture > does not start a mixed case with a foreign task workspace 3250ms",
+                "✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 24586ms",
+                "✓ P10 fixed targeted capture > keeps a missing canonical effect subject unavailable after a real fixture test run 11788ms",
+                "✓ P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 2861ms",
+                "✓ P10 fixed targeted capture > rejects a source snapshot changed by the selected test 6481ms",
+                "✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6759ms",
+                "✓ P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 13417ms",
+                "Test Files  1 passed (1)",
+                "Tests  23 passed (23)"
+              ]
+            },
+            {
+              "kind": "official_fixed_targeted_partial",
+              "ref": "quality/tests/targeted/52466118-7b21-4a12-9043-f966732a04cb.json",
+              "sha256": "97fe2746cd9137babe4d0321b2c39c52b5210ddfa135fd3a914cdf1509f0e2ac",
+              "output_ref": "quality/tests/output/targeted-52466118-7b21-4a12-9043-f966732a04cb.output",
+              "output_sha256": "db50358ce7e9d4f5c2d2b840d763924fe6cbdb536b76835c59d4af1683405d80",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "summary_ref": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/summary.md",
+              "summary_sha256": "29d598f33a5bbcf8b3ca0ee412d958e9160a7f6be86ebb5dbc7d1379faa64266",
+              "observed_test_leaves": "28+15+6=49 passed",
+              "unmapped_changed_paths": 206,
+              "overall": "unavailable",
+              "business_effect": "unknown"
+            }
+          ],
+          "remaining_unknown_or_missing": "选择16+runner9+捕获23，真实49叶仅三例；206 未映射。",
+          "owner": "CARD04 P10/T020 owner"
+        },
+        {
+          "task_id": "T021",
+          "title": "逐 case runner/oracle/AC/结构/风险对账与同任务修复",
+          "source_heading_line": 92,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.json",
+              "sha256": "ef487dcbff88ad96fd2fd5b28e11241421e31cabb54420d014325cce53eb949d",
+              "output_ref": "quality/tests/output/card04-P10-L0-current-1d151292-a0ad-4a73-8b5f-a6841167b4e8.output",
+              "output_sha256": "7dcac16af403c84ed0f6379cb62d459ac2aac8331e5cf94332804a749605351e",
+              "command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-case-selection.test.mjs (16 tests) 34485ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic alpha product and linked regression, excluding unrelated dynamic product 3385ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects only changed dynamic beta product and linked regression, excluding unrelated dynamic product 3430ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects head_as_start against a real task baseline, Git diff and capture receipt 3051ms",
+                "✓ ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > rejects mismatched_snapshot against a real task baseline, Git diff and capture receipt 3138ms",
+                "✓ P10 pre-run registered case selection > selects an affected candidate from P9's pre-run registry without claiming a test ran 2410ms",
+                "✓ P10 pre-run registered case selection > keeps known cases and each unknown path visible without calling partial coverage selected 2461ms",
+                "✓ P10 pre-run registered case selection > keeps an entirely unknown change unavailable with no runnable case 2504ms",
+                "✓ P10 pre-run registered case selection > rejects missing registry hash before any selected-case execution 2411ms",
+                "✓ P10 pre-run registered case selection > rejects wrong registry source before any selected-case execution 2293ms",
+                "✓ P10 pre-run registered case selection > rejects stale snapshot before any selected-case execution 2336ms",
+                "✓ P10 pre-run registered case selection > rejects wrong task before any selected-case execution 2229ms",
+                "✓ P10 pre-run registered case selection > rejects unregistered leaf before any selected-case execution 2533ms",
+                "✓ P10 pre-run registered case selection > rejects duplicate expected leaf before any selected-case execution 2301ms",
+                "✓ tests/contract/build-code-case-reconciliation.test.mjs (53 tests) 447549ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > reads all bound reporter leaves, then keeps the missing business effect unknown 1741ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a changed outer receipt hash 1689ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not turn an older matching receipt into a new run through a caller dispatch claim 1796ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > counts one target reporter once when one case maps to two accepted ACs 14123ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC 12140ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback 11591ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback 11516ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a caller-edited material, case, or source snapshot binding 3928ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a missing per-target raw record instead of trusting the outer pass 11699ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > does not treat a forged current fact ref as a business effect 1606ms",
+                "✓ ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > keeps AC-27 helper capability unknown while the production writer is absent 11575ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid census evidence chain unknown without the official stage binding 12513ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects zero source denominator despite a passing reporter and a passed fact 12596ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing requirement link despite a passing reporter and a passed fact 13329ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing source section despite a passing reporter and a passed fact 12898ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects too few U sources despite a passing reporter and a passed fact 12694ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects missing user V source despite a passing reporter and a passed fact 12433ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects unindexed atom despite a passing reporter and a passed fact 12601ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects R cites absent source despite a passing reporter and a passed fact 12638ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a current fact that binds a different test receipt 12736ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > accepts several official coverage refs when exactly one binds this test receipt 12708ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a duplicate receipt ref with a conflicting hash 12657ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested task mismatch in the canonical chain 12407ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested snapshot mismatch in the canonical chain 12576ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a nested material mismatch in the canonical chain 13661ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a damaged current acceptance wrapper hash 13677ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > does not reuse a genuine older test receipt as this run's effect 21951ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > keeps a valid deferred evidence chain unknown without the official stage binding 12646ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > rejects a falsely passed deferred subject 12765ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies real current source while keeping the real Task effect unknown 12698ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies forged derived source while keeping the real Task effect unknown 12540ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten derived meaning while keeping the real Task effect unknown 12734ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies same message ID with rewritten original source field while keeping the real Task effect unknown 12483ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID before the genuine row while keeping the real Task effect unknown 12423ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with no cell padding while keeping the real Task effect unknown 12686ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies duplicate historical R ID with extra cell padding while keeping the real Task effect unknown 12398ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies missing indexed atom while keeping the real Task effect unknown 12415ms",
+                "✓ ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence > independently classifies broken direct source link while keeping the real Task effect unknown 12708ms",
+                "✓ tests/contract/build-code-targeted-runner.test.mjs (9 tests) 944ms",
+                "Test Files  3 passed (3)",
+                "Tests  78 passed (78)"
+              ]
+            },
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.json",
+              "sha256": "2e6f0758602b8c6364a69b3d5624366a901f7f1b6a4fdaa8b3fda3894c57f5d3",
+              "output_ref": "quality/tests/output/card04-P10-targeted-contract-current-5e56919c-bebc-4c65-9653-777d350442a8.output",
+              "output_sha256": "9fd9768a0d23a3c71a9f964abbdcdc9f469227617c17bf9fc2f7c00eef20293f",
+              "command": "npx vitest run tests/contract/build-code-targeted-capture.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/build-code-targeted-capture.test.mjs (23 tests) 119423ms",
+                "✓ P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence 7589ms",
+                "✓ P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence 7175ms",
+                "✓ P10 fixed targeted capture > preserves first pass and second real failure raw and stderr through the failed outer receipt 7480ms",
+                "✓ P10 fixed targeted capture > runs known cases for mixed changes but reports every unknown path and no overall pass 15185ms",
+                "✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 2898ms",
+                "✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 3031ms",
+                "✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 6914ms",
+                "✓ P10 fixed targeted capture > does not start a mixed case with a foreign task workspace 3250ms",
+                "✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 24586ms",
+                "✓ P10 fixed targeted capture > keeps a missing canonical effect subject unavailable after a real fixture test run 11788ms",
+                "✓ P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 2861ms",
+                "✓ P10 fixed targeted capture > rejects a source snapshot changed by the selected test 6481ms",
+                "✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6759ms",
+                "✓ P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 13417ms",
+                "Test Files  1 passed (1)",
+                "Tests  23 passed (23)"
+              ]
+            },
+            {
+              "kind": "official_fixed_targeted_partial",
+              "ref": "quality/tests/targeted/52466118-7b21-4a12-9043-f966732a04cb.json",
+              "sha256": "97fe2746cd9137babe4d0321b2c39c52b5210ddfa135fd3a914cdf1509f0e2ac",
+              "output_ref": "quality/tests/output/targeted-52466118-7b21-4a12-9043-f966732a04cb.output",
+              "output_sha256": "db50358ce7e9d4f5c2d2b840d763924fe6cbdb536b76835c59d4af1683405d80",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "summary_ref": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P10/T020-real-card04-targeted-rerun-20260927/summary.md",
+              "summary_sha256": "29d598f33a5bbcf8b3ca0ee412d958e9160a7f6be86ebb5dbc7d1379faa64266",
+              "observed_test_leaves": "28+15+6=49 passed",
+              "unmapped_changed_paths": 206,
+              "overall": "unavailable",
+              "business_effect": "unknown"
+            }
+          ],
+          "remaining_unknown_or_missing": "对账53项合同；无同版 build-code 阶段行，三例业务效果 unknown。",
+          "owner": "CARD04 P10/T021 owner"
+        }
+      ],
+      "phase_limit": "合同 78/78+23/23，真实固定三例仅 49 叶；206 路径未映射，整体 unavailable、业务 unknown，当前正式独立 review pending。owner: P10/T020-T021、各未映射路径 owner。"
+    },
+    {
+      "phase_id": "P11",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md",
+      "material_sha256": "896f2ca748fcd495104b7716e03f43c3e9a38ad6f4e35e3e3961f3899916f5dd",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md:18",
+      "gate_cmd_line": "- **gate_cmd**: 第一步 `npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs`；第二步 `npx vitest run tests/contract/acceptance-execution-tier.test.mjs` 中新增的定向用例及受影响既有用例。只跑受影响范围，不跑无范围全量测试。",
+      "tasks": [
+        {
+          "task_id": "T022",
+          "title": "后台→页面关系触发与浏览器业务用例逐项核对",
+          "source_heading_line": 25,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.json",
+              "sha256": "bf4ad3e38e5336dd065cd256057e17620628197ad457414102943d8616ab21ca",
+              "output_ref": "quality/tests/output/card04-P11-representation-current-98f36a31-c797-484d-a6b3-92ec041ee6c1.output",
+              "output_sha256": "462b6ff9aa7f2bea7e938fc6e78c239d2cf480e69c39c1d43fe79747f815196c",
+              "command": "npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/post-business-browser-reconciliation.test.mjs (5 tests) 3ms",
+                "Test Files  1 passed (1)",
+                "Tests  5 passed (5)"
+              ]
+            },
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.json",
+              "sha256": "326c58e900d6a05190916d63829ca111b558c2c75e2ede30384f3be0c5178c41",
+              "output_ref": "quality/tests/output/card04-P11-affected-v2-v3-current-cf0d2776-ba01-468a-80a9-469f2366f319.output",
+              "output_sha256": "a9c006b293a1ef457494f6edeceb2a21849f15947448cf50039f09e97c972697",
+              "command": "npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t \"P11/T022 v2 actual private browser producer|P11/T022 v3 acceptance browser and UI QA share one source|P11/T022 blocked browser missing readback|keeps the pre-cohort tests producer available to the historical build-code receipt path\"",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/acceptance-execution-tier.test.mjs (80 tests | 56 skipped) 211222ms",
+                "✓ P11/T022 v2 actual private browser producer > dispatches one browser case once and lets UI QA reuse its canonical source 11341ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation receipt 6879ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-tests receipt 7039ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-stale-snapshot receipt 6928ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-semantic-tests receipt 6943ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-missing-output receipt 6901ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-output-hash receipt 6988ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on invalid-implementation-head receipt 6696ms",
+                "✓ P11/T022 v2 actual private browser producer > does not start a browser on a self-consistent test receipt from an unrelated producer 6904ms",
+                "✓ P11/T022 v2 actual private browser producer > does not treat fixture-only browser bytes as a passing acceptance 9805ms",
+                "✓ P11/T022 v2 actual private browser producer > keeps two browser cases on one AC distinct without a third QA dispatch 10094ms",
+                "✓ P11/T022 v2 actual private browser producer > uses the existing standalone QA route when no acceptance scenario is declared 6988ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > uses the exact current browser ref and hash for one QA projection 10022ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > does not assign one browser source to two acceptance requirements 10148ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps task browser source from a same-run QA pass 9691ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps tree browser source from a same-run QA pass 9759ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps attempt browser source from a same-run QA pass 9929ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps ref browser source from a same-run QA pass 9892ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps hash browser source from a same-run QA pass 9935ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps blocked browser source from a same-run QA pass 9736ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps old-receipt browser source from a same-run QA pass 10222ms",
+                "✓ P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9775ms",
+                "✓ P11/T022 blocked browser missing readback > authenticates the real unavailable browser item as missing while rejecting fabricated pass shapes 9948ms",
+                "✓ acceptance execution tiers > keeps the pre-cohort tests producer available to the historical build-code receipt path 8658ms",
+                "Test Files  1 passed (1)",
+                "Tests  24 passed | 56 skipped (80)"
+              ]
+            },
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.json",
+              "sha256": "55e0fa3ef3caded4fb2a5092eb7bbfcce59927efb5aa9e0a5f2a23646b0fd5a1",
+              "output_ref": "quality/tests/output/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.output",
+              "output_sha256": "cc6989615cd1a68a41964d8ada1a50a8c579d7a00952fe52406ff420d05b1dd7",
+              "command": "node --test tests/contract/ui-stage-integration.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "ℹ tests 22",
+                "ℹ pass 22",
+                "ℹ fail 0",
+                "ℹ skipped 0"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "协议回执绿；真实页面服务浏览器缺。",
+          "owner": "CARD04 P11/T022 owner"
+        }
+      ],
+      "phase_limit": "正式协议 5/5、受影响 24 pass/56 skip、Node 22/22；未运行真实页面/服务/浏览器，也无外部效果。owner: P11/T022 与页面服务 owner。"
+    },
+    {
+      "phase_id": "P12",
+      "material_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+      "material_sha256": "581668358956ed078259175b6fda8c88b1170929ca65c5804495d370212913ec",
+      "gate_cmd_ref": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md:11",
+      "gate_cmd_line": "- **gate_cmd**: `npx vitest run tests/contract/verify-code-business-handoff.test.mjs`",
+      "tasks": [
+        {
+          "task_id": "T023",
+          "title": "verify-code 风险选样与现有授权业务交接",
+          "source_heading_line": 19,
+          "evidence": [
+            {
+              "kind": "official_scoped_test_receipt",
+              "ref": "quality/tests/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.json",
+              "sha256": "3dd40a9d74556229012aef312a16492178cb23fac62db2c4ffa9e0551edb0e20",
+              "output_ref": "quality/tests/output/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.output",
+              "output_sha256": "49cfd376cfae63526cd2a185bdfebafe920d0e1455c40cebcea56866ef8eadfc",
+              "command": "npx vitest run tests/contract/verify-code-business-handoff.test.mjs",
+              "internal_exit_code": 0,
+              "snapshot_tree": "a8ba4bcc213c29f78aec61e4f64139444d3b0d1b",
+              "source_digest": "4392e12f33e5267f87425cfbf1739633aeb51a410a1fb29b4393d71f5fd5d825",
+              "runner_lines": [
+                "✓ tests/contract/verify-code-business-handoff.test.mjs (3 tests) 2ms",
+                "Test Files  1 passed (1)",
+                "Tests  3 passed (3)"
+              ]
+            }
+          ],
+          "remaining_unknown_or_missing": "技能文本3项；真实抽样与授权回复缺。",
+          "owner": "CARD04 P12/T023 owner"
+        }
+      ],
+      "phase_limit": "正式 3/3 仅技能文案；真实风险抽样、verify-code 消费、授权者答复均缺。owner: P12/T023 与授权业务者。"
+    }
+  ],
+  "excluded_old_reviews": [
+    {
+      "ref": "quality/reviews/results/build-code-simple-3d13aab6-f60e-535a-a050-12707123d310.json",
+      "sha256": "396902d36a31e224ab885c709c9e0986ae2ee8b02e660f7f853cd9888dc3cf93",
+      "snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+      "current_tree": false
+    },
+    {
+      "ref": "quality/reviews/results/build-code-simple-68ef7817-c3bd-5b84-a444-4e2304423403.json",
+      "sha256": "dfb66eb222505a357d59490795180329f01eec694ee1be06fd08ee19afe854a9",
+      "snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+      "current_tree": false
+    },
+    {
+      "ref": "quality/reviews/results/build-code-simple-99581ac4-c4d0-5061-ae6d-47e699a1b302.json",
+      "sha256": "c1eee5c531d059102f0572a705aecce0ce02622b182ed92a389ec6efb6d6ad6a",
+      "snapshot_tree": "844acfd8a689f57c231a05b89251b3f07f7654c6",
+      "current_tree": false
+    },
+    {
+      "ref": "quality/reviews/results/build-code-simple-9fa24202-246a-5c83-a92a-45d4f3bfb1ee.json",
+      "sha256": "1bfdde9df9e58eccc8812bca3f553a759cdc39cd8cb29b0c926db85b980ff9a8",
+      "snapshot_tree": "35b6bf495faa51c3394b7c032c6170354868fbff",
+      "current_tree": false
+    },
+    {
+      "ref": "quality/reviews/results/build-code-simple-e0d109e4-be5d-5ad1-a137-cb7d47c5696c.json",
+      "sha256": "9532018068653b0950affc090b9bf40d3423f62c6380b7b86e6a0f076106e7dc",
+      "snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+      "current_tree": false
+    },
+    {
+      "ref": "quality/reviews/results/build-code-simple-e6a78c63-9d28-5b2f-aa78-b0a89ec924fd.json",
+      "sha256": "fa630cb8d34cb121fd1ef6984461019c4c3e17dccca3030d210db9518c7a71d8",
+      "snapshot_tree": "dbf294cf0ed8df2b0354446c27564228db2162ed",
+      "current_tree": false
+    }
+  ],
+  "current_p10_review": "pending_external_independent_review",
+  "global_limits": [
+    "No build-code stage row in current facts.jsonl",
+    "No current-tree independent review result yet",
+    "P10 real 49 leaves are partial with 206 unmapped paths and unknown business effect",
+    "P5 T008 report missing",
+    "P11 real browser/service/page missing",
+    "P12 real semantic sample and authorized user reply missing",
+    "Do not infer Phase or CARD04 pass from scoped receipts"
+  ]
+}

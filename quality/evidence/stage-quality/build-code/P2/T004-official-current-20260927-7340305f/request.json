@@ -1,0 +1,6 @@
+{
+  "command": "npx vitest run tests/contract/repository-inventory.test.mjs -t \"complexity baseline\"",
+  "receipt_ref": "quality/tests/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.json",
+  "output_ref": "quality/tests/output/card04-P2-L0-current-7340305f-7e78-42ea-b0fe-bb159cd81b27.output",
+  "timeout_ms": 180000
+}

@@ -1,0 +1,7 @@
+22b27300760d45866ddaec58a38d50650a1b25a2efaa08efa7007eca0ba741c4  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/before-stage-end-report.mjs
+7bef8492d35cf43cd704b982f9c9a94d786da72ad6c2ef3cef425c73e323fb3b  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/before-stage-end-report.test.mjs
+3bcf947bcf6f3de9c14469bfc3d1fc80bd192b1c92449d770bc03e305109038d  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/after-stage-end-report.mjs
+2111a0a0ffc9f2603415d01451d2ad45877bbcf7d8a4befbe07e3e62f1f96cee  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/final-stage-end-report.test.mjs
+78d7f9d8cbd1e4cb0ee1e4e55188616e9d6ec5ba4ce44f4ee4e46c814e19f792  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/final-test-red.txt
+6358d3b017ed2dd68eacbe0d3b4221b15e8d6cbbc0bb74c34c1886de9731790e  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/final-test-green.txt
+cdfb5a80f759ba2d7706579b33210cda4da31c7a753e989cf729f4f83777cad0  quality/evidence/stage-quality/build-code/P5/T007-source-impl-20260928/adjacent.txt

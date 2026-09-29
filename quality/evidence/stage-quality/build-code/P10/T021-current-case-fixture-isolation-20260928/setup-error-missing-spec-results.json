@@ -1,0 +1,194 @@
+[
+  {
+    "label": "current-reads-alone",
+    "exit_code": 0,
+    "sha256": "b4c8501ce9120c2088e9412c7a8eaabaceab0dc31cfe58059acc9368b37f8ce1",
+    "bytes": 560,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "reads all bound reporter leaves, then keeps the missing business effect unknown",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "current-reads-after-official",
+    "exit_code": 1,
+    "sha256": "30738b6802b91cd2f71cf638d580a467dbf625c54ca3d17ffd4677af8f123284",
+    "bytes": 2428,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|reads all bound reporter leaves, then keeps the missing business effect unknown",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "current-older-alone",
+    "exit_code": 0,
+    "sha256": "c08d6e10772cae3f5d1a99e0ea06d26b55f096cc7fabe9d4309ff559eaa5e490",
+    "bytes": 567,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "does not turn an older matching receipt into a new run through a caller dispatch claim",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "current-older-after-official",
+    "exit_code": 1,
+    "sha256": "cc51066bea25af4b5ae3f27f7cbf56e0bd0271ac4c30efa837a8b5e64a366ab4",
+    "bytes": 2189,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|does not turn an older matching receipt into a new run through a caller dispatch claim",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "current-forged-alone",
+    "exit_code": 0,
+    "sha256": "e48d0a869b2f8a70702fb3e6d37278b4123a33058d2e03dfcd9f78a067c8ac79",
+    "bytes": 542,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "does not treat a forged current fact ref as a business effect",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "current-forged-after-official",
+    "exit_code": 1,
+    "sha256": "6be14fa7ddb50fde9acc0b7558c9db38ca831953fc84ca89bde38b0e6d77bad5",
+    "bytes": 2142,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|does not treat a forged current fact ref as a business effect",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919"
+  },
+  {
+    "label": "old-reads-alone",
+    "exit_code": 1,
+    "sha256": "7bbd3730a2482bcfd5d51487fb274a551f0cabb444ae76737c255284a7e8ec41",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "reads all bound reporter leaves, then keeps the missing business effect unknown",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  },
+  {
+    "label": "old-reads-after-official",
+    "exit_code": 1,
+    "sha256": "50cb91c667bcb57cc93cb9a074a8b56c2b273cef660a7bba9df895576022b085",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|reads all bound reporter leaves, then keeps the missing business effect unknown",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  },
+  {
+    "label": "old-older-alone",
+    "exit_code": 1,
+    "sha256": "79c2537ff3b4f63ff7048ac748ba47038f5dd3b39f4d34bb77b317db37bc3fe9",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "does not turn an older matching receipt into a new run through a caller dispatch claim",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  },
+  {
+    "label": "old-older-after-official",
+    "exit_code": 1,
+    "sha256": "748d857048b37ea4d2edc641051cfe08feaf554ffc7fae0db09b25a1357127c7",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|does not turn an older matching receipt into a new run through a caller dispatch claim",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  },
+  {
+    "label": "old-forged-alone",
+    "exit_code": 1,
+    "sha256": "e3dcd71410c8e4c86883f0084a2dc0f3b5f92c41131e648d37434adfa3c46080",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "does not treat a forged current fact ref as a business effect",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  },
+  {
+    "label": "old-forged-after-official",
+    "exit_code": 1,
+    "sha256": "93ab6208b4bb0aa7ddd96ca0fb82bfd4962b6643e2b6e4f673feb14f4baac7b2",
+    "bytes": 976,
+    "argv": [
+      "/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest",
+      "run",
+      "tests/contract/build-code-case-reconciliation.test.mjs",
+      "-t",
+      "ORACLE-P10-OFFICIAL-FIXED|does not treat a forged current fact ref as a business effect",
+      "--poolOptions.forks.singleFork",
+      "--no-fileParallelism"
+    ],
+    "cwd": "/tmp/workflowhub-p10-fixture-baseline.8Hax8i"
+  }
+]

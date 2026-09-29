@@ -1,0 +1,23 @@
+{
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs"
+  ],
+  "started_at": "2026-09-27T00:33:46.503571+00:00",
+  "pre_sha256": {
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs": "015301f30e4799a4dd9406aeeea6d9bd87661905088292b117533876c841627e",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "9c0c67bed9065adfd5286a55602e3d0af4a25f051c0019cdf7ac881c3ab0ba7a"
+  },
+  "ended_at": "2026-09-27T00:34:11.606466+00:00",
+  "exit_code": 0,
+  "post_sha256": {
+    "tests/e2e/card-04-real-entry-chain-e2e.test.mjs": "015301f30e4799a4dd9406aeeea6d9bd87661905088292b117533876c841627e",
+    "runtime/stage/stage-runner.mjs": "defe0343739b1df8182a0fba3d281eb98f11d545fb74742ccd87f04935b52e74",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md": "9c0c67bed9065adfd5286a55602e3d0af4a25f051c0019cdf7ac881c3ab0ba7a"
+  },
+  "stdout_sha256": "cd72c48fac5c30a33d3d6679a75f72467868e287cec4d6bfa2536650800cd024",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

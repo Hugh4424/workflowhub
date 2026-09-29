@@ -1,0 +1,26 @@
+--- P6.md before
++++ P6.md after
+@@ -65,9 +65,9 @@
+ 
+ - **Source / FR / AC**: `R-006（上游 decision-log 逐字：七层防御 L4「大量自动化 E2E 最重要」）、CARD-04-RULING-A4-E2E / FR-24 / AC-24`
+ - **Files / symbols**: `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/ORACLE.json`、`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/README.md`（**T011 独占的仓库外绝对路径**；目录 mode `0555`、文件 mode `0444`）、`tests/contract/oracle-mirror.test.mjs`（仓库内本阶段写出并冻结）；symbol：N/A — JSON 与文档材料 + 测试内 `oracleDir()` 纯函数
+-- **Action**: 在实现者仓库写集之外、仅于上述绝对路径建立 T011 拥有的只读镜像目录，存放 E2E 期望值 oracle；禁止在仓库的 `quality/oracle/card-04/` 建立同名副本。`ORACLE.json` 必须恰含这些键与取值：`schema` = `card-04-oracle-mirror.v1`；`card` = `workflowhub-thin-core-card-04-20260919`；`stages` 恰含 `make-decision`、`build-plan`、`build-code`、`verify-code`；`missing_material_error_pattern` 含 `current task material missing or unreadable`；`report_facts_required_sections` 含 `没做到`；`machine_not_done_states` 恰为 `missing`、`inconsistent`、`incomplete`、`failed`、`unavailable` 五值；`spec_analyze_subject` = `stage_end_spec_analyze`；`forbidden_states` 含 `deferred`。同时写 `README.md` 说明「谁可写、为何在仓库外、如何被消费（env `WH_CARD04_ORACLE_DIR`，默认事实目录路径）、残余限制（同一 OS 用户可 chmod）」；测试断言镜像存在、文件只读（目录 `0555`／文件 `0444`）、仓库内无副本。
++- **Action**: 在实现者仓库写集之外、仅于上述绝对路径建立 T011 拥有的只读镜像目录，存放 E2E 期望值 oracle；禁止在仓库的 `quality/oracle/card-04/` 建立同名副本。`ORACLE.json` 必须恰含以下九个顶层键与取值：`schema_version` = `1.0.0`；`schema` = `card-04-oracle-mirror.v1`；`card` = `workflowhub-thin-core-card-04-20260919`；`stages` 恰含 `make-decision`、`build-plan`、`build-code`、`verify-code`；`missing_material_error_pattern` 含 `current task material missing or unreadable`；`report_facts_required_sections` 含 `没做到`；`machine_not_done_states` 恰为 `missing`、`inconsistent`、`incomplete`、`failed`、`unavailable` 五值；`spec_analyze_subject` = `stage_end_spec_analyze`；`forbidden_states` 含 `deferred`。同时写 `README.md` 说明「谁可写、为何在仓库外、如何被消费（env `WH_CARD04_ORACLE_DIR`，默认事实目录路径）、残余限制（同一 OS 用户可 chmod）」；测试断言镜像存在、权限位为目录 `0555`／文件 `0444`、仓库内无副本。
+ - **Inputs**: 用户 2026-09-23 裁定 a4-e2e；期望错误串来源 `tests/contract/stage-runtime-material-check.test.mjs`；事实目录路径 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/`
+-- **Outputs / failure**: 镜像就位且只读；失败＝镜像缺失 / 文件可写 / 仓库内出现 oracle 副本
++- **Outputs / failure**: 镜像就位且权限位为目录 `0555`、文件 `0444`；失败＝镜像缺失 / 权限位不符 / 仓库内出现 oracle 副本
+ - **Boundary / DO NOT TOUCH**: T011 仓库内写集只有 `tests/contract/oracle-mirror.test.mjs`；两份镜像只写入上述 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/oracle/card-04/`，路径虽在 repo 外仍属 T011 外部写权限边界，未经其 owner 授权其他任务只读；仓库 `quality/oracle/card-04/` 必须保持无副本；不改 `runtime/**`、`tools/**`、`docs/**`；八份 build-plan 预置测试（含本卡 gate 测试 `tests/contract/oracle-mirror.test.mjs`）冻结 DO NOT TOUCH——实现期只改实现不改断言
+ - **Dependency**: none
+ - **Test tier / skill**: 契约层（文件系统断言）
+@@ -77,9 +77,9 @@
+ - **expected_exit**: RED `1`；GREEN `0`
+ - **RED target failure**: ORACLE-ORACLE-MIRROR-ISOLATED 目标断言失败（historical prewritten artifact only，预置历史记录非当前实测）。外部 task-store 原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/prewritten-red/P6-T011-oracle-mirror-red.txt` 记录镜像目录缺失导致断言失败（非未捕获 ENOENT 崩溃）；这是 build-plan 预置 RED，不是当前或 canonical run。
+ - **GREEN oracle**: ORACLE-ORACLE-MIRROR-ISOLATED — 通过信号：目录与文件存在 + `0444`/`0555` 位 + 仓库内副本数 0 + `WH_CARD04_ORACLE_DIR` 覆盖优先
+-- **Evidence**: 外部 task-store build-plan 预置 RED 原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/prewritten-red/P6-T011-oracle-mirror-red.txt`（非 canonical runtime evidence）；未来 GREEN 路径 `quality/evidence/stage-quality/build-code/P6/T011-green.txt`（含 `ls -l` mode 原件要求），当前不报告 GREEN。
++- **Evidence**: 外部 task-store build-plan 预置 RED 原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/evidence/prewritten-red/P6-T011-oracle-mirror-red.txt`（非 canonical runtime evidence）。2026-09-28 当前定向检查及独立复核见 `quality/evidence/stage-quality/build-code/P6/T011-current-20260928/`、`quality/evidence/stage-quality/build-code/P6/T011-current-independent-review-20260928.md`：原镜像九键，`npx vitest run tests/contract/oracle-mirror.test.mjs` 9/9、exit 0；缺镜像和临时错值负控分别 exit 1。冻结 T011 测试只检查原八键的部分取值、权限位和仓库副本，不检查顶层键数或 `schema_version`；第九键由 T012 E2E P0-b 检查非空，当前值 `1.0.0` 另由原字节核对。这些是当前局部证据，不是 T012 全链、P6 完成或正式阶段质量事实；原规划的 `quality/evidence/stage-quality/build-code/P6/T011-green.txt` 不是当前完成证明。
+ - **STOP / recovery**: 若宿主文件系统不支持只读位，停止并如实登记为覆盖限制（不得假装只读）
+-- **Coverage limit**: 非宿主级隔离（同一 OS 用户仍可改权限）；真正隔离（不同用户/容器）未建立，如实登记
++- **Coverage limit**: `0444`/`0555` 只证明权限位与声明写集边界，不阻止同一 OS 用户读取或 `chmod` 后改写；不同用户/容器的真正隔离未建立，如实登记
+ - **Done**: gate 绿；镜像落盘；残余限制写入 spec §12.3 与 README
+ 
+ **T012 当前/历史分界（2026-09-27）**：下方 T012 旧字段保留冻结 17 用例和 4-fail RED 的当时来源；其中「P1-only 夹具必须产生 P5 报告」「T007 仍为空 stub」「不能改冻结测试」「生产者不在本卡」都是修订前状态。当前仅按紧接 T012 后的 2026-09-27 合同修订处理 P1 负控、真 P5 正例与其有界测试写面；生产接线归 P5/T008，未有认证来源时 T012 仍 not_done。旧 RED 不删也不冒充现行 GREEN。

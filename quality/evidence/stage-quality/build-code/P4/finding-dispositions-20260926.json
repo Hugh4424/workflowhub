@@ -1,0 +1,99 @@
+{
+  "authority": "task_quality_evidence_only",
+  "phase_id": "P4",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "review_result_ref": "quality/reviews/results/build-code-simple-3d13aab6-f60e-535a-a050-12707123d310.json",
+  "review_result_sha256": "396902d36a31e224ab885c709c9e0986ae2ee8b02e660f7f853cd9888dc3cf93",
+  "review_snapshot_tree": "c4987d3e223a2861e735547658730d2bc7a33326",
+  "recorded_at_utc": "2026-09-26T14:48:11.536709+00:00",
+  "statuses": {
+    "fixed": 1,
+    "rejected_invalid": 1,
+    "accepted_risk": 0,
+    "needs_human": 7
+  },
+  "limitation": "This records dispositions and owners only; it does not certify current Phase, AC, or overall completion. Later repairs keep this reviewed snapshot and need a new evidence version.",
+  "findings": [
+    {
+      "finding_id": "F-0dc92d92984d",
+      "path": "runtime/stage/stage-end-report.mjs",
+      "line": 252,
+      "severity": "major",
+      "disposition": "needs_human",
+      "owner": "P5/T008 build-plan capture/provenance owner; P6/T012 frozen consumer",
+      "basis": "P5/T007 collector is an in-memory transform. P5/T008 phase card and T008-producer-design.md explicitly block writing the three checkpoint files without authenticated single-run source; the dynamic P6/T012 fixture remains unsatisfied. Not a P4-local code fix."
+    },
+    {
+      "finding_id": "F-18b734c3d5ed",
+      "path": "tests/contract/oracle-mirror.test.mjs",
+      "line": 18,
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P6/T011/T012 frozen test and oracle location owner",
+      "basis": "Host-specific DEFAULT_ORACLE_DIR is visible in frozen tests; WH_CARD04_ORACLE_DIR is an override but default portability is not established. The current same-host P6 focused GREEN does not resolve another-host behavior."
+    },
+    {
+      "finding_id": "F-205df6ef8547",
+      "path": "runtime/stage/stage-runner.mjs",
+      "line": 4176,
+      "severity": "major",
+      "disposition": "needs_human",
+      "owner": "build-plan P4 material and frozen-test owner",
+      "basis": "In the no-original-index branch, stage-runner emits provisional R source_ids with an explicit coverage limit; the frozen five-it P4 test expects R-001. The true CARD-04 indexed path maps R only to authenticated U/V census IDs. Emptying no-index source_ids would contradict the frozen test/material behavior; leaving R cannot certify original identity. No unapproved validator/test edit or broad source claim."
+    },
+    {
+      "finding_id": "F-2a7ad4ee1d25",
+      "path": "workflows/build-code/targeted-runner.mjs",
+      "line": 41,
+      "severity": "major",
+      "disposition": "rejected_invalid",
+      "owner": "current user authorization / P10 implementation owner",
+      "basis": "The finding assumes the older build-plan no-code skeleton boundary still overrides execution. Current user authorization in this active CARD-04 build-code session expressly covers implementing P10/T020 targeted runner within its assigned files; that premise is stale. This rejects only the authorization allegation, not P10 authentic producer/consumer/business-effect gaps or its not_done/G2 status."
+    },
+    {
+      "finding_id": "F-7c5886e8c82b",
+      "path": "tests/contract/oracle-mirror.test.mjs",
+      "line": 166,
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P6/T011 frozen test/material owner",
+      "basis": "oracle-mirror.test.mjs uses tracked.length > 1000 as a repository-size proxy. The P6 focused GREEN proves this tree only; a legitimate smaller tree could false-fail. Frozen test is outside P4 write set."
+    },
+    {
+      "finding_id": "F-a2f33615e177",
+      "path": "runtime/stage/stage-runner.mjs",
+      "line": 4189,
+      "severity": "major",
+      "disposition": "fixed",
+      "owner": "P4/T006 implementation owner",
+      "basis": "OCR result 3d13... is bound to pre-fix snapshot_tree c4987d3e... and source SHA 9734dab.... After it, T006-array-limits-red.json captured target exit 1. The bounded stage-runner fix preserves array entries and discloses invalid ones; T006-array-limits-green.meta.json records direct probe exit 0, frozen gate 5/5 exit 0, syntax/diff checks exit 0, post-fix source SHA e02b613.... This is a focused fix only: no proof that production acceptanceChain actually supplies an array, no post-fix official receipt or second OCR."
+    },
+    {
+      "finding_id": "F-a99590ddd5f1",
+      "path": "tests/contract/repository-inventory.test.mjs",
+      "line": 176,
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P2 frozen test/build-plan material owner",
+      "basis": "repository-inventory.test.mjs retains literal within_limit=false despite point-in-time baseline semantics. P2 build-code write set permitted only formal_test_lines JSON; test remains frozen. Future within-limit behavior is not proven."
+    },
+    {
+      "finding_id": "F-abb55219e4cd",
+      "path": "runtime/stage/stage-end-report.test.mjs",
+      "line": 10,
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P5 frozen test provenance/build-plan owner",
+      "basis": "Header comment states historic five/six groups while the current frozen module gate collects eight tests. Correcting the provenance comment requires frozen-test owner; P4 cannot rewrite it."
+    },
+    {
+      "finding_id": "F-c05bd41e4842",
+      "path": "runtime/stage/stage-end-report.mjs",
+      "line": 104,
+      "severity": "minor",
+      "disposition": "needs_human",
+      "owner": "P5/T007 report fact contract owner",
+      "basis": "stage-end-report.mjs supplies command/exit/output hard_requirements=true for applicable=false/null rows. This conflicts with the stated N/A+reason meaning; P5 fact shape/renderer needs owner review and a scoped negative, outside P4 T006."
+    }
+  ]
+}

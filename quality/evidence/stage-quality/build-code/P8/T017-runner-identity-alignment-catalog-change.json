@@ -1,0 +1,33 @@
+{
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "recorded_at": "2026-09-26T12:57:37.171938+00:00",
+  "old_revision": "2026-09-26.card04-seed.1",
+  "new_revision": "2026-09-26.card04-seed.2",
+  "old_sha256": "3bca19beb01a584756cec1d87f14fdcb55d8c258db3b9a404d28b7cc7eaab038",
+  "new_sha256": "e92a0fe02d514d2e5baff6943e0ebce313c20750ce02c6ed40ace9dbb0f0f9e7",
+  "old_ref": "quality/evidence/stage-quality/build-code/P8/T017-runner-identity-alignment-catalog-before.json",
+  "new_ref": "docs/quality/business-case-catalog.json",
+  "added_per_case": {
+    "CARD04-DECISION-LOG-CENSUS": {
+      "machine_command": "npx vitest run tests/contract/decision-log-census.test.mjs --reporter=json",
+      "registered_test_id_count": 6
+    },
+    "CARD04-ACCEPTANCE-MACHINE-CLASSES": {
+      "machine_command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs --reporter=json",
+      "registered_test_id_count": 28
+    },
+    "CARD04-DEFERRED-ACCEPTANCE-REGRESSION": {
+      "machine_command": "npx vitest run tests/deferred-acceptance-semantics.test.mjs --reporter=json",
+      "registered_test_id_count": 15
+    }
+  },
+  "preserved": [
+    "execution.command",
+    "execution.target",
+    "execution.runner_identity",
+    "execution.mode",
+    "execution.expected_test_identity",
+    "uncharted_legacy",
+    "evolution"
+  ]
+}

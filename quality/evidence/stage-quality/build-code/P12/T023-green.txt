@@ -1,0 +1,28 @@
+COMMAND=npx vitest run tests/contract/verify-code-business-handoff.test.mjs
+kind=command_checks
+task_id=workflowhub-thin-core-card-04-20260919
+task_card=T023
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=vitest/2.1.9 darwin-arm64 node-v24.14.0
+npm_config_offline=true
+npm_config_yes=false
+sha256 workflows/verify-code/SKILL.md=cb2ac0a1ce29e104440a2afe1ab7fe56fa3caa86944ce73753d0820fe869b114
+sha256 tests/contract/verify-code-business-handoff.test.mjs=d372df9472de6443983583a3e3b26a94acfccc52aac53e203722b5beb62ccebf
+recorded_at=2026-09-26T12:44:41.488101+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/verify-code-business-handoff.test.mjs (3 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  20:44:41
+   Duration  112ms (transform 10ms, setup 0ms, collect 6ms, tests 2ms, environment 0ms, prepare 27ms)
+stderr:
+
+EXIT=0

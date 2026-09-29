@@ -1,0 +1,1322 @@
+COMMAND=npx vitest run tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_TREE_BASELINE=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+UTC=2026-09-26T12:16:25.256337+00:00
+TASK_ID=workflowhub-thin-core-card-04-20260919
+PHASE_ID=P7
+TASK_IN_PHASE=T016
+STDOUT_BEGIN
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 5ms
+ ❯ tests/contract/census-upstream-authoring.test.mjs (9 tests | 5 failed) 23ms
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1a 模板满足普查三节契约：errors 里没有任何 section 缺失诊断 6ms
+     → 根因：模板 skills/decision-log/templates/decision-log-template.md 实测 status="present" 但 entries=0、source_units=0、source_counts={u:0,atoms:0,v:0,r:0}、errors=5 条（3 条以 " section" 结尾的三节缺失诊断 + 2 条 U/V、R 行缺失诊断）；按此模板正确执行的每一张新卡都会继承这 5 条错误；三节缺失诊断必须清空（实测 3 条）: expected [ …(3) ] to deeply equal []
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1b 模板携带普查可识别的行形态：V-001（说话人=用户）/ R-001→D-nnn / ### U-001 1ms
+     → 根因：模板 skills/decision-log/templates/decision-log-template.md 实测 status="present" 但 entries=0、source_units=0、source_counts={u:0,atoms:0,v:0,r:0}、errors=5 条（3 条以 " section" 结尾的三节缺失诊断 + 2 条 U/V、R 行缺失诊断）；按此模板正确执行的每一张新卡都会继承这 5 条错误；## 逐字声明层（verbatim）内必须有一行 | V-001 | 用户 | … | … |（说话人列必须精确是「用户」，否则被 stage-content-contracts.mjs 的 vRows 过滤掉）: expected '# Decision Log\n\n## 任务身份\n\n在首次正式需求提…' to match /^\| V-001 \| 用户 \|/m
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2a skills/decision-log/SKILL.md 写明「原始需求索引」 5ms
+     → 写入契约缺一半：decision-log SKILL 文本没有要求 `## 原始需求索引`，agent 落笔时无从知道要写它: expected '---\nname: decision-log\ndescription:…' to contain '原始需求索引'
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2b skills/decision-log/SKILL.md 写明「逐字声明层（verbatim）」 5ms
+     → 写入契约缺一半：decision-log SKILL 文本没有要求 `## 逐字声明层（verbatim）`，agent 落笔时无从知道要写它: expected '---\nname: decision-log\ndescription:…' to contain '逐字声明层（verbatim）'
+   × 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2c workflows/make-decision/SKILL.md 写明「需求变更记录」 1ms
+     → 写入契约缺一半：make-decision SKILL 文本没有要求 `## 需求变更记录`，agent 完成声明前无从核对: expected '---\nname: make-decision\ndescription…' to contain '需求变更记录'
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 8 passed (13)
+   Start at  20:16:24
+   Duration  407ms (transform 114ms, setup 0ms, collect 235ms, tests 29ms, environment 0ms, prepare 91ms)
+STDOUT_END
+STDERR_BEGIN
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/census-upstream-authoring.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1a 模板满足普查三节契约：errors 里没有任何 section 缺失诊断
+AssertionError: 根因：模板 skills/decision-log/templates/decision-log-template.md 实测 status="present" 但 entries=0、source_units=0、source_counts={u:0,atoms:0,v:0,r:0}、errors=5 条（3 条以 " section" 结尾的三节缺失诊断 + 2 条 U/V、R 行缺失诊断）；按此模板正确执行的每一张新卡都会继承这 5 条错误；三节缺失诊断必须清空（实测 3 条）: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "decision-log.md has no 需求变更记录 section",
++   "decision-log.md has no 原始需求索引 section",
++   "decision-log.md has no 逐字声明层（verbatim） section",
++ ]
+
+ ❯ tests/contract/census-upstream-authoring.test.mjs:83:7
+     81|       missingSections,
+     82|       `${TEMPLATE_MISSING_TRIO}；三节缺失诊断必须清空（实测 ${missingS…
+     83|     ).toEqual([]);
+       |       ^
+     84|   });
+     85| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/contract/census-upstream-authoring.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T1b 模板携带普查可识别的行形态：V-001（说话人=用户）/ R-001→D-nnn / ### U-001
+AssertionError: 根因：模板 skills/decision-log/templates/decision-log-template.md 实测 status="present" 但 entries=0、source_units=0、source_counts={u:0,atoms:0,v:0,r:0}、errors=5 条（3 条以 " section" 结尾的三节缺失诊断 + 2 条 U/V、R 行缺失诊断）；按此模板正确执行的每一张新卡都会继承这 5 条错误；## 逐字声明层（verbatim）内必须有一行 | V-001 | 用户 | … | … |（说话人列必须精确是「用户」，否则被 stage-content-contracts.mjs 的 vRows 过滤掉）: expected '# Decision Log\n\n## 任务身份\n\n在首次正式需求提…' to match /^\| V-001 \| 用户 \|/m
+
+- Expected: 
+/^\| V-001 \| 用户 \|/m
+
++ Received: 
+"# Decision Log
+
+## 任务身份
+
+在首次正式需求提问前填写一次；固定标签只能出现一条。
+
+- **任务类型**：<规划任务|普通任务>
+
+`规划任务`只问方向层问题；`普通任务`保持既有提问与产物粒度。缺失、重复、冲突或其他值由
+`readTaskTypeFromDecisionLog(markdown)` 返回 `unknown`，不得猜测。
+
+## 原始需求
+
+| source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
+| --- | --- | --- | --- |
+| R-001 |  |  |  |
+
+## 原始声明层
+
+原始用户声明、调研原文和已确认事实只在此处保留可回读引用；后续 ADR 只引用它们，
+不得用摘要替换原文，也不得复制成第二份方向正文。
+
+## 三级追溯链
+
+`原始用户故事/初始需求 → 原始需求或调研 → ADR 决定`。每个 ADR 都必须能沿此链回读。
+
+### 需求框架（先选一类，再逐步回填）
+
+- **framework**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
+- **选择理由**：
+- **回填规则**：调研、Talk、审查、Grill 只能扩展已有节点；混合任务以 `functional` 为外层，在受影响节点下挂 `research` 子树。
+
+| node_id | 节点 | status | evidence_status | evidence_owner | next_review_trigger |
+| --- | --- | --- | --- | --- | --- |
+| N-001 | 背景 / 问题 | open | pending |  |  |
+| N-002 | 目标 / 论断 | open | pending |  |  |
+| N-003 | 方案 / 证据 / 裁决 | open | pending |  |  |
+ | N-004 | 验收 / 扩展 | open | pending |  |  |
+
+### 唯一 OI 大纲（current authority）
+
+大纲只存在于本份 `decision-log.md`；不得另建需求账本、状态机或第五份材料。
+在调研前先建立下表，之后只在这里回填 OI。每个 framework node 和固定类别
+必须有 OI 引用，或明确写 `empty: true` 与具体理由；不能省略、重复、用类别
+改名掩盖缺口，也不能只写 `none`。
+
+#### Framework nodes
+
+| node_id | framework_node | oi_ids | empty | reason |
+| --- | --- | --- | --- | --- |
+| N-background | background |  | false |  |
+| N-problem | problem |  | false |  |
+| N-goal | goal |  | false |  |
+| N-solution | solution |  | false |  |
+| N-acceptance | acceptance |  | false |  |
+| N-extension | extension |  | false |  |
+
+#### Fixed categories
+
+| category | oi_ids | empty | reason |
+| --- | --- | --- | --- |
+| complete_user_flow |  | false |  |
+| page_scope |  | false |  |
+| data_state |  | false |  |
+| success_failure_boundary |  | false |  |
+| non_goals |  | false |  |
+| deferred |  | false |  |
+
+#### OI records and consumers
+
+每个 OI 是一个可独立处置的收敛项，字段如下；`status` 只能是
+`open|confirmed|deferred|not_applicable`。终态才填写终态字段，核心确认项还要
+绑定分组和现有交互凭证：
+
+```yaml
+task_id: <current task>
+outline_version: <current version>
+oi_id: OI-001
+category: complete_user_flow
+source: R-001 / fact-ref
+question: <one plain-language unknown>
+status: open
+selected_disposition: <only for terminal status>
+impact_dimensions: [goal|scope|acceptance|ordinary_detail]
+requires_user_decision: true|false
+visible_group_id: <existing approve-decision group>
+batch_id: <optional alias for the same visible group>
+# 核心 OI 的当前确认通过本文件的直接处置字段与既有 confirmation fact 绑定。
+# 不创建或消费 interaction aggregate；旧记录里的 interaction_ref / interaction_hash
+# 只读保留，不再是当前凭证来源或完成依赖。
+```
+
+方向审查只消费当前 `convergence_outline` questions-only 投影（保留全部 OI
+ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状态统一为
+`open`，遮蔽答案、处置、依据、结论和拟议方案）。细节审查逐条消费当前 OI
+终态字段；既有 `approve-decision` 在同一次整体确认中按主题展示
+`visible_group_id|batch_id`、选项、后果和风险，并记录所选处置与交互凭证。三者
+职责不可互相替代，也不增加新的正常确认点。
+
+## 发散候选与可证伪大纲
+
+模糊需求在用户收敛前填写。表格是给用户读的形态；JSON 只把同一份表格与来源绑定给
+现有 reader，不创建候选库或完成门。
+
+| 角度 ID | 角度 | 来源 | 强度 |
+| --- | --- | --- | --- |
+| A-001 |  | internal/research source | low/medium/high |
+| A-002 |  | internal/research source | low/medium/high |
+
+| 候选 ID | 候选 | origin | angle/source |
+| --- | --- | --- | --- |
+| U-001 |  | user | 原话 source ID |
+| N-001 |  | internal/research | A-001 |
+
+| 假设 ID | 大纲版本 | 假设 | 状态 |
+| --- | --- | --- | --- |
+| H-001 | r0 |  | supported/falsified/unresolved |
+
+```json
+{
+  \"schema_version\": \"workflowhub-decision-divergence.v1\",
+  \"oi_outline_version\": \"<current outline version>\",
+  \"intake\": {
+    \"raw_requirement\": {\"text\":\"<user wording>\",\"attribution\":\"user_verbatim\",\"source_id\":\"U-001\"},
+    \"pain_point\": {\"text\":\"<user wording>\",\"attribution\":\"user_verbatim\",\"source_id\":\"U-002\"}
+  },
+  \"angles\": [
+    {\"angle_id\":\"A-001\",\"plain_language_angle\":\"\",\"source\":\"internal analysis\",\"strength\":\"medium\"},
+    {\"angle_id\":\"A-002\",\"plain_language_angle\":\"\",\"source\":\"research R-001\",\"strength\":\"high\"}
+  ],
+  \"original_candidates\": [
+    {\"candidate_id\":\"U-001\",\"text\":\"\",\"source_id\":\"U-001\",\"semantic_basis\":{\"problem_axis\":\"\",\"mechanism\":\"\",\"target\":\"\",\"outcome\":\"\"}}
+  ],
+  \"candidates\": [
+    {\"candidate_id\":\"U-001\",\"text\":\"\",\"origin\":\"user\",\"source_ids\":[\"U-001\"],\"strength\":\"direct\",\"semantic_basis\":{\"problem_axis\":\"\",\"mechanism\":\"\",\"target\":\"\",\"outcome\":\"\"}},
+    {\"candidate_id\":\"N-001\",\"text\":\"\",\"origin\":\"internal\",\"angle_id\":\"A-001\",\"source_ids\":[\"A-001\"],\"novelty_against\":[\"U-001\"],\"changed_dimensions\":[\"mechanism\"],\"strength\":\"medium\",\"semantic_basis\":{\"problem_axis\":\"\",\"mechanism\":\"\",\"target\":\"\",\"outcome\":\"\"}}
+  ],
+  \"outlines\": [
+    {\"outline_version\":\"r0\",\"status\":\"active\",\"hypotheses\":[{\"hypothesis_id\":\"H-001\",\"statement\":\"\",\"status\":\"unresolved\",\"falsifier\":\"\",\"evidence_refs\":[\"R-001\"]}]}
+  ]
+}
+```
+
+## 目标
+
+- 目标：
+
+## 成功/失败边界
+
+- 成功边界：
+- 失败边界：
+
+## 范围
+
+- 当前范围：
+- 用户流程/结果只记索引和验收影响，细节进入 spec：
+
+## 非目标
+
+-
+
+## 决定
+
+决定区按需求框架的方案或裁决模块使用 `### <module>` 分组；每组内按
+`需求/question → facts/constraints → option → decision → feature/consumer → acceptance`
+链序排列。跨模块依赖必须写 `D-ID + derived_from`，根决定写
+`derived_from: []`。以下四个字段只属于文本层链记录，不改
+`decision-entry.v1`：
+
+```text
+module: <module-name>
+requirement_ids: [R-001]
+derived_from: [D-001]
+artifacts: [spec.md#FR-001]
+```
+
+节点缺证据时保留 `status: open|deferred`、`evidence_status: pending`、
+`evidence_owner` 和 `next_review_trigger`，不得静默写成 confirmed。
+
+每个决定都使用唯一的 `decision-entry.v1` 字段；每个字段只写决策所需的
+一句话或一个来源引用，不复制 spec：
+
+```text
+### ADR-001
+- **source**：[填写：原始声明或调研引用]
+- **decision**：[填写：已确认的选择]
+- **rationale**：[填写：事实、约束和取舍]
+- **consequence**：[填写：影响、风险和后果]
+- **supersedes**：[填写：被替代 ADR / N/A]
+- **原始声明层**：[填写：R-/事实锚点，不复制原文]
+- **三级追溯**：[填写：story/requirement → research → ADR]
+- **三档结论**：`confirmed` / `deferred` / `rejected`
+- **approval_binding**：[填写：真实用户确认或 N/A]
+- **owner/next_action**：[填写：延期或未决的 owner 与触发条件]
+module:
+requirement_ids: []
+derived_from: []
+artifacts: []
+```
+
+## 动态 Talk 批次
+
+| batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
+| --- | --- | --- | --- | --- | --- |
+| T-001 |  |  |  |  |  |
+
+## 调研
+
+| research_id/source | 调研重点 | 关键事实 | 处理状态 | 关联 D |
+| --- | --- | --- | --- | --- |
+| F-001 |  |  |  |  |
+
+## 调研候选交付
+
+只有 `research-report.v1` 明确声明候选时填写。每条都是用户可见的大白话；全文只按 ref
+按需展开，不复制到主文。没有用户可见候选时，报告仍须写 `candidates: []`，本节说明不适用。
+
+完整报告：`quality/evidence/research/<sha256>.json`
+
+| 候选 ID | 大白话摘要 | 推荐/不推荐 | 理由 | 出处与全文 |
+| --- | --- | --- | --- | --- |
+| C-001 |  | recommended/not_recommended |  | source-ref；完整报告 ref |
+
+```json
+{
+  \"schema_version\": \"workflowhub-research-candidate-delivery.v1\",
+  \"report_ref\": \"quality/evidence/research/<sha256>.json\",
+  \"report_sha256\": \"<sha256>\",
+  \"candidates\": [
+    {
+      \"candidate_id\": \"C-001\",
+      \"plain_language_summary\": \"\",
+      \"source_refs\": [\"source-ref\"],
+      \"evidence_refs\": [\"E-001\"],
+      \"recommendation\": \"recommended\",
+      \"recommendation_reason\": \"\"
+    }
+  ]
+}
+```
+
+## grill
+
+| grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
+| --- | --- | --- | --- | --- |
+| G-001 |  |  |  |  |
+
+## 审查处置
+
+| finding_id | 原始事实/来源 | 后果 | status | next_action/evidence_ref | owner/consumer/retain_or_delete |
+| --- | --- | --- | --- | --- | --- |
+| FND-001 |  |  | fixed/rejected_invalid/accepted_risk/needs_human |  |  |
+
+## 最终确认
+
+- 状态：accepted/pending/unknown
+- 用户原文与 host-visible 绑定：
+- 未确认内容：
+
+## 拒绝方案
+
+| 选项 | 拒绝理由 | 关联 D |
+| --- | --- | --- |
+|  |  |  |
+
+## 风险与延期交接
+
+| risk/deferred_id | 风险或延期内容 | 触发/后果 | 处理阶段/owner |
+| --- | --- | --- | --- |
+| RISK-001 |  |  |  |
+
+### 质量边界
+
+- 质量事实：
+- 推进资格：
+- 完成判据：
+- 不可逆授权边界：
+
+## 未决项
+
+| item_id | 未决内容 | 原因 | 谁在何时解决 |
+| --- | --- | --- | --- |
+| OPEN-001 |  |  |  |
+
+## Supersedes
+
+## Append-only 更正
+
+只追加更正记录；不得重写已确认 ADR。每条更正引用被替代 ADR、原因和新的 ADR。
+
+## 文档结果
+
+- CONTEXT.md：changed/no-change，原因和文件引用：
+- ADR：created/not-needed，原因和文件引用：
+- ADR criteria：hard to reverse / surprising without context / genuine trade-off：
+- 术语/ADR 冲突及处理：
+- 不复制 spec 的边界：
+
+### Exit checks
+
+- 上下文一致：
+- owner/接口一致：
+- 失败语义明确：
+- 范围与延期明确：
+"
+
+ ❯ tests/contract/census-upstream-authoring.test.mjs:91:7
+     89|       `${TEMPLATE_MISSING_TRIO}；## 逐字声明层（verbatim）内必须有一行…
+     90|         + "（说话人列必须精确是「用户」，否则被 stage-content-contract…
+     91|     ).toMatch(/^\| V-001 \| 用户 \|/m);
+       |       ^
+     92|     expect(
+     93|       template,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/contract/census-upstream-authoring.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2a skills/decision-log/SKILL.md 写明「原始需求索引」
+AssertionError: 写入契约缺一半：decision-log SKILL 文本没有要求 `## 原始需求索引`，agent 落笔时无从知道要写它: expected '---\nname: decision-log\ndescription:…' to contain '原始需求索引'
+
+- Expected
++ Received
+
+- 原始需求索引
++ ---
++ name: decision-log
++ description: Convert supplied decision material into a structured downstream record.
++ ---
++
++ # Decision Log
++
++ ## Post-cohort authoring contract
++
++ For post-cohort tasks, write one append-only ADR authority in `decision-log.md`:
++ the raw-declaration layer, one current OI authority, a three-level trace
++ `story/requirement → source/research → ADR`, and the terminal conclusion
++ `confirmed|deferred|rejected`. Every correction appends a new ADR and a
++ `supersedes` reference; it never rewrites an accepted source or decision.
++ `build-plan` consumes only confirmed bindings. This is a material convention,
++ not a new store, stage, or confirmation gate.
++
++ Receive original requirement, confirmed direction, constraints, rejected
++ alternatives, risks, and a controlled TaskHandle record callback from
++ make-decision. Do not accept or derive any filesystem root or task path.
++
++ Produce the human-readable `decision-log.md` from
++ [`templates/decision-log-template.md`](./templates/decision-log-template.md).
++ The main document and every accepted omission use the same
++ `decision-entry.v1` shape; there is no shorter appendix-only decision shape.
++ Return the content to the parent, which records it through TaskHandle/TaskKernel.
++ Missing load-bearing reasoning is reported rather than invented.
++
++ ## Task identity declaration
++
++ The current `decision-log.md` carries the task type in its existing material
++ under one `## 任务身份` section. Before the first formal requirement question,
++ the parent records exactly one `任务类型` declaration with the controlled value
++ `规划任务` or `普通任务`, then reads it back with
++ `readTaskTypeFromDecisionLog(markdown)`. Missing, duplicate, conflicting, or
++ unknown declarations return `unknown`; no caller may infer a type from a
++ request, path, hash, or old record. A type change invalidates consumption of
++ old-type questions and artifacts until they are explicitly re-treated under
++ the new type; the current decision keeps the old question reference, reason,
++ and new content location. This is a material convention, not a new schema,
++ field, state machine, or control plane.
++
++ ## Minimum content contract
++
++ ### Requirement framework presets
++
++ At the start of make-decision, choose and record one requirement framework
++ before research, Talk, review, or Grill expands the log. Use the smallest
++ framework that still explains the task:
++
++ - `functional`: `背景 → 问题 → 目标 → 方案 → 验收 → 扩展` for feature or workflow changes.
++ - `research`: `问题 → 论断 → 证据 → 裁决` for research-led or evidence-led decisions.
++
++ The selected preset is a skeleton, not a second source of truth. Each later
++ research result, Talk answer, review finding, and Grill conclusion fills an
++ existing node or adds a clearly named child node; it must not create a parallel
++ requirement list. If a task genuinely mixes both kinds, record `functional`
++ as the outer framework and attach a `research` child under the affected
++ question/solution node. Each node records `status: confirmed|open|deferred|not_applicable`
++ and, when evidence is still missing, the declarative marker
++ `evidence_status: pending` plus `evidence_owner` and `next_review_trigger`.
++ Never turn a pending marker into a confirmed fact by omission.
++
++ ### Divergence and falsifiable outline
++
++ For a vague requirement, write one `## 发散候选与可证伪大纲` section in this same
++ decision-log before user convergence. It has user-visible tables for at least
++ two angles, every original and generated candidate, and every hypothesis. Its
++ `workflowhub-decision-divergence.v1` JSON binding preserves only what the
++ reader needs: two user-verbatim intake fields with source IDs; each original
++ candidate and its four-part semantic basis; each candidate's controlled origin
++ (`user|internal|research`), angle, source IDs, novelty comparison and changed
++ semantic dimensions; and 3–5 evidence-bound/falsifiable hypotheses per outline
++ version. Every original candidate must appear again as a `user` candidate with
++ the same source and semantic basis. A non-user candidate names its generating
++ angle and the original candidates it differs from; a renamed string is not a
++ new direction.
++
++ When more than half of an outline version's hypotheses are falsified, mark it
++ `abandoned`, record `superseded_by`, and write one active replacement with
++ `redraw_of` and the falsification IDs that caused it. Bind the active version
++ to the current OI outline version. This is a pure read-side diagnostic over the
++ one decision-log, not a candidate store, completion gate, or replacement for
++ real user discussion and research.
++
++ ### One current OI authority
++
++ Before research or Talk expands the log, create exactly one current OI outline
++ inside this `decision-log.md`. The outline is the only authority for open
++ questions and their disposition; it is not a second ledger, material, store,
++ or runtime state machine. The selected `functional` framework always has these
++ six nodes: `background`, `problem`, `goal`, `solution`, `acceptance`, and
++ `extension`. The outline also enumerates these fixed fallback categories:
++ `complete_user_flow`, `page_scope`, `data_state`, `success_failure_boundary`,
++ `non_goals`, and `deferred`.
++
++ Every node and category must point to one or more OI IDs, or explicitly carry
++ `empty: true` with a concrete, non-placeholder `reason` explaining why it is
++ empty now. A bare `none`, an omitted row, a duplicate authority, or a category
++ renamed to hide the gap is invalid. A legal OI record keeps the exact fields
++ `task_id`, `outline_version`, `oi_id`, `category`, `source`, `question`, and
++ `status`; status is one of `open`, `confirmed`, `deferred`, or
++ `not_applicable`. Terminal records additionally keep
++ `selected_disposition`, `impact_dimensions`, and
++ `requires_user_decision`. User-facing grouping keeps `visible_group_id` or
++ `batch_id`. Current confirmation proof binds the direct decision-log OI fields
++ to the existing confirmation fact; it does not create or consume an interaction
++ aggregate. Legacy records that still carry `interaction_ref` /
++ `interaction_hash` remain readable historical material only and are no longer
++ a proof source or completion dependency.
++
++ The direction reviewer consumes only the current `convergence_outline`
++ questions-only projection: all current IDs, categories, questions/known
++ unknowns, sources, task and outline identity are retained, the displayed
++ status is `open`, and terminal answers, dispositions, conclusions, evidence,
++ and proposed solutions are removed. The detail reviewer consumes the current
++ OI terminal records and checks each OI; it cannot substitute for direction
++ coverage. Existing `approve-decision` consumes the grouped plain-language
++ options and writes the selected disposition into the current decision-log with
++ its existing confirmation fact. These are three responsibilities over one OI
++ source, not three authorities and not an extra confirmation point. A changed
++ `outline_version` invalidates older consumer results.
++
++ ### Decision chain and module grouping
++
++ Organize the Decisions section by the framework's solution or裁决 modules,
++ using one `### <module>` heading per module and keeping decisions in causal
++ chain order: requirement/question → facts/constraints → option → decision →
++ feature/consumer → acceptance. A decision that depends on another module
++ names the earlier `D-ID` and writes `derived_from: [D-ID]`; use `derived_from: []`
++ for a root decision. Every decision entry also records the text-only chain
++ fields `module`, `requirement_ids`, and `artifacts`. These are documentation
++ fields only: do not add them to `decision-entry.v1` or make them a runtime gate.
++
++ When a node is not yet supported, keep the node and its pending evidence marker
++ visible in the log. A later entry may close it by reference, but must not erase
++ the earlier open fact.
++
++ The executable warning rules live in the repository tool
++ `tools/cli/check-decision-log-chain.mjs`, not inside the portable skill bundle;
++ `run-checks.mjs` is its sole current aggregator consumer. The bundle carries
++ this normative text contract and the template, while the repository tool and
++ its contract test are registered and hashed separately in the repository
++ inventory. This separation keeps the skill portable without creating a second
++ checker or runtime schema.
++
++ Keep the log as a decision index: one compact row per original requirement,
++ research point, Talk/Grill conclusion, review finding, and load-bearing decision.
++ Do not copy the spec, page flow, API fields, task steps, or test procedure into
++ the log; link them by ID and source instead.
++
++ The document must contain `原始需求`, `调研重点`, `Talk`, `Grill`, `D*` reasoning,
++ success/failure boundaries, review disposition, risks, deferred handoff, and
++ stage-end plain-language summaries. Each source row records `source_id`, exact
++ source reference or an explicit missing-reference fact, and its consequence.
++
++ When a completed research report declares candidates, add exactly one
++ `## 调研候选交付` section in the same decision-log. It is a user-visible table
++ with candidate ID, plain-language summary, recommendation or rejection,
++ reason, source refs, and the content-addressed full-report ref. Immediately
++ after the table, place the `workflowhub-research-candidate-delivery.v1` JSON
++ binding in a `json` fence. Its `report_ref`, `report_sha256`, and each
++ candidate's `candidate_id`, summary, source refs, evidence refs,
++ recommendation, and reason must match the report exactly. This is one readable
++ material and one reader contract, not a new receipt, store, gate, or authority.
++ Use an empty `candidates` list only when the report explicitly says that no
++ user-visible alternative exists; unavailable research remains unavailable.
++
++ Each `decision-entry.v1` must keep the following compact fields: question and
++ final option, recommendation, plain-language meaning, decision, source type
++ and exact excerpt, `Approval binding`, 事实与约束, `Logic`, choice
++ reason, impact, consequences and risks, rejected alternatives, unresolved
++ items, and `Supersedes`. The coverage audit must show every original source
++ exactly once, or use `decision-omission-acceptance.v1`; missing reasoning stays
++ unknown and is shown to the user.
++
++ When a review finding is handed off, keep its disposition as a compact derived
++ fact with `finding_id`, `original_fact`, `source`, `consequence`, `status`,
++ `next_action`, `evidence_ref`, `owner`, `consumer`, and `retain_or_delete`.
++ `status` is `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`.
++ This preserves lineage without making a second ledger or a hidden progression
++ gate. 这套最低结构不是 spec 副本；不要复制 spec 的
++ 页面、接口、任务和测试细节。`后果和风险`必须保留在每个 D* 条目中。
++
++ Talk rows must also preserve the queue change or explicitly say `not supplied`.
++ The log must index the boundary between `质量事实`、`推进资格`、`完成判据` and
++ `不可逆授权边界`; these are separate facts, not a gate or a second ledger.
++
++ Record every load-bearing decision separately. Each entry must state:
++
++ - **Question and final option**: the plain-language question and the option
++   actually selected.
++ - **Recommendation**: whether the selected option was recommended and why.
++ - **Plain-language meaning**: what the option means without internal IDs or
++   workflow terms.
++ - **Decision**: the exact choice that now governs downstream work.
++ - **Source**: a specific original requirement, actual user answer, research
++   result, code fact, grill result, or independent-review finding. Preserve the
++   supplied stable source reference and one exact answer excerpt. If no reference
++   was supplied, say it is missing; do not write only “confirmed” or “from discussion”.
++ - **Facts and constraints**: the evidence-bearing premises used.
++ - **Logic**: `source fact -> constraint -> chosen option -> expected result`.
++ - **Choice and reason**: why this option won.
++ - **Impact**: affected scope, interface, acceptance, data, security, or
++   operations.
++ - **Consequences and risks**: immediate trade-offs and future cost.
++ - **Rejected alternatives**: each rejected option and its rejection reason.
++ - **Unresolved items**: what remains undecided, why, and who must resolve it.
++ - **Supersedes**: the exact earlier decision replaced, or `none`.
++ - **Approval binding**: approval status plus the supplied host-visible
++   reference and hash. The hash is delivery binding, not proof of human identity.
++
++ Preserve actual user wording when it defines an interface or boundary. If a
++ later answer changes an earlier decision, retain both entries and make the new
++ entry's `supersedes` relationship explicit; never rewrite history as if the old
++ decision did not exist.
++
++ Before final confirmation, run the automatic coverage audit over every original
++ requirement, actual user answer, adopted grill/review choice, and load-bearing
++ decision. Each source item must map exactly once to the main document or to one
++ `decision-omission-acceptance.v1` appendix. Show every missing item to the user
++ and wait for a real choice before continuing. A review risk record cannot stand
++ in for omission acceptance.
++
++ Publish a `decision-correction-appendix.v1` for D1-D7. It points to the original
++ decision ref/hash, uses the accepted literal correction text, and sets
++ `does_not_rewrite_upstream=true`; never edit the old bytes.
++
++ The documentation and exit-check section must record the supplied
++ `grill-with-docs` result: `CONTEXT.md` changed/no-change with reason and file
++ reference; ADR created/not-needed with reason and file reference; each of the
++ three ADR criteria — hard to reverse, surprising without context, and a genuine
++ trade-off; terminology/ADR conflicts and resolution; and all four
++ objective exit checks. Missing facts stay missing rather than being inferred.
++
++ Also return a host-visible summary that does not copy the full log. For each
++ load-bearing decision, state the decision, source type, plain-language reason,
++ affected scope, consequence, and main risk. End with explicit non-goals,
++ unresolved items, and the documentation outcome. Keep internal IDs, paths,
++ hashes, receipt/attempt refs, and raw evidence out of this summary.
++
+
+ ❯ tests/contract/census-upstream-authoring.test.mjs:127:7
+    125|       read(DECISION_LOG_SKILL_PATH),
+    126|       "写入契约缺一半：decision-log SKILL 文本没有要求 `## 原始需求索…
+    127|     ).toContain("原始需求索引");
+       |       ^
+    128|   });
+    129| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/contract/census-upstream-authoring.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2b skills/decision-log/SKILL.md 写明「逐字声明层（verbatim）」
+AssertionError: 写入契约缺一半：decision-log SKILL 文本没有要求 `## 逐字声明层（verbatim）`，agent 落笔时无从知道要写它: expected '---\nname: decision-log\ndescription:…' to contain '逐字声明层（verbatim）'
+
+- Expected
++ Received
+
+- 逐字声明层（verbatim）
++ ---
++ name: decision-log
++ description: Convert supplied decision material into a structured downstream record.
++ ---
++
++ # Decision Log
++
++ ## Post-cohort authoring contract
++
++ For post-cohort tasks, write one append-only ADR authority in `decision-log.md`:
++ the raw-declaration layer, one current OI authority, a three-level trace
++ `story/requirement → source/research → ADR`, and the terminal conclusion
++ `confirmed|deferred|rejected`. Every correction appends a new ADR and a
++ `supersedes` reference; it never rewrites an accepted source or decision.
++ `build-plan` consumes only confirmed bindings. This is a material convention,
++ not a new store, stage, or confirmation gate.
++
++ Receive original requirement, confirmed direction, constraints, rejected
++ alternatives, risks, and a controlled TaskHandle record callback from
++ make-decision. Do not accept or derive any filesystem root or task path.
++
++ Produce the human-readable `decision-log.md` from
++ [`templates/decision-log-template.md`](./templates/decision-log-template.md).
++ The main document and every accepted omission use the same
++ `decision-entry.v1` shape; there is no shorter appendix-only decision shape.
++ Return the content to the parent, which records it through TaskHandle/TaskKernel.
++ Missing load-bearing reasoning is reported rather than invented.
++
++ ## Task identity declaration
++
++ The current `decision-log.md` carries the task type in its existing material
++ under one `## 任务身份` section. Before the first formal requirement question,
++ the parent records exactly one `任务类型` declaration with the controlled value
++ `规划任务` or `普通任务`, then reads it back with
++ `readTaskTypeFromDecisionLog(markdown)`. Missing, duplicate, conflicting, or
++ unknown declarations return `unknown`; no caller may infer a type from a
++ request, path, hash, or old record. A type change invalidates consumption of
++ old-type questions and artifacts until they are explicitly re-treated under
++ the new type; the current decision keeps the old question reference, reason,
++ and new content location. This is a material convention, not a new schema,
++ field, state machine, or control plane.
++
++ ## Minimum content contract
++
++ ### Requirement framework presets
++
++ At the start of make-decision, choose and record one requirement framework
++ before research, Talk, review, or Grill expands the log. Use the smallest
++ framework that still explains the task:
++
++ - `functional`: `背景 → 问题 → 目标 → 方案 → 验收 → 扩展` for feature or workflow changes.
++ - `research`: `问题 → 论断 → 证据 → 裁决` for research-led or evidence-led decisions.
++
++ The selected preset is a skeleton, not a second source of truth. Each later
++ research result, Talk answer, review finding, and Grill conclusion fills an
++ existing node or adds a clearly named child node; it must not create a parallel
++ requirement list. If a task genuinely mixes both kinds, record `functional`
++ as the outer framework and attach a `research` child under the affected
++ question/solution node. Each node records `status: confirmed|open|deferred|not_applicable`
++ and, when evidence is still missing, the declarative marker
++ `evidence_status: pending` plus `evidence_owner` and `next_review_trigger`.
++ Never turn a pending marker into a confirmed fact by omission.
++
++ ### Divergence and falsifiable outline
++
++ For a vague requirement, write one `## 发散候选与可证伪大纲` section in this same
++ decision-log before user convergence. It has user-visible tables for at least
++ two angles, every original and generated candidate, and every hypothesis. Its
++ `workflowhub-decision-divergence.v1` JSON binding preserves only what the
++ reader needs: two user-verbatim intake fields with source IDs; each original
++ candidate and its four-part semantic basis; each candidate's controlled origin
++ (`user|internal|research`), angle, source IDs, novelty comparison and changed
++ semantic dimensions; and 3–5 evidence-bound/falsifiable hypotheses per outline
++ version. Every original candidate must appear again as a `user` candidate with
++ the same source and semantic basis. A non-user candidate names its generating
++ angle and the original candidates it differs from; a renamed string is not a
++ new direction.
++
++ When more than half of an outline version's hypotheses are falsified, mark it
++ `abandoned`, record `superseded_by`, and write one active replacement with
++ `redraw_of` and the falsification IDs that caused it. Bind the active version
++ to the current OI outline version. This is a pure read-side diagnostic over the
++ one decision-log, not a candidate store, completion gate, or replacement for
++ real user discussion and research.
++
++ ### One current OI authority
++
++ Before research or Talk expands the log, create exactly one current OI outline
++ inside this `decision-log.md`. The outline is the only authority for open
++ questions and their disposition; it is not a second ledger, material, store,
++ or runtime state machine. The selected `functional` framework always has these
++ six nodes: `background`, `problem`, `goal`, `solution`, `acceptance`, and
++ `extension`. The outline also enumerates these fixed fallback categories:
++ `complete_user_flow`, `page_scope`, `data_state`, `success_failure_boundary`,
++ `non_goals`, and `deferred`.
++
++ Every node and category must point to one or more OI IDs, or explicitly carry
++ `empty: true` with a concrete, non-placeholder `reason` explaining why it is
++ empty now. A bare `none`, an omitted row, a duplicate authority, or a category
++ renamed to hide the gap is invalid. A legal OI record keeps the exact fields
++ `task_id`, `outline_version`, `oi_id`, `category`, `source`, `question`, and
++ `status`; status is one of `open`, `confirmed`, `deferred`, or
++ `not_applicable`. Terminal records additionally keep
++ `selected_disposition`, `impact_dimensions`, and
++ `requires_user_decision`. User-facing grouping keeps `visible_group_id` or
++ `batch_id`. Current confirmation proof binds the direct decision-log OI fields
++ to the existing confirmation fact; it does not create or consume an interaction
++ aggregate. Legacy records that still carry `interaction_ref` /
++ `interaction_hash` remain readable historical material only and are no longer
++ a proof source or completion dependency.
++
++ The direction reviewer consumes only the current `convergence_outline`
++ questions-only projection: all current IDs, categories, questions/known
++ unknowns, sources, task and outline identity are retained, the displayed
++ status is `open`, and terminal answers, dispositions, conclusions, evidence,
++ and proposed solutions are removed. The detail reviewer consumes the current
++ OI terminal records and checks each OI; it cannot substitute for direction
++ coverage. Existing `approve-decision` consumes the grouped plain-language
++ options and writes the selected disposition into the current decision-log with
++ its existing confirmation fact. These are three responsibilities over one OI
++ source, not three authorities and not an extra confirmation point. A changed
++ `outline_version` invalidates older consumer results.
++
++ ### Decision chain and module grouping
++
++ Organize the Decisions section by the framework's solution or裁决 modules,
++ using one `### <module>` heading per module and keeping decisions in causal
++ chain order: requirement/question → facts/constraints → option → decision →
++ feature/consumer → acceptance. A decision that depends on another module
++ names the earlier `D-ID` and writes `derived_from: [D-ID]`; use `derived_from: []`
++ for a root decision. Every decision entry also records the text-only chain
++ fields `module`, `requirement_ids`, and `artifacts`. These are documentation
++ fields only: do not add them to `decision-entry.v1` or make them a runtime gate.
++
++ When a node is not yet supported, keep the node and its pending evidence marker
++ visible in the log. A later entry may close it by reference, but must not erase
++ the earlier open fact.
++
++ The executable warning rules live in the repository tool
++ `tools/cli/check-decision-log-chain.mjs`, not inside the portable skill bundle;
++ `run-checks.mjs` is its sole current aggregator consumer. The bundle carries
++ this normative text contract and the template, while the repository tool and
++ its contract test are registered and hashed separately in the repository
++ inventory. This separation keeps the skill portable without creating a second
++ checker or runtime schema.
++
++ Keep the log as a decision index: one compact row per original requirement,
++ research point, Talk/Grill conclusion, review finding, and load-bearing decision.
++ Do not copy the spec, page flow, API fields, task steps, or test procedure into
++ the log; link them by ID and source instead.
++
++ The document must contain `原始需求`, `调研重点`, `Talk`, `Grill`, `D*` reasoning,
++ success/failure boundaries, review disposition, risks, deferred handoff, and
++ stage-end plain-language summaries. Each source row records `source_id`, exact
++ source reference or an explicit missing-reference fact, and its consequence.
++
++ When a completed research report declares candidates, add exactly one
++ `## 调研候选交付` section in the same decision-log. It is a user-visible table
++ with candidate ID, plain-language summary, recommendation or rejection,
++ reason, source refs, and the content-addressed full-report ref. Immediately
++ after the table, place the `workflowhub-research-candidate-delivery.v1` JSON
++ binding in a `json` fence. Its `report_ref`, `report_sha256`, and each
++ candidate's `candidate_id`, summary, source refs, evidence refs,
++ recommendation, and reason must match the report exactly. This is one readable
++ material and one reader contract, not a new receipt, store, gate, or authority.
++ Use an empty `candidates` list only when the report explicitly says that no
++ user-visible alternative exists; unavailable research remains unavailable.
++
++ Each `decision-entry.v1` must keep the following compact fields: question and
++ final option, recommendation, plain-language meaning, decision, source type
++ and exact excerpt, `Approval binding`, 事实与约束, `Logic`, choice
++ reason, impact, consequences and risks, rejected alternatives, unresolved
++ items, and `Supersedes`. The coverage audit must show every original source
++ exactly once, or use `decision-omission-acceptance.v1`; missing reasoning stays
++ unknown and is shown to the user.
++
++ When a review finding is handed off, keep its disposition as a compact derived
++ fact with `finding_id`, `original_fact`, `source`, `consequence`, `status`,
++ `next_action`, `evidence_ref`, `owner`, `consumer`, and `retain_or_delete`.
++ `status` is `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`.
++ This preserves lineage without making a second ledger or a hidden progression
++ gate. 这套最低结构不是 spec 副本；不要复制 spec 的
++ 页面、接口、任务和测试细节。`后果和风险`必须保留在每个 D* 条目中。
++
++ Talk rows must also preserve the queue change or explicitly say `not supplied`.
++ The log must index the boundary between `质量事实`、`推进资格`、`完成判据` and
++ `不可逆授权边界`; these are separate facts, not a gate or a second ledger.
++
++ Record every load-bearing decision separately. Each entry must state:
++
++ - **Question and final option**: the plain-language question and the option
++   actually selected.
++ - **Recommendation**: whether the selected option was recommended and why.
++ - **Plain-language meaning**: what the option means without internal IDs or
++   workflow terms.
++ - **Decision**: the exact choice that now governs downstream work.
++ - **Source**: a specific original requirement, actual user answer, research
++   result, code fact, grill result, or independent-review finding. Preserve the
++   supplied stable source reference and one exact answer excerpt. If no reference
++   was supplied, say it is missing; do not write only “confirmed” or “from discussion”.
++ - **Facts and constraints**: the evidence-bearing premises used.
++ - **Logic**: `source fact -> constraint -> chosen option -> expected result`.
++ - **Choice and reason**: why this option won.
++ - **Impact**: affected scope, interface, acceptance, data, security, or
++   operations.
++ - **Consequences and risks**: immediate trade-offs and future cost.
++ - **Rejected alternatives**: each rejected option and its rejection reason.
++ - **Unresolved items**: what remains undecided, why, and who must resolve it.
++ - **Supersedes**: the exact earlier decision replaced, or `none`.
++ - **Approval binding**: approval status plus the supplied host-visible
++   reference and hash. The hash is delivery binding, not proof of human identity.
++
++ Preserve actual user wording when it defines an interface or boundary. If a
++ later answer changes an earlier decision, retain both entries and make the new
++ entry's `supersedes` relationship explicit; never rewrite history as if the old
++ decision did not exist.
++
++ Before final confirmation, run the automatic coverage audit over every original
++ requirement, actual user answer, adopted grill/review choice, and load-bearing
++ decision. Each source item must map exactly once to the main document or to one
++ `decision-omission-acceptance.v1` appendix. Show every missing item to the user
++ and wait for a real choice before continuing. A review risk record cannot stand
++ in for omission acceptance.
++
++ Publish a `decision-correction-appendix.v1` for D1-D7. It points to the original
++ decision ref/hash, uses the accepted literal correction text, and sets
++ `does_not_rewrite_upstream=true`; never edit the old bytes.
++
++ The documentation and exit-check section must record the supplied
++ `grill-with-docs` result: `CONTEXT.md` changed/no-change with reason and file
++ reference; ADR created/not-needed with reason and file reference; each of the
++ three ADR criteria — hard to reverse, surprising without context, and a genuine
++ trade-off; terminology/ADR conflicts and resolution; and all four
++ objective exit checks. Missing facts stay missing rather than being inferred.
++
++ Also return a host-visible summary that does not copy the full log. For each
++ load-bearing decision, state the decision, source type, plain-language reason,
++ affected scope, consequence, and main risk. End with explicit non-goals,
++ unresolved items, and the documentation outcome. Keep internal IDs, paths,
++ hashes, receipt/attempt refs, and raw evidence out of this summary.
++
+
+ ❯ tests/contract/census-upstream-authoring.test.mjs:134:7
+    132|       read(DECISION_LOG_SKILL_PATH),
+    133|       "写入契约缺一半：decision-log SKILL 文本没有要求 `## 逐字声明层…
+    134|     ).toContain("逐字声明层（verbatim）");
+       |       ^
+    135|   });
+    136| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/contract/census-upstream-authoring.test.mjs > 普查前置到写入契约：模板与 SKILL 必须自带三节格式（A4 / M1） > T2c workflows/make-decision/SKILL.md 写明「需求变更记录」
+AssertionError: 写入契约缺一半：make-decision SKILL 文本没有要求 `## 需求变更记录`，agent 完成声明前无从核对: expected '---\nname: make-decision\ndescription…' to contain '需求变更记录'
+
+- Expected
++ Received
+
+- 需求变更记录
++ ---
++ name: make-decision
++ description: Clarify a real product direction through Talk, proportionate research, independent review, and user confirmation.
++ version: 3.2.0
++ ---
++
++ # Make Decision
++
++ ## 统一回退协议
++
++ 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
++ `validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
++ `build-spec`（`build-plan` 走 spec-clarify）；方向级问题回
++ `make-decision` 做增量决策；材料缺口回对应 owner；环境不可用只记录
++ attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
++
++ ## Purpose
++
++ Turn the original requirement into one readable, user-confirmed direction in
++ `decision-log.md`. This stage exclusively owns user-facing Talk, necessary
++ research, Grill, and the decision log. `build-spec` is the only owner of
++ Clarify; make-decision must not run a second Clarify. Downstream stages consume
++ the result; they do not replay these activities or infer missing decisions.
++
++ ## Task type before questions
++
++ At the beginning of this stage, before the first formal requirement question,
++ create the current `decision-log.md` task identity section and record exactly
++ one declaration using the fixed label `任务类型` and one of the controlled
++ values `规划任务` or `普通任务`. Read it back with the existing pure reader
++ `readTaskTypeFromDecisionLog(markdown)` before selecting the question boundary.
++ Missing, duplicate, conflicting, or unknown declarations remain `unknown` and
++ must be reported to the user for clarification（必须向用户澄清）. Only the type-dependent
++ question/content branch pauses; preparation that does not depend on the type
++ may continue. Do not infer a type from the request, a file name, a previous
++ record, or a hash.
++
++ For `规划任务`, ask only questions that can change the direction: user-visible
++ behavior and result, task-type scope, workflow, completion/failure conditions,
++ invariants, constraints, non-goals, and deferrals. The single authoritative
++ D-004 forbidden list for planning questions is: 文件路径与文件面、函数名、
++ 字段名、算法、schema 形状、命令形态、入口参数形态、行号、代码片段、
++ 测试记录与实测记录. Keep the six direction slots
++ `complete_user_flow|page_scope|data_state|success_failure_boundary|non_goals|deferred`
++ visible; each slot needs the user's answer or `empty` with a concrete reason.
++ `普通任务` keeps the existing question and artifact depth，可以继续追问实现细节，
++ including questions about implementation details when their answers can change
++ the implementation.
++ Every user-visible option still states its plain-language meaning, direct
++ consequence, and main risk for both types.
++
++ If the user changes the declaration mid-stage, stop consuming questions and
++ artifacts produced under the old type until each one is explicitly re-treated
++ under the new type. The current decision must retain the old question
++ reference, the reason for re-treatment, and the location of the new content;
++ changing only a hash is not re-treatment. Do not create a new schema, control
++ plane, type state, or record binding for this behavior.
++
++ Before research starts, this stage creates exactly one current OI outline in
++ the same `decision-log.md`. Its functional skeleton is the six nodes
++ `background|problem|goal|solution|acceptance|extension` plus the fixed
++ categories `complete_user_flow|page_scope|data_state|success_failure_boundary|non_goals|deferred`.
++ Each row has an OI reference or `empty: true` with a concrete reason; omitted,
++ bare-none, duplicate, or substituted rows are gaps. The OI record is the one
++ source for question, source, status and terminal disposition. It is not a
++ fifth material or a second state machine.
++
++ For a vague requirement, triage also writes the same material's divergence
++ record before candidate selection: user-verbatim requirement and pain point,
++ at least two angles, user and non-user candidates with structured semantic
++ differences, and a 3–5-hypothesis versioned outline. More than half falsified
++ hypotheses abandons that version and creates a `redraw_of` replacement tied to
++ the current OI outline version. The reader reports missing or weak evidence as
++ `incomplete`; it is not a completion gate and does not stand in for real Talk.
++
++ The three existing consumers remain separate: direction advice receives the
++ current `convergence_outline` questions-only projection (IDs, categories,
++ questions/unknowns and sources only, with displayed status `open`); detail
++ advice checks current terminal fields one OI at a time; `approve-decision`
++ shows grouped plain-language options and records the selected disposition and
++ existing interaction proof. A projection never leaks an answer or replaces
++ the OI, and a new `outline_version` invalidates old consumer facts. Grouping
++ stays inside the existing overall confirmation; no extra normal confirmation
++ or review gate is introduced.
++
++ ## UI applicability (conditional fact, not a new stage)
++
++ When a task may touch a page or frontend, make-decision records one
++ recomputable applicability fact from the same three inputs:
++
++ - `raw_requirement` — the user's original page, interaction, or non-UI
++   request;
++ - `project_inventory` — the current routes, frontend technology, and existing
++   component/consumer facts;
++ - `planned_or_changed_frontend_fact` — the accepted plan or the actual
++   frontend change that may make the scope UI-relevant.
++
++ The three sources are merged by evidence, not by a caller label. A credible UI
++ signal produces `ui`; credible exclusion from all three sources produces
++ `non_ui`; missing, conflicting, or upstream-unfrozen evidence produces
++ `unknown` with `source_reasons`, risk, and a handoff to make-decision. A caller
++ request to downgrade `ui` to `non_ui` is retained as a request but cannot lower
++ the trusted conclusion. When the plan or frontend fact changes, re-evaluate the
++ three inputs and recompute the result; do not reuse the previous conclusion.
++
++ This is a conditional fact consumed by the existing five stages. It adds no
++ new stage, public command, fifth material, independent state machine, or gate.
++
++ ## 阶段末遗漏披露
++
++ 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
++ 若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
++
++ 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
++ manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
++ 若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
++ 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
++ `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
++ 不得用一条阶段结论均摊到所有 step/skill。
++
++ ## 阶段末复盘（必须执行）
++
++ 阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON。既有 `on_stage_end` 由 `stage-runner#runStageEndReflection` 消费；显式提交仍用公共入口 `run --action=reflect`。`judgments[].evidence_refs` 引用本次 `make-decision` 当前可复核的阶段行、质量事实或测试；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 task/worktree/branch/attempt/material/snapshot 身份。缺来源或判断时保留 `unavailable(executor_absent)`，不借用旧运行身份且不阻断同 task 修复。
++
++ 六个结构化区块是 `what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；条目绑定真实 `evidence_refs` 与 `confidence`。已检查未观察到写 `none_observed`，无法判断写 `unknown` 与 `unknown_reason`，不适用写 `not_applicable` 与理由。
++
++ 消费实际返回的 `ref`、`sha256`：新原件为 `quality/stage-reflection/make-decision/<reflection_key>.json`，`reflection_key` 是语义身份，`sha256` 是原件 bytes hash，两者不能互换。同一运行、来源、材料与判断 A 重试 A 时复用首次原件和时间；新运行或新判断 B 生成新 ref，A 保持不变。失败/缺失仍写其真实状态，不通过删字段、扫描 latest 或读取旧固定 `<stage>.json` 冒充本次完成；旧原件只读保留。
++
++ `validate-stage-reflection.mjs` 在验证时内部调用 `deriveConsumptionEdges`，不是由技能另行调用。它只把较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 的同一引用配成消费边；扫描不完整时 `coverage_status` 为 `partial`、消费保持 unknown 且 `zero_consumption_proof` 不可用，单个 output 没有后续边也不能直接称为零消费。只有完整扫描、近 30 天登记 output 的零 consumer 证明和人工 rejected/同一步骤两次介入，`remove_candidate` 才能保留，否则降为 `needs_evidence`。验证或发布失败时保留实际错误与 unavailable；同一来源重试仍消费原有公开入口，不生成替代记录。
++
++ ## Authority
++
++ The current task has four working materials:
++
++ 1. `decision-log.md`
++ 2. `spec.md`
++ 3. `plan.md`
++ 4. `tasks.md`
++
++ 四份材料都落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
++  `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不是材料替代物，且不新增 gate。
++  新项目可参考 `docs/templates/project-gitignore.md` 选择执行侧车忽略规则；该模板不修改存量仓库。
++ `m15-retirement` 会话负责的材料迁移不在本技能范围内；仓外
++ `Knowledge/Projects/workflowhub/tasks/Projects/` 清理也不在本任务范围内。
++
++ `make-decision` owns `decision-log.md`. Read the original requirement and any
++ current materials that already exist. Old accepted records, reviews, execution
++ records, worktrees, and history are audit facts only; they neither authorize nor
++ block Talk, drafting, revision, or same-task repair.
++
++ Keep three conclusions separate:
++
++ - Work may continue while the current requirement and materials can be read.
++ - A fact write with a wrong task, workspace, runtime, hash, schema, or declared
++   write boundary fails loudly for that write.
++ - Stage completion additionally requires the real decision work and quality
++   facts listed below.
++
++ A failed fact write never freezes the conversation or material repair. Preserve
++ the error, fix the binding or content, and continue in the same task.
++
++ ## 当前 producer 与审查引用
++
++ 本阶段只消费当前原始需求和已存在的材料，不把未来 `spec.md`、`plan.md` 或 `tasks.md` 当方向确认前置。验收在这里明确用户场景、数据来源、成功 oracle 和失败条件；实际 command/service 执行由后续 build-code 负责，同次独立复核与用户确认由 verify-code 消费，方向审查不替代它们。
++
++ 当前 WorkflowHub 会话直接读取并维护 `decision-log.md`，通过现有 `run` 发布当前阶段事实；
++ 不需要外部 Stage Agent、bridge、session 或 stage outcome。旧 outcome 只作为历史 provenance
++ 读取，不能成为当前阶段或复盘的前置条件。
++
++ 方向、细节审查仍各走原有角色和顺序。既有 `review --action=record` 的 `request` 路径执行并记录一次审查；保留实际返回的 `attempt_ref`、可空的 `result_ref` 和 `report_ref`，再分别通过 `receipts.direction_review`、`receipts.detail_review` 交给 `stage-handlers#safeReviewFacts`。result 可用时引用实际 canonical result，只有 unavailable attempt 时引用该 attempt，不拼造 UUID/hash 路径或空结果。保留每个角色的真实语义、provider、transport、错误与 provenance；`recorded` 只证明记录完成。各 review step 记录真实 advice 后按 manifest 前移；后续材料或 route 改变不自动回跳，也不为 clean 标签重派。usage/timing 从已认证 attempt 的 `provider_attempts[].execution` 读取；缺失为 unavailable，真实零值仍为零。
++
++ 普通方向确认绑定 `decision-log.md` 批准内容范围；后续材料细化不使该批准失效，真正方向改变仍需新的真实答复。caller 从 canonical confirmation、quality fact 与真实 approve-decision outcome 认证同一来源；风险接受、close 和其他阶段仍保留各自严格身份绑定。
++
++ ## Portable dependencies
++
++ Use the dependency packages declared in `skill-deps.yaml` directly. Open each
++ dependency's declared `SKILL.md` and follow it in the current agent context. Do
++ not route them through a dispatcher, invocation protocol, or auxiliary progress
++ gate.
++
++ - `talk-with-zhipeng`: user-facing Talk only; Clarify belongs to build-spec.
++ - `grill-with-docs`: challenge the chosen direction against current facts.
++ - `decision-log`: write the decision record.
++ - `wh-review`: obtain independent review evidence.
++
++ Only the main agent may execute user-facing Talk or Grill. Research
++ may use an independent agent or search provider, but the main agent presents the
++ decision and questions to the user.
++
++ ## Procedure
++
++ 1. Replay the original requirement and create the unique current OI outline
++    before research. Separate confirmed facts, assumptions,
++    direction-changing ambiguity, non-goals, and deferred work. For a vague
++    requirement, write the same decision-log's angle table before candidate
++    generation and bind each non-user direction to an angle, user comparison,
++    source, and changed semantic dimension; record outline falsifiers/evidence
++    and redraw when the majority threshold is crossed. Completion:
++    every part of the original requirement is represented or explicitly marked
++    unresolved. Record the requirement-to-decision coverage matrix so that every
++    original requirement has a visible disposition; the matrix must cover the five
++    dimensions: business goal, flow/surface, data/state, success/failure/
++    acceptance, and constraints/non-goals/deferrals. End with a plain-language
++    card containing the core requirement, core goal, and selected direction.
++    Before claiming completion, add these two sections to the same
++    `decision-log.md`:
++
++    - `## UI applicability` contains one fenced JSON fact with
++      `result` and the three named sources. Recompute it with the existing
++      three-input rule. If it is `unknown` or conflicted, record the real user
++      question, wait for the reply, update the source fact it resolves, and
++      recompute; a caller label or unanswered question never becomes `non_ui`.
++    - `## 收敛检查` contains one four-row table: target, scope, solution, and
++      acceptance. Every row records the actual user answer or `无新需求` plus a
++      concrete fact/material reference. The solution row also records the
++      tradeoff, rejected option, and open-item disposition. The acceptance row
++      names its scenario, data source, pass condition, and fail condition.
++      Older decision logs without this section remain readable; new records use
++      this structure before a completion claim.
++    - When the user declares the current task high-risk and user-visible, or the
++      three inputs establish that classification, write the owning `### D<n>`
++      section with exactly one Markdown source line in this form (the JSON is
++      inline code, not bare text):
++
++      ```md
++      - **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"user_declaration"}`
++      ```
++
++      The only alternative `basis` is `three_inputs`.
++      This is the sole decision-log fact a later acceptance card may reference;
++      do not substitute policy IDs, task prose, or provider identity.
++ 2. Execute the manifest in order. `step 1–10 写材料；step 11–13 只落 task store`：
++    steps 1–10 write the current materials through their existing owners. From
++    step 11 through step 13, only write stage facts
++    to the task store (`quality/evidence/handoff/`,
++    `quality/stage-reflection/<stage>/`, and `facts.jsonl`); do not append
++    agent-created step sections to `decision-log.md`. The step outcome records
++    the actual user reply or `no_new_requirement`, and the
++    current/deferred/non-goal/open disposition. Talk and research may add or
++    revise OI rows, but they must update the current outline version rather than
++    create a second list. A write failure stays incomplete with its error; it is
++    never replaced by a final aggregate claim or a second log.
++ 3. The Talk flow uses the dynamic `outline-talk` and `module-convergence`
++    steps after research/divergence and direction advice. There is no fixed
++    round count or mandatory question count: the current OI decides whether the
++    queue has zero, one, or multiple questions, and every real reply can reorder
++    the remaining queue or trigger another bounded divergence pass.
++    Research is an input to Talk, not a review. When a question can materially
++    change direction, make-decision uses the `skills/deep-research/SKILL.md`
++    R0-R5 contract: generate gaps from the requirement framework, retrieve and
++    read primary text, deep-read in bounded parallel contexts, triangulate,
++    write content-addressed `research-report.v1`, and run independent review.
++    R0 gaps come from the requirement-framework skeleton rather than invented
++    agent questions. Skipping research requires recording why the answer cannot
++    change direction and which current facts support the skip. Research is
++    advice/input for Talk; it does not approve a direction or create a gate.
++    Every completed research report must explicitly declare `candidates` (use
++    `[]` only when there is no user-visible alternative). When research puts
++    alternatives before the user, it declares every candidate with its
++    plain-language summary, evidence-bound source refs, recommendation
++    (including rejection), and reason. `stage-handlers#researchFacts` derives
++    whether that candidate delivery is complete from the one canonical report;
++    a summary or report ref alone is not candidate delivery.
++    Research runs only when its answer could materially change direction;
++    otherwise record why it was skipped. Do not invent user answers.
++    Ask only questions whose answers could change direction. Talk must cover both
++    architecture direction and product journey or user outcome. Talk presents a batch of independent
++    questions, with each question containing one decision axis, 2-3 meaningful choices,
++    and plain-language consequences and risks. Talk groups independent decision axes in one batch;
++    each question still contains only one decision axis, while dependent questions move to a later
++    batch after the real reply. Use the real
++    `ask -> wait/pause -> user reply -> resume -> re-rank` seam; never invent a
++    reply. Do not run Clarify here; `build-spec` owns the only Clarify flow.
++
++    Host execution binds that seam separately for every dynamic Talk batch:
++    - `outline-talk` uses the lifecycle for the independent direction questions
++      left after research and direction advice.
++    - `module-convergence` repeats the same lifecycle only while the current OI
++      contains important, direction-changing, or genuinely ambiguous items. It
++      may finish with zero questions; ordinary details become disclosed agent
++      assumptions. Its input must retain the red/blue dispute list and debate
++      unresolved items instead of compressing them into a generic summary.
++    - After detail advice, run another dynamic batch only when a remaining
++      dispute is direction-level or changes acceptance; otherwise repair
++      implementation-level findings directly and register the disposition.
++    Every batch publishes its own `ask`, pauses at `wait`, accepts only the
++    matching real user `reply`, then `resume`s and re-ranks. A previous
++    decision-log paragraph, aggregate, or default choice is never a reply for a
++    later batch.
++ 4. After research/divergence and before `outline-talk`, run the direction advice
++    review. It is independent advice, not a `pass` gate. Preserve the
++    actual provider, transport status, findings, and provenance; unavailable,
++    failure, timeout, and `MATERIAL_INCOMPLETE` remain facts. Dispose each
++    finding; this track records one semantic advice result and does not start a
++    second provider request after finding repair or material edits. An unavailable review is never `pass` and never becomes an empty findings claim; it may be retried only after its missing route/material is repaired.
++ 5. After direction advice, `outline-talk` lets the user address the explicit
++    red/blue finding dispute list, debate unresolved items, contradictions, key
++    assumptions, and remaining risks. Only after that, run `grill-with-docs`.
++    Grill is
++    interactive thinking, never review. It may present one batch only when the
++    questions are independent frontier questions; dependent questions are split
++    and re-ranked. It uses the real `ask -> wait/pause -> user reply -> resume`
++    seam and may preserve a partial reply. It must not call wh-review or create
++    a review fact. Fold only its minimal `grill_summary.decision_updates` and
++    necessary CONTEXT/ADR outcome into `decision-log.md`.
++ 6. Write the decision draft after Grill, then run the detail advice review.
++    This is also advice-only, not a `pass` gate. The detail
++    review must happen after Grill and the draft, never before. Preserve real
++    transport and finding facts. This track records one semantic advice result
++    for the current make-decision execution; a later same-task execution reviews
++    its current input once and preserves the older result as history only.
++ 7. Present the final plain-language decision card at the approval/publish steps: direction,
++    scope, non-goals, success criteria, risks, advice facts, unresolved items,
++    and deferred work. Ask for the user's actual confirmation and preserve it.
++    A rejection leads to a bounded revision of the same task; it does not create
++    a successor task.
++
++ Current make-decision records real Talk/Grill replies, selected OI dispositions,
++ the current decision-log, independent review facts, and the accepted human
++ confirmation through their existing owners. Do not submit an
++ `interaction_aggregate`, write `quality/evidence/interactions/**`, or create a
++ replacement receipt, per-round ledger, latest pointer, or state machine.
++ Historical aggregate bytes remain read-only compatibility material only. The
++ current completion claim derives from the direct decision-log fields, current
++ review facts, and human confirmation; missing quality facts remain explicit and
++ do not stop same-task repair. Do not create a run, revision, latest pointer,
++ ledger, controlled-writer protocol, per-round writer, question-card archive, or
++ Grill history. These direct facts add no new stage and are no gate for same-task
++ repair.
++
++ ## Execution model (M/S/B/P)
++
++ 这是执行方式说明，不是新的 stage、public command、runtime gate 或质量通过条件。
++ 口径唯一来自 decision-log 的“Step×Executor 矩阵”和“上下文守恒规则”。
++
++ | step | executor | handoff |
++ | --- | --- | --- |
++ | 1 load-context | M+S | S 读原始需求和仓库，回传摘要与覆盖矩阵草案；M 校验定稿 |
++ | 2 triage-scope | M+S | S 回传范围、不确定性和非目标草案；M 定稿 |
++ | 3 research-and-diverge | S 为主 | M 定 gap；S 检索/深读/落盘，回传 report hash、摘要、角度和候选来源 |
++ | 4 direction-advice | B+S | B 后台执行红/蓝审查；S 只归纳主题和争议，不做质量裁决；全文落盘，主会话保留结构化摘要 |
++ | 5 outline-talk | M | M 独占方向大纲问题卡与真实用户回复；问题数由当前 OI 决定 |
++ | 6 grill-with-docs | M | M 独占 Grill 问答；S 只提供候选问题池，不调用 wh-review |
++ | 7 module-convergence | M | M 独占按 OI 动态生成的模块问题队列、真实回复和每答重排；零问题合法 |
++ | 8 write-decision-draft | S+M | S 产草稿；M 修正链字段、模块、覆盖和宪法边界 |
++ | 9 detail-advice | B+S | B 后台执行红/蓝审查；S 归纳并保留原始 ref |
++ | 条件动态 Talk 批次 | M | 仅在方向级或影响验收的争议触发；M 独占问题卡与真实用户回复 |
++ | 10 approve-decision | B+M | B 汇总直接的 review/finding 事实；M 签发用户确认 |
++ | 11 stage-end-spec-analyze | S+B | S/B 产语义 gap；M 处置，改变决策时重新确认 |
++ | 12 publish-decision | M | M 发布决策与阶段末披露 |
++ | 13 stage-reflection | M | M 产 judgment JSON；S 只提供统计事实 |
++
++ ### Context conservation rules
++
++ 1. 全量 research-report、审查原始结果、debate 产物和草稿全文都落到 task_dir 的质量证据区或 worktree artifact；主会话只保留 `ref + sha256 + 结构化摘要（≤500 字）`。
++ 2. S 回传必须是结论条目、证据 ref、置信度；研究/草稿/汇总类不超过 500 字，复核类按 `severity|位置|问题|建议` 一行一条，不回传长日志。
++ 3. 并行上限固定为：研究 4、debate 4、红蓝 2；交互步骤与依赖链按顺序执行，不为并行而并行。
++ 4. 问题卡与用户回复只登记在 decision-log T 表；交互由 M 发出，不能由 S/B 代答。
++ 5. 候选由 S 生成、M 选择；方向级或影响验收的争议交用户，实施级争议交独立 debate/复核，M 只登记。
++ 6. M 每步只依赖上一步的决策摘要和材料 ref；S 可按任务需要读取已落盘的完整材料，但不能把旧步骤全文重新塞回 M。
++
++ 这些规则只约束上下文和执行方式，不改变已有阶段契约、事实状态或推进边界。
++
++ ## Completion and fact writing
++
++ Do not claim this stage complete until the dynamic Talk queue is resolved,
++ any post-detail direction-level trigger is evaluated and handled, necessary research ran
++ or has a truthful outcome, Grill ran, `decision-log.md` is current,
++ independent review findings and transport facts are recorded, every finding has a
++ disposition, and the user explicitly confirmed the decision through the existing
++ confirmation record. Confirmation is a completion fact, not a permit to continue
++ working.
++
++ Missing or unavailable quality facts limit only the completion claim and do not
++ prevent continued Talk, drafting, decision-log revision, or finding repair in
++ the same task. Write
++ current facts only to the task's existing fact and quality stores. If a
++ structural check rejects a write, report that exact failure; never turn it into
++ success or create a substitute record.
++
++ ## Communication and stage end
++
++ Use the user's language and plain-language cards. Keep paths, hashes, refs, and
++ commands in formal records. Before moving to `build-spec`, explain what was
++ decided, scope and non-goals, remaining risks, deferred work, and what downstream
++ stages must not guess. Wait for the user's actual reply before handoff; without
++ that reply keep the stage `in_progress`/`pending` and do not claim completion.
++
++ Downstream stages read this summary and the four materials. They must not ask the
++ user to repeat Talk or Grill, and they need no index of the decision process.
++
++ ## Stage-end consistency
++
++ Ask for the user's final confirmation and then run `stage-end-spec-analyze`
++ before `publish-decision`.
++ Invoke the existing `spec-analyze` skill on the original requirement, the
++ current `decision-log.md`, the authenticated requirement projection, the
++ complete Grill and review facts, the final confirmation, and
++ all evidence actually produced in this stage. Check semantic coverage and real
++ outcome evidence, not IDs, paths, hashes, or document existence alone. Repair
++ any finding in make-decision; if a repair changes the decision, ask for
++ confirmation again. Do not
++ move the gap to build-spec. End with the shared six-part plain-language
++ summary: current stage work, requirement coverage, upstream alignment,
++ repairs made here, remaining risks, and the next stage boundary.
++
+
+ ❯ tests/contract/census-upstream-authoring.test.mjs:141:7
+    139|       read(MAKE_DECISION_SKILL_PATH),
+    140|       "写入契约缺一半：make-decision SKILL 文本没有要求 `## 需求变更记…
+    141|     ).toContain("需求变更记录");
+       |       ^
+    142|   });
+    143| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+STDERR_END
+EXIT=1

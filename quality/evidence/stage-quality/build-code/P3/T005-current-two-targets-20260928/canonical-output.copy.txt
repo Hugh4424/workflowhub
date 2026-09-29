@@ -1,0 +1,20 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/stage-runtime-material-check.test.mjs (4 tests) 3159ms
+   ✓ stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 830ms
+   ✓ stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 920ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 690ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 720ms
+ ✓ tests/contract/post-build-plan-missing-index.test.mjs (4 tests) 7800ms
+   ✓ post build-plan run missing Phase index > reports the missing authored material through the public run protocol 969ms
+   ✓ post build-plan run missing Phase index > exits with a precise first-line CLI error rather than raw ENOENT 1121ms
+   ✓ post build-plan run missing Phase index > still lets the post build-plan author draft a missing Phase index 1544ms
+   ✓ post build-plan run missing Phase index > passes the material precheck after index and Phase file are present 4165ms
+
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Start at  00:39:32
+   Duration  8.56s (transform 297ms, setup 0ms, collect 1.30s, tests 10.96s, environment 0ms, prepare 57ms)
+
+

@@ -1,0 +1,35 @@
+{
+  "result": "passed",
+  "commands": [
+    {
+      "name": "T001",
+      "exit_code": 0,
+      "stdout": "rules doc OK",
+      "stderr": "",
+      "stable": true
+    },
+    {
+      "name": "T002",
+      "exit_code": 0,
+      "stdout": "entry inventory OK",
+      "stderr": "",
+      "stable": true
+    },
+    {
+      "name": "T003",
+      "exit_code": 0,
+      "stdout": "ADR-0033 OK",
+      "stderr": "",
+      "stable": true
+    },
+    {
+      "name": "L0",
+      "exit_code": 0,
+      "stdout": "P1 doc assertions OK\nADR-0033 tracked",
+      "stderr": "",
+      "stable": true
+    }
+  ],
+  "before_ref": "before.identity.json",
+  "after_ref": "after.identity.json"
+}

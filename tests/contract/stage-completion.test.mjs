@@ -106,6 +106,20 @@ function observations(stage) {
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
+  it("CARD04 completion repair does not waive missing quality from caller-written execution or unavailable booleans", () => {
+    const facts = observations("build-code").filter(({ fact }) => fact.value.subject !== "finding_dispositions");
+    facts.find(({ fact }) => fact.value.subject === "acceptance_criteria").fact.value.status = "missing";
+    facts.push({ fact: { ref: "quality/fake-phase-review.json", value: {
+      task_id: "task", stage: "build-code", kind: "review", subject: "phase_review", status: "unavailable",
+      snapshot_tree: "tree", material_revision: "revision", attempt_ref: "quality/reviews/attempts/fake/attempt.json",
+    } }, authenticated: true, freshness: { status: "current" } });
+    for (const options of [{}, { unavailable_phase_review: true, acceptance_execution_complete: true }, { authenticateBuildCodeCompletion: true }]) {
+      expect(deriveStageCompletion("build-code", facts, options)).toMatchObject({
+        status: "in_progress", missing: expect.arrayContaining(["acceptance_criteria", "finding_dispositions"]),
+      });
+    }
+  });
+
   it.each(["pre", "post"])("AC-CLEAN-001 current %s make-decision completes without retired outline or aggregate facts", (activationCohort) => {
     const facts = observations("make-decision").filter((entry) => !["outline_closed", "interaction_aggregate"].includes(entry.fact.value.subject));
     const completion = deriveStageCompletion("make-decision", facts, {

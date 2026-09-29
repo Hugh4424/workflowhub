@@ -1,0 +1,57 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/business-case-source-binding.test.mjs (9 tests | 4 failed) 9ms
+   × CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS records a source-bound future observation without claiming an effect 3ms
+     → expected [ 'missing observation contract' ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES records a source-bound future observation without claiming an effect 0ms
+     → expected [ 'missing observation contract' ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION records a source-bound future observation without claiming an effect 0ms
+     → expected [ 'missing observation contract' ] to deeply equal []
+   × CARD-04 P8 case source binding > rejects fake observation and missing-evidence success in the proposed contract 0ms
+     → expected undefined to be defined
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 5 passed (9)
+   Start at  09:00:48
+   Duration  146ms (transform 13ms, setup 0ms, collect 10ms, tests 9ms, environment 0ms, prepare 32ms)
+
+
+--- STDERR ---
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS records a source-bound future observation without claiming an effect
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES records a source-bound future observation without claiming an effect
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION records a source-bound future observation without claiming an effect
+AssertionError: expected [ 'missing observation contract' ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "missing observation contract",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:136:67
+    134|   for (const [id, authority] of Object.entries(expected)) {
+    135|     it(`${id} records a source-bound future observation without claimi…
+    136|       expect(observationContractErrors(cases.get(id), authority)).toEq…
+       |                                                                   ^
+    137|     });
+    138|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects fake observation and missing-evidence success in the proposed contract
+AssertionError: expected undefined to be defined
+ ❯ tests/contract/business-case-source-binding.test.mjs:143:38
+    141|     const entry = cases.get("CARD04-DECISION-LOG-CENSUS");
+    142|     const authority = expected[entry.id];
+    143|     expect(entry.effect_observation).toBeDefined();
+       |                                      ^
+    144|     expect(observationContractErrors({ ...entry, effect_observation: {
+    145|       ...entry.effect_observation, observation_status: "observed",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+

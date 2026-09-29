@@ -1,0 +1,8 @@
+{
+  "status": "recorded",
+  "reused": false,
+  "dispatch_state": "dispatched",
+  "attempt_ref": "quality/reviews/attempts/1258c827-37b6-5f95-a408-d4028e3f1eb1/attempt.json",
+  "result_ref": "quality/reviews/results/build-code-simple-1258c827-37b6-5f95-a408-d4028e3f1eb1.json",
+  "report_ref": "quality/reviews/reports/build-code-simple-1258c827-37b6-5f95-a408-d4028e3f1eb1.md"
+}

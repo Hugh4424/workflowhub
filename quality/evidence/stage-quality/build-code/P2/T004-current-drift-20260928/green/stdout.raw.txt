@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/repository-inventory.test.mjs (9 tests | 8 skipped) 290ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 8 skipped (9)
+   Start at  00:37:29
+   Duration  408ms (transform 19ms, setup 0ms, collect 21ms, tests 290ms, environment 0ms, prepare 27ms)
+

@@ -1,0 +1,35 @@
+COMMAND=npx vitest run tests/contract/stage-runtime-material-check.test.mjs
+kind=command_checks
+check_id=P3-T005-CONTRACT
+task_id=workflowhub-thin-core-card-04-20260919
+cwd=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+HEAD_tree=2a0e21e65488fba4e4507e4491f9edcab8e4585b
+test_sha256=7369285cde321c82180e9b07254e1295a3360771235d1bec11c03ae2849192d5
+source_sha256=a926c3217456cfa3397252945b483f78260009cdc9b393e265b921480eab079f
+package_lock_sha256=a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b
+node_version=v24.14.0
+npm_version=11.9.0
+vitest_version=2.1.9
+npm_config_offline=true
+validation=target_valid
+isolated_git_status=not_applicable
+temporary_checkout_cleanup=see_T005-red.txt
+recorded_at=2026-09-26T11:48:52.403095+00:00
+stdout:
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/stage-runtime-material-check.test.mjs (4 tests) 3374ms
+   ✓ stage-runtime post material check narrowing > runs post make-decision status while spec.md is still absent 833ms
+   ✓ stage-runtime post material check narrowing > runs post build-plan status while spec.md is still absent 1005ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for build-code status 789ms
+   ✓ stage-runtime post material check narrowing > still requires the full post material set for verify-code status 747ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  19:48:47
+   Duration  4.21s (transform 310ms, setup 0ms, collect 701ms, tests 3.37s, environment 0ms, prepare 35ms)
+stderr:
+
+EXIT=0

@@ -1,0 +1,40 @@
+COMMAND=node --input-type=module - (stdin script follows)
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=ef920f1fbd415fe87d50930359059b661e141acd
+SOURCE_SHA256=bda85c210f77df38a042c4866f9d1c52359c8e0d7d2abe9703131da6ec96987c
+UTC=2026-09-26T12:12:44.881436+00:00
+SCRIPT_BEGIN
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { buildPostAcceptanceChainRows } from "./runtime/stage/stage-runner.mjs";
+import { buildStageEndReportFacts, renderStageEndReport } from "./runtime/stage/stage-end-report.mjs";
+const card = "workflowhub-thin-core-card-04-20260919";
+const rows = buildPostAcceptanceChainRows({
+ rows: [{ acceptance_criterion_id: "AC-20", coverage_limits: "P4 原始限制", evidence_refs: [], scenario: "probe" }],
+ spec: readFileSync(`specs/${card}/spec.md`, "utf8"),
+ decisionLog: readFileSync(`specs/${card}/decision-log.md`, "utf8"),
+ boundEvidenceRefs: [], materialRevision: "probe-only", snapshotTree: "a".repeat(40), taskId: card, tests: null,
+});
+assert.equal(rows.length, 1);
+assert.equal(typeof rows[0].coverage_limits, "string");
+assert.ok(rows[0].coverage_limits.includes("CARD-05"));
+const facts = buildStageEndReportFacts({ chainRows: rows, stageResult: { commands: [] } });
+assert.ok(facts.coverage_limits.some((item) => item.reason.includes("P4 原始限制")));
+assert.equal(facts.not_done.some((item) => item.item === "AC-20" && item.status === "inconsistent" && item.reason.includes("覆盖限制")), false);
+assert.equal(facts.not_done.some((item) => item.item === "command_facts" && item.status === "incomplete"), true);
+const absent = buildStageEndReportFacts();
+for (const item of ["chain_rows", "stage_result", "command_facts"]) {
+ assert.equal(absent.not_done.some((entry) => entry.item === item && entry.status === "missing"), true, item);
+}
+assert.ok(!renderStageEndReport(absent).includes("无已记录的机器失败"));
+const malformed = buildStageEndReportFacts({ chainRows: [{ acceptance_criterion_id: "AC-X", coverage_limits: "", evidence_refs: [] }], stageResult: { commands: [] } });
+assert.equal(malformed.not_done.some((item) => item.item === "AC-X" && item.status === "inconsistent"), true);
+console.log("P4->P5 probe OK: real string limits retained; malformed/absent/empty inputs remain adverse");
+SCRIPT_END
+STDOUT_BEGIN
+P4->P5 probe OK: real string limits retained; malformed/absent/empty inputs remain adverse
+STDOUT_END
+STDERR_BEGIN
+
+STDERR_END
+EXIT=0

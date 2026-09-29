@@ -1,0 +1,85 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/stage/stage-end-report.test.mjs > stage-end-report current vNext result disclosure > keeps a conflicted completion predicate distinct from an ordinary missing one
+AssertionError: expected [ …(10) ] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   ObjectContaining {
++ Array [
++   Object {
++     "item": "source_binding",
++     "reason": "阶段结果及逐命令事实由调用者提供；未核对 Task、stage、snapshot 与 canonical receipt/output hash，exit 0 或文件存在不能认证执行",
++     "source": "input.stageResult",
++     "status": "unavailable",
++   },
++   Object {
++     "item": "stage_status",
++     "reason": "阶段状态为 in_progress；不能按完成报告",
++     "source": "input.stageResult#status",
++     "status": "incomplete",
++   },
++   Object {
+      "item": "phase_review",
++     "reason": "阶段完成条件仍缺：phase_review",
+      "source": "input.stageResult#completion.missing[0]",
+-     "status": "inconsistent",
++     "status": "missing",
+    },
+-   ObjectContaining {
++   Object {
+      "item": "risk_tests_fresh",
++     "reason": "阶段完成条件仍缺：risk_tests_fresh",
+      "source": "input.stageResult#completion.missing[1]",
++     "status": "missing",
++   },
++   Object {
++     "item": "human_confirmation",
++     "reason": "阶段结果列出未满足项：human_confirmation",
++     "source": "input.stageResult#quality_missing[0]",
+      "status": "missing",
++   },
++   Object {
++     "item": "execution_outcome",
++     "reason": "阶段执行结果为 blocked_missing_receipts；不能按完成报告",
++     "source": "input.stageResult#execution_outcome",
++     "status": "incomplete",
++   },
++   Object {
++     "item": "AC-21",
++     "reason": "逐 AC 证据引用缺有效 ref/hash 候选；不能认定验收完成",
++     "source": "input.chainRows[1]",
++     "status": "incomplete",
++   },
++   Object {
++     "item": "AC-21",
++     "reason": "该 AC 无覆盖限制披露；空数组不能证明无缺口",
++     "source": "input.chainRows[1]",
++     "status": "inconsistent",
++   },
++   Object {
++     "item": "AC-21",
++     "reason": "路线适用性未声明；不能推断 N/A 或已执行",
++     "source": "input.chainRows[1]",
++     "status": "incomplete",
++   },
++   Object {
++     "item": "execution[1]",
++     "reason": "命令 exit=1；失败输出须保留",
++     "source": "quality/evidence/stage-quality/build-code/run-failed.txt",
++     "status": "failed",
+    },
+  ]
+
+ ❯ runtime/stage/stage-end-report.test.mjs:389:28
+    387|       },
+    388|     });
+    389|     expect(facts.not_done).toEqual(expect.arrayContaining([
+       |                            ^
+    390|       expect.objectContaining({ item: "phase_review", status: "inconsi…
+    391|       expect.objectContaining({ item: "risk_tests_fresh", status: "mis…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

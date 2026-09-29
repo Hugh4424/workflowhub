@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (5 tests | 1 failed | 4 skipped) 10770ms
+   × P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 10770ms
+     → expected true to be false // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  10:33:26
+   Duration  11.26s (transform 151ms, setup 0ms, collect 340ms, tests 10.77s, environment 0ms, prepare 41ms)
+

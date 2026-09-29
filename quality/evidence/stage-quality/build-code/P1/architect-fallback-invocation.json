@@ -1,0 +1,101 @@
+{
+  "schema_version": "architect-fallback-invocation.v1",
+  "purpose": "Persist the immediately preceding one-time independent P1 substitute review; no second review was performed.",
+  "agent_id": "/root/p1_fallback_review",
+  "review_started_at_utc": "2026-09-26 11:49:24 UTC",
+  "review_ended_at_utc": "2026-09-26 11:51:25 UTC",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "phase_id": "P1",
+  "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head_at_review": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree_at_review": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "material_revision": "revision-b377a58c54a3d4016d4f302785139ff206547e627b7e12f27a0b83e14faf750c",
+  "ocr_original_snapshot_tree": "a9f729c36370b559caa05cfa8aa432d96b934b0e",
+  "scope": {
+    "reviewed_sha256": {
+      "docs/architecture/test-asset-governance-rules.md": "3496f72dbad179f9f926bcd2b439c9fd2a81173f9e85cf60c7b2395fd4770b81",
+      "docs/architecture/real-entry-inventory.md": "3f3b5376ec36cddc615f7515f4562f871e0fcb1b0c2b84c255e175793c7f6e44",
+      "docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md": "36a6d5ab8839f0ab6bea402c6f26f685f9c0b2b036d52a3925ef89b901532ec1",
+      "quality/evidence/stage-quality/build-code/P1/P1-gate-green.txt": "d882f347a6a499812c92ef4ee97ca4d1902e6c5b02c3b2c8c6868bbcdc341988",
+      "quality/evidence/stage-quality/build-code/P1/T001-green.txt": "3563817c2057cb454ef01f9a4bc0cdd9a5f68e4aa6278756a7bb66407bd0268b",
+      "quality/evidence/stage-quality/build-code/P1/T001-red.txt": "8d2b40e003e1a933336ad098b9ded61eff8da2d427c4251c3673d2b8ec87a801",
+      "quality/evidence/stage-quality/build-code/P1/T002-green.txt": "ac5ddbe7a663bcbe64722041d760cdabff8ca5a7c01fddb64585cfc5529b2af3",
+      "quality/evidence/stage-quality/build-code/P1/T002-red.txt": "69f753e07807237b0f73a82bfe52b75f5ead9ae3118d87c12a0ba7a108e3b822",
+      "quality/evidence/stage-quality/build-code/P1/T003-green.txt": "1bf62f8e82651858166563565f0133999a069d99f78fb1541c237a5d13104134",
+      "quality/evidence/stage-quality/build-code/P1/T003-red.txt": "ff403e4c949d24ed850a6f261aae377f60a2fea80ea65b4c01a2ae04f3b176c9",
+      "quality/evidence/stage-quality/build-code/P1/capture-request.json": "7915634bd4147b169a77228adc41b942a41055f7862a0c11907343d88c7db4fa",
+      "quality/evidence/stage-quality/build-code/P1/phase-card.md": "704f42d9abb2459cfe7e88c6996de509ad57495d8fb86f546a74d1dc55a4400d"
+    },
+    "contract_and_instruction_paths": [
+      "AGENTS.md",
+      "CONSTITUTION.md",
+      "constitution-checklist.md",
+      "skills/architect-code-review/SKILL.md",
+      "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
+      "specs/workflowhub-thin-core-card-04-20260919/spec.md",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md"
+    ],
+    "contract_sha256_measured_after_review": {
+      "AGENTS.md": "b3443c17474745920839672727a6bffb063a2f65d3a74f6c465b35c0029af3c0",
+      "CONSTITUTION.md": "1799a2282bb8209954909d21683a8eb8fcc72756e7961ff426d2f990306559a2",
+      "constitution-checklist.md": "7e5a7f6efc656e16077131c4aad88bf4710973b1a15f70dc3114bcc73e214aab",
+      "skills/architect-code-review/SKILL.md": "95e69ae87911c965f0c618ad7400ceddfdacf4d6e1f3857d0f5260375f8c88bd",
+      "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "e7ddb0f1398ee675b4a8c0411283fe24b39b43736d6916e1da32bb5984a45268",
+      "specs/workflowhub-thin-core-card-04-20260919/spec.md": "41b61a820c95f4ae489ee96f1a47e683abed54f387acb4dce37cee2d3fb2f328",
+      "specs/workflowhub-thin-core-card-04-20260919/phases/P1.md": "324222c26df2a6b6cce870457f406f6cdb2fac5d6d7356d4663b38f8e8fbc43a"
+    },
+    "consumer_check_paths": [
+      "tools/cli/stage-runtime.mjs",
+      "runtime/interface/runtime-facade.mjs",
+      "package.json",
+      "tools/cli/check-decision-log-chain.mjs",
+      "docs/adr/0032-review-chain-delegation-and-layer-contract.md"
+    ],
+    "consumer_sha256_measured_after_review": {
+      "tools/cli/stage-runtime.mjs": "a926c3217456cfa3397252945b483f78260009cdc9b393e265b921480eab079f",
+      "runtime/interface/runtime-facade.mjs": "d31cf21192688c3c716b92ffe9726f179477a3accd4340c8733089f8a2755d77",
+      "package.json": "c67e1afc7a97392450479fd7a4f61e6a46cc8de62eefa4a54ebfd69e48f45598",
+      "tools/cli/check-decision-log-chain.mjs": "689d5b15ef5fe44c836174258ce552c18dc2c27e998c0dd6217e793d9092a752",
+      "docs/adr/0032-review-chain-delegation-and-layer-contract.md": "7a480926d45ea19133f0c9a11d3ae8f80dce8786c1d93f6f300165646174b47e"
+    }
+  },
+  "ocr_attempt": {
+    "ref": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-thin-core-card-04-20260919/quality/reviews/attempts/e7623be1-6f1d-5258-aded-9b1e72812074/attempt.json",
+    "sha256_measured_after_review": "8ad4976e731744b62bf5e628a6a3794843d8a68a827a7bb6b985fc33e58e62cf",
+    "terminal_status": "unavailable",
+    "error_code": "REVIEW_SOURCE_DRIFT",
+    "canonical_result": null,
+    "provider_raw_outputs": "retained"
+  },
+  "commands_and_exits": [
+    { "command": "git status --short && git branch --show-current", "exit_code": 0 },
+    { "command": "sha256sum docs/architecture/test-asset-governance-rules.md docs/architecture/real-entry-inventory.md docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md", "exit_code": 0 },
+    { "command": "sha256sum quality/evidence/stage-quality/build-code/P1/*", "exit_code": 0 },
+    { "command": "git ls-files docs/adr | rg '/0032-'", "exit_code": 0 },
+    { "command": "rg -n 'stage-runtime.mjs --help|11:29' quality/evidence/stage-quality/build-code/P1 quality/tests", "exit_code": 0, "note": "Match was T003-red timestamp; no historical --help raw output was found in the scoped evidence." },
+    { "command": "node tools/cli/stage-runtime.mjs --help", "exit_code": 0, "note": "Read-only route check; output had seven behaviors and sixteen actions. This later run does not authenticate the inventory's historical 11:29 run." },
+    { "command": "cat, nl, sed, rg and targeted read-only comparisons over the scope paths", "exit_code": 0, "note": "No test suite, mutation, or OCR dispatch was run during review." }
+  ],
+  "response": {
+    "path": "quality/evidence/stage-quality/build-code/P1/architect-fallback-output.json",
+    "sha256": "9d9dc792890ae1fcf240b92f01a06b113dabee0857c6120d3aaa025d46b254d4",
+    "byte_count": 3179,
+    "exact_byte_preservation_verified": false,
+    "byte_preservation_note": "Reconstructed from the immediately preceding visible JSON response with the same fields and formatting; original transport bytes were unavailable for byte-level comparison. JSON content validated with python3 -m json.tool."
+  },
+  "independence_basis": "Fresh subagent /root/p1_fallback_review did not implement P1, did not edit reviewed files, and did not dispatch OCR. This persistence turn performed no second review.",
+  "coverage_limits": [
+    "Review covered P1 documents and scoped RED/GREEN evidence, with targeted contract and consumer reads. Later phases, whole-task acceptance, and real business-entry execution were not reviewed.",
+    "P1 marker gates show document structure and git tracking, not semantic acceptance or AC-16/17/21 completion.",
+    "OCR canonical attempt was unavailable; this fallback JSON is independent diagnostic output and is not a canonical OCR result.",
+    "At persistence time, concurrent edits changed the inventory, ADR, P1-gate-green, T001-green, and T003-green SHA values. Findings bind the reviewed SHA values above, not the newer bytes."
+  ],
+  "sha256_at_persistence_for_changed_scope": {
+    "docs/architecture/real-entry-inventory.md": "394a73b8007defd569d77280f76b7db92853348a922d71fc48b1efbeb7ac23a0",
+    "docs/adr/0032-acceptance-truth-presentation-and-cohort-parity.md": "bd6adec56858141ded80a2dd9774cb2f484fbd1747c5f538d55b00c159a921d7",
+    "quality/evidence/stage-quality/build-code/P1/P1-gate-green.txt": "9094b9035e356b754524ff7e5071fa371567035e3445ca37f521d25f1fb4c3e2",
+    "quality/evidence/stage-quality/build-code/P1/T001-green.txt": "5fdd8f58bdb4dd2b863b8cbfa35a8396b35d5b9817f8e97e25184fea1fd56f72",
+    "quality/evidence/stage-quality/build-code/P1/T003-green.txt": "7cc857fe6dbc6642bdbc06aee52b48ecde087ca0d9c3d1e6e77f8ee14f6622af"
+  }
+}

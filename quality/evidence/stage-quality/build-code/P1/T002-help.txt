@@ -1,0 +1,45 @@
+COMMAND=node tools/cli/stage-runtime.mjs --help
+{
+  "behaviors": [
+    "doctor",
+    "status",
+    "run",
+    "review",
+    "verify",
+    "confirm",
+    "authorize"
+  ],
+  "actions": {
+    "doctor": [
+      "workspace"
+    ],
+    "status": [
+      "begin",
+      "repair"
+    ],
+    "run": [
+      "execute",
+      "preflight",
+      "draft",
+      "reflect"
+    ],
+    "review": [
+      "risk",
+      "record"
+    ],
+    "verify": [
+      "execute"
+    ],
+    "confirm": [
+      "decision"
+    ],
+    "authorize": [
+      "commit",
+      "push",
+      "merge",
+      "archive",
+      "cleanup"
+    ]
+  }
+}
+EXIT=0

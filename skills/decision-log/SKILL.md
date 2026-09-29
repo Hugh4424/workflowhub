@@ -154,6 +154,21 @@ success/failure boundaries, review disposition, risks, deferred handoff, and
 stage-end plain-language summaries. Each source row records `source_id`, exact
 source reference or an explicit missing-reference fact, and its consequence.
 
+For each **newly authored** decision log, use this skill's template to write
+`## 需求变更记录`, `## 原始需求索引`, and `## 逐字声明层（verbatim）`
+alongside the existing `## 原始需求`. Put every `U-00n` under its own `### U-00n`
+heading with a `>` quotation of the user's exact words; give each R index row
+the parseable `| R-001 | U-001 or V-001 | D-001 | ... |` form; give each V row
+the parseable `| V-001 | 用户 | context | exact quotation |` form. Replace every
+template placeholder with a real source or mark that source unavailable. Before
+calling the writing step complete, read the current document through the
+project's existing original-source census reader: the three sections must be
+present, U/V/R rows must parse, `entries.length > 0`, and `errors.length === 0`.
+If a real source is missing, keep the diagnosis visible and repair the same
+document; do not invent a quotation or report a zero denominator as complete.
+This is an authoring check, not a new stage or progression gate. Historical and
+archived decision logs remain read-only and are not backfilled by this rule.
+
 When a completed research report declares candidates, add exactly one
 `## 调研候选交付` section in the same decision-log. It is a user-visible table
 with candidate ID, plain-language summary, recommendation or rejection,

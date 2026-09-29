@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/acceptance-execution-tier.test.mjs (79 tests | 75 skipped) 38976ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > uses the exact current browser ref and hash for one QA projection 10032ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > does not assign one browser source to two acceptance requirements 9729ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > keeps blocked browser source from a same-run QA pass 9623ms
+   ✓ P11/T022 v3 acceptance browser and UI QA share one source > independent reader rejects absent or wrong projection and accepts a matching raw browser source 9591ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 75 skipped (79)
+   Start at  13:45:59
+   Duration  39.78s (transform 316ms, setup 0ms, collect 693ms, tests 38.98s, environment 0ms, prepare 30ms)
+

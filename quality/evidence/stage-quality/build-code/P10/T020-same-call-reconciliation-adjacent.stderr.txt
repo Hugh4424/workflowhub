@@ -1,0 +1,29 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects a selected second case with no AC even when the first case has a valid AC
+Error: same-call case readback did not authenticate the fresh targeted execution
+ ❯ runFixedTargetedCapture workflows/build-code/capture.mjs:245:11
+    243|       || readback.manifest_ref !== pointer.manifest_ref
+    244|       || !Array.isArray(readback.entries) || readback.entries.length =…
+    245|     throw new Error("same-call case readback did not authenticate the …
+       |           ^
+    246|   }
+    247|   return Object.freeze({ ...completed, case_reconciliation: Object.fre…
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:322:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects duplicate case AC IDs before producing partial readback
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are separate facts > rejects outside current spec case AC IDs before producing partial readback
+Error: same-call case readback did not authenticate the fresh targeted execution
+ ❯ runFixedTargetedCapture workflows/build-code/capture.mjs:245:11
+    243|       || readback.manifest_ref !== pointer.manifest_ref
+    244|       || !Array.isArray(readback.entries) || readback.entries.length =…
+    245|     throw new Error("same-call case readback did not authenticate the …
+       |           ^
+    246|   }
+    247|   return Object.freeze({ ...completed, case_reconciliation: Object.fre…
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:338:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+

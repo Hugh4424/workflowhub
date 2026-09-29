@@ -1,0 +1,10 @@
+# P4/T006 current official targeted capture
+
+- Exact command: `npx vitest run runtime/stage/stage-runner.test.mjs` through official `verify --action=execute --stage=build-code`.
+- Worktree: `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`; branch `task/workflowhub/workflowhub-thin-core-card-04-20260919`; HEAD `ef920f1fbd415fe87d50930359059b661e141acd`.
+- Pre/post Task material and tree identity: `{'task_id': 'workflowhub-thin-core-card-04-20260919', 'material_revision': 'revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6', 'snapshot_tree': '4381e90d43a7072ba12d1a4359ba757c3ddd5786'}` / `{'task_id': 'workflowhub-thin-core-card-04-20260919', 'material_revision': 'revision-30e50b760cb29e92f9b114a9be6db6105647a76b7c3c8caeb15a4a949a4975b6', 'snapshot_tree': '4381e90d43a7072ba12d1a4359ba757c3ddd5786'}`; stable: `True`.
+- CLI exit: `0`; canonical receipt exit: `0`; raw output is preserved in `verify.stdout.raw` and `verify.stderr.raw`.
+- Canonical test output reports `Test Files  1 passed (1)` and `Tests  7 passed (7)`; no other test file was requested.
+- Canonical receipt: `quality/tests/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.json`; SHA-256 `c7685c8a1c7616740f724c81912274851c0ec2d7572d2848d3921f5e3f478c72`. Canonical output: `quality/tests/output/card04-P4-T006-current-c5a2d052-0427-4d1f-88e2-95f334cf6bec.output`; SHA-256 `9833cbea5eb8e735eda3eded8e716dd650a5a0660b74f7e3d1567a57fe8b243a`; claimed hash matches: `True`.
+- Current runner SHA-256 `38e2a7067c5b640a3ad18266b1ff478cf257a7f6e507f0c6ccc18f34a310e0c0`; test SHA-256 `0e791e9c094aba2e2005bd1f654e3ecd535f061d869d7e9c252c962d0c9601fd`; handler SHA-256 `dcc54a80e92d3d9f70719d90e1f499281d9c952bfc885f2e99460c78ba5b6b81`. Pre/post source and Task fact hashes: `{'branch': True, 'head': True, 'source_sha256': True, 'task_json_sha256': True, 'facts_jsonl_sha256': True}`.
+- This is one targeted test fact. It does not certify P4 Phase review, real CLI acceptanceChain consumer, P5 report, or whole build-code completion.

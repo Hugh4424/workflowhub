@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/oracle-mirror.test.mjs (9 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  05:04:59
+   Duration  130ms (transform 10ms, setup 0ms, collect 8ms, tests 17ms, environment 0ms, prepare 27ms)
+

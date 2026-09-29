@@ -1,0 +1,16 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (3 tests | 3 failed) 4078ms
+   × P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 1506ms
+     → .toMatch() expects to receive a string, but got undefined
+   × P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 1264ms
+     → .toMatch() expects to receive a string, but got undefined
+   × P10 fixed targeted capture > rejects a source snapshot changed by the selected test 1307ms
+     → .toMatch() expects to receive a string, but got undefined
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  10:07:15
+   Duration  4.49s (transform 132ms, setup 0ms, collect 313ms, tests 4.08s, environment 0ms, prepare 24ms)
+

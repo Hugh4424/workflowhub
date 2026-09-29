@@ -1,0 +1,87 @@
+COMMAND=npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs
+HEAD=35a881ac3c3288249677597a9079d445949de778
+DATE=2026-09-23T10:29:02Z
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-targeted-runner.test.mjs (3 tests | 1 failed) 71ms
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY > rejects duplicate exact runner identities despite an exit-zero command 24ms
+     → a duplicated target does not identify one executed case: expected 'passed' to be 'failed' // Object.is equality
+ ❯ tests/contract/build-code-case-selection.test.mjs (1 test | 1 failed) 958ms
+   × ORACLE-P10-B2-COMMITTED-CHANGE: task change scope > keeps the task-start commit when an existing task worktree has committed the product change 957ms
+     → committed task changes must remain visible to the B2 selector: expected '6df25a51083f9bc1ad0dfda98fabb7fc4ddbf…' to be '11801a9b1b0bb926ae56b8273df11e14c0990…' // Object.is equality
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (6 tests | 2 failed) 131ms
+   × ORACLE-P10-CASE-RECONCILIATION > does not claim a passed business case from a duplicate runner row 24ms
+     → duplicate case identity is ambiguous even when both rows pass: expected 'passed' to be 'failed' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION > does not turn a passing runner name into an independently observed business oracle 21ms
+     → a runner label alone cannot certify a balance or business side effect: expected 'passed' not to be 'passed' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION > does not claim a passed business case from a duplicate runner row
+AssertionError: duplicate case identity is ambiguous even when both rows pass: expected 'passed' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "passed"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:26:100
+     24|   it("does not claim a passed business case from a duplicate runner ro…
+     25|     const result = await execute([{ fullName, status: "passed" }, { fu…
+     26|     expect(actual(result).status, "duplicate case identity is ambiguou…
+       |                                                                                                    ^
+     27|   });
+     28| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION > does not turn a passing runner name into an independently observed business oracle
+AssertionError: a runner label alone cannot certify a balance or business side effect: expected 'passed' not to be 'passed' // Object.is equality
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:31:112
+     29|   it("does not turn a passing runner name into an independently observ…
+     30|     const result = await execute([{ fullName, status: "passed" }]);
+     31|     expect(actual(result).status, "a runner label alone cannot certify…
+       |                                                                                                                ^
+     32|   });
+     33| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-COMMITTED-CHANGE: task change scope > keeps the task-start commit when an existing task worktree has committed the product change
+AssertionError: committed task changes must remain visible to the B2 selector: expected '6df25a51083f9bc1ad0dfda98fabb7fc4ddbf…' to be '11801a9b1b0bb926ae56b8273df11e14c0990…' // Object.is equality
+
+Expected: "11801a9b1b0bb926ae56b8273df11e14c0990b7a"
+Received: "6df25a51083f9bc1ad0dfda98fabb7fc4ddbf01a"
+
+ ❯ tests/contract/build-code-case-selection.test.mjs:37:102
+     35|     const reopened = prepareTaskWorkspace(task);
+     36|     const changed = git(reopened.worktreeRoot, ["diff", "--name-only",…
+     37|     expect(reopened.baselineCommit, "committed task changes must remai…
+       |                                                                                                      ^
+     38|     expect(changed.split("\n")).toContain("product.mjs");
+     39|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY > rejects duplicate exact runner identities despite an exit-zero command
+AssertionError: a duplicated target does not identify one executed case: expected 'passed' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "passed"
+
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:25:95
+     23|     const duplicate = { fullName: selector.full_name, status: "passed"…
+     24|     const result = await runReport([duplicate, duplicate]);
+     25|     expect(outcome(result).status, "a duplicated target does not ident…
+       |                                                                                               ^
+     26|   });
+     27| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  3 failed (3)
+      Tests  4 failed | 6 passed (10)
+   Start at  18:29:02
+   Duration  1.64s (transform 144ms, setup 0ms, collect 337ms, tests 1.16s, environment 0ms, prepare 97ms)
+
+EXIT=1

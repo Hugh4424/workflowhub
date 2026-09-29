@@ -1,0 +1,7 @@
+# P11 当前版本定向核查（2026-09-27）
+
+- 工作树：`task/workflowhub/workflowhub-thin-core-card-04-20260919`，HEAD `ef920f1fbd415fe87d50930359059b661e141acd`，Task `workflowhub-thin-core-card-04-20260919`。`before.json`/`after.json` 记录 P11 材料、四个相关生产文件、两个测试文件及 Task facts 的 SHA-256；运行前后全部一致，HEAD 亦未变。
+- 第一步精确命令：`npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs`。原始 `step1.stdout.raw.txt`/`step1.stderr.raw.txt` 和 `step1.result.json`：exit 0，1 文件、5/5 通过。
+- 第二步定向命令：`npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t "P11/T022 v2 actual private browser producer|P11/T022 v3 acceptance browser and UI QA share one source|P11/T022 blocked browser missing readback|keeps the pre-cohort tests producer available to the historical build-code receipt path"`。原始 `step2.stdout.raw.txt`/`step2.stderr.raw.txt` 和 `step2.result.json`：exit 0，1 文件、24 通过、56 跳过（80 收集）；约 219 秒。过滤覆盖 v3 同源正反、阻塞浏览器读回、v2 受影响路径及旧 pre-cohort 守卫，未运行该文件其余 56 项。
+- 对四个相关生产文件和两个测试文件各执行一次 `node --check`，六项均 exit 0；每项的命令、原始 stdout/stderr 和退出码分别在 `check-*.result.json`、`check-*.stdout.raw.txt`、`check-*.stderr.raw.txt`。`artifact.sha256` 为上述原件逐项记录 SHA-256。两次 Vitest stderr 均为空；结束后未发现本次 P11 Vitest 或临时 Task 子进程残留。
+- 这些检查只证明当前版本在临时 Task 协议夹具上的 P11 本地合同成立。没有启动真实页面、服务或浏览器，没有生成 CARD-04 正式定向测试回执、独立审查或 build-code 阶段完成事实；P11 真实业务页面与服务来源仍缺，不能据此标整相位或业务效果通过。当前 `P11.md` 的 v3“尚未实现或运行”叙述已落后于工作树与本次局部结果，需材料 owner 在复核后更新，不能用旧材料文字覆盖原始结果。

@@ -1,0 +1,26 @@
+{
+  "utc": "2026-09-27T21:33:41.200842+00:00",
+  "task_id": "workflowhub-thin-core-card-04-20260919",
+  "branch": "task/workflowhub/workflowhub-thin-core-card-04-20260919",
+  "head": "ef920f1fbd415fe87d50930359059b661e141acd",
+  "head_tree": "2a0e21e65488fba4e4507e4491f9edcab8e4585b",
+  "working_source_tree_sha256": "d6c8ffe1caa76ce0bd76e811ba697fcc3cbf17c368f75a58ee85cd27f3dc602b",
+  "working_source_tree_file_count": 1963,
+  "files": {
+    "tests/contract/build-code-preexecution-source.test.mjs": "e5ec0396366b1936784e2736265de74b9d4733cbe47dc6265920853d130d76af",
+    "tests/contract/build-code-test-registry.test.mjs": "9afc2b3bb98103f09b0e0f77053e130b6532b6c1d8131fb3dc502f0f27661d2e",
+    "docs/quality/test-asset-registry.json": "b5f7c79668c9fcaa91b6fa4beea96b292e878534fe5e32ca13938fcb79f0e957",
+    "package.json": "c67e1afc7a97392450479fd7a4f61e6a46cc8de62eefa4a54ebfd69e48f45598",
+    "package-lock.json": "a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b",
+    "vitest.config.mjs": "8ef9d87dfaa029d308bf4435d3435b037da362b5f19c8063860648c024cf734c",
+    "specs/workflowhub-thin-core-card-04-20260919/decision-log.md": "01a9cb30dee551d30ffc929752ac137f76f14313e30de8e05837ea23ce6bbd40",
+    "specs/workflowhub-thin-core-card-04-20260919/spec.md": "5c26350bd12e9976e60aef871b2d03247670eed6699de2ff509c3764e74cdceb",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md": "dcfd25eaab81f7e6adc8a01adbf37f81757010d14cb7b9299e7de39f396e488a",
+    "specs/workflowhub-thin-core-card-04-20260919/phases/index.md": "bb517ed53cd6d4e4a7ad71d0a2004fdb4a1705cabd0391b6dfa5d034c89573a0"
+  },
+  "task_files": {
+    "task.json": "fb0a4fd764318e988be1f111507c9104934fba44175589252f22c30e78d3c91d",
+    "facts.jsonl": "c1550f6226c123bf6345d8af187ce5e557e92f097f3348cce6d25bcc952d6b82",
+    "index.json": null
+  }
+}

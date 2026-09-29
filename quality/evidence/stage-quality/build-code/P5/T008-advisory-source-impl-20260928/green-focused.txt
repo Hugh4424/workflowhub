@@ -1,0 +1,24 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ✓ tests/contract/p5-same-run-report-source.test.mjs (34 tests | 6 skipped) 134346ms
+   ✓ P5 same-run report source > does not publish a formal report from CARD04-shaped Task identity with fixture_only text 10397ms
+   ✓ P5 same-run report source > does not publish a formal report from unsupported human approval claim in the isolated fixture 10226ms
+   ✓ P5 same-run report source > writes no P5 report for a P1-only task even with a P5 cursor claim 9265ms
+   ✓ P5 same-run report source > writes no P5 report when the current P5 review is unavailable 9362ms
+   ✓ P5 same-run report source > writes no P5 report without an explicit human exception declaration 11155ms
+   ✓ P5 same-run report source > does not apply an AC-0010 declaration to the distinct AC-001 10409ms
+   ✓ P5 same-run report source > does not apply an exception that expired before P5 10123ms
+   ✓ P5 same-run report source > writes no P5 report for a stale implementation and test snapshot 8397ms
+   ✓ P5 same-run report source > writes no P5 report when the claimed review ref has no original record 6839ms
+   ✓ P5 same-run report source > writes no P5 report when the real stage row writer fails after publication 8476ms
+   ✓ P5 same-run report source > keeps complete same-run fixture inputs unreported without a confirmed human source 10772ms
+   ✓ P5 same-run report source > surfaces advisory original read EACCES before writing a P5 report 9986ms
+   ✓ P5 same-run report source > surfaces advisory original read EPERM before writing a P5 report 9443ms
+   ✓ P5 same-run report source > surfaces advisory original read EIO before writing a P5 report 9490ms
+
+ Test Files  1 passed (1)
+      Tests  28 passed | 6 skipped (34)
+   Start at  04:37:15
+   Duration  135.05s (transform 267ms, setup 0ms, collect 605ms, tests 134.35s, environment 0ms, prepare 25ms)
+

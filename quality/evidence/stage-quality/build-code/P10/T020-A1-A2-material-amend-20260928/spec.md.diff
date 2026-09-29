@@ -1,0 +1,17 @@
+--- spec.md.before
++++ spec.md.after
+@@ -7,6 +7,14 @@
+ - 上游: 母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-04 卡面 `:322-351`、FR-16..FR-21 `:328-333`、AC-16..AC-21 `:335-340`、SD-05/06/07/08/15/17 `:45-95`）、本卡 `specs/workflowhub-thin-core-card-04-20260919/decision-log.md`（D-001..D-008 与旧确认 `:1758-1770` 为历史；R-009..R-018、D-009..D-014 详案及方向确认 `:2159-2408`；D-015 记录用户选择补做 AC-17/18/19，具体样例和新版材料确认另核）
+ - 路线: post cohort（build-spec 历史只读，唯一 authoring 链 = build-plan）
+ - 本规格角色: 需求与行为唯一权威；`phases/index.md` 与 `phases/P*.md` 只做相位/任务编排
++
++### 2026-09-28 有限新增业务用例的实施澄清
++
++原 `decision-log.md` U-006 第 1—4 句及 R-011/R-012/R-013/R-014、FR-30/32/33 与 AC-30/32/33 不变。P8 可在唯一 `docs/quality/business-case-catalog.json` 补两条**有限**用例：A1 `CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE` 对应 P9/T018 的认证任务变化来源，唯一测试目标 `tests/contract/build-code-preexecution-source.test.mjs`；A2 `CARD04-INDEPENDENT-TEST-INVENTORY` 对应 P9/T019 的独立测试登记与已选目标真实报告，唯一测试目标 `tests/contract/build-code-test-registry.test.mjs`。两者分别以原 `decision-log.md` 的 U-006/适用 R 项为非测试需求来源，以定稿后的 `phases/P9.md` T018/T019 为规则来源；`source.revision` 和 `rule.revision` 均按各自当前实文重算，不能从测试名推回业务规则。两例先登记 `not_yet_observed`，不得用候选目标 7/7、8/8 或结构测试通过冒称实际业务效果。
++
++这两例只补原要求的局部观察，不替换旧三例、P9/T018 的 `build-code-change-scope.test.mjs`、T019 的 `build-code-test-inventory.test.mjs`、七条原变化义务的 `not_done` 或历史 RED。P8 owner 只写现有目录与来源绑定测试；P9 owner 只写现有唯一 `docs/quality/test-asset-registry.json`、其现有测试及自己拥有的读者；P10 owner 只在现有只读对账与定向入口验证逐例事实。唯一消费者分别为 P9/P10 现有选择及对账路径；替代条件是原位受审的等价来源/测试/reader 接管并保留旧证据，停止条件是来源、真实消费者、测试身份或当前快照不能独立验证。无需新增 stage、gate、公共命令、schema、第二账本或文件；若确需新的持久字段/文件或跨 owner 写面，先补职责、唯一消费者、替代与删除条件并登记，不在本次澄清中暗加。
++
++A1 当前最多核认证 Git/bootstrap 原件重算的应测路径与应选 case 是否和指定 manifest/实报相符；外层当次返回的 `change_scope.changed_paths/changes` 尚未与同次受信回执持久绑定，该子句保持 `unknown/not_yet_observed`。A2 当前最多核**已登记、已选且当次实跑**目标的文件 hash、规范命令形状、真实 Node/Vitest argv、报告全叶及状态；未运行目标为 `not_run`，其余真实测试入口尚无独立完整发现，`outside_scope=unknown`。P10 的部分运行只能附只读逐例诊断；只要其它变化仍未映射，整体 `unavailable`、业务效果 `unknown`。正式逐 AC 来源、本次官方 `run` 精确消费、适用层测试和失败后同任务修复仍须另证，不能由这两例签完 AC-30/32/33。
+ 
+ ## 材料导航
+ 

@@ -1,0 +1,7 @@
+# P7 legacy binding targeted GREEN
+
+- Same exact command as RED: `npx vitest run tests/contract/acceptance-execution-tier.test.mjs -t 'publishes the acceptance execution aggregate for the implementation/tests receipt branch'`.
+- Worktree, HEAD, UTC time, P7/index/test/two production source SHA-256, output hashes, and exit code are in `run.json`; exact raw outputs are `stdout.bin` and `stderr.bin`.
+- Result: exit `0`; one file, 84 tests collected, exactly one selected and passed, 83 skipped. Selected identity: `P3 T009 real command and service acceptance > publishes the acceptance execution aggregate for the implementation/tests receipt branch`.
+- The selected test keeps the implementation, tests, and old `stage_outcomes` receipts. Its passing assertions require the aggregate and both AC leaves to carry the same current task/attempt/run/tree/material binding; both leaves use the current session actor and lack `stage_outcome_ref/hash`; the child process writes `started.json`; `p9PerAc` authenticates both leaf refs/hashes and command stdout/stderr. This target proves that legacy receipt input did not replace the new execution identity in this path.
+- Production `executePrivateAcceptance` now builds the current session binding directly and `runAcceptanceScenario` no longer passes the optional old outcome to that executor. The optional old outcome read and diagnostics remain outside this target. This is a scoped GREEN, not a full-file or full-phase claim.

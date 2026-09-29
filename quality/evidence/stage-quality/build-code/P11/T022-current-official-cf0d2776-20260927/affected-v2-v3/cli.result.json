@@ -1,0 +1,8 @@
+{
+  "command": "node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-code --project=workflowhub --task=workflowhub-thin-core-card-04-20260919 --input=quality/evidence/stage-quality/build-code/P11/T022-current-official-cf0d2776-20260927/affected-v2-v3/request.json",
+  "started_at_utc": "2026-09-27T12:55:41.029Z",
+  "ended_at_utc": "2026-09-27T12:59:17.299Z",
+  "exit_code": 0,
+  "signal": null,
+  "error": null
+}

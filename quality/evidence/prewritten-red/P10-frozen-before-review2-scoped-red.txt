@@ -1,0 +1,427 @@
+COMMAND=npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs
+CWD=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+HEAD=35a881ac3c3288249677597a9079d445949de778
+UTC=2026-09-23T14:48:03Z
+c5979bbc294702f2674d0de15937fcfaba6c7d3804461a531abb20da6010c131  tests/contract/build-code-case-selection.test.mjs
+64681d5d2d7fc65518bf4c8d2d4b7f59cdc2ee1b3bcf95a5e353b427b527ec7a  tests/contract/build-code-targeted-runner.test.mjs
+60a8d271ec77d81cd2c8308a7dd6798bf89b40114887cbf2dcce345da54f9ed3  tests/contract/build-code-case-reconciliation.test.mjs
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (13 tests | 13 failed) 829ms
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a pending result 7ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a skipped result 1ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a todo result 0ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a failed result 1ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies duplicate passed identities alongside a real successful effect 87ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'duplicate_runner_identity' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a passing reporter name without an independent business oracle 86ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_business_oracle' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual charged effect 89ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual active effect 88ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies forged-report rather than trusting claimed success 92ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'report_digest_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies wrong-identity rather than trusting claimed success 93ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'runner_identity_mismatch' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies missing-effect rather than trusting claimed success 94ms
+     → a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_effect_artifact' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC 95ms
+     → stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+   × ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC 94ms
+     → stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+ ❯ tests/contract/build-code-case-selection.test.mjs (7 tests | 7 failed) 6900ms
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects dynamic alpha product and linked old regression from committed task start 3435ms
+     → P10 must select from task start rather than reopened HEAD: expected 'unavailable' to be 'selected' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects dynamic beta product and linked old regression from committed task start 3461ms
+     → P10 must select from task start rather than reopened HEAD: expected 'unavailable' to be 'selected' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies unknown change scope rather than certifying an empty set 1ms
+     → a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'unknown_change_scope' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies an unmapped changed product path 1ms
+     → a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'unmapped_changed_path' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies an affected regression missing from independent inventory 0ms
+     → a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'missing_inventory_identity' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies a supplied HEAD-as-start and mismatched snapshot 0ms
+     → a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'invalid_change_provenance' // Object.is equality
+   × ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > does not select an unrelated fixed case ID for a different dynamic product 0ms
+     → expected 'unavailable' to be 'selected' // Object.is equality
+ ❯ tests/contract/build-code-targeted-runner.test.mjs (9 tests | 9 failed) 1467ms
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > executes dynamic alpha child with real TAP, identity and side effect 177ms
+     → an unavailable stub is not execution: expected 'unavailable' to be 'completed' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > executes dynamic beta child with real TAP, identity and side effect 169ms
+     → an unavailable stub is not execution: expected 'unavailable' to be 'completed' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies duplicate selected case IDs 169ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'duplicate_case_id' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies a missing target 164ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'missing_target' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: ../outside.test.mjs 165ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'unsafe_target' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: tests/effect.test.mjs; touch pwned 167ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'unsafe_target' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: tests/$(touch pwned).test.mjs 156ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'unsafe_target' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies wrong reporter identity even when the child runs 154ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'reporter_identity_mismatch' // Object.is equality
+   × ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an actually failed observable-effect test 145ms
+     → blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'test_failed' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 29 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a pending result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a skipped result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a todo result
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a failed result
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'nonpassing_runner_status' // Object.is equality
+
+Expected: "nonpassing_runner_status"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:84:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies duplicate passed identities alongside a real successful effect
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'duplicate_runner_identity' // Object.is equality
+
+Expected: "duplicate_runner_identity"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:90:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies a passing reporter name without an independent business oracle
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_business_oracle' // Object.is equality
+
+Expected: "missing_business_oracle"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:95:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual charged effect
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > rejects a passing weak-name child with wrong actual active effect
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'business_effect_mismatch' // Object.is equality
+
+Expected: "business_effect_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:107:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies forged-report rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'report_digest_mismatch' // Object.is equality
+
+Expected: "report_digest_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies wrong-identity rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'runner_identity_mismatch' // Object.is equality
+
+Expected: "runner_identity_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > identifies missing-effect rather than trusting claimed success
+AssertionError: a blanket unavailable/not_implemented response is not cause-specific rejection: expected 'not_implemented' to be 'missing_effect_artifact' // Object.is equality
+
+Expected: "missing_effect_artifact"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-reconciliation.test.mjs:24:107
+     22| function rejectsFor(result, reason) {
+     23|   expect(result.status).not.toBe("reconciled");
+     24|   expect(result.reason, "a blanket unavailable/not_implemented respons…
+       |                                                                                                           ^
+     25|   expect((result.entries ?? []).some(({ status }) => status === "passe…
+     26| }
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/29]⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles alpha child TAP, distinct account artifacts and AC
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs > ORACLE-P10-CASE-RECONCILIATION: runner identity plus independently read effect > reconciles beta child TAP, distinct account artifacts and AC
+AssertionError: stub is not a business-effect attestation: expected 'unavailable' to be 'reconciled' // Object.is equality
+
+Expected: "reconciled"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:129:72
+    127|     expect(JSON.parse(readFileSync(account)).balance_cents).toBe(JSON.…
+    128|     const result = reconcile(v, [observation], [evidence]);
+    129|     expect(result.status, "stub is not a business-effect attestation")…
+       |                                                                        ^
+    130|     expect(result.entries).toEqual(expect.arrayContaining([expect.obje…
+    131|       case_id: v.caseId, acceptance_criterion_id: v.criterion, status:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects dynamic alpha product and linked old regression from committed task start
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > selects dynamic beta product and linked old regression from committed task start
+AssertionError: P10 must select from task start rather than reopened HEAD: expected 'unavailable' to be 'selected' // Object.is equality
+
+Expected: "selected"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-selection.test.mjs:82:88
+     80|     const result = select({ status: "recorded", task_id: task.identity…
+     81|       changed_paths: observedPaths, snapshot_tree: receipt.snapshot_tr…
+     82|     expect(result.status, "P10 must select from task start rather than…
+       |                                                                                        ^
+     83|     expect(result.cases.map(({ id }) => id).sort()).toEqual([v.caseId,…
+     84|     expect(result.cases.map(({ execution }) => execution?.target).sort…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies unknown change scope rather than certifying an empty set
+AssertionError: a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'unknown_change_scope' // Object.is equality
+
+Expected: "unknown_change_scope"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:64:113
+     62| function rejectsFor(result, reason) {
+     63|   expect(result.status).not.toBe("selected");
+     64|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+       |                                                                                                                 ^
+     65|   expect(result.cases ?? []).toEqual([]);
+     66| }
+ ❯ tests/contract/build-code-case-selection.test.mjs:88:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies an unmapped changed product path
+AssertionError: a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'unmapped_changed_path' // Object.is equality
+
+Expected: "unmapped_changed_path"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:64:113
+     62| function rejectsFor(result, reason) {
+     63|   expect(result.status).not.toBe("selected");
+     64|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+       |                                                                                                                 ^
+     65|   expect(result.cases ?? []).toEqual([]);
+     66| }
+ ❯ tests/contract/build-code-case-selection.test.mjs:92:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies an affected regression missing from independent inventory
+AssertionError: a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'missing_inventory_identity' // Object.is equality
+
+Expected: "missing_inventory_identity"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:64:113
+     62| function rejectsFor(result, reason) {
+     63|   expect(result.status).not.toBe("selected");
+     64|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+       |                                                                                                                 ^
+     65|   expect(result.cases ?? []).toEqual([]);
+     66| }
+ ❯ tests/contract/build-code-case-selection.test.mjs:96:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > identifies a supplied HEAD-as-start and mismatched snapshot
+AssertionError: a blanket not_implemented/unavailable response cannot pass a cause-specific negative: expected 'not_implemented' to be 'invalid_change_provenance' // Object.is equality
+
+Expected: "invalid_change_provenance"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-case-selection.test.mjs:64:113
+     62| function rejectsFor(result, reason) {
+     63|   expect(result.status).not.toBe("selected");
+     64|   expect(result.reason, "a blanket not_implemented/unavailable respons…
+       |                                                                                                                 ^
+     65|   expect(result.cases ?? []).toEqual([]);
+     66| }
+ ❯ tests/contract/build-code-case-selection.test.mjs:101:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/29]⎯
+
+ FAIL  tests/contract/build-code-case-selection.test.mjs > ORACLE-P10-B2-CASE-TRUTH: P10-owned change-to-case selection > does not select an unrelated fixed case ID for a different dynamic product
+AssertionError: expected 'unavailable' to be 'selected' // Object.is equality
+
+Expected: "selected"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-case-selection.test.mjs:109:27
+    107|     const result = select({ status: "recorded", changed_paths: [b.path…
+    108|     expect((result.cases ?? []).some(({ id }) => id === a.caseId || id…
+    109|     expect(result.status).toBe("selected");
+       |                           ^
+    110|     expect(result.cases.map(({ id }) => id).sort()).toEqual([b.caseId,…
+    111|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > executes dynamic alpha child with real TAP, identity and side effect
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > executes dynamic beta child with real TAP, identity and side effect
+AssertionError: an unavailable stub is not execution: expected 'unavailable' to be 'completed' // Object.is equality
+
+Expected: "completed"
+Received: "unavailable"
+
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:50:67
+     48|     const v = fixture(label);
+     49|     const result = await run(v);
+     50|     expect(result.status, "an unavailable stub is not execution").toBe…
+       |                                                                   ^
+     51|     expect(result.observations).toEqual(expect.arrayContaining([
+     52|       expect.objectContaining({ case_id: v.caseId, full_id: v.fullId, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies duplicate selected case IDs
+AssertionError: blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'duplicate_case_id' // Object.is equality
+
+Expected: "duplicate_case_id"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-targeted-runner.test.mjs:42:100
+     40| function rejectsFor(result, reason) {
+     41|   expect(result.status).not.toBe("completed");
+     42|   expect(result.reason, "blanket unavailable/not_implemented cannot sa…
+       |                                                                                                    ^
+     43|   expect((result.observations ?? []).some(({ status }) => status === "…
+     44| }
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:74:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies a missing target
+AssertionError: blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'missing_target' // Object.is equality
+
+Expected: "missing_target"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-targeted-runner.test.mjs:42:100
+     40| function rejectsFor(result, reason) {
+     41|   expect(result.status).not.toBe("completed");
+     42|   expect(result.reason, "blanket unavailable/not_implemented cannot sa…
+       |                                                                                                    ^
+     43|   expect((result.observations ?? []).some(({ status }) => status === "…
+     44| }
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:78:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: ../outside.test.mjs
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: tests/effect.test.mjs; touch pwned
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an unsafe target and does not interpolate: tests/$(touch pwned).test.mjs
+AssertionError: blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'unsafe_target' // Object.is equality
+
+Expected: "unsafe_target"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-targeted-runner.test.mjs:42:100
+     40| function rejectsFor(result, reason) {
+     41|   expect(result.status).not.toBe("completed");
+     42|   expect(result.reason, "blanket unavailable/not_implemented cannot sa…
+       |                                                                                                    ^
+     43|   expect((result.observations ?? []).some(({ status }) => status === "…
+     44| }
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:86:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies wrong reporter identity even when the child runs
+AssertionError: blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'reporter_identity_mismatch' // Object.is equality
+
+Expected: "reporter_identity_mismatch"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-targeted-runner.test.mjs:42:100
+     40| function rejectsFor(result, reason) {
+     41|   expect(result.status).not.toBe("completed");
+     42|   expect(result.reason, "blanket unavailable/not_implemented cannot sa…
+       |                                                                                                    ^
+     43|   expect((result.observations ?? []).some(({ status }) => status === "…
+     44| }
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:91:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/29]⎯
+
+ FAIL  tests/contract/build-code-targeted-runner.test.mjs > ORACLE-P10-TARGETED-RUNNER-IDENTITY: safe actual execution > identifies an actually failed observable-effect test
+AssertionError: blanket unavailable/not_implemented cannot satisfy a specific rejection: expected 'not_implemented' to be 'test_failed' // Object.is equality
+
+Expected: "test_failed"
+Received: "not_implemented"
+
+ ❯ rejectsFor tests/contract/build-code-targeted-runner.test.mjs:42:100
+     40| function rejectsFor(result, reason) {
+     41|   expect(result.status).not.toBe("completed");
+     42|   expect(result.reason, "blanket unavailable/not_implemented cannot sa…
+       |                                                                                                    ^
+     43|   expect((result.observations ?? []).some(({ status }) => status === "…
+     44| }
+ ❯ tests/contract/build-code-targeted-runner.test.mjs:96:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/29]⎯
+
+ Test Files  3 failed (3)
+      Tests  29 failed (29)
+   Start at  22:48:03
+   Duration  9.36s (transform 259ms, setup 0ms, collect 617ms, tests 9.20s, environment 0ms, prepare 184ms)
+
+
+EXIT=1
