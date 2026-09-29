@@ -515,9 +515,18 @@ function authenticatedQualityEvidence(task, fact) {
         && value.stage === "build-code"
         && (fact.subject === "same_build_integration_review"
           || value.review_kind === "mini_task.implementation");
+      const oneShotCodeReview = fact.stage === "verify-code"
+        && fact.subject === "code_review"
+        && value.stage === "verify-code"
+        && (value.review_scope ?? null) === null
+        && (value.review_track ?? null) === null
+        && (value.review_kind ?? null) === null
+        && value.subject_kind === "worktree"
+        && (value.phase_id ?? null) === null
+        && value.material_revision === fact.material_revision;
       if (value.task_id !== task.identity.taskId
           || (value.stage !== fact.stage && !crossStageReview)
-          || value.snapshot_tree !== fact.snapshot_tree) {
+          || (value.snapshot_tree !== fact.snapshot_tree && !oneShotCodeReview)) {
         throw new Error(`review evidence is not bound to the current task/stage/snapshot: ${entry.ref}`);
       }
       const reviewKind = value.review_kind ?? null;
