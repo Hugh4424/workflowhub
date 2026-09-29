@@ -26,7 +26,7 @@ npm run check
 ## 普通任务路线
 
 - `pre`：`make-decision → build-spec → build-plan → build-code → verify-code`。既有任务、历史记录和缺少冻结 cohort 的任务都保留这条五阶段路线。
-- `post`：`make-decision → build-plan → build-code → verify-code`。`build-plan` 负责当前 `spec.md`、`plan.md` 和 `tasks.md`；`build-spec` 只读保留 pre/history。
+- `post`：`make-decision → build-plan → build-code → verify-code`。`build-plan` 负责当前 `spec.md`、独立的 `phases/P<n>.md` 和纯指针 `phases/index.md`；`build-spec` 只读保留 pre/history。
 
 cohort 只在创建任务时冻结；不是用户在命令行临时选择。`stage-runtime status --action=begin` 会回显实际的 `task_type`、`activation_cohort` 和 `topology`。
 
