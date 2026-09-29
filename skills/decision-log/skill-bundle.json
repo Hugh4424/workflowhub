@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "6a237213339a59257a2446a56279dc0f6dd5231293b7388efc72739836b01af1"
+      "sha256": "9f0c3bc10e4f510933b9f8f0a3e38839e60ee8221144a746c4b58c25b81d2ed8"
     },
     {
       "path": "templates/decision-log-template.md",
-      "sha256": "8a0c217e2451d23bdf3707117ff79d2943c6576f405e89faecd6f0f4003fe51f"
+      "sha256": "9e49c9224c84a620e306319c9e85a22f0257be589eae14a22be3140016620012"
     }
   ]
 }

@@ -57,11 +57,12 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 20292,
+      "actual": 95118,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 10292,
-      "within_limit": false
+      "delta_from_target": 85118,
+      "within_limit": false,
+      "caliber": "buildReport() 只读内存测量：按当前工作树内容统计 Git 已跟踪的正式测试源码行数（*.test.* 与 __tests__，限源码扩展名）；当前约为 12000 行上限的 7.9 倍。直接执行 node tools/architecture/complexity-report.mjs 的默认路径会覆写本 JSON，有副作用；本条数字须随正式测试文件变化复测。本次 formal_test_lines.actual=95118 取自 2026-09-28 当前工作树已跟踪测试，HEAD ef920f1fbd415fe87d50930359059b661e141acd；顶层 source.git_head=b50818ba0bd092b579eb80c1cbfa10b1b60d366e 及除 formal_test_lines 块外的字段仍是历史快照。整份 JSON 不是同一当前快照；手动 --check-hard-gates 全报表对账仍会报 stale，不能将本文件整体宣称 current。"
     },
     "production_lines": {
       "actual": 27044,

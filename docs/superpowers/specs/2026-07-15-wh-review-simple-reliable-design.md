@@ -2,7 +2,13 @@
 
 日期：2026-07-15
 
-状态：待异源审查
+状态：现行简化设计（2026-09-28 修订）
+
+当前修订：OCR 审查不再要求 reviewer 与宿主或实现者异源，也不要求调用方
+提供 `host_provider`。路由只负责找到可调用的 provider；source、model、adapter
+等身份只作为可选诊断 provenance，不是派发条件、完成条件或下一次运行的阻塞条件。
+
+直接 provider 的稳定性规则：host 不额外施加固定 wall-clock deadline；provider 到自己的终态或调用方明确取消前持续运行。首个 provider 到终态后立即进入增量处理，剩余 provider 不取消；后续 provider 完成后，把迟到 findings 再交给同一处理回调决定合并与处置，完整 round 继续保留所有终态 provenance。部分成功记 `available-with-failures`，全路失败才记 `unavailable`。Kimi 通过 packet-local、只开放 `Read` 的 agent profile 运行，并禁用 user/project skill 自动发现；确实没有可强制只读工具边界的 provider（当前 OpenCode direct CLI）才记 `OCR_PROVIDER_UNSUPPORTED`，不得靠 prompt 伪装 packet 隔离。reviewed execution 的输出按 `ref+hash` 去重，UTF-8 不再同时传 text/base64，临时 `.git` 不进入 packet manifest；provider packet 使用 evidence index、分片当前材料和按需执行证据，完整 canonical evidence 仍保留在 task store。全路失败才记 `unavailable`。这不新增 caller 配置、route identity、review policy、stage、gate 或持久对象。
 
 ## 1. 目标
 
@@ -10,14 +16,14 @@
 
 ```text
 冻结本次改动和必要材料
-  → 调用独立 provider
+  → 调用 provider
   → 保存结果
   → 最终提交前确认代码未变
 ```
 
 用户只能看到三类结果：
 
-- `pass`：有效异源审查通过。
+- `pass`：有效审查通过。
 - `revise_required`：存在需要修改的问题。
 - `unavailable`：本次审查没有形成有效结论，可以直接重跑。
 
@@ -42,14 +48,13 @@
 
 必须保留：
 
-1. provider 与 host 来源不同，禁止自审自判。
-2. provider 看到真实、完整、冻结的本次改动。
-3. provider 不读取真实仓库，不执行 git，不依赖宿主绝对路径。
-4. 基础设施失败不能冒充语义结论。
-5. provider 原始最终输出必须保存。
-6. 有效结果必须绑定本次材料和代码 snapshot。
-7. 最终提交或合并前，当前代码必须仍等于通过审查的 snapshot。
-8. stage 决定审什么；3rd-review 只负责可靠调用 provider。
+1. provider 看到真实、完整、冻结的本次改动。
+2. provider 不读取真实仓库，不执行 git，不依赖宿主绝对路径。
+3. 基础设施失败不能冒充语义结论。
+4. provider 原始最终输出必须保存。
+5. 有效结果必须绑定本次材料和代码 snapshot。
+6. 最终提交或合并前，当前代码必须仍等于通过审查的 snapshot。
+7. stage 决定审什么；3rd-review 只负责可靠调用 provider。
 
 ## 4. 强制简单性约束
 
@@ -372,7 +377,6 @@ WorkflowHub 可以在 attempt 中记录 session/runtime 用于续跑和诊断，
 ```json
 {
   "version": 4,
-  "host_provider": "codex",
   "required_result_protocol": "workflowhub-result.v1",
   "prompt": "检查修复后的完整材料",
   "continuation": { "runtime_id": "上一轮公开 runtime_id" }
@@ -400,6 +404,9 @@ WorkflowHub 可以在 attempt 中记录 session/runtime 用于续跑和诊断，
 优先级固定为 `revise_required > unavailable > pass`：已有一个有效 revise 时，其他 provider 的 transport 失败不能抹掉该问题；没有 revise 且有效 reviewer 不足时才 unavailable。
 
 默认每个 track 最小有效 reviewer 数为 1。高风险 stage 可以建议第二 reviewer，但不能由运行中状态动态增加 gate。
+
+当前 direct OCR 只要求至少一个配置 provider 形成有效结果；provider 的 source、model
+或 adapter 是否相同不再产生额外 quorum，也不影响派发和下一次重跑。
 
 不做加权投票、置信度算法、finding 自动去重、blocking streak 或 finding 生命周期。各 provider findings 原样保存，展示层只能分组，不能修改原文。
 
@@ -551,4 +558,4 @@ commit/merge gate 必须调用 `verify-final` 后才能承认 pass。普通 stag
 - ADR 0001 中 runtime/session/flow/reset/private receipt/public projection 作为正确性链的部分。
 - ADR 0002 中 TTL、delta mismatch、projection pending 需要人工 reset/recover 的部分。
 
-仍保留 ADR 的核心边界：异源 provider、冻结完整材料、transport 与 semantic 分离、基础设施失败不产生 verdict、最终代码一致性。
+仍保留 ADR 的核心边界：冻结完整材料、transport 与 semantic 分离、基础设施失败不产生 verdict、最终代码一致性。

@@ -91,7 +91,7 @@
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "2ad1d00e428a47baf9a7116bfa6f2c841e612b6c96742b94d0e81221300c4a98"
+      "sha256": "2cb1f76c78f4e967ae09adbcafcd33bffa73470b06b54ec3ee7084074e9968aa"
     },
     {
       "path": "scripts/review-runner.mjs",

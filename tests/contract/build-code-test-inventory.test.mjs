@@ -1,0 +1,129 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { listDeliveryFiles, listUntrackedFiles } from "../../tools/architecture/inventory.mjs";
+import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { runCapture } from "../../workflows/build-code/capture.mjs";
+
+// Retain the original G2 path-only characterization. The new assertion below
+// executes the existing canonical capture seam against an actual Node TAP run.
+const roots = [];
+const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+function fixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p9-test-assets-")));
+  roots.push(root);
+  git(root, "init", "-q", "-b", "main");
+  git(root, "config", "user.name", "Inventory fixture");
+  git(root, "config", "user.email", "inventory@example.test");
+  mkdirSync(join(root, "tests"));
+  writeFileSync(join(root, "tests", "two-entries.test.mjs"),
+    'import { it } from "vitest";\nit("AC-30 registered", () => {});\nit("AC-32 unregistered", () => {});\n');
+  git(root, "add", "tests/two-entries.test.mjs");
+  git(root, "commit", "-qm", "tracked tests");
+  writeFileSync(join(root, "tests", "new-entry.test.mjs"), 'import { it } from "vitest";\nit("new entry", () => {});\n');
+  return root;
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("ORACLE-P9-INVENTORY-G2 — existing path discovery is not test-identity proof", () => {
+  it("reports real tracked and untracked test assets as distinct path sources", () => {
+    const root = fixture();
+    expect(listDeliveryFiles({ root })).toContain("tests/two-entries.test.mjs");
+    expect(listUntrackedFiles({ root })).toContain("tests/new-entry.test.mjs");
+    expect(listDeliveryFiles({ root })).not.toContain("tests/new-entry.test.mjs");
+  });
+
+  it("exposes the actual limitation: one discovered test file is not two verified runnable IDs", () => {
+    const root = fixture();
+    const discoveredPaths = [...listDeliveryFiles({ root }), ...listUntrackedFiles({ root })];
+    expect(discoveredPaths.filter((path) => path === "tests/two-entries.test.mjs")).toHaveLength(1);
+    expect(discoveredPaths).not.toContain("tests/two-entries.test.mjs > AC-30 registered");
+    expect(discoveredPaths).not.toContain("tests/two-entries.test.mjs > AC-32 unregistered");
+    // Path enumeration alone cannot decide whether an indexed test ID was
+    // skipped/renamed/duplicated, nor whether the runner actually collected it.
+  });
+});
+
+describe("ORACLE-P9-INDEPENDENT-RUNNABLE-INVENTORY — real runner identity", () => {
+  it("separates independently registered, skipped, and unregistered IDs from real Node TAP", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p9-node-runner-")));
+    roots.push(root);
+    const repo = join(root, "repo");
+    const storage = join(root, "storage");
+    const home = join(root, "home");
+    mkdirSync(repo);
+    mkdirSync(storage);
+    mkdirSync(home);
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Runner inventory fixture");
+    git(repo, "config", "user.email", "runner@example.test");
+    mkdirSync(join(repo, "tests"));
+    // This file is source committed to the authenticated worktree. The fixed
+    // command below actually runs node:test; names in source alone prove nothing.
+    writeFileSync(join(repo, "tests", "two-entries.test.mjs"), [
+      'import { describe, it } from "node:test";',
+      'describe("registered suite", () => {',
+      '  it("AC-30 runnable", () => {});',
+      '  it("AC-31 unregistered", () => {});',
+      '  it("AC-32 skipped", { skip: true }, () => {});',
+      '});',
+      "",
+    ].join("\n"));
+    git(repo, "add", ".");
+    git(repo, "commit", "-qm", "real Node tests");
+    const bootstrapped = bootstrapTask({ project: "Inventory", task: "p9-node-runner", "target-repo": repo }, {
+      env: { HOME: home, WORKFLOWHUB_TASK_DIR: storage }, home, cwd: repo,
+    });
+    const task = openTask(bootstrapped.task_path, "Inventory", "p9-node-runner");
+    // Registry targets are independent literals, NOT parsed from fixture
+    // source or runner output. AC-31 intentionally is not registered; AC-32
+    // is registered but skipped, which must not be called unregistered.
+    const registeredTestIds = [
+      "tests/two-entries.test.mjs > registered suite > AC-30 runnable",
+      "tests/two-entries.test.mjs > registered suite > AC-32 skipped",
+    ];
+    const unregisteredId = "tests/two-entries.test.mjs > registered suite > AC-31 unregistered";
+    const command = "node --test --test-reporter=tap tests/two-entries.test.mjs";
+    const receipt = await runCapture(command, "quality/tests/p9-node-tap.json", {
+      task, workspace: openCurrentTaskWorkspace(task), registeredTestIds,
+    });
+    expect(receipt.exit_code).toBe(0);
+    expect(receipt.receipt_ref).toBe("quality/tests/p9-node-tap.json");
+    const saved = JSON.parse(task.readRecord(receipt.receipt_ref));
+    const rawOutput = task.readRecord(saved.output_ref);
+    expect(rawOutput).toContain("TAP version 13");
+    expect(rawOutput).toContain("AC-30 runnable");
+    expect(rawOutput).toContain("AC-31 unregistered");
+    expect(rawOutput).toContain("AC-32 skipped");
+    expect(rawOutput).toMatch(/# SKIP/);
+    expect(saved).not.toHaveProperty("test_inventory");
+    expect(receipt.test_inventory).toMatchObject({
+      status: "recorded", task_id: task.identity.taskId,
+      snapshot_tree: saved.snapshot_tree, source_digest: saved.source_digest,
+    });
+    expect(receipt.test_inventory.runner).toBe("node:test");
+    expect(receipt.test_inventory.tests).toEqual(expect.arrayContaining([
+      expect.objectContaining({ full_id: registeredTestIds[0], status: "passed" }),
+      expect.objectContaining({ full_id: unregisteredId, status: "passed" }),
+      expect.objectContaining({ full_id: registeredTestIds[1], status: "skipped" }),
+    ]));
+    expect(new Set(receipt.test_inventory.tests.map((entry) => entry.full_id))).toEqual(
+      new Set([...registeredTestIds, unregisteredId]),
+    );
+    expect(receipt.test_inventory.registered_test_ids).toEqual(registeredTestIds);
+    expect(receipt.test_inventory.unmatched).toEqual([unregisteredId]);
+    expect(receipt.test_inventory.unmatched).not.toContain(registeredTestIds[1]);
+    expect(receipt.test_inventory.skipped).toContain(registeredTestIds[1]);
+    expect(receipt.test_inventory.skipped).not.toContain(unregisteredId);
+    expect(receipt.test_inventory.output_ref).toBe(saved.output_ref);
+  });
+});

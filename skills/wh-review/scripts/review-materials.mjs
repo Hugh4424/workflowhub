@@ -109,6 +109,11 @@ const VERIFY_CODE_FULL_DIFF_FILES = new Set([
   "workflows/verify-code/steps.json",
 ]);
 const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
+  "tests/contract/acceptance-execution-tier.test.mjs",
+  "tests/contract/ocr-delegation-adapter.test.mjs",
+  "tests/contract/ocr-delegation-route.test.mjs",
+  "tests/contract/ocr-production-cutover.test.mjs",
+  "tests/review/review-record-route.test.mjs",
   "tests/contract/review-materials-contract.test.mjs",
   "tests/contract/stage-completion.test.mjs",
   "tests/contract/verify-architect-acceptance.test.mjs",
@@ -117,6 +122,19 @@ const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
   "tests/stage-review-cost-policy.test.mjs",
   "tests/verify-code-facts.test.mjs",
 ]);
+// The current verify-code OCR surface is the host/provider boundary and its
+// authenticated execution consumer. Other implementation changes remain in
+// the canonical diff index and summaries; sending every historical task
+// helper/test implementation to a provider turns a code review into a bulk
+// repository scan and is the source of the observed multi-minute stalls.
+const VERIFY_CODE_REVIEW_SURFACE_PREFIXES = [
+  "runtime/review/",
+  "runtime/evidence/freshness.mjs",
+  "tools/cli/stage-runtime.mjs",
+  "skills/wh-review/scripts/review-materials.mjs",
+  "skills/wh-review/scripts/simple-review-runner.mjs",
+  "workflows/verify-code/",
+];
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
  * directly own the current contract complete. Configuration, generic skill
@@ -167,8 +185,12 @@ export function verifyCodeDiffDeliveryForPath(path) {
 
 export function selectVerifyCodeDiffPaths(sections, stage) {
   if (stage !== "verify-code") return null;
+  const hasWorkflowHubRuntimeSurface = sections.some((section) => section.path.startsWith("runtime/"));
   return new Set(sections
-    .filter((section) => classifyReviewableCodePath(section.path) !== null)
+    .filter((section) => VERIFY_CODE_FULL_DIFF_FILES.has(section.path)
+      || VERIFY_CODE_REVIEW_SURFACE_PREFIXES.some((prefix) => section.path === prefix || section.path.startsWith(prefix))
+      || (!hasWorkflowHubRuntimeSurface && classifyReviewableCodePath(section.path) === "implementation")
+      || VERIFY_CODE_RELEVANT_TEST_FILES.has(section.path))
     .map((section) => section.path));
 }
 
@@ -1506,8 +1528,8 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
       : phaseDiffDeliveryForPath(section.path);
     const delivery = fullIntegrationDiff
       ? "included"
-      : stage === "verify-code" && includedVerifyCodePaths.has(section.path)
-      ? "included"
+      : stage === "verify-code" && includedVerifyCodePaths !== null
+      ? (includedVerifyCodePaths.has(section.path) ? "included" : "summary")
       : selectedChangeIds.size > 0
         ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
         : defaultDelivery;

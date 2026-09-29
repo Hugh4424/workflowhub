@@ -34,7 +34,7 @@ Phase 之间的边界重叠、依赖顺序不成立、计划里的测试路由�
 ## Goal
 
 Implement the current task with the smallest correct change, real tests,
-per-AC evidence, independent review, and explicit finding disposition.
+per-AC evidence, OCR review, and explicit finding disposition.
 
 ## 阶段末遗漏披露
 
@@ -109,12 +109,36 @@ or auxiliary progress gate.
 - Use exactly one applicable concrete testing skill directly:
   `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
 - Use the existing OCR delegation adapter through public `review --action=record`
-  once for each Phase. The adapter selects the packet; the independent host
+  once for each Phase. The adapter selects the packet; the host
   returns findings. Verify-code owns the one final worktree review.
 
 If a dependency is unavailable, preserve that fact and use any safe repository
 test commands already specified in the owning pre task card or post Phase file. The missing dependency limits the
 quality or completion claim; it does not prohibit code or material repair.
+
+## Affected business cases
+
+When a Phase calls for P8/P9 business-case selection, authenticate the current
+Task start, source snapshot, catalog revision, and independent runnable-test
+inventory before using them. Start the Phase's fixed trusted capture command
+once; its inner selection must derive cases and related regressions from the
+actual changed paths, then run validated test targets with argv and `shell:false`.
+The agent supplies the fixed command, not a hand-picked list of case paths.
+`selectAffectedCases`, `runTargetedCases`, and `reconcileCases` are importable
+seams, not a fixed launcher or independent authentication authority. If the
+fixed consumer, exact inventory identity, or canonical binding is absent,
+record the attempted route and `unknown`/`unavailable` for affected ACs.
+
+For each selected case, retain the rule and catalog revision, AC, test file and
+full runnable identity, argv, child exit, raw report/ref/hash, source snapshot,
+observable business inputs and before/after effect refs. Check the supplied
+effect against a project-owned oracle and its source revision; a passing TAP
+name, exit 0, or a matching fixture field cannot establish a business pass.
+Record structural and risk gaps with their owners. On same-task repair, retain
+the old failure ref, take a new snapshot, recompute the affected set, rerun
+adjacent regressions, and link the new receipt to the old fact without
+overwriting either. Complete the AC claim only after current authenticated
+case evidence and the independent review facts have been recorded.
 
 ## Conditional UI implementation handoff
 
@@ -143,6 +167,8 @@ cleanup result to validate against `browser-qa-evidence.v1`; a fixture-only
 return, identity mismatch, browser failure, cancellation, or cleanup failure
 is retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.
 No public Runner, QA command, or persistent QA control object is created.
+This remains inside build-code: it creates no new stage, and UI quality evidence
+is no gate for continuing same-task repair.
 
 For a declared browser acceptance scenario, build-code passes the four-field
 `acceptance_scenario` to the private controlled-QA adapter. The adapter must
@@ -178,8 +204,8 @@ make command/service acceptance not applicable.
 For each ordinary `build-code/phase` review, submit `review --action=record`
 with `input.request` binding `review_scope="phase"`, `subject_kind="phase"`,
 and `phase_id="P<n>"`. No candidate flag or comparative go/no-go is required.
-The OCR adapter selects the authenticated packet and files; the independent
-host executor returns the real findings. Consume the returned canonical
+The OCR adapter selects the authenticated packet and files; the host executor
+returns the real findings. Consume the returned canonical
 `result_ref` or unavailable `attempt_ref` through `run` `receipts.review`.
 The Phase result is `phase_review`; the final worktree review belongs to
 verify-code. Historical integration attempts remain readable facts, not a
@@ -187,21 +213,25 @@ current build-code step or completion condition.
 Malformed code-surface requests fail before dispatch. An unavailable host
 remains an unavailable review fact and permits same-task repair.
 
-### AC-REVIEW-011：OCR 工具不可用时的独立替代
+Direct OCR providers have the same fixed 600,000 ms host deadline as verify-code;
+health/output sampling is diagnostic only. A timed-out provider remains a failed
+provider attempt, while another successful route can still be retained.
+
+### AC-REVIEW-011：OCR 工具不可用时的替代审查
 
 当前 WorkflowHub 主会话读取本 Phase 的 OCR canonical attempt：仅当工具
 `unavailable` 且零成功审查路时，在同一 Phase 内调用一次
 `skills/architect-code-review/SKILL.md`。把当前 diff、完整 AC、OCR packet
-可读部分及原始失败原因交给未参与该 Phase 实现的执行者，在全新独立上下文中审查；
+可读部分及原始失败原因交给能够调用的执行者审查；
 此条件调用由主会话显式读取技能，不增加每 Phase 的常规依赖或固定轮次。
-先核对执行者身份、与实现者的参与记录及仓库读取能力。无法确认独立性或无法启动
-时，该一次替代机会记为 unavailable，不由实现者自审。已有成功路的 findings
+只核对输入范围、执行能力和真实输出。reviewer 与实现者是否同源、是否使用同一
+宿主或模型都不构成阻塞。无法启动时，该一次替代机会记为 unavailable。已有成功路的 findings
 照常入账；局部覆盖缺口单独披露。明确的人为取消按取消事实处理，不自动重派。
 
 一次替代调用完成后，保存原始输入范围、task/Phase、材料版本与代码快照、OCR
-`attempt_ref`、执行者身份及未参与实现的依据、调用命令或 host invocation、
+`attempt_ref`、执行者身份、调用命令或 host invocation、
 开始/结束时间、exit/transport、原始输出、findings、覆盖缺口和各原件 hash。
-可用时逐条处理替代 finding，但只称“独立替代审查已执行”；替代也不可用时
+可用时逐条处理替代 finding；替代也不可用时
 明确记 `unverified`、两路原因和缺失维度，不重派、不写 `findings: []`。
 旧 wh-review/broker 仅供历史读取，不是本分支的执行者。
 
@@ -211,7 +241,7 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
 `result_ref` 或 unavailable `attempt_ref`；在正式 review consumer 无法认证
 替代结果前，Phase review 质量保持 `incomplete/unverified`，不得把证据
 附件冒充 `quality/reviews/results`。单独判断 AC-REVIEW-011：若同一 Phase
-的 OCR unavailable attempt、恰好一次未参与实现者的独立调用及其身份/原始
+的 OCR unavailable attempt、恰好一次真实替代调用及其身份/原始
 输出/exit、来源缺口和最终披露均可核对，则本 AC 可记 achieved；替代也
 不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
 这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
@@ -347,7 +377,7 @@ After all implementation Tasks, use the dedicated final task in the pre
 final aggregate strategy once, and record its command, oracle, result, limits,
 and per-AC impact. Reconcile the Phase review findings and repairs with the
 final test and AC facts, then continue to `stage-end-spec-analyze`. Verify-code
-performs one independent final worktree OCR review and replays the risky paths
+performs one final worktree OCR review and replays the risky paths
 and complete user flow. Historical integration review outcomes stay visible but
 do not require a new dispatch.
 
@@ -361,7 +391,7 @@ final aggregate.
 ## Completion and fail-loud writes
 
 Rule: publish no completion unless the requested behavior is implemented, relevant
-real tests ran, every applicable AC has a result, a current independent review
+real tests ran, every applicable AC has a result, a current OCR review
 result is recorded, every finding has a disposition, and the stage-end
 plain-language summary exists. Keep adverse, unavailable, failed, and unknown
 review facts visible; an unavailable attempt remains quality-incomplete and does

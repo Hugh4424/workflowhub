@@ -1,7 +1,7 @@
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
-import { officialStageHandler } from "./stage-handlers.mjs";
+import { officialStageHandler, verifyUnavailableReview } from "./stage-handlers.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
@@ -15,8 +15,8 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../task/material-workspace.mjs";
 import { isExecutionRecordOnlyMaterialDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
-import { STAGE_SPEC_ANALYZE_PROFILES, deriveDecisionLogOriginalSourceCensus, projectAcceptanceExecutionData, projectPostPhaseAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
+import { activeAcceptanceCriterionIds, STAGE_SPEC_ANALYZE_PROFILES, deriveDecisionLogOriginalSourceCensus, projectAcceptanceExecutionData, projectPostPhaseAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
+import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
@@ -24,10 +24,11 @@ import { isDateTime, normalizeStageReflectionAvailability, publishStageReflectio
 import { STAGE_HANDOFF_STAGES, publishStageHandoff, stageHandoffFailure } from "./stage-handoff.mjs";
 import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 import { classifyProtocolError } from "./protocol-error-whitelist.mjs";
+import { buildStageEndReportFacts, renderStageEndReport } from "./stage-end-report.mjs";
 import { initializeTaskStore, writeStageRow } from "../task/task-store.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
 import { runWorkspaceCommand, runCandidateWorkspaceCommand } from "../task/workspace-runner.mjs";
-import { authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult } from "../evidence/freshness.mjs";
+import { authenticateBuildCodeCompletion, isFutureStageAcceptanceDeferred, authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult, authenticateP5AdvisorySources, isCompleteP5T007VitestOutput, parseP5HumanExceptionDeclaration } from "../evidence/freshness.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -1199,11 +1200,19 @@ export async function runStageEndReflection(context, {
    */
   const withStageRow = (reflectionResultValue, handoffFacts = null, { handoffPending = false } = {}) => {
     const handoff = handoffFacts === null ? null : handoffFacts.handoff;
-    const stageResult = (rowError = null) => Object.freeze({
-      ...reflectionResultValue,
-      ...(handoff === null ? {} : { stage_handoff: handoff }),
-      ...(rowError === null ? {} : { stage_row_error: rowError }),
-    });
+    const stageResult = (rowError = null, rowWrite = null) => {
+      const value = {
+        ...reflectionResultValue,
+        ...(handoff === null ? {} : { stage_handoff: handoff }),
+        ...(rowError === null ? {} : { stage_row_error: rowError }),
+      };
+      // Private same-call carrier only. Public JSON and the frozen stage row
+      // do not acquire another field or a claimed test-consumption fact.
+      if (rowWrite !== null) Object.defineProperty(value, "stage_row_write", {
+        value: rowWrite, enumerable: false, configurable: false, writable: false,
+      });
+      return Object.freeze(value);
+    };
     try {
       // CLI bootstrap initializes the store first, but this runtime entry point
       // is also the canonical writer for a directly constructed task context.
@@ -1307,13 +1316,13 @@ export async function runStageEndReflection(context, {
         // created for them.
         handoff: handoffItems,
       }, existingStageRow);
-      writeStageRow(ctx.task.taskPath, stageRow);
+      const rowWrite = writeStageRow(ctx.task.taskPath, stageRow);
+      return stageResult(null, rowWrite);
     } catch (error) {
       // A record write failure must not turn a published handoff or a finished
       // stage end into a success claim; the error stays visible on the result.
       return stageResult(error?.message ?? String(error));
     }
-    return stageResult();
   };
   const withHandoff = (reflectionResultValue) => {
     if (!STAGE_HANDOFF_STAGES.includes(stage)) return withStageRow(reflectionResultValue);
@@ -1685,8 +1694,10 @@ export function readCurrentE2eAcceptanceEvidence(ctx, receipts = {}) {
   // quality_review belongs to its OCR code review. The accepted confirmation
   // already names the independent E2E review it confirms.
   if (typeof receipts.confirmation !== "string") return result;
+  const materialScope = stageFactMaterialFiles("verify-code", materials, { activationCohort });
   const current = { task_id: ctx.identity.taskId, stage: "verify-code", snapshot_tree: ctx.kernel.currentVNextSnapshot().tree,
-    material_revision: ctx.kernel.currentVNextMaterialRevision(), material_scope_revision: stageMaterialScopeRevision("verify-code", materials, { activationCohort: ctx.task?.manifest?.activation_cohort ?? "pre" }) };
+    material_revision: ctx.kernel.currentVNextMaterialRevision(), material_scope: materialScope,
+    material_scope_revision: stageMaterialScopeRevision("verify-code", materials, { activationCohort }) };
   const read = (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
     ? ctx.task.readRecordBytes(ref) : ctx.task.readRecord(ref);
   const dependencies = {};
@@ -2174,6 +2185,7 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   subjectStatus = status,
   detail,
   evidenceState,
+  acceptanceResultOverride,
   notApplicableReason,
   reviewFindings,
   evidenceRefs = [],
@@ -2182,10 +2194,16 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   riskAcceptanceRefs,
   executionItems,
   executionBinding,
+  uiQaProjection,
   executionEvidence,
   analysisResult,
   recordedAt = null,
 }) {
+  if (acceptanceResultOverride !== undefined
+      && (subject !== "stage_end_spec_analyze"
+        || !new Set(["incomplete", "inconsistent", "unavailable"]).has(acceptanceResultOverride))) {
+    throw new Error("stage-end spec-analyze acceptance result override is invalid");
+  }
   const effectiveRecordedAt = recordedAt ?? new Date().toISOString();
   const subjectEvidence = evidenceRefs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
   const evidenceValue = executionEvidence ?? {
@@ -2211,6 +2229,7 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
       ...(executionItems ? {
         execution_items: executionItems,
         execution_binding: executionBinding ?? null,
+        ...(uiQaProjection ? { ui_qa_projection: uiQaProjection } : {}),
       } : {}),
       ...(analysisResult ? { analysis_result: analysisResult } : {}),
     },
@@ -2223,7 +2242,7 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   const acceptanceValue = {
     schema_version: "acceptance-evidence.v1",
     acceptance_criterion_id: subject,
-    result: acceptanceResultForSubjectStatus(subjectStatus),
+    result: acceptanceResultOverride ?? acceptanceResultForSubjectStatus(subjectStatus),
     refs: [{ ref: evidenceRef, sha256: evidenceHash }],
     snapshot_tree: snapshot.tree,
     summary: { actual_outcome: evidenceState ?? status, evidence_type: "stage quality fact" },
@@ -2250,6 +2269,7 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
   return Object.freeze({
     fact,
     evidence: Object.freeze({ ref: acceptanceRef, sha256: acceptanceHash }),
+    stageEvidence: Object.freeze({ ref: evidenceRef, sha256: evidenceHash }),
   });
 }
 
@@ -2264,6 +2284,14 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null
   const postReport = ctx.stage === "build-plan" && ctx.manifest?.activation_cohort === "post"
     && result.spec_analyze?.producer === "workflowhub-session";
   const consistent = postReport ? analyzerResult?.status === "reported" : analyzerResult?.status === "consistent";
+  const analyzerVerdict = analyzerResult?.status;
+  const evidenceState = new Set(["material_incomplete", "inconsistent", "unavailable", "consistent", "reported"])
+    .has(analyzerVerdict) ? analyzerVerdict : undefined;
+  const acceptanceResultOverride = {
+    material_incomplete: "incomplete",
+    inconsistent: "inconsistent",
+    unavailable: "unavailable",
+  }[analyzerVerdict];
   const stageOutcomeEvidence = typeof result.stage_outcome_ref === "string"
     && typeof result.stage_outcome_hash === "string"
     ? [{ ref: result.stage_outcome_ref, sha256: result.stage_outcome_hash }]
@@ -2271,6 +2299,8 @@ function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null
   return publishAcceptanceQualityFact(ctx, snapshot, {
     subject: "stage_end_spec_analyze",
     status: consistent ? "passed" : "missing",
+    evidenceState,
+    acceptanceResultOverride,
     detail: consistent
       ? postReport
         ? "current post build-plan structural report was published; semantic quality belongs to the independent merged review"
@@ -2765,17 +2795,8 @@ const result = await module[name](JSON.parse(input));
 process.stdout.write(JSON.stringify(result));
 `;
 
-async function executePrivateAcceptance(ctx, scenario, binding, signal, legacyStageOutcome = null) {
+async function executePrivateAcceptance(ctx, scenario, binding, signal) {
   if (!scenario.execution) return unavailableAcceptanceScenario(scenario, `${scenario.tier} acceptance execution requires explicit execution`);
-  if (legacyStageOutcome?.value) {
-    const outcome = legacyStageOutcome.value;
-    let producer;
-    try { producer = validateStageOutcomeProducer(outcome.value, "build-code", { requireSource: true }); }
-    catch (error) { return unavailableAcceptanceScenario(scenario, error.message); }
-    const executorActor = Object.freeze({ source_kind: producer.kind, source_id: producer.sourceId, run_id: producer.agentRunId });
-    const executionBinding = Object.freeze({ stage_outcome_ref: outcome.ref, stage_outcome_hash: outcome.sha256 });
-    return executeAcceptanceCommandOrService(ctx, scenario, binding, executionBinding, executorActor, signal);
-  }
   if (typeof binding.attempt_id !== "string" || binding.attempt_id.trim() === "") {
     return unavailableAcceptanceScenario(scenario, "acceptance execution has no current WorkflowHub attempt binding");
   }
@@ -2895,7 +2916,9 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     return Object.values(value).some(containsNotReadPlaceholder);
   };
   const executed = !inconclusive && processPassed && rows.length === ids.length
-    && rows.every((row) => row.outcome !== "incomplete" && row.outcome !== "deferred"
+    && rows.every((row) => row.outcome !== "incomplete" && (row.outcome !== "deferred" || isFutureStageAcceptanceDeferred({
+      spec: currentMaterialTexts(ctx)?.["spec.md"], activeCriterionIds: activeAcceptanceCriterionIds(currentMaterialTexts(ctx)?.["spec.md"]),
+      criterionId: row.acceptance_criterion_id, outcome: row.outcome, owner: row.owner }))
       && row.assertions.every((assertion) => assertion.result === "passed"
         && !containsNotReadPlaceholder(assertion.expected)
         && !containsNotReadPlaceholder(assertion.actual)));
@@ -2903,7 +2926,7 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     executor: "workspace-command", ...(executed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
 }
 
-async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, signal = undefined, authenticatedStageOutcome = null) {
+async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, signal = undefined) {
   if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)) throw new TypeError("acceptance scenario must be an object");
   const snapshot = ctx.kernel.currentVNextSnapshot();
   const materialRevision = ctx.kernel.currentVNextMaterialRevision();
@@ -2920,7 +2943,7 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
     source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: scenario.tier,
     acceptance_criterion_ids: Object.freeze([...(scenario.acceptance_criterion_ids ?? [])]),
   });
-  if (scenario.tier !== "browser") return executePrivateAcceptance(ctx, scenario, binding, signal, authenticatedStageOutcome);
+  if (scenario.tier !== "browser") return executePrivateAcceptance(ctx, scenario, binding, signal);
   if (typeof publication.runControlledUiQa !== "function") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no controlled QA adapter");
   if (typeof attemptId !== "string" || attemptId.trim() === "") return unavailableAcceptanceScenario(scenario, "browser acceptance execution has no current attempt binding");
   const acceptanceScenario = Object.freeze({ source: scenario.source, sample: scenario.sample, scenario: scenario.scenario, tier: "browser" });
@@ -2961,6 +2984,81 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
   }
 }
 
+function projectAcceptanceBrowserUiQa(ctx, snapshot, executionItems, executionBinding, uiQa) {
+  const browserItems = executionItems.filter((item) => item?.tier === "browser");
+  if (browserItems.length === 0) return null;
+  const unavailable = (reason) => ({ status: "unknown", reason, items: [] });
+  if (executionBinding?.kind !== WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND
+      || executionBinding.task_id !== ctx.identity.taskId
+      || executionBinding.material_revision !== ctx.kernel.currentVNextMaterialRevision()
+      || executionBinding.snapshot_tree !== snapshot.tree
+      || typeof executionBinding.attempt_id !== "string" || !executionBinding.attempt_id.trim()) {
+    return unavailable("browser execution has no current task, attempt, material and snapshot binding");
+  }
+  const observations = Array.isArray(uiQa?.items) ? uiQa.items : uiQa ? [uiQa] : [];
+  if (observations.length !== browserItems.length) return unavailable("UI QA source does not uniquely match each browser case");
+  const projected = [];
+  const seenCases = new Set();
+  const seenSources = new Set();
+  for (const item of browserItems) {
+    const caseValue = { source: item.source, sample: item.sample, scenario: item.scenario, tier: "browser" };
+    const caseKey = canonicalJson(caseValue);
+    if (seenCases.has(caseKey) || item.task_id !== ctx.identity.taskId || item.status !== "executed"
+        || !Array.isArray(item.acceptance_criterion_ids) || item.acceptance_criterion_ids.length !== 1
+        || typeof item.acceptance_criterion_ids[0] !== "string" || !item.acceptance_criterion_ids[0].trim()
+        || !Array.isArray(item.evidence_refs) || item.evidence_refs.length !== 1) {
+      return unavailable("browser case, AC or execution source is missing or not unique");
+    }
+    seenCases.add(caseKey);
+    const reference = item.evidence_refs[0];
+    if (typeof reference?.ref !== "string"
+        || !/^quality\/evidence\/browser-qa\/[a-f0-9]{64}\.json$/.test(reference.ref)
+        || !SHA256_HEX.test(reference.sha256 ?? "")
+        || reference.ref !== `quality/evidence/browser-qa/${reference.sha256}.json`
+        || seenSources.has(reference.ref)) return unavailable("browser source ref/hash is missing or reused");
+    seenSources.add(reference.ref);
+    let browser;
+    try {
+      const raw = ctx.task.readRecord(reference.ref);
+      if (createHash("sha256").update(raw).digest("hex") !== reference.sha256) throw new Error("source hash mismatch");
+      browser = JSON.parse(raw);
+      validateBrowserQaEvidence(browser);
+    } catch {
+      return unavailable("browser source bytes are unavailable or invalid");
+    }
+    const observed = observations.filter((entry) => entry?.evidence_ref === reference.ref
+      && entry?.evidence_hash === reference.sha256);
+    if (observed.length !== 1) return unavailable("UI QA ref/hash does not uniquely match browser source");
+    const qa = observed[0];
+    if (browser.task_id !== ctx.identity.taskId || browser.stage !== "build-code"
+        || browser.attempt_id !== executionBinding.attempt_id
+        || browser.material_revision !== executionBinding.material_revision
+        || browser.snapshot_tree !== snapshot.tree
+        || browser.acceptance_criterion_id !== item.acceptance_criterion_ids[0]
+        || !sameAcceptanceScenario(browser.acceptance_scenario, caseValue)
+        || browser.data_identity?.source !== item.source || browser.data_identity?.dataset_id !== item.sample
+        || browser.data_identity?.fixture_only !== false || browser.fixture?.fixture_only !== false
+        || browser.result !== "pass" || browser.test?.exit_code !== 0
+        || browser.cancellation?.status !== "not_cancelled" || browser.cleanup?.status !== "completed"
+        || ["service_identity", "api_identity", "dto_identity"].some((field) => !browser[field])
+        || String(browser.service_identity?.instance ?? "").toLowerCase() === "fixture"
+        || qa.status !== "passed" || qa.result !== browser.result
+        || qa.task_id !== browser.task_id || qa.attempt_id !== browser.attempt_id
+        || qa.material_revision !== browser.material_revision || qa.snapshot_tree !== browser.snapshot_tree
+        || qa.invocation_id !== browser.invocation_id
+        || ["service_identity", "api_identity", "dto_identity"].some((field) => canonicalJson(qa[field]) !== canonicalJson(browser[field]))) {
+      return unavailable("UI QA status or task, case, AC, service identity differs from browser source");
+    }
+    projected.push({ case: caseValue, acceptance_criterion_ids: [...item.acceptance_criterion_ids],
+      task_id: browser.task_id, attempt_id: browser.attempt_id,
+      material_revision: browser.material_revision, snapshot_tree: browser.snapshot_tree,
+      evidence_ref: reference.ref, evidence_hash: reference.sha256,
+      result: browser.result, status: "passed", service_identity: browser.service_identity,
+      api_identity: browser.api_identity, dto_identity: browser.dto_identity });
+  }
+  return { status: "passed", items: projected };
+}
+
 function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, publicationTimestamp) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
@@ -2980,6 +3078,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     ? phaseProgress?.material_revision === materials.revision ? phaseProgress.phase_id : null
     : undefined;
   const qualityFactRefs = [];
+  let acceptanceExecutionPublication = null;
   const qualityAdvisoryFactRefs = [];
   const reviewStatuses = new Map();
   const reviewSources = new Map();
@@ -3103,7 +3202,11 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     }
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
     const confirmation = kind === "confirmation" ? confirmationEvidenceStatus(ctx.task, candidate) : null;
-    const status = kind === "acceptance_criterion"
+    const uiQaProjection = subject === "acceptance_execution" && ctx.manifest?.activation_cohort === "post"
+      ? projectAcceptanceBrowserUiQa(ctx, snapshot, acceptanceSubject?.execution_items ?? [],
+        acceptanceSubject?.execution_binding ?? null, result.facts?.ui_qa)
+      : null;
+    const baseStatus = kind === "acceptance_criterion"
       ? acceptanceSubject?.status === undefined
         ? "missing"
         : new Set(["passed", "failed", "inconclusive", "deferred", "missing"]).has(acceptanceSubject.status)
@@ -3118,6 +3221,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
       : candidate === null
         ? "missing"
         : "passed";
+    const status = uiQaProjection && uiQaProjection.status !== "passed" ? "missing" : baseStatus;
     const qualityPredicatePassed = kind === "review" ? status === "recorded" : status === "passed";
     if (!qualityPredicatePassed && gating) {
       allPassed = false;
@@ -3138,7 +3242,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
       acceptanceFact = publishAcceptanceQualityFact(ctx, snapshot, {
         subject,
         status,
-        detail: acceptanceSubject?.detail,
+        detail: uiQaProjection?.status === "unknown"
+          ? `${acceptanceSubject?.detail ?? "acceptance execution"}; ${uiQaProjection.reason}`
+          : acceptanceSubject?.detail,
         evidenceRefs: subjectEvidence,
         ...(subject === "finding_dispositions" ? {
           dispositionItems: acceptanceSubject?.disposition_items ?? [],
@@ -3148,9 +3254,11 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
         ...(subject === "acceptance_execution" ? {
           executionItems: acceptanceSubject?.execution_items ?? [],
           executionBinding: acceptanceSubject?.execution_binding ?? null,
+          uiQaProjection,
         } : {}),
         recordedAt: publicationTimestamp,
       });
+      if (subject === "acceptance_execution") acceptanceExecutionPublication = acceptanceFact;
       factEvidenceRef = acceptanceFact.evidence.ref;
       factEvidenceHash = acceptanceFact.evidence.sha256;
       factEvidence.push(acceptanceFact.evidence);
@@ -3217,10 +3325,21 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   // actual leaves. Missing/unknown rows remain non-passing facts; no status is
   // inferred from the number of rows or from aggregate test counts.
   if (ctx.stage === "build-code" && Array.isArray(result.facts?.acceptance_coverage?.items)) {
+    const executionItems = result.facts.acceptance_execution?.items ?? [];
+    const browserItems = executionItems.filter((entry) => entry.tier === "browser");
+    let currentAggregate = null;
+    if (browserItems.length > 0 && acceptanceExecutionPublication) {
+      const { stageEvidence } = acceptanceExecutionPublication;
+      const raw = ctx.task.readRecord(stageEvidence.ref);
+      if (createHash("sha256").update(raw).digest("hex") !== stageEvidence.sha256) {
+        throw new Error("current acceptance aggregate changed before AC publication");
+      }
+      currentAggregate = JSON.parse(raw);
+    }
     for (const item of result.facts.acceptance_coverage.items) {
       const subject = typeof item?.acceptance_criterion_id === "string" ? item.acceptance_criterion_id : null;
       if (!subject) continue;
-      const actualLeaves = (result.facts.acceptance_execution?.items ?? [])
+      const actualLeaves = executionItems
         .filter((entry) => entry.tier !== "browser")
         .flatMap((entry) => entry.evidence_refs ?? []).flatMap((reference) => {
           const raw = ctx.task.readRecord(reference.ref);
@@ -3228,9 +3347,28 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
           const value = JSON.parse(raw);
           return value.subject === subject ? [validateAcceptanceExecutionEvidence(value)] : [];
         });
+      const requiredBrowser = browserItems.filter((entry) => entry.acceptance_criterion_ids?.includes(subject));
+      const browserProof = requiredBrowser.length === 0 || (
+        currentAggregate?.status === "passed"
+        && currentAggregate.subject_fact?.ui_qa_projection?.status === "passed"
+        && item.status === "covered"
+        && requiredBrowser.every((entry) => {
+          const reference = entry.evidence_refs?.[0];
+          if (entry.status !== "executed" || entry.acceptance_criterion_ids?.length !== 1
+              || entry.evidence_refs?.length !== 1 || !reference
+              || !item.evidence_refs?.some((candidate) => candidate.ref === reference.ref && candidate.sha256 === reference.sha256)) return false;
+          const matching = currentAggregate.subject_fact.ui_qa_projection.items?.filter((projection) =>
+            projection.evidence_ref === reference.ref && projection.evidence_hash === reference.sha256
+            && projection.status === "passed" && projection.result === "pass"
+            && projection.acceptance_criterion_ids?.length === 1
+            && projection.acceptance_criterion_ids[0] === subject
+            && ["source", "sample", "scenario", "tier"].every((field) => projection.case?.[field] === entry[field]));
+          return matching?.length === 1;
+        })
+      );
       const status = actualLeaves.some((value) => value.status === "failed") ? "failed"
-        : item.status === "covered" || item.status === "not_applicable" ? "passed" : "missing";
-      const subjectStatus = item.status === "not_applicable" ? "not_applicable" : status;
+        : (item.status === "covered" || item.status === "not_applicable") && browserProof ? "passed" : "missing";
+      const subjectStatus = item.status === "not_applicable" && browserProof ? "not_applicable" : status;
       const evidenceState = item.evidence_state
         ?? (item.status === "unknown" && (!item.evidence_refs || item.evidence_refs.length === 0)
           ? "unknown_empty_evidence"
@@ -3242,13 +3380,22 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
         evidenceState,
         ...(item.status === "not_applicable" ? { notApplicableReason: item.not_applicable_reason } : {}),
         ...(item.evidence_state === "zero_review_findings" ? { reviewFindings: item.review_findings ?? [] } : {}),
-        detail: item.not_applicable_reason
+        detail: !browserProof
+          ? `${item.semantic_gap ?? "current per-AC evidence is not yet complete"}; browser AC is not bound to this run's passing aggregate and raw source`
+          : item.not_applicable_reason
           ? `not_applicable: ${item.not_applicable_reason}`
           : item.evidence_state === "zero_review_findings"
             ? "related review completed with zero findings; no AC execution proof was inferred"
             : item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
-        evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
-        ...(actualLeaves.length === 1 ? { executionEvidence: actualLeaves[0] } : {}),
+        evidenceRefs: requiredBrowser.length > 0 && acceptanceExecutionPublication
+          ? [acceptanceExecutionPublication.evidence, ...(Array.isArray(item.evidence_refs) ? item.evidence_refs : [])]
+          : Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
+        // A single passed leaf can be the result of only one of several
+        // required scenarios. Non-covered ACs need this wrapper so the
+        // partial ref and missing-scenario diagnosis remain bound to a
+        // non-passing fact instead of publishing a passed leaf as missing.
+        ...(requiredBrowser.length === 0 && item.status === "covered" && status === "passed" && actualLeaves.length === 1
+          && actualLeaves[0].status === "passed" ? { executionEvidence: actualLeaves[0] } : {}),
         recordedAt: publicationTimestamp,
       });
       qualityFactRefs.push(leaf.fact.ref);
@@ -3272,7 +3419,21 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx), {
     activationCohort: ctx.manifest?.activation_cohort ?? "pre",
   });
+  const buildCodeAuthentication = ctx.stage === "build-code" ? authenticateBuildCodeCompletion({
+    task: ctx.task, read: (ref) => ctx.task.readRecord(ref), currentMaterialRevision: materials.revision, snapshotTree: snapshot.tree,
+    spec: currentMaterialTexts(ctx)?.["spec.md"], activeCriterionIds: activeAcceptanceCriterionIds(currentMaterialTexts(ctx)?.["spec.md"]),
+    observations, verifyUnavailableReview,
+  }) : null;
+  for (const observation of observations) {
+    const value = observation.fact.value;
+    if ((value.subject === "acceptance_criteria" && buildCodeAuthentication?.acceptance_execution_complete === true)
+        || (value.subject === "finding_dispositions" && buildCodeAuthentication?.unavailable_phase_review === true)) {
+      qualityAdvisoryFactRefs.push(observation.fact.ref);
+      qualityAdvisories.push(`${value.subject}:${value.status}:completion_source_separate_from_quality`);
+    }
+  }
   const completion = deriveStageCompletion(ctx.stage, observations, {
+    authenticateBuildCodeCompletion: () => buildCodeAuthentication,
     authenticateCodeReview: ({ fact }) => authenticateCurrentVerifyCodeReviewFact(ctx.task, fact, {
       snapshotTree: snapshot.tree,
       materialRevision: materials.revision,
@@ -3751,7 +3912,7 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       ? { runControlledUiQa: publication.runControlledUiQa }
       : {}),
     ...(ctx.stage === "build-code" ? {
-      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, signal, authenticatedStageOutcome),
+      runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, signal),
     } : {}),
     ...(ctx.stage === "verify-code" ? {
       readE2eAcceptanceEvidence: () => readCurrentE2eAcceptanceEvidence(ctx, invocation.receipts),
@@ -3814,8 +3975,14 @@ export function verifyOfficialEvidence(ctx, result) {
       snapshotTree: tests.snapshot_tree,
       requireRuntimeProfile: tests.runtime_profile !== undefined || tests.capability_proof !== undefined,
     });
+    const structuredFields = new Set(["runtime_profile", "capability_proof", "behavior_fingerprint"]);
     for (const key of ["command", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash", "runtime_profile", "runtime_profile_status", "runtime_profile_authenticated", "capability_proof", "behavior_fingerprint", "behavior_fingerprint_status"]) {
-      if (receiptValue[key] !== tests[key]) throw new Error(`test receipt and facts.${key} are not bound`);
+      const receiptField = receiptValue[key], factField = tests[key];
+      const bothStructured = structuredFields.has(key)
+        && receiptField !== null && typeof receiptField === "object"
+        && factField !== null && typeof factField === "object";
+      if (bothStructured ? canonicalJson(receiptField) !== canonicalJson(factField)
+        : receiptField !== factField) throw new Error(`test receipt and facts.${key} are not bound`);
     }
     if ((tests.status === "passed" && receiptValue.exit_code !== 0)
         || (tests.status === "failed" && receiptValue.exit_code === 0)) {
@@ -4113,7 +4280,112 @@ async function currentPostBuildPlanSpecAnalyze(ctx, preflight, runSpecAnalyze = 
   });
 }
 
-async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, runSpecAnalyze = null) {
+export function buildPostAcceptanceChainRows({ rows, spec, decisionLog, boundEvidenceRefs, materialRevision, snapshotTree, taskId, tests }) {
+  const mapped = new Map();
+  const section = typeof spec === "string"
+    ? spec.match(/(?:^|\n)##\s+来源与决策映射[^\n]*\n([\s\S]*?)(?=\n##\s|$)/)?.[1] ?? ""
+    : "";
+  const idsIn = (cell, prefix) => {
+    const ids = [];
+    const pattern = new RegExp(`\\b${prefix}-(\\d+)(?:\\.\\.(?:${prefix}-)?(\\d+))?\\b`, "g");
+    for (const match of String(cell ?? "").matchAll(pattern)) {
+      const first = Number(match[1]);
+      const last = match[2] === undefined ? first : Number(match[2]);
+      if (last < first || last - first > 100) continue;
+      for (let number = first; number <= last; number += 1) {
+        const id = `${prefix}-${String(number).padStart(match[1].length, "0")}`;
+        if (!ids.includes(id)) ids.push(id);
+      }
+    }
+    return ids;
+  };
+  const decisions = new Set(
+    [...String(decisionLog ?? "").matchAll(/^#{1,6}\s+(D-\d{3})\b/gm)].map((match) => match[1]),
+  );
+  const sourceCensus = deriveDecisionLogOriginalSourceCensus(decisionLog);
+  const originalSourceIds = new Set((sourceCensus.entries ?? []).map((entry) => entry.id));
+  const indexByR = new Map((sourceCensus.index_entries ?? []).map((entry) => [entry.id, entry.source_refs]));
+  const trustedIndex = sourceCensus.status === "present" && sourceCensus.errors.length === 0
+    && indexByR.size > 0 && originalSourceIds.size > 0;
+  // R references are trace edges, never authenticated original source IDs.
+  const noOriginalSourceIndex = indexByR.size === 0 && (sourceCensus.source_units ?? []).length === 0;
+  for (const line of section.split(/\r?\n/)) {
+    if (!line.startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.length !== 4 || cells[0] === "来源" || /^[-:\s]+$/.test(cells[0])) continue;
+    const sourceIds = idsIn(cells[0], "R");
+    const decisionIds = idsIn(cells[1], "D");
+    const frIds = idsIn(cells[2], "FR");
+    for (const acId of idsIn(cells[3], "AC")) {
+      const entry = mapped.get(acId) ?? { sourceIds: [], decisionIds: [], missingDecisionIds: [], frIds: [] };
+      for (const id of sourceIds) if (!entry.sourceIds.includes(id)) entry.sourceIds.push(id);
+      for (const id of decisionIds) {
+        const target = decisions.has(id) ? entry.decisionIds : entry.missingDecisionIds;
+        if (!target.includes(id)) target.push(id);
+      }
+      for (const id of frIds) if (!entry.frIds.includes(id)) entry.frIds.push(id);
+      mapped.set(acId, entry);
+    }
+  }
+  const bound = Array.isArray(boundEvidenceRefs) ? boundEvidenceRefs.filter((entry) =>
+    typeof entry?.ref === "string" && entry.ref.trim() !== ""
+    && SHA256_HEX.test(entry.hash ?? "") && entry.status === "fresh"
+    && entry.snapshot_tree === snapshotTree) : [];
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const acId = row.acceptance_criterion_id;
+    const mapping = mapped.get(acId);
+    const sourceIds = [];
+    const unmappedRIds = [];
+    for (const rId of mapping?.sourceIds ?? []) {
+      const originalIds = trustedIndex
+        ? (indexByR.get(rId) ?? []).filter((id) => originalSourceIds.has(id)) : [];
+      if (originalIds.length === 0) unmappedRIds.push(rId);
+      for (const id of originalIds) if (!sourceIds.includes(id)) sourceIds.push(id);
+    }
+    const decisionIds = mapping?.decisionIds ?? [];
+    const frIds = mapping?.frIds ?? [];
+    const ownEvidenceRefs = new Set((Array.isArray(row.evidence_refs) ? row.evidence_refs : [])
+      .map((entry) => entry?.ref).filter((ref) => typeof ref === "string"));
+    const evidenceRefs = bound.filter((entry) => entry.kind !== "acceptance" || ownEvidenceRefs.has(entry.ref))
+      .map((entry) => ({ ref: entry.ref, hash: entry.hash, snapshot_tree: entry.snapshot_tree }));
+    const limits = Array.isArray(row.coverage_limits)
+      ? row.coverage_limits.filter((item) => typeof item === "string" && item.trim())
+        .map((item) => item.trim())
+      : typeof row.coverage_limits === "string" && row.coverage_limits.trim()
+        ? [row.coverage_limits.trim()] : [];
+    if (Array.isArray(row.coverage_limits)
+        && row.coverage_limits.some((item) => typeof item !== "string" || !item.trim())) {
+      limits.push(`${acId}: 既有 coverage_limits 含无法读取的条目。`);
+    }
+    limits.push("CARD-05 维护 review_ref；task_ids 沿用其现有派生。本阶段材料引用不替代逐 AC 业务效果或独立审查，机器判定类与人写声明类不可互替。");
+    if (noOriginalSourceIndex) limits.push(`${acId}: decision-log 无原始需求索引，R 编号不能作为真实原始来源。`);
+    if (!trustedIndex && !noOriginalSourceIndex) limits.push(`${acId}: 原始需求索引或 U/V 普查不完整，未认证来源转换。`);
+    if (unmappedRIds.length > 0) limits.push(`${acId}: ${unmappedRIds.join("、")} 在原始需求索引没有可认证 U/V 边，未写入 source_ids。`);
+    if (sourceIds.length === 0) limits.push(`${acId}: 未得到可认证原始来源 ID。`);
+    if (decisionIds.length === 0) limits.push(`${acId}: decision-log 没有可回读的 D 决策条目。`);
+    if (mapping?.missingDecisionIds.length) limits.push(`${acId}: 映射所列 ${mapping.missingDecisionIds.join("、")} 不在 decision-log 的 D 标题中。`);
+    if (frIds.length === 0) limits.push(`${acId}: 来源与决策映射没有 FR 编号。`);
+    if (evidenceRefs.length === 0) limits.push(`${acId}: 当前快照没有可回读的带哈希证据引用。`);
+    if (!row.file_symbol || !row.implementation_anchor || !row.verification_anchor) {
+      limits.push(`${acId}: file_symbol 或独立实现/验证锚点未齐，不能据此判完整。`);
+    }
+    if (!tests?.receipt_ref) limits.push(`${acId}: 当前 build-code 测试 receipt 未提供。`);
+    return {
+      ...row,
+      task_id: taskId,
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      producer_stage: "build-code",
+      source_ids: sourceIds,
+      decision_ids: decisionIds,
+      fr_ids: frIds,
+      evidence_refs: evidenceRefs,
+      coverage_limits: limits.join(" "),
+    };
+  });
+}
+
+async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, runSpecAnalyze = null, captureAcceptanceChain = null) {
   const current = currentMaterialTexts(ctx) ?? {};
   const phases = Object.fromEntries(Object.entries(current).filter(([name]) => /^phases\/P\d+\.md$/.test(name)));
   const decisionLog = current["decision-log.md"] ?? "";
@@ -4194,23 +4466,22 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
     scenario_refs: [],
     oracle_refs: [],
   }));
-  const acceptanceChain = acceptanceRows.map((row) => ({
-    ...row,
-    task_id: ctx.identity.taskId,
-    material_revision: materialRevision,
-    snapshot_tree: snapshotTree,
-    producer_stage: "build-code",
-    ...((acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) ?? []).length > 0
-      ? { task_ids: acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) }
-      : {}),
-    ...(Array.isArray(row.evidence_refs) && row.evidence_refs.length > 0
-      ? {
-          evidence_refs: row.evidence_refs
-            .filter((entry) => typeof entry?.ref === "string" && SHA256_HEX.test(entry.sha256 ?? ""))
-            .map((entry) => ({ ref: entry.ref, hash: entry.sha256, snapshot_tree: snapshotTree })),
-        }
-      : {}),
-  }));
+  const acceptanceChain = buildPostAcceptanceChainRows({
+    rows: acceptanceRows.map((row) => ({
+      ...row,
+      ...((acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) ?? []).length > 0
+        ? { task_ids: acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) }
+        : {}),
+    })),
+    spec,
+    decisionLog,
+    boundEvidenceRefs: evidence,
+    materialRevision,
+    snapshotTree,
+    taskId: ctx.identity.taskId,
+    tests,
+  });
+  if (typeof captureAcceptanceChain === "function") captureAcceptanceChain(acceptanceChain);
   const packet = {
     activation_cohort: "post",
     work_summary: "当前 build-code 实现、测试和逐 AC 事实的一致性检查",
@@ -4345,8 +4616,238 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
   });
 }
 
-/** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
-export function runOfficialStage(stage, context, invocation, publication, { signal, allowLegacyStageOutcome = false } = {}) {
+/** A decision-log entry alone cannot prove who made a P5 exception declaration. */
+function p5HumanExceptionFromDecisionLog(ctx, acceptanceChain, auditInputRef, captureAudit, publicationFacts) {
+  const parsed = parseP5HumanExceptionDeclaration(ctx.artifacts.read("decision-log.md"),
+    ctx.artifacts.read("phases/index.md"), acceptanceChain,
+    ctx.artifacts.reference("decision-log.md"), {
+      task: ctx.task, artifacts: ctx.artifacts, snapshot: ctx.kernel.currentVNextSnapshot({ fresh: true }),
+      materialRevision: ctx.kernel.currentVNextMaterialRevision(), auditInputRef, captureAudit, publicationFacts,
+    });
+  // Material text alone cannot prove the user approved this exception. The
+  // existing generic confirmation record also grants unrelated permissions.
+  // Keep publication closed until a dedicated, independently verifiable
+  // source exists; do not treat parsed fields as that source.
+  return parsed.kind === "none" || parsed.kind === "declared" ? parsed : null;
+}
+
+function publishP5SameRunSource(ctx, invocation, stageResult, acceptanceChain, previousStageRow) {
+  const progress = stageResult.stage_reflection?.stage_row_write?.value?.phase_progress
+    ?? currentStageRow(ctx.task.taskPath, ctx.identity.taskId, "build-code")?.phase_progress;
+  if (progress?.phase_id !== "P5" || progress.task_id !== "T008") return;
+  const unavailable = (reason) => ({ warning: `P5 publication unavailable: ${reason}` });
+  const root = ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot;
+  if (ctx.manifest?.activation_cohort !== "post" || !root || !Array.isArray(acceptanceChain)
+      || acceptanceChain.length === 0 || stageResult?.stage !== "build-code"
+      || stageResult.stage_reflection?.stage_row_error) return unavailable("same-run source context, acceptance chain, or final row write is absent");
+  let current;
+  try {
+    const phase = ctx.artifacts.read("phases/P5.md");
+    const index = ctx.artifacts.read("phases/index.md");
+    if (!/### T007\b/.test(phase) || !/### T008\b/.test(phase)
+        || !/\|\s*`?P5`?\s*\|\s*`?phases\/P5\.md`?\s*\|/.test(index)) return unavailable("indexed P5/T007/T008 material authority is absent");
+    const snapshot = ctx.kernel.currentVNextSnapshot({ fresh: true });
+    const materials = currentMaterialBinding(ctx);
+    const publicationFactsRaw = ctx.task.readRecord("facts.jsonl");
+    const publicationRows = publicationFactsRaw.split("\n").filter(Boolean).map((line) => JSON.parse(line))
+      .filter((entry) => entry.record_kind === "stage" && entry.stage === "build-code");
+    if (publicationRows.length !== 1) return unavailable("the final build-code row is absent or ambiguous");
+    const row = publicationRows[0];
+    if (!row || row.source !== "stage-end:build-code" || row.created_at === previousStageRow?.created_at
+        || row.snapshot_tree?.value !== snapshot.tree
+        || row.material_digest?.value !== materials.material_scope_revision?.replace(/^revision-/, "")
+        || row.task_id !== ctx.identity.taskId || row.phase_progress?.phase_id !== "P5"
+        || row.phase_progress?.task_id !== "T008" || row.phase_progress?.material_revision !== materials.revision
+        || row.evidence?.value?.[0]?.exit_code !== 0) return unavailable("the final row does not bind this P5 Task, tree, material, and successful execution");
+    const worktree = realpathSync(root);
+    const branch = execFileSync("git", ["branch", "--show-current"], { cwd: worktree, encoding: "utf8" }).trim();
+    if (!branch || (ctx.candidateWorkspace?.branch && branch !== ctx.candidateWorkspace.branch)) return unavailable("the authenticated worktree branch differs");
+    const refs = invocation.receipts ?? {};
+    if (![refs.implementation, refs.tests, refs.review].every((ref) => typeof ref === "string" && ref.trim())) return unavailable("implementation, tests, or review receipt is absent");
+    const readRecord = (ref) => ctx.task.readRecord(ref);
+    const implementationRaw = readRecord(refs.implementation);
+    const testRaw = readRecord(refs.tests);
+    const reviewRaw = readRecord(refs.review);
+    const implementation = JSON.parse(implementationRaw);
+    const tests = JSON.parse(testRaw);
+    const review = JSON.parse(reviewRaw);
+    validateCanonicalImplementationReceipt(implementation, { taskId: ctx.identity.taskId,
+      snapshotTree: snapshot.tree, read: readRecord });
+    validateCanonicalTestReceipt(tests, { taskId: ctx.identity.taskId, stage: "build-code",
+      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
+    const t007Command = /^(?:npx |\.\/node_modules\/\.bin\/)vitest run runtime\/stage\/stage-end-report\.test\.mjs(?: --config vitest\.config\.mjs --poolOptions\.forks\.singleFork --no-fileParallelism)?$/;
+    const output = readRecord(tests.output_ref);
+    if (!t007Command.test(tests.command) || !isCompleteP5T007VitestOutput(output)
+        || createHash("sha256").update(output).digest("hex") !== tests.output_hash
+        || tests.snapshot_head !== snapshot.head || tests.source_digest !== snapshot.source_digest
+        || implementation.snapshot_head !== snapshot.head
+        || !implementation.changed.includes("runtime/stage/stage-end-report.mjs")) return unavailable("the implementation or complete T007 test input does not bind the current source");
+    for (const name of ["stage-end-report.mjs", "stage-end-report.test.mjs"]) {
+      const relativePath = `runtime/stage/${name}`;
+      const actual = readFileSync(join(worktree, relativePath));
+      const runningVersion = readFileSync(join(REPOSITORY_ROOT, relativePath));
+      if (!actual.equals(runningVersion)) return unavailable(`the loaded converter/test version differs: ${name}`);
+    }
+    const reviewBinding = { ref: refs.review, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
+    if (review?.task_id !== ctx.identity.taskId || review.stage !== "build-code"
+        || review.phase_id !== "P5" || review.review_scope !== "phase"
+        || review.subject_kind !== "phase" || review.result_ref !== refs.review) return unavailable("the review does not authenticate this Task/build-code/P5 identity");
+    const originalAttempt = JSON.parse(readRecord(review.attempt_ref));
+    if (originalAttempt.material_revision !== review.material_revision) return unavailable("the review attempt/material identity differs");
+    // Keep the original review tuple. A stale review is reportable evidence,
+    // never proof that this publication's current implementation was reviewed.
+    authenticateStageReviewResult(review, { taskId: ctx.identity.taskId, read: readRecord });
+    const qualityFacts = (stageResult.quality_fact_refs ?? []).map((ref) => {
+      const raw = readRecord(ref);
+      const value = JSON.parse(raw);
+      if (value.task_id !== ctx.identity.taskId || value.stage !== "build-code"
+          || value.snapshot_tree !== snapshot.tree || value.material_revision !== materials.revision
+          || ref !== `quality/facts/${qualityFactDigest(value)}.json`) throw new Error("P5 quality fact is not current");
+      return { ref, sha256: createHash("sha256").update(raw).digest("hex"), value };
+    });
+    const phaseReviewFacts = qualityFacts.filter(({ value }) => value.subject === "phase_review");
+    if (phaseReviewFacts.length !== 1 || (phaseReviewFacts[0].value.status === "recorded"
+      ? !phaseReviewFacts[0].value.evidence?.some((evidence) => evidence.ref === refs.review
+        && evidence.sha256 === reviewBinding.sha256)
+      : !["missing", "unavailable"].includes(phaseReviewFacts[0].value.status))) return unavailable("the same-run phase review quality fact is absent or invalid");
+    const acceptanceCandidates = [];
+    const qualityAdvisoryFacts = authenticateP5AdvisorySources({ read: readRecord,
+      taskId: ctx.identity.taskId, snapshotTree: snapshot.tree,
+      materialRevision: materials.revision, stageResult,
+      qualityBindings: qualityFacts.map(({ ref, sha256 }) => ({ ref, sha256 })), acceptanceCandidates });
+    let auditEvidence = null;
+    const publicationFactsHash = createHash("sha256").update(publicationFactsRaw).digest("hex");
+    const publicationFacts = { ref: `quality/evidence/stage-quality/build-code/P5/facts-${publicationFactsHash}.jsonl`,
+      sha256: publicationFactsHash, raw: publicationFactsRaw };
+    const exception = p5HumanExceptionFromDecisionLog(ctx, acceptanceChain, invocation.receipts?.audit,
+      (binding) => { auditEvidence = binding; }, publicationFacts);
+    if (!exception) return unavailable("authenticated exception or finite none source is absent");
+    current = { snapshot, materials, row, worktree, branch, implementationRaw, testRaw, reviewRaw,
+      implementation, tests, review, qualityFacts, qualityAdvisoryFacts, acceptanceCandidates, exception, auditEvidence, publicationFacts };
+  } catch (error) {
+    if (["EACCES", "EPERM", "EIO"].includes(error?.code)) throw error;
+    return unavailable(error.message);
+  }
+  const { snapshot, materials, row, worktree, branch, implementationRaw, testRaw, reviewRaw,
+    implementation, tests, qualityFacts, qualityAdvisoryFacts, acceptanceCandidates, exception, auditEvidence, publicationFacts } = current;
+  const digest = (raw) => createHash("sha256").update(raw).digest("hex");
+  const materialValues = materialEntriesForContext(ctx, ctx.artifacts);
+  if (materialRevisionFromValues(materialValues) !== materials.revision) {
+    throw new Error("P5 publication materials changed before raw capture");
+  }
+  const materialRecords = materialValues.map(([name, raw]) => ({ name,
+    source_ref: ctx.artifacts.reference(name),
+    ref: `quality/evidence/stage-quality/build-code/P5/material-${digest(raw)}.txt`, sha256: digest(raw), raw }));
+  const publicationMaterials = materialRecords.map(({ raw, ...binding }) => binding);
+  const stageResultValue = JSON.parse(JSON.stringify(stageResult));
+  if (current.review.snapshot_tree !== snapshot.tree || current.review.material_revision !== materials.revision) {
+    // This is a derived report warning. Preserve the actual canonical fact
+    // status/bytes and independently recheck this derivation in the reader.
+    stageResultValue.quality_warnings = [...(stageResultValue.quality_warnings ?? []),
+      "phase_review:stale-review-snapshot"];
+  }
+  stageResultValue.quality_warnings = [...(stageResultValue.quality_warnings ?? []),
+    "phase_review:original-material-replay-unavailable"];
+  const sourceRecord = {
+    schema_version: "workflowhub-p5-same-run-source.v1", project_name: ctx.identity.projectName,
+    task_id: ctx.identity.taskId, stage: "build-code", phase_id: "P5", phase_task_id: "T008",
+    worktree, branch, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree,
+    source_digest: snapshot.source_digest, material_revision: materials.revision,
+    attempt_id: invocation.attempt_id ?? null, stage_row_created_at: row.created_at,
+    publication_facts: { ref: publicationFacts.ref, sha256: publicationFacts.sha256 },
+    publication_materials: publicationMaterials,
+    receipts: {
+      implementation: { ref: invocation.receipts.implementation, sha256: digest(implementationRaw) },
+      tests: { ref: invocation.receipts.tests, sha256: digest(testRaw) },
+      review: { ref: invocation.receipts.review, sha256: digest(reviewRaw) },
+    },
+    implementation_diff: { ref: implementation.diff_ref, sha256: implementation.diff_hash },
+    test_output: { ref: tests.output_ref, sha256: tests.output_hash },
+    quality_facts: qualityFacts.map(({ ref, sha256 }) => ({ ref, sha256 })),
+    quality_advisory_facts: qualityAdvisoryFacts,
+    human_exception_source: exception,
+    stage_result: stageResultValue, acceptance_chain: acceptanceChain,
+  };
+  const reportRoot = "quality/evidence/stage-quality/build-code/P5";
+  const sourceRaw = `${JSON.stringify(sourceRecord, null, 2)}\n`;
+  const sourceHash = digest(sourceRaw);
+  const sourceRef = `${reportRoot}/source-${sourceHash}.json`;
+  const evidenceIndex = [
+    ...Object.values(sourceRecord.receipts).map(({ ref }) => ({ path: ref, kind: "canonical_receipt" })),
+    { path: tests.output_ref, kind: "canonical_test_output" },
+    ...sourceRecord.quality_facts.map(({ ref }) => ({ path: ref, kind: "quality_fact" })),
+    ...acceptanceCandidates,
+    { path: exception.kind === "none" ? exception.audit_ref : exception.source_ref,
+      kind: exception.kind === "none" ? "no_exception_audit_candidate" : "human_exception_material" },
+    ...Object.values(exception.approval_refs ?? {}).map(({ ref }) => ({ path: ref, kind: "human_exception_approval" })),
+  ];
+  const facts = buildStageEndReportFacts({ chainRows: acceptanceChain, stageResult: stageResultValue,
+    stageResultPath: `${sourceRef}#stage_result`, evidenceIndex,
+    declared: { routes: [], limits: [], ...(exception.kind === "none"
+      ? { exceptions: [], no_exceptions: exception } : { exceptions: [{ declared_by: exception.declared_by,
+      reason: exception.reason, scope: exception.scope, expires_at_phase: exception.expires_at_phase,
+      owner: exception.owner, verbatim: exception.verbatim, source_path: exception.source_path }] }) } });
+  const factsRaw = `${JSON.stringify(facts, null, 2)}\n`;
+  const reportRaw = renderStageEndReport(facts);
+  const certificate = {
+    schema_version: "workflowhub-p5-source-certificate.v1", task_id: ctx.identity.taskId,
+    stage: "build-code", phase_id: "P5", material_revision: materials.revision,
+    snapshot_tree: snapshot.tree, source_ref: sourceRef, source_sha256: sourceHash,
+    facts_sha256: digest(factsRaw), report_sha256: digest(reportRaw),
+    receipt_refs: sourceRecord.receipts, quality_fact_refs: sourceRecord.quality_facts,
+    publication_facts: sourceRecord.publication_facts,
+    publication_materials: sourceRecord.publication_materials,
+    quality_advisory_fact_refs: sourceRecord.quality_advisory_facts,
+  };
+  const certificateRaw = `${JSON.stringify(certificate, null, 2)}\n`;
+  const certificateHash = digest(certificateRaw);
+  const certificateRef = `${reportRoot}/certificate-${certificateHash}.json`;
+  const deliveryRaw = `${JSON.stringify({ schema_version: "workflowhub-p5-delivery-index.v1",
+    task_id: ctx.identity.taskId, phase_id: "P5", source_ref: sourceRef, source_sha256: sourceHash,
+    certificate_ref: certificateRef, certificate_sha256: certificateHash,
+    facts_sha256: digest(factsRaw), report_sha256: digest(reportRaw) }, null, 2)}\n`;
+  const fixedReports = [["report-facts.json", factsRaw], ["report.md", reportRaw], ["T008-delivery.txt", deliveryRaw]];
+  for (const [name, expectedRaw] of fixedReports) {
+    const ref = `${reportRoot}/${name}`;
+    let existingRaw;
+    try { existingRaw = ctx.task.readRecord(ref); }
+    catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    if (existingRaw !== expectedRaw) {
+      throw new Error(`P5 report source conflict: ${ref} already binds different bytes`);
+    }
+  }
+  // The Task store publishes one regular file atomically, not a five-file
+  // transaction. report-facts.json is the last create-only commit marker:
+  // consumers must first read it, then authenticate all four prior refs and
+  // hashes. A failed earlier write can leave diagnostic orphans but no report.
+  const priorRecords = [...materialRecords.map(({ ref, raw }) => [ref, raw]), [publicationFacts.ref, publicationFacts.raw], ...(auditEvidence ? [[auditEvidence.ref, auditEvidence.raw]] : []), [sourceRef, sourceRaw], [certificateRef, certificateRaw],
+    [`${reportRoot}/report.md`, reportRaw], [`${reportRoot}/T008-delivery.txt`, deliveryRaw]];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      for (const [ref, raw] of priorRecords) publishVNextEvidence(ctx, ref, raw);
+      for (const [ref, raw] of priorRecords) {
+        if (ctx.task.readRecord(ref) !== raw) throw new Error(`P5 report source changed before commit: ${ref}`);
+      }
+      if (ctx.task.readRecord("facts.jsonl") !== publicationFacts.raw) {
+        throw new Error("P5 publication facts changed before commit marker");
+      }
+      if (materialRevisionFromValues(materialEntriesForContext(ctx, ctx.artifacts)) !== materials.revision) {
+        throw new Error("P5 publication materials changed before commit marker");
+      }
+      publishVNextEvidence(ctx, `${reportRoot}/report-facts.json`, factsRaw);
+      return;
+    } catch (error) {
+      // Retry only an interrupted file write, using these exact same bytes.
+      // A conflicting immutable record or an authentication failure is final.
+      if (error?.code !== "EIO" || attempt === 1) throw error;
+    }
+  }
+}
+
+export async function runOfficialStage(stage, context, invocation, publication, { signal, allowLegacyStageOutcome = false } = {}) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
@@ -4366,7 +4867,12 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
   // is consumed only by the stage-end transaction after publication and must
   // never cross the official handler boundary.
   delete handlerInput.stage_reflection;
-  return runStage(
+  const postBuildCode = stage === "build-code" && ctx.manifest?.activation_cohort === "post";
+  const previousP5Row = postBuildCode
+    ? currentStageRow(ctx.task.taskPath, ctx.identity.taskId, "build-code")
+    : null;
+  let sameRunAcceptanceChain = null;
+  const stageResult = await runStage(
     stage,
     ctx,
     async (worker, _upstream, preflight) => {
@@ -4565,7 +5071,8 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
       const currentSpecAnalyze = !stageOutcome.value
         && stage === "build-code"
         && ctx.manifest?.activation_cohort === "post"
-        ? await currentPostBuildCodeSpecAnalyze(ctx, preflight, result, publication?.runSpecAnalyze)
+        ? await currentPostBuildCodeSpecAnalyze(ctx, preflight, result, publication?.runSpecAnalyze,
+          (rows) => { sameRunAcceptanceChain = rows; })
         : null;
       return {
         ...result,
@@ -4598,4 +5105,127 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
       },
     },
   );
+  if (postBuildCode) {
+    const p5Publication = publishP5SameRunSource(ctx, input, stageResult, sameRunAcceptanceChain, previousP5Row);
+    if (p5Publication?.warning) return Object.freeze({ ...stageResult, quality_status: "incomplete",
+      quality_warnings: [...(stageResult.quality_warnings ?? []), p5Publication.warning] });
+  }
+  // P10 consumes only this call's final row write, never a later blind read.
+  const written = stageResult.stage_reflection?.stage_row_write;
+  if (!postBuildCode || stageResult.stage_reflection?.stage_row_error
+      || written?.value?.phase_progress?.phase_id !== "P10"
+      || written.value.phase_progress.task_id !== "T021"
+      || typeof input.receipts?.tests !== "string") return stageResult;
+  const workspace = ctx.candidateWorkspace ?? ctx.workspace;
+  const digest = (raw) => createHash("sha256").update(raw).digest("hex");
+  let consumption;
+  try {
+    const snapshot = ctx.kernel.currentVNextSnapshot({ fresh: true });
+    const revision = ctx.kernel.currentVNextMaterialRevision();
+    if (written.value.task_id !== ctx.identity.taskId || written.value.source !== "stage-end:build-code"
+        || written.value.snapshot_tree?.value !== snapshot.tree
+        || written.value.phase_progress.material_revision !== revision) return stageResult;
+    const receiptRaw = ctx.task.readRecord(input.receipts.tests);
+    const receipt = JSON.parse(receiptRaw);
+    const { FIXED_TARGETED_CAPTURE_COMMAND } = await import("../../workflows/build-code/capture.mjs");
+    validateCanonicalTestReceipt(receipt, { taskId: ctx.identity.taskId, stage: "build-code",
+      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture",
+      expectedCommand: FIXED_TARGETED_CAPTURE_COMMAND, requirePassed: true });
+    const output = ctx.task.readRecord(receipt.output_ref);
+    if (digest(output) !== receipt.output_hash) return stageResult;
+    const pointer = JSON.parse(output.trim());
+    const manifestRaw = ctx.task.readRecord(pointer.manifest_ref);
+    if (digest(manifestRaw) !== pointer.manifest_hash) return stageResult;
+    const manifest = JSON.parse(manifestRaw);
+    let partialSelection;
+    if (manifest.selection_status !== "selected") {
+      const { capturePreExecutionTaskChangeScope } = await import("../../workflows/build-code/change-scope.mjs");
+      const { readCurrentTestAssetRegistry } = await import("../../workflows/build-code/test-asset-inventory.mjs");
+      const { selectAffectedCases } = await import("../../workflows/build-code/case-selection.mjs");
+      const current = capturePreExecutionTaskChangeScope({ task: ctx.task, workspace });
+      const catalog = JSON.parse(readFileSync(join(workspace.worktreeRoot, "docs/quality/business-case-catalog.json"), "utf8"));
+      const registry = readCurrentTestAssetRegistry({ task: ctx.task, workspace });
+      partialSelection = selectAffectedCases({ changeScope: current, catalog,
+        registry: { ...registry, task_id: ctx.identity.taskId,
+          snapshot_tree: current.snapshot_tree, source_digest: current.source_digest } });
+      if (partialSelection.status !== "unavailable" || partialSelection.reason !== "unmapped_changed_path"
+          || !partialSelection.cases?.length || !partialSelection.unmapped_changed_paths?.length
+          || JSON.stringify(partialSelection.cases.map((item) => item.id)) !== JSON.stringify(manifest.selected_case_ids)) {
+        return stageResult;
+      }
+    }
+    // The immutable receipt never carries transient dispatch_state. Rebuild
+    // only the existing reader input from the actual pointer/manifest bytes.
+    const capture = { ...receipt, receipt_ref: input.receipts.tests, receipt_hash: digest(receiptRaw),
+      targeted_capture: { status: manifest.selection_status === "selected" ? "executed" : "unavailable",
+        ...(partialSelection ? { reason: partialSelection.reason,
+          unmapped_changed_paths: partialSelection.unmapped_changed_paths } : {}),
+        task_id: manifest.task_id, snapshot_tree: manifest.snapshot_tree,
+        material_revision: manifest.material_revision, run_id: pointer.run_id,
+        selected_case_ids: manifest.selected_case_ids,
+        scope_summary: manifest.scope_summary,
+        manifest_ref: pointer.manifest_ref, manifest_hash: pointer.manifest_hash,
+        raw_report_ref: manifest.execution?.raw_output_ref,
+        raw_report_sha256: manifest.execution?.raw_output_sha256,
+        reports: manifest.reports, business_effect_status: manifest.business_effect_status } };
+    const { reconcileCurrentTaskCases } = await import("../../workflows/build-code/case-reconciliation.mjs");
+    // This existing reader verifies command, Task/tree/material, current
+    // catalog/registry selection, and all real subprocess reporter bytes.
+    // With no locator it still cannot claim this run consumed the receipt.
+    const readback = reconcileCurrentTaskCases({ task: ctx.task, workspace, capture });
+    const authenticatedPartial = partialSelection && readback.status === "unavailable"
+      && readback.reason === "unmapped_changed_path" && readback.business_effect_status === "unknown"
+      && JSON.stringify(readback.unmapped_changed_paths) === JSON.stringify(partialSelection.unmapped_changed_paths)
+      && JSON.stringify(readback.selected_case_ids) === JSON.stringify(manifest.selected_case_ids)
+      && JSON.stringify([...new Set(readback.entries?.map((entry) => entry.case_id))]) === JSON.stringify(manifest.selected_case_ids);
+    if ((partialSelection ? !authenticatedPartial : readback.reason !== "current_execution_unverified")
+        || readback.receipt_ref !== input.receipts.tests
+        || readback.manifest_ref !== pointer.manifest_ref || !readback.entries?.length) return stageResult;
+    const selectedAcIds = new Set(readback.entries.map((entry) => entry.acceptance_criterion_id));
+    const bindings = [];
+    const acCounts = new Map();
+    let testCount = 0;
+    for (const ref of stageResult.quality_fact_refs ?? []) {
+      const raw = ctx.task.readRecord(ref), value = JSON.parse(raw);
+      if (value.task_id !== ctx.identity.taskId || value.stage !== "build-code"
+          || value.snapshot_tree !== snapshot.tree || value.material_revision !== revision
+          || ref !== `quality/facts/${qualityFactDigest(value)}.json`) return stageResult;
+      const isTest = value.kind === "test" && value.subject === "risk_tests_fresh";
+      const isAc = value.kind === "acceptance_criterion" && selectedAcIds.has(value.subject);
+      if (isTest) {
+        if (value.status !== "passed" || !value.evidence?.some((evidence) =>
+          evidence.ref === capture.receipt_ref && evidence.sha256 === capture.receipt_hash)) return stageResult;
+        testCount += 1;
+      }
+      if (isAc) acCounts.set(value.subject, (acCounts.get(value.subject) ?? 0) + 1);
+      if (isTest || isAc) bindings.push({ ref, sha256: digest(raw) });
+    }
+    if (testCount !== 1 || [...selectedAcIds].some((ac) => acCounts.get(ac) !== 1)) return stageResult;
+    consumption = { snapshot, revision, capture, receipt, selectedAcIds,
+      source: { schema_version: "workflowhub-p10-run-consumption.v1", task_id: ctx.identity.taskId,
+        stage: "build-code", snapshot_tree: snapshot.tree, material_revision: revision,
+        source_digest: snapshot.source_digest,
+        test_receipt: { ref: capture.receipt_ref, sha256: capture.receipt_hash },
+        test_output: { ref: receipt.output_ref, sha256: receipt.output_hash },
+        stage_row: { ref: written.ref, sha256: written.sha256 }, quality_facts: bindings } };
+  } catch (error) {
+    if (["EACCES", "EPERM", "EIO"].includes(error?.code)) throw error;
+    // A missing/invalid input remains existing quality evidence, no locator.
+    return stageResult;
+  }
+  const raw = `${JSON.stringify(consumption.source, null, 2)}\n`;
+  const hash = digest(raw);
+  const locator = Object.freeze({ ref: `quality/evidence/stage-quality/build-code/p10-consumption-${hash}.json`, sha256: hash });
+  // Publishing errors must surface. Never return a locator for a partial
+  // record, replaced row, or failed independent readback.
+  publishVNextEvidence(ctx, locator.ref, raw);
+  const { authenticateP10RunConsumption } = await import("../evidence/freshness.mjs");
+  if (ctx.task.readRecord(locator.ref) !== raw
+      || authenticateP10RunConsumption({ task: ctx.task, locator, taskId: ctx.identity.taskId,
+        snapshotTree: consumption.snapshot.tree, materialRevision: consumption.revision,
+        sourceDigest: consumption.snapshot.source_digest, capture: consumption.capture,
+        receipt: consumption.receipt, acceptedAcIds: consumption.selectedAcIds }) === null) {
+    throw new Error("P10 run consumption publication/readback failed; existing stage facts are retained");
+  }
+  return Object.freeze({ ...stageResult, p10_consumption_evidence: locator });
 }

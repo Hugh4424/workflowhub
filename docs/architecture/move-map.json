@@ -3502,6 +3502,79 @@
       "consumer": "explicit targeted wallclock run and CARD-05 P5 evidence readback for direct OCR no-timeout behavior",
       "delete_condition": "retain until an approved replacement supplies equivalent real-wallclock evidence for direct OCR waiting and fast-result retention",
       "content_change": "controlled real-child experiment observes fast finding retention while another provider remains active beyond 21 minutes; fixture findings are not LLM quality verdicts"
+    },
+    {
+      "source": "docs/quality/business-case-catalog.json",
+      "destination": "docs/quality/business-case-catalog.json",
+      "status": "add",
+      "owner": "CARD-04 P8 business rule owner",
+      "consumer": "P9 change trigger and P10 business reconciliation readers",
+      "delete_condition": "remove only when an independently reviewed single business catalog replaces it and P9/P10 consumers migrate",
+      "content_change": "finite versioned CARD-04 business case relationships, rule source metadata, and additive v1 future canonical effect-observation contracts; not_yet_observed is not an effect fact",
+      "sha256_after": "60288229ae854083d62c9cfefca3778db7752d78a1d48f29a0698d78014bd41b"
+    },
+    {
+      "source": "tests/contract/business-case-source-binding.test.mjs",
+      "destination": "tests/contract/business-case-source-binding.test.mjs",
+      "status": "add",
+      "owner": "CARD-04 P8/T017 test owner",
+      "consumer": "targeted Vitest and verify-code review of business catalog source bindings",
+      "delete_condition": "remove after an independently reviewed equivalent source binding target replaces it and old RED is retained",
+      "content_change": "tests catalog source/rule revisions against actual source bytes and wrong-source failures"
+    },
+    {
+      "source": "docs/quality/test-asset-registry.json",
+      "destination": "docs/quality/test-asset-registry.json",
+      "status": "add",
+      "owner": "CARD-04 P9/T019 test asset owner",
+      "consumer": "workflows/build-code/test-asset-inventory.mjs independent registry reader",
+      "delete_condition": "remove when a reviewed existing test registry becomes the sole reader source and all P9/P10 consumers migrate",
+      "content_change": "finite versioned test file, command and full leaf identity registry independent of the business catalog"
+    },
+    {
+      "source": "tests/contract/build-code-preexecution-source.test.mjs",
+      "destination": "tests/contract/build-code-preexecution-source.test.mjs",
+      "status": "add",
+      "owner": "CARD-04 P9/T018 test owner",
+      "consumer": "targeted Vitest and verify-code review of pre-run task change source",
+      "delete_condition": "remove after equivalent authenticated pre-run source tests replace it and old RED is retained",
+      "content_change": "tests task bootstrap and current Git change scope before any current test receipt exists"
+    },
+    {
+      "source": "tests/contract/build-code-test-registry.test.mjs",
+      "destination": "tests/contract/build-code-test-registry.test.mjs",
+      "status": "add",
+      "owner": "CARD-04 P9/T019 test owner",
+      "consumer": "targeted Vitest and verify-code review of independent test registry reader",
+      "delete_condition": "remove after equivalent registry versus reporter leaf tests replace it and old RED is retained",
+      "content_change": "tests independent registry and complete reporter leaf reconciliation with missing extra skip and duplicate failures"
+    },
+    {
+      "source": "workflows/build-code/targeted-capture.mjs",
+      "destination": "workflows/build-code/targeted-capture.mjs",
+      "status": "add",
+      "owner": "CARD-04 P10/T020 build-code owner",
+      "consumer": "fixed private command launched only by workflows/build-code/capture.mjs",
+      "delete_condition": "remove when capture.mjs or an independently reviewed single private executor takes over its verified behavior",
+      "content_change": "private authenticated targeted test launch and per-case evidence collection without a new public command"
+    },
+    {
+      "source": "tests/contract/build-code-targeted-capture.test.mjs",
+      "destination": "tests/contract/build-code-targeted-capture.test.mjs",
+      "status": "add",
+      "owner": "CARD-04 P10/T020 test owner",
+      "consumer": "targeted Vitest and verify-code review of the fixed private launcher",
+      "delete_condition": "remove after equivalent same-task targeted execution journey tests replace it and old RED is retained",
+      "content_change": "tests fixed launcher identity, fresh execution, safe argv, raw evidence and negative paths"
+    },
+    {
+      "source": "tests/contract/post-acceptance-chain-source-index.test.mjs",
+      "destination": "tests/contract/post-acceptance-chain-source-index.test.mjs",
+      "status": "add",
+      "owner": "CARD-04 P4/T006 acceptance-chain test owner",
+      "consumer": "targeted Vitest and P4 independent review of authenticated U/V source IDs in acceptance-chain rows",
+      "delete_condition": "remove only after an independently reviewed equivalent real-material source-index negative control replaces it and the original RED/GREEN evidence is retained",
+      "content_change": "reads current decision-log and spec, asserts indexed AC-29 source IDs, and checks no-index AC disclosure"
     }
   ]
 }

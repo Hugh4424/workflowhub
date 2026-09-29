@@ -32,6 +32,12 @@ export function authenticateStageWriteBoundary(context, { runnerRoot, operation,
   if (!context || !STAGES.has(context.stage) || !context.task) {
     throw new TypeError("authenticated StageContext is required");
   }
+  // A post build-plan author may draft spec/Phase files incrementally, but an
+  // official stage execution consumes the complete authored material set.
+  if (context.stage === "build-plan" && operation === "run"
+      && readActivationCohort(context.task.manifest) === "post") {
+    assertCurrentTaskMaterials(context.artifacts, "post");
+  }
   return authenticateWriteBoundary({
     task: context.task,
     runnerRoot,

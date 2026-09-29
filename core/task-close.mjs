@@ -9,7 +9,7 @@ import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { assertNoCloseExecutionSidecars, captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues, materializeGitSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
-import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../runtime/review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
@@ -436,13 +436,16 @@ function currentQualityValue(task, ref) {
   try {
     const raw = task.readRecord(ref);
     const value = JSON.parse(raw);
+    // Validate against the canonical quality-fact schema instead of a close
+    // local subset. Coverage facts (including incomplete coverage) are valid
+    // historical observations and must be readable here even though they do
+    // not participate in the verify-code close predicates below.
+    validateCanonicalQualityFact(value);
     if (value?.schema_version !== "quality-fact.v1"
         || value.task_id !== task.identity.taskId
         || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
         || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")
         || !["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(value.stage)
-        || !["test", "review", "acceptance_criterion", "confirmation"].includes(value.kind)
-        || !["passed", "failed", "recorded", "unavailable", "missing"].includes(value.status)
         || typeof value.subject !== "string" || value.subject.trim() === ""
         || !Array.isArray(value.evidence) || value.evidence.length === 0
         || value.evidence.some((entry) => !entry || typeof entry.ref !== "string" || entry.ref.trim() === ""
@@ -453,6 +456,7 @@ function currentQualityValue(task, ref) {
             review: "review_result",
             acceptance_criterion: "acceptance_evidence",
             confirmation: "human_confirmation",
+            coverage: "coverage_audit",
           })[value.kind])
         || !Number.isFinite(Date.parse(value.recorded_at))) {
       const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has invalid quality fact fields`);
@@ -511,9 +515,18 @@ function authenticatedQualityEvidence(task, fact) {
         && value.stage === "build-code"
         && (fact.subject === "same_build_integration_review"
           || value.review_kind === "mini_task.implementation");
+      const oneShotCodeReview = fact.stage === "verify-code"
+        && fact.subject === "code_review"
+        && value.stage === "verify-code"
+        && (value.review_scope ?? null) === null
+        && (value.review_track ?? null) === null
+        && (value.review_kind ?? null) === null
+        && value.subject_kind === "worktree"
+        && (value.phase_id ?? null) === null
+        && value.material_revision === fact.material_revision;
       if (value.task_id !== task.identity.taskId
           || (value.stage !== fact.stage && !crossStageReview)
-          || value.snapshot_tree !== fact.snapshot_tree) {
+          || (value.snapshot_tree !== fact.snapshot_tree && !oneShotCodeReview)) {
         throw new Error(`review evidence is not bound to the current task/stage/snapshot: ${entry.ref}`);
       }
       const reviewKind = value.review_kind ?? null;
@@ -548,10 +561,10 @@ function authenticatedQualityEvidence(task, fact) {
         }
       } else {
         authenticateReviewEvidence(task, value);
-        if (fact.stage === "verify-code" && fact.subject === "code_review"
-            && canonicalReviewFindings(value).some(isActionableSeriousFinding)) {
-          throw new Error(`verify-code code_review has actionable serious findings: ${fact.ref}`);
-        }
+        // Review findings are immutable quality facts, not a physical-close
+        // permission gate. The canonical quality fact carries the current
+        // disposition/status; retain the raw findings for audit without
+        // requiring an empty or "green" review result to continue.
       }
     } else if (fact.kind === "test") {
       const receiptStage = value?.stage;

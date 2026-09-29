@@ -118,7 +118,7 @@ function verifyLeafStatus(criterion) {
   const values = [criterion.scenario, criterion.oracle, criterion.actual_outcome, criterion.evidence_type,
     ...(criterion.coverage_limits ?? []), ...(criterion.exceptions ?? [])];
   if (criterion.result === "fail") return "failed";
-  if (["inconclusive", "deferred"].includes(criterion.result)) return "incomplete";
+  if (["inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"].includes(criterion.result)) return "incomplete";
   return values.some((value) => value === "unknown")
     || !validAnchor(criterion.implementation_anchor, "implementation")
     || !validAnchor(criterion.verification_anchor, "verification")
@@ -159,7 +159,7 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
         || [...Object.keys(criterion)].some((key) => !VERIFY_LEAF_KEYS.has(key))
         || typeof criterion.acceptance_criterion_id !== "string" || criterion.acceptance_criterion_id.trim() === ""
         || seen.has(criterion.acceptance_criterion_id)
-        || !new Set(["pass", "fail", "inconclusive", "deferred"]).has(criterion.result)
+        || !new Set(["pass", "fail", "inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"]).has(criterion.result)
         || criterion.status !== undefined && !new Set(["passed", "failed", "unknown", "unavailable", "incomplete", "missing"]).has(criterion.status)
         || criterion.source_digest !== sourceDigest
         || typeof criterion.scenario !== "string" || criterion.scenario.trim() === ""

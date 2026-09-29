@@ -342,6 +342,7 @@ export function deriveStageCompletion(stage, observations = [], {
   requireStageOutcome = false,
   stageOutcomeStatus = null,
   authenticateCodeReview = null,
+  authenticateBuildCodeCompletion = null,
   // Kept only as an ignored compatibility argument for legacy callers.
   // `outline_closed` is historical diagnostic data, never a current
   // completion predicate for either cohort.
@@ -349,6 +350,11 @@ export function deriveStageCompletion(stage, observations = [], {
 } = {}) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!Array.isArray(observations)) throw new TypeError("completion observations must be an array");
+  let buildCodeAuthentication = null;
+  if (stage === "build-code" && typeof authenticateBuildCodeCompletion === "function") {
+    try { buildCodeAuthentication = authenticateBuildCodeCompletion({ observations }); }
+    catch { /* An unavailable source cannot grant a completion exception. */ }
+  }
   const requirements = {
     ...STAGE_PREDICATES[stage],
     // UI applicability is a new conditional subject. Current make-decision
@@ -384,6 +390,11 @@ export function deriveStageCompletion(stage, observations = [], {
     }) ? { e2e_acceptance: "acceptance_criterion" } : {}),
   };
   if (requirements.ui_applicability === undefined) delete requirements.ui_applicability;
+  // Acceptance execution and review availability are quality facts, not
+  // substitutes for the stage's required quality predicates.  Keep the
+  // original requirements visible so a continuation-ready task cannot be
+  // projected as quality-complete merely because an execution source was
+  // authenticated or a review attempt was unavailable.
   const satisfied = new Map();
   const conflicts = new Set();
   const candidates = new Map();

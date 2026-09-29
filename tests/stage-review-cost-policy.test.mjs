@@ -5,8 +5,8 @@ import yaml from "js-yaml";
 const readStage = (stage) => readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
 const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
 
-describe("non-code review policy", () => {
-  it("keeps the post-cohort authoring chain stage-owned and wh-review as the provider review", () => {
+describe("review policy", () => {
+  it("keeps authoring review separate from the direct OCR code-review surfaces", () => {
     const buildSpec = yaml.load(readFileSync(new URL("../workflows/build-spec/skill-deps.yaml", import.meta.url), "utf8"));
     const buildPlan = yaml.load(readFileSync(new URL("../workflows/build-plan/skill-deps.yaml", import.meta.url), "utf8"));
     const buildCode = yaml.load(readFileSync(new URL("../workflows/build-code/skill-deps.yaml", import.meta.url), "utf8"));
@@ -20,16 +20,23 @@ describe("non-code review policy", () => {
     expect(readStage("build-spec")).toMatch(/pre[- ]cohort|historical[\s\S]{0,80}read-only|历史[\s\S]{0,80}只读/i);
     expect(buildCode.skills.map((entry) => entry.name)).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
-      "frontend-component-quality", "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
+      "frontend-component-quality", "fullstack-slice-testing", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
-    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["architect-code-review", "frontend-component-quality", "wh-review", "stage-reflection"]);
-    for (const manifest of [buildSpec, buildPlan, buildCode, verifyCode]) {
+    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["frontend-component-quality", "stage-reflection"]);
+    for (const manifest of [buildSpec, buildPlan]) {
       expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
       expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);
       expect(manifest.skills.every((entry) => !("invocation" in entry) && !("dispatch" in entry))).toBe(true);
       expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
         .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
     }
+    for (const manifest of [buildCode, verifyCode]) {
+      expect(manifest.skills.map((entry) => entry.name)).not.toContain("wh-review");
+      expect(manifest.external_capabilities.map((entry) => entry.id)).not.toContain("wh-review-provider");
+      expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
+        .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
+    }
+    expect(verifyCode.external_capabilities.map((entry) => entry.id)).toContain("ocr-cli");
   });
 
   it("RED: replaces the old 15 + 13 authoring chain with the authoritative 13 build-plan steps", () => {
