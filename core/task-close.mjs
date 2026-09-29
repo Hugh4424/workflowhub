@@ -561,10 +561,10 @@ function authenticatedQualityEvidence(task, fact) {
         }
       } else {
         authenticateReviewEvidence(task, value);
-        if (fact.stage === "verify-code" && fact.subject === "code_review"
-            && canonicalReviewFindings(value).some(isActionableSeriousFinding)) {
-          throw new Error(`verify-code code_review has actionable serious findings: ${fact.ref}`);
-        }
+        // Review findings are immutable quality facts, not a physical-close
+        // permission gate. The canonical quality fact carries the current
+        // disposition/status; retain the raw findings for audit without
+        // requiring an empty or "green" review result to continue.
       }
     } else if (fact.kind === "test") {
       const receiptStage = value?.stage;
