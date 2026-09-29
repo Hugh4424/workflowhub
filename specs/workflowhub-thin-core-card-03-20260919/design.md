@@ -97,7 +97,7 @@
 
 - **机制**：`build-code` 的收尾步把「当前结果」与上一轮的字节级快照逐字节比对，材料任何变化都要求整段重做。
 - **落点（两个）**：① `docs/standard-workflow.md:334-338`（build-code step 11 `authenticate-current-task-completion` 的说明；**2026-09-29 锚点更正**：原记 `:289-290` 为合并前旧编号）；② `workflows/build-code/steps.json:15`（同一 step 的 `observable_result`）。
-- **逐字草案（替换 `docs/standard-workflow.md:334-338` 原文）**：
+- **逐字草案（替换 `docs/standard-workflow.md:334-338` 原文）** —— **2026-09-29 复核更正：该文案已落地**，`docs/standard-workflow.md:334-338` 现文即此稿；该落点由合并提交 `97092b30` 带入本卡 worktree（`git diff --stat '97092b30^1' 97092b30 -- docs/standard-workflow.md` 为空，即合并结果与 main 侧逐字节相同）。以下保留的是**设计期草案原文**，不是待办：
 
 ```markdown
 11. `authenticate-current-task-completion`：确认 task facts 绑定**该 phase 声明的写集**
@@ -107,14 +107,14 @@
     代码快照变化本身不使材料失效。
 ```
 
-- **逐字草案（`workflows/build-code/steps.json:15` 的 `observable_result`，**在原句之后追加**，原句逐字保留）**：
+- **逐字草案（`workflows/build-code/steps.json:15` 的 `observable_result`，**在原句之后追加**，原句逐字保留）** —— **2026-09-29 复核更正：该追加已落地**，`steps.json:15` 现文含「the binding object is the write set this Phase declares … not a whole cross-Phase snapshot.」；经本卡提交 `5202828a` 落地并随合并 `97092b30` 进入本卡 worktree。以下保留的是**设计期草案原文**，不是待办：
 
 ```text
 ... and review dispositions support that claim; the binding object is the write set this Phase declares (its declared Write set paths only — not this round's actual changed files, and not an affected-check list), not a whole cross-Phase snapshot. missing quality facts stay incomplete but do not block repair.
 ```
 
 - **判据口径（逐字取自用户裁决，不得替换）**：`decision-log.md:52`(T-010=A) 逐字「口径＝『删掉跨 phase 的全量快照绑定、只留**该 phase 自己声明的写集**』。落点：`docs/standard-workflow.md:334-338`（step 11 `authenticate-current-task-completion`）**与** `workflows/build-code/steps.json:15`」；`:293` acceptance 逐字「step 11 的绑定对象为**该 phase 声明的写集**、不再绑整个 snapshot」。**不是**「绑定当前材料版本 + 实际影响集」——那是影响集口径，v1 曾用它静默替换本判据，v2 改回逐字原文；影响集只作为写集的补充项出现。
-- **如实写明第二落点的现状**：`workflows/build-code/steps.json:15` 现在是 step 11 的 `observable_result`，**当前不含任何绑定语义** —— `grep -c snapshot workflows/build-code/steps.json` = **0**（本卡 worktree 实测）。所以本卡是在该处**新增**判据，不是「修正已有绑定」；v1 写的「`:15` 已要求绑定当前 snapshot」是错的，已删。
+- **如实写明第二落点在设计期的现状（2026-09-28 实测；2026-09-29 复核更正：该处现已落地）**：`workflows/build-code/steps.json:15` 是 step 11 的 `observable_result`，**设计期不含任何绑定语义** —— `grep -c snapshot workflows/build-code/steps.json` = **0**（本卡 worktree 实测）。所以本卡是在该处**新增**判据，不是「修正已有绑定」；v1 写的「`:15` 已要求绑定当前 snapshot」是错的，已删。
 - **三个读取点（逐点核对并要求给出处置，不能只写「不变」）**：
   1. `tests/contract/stage-routing-and-concrete-testing.test.mjs:164-165` —— `:164` 取 `authenticate-current-task-completion` 的 `observable_result`，`:165` 以 `toMatch(/current task facts is marked completed only when actual changes, tests, AC evidence, and review dispositions support that claim/i)` 断言。**处置：新增判据只能追加在原句之后，不得改动或重排现有子串**；按上述草案追加后 `:165` 仍匹配 → 不红。
   2. `tests/e2e/vnext-five-stage-current.test.mjs:499` —— `:499` 在 `stepSlug` 映射表里把 `build-code` 映到 `"authenticate-current-task-completion"`，只按 **slug** 定位、不读 `observable_result`。**处置：不动 slug，本条改动对它是纯文本加法 → 不红**（`confirm --action=decision` 的语义前提未变）。
@@ -356,7 +356,7 @@ Worktree 根目录的 `progress.md`、`task_plan.md`、`findings.md`、`HANDOFF-
 
 - **机制（加强后）**：build-code 被启动 **17 次**，其中 **10 次是同步整轮重跑**（198.1 / 269.5 / 278.4 / 221.1 / 270.4 / 61.4 / 243.3 / 314.6 / 359.5 / 315.1s），合计 **2531.4s，均值 253s = 12.0% 墙钟**；另外 7 次靠 `setsid`/`nohup`/`trap '' TERM`（ord=4715）/`tmux new-session -d`（ord=4801）脱离前台 —— 这是「一次跑到一个可判定的终态」这一原子性要求与前台等待上限冲突后的绕过行为。与之配套的还有 39 个测试文件被调用 113 次（`tests/contract/spec-stage-artifact-closure.test.mjs` 11 次 / 244.5s，`tests/contract/acceptance-execution-tier.test.mjs` 10 次 / 628.8s，`tests/contract/stage-runtime-preflight.test.mjs` 5 次 / 659.9s）。
 - **落点**：原 R2 落点（`docs/standard-workflow.md:334-338`）不变；本节的「重入不是重跑」句与 **R9 草案合并为同一段落**，落在 `docs/standard-workflow.md:293` 之后，不另起段落、不重复表述。
-- **逐字草案（R2+R9 合并稿，替换 §1 中 R9 单独的草案）**：
+- **逐字草案（R2+R9 合并稿，替换 §1 中 R9 单独的草案）** —— **2026-09-29 复核更正：该合并稿已落地**，见 `docs/standard-workflow.md:334-338` 现文（`:336-337` 即「删掉跨 phase 的全量快照绑定…只有当该 phase 声明的写集变化时才需要重做对应部分」）。以下保留的是**设计期草案原文**，不是待办：
 
 ```
 重入不是重跑：stage 重新进入时，材料未变且当前 task 事实已经完成的步骤不重新实现、不重新测试、不重新审查，从进度游标指到的 task 继续。判据是影响集而不是快照相等——只有材料的当前版本发生变化（spec.md 或该 phase 文件本身改动）以及被这次变化直接命中的 task 才重做；材料未变时不需要枚举全部 phase 文件、不需要重跑最终 aggregate。整轮跑到终态的原子性只适用于第一次进入与材料确实变化时；一次超时或一次脱离式的后台发起不等于终态。
@@ -648,7 +648,7 @@ A subagent handoff for one Task returns: the files it changed with exact paths, 
 - **Carry-over from spec**: [the `N/A` / `deferred` / `non-goal` items this Phase inherits, with the reason; write `none — reason` when empty]
 ```
 
-为什么：B 的 G-8 实测 card-04 `spec.md:617-618` 把覆盖率/CI 记成 `N/A + reason`，而没有任何 phase 文件转述过这个 N/A，于是"规格说不适用、phase 说要做"这种矛盾没有字段承载。本字段只转述**指针 + 理由**，不复制正文。
+为什么：B 的 G-8 实测 card-04 `spec.md:659-660` 把覆盖率/CI 记成 `N/A + reason`（**2026-09-29 复核更正行号**：原记 `:617-618`；实测 `:617` = `### 12.2 风险表`，与本条无关。本条实际在 `:659`「覆盖率路线」与 `:660`「CI 接线」两行，另见 `:330` DER-04、`:335` DER-09），而没有任何 phase 文件转述过这个 N/A，于是"规格说不适用、phase 说要做"这种矛盾没有字段承载。本字段只转述**指针 + 理由**，不复制正文。
 
 ### §3.6 逐字段清单表（模板 38 个既有字段 + **4 个新增**）
 

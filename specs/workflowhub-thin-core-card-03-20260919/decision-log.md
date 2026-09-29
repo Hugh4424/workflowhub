@@ -643,7 +643,7 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 
 **收尾确认**：make-decision **十三步全部完成**（step 1–9、step 10 批准〔confirmation `673f4045…`〕、step 11 spec-analyze 透镜 consistent〔fact `786c1f41…`〕、step 12 发布汇报、step 13 复盘〔`52fbe536…`〕）；四组追加指令（模板二次修订／审查第 9 条／审查编排优化设计／本收尾）全部登记落盘；追加后复验：透镜 **consistent**（ok=true、errors=0、findings=0、收敛 7/7）、`analyzeDecisionOutline` ok、`analyzeDecisionConvergence` ok、内容契约 4 ✓——**本阶段可正式收工**。
 
-**时序裁决更新**：T-013 原自定义答复「build-plan 等到 card-04 交付合并进来后再进行」**由用户本指令更新为**：**build-plan 先行**；CARD-04 合并后回头核对 card-03 的 decision／spec／phase 是否需要更新（用户亲自指定的复核点，即「错开实施」的时间对账）。**2026-09-29 复核完成**：复核当时 main tip 为 `6848760d`，合并点提交为 `97092b30`；`git log --oneline 97092b30..main` 为空，其含义是 **main 当时已整体包含在本卡合并提交 `97092b30` 之内**（main ⊆ `97092b30`），**不是**「本卡位于 main tip」。结论＝本卡的 decision／spec／phase **无需更新**，复核点关闭。**复核之后 main 另前进 2 个与本卡无关的提交**：`94000a65`（README post 行修正）、`b3cea456`（残留卡材料归档），均属另一件事的处置 ⇒ 现 main tip = `b3cea456`，本卡分支**尚未包含**这两条：现跑 `git log --oneline 97092b30..main` 会输出这两条，`git merge-base --is-ancestor 97092b30 main` 为**假**。
+**时序裁决更新**：T-013 原自定义答复「build-plan 等到 card-04 交付合并进来后再进行」**由用户本指令更新为**：**build-plan 先行**；CARD-04 合并后回头核对 card-03 的 decision／spec／phase 是否需要更新（用户亲自指定的复核点，即「错开实施」的时间对账）。**2026-09-29 复核完成**：复核当时 main tip 为 `6848760d`，合并点提交为 `97092b30`；`git log --oneline 97092b30..main` 为空，其含义是 **main 当时已整体包含在本卡合并提交 `97092b30` 之内**（main ⊆ `97092b30`），**不是**「本卡位于 main tip」。结论＝本卡的 decision／spec／phase **无需更新**，复核点关闭。**截至 2026-09-29 复核时**，main 在此之后另前进 **3 个与本卡无关的提交**：`94000a65`（README post 行修正）、`b3cea456`（残留卡材料归档）、`332fe59b`（本轮 ARCHIVE-NOTE 来源更正），均属另一件事的处置 ⇒ **2026-09-29 现时** main tip = `332fe59b`，本卡分支**尚未包含**这三条：跑 `git log --oneline 97092b30..main` 会输出这三条，`git merge-base --is-ancestor 97092b30 main` 为**假**。（本句为**带日期的历史叙述**：main 继续前进不再使本句失真。）
 
 **风险（如实登记）**：build-plan 先于合并 ⇒ 计划可能与 CARD-04 在研写面重叠（card-04 worktree 41 条目不干净、`tools/cli/stage-runtime.mjs` 曾实测硬碰撞 1 处）；缓解＝本条的合并后核对点＋施工表行 52「时间错开」＋行 70 已把审查编排的 runtime 触点推迟到合并后（2026-09-29 复核：CARD-04 **未实现**该设计，移交 CARD-05／CARD-06）。
 
@@ -651,13 +651,13 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 
 ### 十五、合并后复核修订（2026-09-29；仅文字级修订，未新增任何决策）
 
-**背景**：card-04 的归档提交 `6848760d` 已并入 main，本卡 worktree 的合并点提交为 `97092b30`（Merge main into card-03）。复核当时 main tip 为 `6848760d`，`git log --oneline 97092b30..main` 为空 ⇒ **main 当时已整体包含在本卡的合并提交 `97092b30` 之内**（main ⊆ `97092b30`），用户亲自指定的「合并后回头核对」复核点**已完成**；核对口径＝card-04 的改动面即其合并提交 `40421a46` 对第一父 `40421a46^1` 的 diff，共 **110 个文件**。（**复核之后** main 另前进 `94000a65`、`b3cea456` 两个与本卡无关的提交 ⇒ 现 main tip = `b3cea456`，见本节第 3 条与第十四节时序裁决更新。）
+**背景**：card-04 的归档提交 `6848760d` 已并入 main，本卡 worktree 的合并点提交为 `97092b30`（Merge main into card-03）。复核当时 main tip 为 `6848760d`，`git log --oneline 97092b30..main` 为空 ⇒ **main 当时已整体包含在本卡的合并提交 `97092b30` 之内**（main ⊆ `97092b30`），用户亲自指定的「合并后回头核对」复核点**已完成**；核对口径＝card-04 的改动面即其合并提交 `40421a46` 对第一父 `40421a46^1` 的 diff，共 **110 个文件**。（**截至 2026-09-29 复核时** main 另前进 `94000a65`、`b3cea456`、`332fe59b` 三个与本卡无关的提交 ⇒ **2026-09-29 现时** main tip = `332fe59b`，见本节第 3 条与第十四节时序裁决更新；此为带日期的历史叙述。）
 
 **复核结论**：本卡的 decision／spec／phase **无需内容性更新**；下面是本轮 13 条修订的分类与依据。
 
 1. **ADR 撞号（编号维护）**：本卡的派发规则 ADR（原路径 `docs/adr/0033-…`）与 card-04 的 `docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md` 重号 ⇒ 本卡那份经 `git mv` 改名为 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md`，本文件与 `design.md` 内全部路径引用同步改名；card-04 的 `0033` 一字未动。
 2. **哈希链收尾**：`skills/catalog.yaml` 与 `skills/wh-review/skill-bundle.json` 的合并后哈希修复，经机器自己的校验器（`runtime/adapters/local-skill-resolver.mjs` 的 `validateSkillBundle`）对 worktree 内全部技能包逐个校验通过后提交；本轮拆成两个提交（哈希修复一个、本档案修订一个），便于独立回溯。
-3. **过时复核点**：本档案第十四节的「CARD-04 合并后回头核对」已过时 ⇒ 改为「已于 `97092b30` 复核完成；复核当时 `git log --oneline 97092b30..main` 为空，即 main ⊆ `97092b30`；其后 main 另前进与本卡无关的 `94000a65`、`b3cea456`，现 main tip = `b3cea456`」，结论＝本卡 decision／spec／phase 无需内容性更新。
+3. **过时复核点**：本档案第十四节的「CARD-04 合并后回头核对」已过时 ⇒ 改为「已于 `97092b30` 复核完成；复核当时 `git log --oneline 97092b30..main` 为空，即 main ⊆ `97092b30`；其后（截至 2026-09-29）main 另前进与本卡无关的 `94000a65`、`b3cea456`、`332fe59b`，**2026-09-29 现时** main tip = `332fe59b`」，结论＝本卡 decision／spec／phase 无需内容性更新。
 4. **过时措辞与移交对象**：`design.md` §14.17 措施 1/2/3/5 原写「CARD-04 之后实现」，实测 **CARD-04 未实现**（main 的 `tools/cli/stage-runtime.mjs` 自合并点起零改动；全仓无 `--async`、无 `--action=collect`、无 attempt 态 `result_invalid`）⇒ 改为「CARD-04 未实现，转后续卡」，移交对象写 **CARD-05**（触点 `runtime/review/review-record-route.mjs`）与 **CARD-06**（触点 `skills/wh-review/scripts/simple-review-runner.mjs`）。
 5. **越界风险登记**：上述设计里新增的 `--async`／`--action=collect`（新 CLI 动词）与 attempt 态 `result_invalid`（新 schema 字段）命中 card-04 的 **B-08**（不得新建 schema 字段／CLI 动词／控制面），措施 4 的「record 时拒收目录快照型材料」命中 **B-06**（不得重新引入材料同一性校验门）⇒ 三处一律显式写成「待 CARD-05／CARD-06 裁决」，并声明措施 4 **不是材料同一性门**。
 6. **锚点更正**：§14.17 措施 4 原引 `runtime/review/review-input-bounds.mjs:5-6`；复核发现该文件**未被 card-04 触碰**（原判「已被 card-04 重写」不成立），其内容自始即「Provider capability, rather than a local byte ceiling, decides whether delivery is possible.」与 `{ materials, diff: null }` ⇒ 锚点更正为符号锚点，并如实记录该前提不成立。
