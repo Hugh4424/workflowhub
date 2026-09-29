@@ -253,7 +253,7 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    Phase Card in the task's working area: goal, exact allowed files and symbols,
    covered ACs, non-goals, compatibility boundary, predesigned test route, stop
    conditions, and expected stage-end summary. Completion: the change boundary
-   and its ACs are explicit before editing.
+   and its ACs are explicit before editing. 续跑的第一步是**先对现实**：跑 `git status --short`，再跑本 Phase **自己写的** `gate_cmd` 看它当前的输出。材料与代码不一致时**以代码为准**，并把不一致如实记进本 Phase 的 task facts。
 
    Phase Card 里再写两行**版本锚**（给人看的绑定，不是 machine gate）：
    - `规则锚`：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。
@@ -354,7 +354,7 @@ Phase 收尾把这条已有要求做完整，只使用既有字段，不新增�
 ② 把这次运行的**原始输出**写入本 Phase 契约头自己声明的 `evidence_path`（原件，不写摘要、不写结论）；
 ③ 本 Phase 的交付锚是**一次 `git commit`**：只在既有 commit 授权到位时执行（见下方授权段）；
    缺授权时如实记 `delivery pending`——它不是进入、继续、测试、修复或交接的前置。
-这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。
+这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。**进展 = 交付锚**（新提交或新证据），不是动作次数；拿不出外部锚时，按本文件 `:272-275` 的既有判据自述一行，写不出即报告给人。本条不设次数或时长阈值。
 
 Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
 step. It compares the original requirement and current cohort materials with
@@ -364,7 +364,7 @@ or files. Repair valid gaps in build-code when they belong to implementation or
 task facts; keep product/spec/Phase ownership with its owning stage. Emit the
 shared six-part plain-language summary: current stage work, requirement
 coverage, upstream alignment, repairs made here, remaining risks, and the next
-stage boundary.
+stage boundary. `remaining risks` 段必须对本期**失败信号**给一句成句解读；唯一允许的空态写法是「这一轮没有失败信号」，不许留空、不许只写 `none` 或 `N/A`。
 
 After the phase facts are recorded, a phase may be committed only when the
 user has separately authorized the irreversible operation. The public form is

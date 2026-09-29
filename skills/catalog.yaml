@@ -127,7 +127,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 47974d73bc104f6aa137f472b4f55f29f54c26fa394fbdf8c2dd6dec7510c462
+    local_bundle_hash: 5e0a116b3a637ff6705ba1277591fd6a12887ca9b16253181da33cce4600f493
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -215,7 +215,7 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c36970ae6d0639d5d0cc33fb1858c63534fb40bb2bcb548b65de0b3fd20dc413
+    local_bundle_hash: 599d8807813218fbe7b1f1fbd49d36f2c05a274cee16d85b81d5f734a303bffa
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -283,7 +283,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: 630a125087f72143bb3a0e1d8e33b3cb25792dd9583060b535ac40ea9aeca72f
+    local_bundle_hash: 8ec7d43d206ef1d83a74aede159b5e6f8840a966491a3f32f7314db23f983a4b
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -332,7 +332,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: b1a6e954162da7506f18a74be37cb8b5cb63d14b386ad3b10fc98acb23dcc3e1
+    local_bundle_hash: a5d2df7d7885e4f07b6f3e90b6c1da9da8de24f37c34e4c05e3b20a33673a1c7
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true

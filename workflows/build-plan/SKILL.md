@@ -199,7 +199,7 @@ not new workflow stages and not gates.
    pre-cohort task, `spec.md` is required upstream input; for a post-cohort
    task, draft `spec.md` from the decision at `spec-specify` before using it
    for phase planning. Extract requirements, FR/AC, constraints, non-goals,
-   risks, deferred items, and open questions.
+   risks, deferred items, and open questions. Also read the three existing "subtraction" carriers in the current `decision-log.md`: `decision-omission-acceptance.v1` (an accepted "not doing"), `retain_or_delete` (a deletion decision), and `not_applicable` (not applicable). An accepted "not doing" is a legitimate registration, not a gap to close.
 2. Research only in proportion to implementation risk. Verify code anchors,
    existing consumers, interfaces, data changes, failure paths, ownership,
    testing conventions, and rollback options. Put durable conclusions in
@@ -289,7 +289,7 @@ work merely for convenience. If a genuinely required cross-repository check is
 part of the AC, keep it explicit with its actual scope and limits. Splitting a
 long aggregate into ordinary tasks is optional plan authoring, not a runtime
 gate; a timeout remains `incomplete` and does not trigger an automatic full
-rerun.
+rerun. Slice discipline applies to every split, including this one: the split must pass two checks — there is at least one slice that can be discarded wholesale because it is low-value or can be deferred, and the slices are roughly equal in size. When the material or the scope exceeds what can be read in one pass, the action is to split the problem into smaller pieces, not to keep writing into the same one. Neither check carries a numeric threshold.
 
 Each implementation file appears in one Phase boundary and each task file list is a subset of
 that phase. Parallel phases/tasks require independent inputs, dependencies, and

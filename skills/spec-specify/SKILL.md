@@ -43,7 +43,7 @@ exclusions, and the global implementation-design section. Keep the quick-read
 section short; put narrative before trace fields. Translate source requirements
 into four discoverable surfaces: requirement explanation, acceptance flow,
 test standard, and architecture boundary. Link each to source/decision IDs;
-do not rewrite the PRD goal or decision rationale.
+do not rewrite the PRD goal or decision rationale. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
 
 The template is the same content contract consumed by strict stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
