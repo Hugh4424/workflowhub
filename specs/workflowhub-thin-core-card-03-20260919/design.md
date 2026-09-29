@@ -1875,7 +1875,7 @@ node --test tests/workflow-v2-contract.test.mjs
 9. **build-prd 的恢复条件未验证**：字段 6 的「提升为正式 stage」路径是推理，未实跑 `config/workflowhub.yaml` 的 consumer 与两条断言的联动态。**需要怎么测**：仅在该决定真的要做时，跑【build-prd】组的两个文件。
 
 ## §12 验收载体与丢失落点回填（V4-D 原始交付，附录）
-**性质**：填充件（不是判定书）。对象＝`/tmp/wh-card03-design/DESIGN-v3.md`（1368 行）+ `V4-M4.md`（216 行）；权威＝`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（474 行；**2026-09-29 复核更正**：现为 **747 行**）。本次只读，未改任何仓库文件、未跑测试、未做 git 写。§2.6 与 §1.2 给出可直接粘贴的逐字块；每条回填都带授权来源，无授权的不写。
+**性质**：填充件（不是判定书）。对象＝`/tmp/wh-card03-design/DESIGN-v3.md`（1368 行）+ `V4-M4.md`（216 行）；权威＝`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（474 行；**2026-09-29 复核更正**：现为 **747 行**，且原记「474 行」在本分支历史中**无法复现**——该文件在本分支历次提交最小为 711 行（`5202828a`））。本次只读，未改任何仓库文件、未跑测试、未做 git 写。§2.6 与 §1.2 给出可直接粘贴的逐字块；每条回填都带授权来源，无授权的不写。
 
 ## 0. 三条口径（后面所有处置都按它判）
 - **处置列只描述执行时序，不描述归属**：`V4-M4.md:32-34` 逐字定义——「本卡内做」＝「按 §6.3 的批次直接写，**无需等待任何合并**」；「错开实施」＝「该落点所在文件在 CARD-04 写面内，但……**仍属本卡交付**（**不是**排除），在 CARD-04 分支合并进 main **之后**执行」。
