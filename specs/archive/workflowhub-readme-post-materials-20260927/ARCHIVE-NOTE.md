@@ -7,7 +7,7 @@
 - 用户逐字授权仅「可以，就改这一行」，范围仅 README 一行。转录 PARENT 第 **22922-22926** 行记其时刻 2026-09-27T07:43:17Z，晚于创建 8 小时 03 分，且只授权「改这一行」；全文无「新建 task／跑完四阶段／提交／合并／推送」的用户语句。本卡 `quality/confirmations/` 最早的同一答复为 2026-09-27T07:52:26.241Z（stage=make-decision）。
 
 ## 四阶段连续自动推进
-- 单一子代理连续跑完：转录 `~/.codex/sessions/2026/09/27/rollout-2026-09-27T15-35-50-01a0e1ca-a7c7-7633-ae05-d466dd0d6c4c.jsonl` 第 **1/29** 行的 session_meta 含 `/root/p13_report_consumer` 与 `fork_turns`。
+- 单一子代理连续跑完：转录 `~/.codex/sessions/2026/09/27/rollout-2026-09-27T15-35-50-01a0e1ca-a7c7-7633-ae05-d466dd0d6c4c.jsonl`：`:1`（ordinal 0）的 session_meta 含 `/root/p13_report_consumer`；`:29`（ordinal 28）的 `"role":"developer"` 消息含 `fork_turns`（2026-09-29 复核更正：原记「第 **1/29** 行的 session_meta 含 `/root/p13_report_consumer` 与 `fork_turns`」把归属记错，实测 `:1` 的 `grep -c fork_turns` = 0）。
 - 外置 `facts.jsonl` stage-end：make-decision `2026-09-27T07:57:42.119Z`、build-plan `2026-09-27T08:48:28.602Z`、build-code `2026-09-27T09:03:11.298Z`、verify-code `2026-09-27T09:03:40.201Z`。
 - build-code → verify-code 间隔 28.903 秒（即 29 秒）。
 - `quality/confirmations/` 共 10 条，`reply_text` 全为「可以，就改这一行」，最早一条为 2026-09-27T07:52:26.241Z（stage=make-decision）；**build-code 与 verify-code 无确认记录**。
