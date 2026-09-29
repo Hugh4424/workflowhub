@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/acceptance-result-machine-classes.test.mjs tests/deferred-acceptance-semantics.test.mjs tests/contract/census-upstream-authoring.test.mjs tests/decision-log-content-contract.test.mjs",
-  "receipt_ref": "quality/tests/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.json",
-  "output_ref": "quality/tests/output/card04-P7-L0-current-6814433c-cadc-4bce-8c26-8cbe61974e58.output",
-  "timeout_ms": 600000
-}

@@ -1,6 +1,0 @@
-# P11 ui-node-adjacent current official protocol test
-
-- Command: `node --test tests/contract/ui-stage-integration.test.mjs`; public verify capture, new receipt/output refs, timeout 1200000 ms. Task workflowhub-thin-core-card-04-20260919, branch task/workflowhub/workflowhub-thin-core-card-04-20260919, HEAD ef920f1fbd415fe87d50930359059b661e141acd, tree a8ba4bcc213c29f78aec61e4f64139444d3b0d1b, material revision-385359c77a5be8197c6fd6c0b63441236f630342a490566cc4b55e299841d044. Double preflight stable.
-- CLI exit 0; receipt internal exit 0; count oracle true; ℹ tests 22; ℹ suites 0; ℹ pass 22; ℹ fail 0; ℹ cancelled 0; ℹ skipped 0; ℹ todo 0.
-- Receipt quality/tests/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.json SHA-256 55e0fa3ef3caded4fb2a5092eb7bbfcce59927efb5aa9e0a5f2a23646b0fd5a1; output quality/tests/output/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.output SHA-256 cc6989615cd1a68a41964d8ada1a50a8c579d7a00952fe52406ff420d05b1dd7. 16 materials, relevant sources/tests and facts before/after are in this directory; hashes stable true, identity stable true.
-- This tests the protocol in fixtures only. No real page, service, browser run or business effect was authenticated; P11 remains not done.

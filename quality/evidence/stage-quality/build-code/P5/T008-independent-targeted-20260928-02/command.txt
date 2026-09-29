@@ -1,1 +1,0 @@
-/Users/Hugh/Hugh/Project/workflowhub/node_modules/.bin/vitest run tests/contract/p5-same-run-report-source.test.mjs --config vitest.config.mjs --poolOptions.forks.singleFork --no-fileParallelism

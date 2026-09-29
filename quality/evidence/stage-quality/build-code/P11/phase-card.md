@@ -1,8 +1,0 @@
-# CARD-04 build-code P11 Phase Card
-
-- Goal: establish whether a sourced backend change affecting a real page can trigger lawful post browser acceptance, execute in a controlled real service, and feed per-case/AC facts to the existing consumers.
-- Task/AC: T022, FR-30–33 and AC-30–33. Current physical P11 authority declares a conditional STOP: no confirmed page/service business case, no browser adapter/official per-AC consumer, and no precise protected runtime write authorization. The frozen contract test is a negative diagnostic, not a service/browser pass.
-- Current write set: P11 test and prewritten evidence only; frozen test bytes and old RED must be preserved. No production browser executor, `runtime/stage/**`, `runtime/review/**`, CLI, P4 implementation, or artificial page/service fixture may be written under this card.
-- Read-only route: run the exact `npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs` once on the current snapshot and preserve service positive/browser target RED, plus a scoped source/consumer inventory and concrete negative cases (backend→browser N/A, post tier rejection, absent adapter, wrong service, fixture-only success, cleanup failure). No broad test or invented UI N/A.
-- STOP exit: produce a bounded proposal with exact protected file/symbol/owner/consumer/negative oracle/rollback and true current evidence. Product writes and browser QA follow only after the stated separate precise authorization and a real page/service are available. Browser QA, if triggered, must use `isolated-browser-qa` and report login-state and cleanup facts.
-- Handoff: current test status, missing consumer/service/authority, affected AC and owner; carry `not_done/unknown` to P12/P13 rather than a false pass.

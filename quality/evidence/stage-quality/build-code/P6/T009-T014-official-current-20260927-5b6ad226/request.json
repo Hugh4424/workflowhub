@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/decision-log-census.test.mjs tests/contract/upstream-coverage-ledger.test.mjs tests/contract/spec-analyze-truthfulness.test.mjs tests/contract/review-history-canonical-reader.test.mjs tests/contract/oracle-mirror.test.mjs tests/e2e/card-04-real-entry-chain-e2e.test.mjs tests/contract/post-phase-official-handler.test.mjs tests/contract/post-spec-analyze-original-source.test.mjs",
-  "receipt_ref": "quality/tests/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.json",
-  "output_ref": "quality/tests/output/card04-P6-L0-current-5b6ad226-3edb-410d-b428-374d0cb94ba7.output",
-  "timeout_ms": 900000
-}

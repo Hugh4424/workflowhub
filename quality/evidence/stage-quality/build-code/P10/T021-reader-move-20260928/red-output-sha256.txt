@@ -1,2 +1,0 @@
-7220b2d38377b7d48f1320521bd2b9b1f16c2884ea9b39d3cf3c21ec76c2fcd3  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/red-stdout.txt
-00dea22875042ee14fb0a3d539ea168416dceaa6eb6f02dc8f99b1c861bda222  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/red-stderr.txt

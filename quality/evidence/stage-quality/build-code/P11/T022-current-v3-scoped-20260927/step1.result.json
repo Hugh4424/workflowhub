@@ -1,8 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/post-business-browser-reconciliation.test.mjs",
-  "started_at_utc": "2026-09-27T11:30:17.397Z",
-  "ended_at_utc": "2026-09-27T11:30:18.092Z",
-  "exit_code": 0,
-  "signal": null,
-  "error": null
-}

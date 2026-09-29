@@ -1,6 +1,0 @@
-{
-  "routing_tier": "feature",
-  "routing_rationale": "实际改动为 tests/contract/post-acceptance-chain-source-index.test.mjs 与 docs/architecture/move-map.json 登记；目标跨当前需求来源索引、spec 映射及 runtime/stage/stage-runner.mjs 验收行接口，所以保留单目标测试和就近七项邻接测试。",
-  "result": "pass",
-  "ts": "2026-09-27T18:03:29Z"
-}

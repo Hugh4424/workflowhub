@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/oracle-mirror.test.mjs",
-  "receipt_ref": "quality/tests/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.json",
-  "output_ref": "quality/tests/output/card04-P6-T011-official-current-3640546b-e3c9-445e-874e-7afe8a7a29e2.output",
-  "timeout_ms": 1200000
-}

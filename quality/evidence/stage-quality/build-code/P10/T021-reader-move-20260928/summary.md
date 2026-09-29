@@ -1,8 +1,0 @@
-# P10/T021 reader migration: scoped evidence
-
-- Changed only `runtime/evidence/freshness.mjs`, `workflows/build-code/case-reconciliation.mjs`, and `tests/contract/build-code-case-reconciliation.test.mjs` as production/test sources. The runtime owns the sole full consumption-source authenticator; the workflow reader calls it after its existing fixed receipt, output, manifest, and raw reporter checks.
-- Same named test was RED before migration: `red-command.txt`, `red-stdout.txt`, `red-stderr.txt`, `red-exit.txt` (1 failed; missing runtime export). After migration and added malformed/incorrect fact controls, `green-final-*` records 1 passed, 56 skipped, exit 0. Output hashes are in `*-output-sha256.txt`; exact final source hashes are in `final-source-sha256.txt`.
-- The test authenticates a content-addressed locator and selected AC fact, rejects wrong locator hash, missing AC, malformed partial JSON, wrong fact hash, another receipt's AC fact, and replaced final stage row. The runtime reader reads `facts.jsonl` before source records and after all facts and rejects a changed file.
-- `no-locator-*` records the adjacent official-row case: 1 passed, 56 skipped, exit 0. Without a locator, execution and business effect remain unknown.
-- `node --check` passed for both production files; `git diff --check` passed for scoped files. No full contract-file or whole-repository test was rerun after these source changes.
-- Limits: the real `runOfficialStage` producer does not yet publish this source or locator; a synthetic test-owned source cannot prove author identity or complete same-run fact list. No authentic AC-26/27/33 business effect is established. The reader detects changed row bytes across its read, not same-byte ABA. T021 and P10 are incomplete.

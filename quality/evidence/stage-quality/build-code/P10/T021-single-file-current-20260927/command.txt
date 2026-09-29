@@ -1,1 +1,0 @@
-timeout --signal=INT --kill-after=10s 180s npx vitest run tests/contract/build-code-case-reconciliation.test.mjs

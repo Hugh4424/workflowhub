@@ -1,6 +1,0 @@
-{
-  "command": "node --test tests/contract/ui-stage-integration.test.mjs",
-  "receipt_ref": "quality/tests/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.json",
-  "output_ref": "quality/tests/output/card04-P11-ui-node-adjacent-current-deafc963-453d-4c8f-887a-4669a64c51f5.output",
-  "timeout_ms": 1200000
-}

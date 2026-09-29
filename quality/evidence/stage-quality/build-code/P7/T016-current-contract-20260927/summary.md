@@ -1,8 +1,0 @@
-# P7 当前状态修订与 T016 模板解析护栏
-
-- 工作树：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`；分支 `task/workflowhub/workflowhub-thin-core-card-04-20260919`；HEAD `ef920f1fbd415fe87d50930359059b661e141acd`；外置 Task `workflowhub-thin-core-card-04-20260919`。本轮未改生产代码、模板、两份技能、CARD-05 生产者或正式 Task facts。
-- 旧字节：`before-census-upstream-authoring.test.mjs` SHA-256 `cff065cf42e5c6c695cf862cc487bcd5690d074d2f1bc7c4b0ba`；`before-P7.md` SHA-256 `f84be26579271b7bad51ea4aae587ad4a5cb9dff4a93762906cb3ea98e6442aa`。原测试定向 13/13、exit 0，见 `before-targeted.raw.txt`/`.exit`。
-- 新测试：`tests/contract/census-upstream-authoring.test.mjs` SHA-256 `c787a8b3d033e0421beb76dda0d4779c0ab161b13d5859673608e9356d47d017`。从当前模板填入明确标为测试夹具的 U/R/V 文本，调用真实 `deriveDecisionLogOriginalSourceCensus`，同时核 `errors=[]`、`entries>0`、三类行各在自己的二级小节。五个内存坏例核引文缺失、R 行缺失、V 行说话人错误、R 行完整但挪错节、U/V 同缺导致空分母；原有归档/旧格式护栏保留。
-- 目标 RED：`final-fault-injected-test.mjs` 是当前测试的临时副本，仅让其填充后的完整 R 行挪到别的小节；生产模板未改，临时测试文件已删除。`final-target-fault-red.raw.txt` exit 1，1 failed/14 skipped，失败为新 T1e 实际断言（含 `R_outside_section`），不是 import/setup 错误；对应 SHA/来源见 `.meta.json`。旧版第一次 U 引文故障 RED 另存 `target-fault-red.*`，不冒称生产代码改前 RED。
-- GREEN：同字节新测试 `final-T016-green.raw.txt` 为 T016+旧内容契约 19/19、exit 0；P7 四文件完整定向命令 `current-material-P7-L0.raw.txt` 为 62/62、exit 0。`current-material-P7-L0.meta.json` 逐文件记录当前 16 份 post 材料、测试和解析器 SHA；P1 同版材料改动后重采，运行前后材料字节稳定，诊断性 manifest SHA-256 `e88691d145a7633875dc2835d5eb8624d39494bd4a3afa2c22e51c6acca1746b`。该 manifest **不是** WorkflowHub 正式 material_revision 或 canonical receipt。
-- `P7.md` 只修当前状态：旧本地 RED/GREEN、官方 56/56 测试记录和独立 Phase 审查可回读，但都绑定旧快照；本轮局部 GREEN 也不证明真实新卡用了模板。当前 Task 仍无 build-code 阶段行、历史 123 条逐文件兼容基线仍缺、完整四类生产者（尤其通用 `missing`）仍待 CARD-05 写面，M2/M3 仍未闭环。本轮未请求正式同版 receipt/独立审查；材料稳定后由主任务办理。

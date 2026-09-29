@@ -1,5 +1,0 @@
-{
-  "command": "diff -u quality/evidence/stage-quality/build-code/P11/T022-adjacent-node-red-repair-20260927/workflows__build-code__SKILL.md.before workflows/build-code/SKILL.md",
-  "exit_code": 1,
-  "stderr": ""
-}

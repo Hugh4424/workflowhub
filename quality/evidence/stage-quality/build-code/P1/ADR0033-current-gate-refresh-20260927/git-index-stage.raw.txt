@@ -1,1 +1,0 @@
-100644 481f798519113c594a9d04c75bade79b888a39d7 0	docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md

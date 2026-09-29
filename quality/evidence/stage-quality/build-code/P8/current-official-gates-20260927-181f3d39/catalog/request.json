@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/business-case-catalog.test.mjs",
-  "receipt_ref": "quality/tests/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.json",
-  "output_ref": "quality/tests/output/card04-P8-catalog-current-181f3d39-4810-4e78-829a-422d40fcc791.output",
-  "timeout_ms": 1200000
-}

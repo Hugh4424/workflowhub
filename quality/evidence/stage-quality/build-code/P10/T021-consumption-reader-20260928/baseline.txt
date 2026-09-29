@@ -1,3 +1,0 @@
-
- RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
-

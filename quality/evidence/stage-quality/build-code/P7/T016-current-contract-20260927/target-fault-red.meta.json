@@ -1,8 +1,0 @@
-{
-  "exit_code": 1,
-  "utc": "2026-09-27T09:11:36.914621+00:00",
-  "test_sha256": "cb76aefc3f6ff25deac40508688d3cdb190983e052f24e03e97987380c9cd8fd",
-  "fault_test_sha256": "c2dc760f1cdb8cf12db37f6a62a72cffefc63c0667fac2c2ceb2e6670f821976",
-  "template_sha256": "a8f3ce6318d94987c861a974475eab882de8756ab10bacb43341f14c40fce567",
-  "fault": "remove U quote marker from in-memory filled template, leaving production template unchanged"
-}

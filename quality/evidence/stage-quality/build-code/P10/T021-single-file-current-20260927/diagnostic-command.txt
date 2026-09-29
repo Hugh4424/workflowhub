@@ -1,1 +1,0 @@
-timeout --signal=INT --kill-after=10s 90s npx vitest run tests/contract/build-code-case-reconciliation.test.mjs -t 'reads all bound reporter leaves|does not turn an older matching receipt|independently classifies (real current source|forged derived source|duplicate historical R ID before the genuine row)' --reporter=verbose

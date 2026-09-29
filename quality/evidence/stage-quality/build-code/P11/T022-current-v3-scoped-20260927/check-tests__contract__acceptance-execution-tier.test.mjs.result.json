@@ -1,8 +1,0 @@
-{
-  "command": "node --check tests/contract/acceptance-execution-tier.test.mjs",
-  "started_at_utc": "2026-09-27T11:34:20.276Z",
-  "ended_at_utc": "2026-09-27T11:34:20.297Z",
-  "exit_code": 0,
-  "signal": null,
-  "error": null
-}

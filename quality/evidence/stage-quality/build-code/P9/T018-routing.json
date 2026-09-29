@@ -1,6 +1,0 @@
-{
-  "routing_tier": "feature",
-  "routing_rationale": "实际变更仅 workflows/build-code/change-scope.mjs 与 workflows/build-code/capture.mjs：同一后端测试捕获功能域内新增 return-only 变更范围及既有 TaskHandle/Workspace 身份核对；不改公共协议、权限策略、前端、持久化 schema 或 canonical writer。预判 backend/feature，实际边界一致。",
-  "result": "pass",
-  "ts": "2026-09-26T12:33:11Z"
-}

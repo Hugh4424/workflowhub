@@ -1,9 +1,0 @@
-{
-  "command": "node --input-type=module [inline narrow validateDeletionDisposition and CARD04 registration probe]",
-  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
-  "recorded_at": "2026-09-27T00:45:32.163Z",
-  "exit_code": 0,
-  "output_ref": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/quality/evidence/stage-quality/build-code/P9/CARD04-move-map-registration-diagnostic-20260927.json",
-  "output_sha256": "0bd089127e5f93389a0cece0ae1957bcb043df71de08a36ac4183bd36195bd4b",
-  "move_map_sha256": "d90163d81ded89d7d42c49fa493387c4682cc7cb1620e9250b2942298ad791aa"
-}

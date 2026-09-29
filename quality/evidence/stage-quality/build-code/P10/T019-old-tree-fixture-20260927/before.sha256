@@ -1,5 +1,0 @@
-a99b7b914cd975b0f34be44ccafac5c384294c2d2224086d4cba5c6171fcdea0  tests/contract/build-code-case-selection.test.mjs
-776b21f84378177725be67683596983055579f86013dcbc275dd91c79f99b55e  specs/workflowhub-thin-core-card-04-20260919/phases/P10.md
-5801544f09b9481129231f7fb610571701a5c3f52a939a07671884b5bb3a7400  workflows/build-code/case-selection.mjs
-4c0f0a992c812d1905aad4c933533adef8b45467ccb0f84bd5f8b6968cb9a6f3  quality/evidence/stage-quality/build-code/P10/T019-old-tree-fixture-20260927/official-before-receipt.json
-ea548bcbdac0e8c20b71d814ac5e3faa9af5c7cb4011f2a6063899233f08feb2  quality/evidence/stage-quality/build-code/P10/T019-old-tree-fixture-20260927/official-before-output.txt

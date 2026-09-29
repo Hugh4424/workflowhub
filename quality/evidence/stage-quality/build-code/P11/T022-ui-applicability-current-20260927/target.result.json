@@ -1,8 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/ui-applicability-must-ask.test.mjs tests/contract/ui-applicability-contract.test.mjs tests/contract/ui-stage-integration.test.mjs tests/decision-log-content-contract.test.mjs",
-  "started_at_utc": "2026-09-27T12:00:58.552Z",
-  "ended_at_utc": "2026-09-27T12:01:35.809Z",
-  "exit_code": 0,
-  "signal": null,
-  "error": null
-}

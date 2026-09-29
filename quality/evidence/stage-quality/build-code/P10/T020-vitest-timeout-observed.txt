@@ -1,8 +1,0 @@
-COMMAND: node quality/evidence/stage-quality/build-code/P10/T020-vitest-timeout-probe.mjs
-CWD: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
-HEAD: ef920f1fbd415fe87d50930359059b661e141acd
-HEAD TREE: 2a0e21e65488fba4e4507e4491f9edcab8e4585b
-NODE: v24.14.0
-EXIT: 0 (probe's own assertion)
-PROBE RESULT: {"status":"unavailable","reason":"test_failed","observation_count":0,"exit_code":null,"elapsed_ms":30015,"raw_output_sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","canonical_receipt":false}
-The isolated fixture's Vitest test timeout was 120000 ms; the runner's 30000 ms child limit fired first. The probe removed its temporary fixture directory in finally. No passed observation was emitted.

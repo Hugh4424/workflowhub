@@ -1,9 +1,0 @@
-# P8 三例当前来源重绑：有限语义核读
-
-- 认证工作树/Task/逐文件 SHA 与原始退出状态见 `manifest.json`；旧目录和旧 P8 字节在 `before-*`，旧证据未覆盖。目录修订 `.7→.8` 的 JSON 逐字段比较只有 10 处变化：顶层 `revision`，每例 `source.revision`、`rule.revision`、`effect_observation.rule_revision`。schema、规则文本、49 个期望测试身份、关系、观察状态与 AC-27 生产者状态字节不变。没有新增产品文件、合同测试、schema 或公共命令；仅新增本轮证据与只读取证脚本，不改 move-map。
-- `CARD04-DECISION-LOG-CENSUS`：保留的隔离副本中 decision-log SHA `790d…`，当前 `4376…`；可读 diff 仅在文件末尾追加 ADR-0033 迁号说明，原 U/V/R 三节和 R-001..R-008 索引原文不变。当前 `P6.md:22-40` 的 T009 仍要求非零 U/V 分母、`errors=[]`、R-001..R-008。P6 另有 T012/T014/T025-27 后续材料修订；本次没有把这些视为 census 规则完成事实。目录旧 P6 SHA `f2f…` 的整份原字节不在本证据包，语义判断只限本例当前 T009 规则与当前真实 U/V/R 文本，不宣称整份 P6 历史字节等价。
-- `CARD04-ACCEPTANCE-MACHINE-CLASSES`：保留旧 `P7.md` SHA `f84b…` 与当前 `76c5…` 的可读 diff 是 T015/T016 本地证据和当前状态说明修订；T015 的八值、机器四类非通过、非法值拒绝仍与目录规则相符。`effect_observation.producer_status` 仍为 `not_implemented`，不把 `stage_end_spec_analyze` 的不同 subject 结果冒充 AC-27 实际效果。
-- `CARD04-DEFERRED-ACCEPTANCE-REGRESSION`：当前 P7/T015 仍保留旧 deferred 语义测试，`tests/deferred-acceptance-semantics.test.mjs` 本轮未改；目录的“missing→deferred、非法值不静默 failed”仍与该测试/规则相符。观察状态继续 `not_yet_observed`。
-- 目标 RED：原目录运行 `business-case-source-binding.test.mjs`，10 收集/3 项精确因陈旧 source/rule SHA 失败/7 通过，exit 1，另有非根因 WebSocket 端口提示。GREEN：当前目录 `business-case-source-binding.test.mjs` + 旧 `business-case-catalog.test.mjs` 12/12、exit 0。原始输出和 exit 文件同目录。
-- P10 相邻限制：`P10-current-preexecution-probe.mjs` 只读打开**当前** CARD-04 Task/worktree，调用真实 P9 预执行变化读者、独立 registry 和 P10 selector，并逐字核三例 source/rule/observation revision；exit 0、三例绑定全 true。但 215 个真实变更含未映射路径，selector 正确返回 `unavailable/unmapped_changed_path`、零选例，未启动固定 child 或写正式回执。P10 固定入口的隔离 fixture 单项另运行 exit 1：其期待 `missing_current_business_effect`，当前返回 `invalid_business_effect_binding`，与 P8 catalog 字节无关；原件保留给 P10 owner。本任务不修该 RED，也不声称 P10 或实际业务通过。
-- CARD-04 `facts.jsonl` 目前仅 make-decision/build-plan 两条阶段行；本轮只有目录来源绑定局部 GREEN，P8 完成及全卡质量仍待同版独立复核和实际效果来源。

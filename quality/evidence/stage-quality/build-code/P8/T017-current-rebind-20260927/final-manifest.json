@@ -1,9 +1,0 @@
-{
-  "recorded_at_utc": "2026-09-27T09:27:40.832453+00:00",
-  "catalog_sha256": "52ff4e9cef411c96133946d7d3315b7e2dd6ae199c473e82336ec4bef6ec1c8d",
-  "p8_material_sha256": "90d4bf2e5329eb0ce6c8ba8f475648f0095f0dc88b9c659aae6efb1404658d61",
-  "semantic_audit_sha256": "fa80d0cc04a6fbed841e3ab702fa5ff1e8684b0cf5f4c45af40ab611930e355e",
-  "previous_manifest_ref": "manifest.json",
-  "catalog_vs_previous_manifest_unchanged": true,
-  "p8_change_after_tests": "wording only: evidence-script move-map scope clarified; source/rule/observation bindings unchanged"
-}

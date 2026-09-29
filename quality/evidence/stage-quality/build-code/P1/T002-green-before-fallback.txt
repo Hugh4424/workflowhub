@@ -1,3 +1,0 @@
-COMMAND=node -e "const fs=require('fs');const f='docs/architecture/real-entry-inventory.md';const ss=['显式入口','间接入口','未跑过入口','冻结接口面','CARD-10'];let t='';try{t=fs.readFileSync(f,'utf8')}catch{console.error('断言失败: '+f+' 不存在');process.exit(1)}let bad=0;for(const s of ss){if(!t.includes(s)){console.error('断言失败: 缺 '+s);bad=1}}if(!bad)console.log('entry inventory OK');process.exit(bad)"
-entry inventory OK
-EXIT=0

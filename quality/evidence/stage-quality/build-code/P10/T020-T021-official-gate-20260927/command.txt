@@ -1,1 +1,0 @@
-timeout --signal=INT --kill-after=30s 1320s node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-code --project=workflowhub --task=workflowhub-thin-core-card-04-20260919 --input=quality/evidence/stage-quality/build-code/P10/T020-T021-official-gate-20260927/request.json

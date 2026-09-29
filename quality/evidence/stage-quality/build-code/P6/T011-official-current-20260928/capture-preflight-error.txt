@@ -1,1 +1,0 @@
-Initial capture wrapper failed before verify: AttributeError: 'bytes' object has no attribute 'encode' while hashing git status. No formal test was run in that wrapper attempt. Corrected wrapper below retained this record.

@@ -1,5 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
-  "receipt_ref": "quality/tests/card04-P10-L0-official-20260927.json",
-  "timeout_ms": 1200000
-}

@@ -1,6 +1,0 @@
-
- RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919
-
-(node:67836) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 2)
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:67836) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 3)

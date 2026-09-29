@@ -1,1 +1,0 @@
-npx vitest run tests/contract/build-code-case-reconciliation.test.mjs -t "reader move"

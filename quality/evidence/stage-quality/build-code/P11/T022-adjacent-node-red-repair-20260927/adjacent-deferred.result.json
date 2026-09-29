@@ -1,8 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/post-phase-contract.test.mjs -t \"keeps an explicitly deferred AC visible in history but outside current formal coverage\"",
-  "started_at_utc": "2026-09-27T12:09:34.896Z",
-  "ended_at_utc": "2026-09-27T12:09:35.931Z",
-  "exit_code": 0,
-  "signal": null,
-  "error": null
-}

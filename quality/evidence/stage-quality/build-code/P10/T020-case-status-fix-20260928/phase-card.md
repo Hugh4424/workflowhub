@@ -1,8 +1,0 @@
-# P10/T020 case status fail-closed repair
-
-- Goal: the existing automatic selector must never run a catalog case whose status is absent or neither `active` nor `retired`. Only `active` cases may be selected directly or through a related-case edge; `retired` stays excluded.
-- Authority: current `phases/P10.md` T020 write set and AC-32 fail-closed selection. This fixes current official review finding `F-608af91c7e3a` after an independent direct counterexample; the review packet's anchor classification remains historical provenance.
-- Allowed changes: only `workflows/build-code/case-selection.mjs` catalog status validation/selection, and `tests/contract/build-code-case-selection.test.mjs` exact status fixtures and negative controls. No catalog, registry, runtime, CLI, stage or receipt schema changes.
-- Oracle: with a real authenticated pre-run fixture, absent/unknown/invalid direct status and unknown related status return `unavailable/missing_inventory_identity` with no cases. An active case still selects; retired remains non-runnable. Targeted new tests must fail before production repair and pass after; affected existing selection tests must remain green.
-- Test route: backend feature, scoped Vitest contract file; `test-routing-advisor` should classify the actual two-file behavior change as `feature`, then apply `backend-testing` normal, bad input, related-edge and retirement checks. Preserve raw RED/GREEN, source hashes, current Task/tree and independent review.
-- Stop: any test/import/setup failure posing as RED; selecting an unknown case; removing an old assertion; changing P9 provenance or broader P10 selection behavior; claiming this local fix resolves the 208 currently unmapped changed paths or current business effects.

@@ -1,3 +1,0 @@
-original=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/node_modules
-backup=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/node_modules.p5-t008-backup-87798
-/Users/Hugh/Hugh/Project/workflowhub/node_modules

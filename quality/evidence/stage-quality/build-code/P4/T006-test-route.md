@@ -1,9 +1,0 @@
-# P4/T006 分层测试执行记录
-
-- 预判与实改：`runtime/stage/stage-runner.mjs` 的 post acceptanceChain 构建；`vitest.config.mjs` 的 runtime include 已在 build-plan 预置，本次仅核对。`test-routing-advisor` 重判为 `feature`，与后端模块/接口目标一致，见 `T006-route.json`。
-- `backend-testing` 场景：冻结夹具 spec「来源与决策映射」表、decision-log D 标题、当前快照的 ref/hash 输入；单元核 source/decision/FR、证据绑定、缺失披露及透传字段。接口核 `currentPostBuildCodeSpecAnalyze` 确实调用导出的 builder；无 HTTP、服务或数据库。
-- 精确测试：`npx vitest run runtime/stage/stage-runner.test.mjs`。RED exit 1，5 collected/5 failed，首例为 `typeof` 目标断言失败；GREEN exit 0，5 collected/5 passed。测试身份及原始输出见 `T006-red.txt`、`T006-green.txt`。
-- 负控：只临时将 builder 的 `source_ids: sourceIds` 改为 `source_ids: []`，同一命令 exit 1，1 failed/4 passed，失败为 `expected [] to deeply equal ['R-001']`；源码原字节已恢复，SHA-256 前后相同，再跑同一命令 exit 0、5 passed，见 `T006-negative-control.txt`、`T006-green-after-negative.txt`。
-- 自动代码检查：三个限定文件 `node --check` 均 exit 0，`git diff --check` exit 0，见 `T006-syntax.txt`；冻结测试 SHA-256 始终为 `b9e790d61bb556fec620e79678426f401b0ed98f87acf211ac469f8dda47559e`。
-- 真实材料探针：最初模块实现在 `T006-real-material-probe.txt` 中输出了 R-009 等索引 ID，而 `runtime/stage/stage-content-contracts.mjs:6297-6304` 只接受 `deriveDecisionLogOriginalSourceCensus` 的 U/V 原始 ID，缺口的目标断言 RED 见 `T006-source-normalization-red.txt`。本次限权修正只消费 `decision-log.md:2459-2482` 已认证 `## 原始需求索引` 的 R→U/V 边，并与当前 census entries 交集。AC-29 现输出 U-006-01..06；R-010/R-018 无 U/V 边，写入 `coverage_limits` 而不冒充来源；`task_ids` 原样保留。未索引 R-999 负控输出空 `source_ids` 且披露；无索引的原冻结夹具保留 R 局部映射并披露其不能证明真实原始来源。原测试仍 5 passed，现行原件见 `T006-source-normalization-frozen-green.txt` 和 `T006-source-normalization-real-probe.txt`。
-- 局限：本次模块门及 U/V 身份核验不证明完整 post CLI 的 spec-analyze 结论、业务 AC 或 P5 报告。AC-18 顶部表只有 CARD-04-LOCAL 标记，没有可认证 U/V 原始来源边，仍留空并披露；`file_symbol`、独立锚点等完整性缺口也不会被本函数伪造。UI 消费者清查尚未由本相位证明，保持 unknown。正式当前快照测试 receipt、Phase OCR review 和 finding 处置由主会话提交。

@@ -1,2 +1,0 @@
-4671ea0930b497bbcc5d6f7d434ccea9907138390872b1b9325f03c5eb577d93  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/no-locator-stdout.txt
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/no-locator-stderr.txt

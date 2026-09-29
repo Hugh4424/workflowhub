@@ -1,9 +1,0 @@
-# CARD05 stale-path / current-OI two-file targeted close
-
-The exact requested command was `npx vitest run tests/contract/post-phase-contract.test.mjs tests/contract/decision-freeze-current-oi.test.mjs`. `run.json` records cwd, HEAD, current P10 phase/spec/decision material SHA-256, the two test and two production source SHA-256, UTC start/end, exit code, and raw-output hashes. Its untouched raw output is `command.stdout.txt` and `command.stderr.txt`.
-
-Result: exit 0; both files passed, with **42/42 test leaves** (26 `decision-freeze-current-oi`, 16 `post-phase-contract`). There were no failures or skips in this exact two-file run. `leaf-identities.stdout.txt` is a second run of precisely the same two files with `--reporter=verbose`; it also exited 0 and enumerates all 42 actual runner leaf names. Its own command, times, exit, and output hashes are in `leaf-identities-run.json`. The count of `✓ tests/contract/` lines is 42: 26 plus 16.
-
-Earlier observations of 18/20, then 19/20 after the stale-path correction, had a 20-leaf denominator. The current test source now collects 42 leaves, so this is the current two-file result, not a claim that the old 20-leaf runs covered all present tests. The current no-status CF positive case and the CARD05 D-044 absent-proof case are among the passing leaves. No P10 or whole CARD04 completion is inferred.
-
-Capture note: the first exact execution printed 42/42 passed, but the wrapper raised a Python `json.dumps(..., flush=True)` error after writing raw output, so it did not preserve the child exit code. Those raw files are retained as `attempt1.*`. The exact command was rerun to produce the complete `run.json` record. The same wrapper mistake occurred once on the auxiliary verbose run; its original raw output is retained as `leaf-identities-attempt1.*`, and the subsequent verbose run has complete metadata. No formal source, material, or Task facts was changed by these checks.

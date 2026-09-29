@@ -1,7 +1,0 @@
-{
-  "receipts": {
-    "implementation": "quality/evidence/implementation/f19f69b2de119e9e55d267ae14ee55029d3b4ae1a2d09a7af53d37701ef42094.json",
-    "tests": "quality/tests/card04-P3-T005-two-targets-2ec04542-fc3c-4f75-8bfb-ec87394bf9da.json",
-    "review": "quality/reviews/results/build-code-simple-4f2643f1-2185-507d-ad19-ec19bedb433b.json"
-  }
-}

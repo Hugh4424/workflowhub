@@ -1,6 +1,0 @@
-38e2a7067c5b640a3ad18266b1ff478cf257a7f6e507f0c6ccc18f34a310e0c0  runtime/stage/stage-runner.mjs
-c0cfb6b0743d5f32f14b0c2ad73fcd36c1b98d91031153398c7f3921c1a8a1d6  runtime/evidence/freshness.mjs
-7828fe354db7cc4507ddd5a503ad9cd97279d81ac1e2d51291b48dab11ba6b43  runtime/stage/stage-end-report.mjs
-3882d202565978f5e4d3d6a4985bcabccac907263e4e3f53782c79928c353428  runtime/stage/stage-end-report.test.mjs
-96303b07b5eda5cc079ae00132dc6d7c4d4ad241d6128df77aa8b9c26ae08fc2  tests/contract/p5-same-run-report-source.test.mjs
-d714d9e07bf0baffd77ab4333633fbd0ab266a34661710edd640794a93ac18a8  specs/workflowhub-thin-core-card-04-20260919/phases/P5.md

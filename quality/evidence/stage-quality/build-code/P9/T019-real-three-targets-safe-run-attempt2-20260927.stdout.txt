@@ -1,7 +1,0 @@
-{
-  "status": "unavailable",
-  "error": "real source changed during isolated runs: ./\n.codex/\n.planning/\n.planning/2026-09-09-build-spec-and-build-plan/\n.planning/2026-09-16-build-code-mechanism-waste-reduction/\n.planning/2026-09-16-build-code-mechanism-waste-reduction/apply/\n.planning/2026-09-16-build-code-mechanism-waste-reduction/apply/evidence/\n.planning/2026-09-16-eliminate-external-stage-agent/\n.planning/2026-09-16-eliminate-external-stage-agent/evidence/\n.planning/2026-09-17-build-plan-cost-baseline-20260917/\n.planning/2026-09-19-workflowhub-deferred-closeout/\n.planning/build-spec-build-plan/\nconfig/\ncontracts/\ncore/\ncore/__tests__/\ndocs/\ndocs/adr/\ndocs/architecture/\ndocs/contracts/\ndocs/operations/\ndocs/quality/\ndocs/research/\ndocs/research/reviews/\ndocs/superpowers/\ndocs/superpowers/plans/\ndocs/superpowers/specs/\ndocs/templates/\nfixtures/\nfixtures/anti-host-bad/\nfixtures/components/\nfixtures/config-bad/\nfixtures/config-ok/\nmetrics/\nmetrics/adapters/\nruntime/\nruntime/adapters/\nruntime/distribution/\nruntime/evidence/\nruntime/interface/\nruntime/review/\nruntime/",
-  "manifest_sha256": "bf82f8a50f8e6a11e4d1eda5fba3296278e03589791271f9dca1abb0cd20aeab",
-  "target_count": 3,
-  "temporary_retained": true
-}

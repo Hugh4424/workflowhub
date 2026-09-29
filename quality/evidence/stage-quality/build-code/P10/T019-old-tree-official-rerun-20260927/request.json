@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/build-code-case-selection.test.mjs tests/contract/build-code-targeted-runner.test.mjs tests/contract/build-code-case-reconciliation.test.mjs",
-  "receipt_ref": "quality/tests/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.json",
-  "output_ref": "quality/tests/output/card04-P10-L0-old-tree-fixed-601759a7-0334-4c70-bd2b-232bb2cf0e31.output",
-  "timeout_ms": 1200000
-}

@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/business-case-source-binding.test.mjs",
-  "receipt_ref": "quality/tests/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.json",
-  "output_ref": "quality/tests/output/card04-P8-source-binding-current-3da300fc-7ce9-4540-aec8-de1b5548134e.output",
-  "timeout_ms": 1200000
-}

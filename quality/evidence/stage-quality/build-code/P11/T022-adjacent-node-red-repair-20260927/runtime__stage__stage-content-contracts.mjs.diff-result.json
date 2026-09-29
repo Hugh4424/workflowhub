@@ -1,5 +1,0 @@
-{
-  "command": "diff -u quality/evidence/stage-quality/build-code/P11/T022-adjacent-node-red-repair-20260927/runtime__stage__stage-content-contracts.mjs.before runtime/stage/stage-content-contracts.mjs",
-  "exit_code": 1,
-  "stderr": ""
-}

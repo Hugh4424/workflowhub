@@ -1,6 +1,0 @@
-{
-  "command": "npx vitest run tests/contract/verify-code-business-handoff.test.mjs",
-  "receipt_ref": "quality/tests/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.json",
-  "output_ref": "quality/tests/output/card04-P12-handoff-current-d00c2491-3e88-4dec-8727-d3095da1c7c0.output",
-  "timeout_ms": 1200000
-}

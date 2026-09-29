@@ -1,2 +1,0 @@
-0f92c0021d398d9ad554d8fcaf3d5e105e12c982cf38e2fd4836c5d04963f6e4  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/green-stdout.txt
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  quality/evidence/stage-quality/build-code/P10/T021-reader-move-20260928/green-stderr.txt

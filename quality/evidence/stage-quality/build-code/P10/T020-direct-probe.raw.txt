@@ -1,1 +1,0 @@
-{"selection":"selected","provenance":"supplied_unverified","duplicate_inventory":"rejected","stale_inventory":"rejected","execution":"completed","symlink":"unsafe_target","missing_executable":"unsafe_target","interpolation":"unsafe_target"}

@@ -1,1 +1,0 @@
-isolated temporary fixture removed; evidence files retained

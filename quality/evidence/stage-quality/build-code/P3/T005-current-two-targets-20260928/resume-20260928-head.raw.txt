@@ -1,3 +1,0 @@
-COMMAND=npx vitest run tests/contract/stage-runtime-material-check.test.mjs
-sh: vitest: command not found
-EXIT=127

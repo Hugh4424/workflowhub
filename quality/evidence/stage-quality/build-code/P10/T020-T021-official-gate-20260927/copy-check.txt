@@ -1,1 +1,0 @@
-receipt_copy_cmp=0 output_copy_cmp=0
