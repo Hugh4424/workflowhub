@@ -1622,7 +1622,7 @@ node --test tests/workflow-v2-contract.test.mjs
 - **Part 0 的两条裁决**：D-PROG=A（只做两处纯文本改动，候选 4 明确不做，残留风险如实写明）→ §4.4/§4.8/§4.10；D-FIELD=A（只加 4 个字段、删掉的 7 个逐条说明为什么不加）→ §3.1–§3.6。
 - **治理边界自查**：全文**没有**新增门禁、校验、阻断、哈希、receipt、snapshot lineage、successor、reopen、rebind、continuation、checkpoint permit 或第二套进度权威；每个新字段都写明「只能记录、不成门」的限定；`Progress cursor` 与 stage row 的既有校验**复用**而不扩张（§3.7）。
 - **口径自查**：凡百分比一律带「推断值，不作为验收指标」；实测数字与推断百分比**分表/分句**，没有同表混算（§0 表 + §1 各根因）。
-- **未达标处（如实列出）**：①本文件共 **1234 行**（正文 §0–§8 ＝ 第 1–1177 行；§9 修改溯源表 ＝ 第 1179–1234 行），比 900–1200 的目标上限多 34 行，多出的部分**全部是 §9 溯源表本身**（正文在目标区间内）；②`docs/standard-workflow.md:334-338`、`workflows/build-code/steps.json:15`、`workflows/build-code/SKILL.md:203-208`/`:245-250` 的落地**尚未实施**（本卡是设计书，实施在后续 build-code 阶段）；③行号会随 CARD-04 合并漂移的四处（§6.1 #14/#15）必须在合并后重新定位。
+- **未达标处（如实列出）**：①**行数（2026-09-29 一致性复核更正，实测）**：本文件共 **3416 行**——正文 §0–§8 ＝ 第 1–1569 行；§9 修改溯源表 ＝ 第 1570–1650 行；§10–§14（附录与增补）＝ 第 1651–3416 行。原自评「共 **1234 行**（正文 §0–§8 ＝ 1–1177；§9 ＝ 1179–1234）、比 900–1200 上限多 34 行、多出的全是 §9 溯源表本身」的数字**在本卡树上无法复现**（引入该行的提交 `5202828a` 实测已 3408 行；改过本文件的 6 个提交全部落在 3408–3416 行），故原「正文在目标区间内」的结论**不再成立**，按本行实测值如实更正；②四个落点的落地状态**按实况拆分**（**2026-09-29 一致性复核更正**，原句把它们一概写成「落地尚未实施」）：`docs/standard-workflow.md:334-338` **已落地**（实测 `git diff --stat '97092b30^1' 97092b30 -- docs/standard-workflow.md` 为空，该 5 行现文即 §1 R2 的逐字草案；见 `:100` 与 §14.7 行 10＝`:1143`）、`workflows/build-code/steps.json:15` **已落地**（现文含「the binding object is the write set this Phase declares … not a whole cross-Phase snapshot.」；见 §14.7 行 8＝`:1141`）；`workflows/build-code/SKILL.md` 的 C1 追加引用句（原记 `:203-208`／`:245-250`，现位置 `:251-257`／`:320-327`）**未实施**，按 §14.7 行 17（其授权列即引「§6.1.1 第 17–20 行同款处置」）与行 52 的 **错开实施** 口径排队；③行号会随 CARD-04 合并漂移的四处（§6.1 #14/#15）必须在合并后重新定位。
 
 ---
 
@@ -2567,7 +2567,7 @@ build-plan 交接前把「可执行性」当成完成条件核对一次，核对
 | # | 文件 | 落点（文本锚点） | 改什么（一句话） | 处置 | 授权来源 |
 | --- | --- | --- | --- | --- | --- |
 | 43 | `skills/spec-plan/templates/phase-template.md` | 尾注段 `Do not collapse multiple Tasks into one line,` 所在三行之后、`## L2 — Removable reference` 之前 | 追加 6 行：字段齐备性 / 只写意图 / 标题＝一个可独立验收的功能结果 / 写面纪律 / 规模对账 / 空白格不等于小范围 | 本卡内做（**已落地**：6 行内容并入行 61／68 的整份重构，见 `:2610` 与 §14.12；**2026-09-29 一致性复核更正**） | 用户 2026-09-28「12 条都认」；设计书 §14.2 I-1…I-5 |
-| 44 | `skills/spec-plan/SKILL.md` | `Write one independent \`phases/P<n>.md\` file per Phase using` 所在段末句（第 2 行的 `Acceptance inline` 句之后） | 追加 1 句：交接前逐字段核对 + `Consumer`/`Observable seam` 里的真实路径与符号必须存在 | 本卡内做（**实况：该末句未落**——`skills/spec-plan/SKILL.md` 全文无此句、全仓无 `Before handoff, confirm`；同一命题已由 `skills/spec-plan/templates/phase-template.md:147`／`:175` 的 `可观察接缝` 字段规范（三项都写「我是怎么知道的」）承载；**2026-09-29 一致性复核更正**） | 同上 |
+| 44 | `skills/spec-plan/SKILL.md` | `Write one independent \`phases/P<n>.md\` file per Phase using` 所在段末句（第 2 行的 `Acceptance inline` 句之后） | 追加 1 句：交接前逐字段核对 + `Consumer`/`Observable seam` 里的真实路径与符号必须存在 | 本卡内做（**实况：该末句未落**——`skills/spec-plan/SKILL.md`（34 行）全文无此句；**全仓落地文件** 0 命中 `Before handoff, confirm`，实测 `grep -rn 'Before handoff, confirm' --exclude-dir=.git --exclude-dir=node_modules .` 的 2 处命中**全部落在本设计书自身**：`:2272`（逐字草案）与本行 `:2570`；同一命题已由 `skills/spec-plan/templates/phase-template.md:147`／`:175` 的 `可观察接缝` 字段规范（三项都写「我是怎么知道的」）承载；**2026-09-29 一致性复核更正**） | 同上 |
 | 45 | `workflows/build-code/steps.json` | `:5` 的 `observable_result`（与 §5.1 同批，追加在 §5.1 替换文本之后） | 追加 1 句：一次只推进一个 Phase；提前开第二个 Phase 记为事实 | 本卡内做 | 用户 2026-09-28；设计书 §14.3 I-6 |
 | 46 | `workflows/build-code/steps.json` | `:12` 的 `observable_result`（与 §5.2 同批，紧邻 §5.2 追加句） | 追加 1 句：`unavailable` 也算该 Phase 的一次尝试 | 本卡内做 | 用户 2026-09-28；设计书 §14.3 I-8 |
 | 47 | `docs/standard-workflow.md` | `### review、测试和成本` 段末 | 追加 3 行：证据只留原件与指针 / 不得把整棵树当证据 / 同三元组已有 semantic 结果则复用 | 本卡内做（**实况**：前两句已落地 `docs/standard-workflow.md:107-123`；第三句的 runtime 侧（`runtime/review/review-record-route.mjs`）按 §14.6 冲突 3 挂 **CARD-05**，见 `:2613`；**2026-09-29 一致性复核更正**） | 用户 2026-09-28；设计书 §14.3 I-9、§14.5 I-13 |
@@ -2605,7 +2605,7 @@ build-plan 交接前把「可执行性」当成完成条件核对一次，核对
 | 70 | `tools/cli/stage-runtime.mjs`、`runtime/review/review-record-route.mjs`、`runtime/review/review-input-bounds.mjs`、`skills/wh-review/scripts/simple-review-runner.mjs`、`workflows/build-code/SKILL.md`、`docs/standard-workflow.md` | （本卡只设计不动手） | **审查编排优化五项措施＋预算研究项**（2026-09-28 用户指令「不能只登记，要设计更详细的解决方案」；card-04 审查耗时法证：墙钟 2.88h＞全会话 exec 1.76h、43% 空 attempt、坏结果照收）：①审查非阻塞化 ②派发前契约预检 ③结果完整性校验 ④审查包只绑声明写集 ⑤发现分级消费；⑥预算/超时降级为研究项（用户质疑硬切浪费、健康检查已够） | **下游推迟**（CARD-04 未实现；转 CARD-05／CARD-06 按 §14.17 拆任务；本卡零 runtime 改动） |
 
 
-**全表合计 70 行、「无授权」0 行**（43–51 本卡内做 9 行：行 43 与行 45–51 的命题已落地（行 45／46 为落点移位：`docs/standard-workflow.md:318-322`＋`workflows/build-code/SKILL.md:333`；`workflows/build-code/steps.json:12`＋`workflows/build-code/SKILL.md:284-303`；行 47 第三句的 runtime 侧按 §14.6 冲突 3 挂 CARD-05，见 `:2613`），行 44 的 `skills/spec-plan/SKILL.md` 末句未落、同一命题由 `skills/spec-plan/templates/phase-template.md:147`／`:175` 的 `可观察接缝` 字段规范承载；52 错开实施、53–69 已落地、70 下游推迟；2026-09-28 step 9 复核补记；**2026-09-29 一致性复核更正**）。
+**全表合计 70 行、「无授权」0 行**（43–51 本卡内做 9 行：行 43 与行 45–51 的命题已落地（**其中行 47 只算「前两句已落地」**，与行 47 单元格口径一致；行 45／46 为落点移位：`docs/standard-workflow.md:318-322`＋`workflows/build-code/SKILL.md:333`；`workflows/build-code/steps.json:12`＋`workflows/build-code/SKILL.md:284-303`；行 47 第三句的 runtime 侧按 §14.6 冲突 3 挂 CARD-05，见 `:2613`），行 44 的 `skills/spec-plan/SKILL.md` 末句未落、同一命题由 `skills/spec-plan/templates/phase-template.md:147`／`:175` 的 `可观察接缝` 字段规范承载；52 错开实施、53–69 已落地、70 下游推迟；2026-09-28 step 9 复核补记；**2026-09-29 一致性复核更正**）。
 
 > **行 43 的处置已于 2026-09-28 改写**：用户在同日追加指出「**phase 的模板比原来 plan 和 tasks 模板质量差距太大了，结构化、可阅读性、内容丰富程度都差的很远，需要仔细调研分析**」⇒ 行 43 原定的「在旧英文尾注段后追加 6 行」被**升级为整份重构提案**，调研报告已回收、6 行内容已并入重构后的模板并落盘（见 §14.10.7 未决项 1 的闭合记录与 §14.12；**2026-09-29 一致性复核更正**）。行 43 的 I-1…I-5 内容不撤销，改为并入重构后的模板。
 
@@ -3291,7 +3291,7 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 | X11／X12 | 两处「非矛盾」限定 | **不落本卡** | — |
 | **①–⑤** | token 五种口径的边界（应用目标计数 46,631,377／主转录末值 1,264,453,587（cached 99.60%）／按回合聚合／子代理 70 份／`exec` 文本嵌套计数） | **采纳为「引用纪律」** | 本卡**任何**引用 token 数字的地方必须同时写明属于哪一种口径；本卡现行文本只引 21,135 秒静默（`design.md` 2 处、`decision-log.md` 1 处），**不是 token 口径**，故不受影响 |
 
-#### §14.14.7 施工表未实施的行（不是漏记，是排队；**2026-09-29 一致性复核更正**：原列三行中的行 50、行 51 已落地，现余一行）
+#### §14.14.7 施工表现仍未实施的行：现余行 52（不是漏记，是排队；**2026-09-29 一致性复核更正**：原列三行中的行 50、行 51 已落地，现余行 52）
 
 `grep` 实测（2026-09-28）：
 
