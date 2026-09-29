@@ -10,7 +10,7 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs";
-import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { acceptanceResultForSubjectStatus, runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 
 const roots = [];
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -218,11 +218,29 @@ describe("post build-plan official handler", () => {
     expect(fact).toMatchObject({ subject: "stage_end_spec_analyze", status: "missing" });
     const acceptance = JSON.parse(task.readRecord(fact.evidence[0].ref));
     const stageQuality = JSON.parse(task.readRecord(acceptance.refs[0].ref));
+    expect(acceptance.result).toBe("incomplete");
+    expect(acceptance.summary.actual_outcome).toBe("material_incomplete");
+    expect(stageQuality.subject_fact.evidence_state).toBe("material_incomplete");
     expect(stageQuality.subject_fact.analysis_result).toMatchObject({
       status: "material_incomplete",
       facts: { lens_execution_id: "build-code-lens-current-revision" },
       errors: expect.arrayContaining(["AC-001 acceptance chain remains incomplete"]),
     });
+  });
+
+  it("keeps the build-code analyzer non-pass when its portable lens is absent", async () => {
+    const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
+    const context = {
+      stage: "build-code", task, kernel, identity: task.identity, manifest: task.manifest,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-code"), candidateWorkspace, workspace, artifacts,
+    };
+    const result = await runOfficialStage("build-code", context, { receipts: {} });
+    const { fact, acceptance, stageQuality, analysis } = analyzerReadback(task, result);
+    expect(fact.status).toBe("missing");
+    expect(acceptance.result).not.toBe("pass");
+    expect(analysis.facts.lens_execution_status).toBe("unavailable");
+    expect(acceptance.summary.actual_outcome).toBe(analysis.status);
+    expect(stageQuality.subject_fact.evidence_state).toBe(analysis.status);
   });
 
   it("post build-plan final analyze reports structure without semantic census", async () => {
@@ -319,12 +337,57 @@ describe("post build-plan official handler", () => {
     expect(runSpecAnalyze).toHaveBeenCalledOnce();
     const { fact, analysis, stageQuality } = analyzerReadback(task, result);
     expect(fact.status).toBe("missing");
+    const { acceptance } = analyzerReadback(task, result);
+    expect(acceptance.result).toBe("inconsistent");
+    expect(acceptance.summary.actual_outcome).toBe("inconsistent");
+    expect(stageQuality.subject_fact.evidence_state).toBe("inconsistent");
     expect(stageQuality).toMatchObject({ snapshot_tree: snapshotTree, material_revision: materialRevision });
     expect(analysis).toMatchObject({
       status: "inconsistent",
       facts: { lens_execution_id: "lens-current-revision" },
       errors: expect.arrayContaining(["U-001 semantic coverage remains unknown"]),
     });
+  });
+
+  it.each([
+    ["material_incomplete", "incomplete", "missing"],
+    ["unavailable", "unavailable", "missing"],
+    ["reported", "pass", "passed"],
+  ])("preserves %s in the bound post build-plan analyzer fact", async (verdict, acceptanceResult, qualityStatus) => {
+    const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
+    const context = {
+      stage: "build-plan", task, kernel, identity: task.identity, manifest: task.manifest,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-plan"), candidateWorkspace, workspace, artifacts,
+    };
+    const result = await runOfficialStage("build-plan", context, { receipts: {} }, {
+      runSpecAnalyze: async () => ({
+        schema_version: "workflowhub-spec-analyze-lens-result.v1",
+        task_id: task.identity.taskId,
+        stage: "build-plan",
+        step_slug: "final-spec-analyze",
+        skill_id: "spec-analyze",
+        snapshot_tree: kernel.currentVNextSnapshot().tree,
+        material_revision: kernel.currentVNextMaterialRevision(),
+        source_content_sha256: sha256(artifacts.read("decision-log.md")),
+        skill_bundle_sha256: sha256(readFileSync(new URL("../../skills/spec-analyze/skill-bundle.json", import.meta.url))),
+        result: { status: verdict, facts: { lens_execution_id: `lens-${verdict}` }, errors: [] },
+      }),
+    });
+    const { fact, acceptance, stageQuality, analysis } = analyzerReadback(task, result);
+    expect(fact.status).toBe(qualityStatus);
+    expect(acceptance.result).toBe(acceptanceResult);
+    expect(acceptance.summary.actual_outcome).toBe(verdict);
+    expect(stageQuality.subject_fact.evidence_state).toBe(verdict);
+    expect(analysis.status).toBe(verdict);
+    if (verdict === "reported") {
+      expect(result.quality_advisories).not.toContain(`stage-end-spec-analyze:${verdict}`);
+    } else {
+      expect(result.quality_advisories).toContain(`stage-end-spec-analyze:${verdict}`);
+    }
+  });
+
+  it("does not change generic missing acceptance mapping", () => {
+    expect(acceptanceResultForSubjectStatus("missing")).toBe("deferred");
   });
 
   it("reports the portable lens as unavailable when the publication callback is absent", async () => {
@@ -399,6 +462,7 @@ describe("post build-plan official handler", () => {
   it.each([
     ["stale material revision", (bound) => ({ ...bound, material_revision: "old-revision" }), /material_revision does not match/],
     ["self-asserted consistency", (bound) => ({ ...bound, result: { ...bound.result, status: "consistent" } }), /unauthenticated consistency/],
+    ["forged status", (bound) => ({ ...bound, result: { ...bound.result, status: "bogus" } }), /result is incomplete/],
   ])("rejects a portable lens result with %s", async (_name, alter, errorPattern) => {
     const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
     const context = {

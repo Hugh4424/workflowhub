@@ -1,22 +1,29 @@
 import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { SHA256_HEX } from "./canonical-utils.mjs";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
+import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
-import { STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
+import { STAGE_FACT_MATERIALS, stageFactMaterialFiles, stageMaterialScopeRevision } from "../stage/completion-predicates.mjs";
+import { buildStageEndReportFacts, renderStageEndReport } from "../stage/stage-end-report.mjs";
+import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
+import { openCurrentTaskWorkspace } from "../task/workspace.mjs";
+import { assertTaskHandle } from "../task/task-handle.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { ensureGitSnapshotObjectStore } from "../task/git-worktree-snapshot.mjs";
-import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
-import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
+import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
+import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { authenticatedEvidenceDigest } from "../review/review-packet-identity.mjs";
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
-import { CURRENT_MATERIAL_FILES, materialFilesForCohort } from "../task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../task/material-workspace.mjs";
 
 export function ordinaryReviewMaterialRevision(materials, materialScope = null) {
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) throw new TypeError("ordinary review materials must be a map");
@@ -146,8 +153,7 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   }
   const reviewer = binding.reviewer_actor;
   if (reviewer.source_kind !== "review_provider" || !attempt.provider_attempts.some((provider) => provider.status === "completed"
-      && provider.identity?.source_id === reviewer.source_id && provider.runtime_id === reviewer.run_id)
-      || reviewer.source_id.split("/")[0] === execution.actor.source_id.split("/")[0]) throw new Error("ordinary execution reviewer is not an independent authenticated actor");
+      && provider.identity?.source_id === reviewer.source_id && provider.runtime_id === reviewer.run_id)) throw new Error("ordinary execution reviewer is not an authenticated provider actor");
   dependencies[`${key}:attempt`] = "current";
   dependencies[`${key}:frozen-material`] = "current";
   return { execution, binding, request };
@@ -158,8 +164,11 @@ export function authenticateExecutionConfirmation(confirmation, reference, revie
   if (confirmation.schema_version !== "human-confirmation.v3" || confirmation.subject_ref !== reviewReference.ref
       || confirmation.material_revision !== fact.material_revision || confirmation.snapshot_tree !== fact.snapshot_tree
       || reference.ref !== `quality/confirmations/${reference.sha256}.json`) throw new Error("execution confirmation is not bound to the current ordinary review");
+  const materialScope = Array.isArray(fact.material_scope) && fact.material_scope.length > 0
+    ? fact.material_scope
+    : STAGE_FACT_MATERIALS["verify-code"];
   const expected = createQualityFact({ taskId: fact.task_id, stage: "verify-code", materialRevision: fact.material_revision,
-    materialScope: STAGE_FACT_MATERIALS["verify-code"], materialScopeRevision: fact.material_scope_revision,
+    materialScope, materialScopeRevision: fact.material_scope_revision,
     snapshotTree: fact.snapshot_tree, kind: "confirmation", status: "passed", subject: "human_confirmation",
     evidence: [{ ref: reference.ref, sha256: reference.sha256, evidence_type: "human_confirmation" }], recordedAt: confirmation.confirmed_at });
   const value = readBoundJson(expected, read, dependencies, `${key}:typed-fact`);
@@ -212,7 +221,23 @@ export function authenticateStageReviewResult(result, { taskId, read }) {
       review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
     });
   }
-  return authenticateCanonicalReviewResult({ attempt, result, providerOutputs });
+  // source_strength is derived from the authenticated provider union. Older
+  // immutable summaries can omit it; present values and all other fields
+  // still undergo the original strict comparison. Never alter source bytes.
+  const comparison = structuredClone(result);
+  return authenticateCanonicalReviewResult({ attempt, result: comparison, providerOutputs,
+    assess: (eligibleProviders) => {
+      if (comparison.adjudication !== undefined) {
+        const derived = aggregateCanonicalProviderResults(eligibleProviders);
+        const byId = new Map(derived.findings.map((finding) => [finding.id, finding]));
+        for (const finding of [...comparison.findings, ...comparison.adjudication.clusters]) {
+          if (!Object.hasOwn(finding, "source_strength") && byId.has(finding.id)) {
+            finding.source_strength = byId.get(finding.id).source_strength;
+          }
+        }
+      }
+      return eligibleProviders;
+    } });
 }
 
 /**
@@ -315,11 +340,9 @@ function readBound(binding, read, dependencies, key) {
 function expectedPassed(status, passed, failed, nonterminal) {
   if (status === "passed") return passed;
   if (status === "failed") return failed;
-  // A missing quality fact is the canonical projection for an acceptance
-  // subject that is inconclusive/deferred. Preserve that distinction in the
-  // bound leaf without treating it as either a pass or an implementation
-  // failure.
-  if (status === "missing") return nonterminal === "inconclusive" || nonterminal === "deferred";
+  // A missing quality fact can carry any nonterminal acceptance result.
+  // Preserve the bound leaf without treating it as a pass or implementation failure.
+  if (status === "missing") return ["inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"].includes(nonterminal);
   return false;
 }
 
@@ -406,6 +429,72 @@ function authenticateBrowserAcceptance(value, fact, scenario, read, dependencies
   }
   const outputRaw = readBound({ ref: value.test.output_ref, sha256: value.test.output_hash }, read, dependencies, `${key}:test-output`);
   if (outputRaw === undefined) throw new Error("browser acceptance test output is unavailable");
+}
+
+function authenticateBrowserUiQaProjection(projection, browserSources, browserItems, binding, fact, aggregateStatus) {
+  if (browserSources.length === 0) {
+    if (projection === undefined) return;
+    const unavailableBrowser = browserItems.length > 0 && browserItems.every((item) =>
+      new Set(["unavailable", "failed"]).has(item.status) && item.evidence_refs.length === 0);
+    if (unavailableBrowser && aggregateStatus === "missing" && fact.status === "missing"
+        && projection && typeof projection === "object" && !Array.isArray(projection)
+        && projection.status === "unknown" && typeof projection.reason === "string"
+        && projection.reason.trim() && Array.isArray(projection.items) && projection.items.length === 0) return;
+    throw new Error("UI QA projection has no browser execution source");
+  }
+  // Old non-passing browser aggregates remain readable. A current passing
+  // aggregate must carry the projection in these same immutable bytes.
+  const postMaterial = Array.isArray(fact.material_scope) && fact.material_scope.includes("phases/index.md");
+  if (projection === undefined && (!postMaterial || aggregateStatus !== "passed")) return;
+  if (!projection || typeof projection !== "object" || Array.isArray(projection)
+      || !Array.isArray(projection.items)) throw new Error("browser UI QA projection is missing or invalid");
+  if (aggregateStatus !== "passed") {
+    if (projection.status !== "unknown" || typeof projection.reason !== "string"
+        || !projection.reason.trim() || projection.items.length !== 0) {
+      throw new Error("non-passing browser UI QA projection is inconsistent");
+    }
+    return;
+  }
+  if (projection.status !== "passed" || projection.items.length !== browserSources.length
+      || binding?.kind !== WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND
+      || typeof binding.attempt_id !== "string" || !binding.attempt_id.trim()) {
+    throw new Error("passing browser UI QA projection has no unique current source");
+  }
+  const seenCases = new Set();
+  const seenRefs = new Set();
+  for (const { item, reference, browser } of browserSources) {
+    const caseValue = { source: item.source, sample: item.sample, scenario: item.scenario, tier: "browser" };
+    const caseKey = JSON.stringify(caseValue);
+    if (seenCases.has(caseKey) || !Array.isArray(item.acceptance_criterion_ids)
+        || item.acceptance_criterion_ids.length !== 1
+        || browser.acceptance_criterion_id !== item.acceptance_criterion_ids[0]
+        || browser.attempt_id !== binding.attempt_id || browser.task_id !== fact.task_id
+        || browser.material_revision !== fact.material_revision || browser.snapshot_tree !== fact.snapshot_tree
+        || browser.test?.exit_code !== 0 || browser.result !== "pass"
+        || browser.fixture?.fixture_only !== false || browser.data_identity?.fixture_only !== false
+        || browser.cancellation?.status !== "not_cancelled" || browser.cleanup?.status !== "completed") {
+      throw new Error("browser UI QA projection source identity or result is invalid");
+    }
+    seenCases.add(caseKey);
+    const matching = projection.items.filter((entry) => entry?.evidence_ref === reference.ref
+      && entry?.evidence_hash === reference.sha256);
+    if (matching.length !== 1 || seenRefs.has(reference.ref)
+        || reference.ref !== `quality/evidence/browser-qa/${reference.sha256}.json`) {
+      throw new Error("browser UI QA projection ref/hash does not uniquely match execution");
+    }
+    seenRefs.add(reference.ref);
+    const entry = matching[0];
+    if (!sameAcceptanceScenario(entry.case, caseValue)
+        || !Array.isArray(entry.acceptance_criterion_ids)
+        || JSON.stringify(entry.acceptance_criterion_ids) !== JSON.stringify(item.acceptance_criterion_ids)
+        || entry.task_id !== browser.task_id || entry.attempt_id !== browser.attempt_id
+        || entry.material_revision !== browser.material_revision || entry.snapshot_tree !== browser.snapshot_tree
+        || entry.result !== browser.result || entry.status !== "passed"
+        || ["service_identity", "api_identity", "dto_identity"].some((field) => !browser[field]
+          || JSON.stringify(entry[field]) !== JSON.stringify(browser[field]))) {
+      throw new Error("browser UI QA projection disagrees with raw source or execution item");
+    }
+  }
 }
 
 function authenticateExecutionActor(binding, fact, read, dependencies, key) {
@@ -524,6 +613,7 @@ function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, k
   const actor = binding ? authenticateExecutionActor(binding, fact, read, dependencies, key) : null;
   if (value.status === "passed" && (!actor || value.subject_fact.execution_items.length === 0)) throw new Error("passed execution requires a real actor and scenario");
   const seen = new Set();
+  const browserSources = [];
   for (const [index, item] of value.subject_fact.execution_items.entries()) {
     if (!item || item.task_id !== fact.task_id || !new Set(["executed", "failed", "unavailable"]).has(item.status)
         || !new Set(["command", "service", "browser"]).has(item.tier)
@@ -542,7 +632,10 @@ function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, k
       if (!match || (item.tier !== "browser" && match[1] !== reference.sha256)) throw new Error("nested execution evidence ref is invalid");
       const nested = readBoundJson(reference, read, dependencies, nestedKey);
       if (!nested) throw new Error("nested acceptance execution evidence is unavailable");
-      if (item.tier === "browser") authenticateBrowserAcceptance(nested, fact, item, read, dependencies, nestedKey);
+      if (item.tier === "browser") {
+        authenticateBrowserAcceptance(nested, fact, item, read, dependencies, nestedKey);
+        browserSources.push({ item, reference, browser: nested });
+      }
       else {
         if (criterionIds.has(nested.subject)) throw new Error("nested execution has duplicate AC evidence");
         criterionIds.add(nested.subject);
@@ -555,6 +648,8 @@ function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, k
         && (!Array.isArray(item.acceptance_criterion_ids) || item.acceptance_criterion_ids.length !== criterionIds.size
           || item.acceptance_criterion_ids.some((id) => !criterionIds.has(id)))) throw new Error("nested execution omits declared AC evidence");
   }
+  authenticateBrowserUiQaProjection(value.subject_fact.ui_qa_projection, browserSources,
+    value.subject_fact.execution_items.filter((item) => item.tier === "browser"), binding, fact, value.status);
   return actor;
 }
 
@@ -762,6 +857,89 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
             } else if (nestedValue.subject_fact?.execution) {
               authenticateExecutionLeaf(nestedValue, fact, read, dependencies, nestedKey);
             } else {
+              const acReferences = nestedValue.subject_fact?.evidence_refs ?? [];
+              const executionWrappers = acReferences.filter((reference) =>
+                /^quality\/evidence\/acceptance\/build-code\/acceptance_execution-[a-f0-9]{64}\.json$/.test(reference?.ref ?? ""));
+              const browserReferences = acReferences.filter((reference) =>
+                /^quality\/evidence\/browser-qa\/[a-f0-9]{64}\.json$/.test(reference?.ref ?? ""));
+              const postAc = Array.isArray(fact.material_scope) && fact.material_scope.includes("phases/index.md")
+                && /^AC-/.test(fact.subject);
+              if (postAc && fact.status === "passed" && acReferences.length === 0
+                  && !new Set(["zero_review_findings", "not_applicable"]).has(nestedValue.subject_fact?.evidence_state)) {
+                throw new Error("passed AC has no current source evidence");
+              }
+              if (executionWrappers.length > 0 || browserReferences.length > 0) {
+                if (executionWrappers.length !== 1) throw new Error("browser AC has no unique execution wrapper");
+                const wrapperKey = `${nestedKey}:execution-wrapper`;
+                const wrapper = readBoundJson(executionWrappers[0], read, dependencies, wrapperKey);
+                if (!wrapper) throw new Error("browser AC execution wrapper is unavailable");
+                validateAcceptanceEvidence(wrapper);
+                if (wrapper.acceptance_criterion_id !== "acceptance_execution" || wrapper.refs.length !== 1
+                    || wrapper.snapshot_tree !== fact.snapshot_tree
+                    || wrapper.freshness?.material_revision !== fact.material_revision
+                    || (fact.status === "passed" && wrapper.result !== "pass")) {
+                  throw new Error("browser AC execution wrapper identity is invalid");
+                }
+                const aggregateReference = wrapper.refs[0];
+                if (aggregateReference.ref !== `quality/evidence/stage-quality/build-code/acceptance_execution-${aggregateReference.sha256}.json`) {
+                  throw new Error("browser AC wrapper does not point to a canonical aggregate");
+                }
+                const aggregateKey = `${nestedKey}:execution-aggregate`;
+                const aggregate = readBoundJson(aggregateReference, read, dependencies, aggregateKey);
+                if (!aggregate) throw new Error("browser AC execution aggregate is unavailable");
+                authenticateE2eExecutionStageQuality(aggregate, fact, read, dependencies, aggregateKey);
+                const required = aggregate.subject_fact.execution_items.filter((item) =>
+                  item.tier === "browser" && item.acceptance_criterion_ids?.includes(fact.subject));
+                const commandReferences = acReferences.filter((reference) =>
+                  reference?.ref?.startsWith(`quality/evidence/stage-quality/build-code/${fact.subject}-`));
+                const requiredCommandReferences = aggregate.subject_fact.execution_items
+                  .filter((item) => item.tier !== "browser" && item.acceptance_criterion_ids?.includes(fact.subject))
+                  .flatMap((item) => item.evidence_refs ?? [])
+                  .filter((reference) => reference?.ref?.startsWith(`quality/evidence/stage-quality/build-code/${fact.subject}-`));
+                if (fact.status === "passed" && (commandReferences.length !== requiredCommandReferences.length
+                    || commandReferences.some((reference) => !requiredCommandReferences.some((expected) =>
+                      reference.ref === expected.ref && reference.sha256 === expected.sha256))
+                    || requiredCommandReferences.some((expected) => !commandReferences.some((reference) =>
+                      reference.ref === expected.ref && reference.sha256 === expected.sha256)))) {
+                  throw new Error("passed mixed AC omits or borrows a command source from this execution");
+                }
+                if (fact.status === "passed" && (aggregate.status !== "passed" || required.length === 0
+                    || browserReferences.length !== required.length)) {
+                  throw new Error("passed browser AC is absent from this execution aggregate");
+                }
+                if (fact.status !== "passed") {
+                  const declared = required.flatMap((item) => item.evidence_refs ?? []);
+                  if (browserReferences.some((reference) => !declared.some((source) =>
+                    source.ref === reference.ref && source.sha256 === reference.sha256))) {
+                    throw new Error("non-passing browser AC cites a foreign raw source");
+                  }
+                  dependencies[wrapperKey] = "current";
+                  dependencies[aggregateKey] = "current";
+                } else {
+                  const matched = new Set();
+                  for (const [index, item] of required.entries()) {
+                    if (item.acceptance_criterion_ids?.length !== 1 || item.evidence_refs?.length !== 1) {
+                      throw new Error("browser AC execution item is not unique");
+                    }
+                    const reference = item.evidence_refs[0];
+                    if (!browserReferences.some((source) => source.ref === reference.ref && source.sha256 === reference.sha256)
+                        || matched.has(reference.ref)) throw new Error("browser AC raw source belongs to another run or AC");
+                    matched.add(reference.ref);
+                    const browserKey = `${nestedKey}:browser:${index}`;
+                    const browser = readBoundJson(reference, read, dependencies, browserKey);
+                    if (!browser) throw new Error("browser AC raw source is unavailable");
+                    authenticateBrowserAcceptance(browser, fact, item, read, dependencies, browserKey);
+                    if (browser.acceptance_criterion_id !== fact.subject
+                        || browser.attempt_id !== aggregate.subject_fact.execution_binding?.attempt_id
+                        || browser.result !== "pass" || browser.test?.exit_code !== 0) {
+                      throw new Error("browser AC raw source identity or result is invalid");
+                    }
+                    dependencies[browserKey] = "current";
+                  }
+                  dependencies[wrapperKey] = "current";
+                  dependencies[aggregateKey] = "current";
+                }
+              }
               for (const [index, reference] of (nestedValue.subject_fact?.evidence_refs ?? []).entries()) {
                 if (!/^quality\/evidence\/stage-quality\/build-code\/AC-/.test(reference?.ref ?? "")) continue;
                 const leafKey = `${nestedKey}:leaf:${index}`;
@@ -862,4 +1040,969 @@ export function authenticateQualityFactRecord(fact, { read } = {}) {
     dependencies: Object.freeze(dependencies),
     ...(reviewStatus ? { review_status: reviewStatus } : {}),
   });
+}
+
+// A deferred leaf is an execution judgment, not business acceptance. Only a
+// criterion explicitly assigned to the next stage by the current spec qualifies.
+export function isFutureStageAcceptanceDeferred({ spec, activeCriterionIds, criterionId, outcome, owner } = {}) {
+  if (outcome !== "deferred" || owner !== "verify-code" || typeof spec !== "string"
+      || !Array.isArray(activeCriterionIds) || !activeCriterionIds.includes(criterionId)) return false;
+  const declarations = [...spec.matchAll(/^(?:[ \t]*[-*][ \t]*(?:\[[ xX]\][ \t]*)?|#{1,6}[ \t]+)(?:\*\*)?(AC-[A-Za-z0-9-]+)(?=$|[\s*（(:：])[^\n]*/gm)];
+  const matches = declarations.filter((match) => match[1] === criterionId);
+  if (matches.length !== 1) return false;
+  const declaration = matches[0], next = declarations.find((match) => match.index > declaration.index);
+  const body = declaration[0] + spec.slice(declaration.index + declaration[0].length, next?.index ?? spec.length).split(/^#{1,6}\s+/m)[0];
+  // Counterexamples and ordinary mentions cannot assign an AC to a later stage.
+  const normative = body.split(/(?:失败场景|失败条件|负控|failure\s+(?:scenario|condition)|negative\s+control)\s*[:=：]?/i)[0].replace(/[*`]/g, "");
+  if (/(?:无需|不需要|不要求|not\s+(?:required|needed))[^。;；\n]*verify-code/i.test(normative)) return false;
+  const condition = normative.match(/(?:条件|precondition)\s*[:=：]([^。;；\n]+)/i)?.[1];
+  if (!condition) return false;
+  const action = "(?:独立|independent\\s+)?(?:语义(?:抽查|审查)|semantic\\s+(?:review|spot-check)|审查|抽查|授权|review|authorization|execution)";
+  return new RegExp(`verify-code\\s*(?:阶段|stage)?\\s*${action}\\s*(?:均)?(?:已产生|已完成|completed|produced)`, "i").test(condition);
+}
+
+/** Compose existing immutable readers for build-code completion, not quality pass.
+ * The stage supplies the existing unavailable-review verifier as an internal
+ * dependency; no user field or terminal label substitutes for that verifier. */
+export function authenticateBuildCodeCompletion({ task: taskHandle, read, currentMaterialRevision, snapshotTree, spec,
+  activeCriterionIds, observations = [], verifyUnavailableReview } = {}) {
+  let unavailablePhaseReview = false, acceptanceExecutionComplete = false;
+  try {
+    const task = assertTaskHandle(taskHandle), taskId = task.identity.taskId;
+    if (typeof read !== "function" || !Array.isArray(observations) || !Array.isArray(activeCriterionIds)
+        || activeCriterionIds.length === 0 || new Set(activeCriterionIds).size !== activeCriterionIds.length) throw new Error("completion sources are unavailable");
+    const select = (subject) => {
+      const entries = observations.filter((entry) => (entry?.fact?.value ?? entry?.fact)?.stage === "build-code"
+        && (entry?.fact?.value ?? entry?.fact)?.subject === subject);
+      if (entries.length === 1) return entries[0];
+      const ranked = entries.map((entry) => ({ entry, time: Date.parse((entry.fact.value ?? entry.fact).recorded_at) }));
+      if (ranked.some(({ time }) => !Number.isFinite(time))) return null;
+      const latest = ranked.filter(({ time }) => time === Math.max(...ranked.map(({ time }) => time)));
+      return latest.length === 1 ? latest[0].entry : null;
+    };
+    const authenticate = (entry, current = true) => {
+      if (!entry?.fact?.ref) throw new Error("completion fact is missing");
+      const raw = read(entry.fact.ref), fact = JSON.parse(raw);
+      if (JSON.stringify(fact) !== JSON.stringify(entry.fact.value ?? entry.fact) || fact.task_id !== taskId
+          || fact.stage !== "build-code" || (current && (fact.material_revision !== currentMaterialRevision || fact.snapshot_tree !== snapshotTree))
+          || !authenticateQualityFactRecord({ ...fact, ref: entry.fact.ref, sha256: sha256(raw) }, { read }).authenticated) throw new Error("completion fact is unauthenticated");
+      return fact;
+    };
+    try {
+      const disposition = authenticate(select("finding_dispositions"));
+      const phaseReview = authenticate(select("phase_review"), false);
+      if (disposition.status !== "missing" || phaseReview.kind !== "review" || phaseReview.status !== "unavailable"
+          || phaseReview.evidence.length !== 1 || typeof verifyUnavailableReview !== "function") throw new Error("unavailable review exception does not apply");
+      const evidence = phaseReview.evidence[0], raw = read(evidence.ref), attempt = JSON.parse(raw);
+      validateSchema("attempt", attempt);
+      if (sha256(raw) !== evidence.sha256 || attempt.task_id !== taskId || attempt.stage !== "build-code"
+          || attempt.subject_kind !== "phase" || attempt.review_scope !== "phase" || !/^P[1-9]\d*$/.test(attempt.phase_id ?? "")) throw new Error("unavailable Phase review identity mismatch");
+      verifyUnavailableReview({ identity: { taskId }, stage: "build-code", readReceipt: (ref) => {
+        const bytes = read(ref); return { value: JSON.parse(bytes), sha256: sha256(bytes) };
+      } }, { ref: evidence.ref, value: attempt, evidence }, attempt.review_track, "build-code");
+      unavailablePhaseReview = true;
+    } catch { /* Keep missing/false/semantic review facts as completion gaps. */ }
+    try {
+      const fact = authenticate(select("acceptance_execution"));
+      if (fact.kind !== "acceptance_criterion" || fact.status !== "passed" || fact.evidence.length !== 1) throw new Error("execution did not complete");
+      const wrapper = readBoundJson(fact.evidence[0], read, {}, "completion-wrapper");
+      const refs = wrapper?.refs?.filter((ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance_execution-[a-f0-9]{64}\.json$/.test(ref.ref));
+      if (refs?.length !== 1) throw new Error("execution aggregate is missing");
+      const aggregate = readBoundJson(refs[0], read, {}, "completion-aggregate");
+      authenticateAcceptanceExecutionAggregate(aggregate, fact, read);
+      const covered = new Set(), placeholder = (value) => value === "not-read" || (value && typeof value === "object"
+        && (value.status === "not-read" || Object.values(value).some(placeholder)));
+      for (const item of aggregate.subject_fact.execution_items) {
+        if (item.status !== "executed" || !Array.isArray(item.acceptance_criterion_ids) || item.acceptance_criterion_ids.length === 0
+            || item.acceptance_criterion_ids.some((id) => !activeCriterionIds.includes(id))) throw new Error("execution AC set is invalid");
+        if (item.tier === "browser") { item.acceptance_criterion_ids.forEach((id) => covered.add(id)); continue; }
+        for (const ref of item.evidence_refs) {
+          const leaf = readBoundJson(ref, read, {}, "completion-leaf"), subject = leaf.subject_fact, execution = subject.execution;
+          if (!activeCriterionIds.includes(leaf.subject) || execution.exit_code !== 0 || execution.signal !== null
+              || execution.timed_out || execution.cancelled || execution.cleanup?.status !== "completed" || execution.error
+              || subject.assertions.length === 0 || subject.assertions.some((assertion) => assertion.result !== "passed"
+                || placeholder(assertion.expected) || placeholder(assertion.actual))
+              || !(subject.status === "passed" || (subject.status === "deferred" && isFutureStageAcceptanceDeferred({
+                spec, activeCriterionIds, criterionId: leaf.subject, outcome: subject.outcome, owner: subject.outcome_owner })))) throw new Error("current acceptance judgment is not complete");
+          covered.add(leaf.subject);
+        }
+      }
+      if (covered.size !== activeCriterionIds.length || activeCriterionIds.some((id) => !covered.has(id))) throw new Error("execution does not cover the spec denominator");
+      acceptanceExecutionComplete = true;
+    } catch { /* Actual failure, cancellation, or missing AC stays incomplete. */ }
+  } catch { /* No authenticated context means no exception. */ }
+  return Object.freeze({ unavailable_phase_review: unavailablePhaseReview, acceptance_execution_complete: acceptanceExecutionComplete });
+}
+
+const P10_CONSUMPTION_REF = /^quality\/evidence\/stage-quality\/build-code\/p10-consumption-([a-f0-9]{64})\.json$/;
+const P10_QUALITY_FACT_REF = /^quality\/facts\/[a-f0-9]{64}\.json$/;
+
+/** Authenticate one explicit P10 run-consumption source through TaskHandle.
+ * The source names records; their bytes, the final stage row, and every
+ * selected AC fact must still match this caller's already authenticated
+ * fixed test receipt. This does not independently prove who wrote the source.
+ */
+export function authenticateP10RunConsumption({ task: taskHandle, locator, taskId,
+  snapshotTree, materialRevision, sourceDigest, capture, receipt, acceptedAcIds } = {}) {
+  try {
+    const task = assertTaskHandle(taskHandle);
+    if (task.identity.taskId !== taskId || !(acceptedAcIds instanceof Set)
+        || acceptedAcIds.size === 0 || [...acceptedAcIds].some((ac) => typeof ac !== "string" || !ac)) return null;
+    const match = typeof locator?.ref === "string" ? P10_CONSUMPTION_REF.exec(locator.ref) : null;
+    if (!match || locator.sha256 !== match[1]) return null;
+    // Read the current row both before and after all referenced records. An
+    // interleaved run that replaces it cannot make this read look current.
+    const stageRowsBefore = task.readRecord("facts.jsonl");
+    const raw = task.readRecord(locator.ref);
+    if (sha256(raw) !== locator.sha256) return null;
+    const source = JSON.parse(raw);
+    if (source.schema_version !== "workflowhub-p10-run-consumption.v1"
+        || source.task_id !== taskId || source.stage !== "build-code"
+        || source.snapshot_tree !== snapshotTree || source.material_revision !== materialRevision
+        || source.source_digest !== sourceDigest
+        || source.test_receipt?.ref !== capture.receipt_ref
+        || source.test_receipt?.sha256 !== capture.receipt_hash
+        || source.test_output?.ref !== receipt.output_ref
+        || source.test_output?.sha256 !== receipt.output_hash) return null;
+    const output = task.readRecord(source.test_output.ref);
+    if (sha256(output) !== source.test_output.sha256) return null;
+
+    const rowIndex = /^facts\.jsonl#([1-9][0-9]*)$/.exec(source.stage_row?.ref ?? "");
+    if (!rowIndex || !SHA256_HEX.test(source.stage_row?.sha256 ?? "")) return null;
+    const lines = stageRowsBefore.split("\n");
+    if (lines.at(-1) !== "") return null;
+    lines.pop();
+    const index = Number(rowIndex[1]) - 1;
+    if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length
+        || sha256(`${lines[index]}\n`) !== source.stage_row.sha256) return null;
+    const rows = lines.map((line) => JSON.parse(line));
+    const currentRows = rows.filter((row) => row.record_kind === "stage" && row.stage === "build-code");
+    const row = rows[index];
+    if (currentRows.length !== 1 || currentRows[0] !== row
+        || row.task_id !== taskId || row.source !== "stage-end:build-code"
+        || row.snapshot_tree?.value !== snapshotTree
+        || row.phase_progress?.phase_id !== "P10" || row.phase_progress?.task_id !== "T021"
+        || row.phase_progress?.material_revision !== materialRevision) return null;
+
+    if (!Array.isArray(source.quality_facts) || source.quality_facts.length === 0) return null;
+    const seen = new Set(), byAc = new Map();
+    let testFactCount = 0;
+    for (const binding of source.quality_facts) {
+      if (!P10_QUALITY_FACT_REF.test(binding?.ref ?? "")
+          || !SHA256_HEX.test(binding.sha256 ?? "") || seen.has(binding.ref)) return null;
+      seen.add(binding.ref);
+      const factRaw = task.readRecord(binding.ref);
+      if (sha256(factRaw) !== binding.sha256) return null;
+      const authenticated = authenticateQualityFactRecord(binding,
+        { read: (ref) => task.readRecord(ref) });
+      if (!authenticated.authenticated) return null;
+      const fact = JSON.parse(factRaw);
+      if (fact.task_id !== taskId || fact.stage !== "build-code"
+          || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) return null;
+      if (fact.kind === "test" && fact.subject === "risk_tests_fresh") {
+        if (fact.status !== "passed" || !fact.evidence.some((evidence) =>
+          evidence.ref === capture.receipt_ref && evidence.sha256 === capture.receipt_hash)) return null;
+        testFactCount += 1;
+      }
+      if (fact.kind === "acceptance_criterion" && acceptedAcIds.has(fact.subject)) {
+        if (byAc.has(fact.subject)) return null;
+        byAc.set(fact.subject, binding);
+      }
+    }
+    if (testFactCount !== 1 || [...acceptedAcIds].some((ac) => !byAc.has(ac))
+        || task.readRecord("facts.jsonl") !== stageRowsBefore) return null;
+    return Object.freeze({ byAc });
+  } catch { return null; }
+}
+
+const P5_REPORT_ROOT = "quality/evidence/stage-quality/build-code/P5";
+const p5Unavailable = (reason) => Object.freeze({ status: "unavailable", authenticated: false, reason });
+const p5Missing = (reason) => Object.freeze({ status: "missing", authenticated: false, reason });
+const p5Require = (condition, reason) => {
+  if (!condition) throw new Error(reason);
+};
+
+/** P5-only reconstruction: persist original bindings, never enriched objects. */
+function p5AcceptanceCandidates({ read, taskId, snapshotTree, materialRevision, stageResult,
+  qualityBindings, advisoryBindings }) {
+  p5Require(Array.isArray(qualityBindings)
+    && JSON.stringify(qualityBindings.map((binding) => binding.ref)) === JSON.stringify(stageResult.quality_fact_refs),
+  "P5 acceptance quality binding list is not the same-run result");
+  const originals = new Map();
+  for (const binding of [...qualityBindings, ...advisoryBindings]) {
+    p5Require(typeof binding?.ref === "string" && SHA256_HEX.test(binding.sha256 ?? "")
+      && (!originals.has(binding.ref) || originals.get(binding.ref).sha256 === binding.sha256),
+    "P5 acceptance quality binding is invalid or conflicting");
+    originals.set(binding.ref, binding);
+  }
+  const candidates = new Map();
+  for (const binding of originals.values()) {
+    const raw = read(binding.ref);
+    const fact = validateCanonicalQualityFact(JSON.parse(raw));
+    p5Require(sha256(raw) === binding.sha256
+      && binding.ref === `quality/facts/${qualityFactDigest(fact)}.json`
+      && fact.fact_id === `quality-${qualityFactDigest(fact)}`
+      && fact.task_id === taskId && fact.stage === "build-code"
+      && fact.snapshot_tree === snapshotTree && fact.material_revision === materialRevision,
+    "P5 acceptance quality fact hash or identity is invalid");
+    if (fact.kind !== "acceptance_criterion") {
+      p5Require(!fact.evidence.some((entry) => entry.evidence_type === "acceptance_evidence"),
+        "P5 acceptance evidence has the wrong quality fact kind");
+      continue;
+    }
+    p5Require(fact.evidence.length === 1 && fact.evidence[0].evidence_type === "acceptance_evidence",
+      "P5 acceptance quality fact evidence list is incomplete");
+    const wrapperBinding = fact.evidence[0];
+    p5Require(SHA256_HEX.test(wrapperBinding.sha256 ?? "")
+      && wrapperBinding.ref === `quality/evidence/acceptance/build-code/${fact.subject}-${wrapperBinding.sha256}.json`,
+    "P5 acceptance wrapper ref/hash identity is invalid");
+    const wrapperRaw = read(wrapperBinding.ref);
+    p5Require(sha256(wrapperRaw) === wrapperBinding.sha256, "P5 acceptance wrapper hash mismatch");
+    const wrapper = validateAcceptanceEvidence(JSON.parse(wrapperRaw));
+    p5Require(wrapper.acceptance_criterion_id === fact.subject && wrapper.snapshot_tree === snapshotTree
+      && wrapper.refs.length === 1 && wrapper.freshness?.status === "current"
+      && wrapper.freshness.evaluated_at === fact.recorded_at
+      && wrapper.freshness.snapshot_tree === snapshotTree
+      && wrapper.freshness.material_revision === materialRevision
+      && wrapper.freshness.evidence_freshness?.length === 1,
+    "P5 acceptance wrapper identity or same-run freshness is invalid");
+    const stageBinding = wrapper.refs[0];
+    const freshnessBinding = wrapper.freshness.evidence_freshness[0];
+    p5Require(stageBinding.ref === `quality/evidence/stage-quality/build-code/${fact.subject}-${stageBinding.sha256}.json`
+      && freshnessBinding.ref === stageBinding.ref && freshnessBinding.sha256 === stageBinding.sha256
+      && freshnessBinding.status === "current", "P5 acceptance stage-quality ref identity is invalid");
+    const stageRaw = read(stageBinding.ref);
+    p5Require(sha256(stageRaw) === stageBinding.sha256, "P5 acceptance stage-quality hash mismatch");
+    const stage = JSON.parse(stageRaw);
+    p5Require(stage.schema_version === "stage-quality-evidence.v1" && stage.task_id === taskId
+      && stage.stage === "build-code" && stage.subject === fact.subject
+      && stage.snapshot_tree === snapshotTree && stage.material_revision === materialRevision,
+    "P5 acceptance stage-quality identity is invalid");
+    p5Require(typeof stage.status === "string" && stage.status.trim()
+      && stage.status === stage.subject_fact?.status,
+    "P5 acceptance raw status conflicts with subject_fact.status");
+    // Canonical facts historically normalize unsupported subject states to
+    // missing. The raw state remains authoritative for report disclosure.
+    const normalized = stage.status === "not_applicable" ? "passed"
+      : new Set(["passed", "failed", "missing"]).has(stage.status) ? stage.status : "missing";
+    p5Require(fact.status === normalized, "P5 acceptance canonical/raw status is inconsistent");
+    candidates.set(wrapperBinding.ref, { path: wrapperBinding.ref, kind: "acceptance_evidence_candidate",
+      acceptance: JSON.parse(wrapperRaw), stage_quality: { path: stageBinding.ref, record: stage } });
+  }
+  return [...candidates.values()];
+}
+
+/** Private P5 provenance check. The stage writer supplies its same-run result;
+ * the report reader supplies the immutable source/certificate bindings. */
+export function authenticateP5AdvisorySources({ read, taskId, snapshotTree, materialRevision, stageResult, bindings = null,
+  qualityBindings = null, acceptanceCandidates = null }) {
+  p5Require(typeof read === "function" && typeof taskId === "string" && taskId.trim()
+    && typeof snapshotTree === "string" && snapshotTree.trim()
+    && typeof materialRevision === "string" && materialRevision.trim(),
+  "P5 advisory source context is incomplete");
+  const refs = stageResult?.quality_advisory_fact_refs;
+  const advisories = stageResult?.quality_advisories ?? [];
+  p5Require(stageResult?.stage === "build-code" && Array.isArray(refs) && refs.length > 0
+    && Array.isArray(advisories) && advisories.every((value) => typeof value === "string")
+    && new Set(refs).size === refs.length,
+  "P5 advisory fact list is absent, duplicated, or invalid");
+  p5Require(bindings === null || (Array.isArray(bindings) && bindings.length === refs.length
+    && refs.every((ref, index) => bindings[index]?.ref === ref
+      && SHA256_HEX.test(bindings[index]?.sha256 ?? ""))),
+  "P5 advisory source binding list does not match the same-run result");
+  const digest = (raw) => sha256(raw);
+  const selected = [];
+  const verified = refs.map((ref, index) => {
+    p5Require(/^quality\/facts\/[a-f0-9]{64}\.json$/.test(ref), `P5 advisory fact ref is invalid: ${ref}`);
+    const raw = read(ref);
+    const fact = validateCanonicalQualityFact(JSON.parse(raw));
+    const factHash = digest(raw);
+    p5Require((bindings === null || bindings[index].sha256 === factHash)
+      && ref === `quality/facts/${qualityFactDigest(fact)}.json`
+      && fact.fact_id === `quality-${qualityFactDigest(fact)}`
+      && fact.task_id === taskId && fact.stage === "build-code"
+      && fact.material_revision === materialRevision && fact.snapshot_tree === snapshotTree,
+    `P5 advisory fact hash or current identity is invalid: ${ref}`);
+    if (fact.subject === "stage_end_spec_analyze") selected.push(fact);
+    return { ref, sha256: factHash };
+  });
+  p5Require(selected.length === 1, "P5 advisory source must contain exactly one stage-end spec-analyze fact");
+  const fact = selected[0];
+  p5Require(fact.kind === "acceptance_criterion" && fact.evidence?.length === 1
+    && fact.evidence[0].evidence_type === "acceptance_evidence",
+  "P5 stage-end advisory fact kind or evidence list is invalid");
+  const wrapperBinding = fact.evidence[0];
+  p5Require(SHA256_HEX.test(wrapperBinding.sha256 ?? "")
+    && wrapperBinding.ref === `quality/evidence/acceptance/build-code/stage_end_spec_analyze-${wrapperBinding.sha256}.json`,
+  "P5 stage-end acceptance wrapper ref is invalid");
+  const wrapperRaw = read(wrapperBinding.ref);
+  p5Require(digest(wrapperRaw) === wrapperBinding.sha256, "P5 stage-end acceptance wrapper hash is invalid");
+  const wrapper = JSON.parse(wrapperRaw);
+  p5Require(wrapper.schema_version === "acceptance-evidence.v1"
+    && wrapper.acceptance_criterion_id === "stage_end_spec_analyze"
+    && wrapper.snapshot_tree === snapshotTree && wrapper.refs?.length === 1
+    && wrapper.freshness?.status === "current"
+    && wrapper.freshness.snapshot_tree === snapshotTree
+    && wrapper.freshness.material_revision === materialRevision
+    && wrapper.freshness.evidence_freshness?.length === 1,
+  "P5 stage-end acceptance wrapper identity or freshness is invalid");
+  const stageBinding = wrapper.refs[0];
+  const freshnessBinding = wrapper.freshness.evidence_freshness[0];
+  p5Require(SHA256_HEX.test(stageBinding.sha256 ?? "")
+    && stageBinding.ref === `quality/evidence/stage-quality/build-code/stage_end_spec_analyze-${stageBinding.sha256}.json`
+    && freshnessBinding.ref === stageBinding.ref
+    && freshnessBinding.sha256 === stageBinding.sha256
+    && freshnessBinding.status === "current",
+  "P5 stage-end stage-quality ref or freshness binding is invalid");
+  const stageRaw = read(stageBinding.ref);
+  p5Require(digest(stageRaw) === stageBinding.sha256, "P5 stage-end stage-quality original hash is invalid");
+  const stage = JSON.parse(stageRaw);
+  const verdict = stage.subject_fact?.analysis_result?.status;
+  const expected = {
+    consistent: { status: "passed", result: "pass" },
+    material_incomplete: { status: "missing", result: "incomplete" },
+    inconsistent: { status: "missing", result: "inconsistent" },
+    unavailable: { status: "missing", result: "unavailable" },
+  }[verdict];
+  p5Require(expected && stage.schema_version === "stage-quality-evidence.v1"
+    && stage.task_id === taskId && stage.stage === "build-code"
+    && stage.subject === "stage_end_spec_analyze"
+    && stage.snapshot_tree === snapshotTree && stage.material_revision === materialRevision
+    && stage.status === expected.status && stage.subject_fact.status === expected.status
+    && fact.status === expected.status && wrapper.result === expected.result
+    && wrapper.summary?.actual_outcome === verdict
+    && (stage.subject_fact.evidence_state === undefined || stage.subject_fact.evidence_state === verdict),
+  "P5 stage-end advisory verdict or status does not match its originals");
+  const sameSubject = advisories.filter((value) => typeof value === "string" && value.startsWith("stage-end-spec-analyze:"));
+  p5Require(sameSubject.length === (verdict === "consistent" ? 0 : 1)
+    && (verdict === "consistent" || sameSubject[0] === `stage-end-spec-analyze:${verdict}`),
+  "P5 same-run advisory verdict is absent, duplicated, or conflicts with its original");
+  if (acceptanceCandidates !== null) {
+    p5Require(Array.isArray(acceptanceCandidates), "P5 acceptance in-memory candidate index is invalid");
+    acceptanceCandidates.push(...p5AcceptanceCandidates({ read, taskId, snapshotTree, materialRevision,
+      stageResult, qualityBindings, advisoryBindings: verified }));
+  }
+  return verified;
+}
+
+/** Discover one actual current audit only in the existing private namespace. */
+function p5CurrentAuditRef(context) {
+  const task = assertTaskHandle(context.task);
+  let path = task.taskPath;
+  for (const segment of ["quality", "evidence", "audits", "build-code"]) {
+    path = join(path, segment);
+    let stat;
+    try { stat = lstatSync(path); }
+    catch (error) { if (error.code === "ENOENT") throw new Error("P5 actual scoped audit is missing"); throw error; }
+    p5Require(stat.isDirectory() && !stat.isSymbolicLink(), "P5 audit directory is not a real directory");
+  }
+  const before = lstatSync(path);
+  const scope = { task_id: task.identity.taskId, phase_id: "P5", material_revision: context.materialRevision,
+    snapshot_tree: context.snapshot.tree, report_scope: "p5_intermediate" };
+  const matches = [];
+  for (const name of readdirSync(path).sort()) {
+    const stat = lstatSync(join(path, name));
+    p5Require(/^[a-f0-9]{64}\.json$/.test(name) && stat.isFile() && !stat.isSymbolicLink(),
+      `P5 audit original ref is invalid: ${name}`);
+    const ref = `quality/evidence/audits/build-code/${name}`;
+    const raw = task.readRecord(ref);
+    p5Require(name === `${sha256(raw)}.json`, `P5 audit original hash mismatch: ${ref}`);
+    const audit = JSON.parse(raw);
+    const candidate = audit.exception_census?.scope;
+    if (audit.task_id === task.identity.taskId && audit.stage_slug === "build-code"
+        && candidate && Object.keys(candidate).length === 5
+        && Object.keys(scope).every((key) => candidate[key] === scope[key])) matches.push(ref);
+  }
+  const after = lstatSync(path);
+  p5Require(before.ino === after.ino && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs,
+    "P5 audit directory changed during enumeration");
+  p5Require(matches.length === 1, `P5 scoped audit must be unique; found ${matches.length}`);
+  return matches[0];
+}
+
+/** Fixed private census, not a new Task API or a caller-selected directory. */
+function p5RiskRefs(task) {
+  let path = task.taskPath;
+  for (const segment of ["quality", "evidence", "risk-acceptances"]) {
+    path = join(path, segment);
+    let stat;
+    try { stat = lstatSync(path); }
+    catch (error) { if (error.code === "ENOENT") return []; throw error; }
+    p5Require(stat.isDirectory() && !stat.isSymbolicLink(), "P5 risk census directory is not a real directory");
+  }
+  const before = lstatSync(path);
+  const names = readdirSync(path).sort();
+  const refs = names.map((name) => {
+    const stat = lstatSync(join(path, name));
+    p5Require(/^[a-f0-9]{64}\.json$/.test(name) && stat.isFile() && !stat.isSymbolicLink(),
+      `P5 risk census has an unclassified original: ${name}`);
+    return `quality/evidence/risk-acceptances/${name}`;
+  });
+  const after = lstatSync(path);
+  p5Require(before.ino === after.ino && before.mtimeMs === after.mtimeMs
+    && before.ctimeMs === after.ctimeMs, "P5 risk census changed during enumeration");
+  return refs;
+}
+
+function p5Permission(task, decisionRaw, refs, declaration = null) {
+  const raw = {};
+  for (const name of ["question", "answer"]) {
+    const binding = refs?.[name];
+    p5Require(/^quality\/evidence\/[A-Za-z0-9_./-]+\.jsonl$/.test(binding?.ref ?? "")
+      && !binding.ref.includes("..") && SHA256_HEX.test(binding.sha256 ?? "")
+      && decisionRaw.includes(binding.sha256)
+      && (decisionRaw.includes(binding.ref) || (decisionRaw.includes(basename(binding.ref))
+        && Object.values(refs).some((entry) => dirname(entry.ref) === dirname(binding.ref)
+          && decisionRaw.includes(entry.ref)))), "P5 permission is not cited by the current owning material");
+    raw[name] = task.readRecord(binding.ref);
+    p5Require(sha256(raw[name]) === binding.sha256, `P5 permission ${name} hash mismatch`);
+    p5Require(raw[name].trim().split("\n").length === 1, "P5 permission original must be one complete transcript event");
+  }
+  const question = JSON.parse(raw.question);
+  const answer = JSON.parse(raw.answer);
+  const call = question.payload;
+  p5Require(question.type === "response_item" && call?.type === "function_call"
+    && call.name === "request_user_input_async" && typeof call.call_id === "string"
+    && answer.type === "response_item" && answer.payload?.type === "message"
+    && answer.payload.role === "user", "P5 permission originals are not a question and user reply");
+  const questions = JSON.parse(call.arguments).questions;
+  const texts = answer.payload.content?.filter((item) => item.type === "input_text").map((item) => item.text) ?? [];
+  p5Require(texts.length === 1, "P5 permission user reply is ambiguous");
+  const match = /^<send_user_message_question_reply>\s*([\s\S]+?)\s*<\/send_user_message_question_reply>$/.exec(texts[0]);
+  p5Require(match, "P5 permission reply has no original structured answer");
+  const replies = JSON.parse(match[1]);
+  p5Require(Array.isArray(replies) && replies.length === 1, "P5 permission answer is ambiguous");
+  const reply = replies[0];
+  const item = JSON.parse(reply.questionItemId);
+  const title = questions?.[item?.[2]]?.title;
+  p5Require(Array.isArray(item) && item.length === 3 && item[0] === call.name && item[1] === call.call_id
+    && Number.isInteger(item[2]) && item[2] >= 0 && title === reply.question
+    && typeof title === "string", "P5 permission reply does not match its original question/call");
+  if (declaration) {
+    p5Require(title.startsWith("是否批准以下人工例外声明？\n") && reply.answer === "批准这项人工例外",
+      "P5 reply is not approval of the specific human exception");
+    const proposed = JSON.parse(title.slice(title.indexOf("\n") + 1));
+    const expected = { subject: { task_id: task.identity.taskId, phase_id: "P5", declaration_type: "human_exception" },
+      declared_by: declaration.declared_by, reason: declaration.reason, impact_scope: declaration.scope,
+      expiry_stage: declaration.expires_at_phase, owner: declaration.owner, verbatim: declaration.verbatim };
+    p5Require(Object.keys(proposed).length === Object.keys(expected).length
+      && Object.keys(expected).every((key) => key === "subject"
+        ? proposed.subject && Object.keys(proposed.subject).length === 3
+          && Object.keys(expected.subject).every((field) => proposed.subject[field] === expected.subject[field])
+        : proposed[key] === expected[key]), "P5 approval question does not bind the exact declaration fields");
+  } else p5Require(/核查后.*没有例外/.test(title) && reply.answer === "可以，写明没有例外",
+    "P5 user reply does not permit the conditional zero-exception wording");
+  return Object.fromEntries(["question", "answer"].map((name) => [name,
+    { ref: refs[name].ref, sha256: refs[name].sha256 }]));
+}
+
+function p5NoExceptions(decisionRaw, context) {
+  const { task: handle, artifacts, snapshot, materialRevision, auditInputRef, existing, captureAudit,
+    publicationFacts, requiredRefs = [] } = context;
+  const task = assertTaskHandle(handle);
+  p5Require(publicationFacts && SHA256_HEX.test(publicationFacts.sha256 ?? "")
+    && publicationFacts.ref === `${P5_REPORT_ROOT}/facts-${publicationFacts.sha256}.jsonl`,
+  "P5 none publication facts binding is missing");
+  const read = (ref) => ref === publicationFacts.ref && typeof publicationFacts.raw === "string"
+    ? publicationFacts.raw : task.readRecord(ref);
+  p5Require(sha256(read(publicationFacts.ref)) === publicationFacts.sha256, "P5 none publication facts hash mismatch");
+  let savedAudit = null;
+  if (existing) {
+    p5Require(existing.kind === "none" && SHA256_HEX.test(existing.audit_sha256 ?? "")
+      && existing.audit_ref === `${P5_REPORT_ROOT}/audit-${existing.audit_sha256}.json`, "P5 none audit ref is invalid");
+    const raw = read(existing.audit_ref);
+    p5Require(sha256(raw) === existing.audit_sha256, "P5 none audit hash mismatch");
+    savedAudit = JSON.parse(raw);
+  }
+  const inputRef = auditInputRef ?? savedAudit?.classification_source?.ref;
+  p5Require(/^quality\/evidence\/audits\/build-code\/[a-f0-9]{64}\.json$/.test(inputRef ?? ""),
+    "P5 finite scope has no actual material classification audit");
+  const inputRaw = read(inputRef);
+  const inputHash = sha256(inputRaw);
+  p5Require(inputRef.endsWith(`/${inputHash}.json`), "P5 material classification audit hash mismatch");
+  const input = JSON.parse(inputRaw);
+  const census = input.exception_census;
+  const scope = { task_id: task.identity.taskId, phase_id: "P5", material_revision: materialRevision,
+    snapshot_tree: snapshot.tree, report_scope: "p5_intermediate" };
+  p5Require(input.schema_version === "v1" && input.task_id === scope.task_id
+    && input.stage_slug === "build-code" && input.verdict === "pass"
+    && SHA256_HEX.test(input.summary_hash ?? "") && Array.isArray(input.content_evidence_refs)
+    && census && census.scope && Object.keys(census.scope).length === 5
+    && Object.keys(scope).every((key) => census.scope[key] === scope[key]), "P5 classification scope is absent, stale or not intermediate");
+  const permission = p5Permission(task, decisionRaw, census.permission_refs);
+  const base = Object.fromEntries(["decision-log.md", "spec.md", "phases/index.md"].map((name) => [name, artifacts.read(name)]));
+  const materialFiles = materialFilesForCohort("post", base);
+  const sources = new Map();
+  const materialRaw = new Map(materialFiles.map((name) => [artifacts.reference(name), artifacts.read(name)]));
+  const addBasis = (binding) => {
+    p5Require(typeof binding?.ref === "string" && !binding.ref.includes("..")
+      && SHA256_HEX.test(binding.sha256 ?? ""), "P5 material resolution basis is invalid");
+    const ref = binding.ref.split("#")[0];
+    const raw = materialRaw.has(ref) ? materialRaw.get(ref) : read(ref);
+    p5Require(sha256(raw) === binding.sha256, `P5 material resolution basis hash mismatch: ${ref}`);
+    if (!materialRaw.has(ref)) sources.set(ref, { ref, sha256: binding.sha256, kind: "classification_basis" });
+  };
+  const classifications = census.classifications;
+  p5Require(Array.isArray(classifications), "P5 material classifications are absent");
+  for (const name of materialFiles) {
+    const ref = artifacts.reference(name);
+    const raw = artifacts.read(name);
+    const digest = sha256(raw);
+    const found = classifications.filter((entry) => entry?.ref === ref);
+    p5Require(found.length === 1 && found[0].sha256 === digest && new Set(["no_exception", "resolved"]).has(found[0].result)
+      && typeof found[0].reason === "string" && found[0].reason.trim(),
+      `P5 material exception classification is incomplete or unknown: ${ref}`);
+    p5Require(found[0].result !== "resolved" || (Array.isArray(found[0].resolution_refs)
+      && found[0].resolution_refs.length > 0), `P5 historical exception has no actual resolution basis: ${ref}`);
+    p5Require(found[0].resolution_refs === undefined || Array.isArray(found[0].resolution_refs),
+      `P5 material resolution references are invalid: ${ref}`);
+    for (const binding of found[0].resolution_refs ?? []) addBasis(binding);
+    sources.set(ref, { ref, sha256: digest, kind: "material" });
+  }
+  p5Require(classifications.length === materialFiles.length, "P5 material classification has extra or duplicated scope");
+  let refs;
+  if (existing) {
+    p5Require(Array.isArray(savedAudit.sources) && savedAudit.sources.length > 0
+      && new Set(savedAudit.sources.map((entry) => entry.ref)).size === savedAudit.sources.length,
+    "P5 none publication source set is absent or duplicated");
+    refs = savedAudit.sources.filter((entry) => entry.kind === "task_original").map((entry) => entry.ref).sort();
+    p5Require([publicationFacts.ref, ...requiredRefs].every((ref) => refs.includes(ref)),
+      "P5 none publication source set lacks a required original");
+  } else {
+    refs = [...new Set([publicationFacts.ref, ...task.listCanonicalQualityFactRefs(),
+      ...task.listCanonicalReviewResultRefs(), ...task.listCanonicalReviewAttemptRefs(),
+      ...task.listCanonicalAuthorizationRefs(), ...p5RiskRefs(task)])].sort();
+  }
+  const inspectRisk = (value, ref) => {
+    if (Array.isArray(value)) { value.forEach((entry) => inspectRisk(entry, ref)); return; }
+    if (!value || typeof value !== "object") return;
+    p5Require(value.status !== "accepted_risk" && value.disposition !== "accepted_risk"
+      && value.selected_option !== "accept-risk", `P5 still applicable or unclassified accepted risk: ${ref}`);
+    Object.values(value).forEach((entry) => inspectRisk(entry, ref));
+  };
+  for (const ref of refs) {
+    const raw = read(ref);
+    const digest = sha256(raw);
+    if (existing) p5Require(savedAudit.sources.some((entry) => entry.ref === ref && entry.sha256 === digest),
+      `P5 none publication original hash mismatch: ${ref}`);
+    const records = ref === publicationFacts.ref ? raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [JSON.parse(raw)];
+    for (const record of records) {
+      p5Require(record.task_id === task.identity.taskId, `P5 census original has the wrong Task: ${ref}`);
+      if (ref.startsWith("quality/facts/")) {
+        validateCanonicalQualityFact(record);
+        p5Require(ref === `quality/facts/${qualityFactDigest(record)}.json`, "P5 census quality fact ref is invalid");
+      }
+      if (ref.startsWith("quality/reviews/results/")) authenticateStageReviewResult(record, { taskId: task.identity.taskId, read });
+      if (ref.startsWith("quality/reviews/attempts/")) validateSchema("attempt", record);
+      if (ref.startsWith("quality/evidence/risk-acceptances/")) {
+        p5Require(ref.endsWith(`/${digest}.json`), "P5 risk original hash mismatch");
+        const reviewRaw = read(record.review_ref);
+        const review = JSON.parse(reviewRaw);
+        authenticateStageReviewResult(review, { taskId: task.identity.taskId, read });
+        const pause = deriveSeriousReviewPause({ taskId: task.identity.taskId, stage: record.stage,
+          reviewRef: record.review_ref, reviewHash: sha256(reviewRaw), result: review, workflowRunId: record.workflow_run_id });
+        const cardRaw = read(record.card_ref);
+        p5Require(sha256(cardRaw) === record.card_hash && sha256(read(record.reply_ref)) === record.reply_hash,
+          "P5 risk card or reply hash mismatch");
+        const finding = pause.findings.find((entry) => entry.finding_id === record.finding_id);
+        p5Require(finding, "P5 risk finding is absent from its original review");
+        validateRiskAcceptance({ acceptance: record, pause: { ...pause,
+          findings: pause.findings.map((entry) => entry === finding ? { ...entry, card_hash: record.card_hash } : entry) } });
+      }
+      inspectRisk(record, ref);
+    }
+    sources.set(ref, { ref, sha256: digest, kind: "task_original" });
+  }
+  const audit = { scope, permission_refs: permission,
+    classification_source: { ref: inputRef, sha256: inputHash }, sources: [...sources.values()].sort((a, b) => a.ref.localeCompare(b.ref)), result: "none" };
+  const auditRaw = `${JSON.stringify(audit, null, 2)}\n`;
+  const auditHash = sha256(auditRaw);
+  const auditRef = `${P5_REPORT_ROOT}/audit-${auditHash}.json`;
+  const candidate = { kind: "none", permission_refs: permission, audit_ref: auditRef, audit_sha256: auditHash, scope };
+  if (existing) {
+    p5Require(read(existing.audit_ref) === auditRaw && JSON.stringify(existing) === JSON.stringify(candidate),
+      "P5 none audit source set or classification does not match publication originals");
+  } else if (typeof captureAudit === "function") captureAudit({ ref: auditRef, raw: auditRaw });
+  else task.writeRecordAtomic(auditRef, auditRaw, { createOnly: true });
+  return candidate;
+}
+
+function p5DeclaredException(decisionRaw, indexRaw, acceptanceChain, sourceRef, context) {
+  const task = assertTaskHandle(context.task);
+  const declaration = parseP5HumanExceptionDeclaration(decisionRaw, indexRaw, acceptanceChain, sourceRef);
+  p5Require(!declaration.fixture_only, "P5 fixture_only declaration is not a human approval source");
+  const ref = context.auditInputRef ?? context.existing?.audit_ref;
+  p5Require(/^quality\/evidence\/audits\/build-code\/[a-f0-9]{64}\.json$/.test(ref ?? ""),
+    "P5 human exception has no specific approval audit");
+  const raw = task.readRecord(ref);
+  const digest = sha256(raw);
+  p5Require(ref.endsWith(`/${digest}.json`), "P5 human exception audit hash mismatch");
+  const audit = JSON.parse(raw);
+  const scope = { task_id: task.identity.taskId, phase_id: "P5", material_revision: context.materialRevision,
+    snapshot_tree: context.snapshot.tree, report_scope: "p5_intermediate" };
+  const census = audit.exception_census;
+  p5Require(audit.schema_version === "v1" && audit.task_id === scope.task_id && audit.stage_slug === "build-code"
+    && audit.verdict === "pass" && SHA256_HEX.test(audit.summary_hash ?? "") && Array.isArray(audit.content_evidence_refs)
+    && census?.kind === "declared" && census.scope && Object.keys(census.scope).length === 5
+    && Object.keys(scope).every((key) => census.scope[key] === scope[key]), "P5 human exception approval scope is absent or stale");
+  const approval = p5Permission(task, decisionRaw, census.permission_refs, declaration);
+  const candidate = { ...declaration, kind: "declared", approval_refs: approval,
+    audit_ref: ref, audit_sha256: digest, approval_scope: scope };
+  if (context.existing) p5Require(JSON.stringify(candidate) === JSON.stringify(context.existing),
+    "P5 specific human exception original sources do not reproduce the claimed declaration");
+  return candidate;
+}
+
+/** A parsed declaration alone has no user approval; context performs the private finite census. */
+export function parseP5HumanExceptionDeclaration(decisionRaw, indexRaw, acceptanceChain, sourceRef, context = null) {
+  if (context) {
+    if (!context.auditInputRef && !context.existing) context = { ...context, auditInputRef: p5CurrentAuditRef(context) };
+    const ref = context.auditInputRef ?? context.existing?.audit_ref;
+    if (context.existing?.kind === "declared" || (ref && /^quality\/evidence\/audits\/build-code\/[a-f0-9]{64}\.json$/.test(ref)
+        && JSON.parse(context.task.readRecord(ref)).exception_census?.kind === "declared")) {
+      return p5DeclaredException(decisionRaw, indexRaw, acceptanceChain, sourceRef, context);
+    }
+    return p5NoExceptions(decisionRaw, context);
+  }
+  p5Require(typeof decisionRaw === "string" && typeof sourceRef === "string" && sourceRef.trim(),
+    "P5 human exception material source is absent");
+  const headings = [...decisionRaw.matchAll(/^ {0,3}## 人工例外声明[^\n]*$/gm)];
+  p5Require(headings.length === 1, "P5 human exception source must contain one declaration heading");
+  const afterHeading = decisionRaw.slice(headings[0].index + headings[0][0].length);
+  const nextSection = /^ {0,3}#{1,2}[ \t]+\S/gm.exec(afterHeading);
+  const section = nextSection ? afterHeading.slice(0, nextSection.index) : afterHeading;
+  const fences = [...section.matchAll(/^[ \t]*```[^\r\n]*$/gm)];
+  const blocks = [...section.matchAll(/^[ \t]*```json[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t]*\r?$/gm)];
+  p5Require(fences.length === 2 && blocks.length === 1,
+    "P5 human exception source must contain exactly one JSON declaration block in its section");
+  const declaration = JSON.parse(blocks[0][1]);
+  p5Require(Array.isArray(declaration?.declarations) && declaration.declarations.length === 1,
+    "P5 human exception declaration is ambiguous");
+  const entry = declaration.declarations[0];
+  p5Require(entry && typeof entry === "object" && !Array.isArray(entry)
+    && ["declared_by", "reason", "scope", "expires_at_phase", "owner", "verbatim"].every((name) =>
+      typeof entry[name] === "string" && entry[name].trim())
+    && (entry.status === undefined), "P5 human exception fields are incomplete");
+  const indexed = phaseFilesFromIndex(indexRaw);
+  p5Require(indexed.includes(`phases/${entry.expires_at_phase}.md`)
+    && /^P[1-9][0-9]*$/.test(entry.expires_at_phase)
+    && Number(entry.expires_at_phase.slice(1)) >= 5,
+  "P5 human exception expiry is not a current indexed Phase");
+  const actualIds = new Set((Array.isArray(acceptanceChain) ? acceptanceChain : [])
+    .map((row) => row?.acceptance_criterion_id).filter((value) => typeof value === "string"));
+  const scopedIds = [...entry.scope.matchAll(/(?:^|[^A-Za-z0-9_-])(AC-[A-Za-z0-9_-]+)(?=$|[^A-Za-z0-9_-])/g)]
+    .map((match) => match[1]);
+  p5Require(scopedIds.length > 0 && scopedIds.every((id) => actualIds.has(id)),
+    "P5 human exception scope includes an absent acceptance criterion");
+  return {
+    declared_by: entry.declared_by, reason: entry.reason, scope: entry.scope,
+    expires_at_phase: entry.expires_at_phase, owner: entry.owner, verbatim: entry.verbatim,
+    source_ref: sourceRef, source_sha256: sha256(decisionRaw),
+    source_path: `${sourceRef}#human-exception-declaration`,
+    fixture_only: declaration.kind === "fixture_only",
+  };
+}
+
+/** Internal P5 reader shared with its same-run writer and contract fixture. */
+export function isCompleteP5T007VitestOutput(output) {
+  if (typeof output !== "string") return false;
+  const lines = output.replace(/\u001b\[[0-9;]*m/g, "").split(/\r?\n/).map((line) => line.trim());
+  const run = lines.filter((line) => /^RUN\s+v\d+\.\d+\.\d+\s+\S+/.test(line));
+  const fileResults = lines.filter((line) => /^[✓❯↓]\s+.*\.test\.[cm]?[jt]s\b/u.test(line));
+  const fileSummary = lines.filter((line) => /^Test Files\b/.test(line));
+  const testSummary = lines.filter((line) => /^Tests\b/.test(line));
+  if (run.length !== 1 || fileResults.length !== 1 || fileSummary.length !== 1 || testSummary.length !== 1
+      || !/^Test Files\s+1 passed \(1\)$/.test(fileSummary[0])
+      || lines.some((line) => /^(?:FAIL\b|×\s+)/u.test(line))) return false;
+  const file = /^✓\s+runtime\/stage\/stage-end-report\.test\.mjs \((\d+) tests\)\s+\d+(?:\.\d+)?ms$/u.exec(fileResults[0]);
+  const tests = /^Tests\s+(\d+) passed \((\d+)\)$/.exec(testSummary[0]);
+  if (!file || !tests) return false;
+  const count = Number(tests[1]);
+  return Number.isSafeInteger(count) && count >= 15 && count === Number(tests[2]) && count === Number(file[1]);
+}
+
+/** Read blobs as data from the one publication tree; never load old code. */
+function p5PublicationMaterials(task, source, certificate, worktree) {
+  p5Require(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(source.snapshot_tree ?? "")
+    && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(source.snapshot_head ?? "")
+    && SHA256_HEX.test(source.source_digest ?? ""), "P5 publication snapshot identity is invalid");
+  ensureGitSnapshotObjectStore(worktree);
+  const git = (args) => execFileSync("git", args, { cwd: worktree, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+  const unavailable = (message) => {
+    const error = new Error(message);
+    error.code = "P5_PUBLICATION_VERSION_UNAVAILABLE";
+    throw error;
+  };
+  const blob = (path) => {
+    let entry;
+    try { entry = git(["ls-tree", "-z", source.snapshot_tree, "--", path]).toString("utf8"); }
+    catch { unavailable(`P5 publication Git blob unavailable: ${path}`); }
+    if (!/^(?:100644|100755) blob [a-f0-9]+\t/.test(entry)
+        || entry.split("\0").filter(Boolean).length !== 1) unavailable(`P5 publication Git blob unavailable: ${path}`);
+    try { return git(["show", `${source.snapshot_tree}:${path}`]); }
+    catch { unavailable(`P5 publication Git blob unavailable: ${path}`); }
+  };
+  const currentArtifacts = ArtifactDir.open(worktree, task);
+  const bindings = source.publication_materials;
+  p5Require(Array.isArray(bindings) && bindings.length > 0
+    && JSON.stringify(bindings) === JSON.stringify(certificate.publication_materials),
+  "P5 publication material bindings are absent or inconsistent");
+  const values = {}, seen = new Set();
+  for (const binding of bindings) {
+    p5Require(typeof binding?.name === "string" && !seen.has(binding.name)
+      && binding.source_ref === currentArtifacts.reference(binding.name)
+      && SHA256_HEX.test(binding.sha256 ?? "")
+      && binding.ref === `${P5_REPORT_ROOT}/material-${binding.sha256}.txt`,
+    "P5 publication material source binding is invalid");
+    seen.add(binding.name);
+    const raw = task.readRecord(binding.ref);
+    p5Require(sha256(raw) === binding.sha256, `P5 publication material original hash mismatch: ${binding.name}`);
+    values[binding.name] = raw;
+  }
+  const names = materialFilesForCohort("post", values);
+  p5Require(JSON.stringify(bindings.map(({ name }) => name)) === JSON.stringify(names)
+    && materialRevisionFromValues(names.map((name) => [name, values[name]])) === source.material_revision,
+  "P5 publication material scope or revision is invalid");
+  p5Require(names.includes("phases/P5.md") && /### T007\b/.test(values["phases/P5.md"])
+    && /### T008\b/.test(values["phases/P5.md"]), "P5 publication authority is absent");
+  for (const [path, host] of [
+    ["runtime/stage/stage-end-report.mjs", new URL("../stage/stage-end-report.mjs", import.meta.url)],
+    ["runtime/evidence/acceptance-evidence-validator.mjs", new URL("./acceptance-evidence-validator.mjs", import.meta.url)],
+    ["runtime/evidence/canonical-utils.mjs", new URL("./canonical-utils.mjs", import.meta.url)],
+  ]) {
+    if (!blob(path).equals(readFileSync(host))) unavailable(`P5 converter version unavailable for reproduction: ${path}`);
+  }
+  // The old test file is an input of its original receipt, not code to run.
+  blob("runtime/stage/stage-end-report.test.mjs");
+  return { values, names, git, artifacts: { read: (name) => values[name], reference: (name) => currentArtifacts.reference(name) } };
+}
+
+function p5PublicationFacts(task, source, certificate, read) {
+  const binding = source.publication_facts;
+  p5Require(binding && Object.keys(binding).sort().join() === "ref,sha256"
+    && SHA256_HEX.test(binding.sha256 ?? "")
+    && binding.ref === `${P5_REPORT_ROOT}/facts-${binding.sha256}.jsonl`
+    && JSON.stringify(certificate.publication_facts) === JSON.stringify(binding),
+  "P5 publication facts binding is absent or invalid");
+  const raw = read(binding.ref);
+  p5Require(sha256(raw) === binding.sha256, "P5 publication facts hash mismatch");
+  const records = raw.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  p5Require(records.length > 0 && records.every((record) => record.task_id === task.identity.taskId),
+    "P5 publication facts Task identity is invalid");
+  const rows = records.filter((record) => record.record_kind === "stage" && record.stage === "build-code");
+  p5Require(rows.length === 1, "P5 publication facts stage row is absent or duplicated");
+  return { ...binding, raw, row: rows[0] };
+}
+
+/** Current state is a separate observation; it never replaces publication data. */
+function p5CurrentBinding(task, workspace, source, publicationFacts) {
+  try {
+    const current = captureWorkspaceSnapshot(workspace, task.identity.taskId, "post");
+    const currentFacts = task.readRecord("facts.jsonl");
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const currentRevision = materialRevisionFromValues(source.publication_materials
+      .map(({ name }) => [name, artifacts.read(name)]));
+    const branch = execFileSync("git", ["branch", "--show-current"], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim();
+    const matches = current.head === source.snapshot_head && current.tree === source.snapshot_tree
+      && current.source_digest === source.source_digest && currentFacts === publicationFacts.raw && branch === source.branch
+      && currentRevision === source.material_revision;
+    return { status: matches ? "current" : "stale", reason: matches
+      ? "the publication workspace and stage facts still match"
+      : "current workspace or stage facts differ; the report remains publication-time evidence" };
+  } catch (error) { return { status: "unavailable", reason: `current binding cannot be observed: ${error.message}` }; }
+}
+
+/** Authenticate the one immutable P5 publication, without certifying current quality. */
+export function authenticateP5StageEndReport(taskHandle) {
+  let task;
+  try { task = assertTaskHandle(taskHandle); }
+  catch (error) { return p5Unavailable(`authenticated TaskHandle unavailable: ${error.message}`); }
+  const markerRef = `${P5_REPORT_ROOT}/report-facts.json`;
+  let factsRaw;
+  try { factsRaw = task.readRecord(markerRef); }
+  catch (error) {
+    return error?.code === "ENOENT"
+      ? p5Missing("P5 report-facts.json commit marker is missing")
+      : p5Unavailable(`P5 commit marker cannot be read: ${error.message}`);
+  }
+  try {
+    const read = (ref) => task.readRecord(ref);
+    const readJson = (ref) => JSON.parse(read(ref));
+    const deliveryRef = `${P5_REPORT_ROOT}/T008-delivery.txt`;
+    const reportRef = `${P5_REPORT_ROOT}/report.md`;
+    const delivery = readJson(deliveryRef);
+    p5Require(delivery.schema_version === "workflowhub-p5-delivery-index.v1"
+      && delivery.task_id === task.identity.taskId && delivery.phase_id === "P5"
+      && SHA256_HEX.test(delivery.source_sha256 ?? "")
+      && SHA256_HEX.test(delivery.certificate_sha256 ?? "")
+      && delivery.source_ref === `${P5_REPORT_ROOT}/source-${delivery.source_sha256}.json`
+      && delivery.certificate_ref === `${P5_REPORT_ROOT}/certificate-${delivery.certificate_sha256}.json`,
+    "P5 delivery index identity is invalid");
+    const sourceRaw = read(delivery.source_ref);
+    const certificateRaw = read(delivery.certificate_ref);
+    const reportRaw = read(reportRef);
+    p5Require(sha256(sourceRaw) === delivery.source_sha256
+      && sha256(certificateRaw) === delivery.certificate_sha256
+      && sha256(factsRaw) === delivery.facts_sha256
+      && sha256(reportRaw) === delivery.report_sha256,
+    "P5 report ref/hash binding is invalid");
+    const source = JSON.parse(sourceRaw);
+    const certificate = JSON.parse(certificateRaw);
+    p5Require(source.schema_version === "workflowhub-p5-same-run-source.v1"
+      && certificate.schema_version === "workflowhub-p5-source-certificate.v1"
+      && source.project_name === task.identity.projectName
+      && source.task_id === task.identity.taskId && source.stage === "build-code"
+      && source.phase_id === "P5" && source.phase_task_id === "T008"
+      && certificate.task_id === task.identity.taskId && certificate.stage === "build-code"
+      && certificate.phase_id === "P5" && certificate.source_ref === delivery.source_ref
+      && certificate.source_sha256 === delivery.source_sha256
+      && certificate.facts_sha256 === delivery.facts_sha256
+      && certificate.report_sha256 === delivery.report_sha256,
+    "P5 source/certificate identity is invalid");
+
+    const publicationFacts = p5PublicationFacts(task, source, certificate, read);
+    const workspace = openCurrentTaskWorkspace(task);
+    const worktree = workspace.worktreeRoot;
+    p5Require(source.worktree === worktree && typeof source.branch === "string" && source.branch.trim(),
+      "P5 publication workspace identity is invalid");
+    const publication = p5PublicationMaterials(task, source, certificate, worktree);
+    const materials = publication.values;
+    const artifacts = publication.artifacts;
+    const materialRevision = materialRevisionFromValues(publication.names.map((name) => [name, materials[name]]));
+    const scopeRevision = stageMaterialScopeRevision("build-code", materials, { activationCohort: "post" });
+    const snapshot = { head: source.snapshot_head, tree: source.snapshot_tree, source_digest: source.source_digest };
+    const row = publicationFacts.row;
+    p5Require(source.material_revision === materialRevision
+      && certificate.snapshot_tree === snapshot.tree && certificate.material_revision === materialRevision
+      && row.source === "stage-end:build-code" && row.created_at === source.stage_row_created_at
+      && row.snapshot_tree?.value === snapshot.tree
+      && row.material_digest?.value === scopeRevision.replace(/^revision-/, "")
+      && row.phase_progress?.phase_id === "P5" && row.phase_progress?.task_id === "T008"
+      && row.phase_progress?.material_revision === materialRevision && row.evidence?.value?.[0]?.exit_code === 0,
+    "P5 publication Task/material/snapshot/stage row binding is invalid");
+
+    const receiptBindings = source.receipts;
+    p5Require(receiptBindings && ["implementation", "tests", "review"].every((name) =>
+      typeof receiptBindings[name]?.ref === "string" && SHA256_HEX.test(receiptBindings[name]?.sha256 ?? ""))
+      && JSON.stringify(certificate.receipt_refs) === JSON.stringify(receiptBindings),
+    "P5 receipt binding is incomplete");
+    const receiptRaw = Object.fromEntries(Object.entries(receiptBindings).map(([name, binding]) => {
+      const raw = read(binding.ref);
+      p5Require(sha256(raw) === binding.sha256, `P5 ${name} receipt hash mismatch`);
+      return [name, raw];
+    }));
+    const implementation = JSON.parse(receiptRaw.implementation);
+    const tests = JSON.parse(receiptRaw.tests);
+    const review = JSON.parse(receiptRaw.review);
+    validateCanonicalImplementationReceipt(implementation, { taskId: task.identity.taskId,
+      snapshotTree: snapshot.tree, read });
+    validateCanonicalTestReceipt(tests, { taskId: task.identity.taskId, stage: "build-code",
+      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
+    const testCommand = /^(?:npx |\.\/node_modules\/\.bin\/)vitest run runtime\/stage\/stage-end-report\.test\.mjs(?: --config vitest\.config\.mjs --poolOptions\.forks\.singleFork --no-fileParallelism)?$/;
+    const output = read(tests.output_ref);
+    p5Require(testCommand.test(tests.command) && isCompleteP5T007VitestOutput(output)
+      && sha256(output) === tests.output_hash && tests.snapshot_head === snapshot.head
+      && tests.source_digest === snapshot.source_digest && implementation.snapshot_head === snapshot.head
+      && implementation.changed.includes("runtime/stage/stage-end-report.mjs")
+      && source.implementation_diff?.ref === implementation.diff_ref
+      && source.implementation_diff?.sha256 === implementation.diff_hash
+      && source.test_output?.ref === tests.output_ref && source.test_output?.sha256 === tests.output_hash,
+    "P5 T007 implementation/test/output binding is invalid");
+    for (const receipt of [implementation, tests]) {
+      p5Require(publication.git(["rev-parse", `${receipt.snapshot_commit}^{tree}`]).toString("utf8").trim() === snapshot.tree
+        && publication.git(["show", "-s", "--format=%P", receipt.snapshot_commit]).toString("utf8").trim() === snapshot.head,
+      "P5 publication receipt snapshot commit does not bind its tree/head");
+    }
+    p5Require(review.task_id === task.identity.taskId && review.stage === "build-code"
+      && review.phase_id === "P5" && review.review_scope === "phase"
+      && review.subject_kind === "phase" && review.result_ref === receiptBindings.review.ref,
+    "P5 review Task/phase provenance is invalid");
+    const originalAttempt = JSON.parse(read(review.attempt_ref));
+    p5Require(originalAttempt.material_revision === review.material_revision,
+      "P5 original review attempt/material binding is invalid");
+    authenticateStageReviewResult(review, { taskId: task.identity.taskId, read });
+
+    const qualityBindings = source.quality_facts;
+    p5Require(Array.isArray(qualityBindings) && qualityBindings.length > 0
+      && JSON.stringify(certificate.quality_fact_refs) === JSON.stringify(qualityBindings)
+      && JSON.stringify(source.stage_result?.quality_fact_refs) === JSON.stringify(qualityBindings.map((entry) => entry.ref))
+      && source.stage_result?.stage === "build-code" && !source.stage_result?.stage_reflection?.stage_row_error,
+    "P5 stage result/quality fact binding is invalid");
+    let phaseReviewFact = false;
+    let phaseReviewCount = 0;
+    const staleReviewWarning = "phase_review:stale-review-snapshot";
+    const staleReview = review.snapshot_tree !== snapshot.tree || review.material_revision !== materialRevision;
+    p5Require((source.stage_result?.quality_warnings ?? []).filter((value) => value === staleReviewWarning).length
+      === (staleReview ? 1 : 0), "P5 original review freshness is not disclosed accurately");
+    p5Require((source.stage_result?.quality_warnings ?? []).filter((value) =>
+      value === "phase_review:original-material-replay-unavailable").length === 1,
+    "P5 original review material replay limit is not disclosed accurately");
+    for (const binding of qualityBindings) {
+      p5Require(typeof binding?.ref === "string" && SHA256_HEX.test(binding.sha256 ?? ""), "P5 quality fact ref is invalid");
+      const raw = read(binding.ref);
+      const fact = validateCanonicalQualityFact(JSON.parse(raw));
+      p5Require(sha256(raw) === binding.sha256
+        && binding.ref === `quality/facts/${qualityFactDigest(fact)}.json`
+        && fact.fact_id === `quality-${qualityFactDigest(fact)}`
+        && fact.task_id === task.identity.taskId && fact.stage === "build-code"
+        && fact.material_revision === materialRevision && fact.snapshot_tree === snapshot.tree,
+      "P5 quality fact is not current");
+      if (fact.subject === "phase_review") {
+        phaseReviewCount += 1;
+        phaseReviewFact = fact.status === "recorded"
+          ? fact.evidence?.some((evidence) => evidence.ref === receiptBindings.review.ref
+            && evidence.sha256 === receiptBindings.review.sha256)
+          : ["missing", "unavailable"].includes(fact.status);
+      }
+    }
+    p5Require(phaseReviewCount === 1 && phaseReviewFact, "P5 same-run phase review quality fact is absent or invalid");
+
+    p5Require(Array.isArray(source.quality_advisory_facts)
+      && JSON.stringify(certificate.quality_advisory_fact_refs) === JSON.stringify(source.quality_advisory_facts),
+    "P5 source/certificate advisory binding list does not match");
+    const acceptanceCandidates = [];
+    authenticateP5AdvisorySources({ read, taskId: task.identity.taskId,
+      snapshotTree: snapshot.tree, materialRevision, stageResult: source.stage_result,
+      bindings: source.quality_advisory_facts, qualityBindings, acceptanceCandidates });
+
+    const exception = parseP5HumanExceptionDeclaration(materials["decision-log.md"],
+      materials["phases/index.md"], source.acceptance_chain, artifacts.reference("decision-log.md"),
+      new Set(["none", "declared"]).has(source.human_exception_source?.kind) ? { task, artifacts, snapshot, materialRevision,
+        existing: source.human_exception_source, publicationFacts,
+        requiredRefs: [...qualityBindings, ...source.quality_advisory_facts].map((binding) => binding.ref).concat(receiptBindings.review.ref) } : null);
+    p5Require(JSON.stringify(source.human_exception_source) === JSON.stringify(exception),
+      "P5 human exception original source does not match");
+
+    const evidenceIndex = [
+      ...Object.values(receiptBindings).map(({ ref }) => ({ path: ref, kind: "canonical_receipt" })),
+      { path: tests.output_ref, kind: "canonical_test_output" },
+      ...qualityBindings.map(({ ref }) => ({ path: ref, kind: "quality_fact" })),
+      ...acceptanceCandidates,
+      { path: exception.kind === "none" ? exception.audit_ref : exception.source_ref,
+        kind: exception.kind === "none" ? "no_exception_audit_candidate" : "human_exception_material" },
+      ...Object.values(exception.approval_refs ?? {}).map(({ ref }) => ({ path: ref, kind: "human_exception_approval" })),
+    ];
+    const rebuilt = buildStageEndReportFacts({ chainRows: source.acceptance_chain,
+      stageResult: source.stage_result, stageResultPath: `${delivery.source_ref}#stage_result`, evidenceIndex,
+      declared: { routes: [], limits: [], ...(exception.kind === "none"
+        ? { exceptions: [], no_exceptions: exception } : { exceptions: [{ declared_by: exception.declared_by,
+        reason: exception.reason, scope: exception.scope, expires_at_phase: exception.expires_at_phase,
+        owner: exception.owner, verbatim: exception.verbatim, source_path: exception.source_path }] }) } });
+    p5Require(factsRaw === `${JSON.stringify(rebuilt, null, 2)}\n`
+      && reportRaw === renderStageEndReport(rebuilt), "P5 report facts/render do not reproduce original bytes");
+    if (exception.kind === "none" || exception.kind === "declared") return Object.freeze({ status: "recorded", authenticated: true,
+      facts: rebuilt, source_ref: delivery.source_ref, source_sha256: delivery.source_sha256,
+      certificate_ref: delivery.certificate_ref, certificate_sha256: delivery.certificate_sha256,
+      material_revision: materialRevision, snapshot_tree: snapshot.tree,
+      freshness: p5CurrentBinding(task, workspace, source, publicationFacts),
+      current_quality: { status: "unknown", reason: "P5 publication authentication does not certify current Phase or whole-task quality" } });
+    // These bytes can be rechecked, but their decision-log declaration has no
+    // independent user confirmation bound to this particular P5 exception.
+    // Neither fixture_only nor self-described human fields are formal approval.
+    return p5Missing("P5 human exception has no independently authenticated user confirmation source");
+  } catch (error) {
+    return new Set(["EACCES", "EPERM", "EIO", "P5_PUBLICATION_VERSION_UNAVAILABLE"]).has(error?.code)
+      ? p5Unavailable(`P5 source read is unavailable: ${error.message}`)
+      : p5Missing(`P5 report cannot be authenticated: ${error.message}`);
+  }
 }

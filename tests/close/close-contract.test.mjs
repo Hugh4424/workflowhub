@@ -20,6 +20,7 @@ import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapsh
 import { initializeTaskStore, readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -271,6 +272,39 @@ async function confirmedFirstTimeClose(state, { now = () => FIXED_CLOSE_TIME } =
 }
 
 describe("close contract (T0-RED)", () => {
+  it("reads incomplete coverage facts without treating them as malformed close facts", () => {
+    const state = fixture();
+    const evidence = JSON.stringify({
+      schema_version: "coverage-audit.v1",
+      task_id: state.taskId,
+      stage: "make-decision",
+      status: "incomplete",
+    });
+    const evidenceRef = `quality/evidence/coverage-audit-${"a".repeat(64)}.json`;
+    state.kernel.publishCanonicalRecord(evidenceRef, `${evidence}\n`);
+    const fact = createQualityFact({
+      taskId: state.taskId,
+      stage: "make-decision",
+      materialRevision: `revision-${"b".repeat(64)}`,
+      materialScope: ["decision-log.md"],
+      materialScopeRevision: `revision-${"c".repeat(64)}`,
+      snapshotTree: "d".repeat(40),
+      kind: "coverage",
+      status: "incomplete",
+      subject: "decision_coverage",
+      evidence: [{
+        ref: evidenceRef,
+        sha256: createHash("sha256").update(`${evidence}\n`).digest("hex"),
+        evidence_type: "coverage_audit",
+      }],
+      recordedAt: "2026-08-21T00:00:00.000Z",
+    });
+    state.kernel.publishCanonicalRecord(fact.ref, fact.raw);
+
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(prepared.plan.delivery.quality_gaps).not.toContain(expect.stringContaining("QUALITY_FACT_INVALID"));
+  });
+
   it("requires explicit user reply text and current-step provenance", () => {
     const state = fixture();
     const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });

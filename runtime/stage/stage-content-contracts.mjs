@@ -520,9 +520,162 @@ function normalizedValue(value) {
   return typeof value === "string" ? value.normalize("NFC").trim().replace(/\s+/g, " ") : value;
 }
 
+function currentOiFreezeProjection(markdown) {
+  const heading = /^### OI 记录（解析器权威记录，YAML）\s*$/gm;
+  const matches = [...markdown.matchAll(heading)];
+  if (matches.length === 0) return null;
+  const errors = [];
+  if (matches.length !== 1) errors.push("current OI authority has duplicate headings");
+  const start = matches[0].index + matches[0][0].length;
+  const tail = markdown.slice(start);
+  const next = /^#{1,3}\s+/m.exec(tail);
+  const body = tail.slice(0, next ? next.index : undefined);
+  const records = [];
+  let fence = null;
+  const parseFence = () => {
+    let parsed;
+    const content = fence.lines.join("\n");
+    try { parsed = fence.language === "json" ? JSON.parse(content) : yaml.load(content); }
+    catch { errors.push("current OI authority contains invalid YAML or JSON"); return; }
+    const entries = Array.isArray(parsed) ? parsed : object(parsed) && Array.isArray(parsed.ois) ? parsed.ois : [parsed];
+    for (const entry of entries) {
+      if (!object(entry)) { errors.push("current OI authority contains an invalid record"); continue; }
+      records.push(entry);
+    }
+  };
+  for (const line of body.split(/\r?\n/)) {
+    const marker = /^[ \t]*(`{3,}|~{3,})([^\r\n]*)$/.exec(line);
+    if (/^[ \t]*(?:`{2}(?!`)|~{2}(?!~))/.test(line)) {
+      errors.push("current OI authority contains a malformed fence");
+    }
+    if (fence === null) {
+      if (!marker) {
+        if (/^[ \t]*(?:oi_id|category|status)\s*:/.test(line)) errors.push("current OI authority contains a record outside a supported fence");
+        continue;
+      }
+      const language = marker[2].trim().toLowerCase();
+      if (language === "") { errors.push("current OI authority has a stray closing fence"); continue; }
+      fence = { marker: marker[1], language, lines: [] };
+      if (marker[1] !== "```" || !["yaml", "yml", "json"].includes(language)) {
+        errors.push("current OI authority contains an unsupported fence");
+      }
+    } else if (marker && marker[1] === fence.marker && marker[2].trim() === "") {
+      if (fence.marker === "```" && ["yaml", "yml", "json"].includes(fence.language)) parseFence();
+      fence = null;
+    } else if (marker) {
+      errors.push("current OI authority contains a malformed nested fence");
+      fence = null;
+    } else {
+      fence.lines.push(line);
+    }
+  }
+  if (fence !== null) errors.push("current OI authority contains an unclosed fence");
+  if (records.length === 0) errors.push("current OI authority has no records");
+  const seen = new Set();
+  const categories = new Set();
+  const unresolved = [];
+  const map = {
+    complete_user_flow: "user_flow",
+    data_state: "data_states",
+    success_failure_boundary: "success_failure_boundaries",
+    non_goals: "non_goals",
+  };
+  for (const record of records) {
+    const id = record.oi_id ?? record.id;
+    if (typeof id !== "string" || !/^OI-[A-Za-z0-9][A-Za-z0-9_-]*$/i.test(id)) {
+      errors.push("current OI authority has a record without a valid OI id");
+    } else if (seen.has(id)) {
+      errors.push(`current OI authority duplicates ${id}`);
+    } else seen.add(id);
+    if (!DECISION_OUTLINE_FIXED_CATEGORIES.includes(record.category)) errors.push(`current OI authority ${id ?? "record"} category is missing or invalid`);
+    else if (map[record.category]) categories.add(map[record.category]);
+    if (!OI_STATUSES.has(record.status)) errors.push(`current OI authority ${id ?? "record"} status is missing or invalid`);
+    else if (record.status === "open") unresolved.push(id ?? "open OI");
+  }
+  return {
+    coverage: FREEZE_PACKET_COVERAGE.filter((category) => categories.has(category)),
+    unresolved,
+    errors,
+    records,
+  };
+}
+
+function currentCfFreezeProjection(markdown, oiRecords) {
+  const heading = /^## 独立替代审查发现的未决冲突（须用户裁决）\s*$/gm;
+  const matches = [...markdown.matchAll(heading)];
+  if (matches.length === 0) return { unresolved: [], errors: [] };
+  const errors = [];
+  if (matches.length !== 1) errors.push("current CF authority has duplicate headings");
+  const tail = markdown.slice(matches[0].index + matches[0][0].length);
+  const next = /^#{1,2}\s+/m.exec(tail);
+  const body = tail.slice(0, next ? next.index : undefined);
+  const entries = [...body.matchAll(/^#{3,4}\s+(CF-\d+)(?!\s*[–-])[^\n]*$/gm)];
+  if (entries.length === 0) errors.push("current CF authority has no numbered conflicts");
+  const seen = new Set();
+  const unresolved = [];
+  for (const [index, entry] of entries.entries()) {
+    const id = entry[1];
+    if (seen.has(id)) errors.push(`current CF authority duplicates ${id}`);
+    seen.add(id);
+    const section = body.slice(entry.index + entry[0].length, entries[index + 1]?.index);
+    const statuses = [...section.matchAll(/^\|\s*\*\*状态（(?:当前|[^）]*用户裁决)）\*\*\s*\|\s*([^|]*)\|/gm)];
+    if (statuses.length > 1) { errors.push(`current CF ${id} has no unique current status`); continue; }
+    if (statuses.length === 0) {
+      const approval = /^\|\s*\*\*用户裁决（[^\n]*）\*\*\s*\|\s*(用户已\*\*显式批准\*\*[^|]*)\|/m.exec(section);
+      const landing = /^\|\s*本修复的落地\s*\|\s*([^|]*)\|/m.exec(section);
+      const oiIds = [...new Set(approval?.[1].match(/\bOI-\d+\b/g) ?? [])];
+      const decisionId = landing?.[1].match(/\b(D-\d+)\s+的\s*(?:decision|决定)/)?.[1] ?? null;
+      const oi = oiIds.length === 1 ? oiRecords.find((record) => record.oi_id === oiIds[0]) : null;
+      const decisionHeading = decisionId ? new RegExp(`^### ${decisionId}\\s*$`, "m").exec(markdown) : null;
+      const decisionTail = decisionHeading ? markdown.slice(decisionHeading.index + decisionHeading[0].length) : "";
+      const nextDecision = /^#{1,3}\s+/m.exec(decisionTail);
+      const decisionBody = decisionTail.slice(0, nextDecision ? nextDecision.index : undefined);
+      const currentDecisionBindsOi = decisionBody.split(/\r?\n/)
+        .filter((line) => /^-\s*(?:\*\*decision\*\*|\*\*（校正|decision:)/.test(line))
+        .flatMap((line) => line.split(/[。！？；;]/))
+        .some((sentence) => /显式批准/.test(sentence)
+          && [...new Set(sentence.match(/\bOI-\d+\b/g) ?? [])].join(",") === oiIds[0]);
+      if (approval && /已由用户裁决/.test(entry[0]) && oi?.status === "confirmed"
+          && decisionHeading && currentDecisionBindsOi) continue;
+      errors.push(`current CF ${id} has no verified current disposition`);
+      continue;
+    }
+    const status = statuses[0][1].replace(/\*/g, "").trim();
+    const resolved = /^RESOLVED by (D-\d+)\b/i.exec(status);
+    if (resolved) {
+      // The current status references an existing decision, not a promise that
+      // a similarly named decision will later exist. Reuse its text fields.
+      const decisions = markdownSections(markdown, 3)
+        .filter(({ heading }) => heading.match(/^D-\d+\b/)?.[0] === resolved[1]);
+      const lines = decisions.length === 1 ? decisions[0].body.split(/\r?\n/) : [];
+      const decisionLines = lines.filter((line) => /^-\s*(?:\*\*decision\*\*|decision)\s*[:：]/.test(line));
+      const hasDecision = decisionLines.some((line) => line.replace(/^-\s*(?:\*\*decision\*\*|decision)\s*[:：]\s*/, "").trim());
+      const sourceLines = lines.filter((line) => /^-\s*(?:\*\*decision\*\*|decision|(?:原\s+)?derived_from(?:\s+依据)?)\s*[:：]/.test(line));
+      const bindsConflict = sourceLines.some((line) => (line.match(/\bCF-\d+\b/g) ?? []).includes(id));
+      const statusLines = lines.filter((line) => /^-\s*(?:\*\*(?:状态|三档结论)\*\*|status|状态|三档结论)\s*[:：]/.test(line));
+      const confirmed = statusLines.length === 1 && /^confirmed\b/i.test(statusLines[0]
+        .replace(/^-\s*(?:\*\*(?:状态|三档结论)\*\*|status|状态|三档结论)\s*[:：]\s*/, "")
+        .replace(/[*`]/g, "").trim());
+      const explicitApproval = statusLines.length === 0 && decisionLines
+        .flatMap((line) => line.split(/[。！？；;]/))
+        .some((sentence) => /^用户已显式批准/.test(sentence
+          .replace(/^-\s*(?:\*\*decision\*\*|decision)\s*[:：]\s*/, "").replace(/\*/g, "").trim())
+          && (sentence.match(/\bCF-\d+\b/g) ?? []).includes(id));
+      if (decisions.length === 1 && hasDecision && bindsConflict && (confirmed || explicitApproval)) continue;
+      errors.push(`current CF ${id} has no verified current disposition`);
+      continue;
+    }
+    if (/^(?:open|未决)/i.test(status)) { unresolved.push(id); continue; }
+    errors.push(`current CF ${id} status is invalid`);
+  }
+  return { unresolved, errors };
+}
+
 function decisionFreezeModel(value) {
   if (object(value)) return value;
   if (typeof value !== "string") return {};
+  const oi = currentOiFreezeProjection(value);
+  const cf = oi ? currentCfFreezeProjection(value, oi.records) : { unresolved: [], errors: [] };
   const active = value.match(/### M6[\s\S]*?(?=\n### |\n## |$)/i)?.[0] ?? value;
   const status = active.match(/approval_binding\s*(?:status\s*)?(?::|：|已)?\s*([a-z_]+)/i)?.[1]?.toLowerCase() ?? null;
   const confirmationSection = value.match(/##\s*最终确认[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
@@ -567,8 +720,9 @@ function decisionFreezeModel(value) {
     approval_binding: binding,
     final_confirmation: sectionBinding(confirmationSection, confirmationStatus),
     step_11: sectionBinding(step11Section, step11Status),
-    unresolved_direction_questions: unresolved,
-    freeze_packet: { coverage },
+    unresolved_direction_questions: oi ? [...oi.unresolved, ...cf.unresolved] : unresolved,
+    freeze_packet: { coverage: oi?.coverage ?? coverage },
+    _decision_freeze_content_errors: oi ? [...oi.errors, ...cf.errors] : [],
   };
 }
 
@@ -596,7 +750,8 @@ export function validateDecisionFreeze({ decisionLog, material_revision, snapsho
     material_revision: currentMaterialRevision ?? material_revision ?? null,
     snapshot_tree: currentSnapshotTree ?? snapshot_tree ?? null,
   };
-  const errors = [];
+  const errors = Array.isArray(model._decision_freeze_content_errors)
+    ? [...model._decision_freeze_content_errors] : [];
   const binding = freezeSource(model.approval_binding);
   const confirmation = freezeSource(model.final_confirmation ?? model.finalConfirmation);
   const step11 = freezeSource(model.step_11 ?? model.step11);
@@ -6495,12 +6650,9 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
   // owned by the independent merged review and its dispositions.  Only the
   // post build-code profile may use the legacy authenticated source census.
   if (postBuildCode && nonEmptyString(identity?.task_id)) {
-    if (authenticatedSourceCensus?.status !== "present" || !Array.isArray(authenticatedSourceCensus.entries)
-        || authenticatedSourceCensus.entries.length === 0) {
-      errors.push("MATERIAL_INCOMPLETE: authenticated original source census is required for post build-code");
-    } else {
-      const trustedIds = new Set(authenticatedSourceCensus.entries.map((entry) => entry?.id).filter(nonEmptyString));
-      const claimedIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
+    const censusPresent = authenticatedSourceCensus?.status === "present"
+      && Array.isArray(authenticatedSourceCensus.entries);
+    if (censusPresent) {
       for (const error of authenticatedSourceCensus.errors ?? []) {
         errors.push(`MATERIAL_INCOMPLETE: decision-log original source census: ${error}`);
         findings.push(stageAnalyzeFinding({
@@ -6508,6 +6660,12 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
           impact: error, correction: "在当前 decision-log 补齐逐字声明与 R 索引的双向映射，再复查 spec/Phase",
         }));
       }
+    }
+    if (!censusPresent || authenticatedSourceCensus.entries.length === 0) {
+      errors.push("MATERIAL_INCOMPLETE: authenticated original source census is required for post build-code");
+    } else {
+      const trustedIds = new Set(authenticatedSourceCensus.entries.map((entry) => entry?.id).filter(nonEmptyString));
+      const claimedIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
       for (const id of trustedIds) {
         if (claimedIds.has(id)) continue;
         errors.push(`MATERIAL_INCOMPLETE: authenticated original source is absent from analyzer packet: ${id}`);
@@ -8063,8 +8221,13 @@ export function projectPostPhaseAcceptanceExecutionData({ index, phases, spec } 
           continue;
         }
         const tier = taskFieldText(scenario.tier).toLowerCase();
-        if (!["command", "service"].includes(tier)) {
-          errors.push(`${label}.tier must be command or service for a post non-UI acceptance`);
+        if (!["browser", "command", "service"].includes(tier)) {
+          errors.push(`${label}.tier must be browser, command, or service`);
+          continue;
+        }
+        const uiScope = taskFieldText(row.fields.ui_scope).toLowerCase();
+        if (tier === "browser" && uiScope !== "ui") {
+          errors.push(`${label}.ui_scope must be ui for browser acceptance`);
           continue;
         }
         const executionErrors = acceptanceExecutionErrors({ ...scenario, tier }, label);
@@ -8076,12 +8239,12 @@ export function projectPostPhaseAcceptanceExecutionData({ index, phases, spec } 
           task_id: row.task_id,
           phase_id: row.phase_id,
           acceptance_criterion_ids: Object.freeze([...acceptanceCriterionIds]),
-          ui_scope: taskFieldText(row.fields.ui_scope) || "non_ui",
+          ui_scope: tier === "browser" ? uiScope : taskFieldText(row.fields.ui_scope) || "non_ui",
           source: scenario.source.trim(),
           sample: scenario.sample.trim(),
           scenario: scenario.scenario.trim(),
           tier,
-          execution: Object.freeze(structuredClone(scenario.execution)),
+          ...(scenario.execution === undefined ? {} : { execution: Object.freeze(structuredClone(scenario.execution)) }),
         }));
       }
     }
@@ -8182,7 +8345,9 @@ function acceptanceCriterionDispositions(spec) {
   const headingIds = [...listIds, ...headingEntries, ...tableIds];
   const explicitDeferredLabel = /^(?:(?:deferred|延期|不计入|not_applicable)|[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）])$/i;
   const explicitDeferredAnnotation = /^\s*[[(（]\s*(?:deferred|延期|不计入|not_applicable)\s*[\])）](?=$|[\s:：—–-])/i;
-  const explicitMetadata = /(?:^|[\s（(【[])(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
+  // A disposition marker must lead the text immediately after the AC title;
+  // a sentence that merely discusses "status: deferred" remains an active AC.
+  const explicitMetadata = /^\s*(?:[（(【[]\s*)?(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*(?:deferred|延期|不计入|not_applicable)(?=$|[\s）)】\].。,:：，;；—–-])/i;
   const inactiveIds = new Set();
   const deferredIds = new Set();
   for (const [, label, suffix] of listEntries) {
@@ -8191,7 +8356,7 @@ function acceptanceCriterionDispositions(spec) {
     const annotation = suffix.trim().replace(/^[:：—–-]\s*/, "");
     if (explicitDeferredLabel.test(match[2].trim())
       || explicitDeferredAnnotation.test(annotation)
-      || explicitMetadata.test(suffix)) {
+      || explicitMetadata.test(annotation)) {
       inactiveIds.add(match[1]);
       if (!/not_applicable/i.test(match[2])
           && !/(?:status|状态|disposition|处置|scope|计入状态)\s*[:=：]\s*not_applicable\b|^[\s:：—–-]*[[(（]\s*not_applicable\b/i.test(suffix)) deferredIds.add(match[1]);

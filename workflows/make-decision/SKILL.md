@@ -202,6 +202,17 @@ decision and questions to the user.
    dimensions: business goal, flow/surface, data/state, success/failure/
    acceptance, and constraints/non-goals/deferrals. End with a plain-language
    card containing the core requirement, core goal, and selected direction.
+   For a new card, use `skills/decision-log/templates/decision-log-template.md`
+   to write `## 需求变更记录`, `## 原始需求索引`, and
+   `## 逐字声明层（verbatim）` in the same decision-log. Each U block has a
+   `### U-00n` heading and `>` verbatim user quotation; each R index row cites
+   a real U/V ID and a D ID; each V row names `用户` and quotes the original
+   words. Before this writing step is complete, use the existing read-only
+   original-source census: all three sections and U/V/R row shapes parse,
+   `entries.length > 0`, and `errors.length === 0`. Replace template
+   placeholders with real sources; otherwise keep the exact missing-source
+   diagnosis visible. This adds no stage or gate. Do not backfill archived
+   decision logs or treat their census as proof for the new card.
    Before claiming completion, add these two sections to the same
    `decision-log.md`:
 

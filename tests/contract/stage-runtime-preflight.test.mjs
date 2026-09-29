@@ -38,7 +38,6 @@ function preflightServices(overrides = {}) {
   return {
     command: [process.execPath, "-e", "process.exit(0)"],
     paths: [join(ROOT, "tools", "cli", "stage-runtime.mjs")],
-    host_provider: "codex/host",
     route: { providers: ["opencode/reviewer"] },
     packet: { bytes: 128, limit_bytes: 2 * 1024 * 1024 },
     capabilities: { network: "localhost_only", filesystem: "worktree_temp_only", subprocess: "explicit_only" },

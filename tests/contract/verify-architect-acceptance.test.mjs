@@ -40,7 +40,7 @@ describe("verify-code bounded code review", () => {
     expect(steps.indexOf(reviewStep)).toBeLessThan(steps.indexOf(publishStep));
     expect(steps.indexOf(publishStep)).toBeLessThan(repairIndexes[0]);
     expect(repairIndexes[0]).toBeLessThan(repairIndexes[1]);
-    expect(reviewStep.observable_result).toMatch(/OCR.*独立代码审查/);
+    expect(reviewStep.observable_result).toMatch(/OCR.*代码审查/);
     const skill = read("workflows/verify-code/SKILL.md");
     expect(skill).toMatch(/工具 `unavailable` 且零成功审查路时[\s\S]*恰好调用一次[\s\S]*architect-code-review/);
     expect(skill).toMatch(/旧 wh-review\/broker 只读，不充当替代审查/);
@@ -59,7 +59,7 @@ describe("verify-code bounded code review", () => {
     expect(contract).toMatch(/unavailable[\s\S]{0,120}(?:incomplete|缺事实)/i);
     const skill = read("workflows/verify-code/SKILL.md");
     expect(skill).toMatch(/review --action=record` 派发一次 OCR delegation/);
-    expect(skill).toMatch(/当前 diff、完整 AC 文本、真实入口和 `reviewed_execution/);
+    expect(skill).toMatch(/当前 diff、完整 AC 文本和真实入口发起/);
     expect(skill).toMatch(/4\. \*\*正式发布\*\*：[^\n]*`receipts\.quality_review`[^\n]*OCR canonical result_ref、unavailable attempt_ref[^\n]*Architect canonical result_ref[^\n]*`code_review`/);
   });
 

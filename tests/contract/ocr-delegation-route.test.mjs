@@ -167,7 +167,7 @@ describe("OCR delegation public review route", () => {
     writeFileSync(join(packetRoot, "src", "reviewed.mjs"), sourceBytes);
     const snapshotTree = commitSnapshotFile(repo, "src/reviewed.mjs", sourceBytes);
     const sourceBundle = createOcrSourceBundle(root, snapshotTree, { "src/reviewed.mjs": sourceBytes });
-    const request = { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1", host_provider: "codex/luna" };
+    const request = { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1" };
     const trustedContext = trustedOcrContext(root);
     const provider = "kimi/coding";
     const finding = {
@@ -282,13 +282,63 @@ describe("OCR delegation public review route", () => {
       },
     });
     expect(seen).toEqual(providers);
-    expect(result).toMatchObject({ status: "available-with-failures", outcome: "completed", material_id: materialId, minimum_heterologous: 1 });
+    expect(result).toMatchObject({ status: "available-with-failures", outcome: "completed", material_id: materialId });
     expect(result.provider_results.map(({ status }) => status)).toEqual(["failed", "completed"]);
     expect(result.provider_results[0].error.code).toBe("OCR_PROVIDER_EXIT_NONZERO");
     expect(result.provider_results[1].identity).toMatchObject(trustedContext.selection.provider_identities["codex/luna"]);
     expect(result.provider_results[1].evidence_anchor_valid).toEqual([true]);
     expect(result.findings).toHaveLength(1);
     expect(roots.every((path) => !existsSync(path))).toBe(true);
+  });
+
+  it("processes the first provider immediately and later findings incrementally without cancelling siblings", async () => {
+    const { root } = fixture();
+    const packetRoot = join(root, "ocr-direct-first-success-packet");
+    mkdirSync(join(packetRoot, "src"), { recursive: true });
+    const sourceBytes = Buffer.from("export const answer = 42;\n");
+    writeFileSync(join(packetRoot, "src", "reviewed.mjs"), sourceBytes);
+    const providers = ["kimi/coding", "codex/luna"];
+    const trustedContext = trustedOcrContext(root, providers);
+    const cancellationSignals = [];
+    const processed = [];
+    let codexDone = false;
+    const result = await runConfiguredOcrHostReview({
+      request: { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1" },
+      packet: {
+        root: packetRoot, material_id: materialId,
+        preview: { reviewable_files: [{ path: "src/reviewed.mjs" }] },
+        rules: { rules: [{ path: "src/reviewed.mjs", rule: "Inspect code behavior." }] },
+        manifest: [{ path: "src/reviewed.mjs", bytes: sourceBytes.length, sha256: createHash("sha256").update(sourceBytes).digest("hex") }],
+      },
+    }, {
+      trustedContext,
+      providerExecutor: async ({ provider, signal }) => {
+        cancellationSignals.push(signal);
+        if (provider === "kimi/coding") {
+          return { status: "completed", output: directProviderOutput(provider, []) };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        codexDone = true;
+        return { status: "completed", output: directProviderOutput(provider, [{
+          severity: "major", path: "src/reviewed.mjs", line: 1,
+          issue: "The changed export is hard-coded.", root_cause: "The implementation returns a fixed value.",
+          recommendation: "Derive the value from the actual input.", evidence_kind: "direct",
+          evidence: "The source line is `export const answer = 42;`.",
+        }]) };
+      },
+      onProviderResult: ({ provider, result: providerResult, pending_providers }) => {
+        processed.push({ provider, findings: providerResult.findings, pending_providers });
+        if (provider === "kimi/coding") expect(codexDone).toBe(false);
+      },
+    });
+    expect(result).toMatchObject({ status: "available", outcome: "completed", material_id: materialId });
+    expect(result.provider_results.map(({ status }) => status)).toEqual(["completed", "completed"]);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({ provider: "codex/luna", path: "src/reviewed.mjs", line: 1 });
+    expect(processed.map(({ provider }) => provider)).toEqual(["kimi/coding", "codex/luna"]);
+    expect(processed[0]).toMatchObject({ provider: "kimi/coding", findings: [], pending_providers: ["codex/luna"] });
+    expect(processed[1].findings).toHaveLength(1);
+    expect(cancellationSignals.every((signal) => !signal.aborted)).toBe(true);
   });
 
   // Broker request-id drift has no direct-host counterpart; the direct identity

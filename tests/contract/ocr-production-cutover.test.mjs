@@ -97,11 +97,13 @@ describe("OCR production cutover defaults", () => {
     const attachmentRoot = join(state.root, "review-data");
     mkdirSync(attachmentRoot);
     const authenticatedEvidence = {
+      runtime_current_materials: { "decision-log.md": "# Current decision\n" },
+      runtime_implementation_diff: "diff --git a/README.md b/README.md\n+reviewed execution source\n",
       runtime_execution_records: [{ ref: "quality/evidence/stage-quality/build-code/AC-EXE-002.json",
         raw: '{"subject_fact":{"outcome":"unavailable","outcome_reason":"review unavailable"}}' }],
     };
     const request = {
-      stage: "verify-code", subject_kind: "worktree", host_provider: "codex/host",
+      stage: "verify-code", subject_kind: "worktree",
       materials: { changed_files: "README.md", implementation_assessment: "Inspect current execution behavior.",
         test_context: "Focused execution evidence delivery check.", open_risks: "none declared",
         acceptance_criteria: "AC-EXE-002: Preserve the unavailable execution fact for review." },
@@ -109,8 +111,14 @@ describe("OCR production cutover defaults", () => {
     };
     const bundle = prepareTaskBoundBuildCodeReviewBundle({ task: state.task, workspace: openCurrentTaskWorkspace(state.task) }, request,
       { loadConfig: () => ({ attachmentRoot }) });
-    const expectedBytes = authenticatedEvidenceBytes(authenticatedEvidence);
+    const providerEvidence = {
+      runtime_current_materials: { "decision-log.md": { bytes: Buffer.byteLength("# Current decision\n", "utf8"), sha256: createHash("sha256").update("# Current decision\n").digest("hex") } },
+      runtime_implementation_diff: { bytes: Buffer.byteLength("diff --git a/README.md b/README.md\n+reviewed execution source\n", "utf8"), sha256: createHash("sha256").update("diff --git a/README.md b/README.md\n+reviewed execution source\n").digest("hex") },
+      runtime_execution_records: authenticatedEvidence.runtime_execution_records,
+    };
+    const expectedBytes = authenticatedEvidenceBytes(providerEvidence);
     let receivedBytes = null;
+    let receivedCurrentMaterial = null;
     let receivedInstructions = null;
     try {
       expect(bundle.manifest).toContainEqual({ path: "authenticated-evidence.json", bytes: expectedBytes.length,
@@ -127,6 +135,7 @@ describe("OCR production cutover defaults", () => {
           },
           providerExecutor: async ({ cwd }) => {
             receivedBytes = readFileSync(join(cwd, "authenticated-evidence.json"));
+            receivedCurrentMaterial = readFileSync(join(cwd, "context", "current-materials", "decision-log.md"), "utf8");
             receivedInstructions = readFileSync(join(cwd, "review-instructions.md"), "utf8");
             return { status: "completed", output: JSON.stringify({ role: "assistant",
               content: [{ type: "text", text: '{"findings":[]}' }] }) };
@@ -134,6 +143,7 @@ describe("OCR production cutover defaults", () => {
         }),
       });
       expect(receivedBytes).toEqual(expectedBytes);
+      expect(receivedCurrentMaterial).toBe("# Current decision\n");
       expect(receivedInstructions).toContain("compare code/test claims with recorded execution");
       expect(receivedInstructions).toContain("identify false-green behavior");
       expect(result.authenticated_evidence_sha256).toBe(authenticatedEvidenceDigest(authenticatedEvidence));

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { captureGitWorktreeSnapshot, isStageMaterialOnlySnapshotDelta } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { authenticateExecutionConfirmation } from "../../runtime/evidence/freshness.mjs";
 import { handoffDeclaration, readCurrentE2eAcceptanceEvidence, validateAnalyzerBindings } from "../../runtime/stage/stage-runner.mjs";
 import { captureWorkspaceSnapshot } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { deriveNamedStatusRefs, deriveStatusRootCauses, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
@@ -108,6 +109,60 @@ describe("post-cohort runtime material binding", () => {
     const evidence = readCurrentE2eAcceptanceEvidence(ctx);
     expect(evidence).toMatchObject({ required: true, execution: { status: "missing" } });
     expect(evidence.reason).toBeUndefined();
+  });
+
+  it("authenticates verify-code confirmation against the post Phase material scope", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-post-confirmation-")));
+    roots.push(root);
+    const repo = join(root, "repo");
+    const worktree = join(root, "worktree");
+    mkdirSync(repo);
+    git(repo, ["init", "-q", "-b", "main"]);
+    git(repo, ["config", "user.name", "WorkflowHub Tests"]);
+    git(repo, ["config", "user.email", "tests@workflowhub.local"]);
+    git(repo, ["commit", "--allow-empty", "-qm", "baseline"]);
+    git(repo, ["worktree", "add", "-q", "-b", `task/workflowhub/${taskId}-confirmation`, worktree, "main"]);
+    const task = createTask({
+      storageRoot: root,
+      manifest: {
+        schema_version: "1.0.0", project_name: "workflowhub", task_id: `${taskId}-confirmation`,
+        created_at: "2026-09-22T00:00:00.000Z", target_repo_root: repo,
+        workspace_mode: "existing", workspace_root: worktree, activation_cohort: "post",
+        issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+      },
+    });
+    const materialRoot = join(worktree, "specs", task.identity.taskId);
+    mkdirSync(join(materialRoot, "phases"), { recursive: true });
+    writeFileSync(join(materialRoot, "decision-log.md"), "## 任务身份\n\n- **任务类型**：普通任务\n");
+    writeFileSync(join(materialRoot, "spec.md"), "# Spec\n");
+    writeFileSync(join(materialRoot, "phases", "index.md"), "## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n");
+    writeFileSync(join(materialRoot, "phases", "P1.md"), "# Phase P1\n");
+    const workspace = openCurrentTaskWorkspace(task);
+    const kernel = createTaskKernel(task, { workspace });
+    const confirmation = kernel.publishHumanConfirmation("verify-code", {
+      decision: "accepted",
+      subject_ref: "quality/reviews/results/execution-review.json",
+      reply_text: "fixture accepts the current execution scope",
+      step_slug: "run-final-code-check-and-handoff",
+    });
+    const confirmationValue = JSON.parse(task.readRecord(confirmation.ref));
+    const confirmationFact = JSON.parse(task.readRecord(confirmation.quality_fact_ref));
+    expect(confirmationFact.material_scope).toEqual([
+      "decision-log.md", "spec.md", "phases/index.md", "phases/P1.md",
+    ]);
+    expect(() => authenticateExecutionConfirmation(
+      confirmationValue,
+      { ref: confirmation.ref, sha256: confirmation.hash },
+      { ref: confirmationValue.subject_ref },
+      {
+        task_id: task.identity.taskId,
+        material_revision: confirmationValue.material_revision,
+        snapshot_tree: confirmationValue.snapshot_tree,
+        material_scope: confirmationFact.material_scope,
+        material_scope_revision: confirmationFact.material_scope_revision,
+      },
+      (ref) => task.readRecord(ref),
+    )).not.toThrow();
   });
 
   it("reads handoff declarations only from indexed post Phase authorities", () => {

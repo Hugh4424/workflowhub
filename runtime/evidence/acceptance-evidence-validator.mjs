@@ -3,6 +3,7 @@ const GIT_OID = /^[a-f0-9]{40}$/i;
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const EVIDENCE_REF = /^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+const ACCEPTANCE_RESULTS = ["pass", "fail", "inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"];
 
 function validateSummaryAnchor(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an anchor object`);
@@ -28,7 +29,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
   for (const key of Object.keys(value)) if (!["schema_version", "acceptance_criterion_id", "result", "refs", "snapshot_tree", "source_digest", "summary", "freshness"].includes(key)) throw new Error(`${label} has unknown field ${key}`);
   if (value.schema_version !== "acceptance-evidence.v1") throw new Error(`${label} schema_version must be acceptance-evidence.v1`);
   if (typeof value.acceptance_criterion_id !== "string" || !ACCEPTANCE_ID.test(value.acceptance_criterion_id)) throw new Error(`${label} acceptance_criterion_id must be stable and non-empty`);
-  if (!new Set(["pass", "fail", "inconclusive", "deferred"]).has(value.result)) throw new Error(`${label} result must be pass, fail, inconclusive, or deferred`);
+  if (!ACCEPTANCE_RESULTS.includes(value.result)) throw new Error(`${label} result must be one of ${ACCEPTANCE_RESULTS.join(", ")}`);
   if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
   const refs = value.refs.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !SHA256_HEX.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);

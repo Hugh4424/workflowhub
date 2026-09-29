@@ -484,6 +484,7 @@ describe("review record route", () => {
     expect(attempt).toMatchObject({ terminal_status: "unavailable", error: { code: "OCR_INDEPENDENCE_INCOMPLETE" },
       review_policy: { minimum_heterologous: 2 }, coverage: { group_outcome: "partial", valid_provider_count: 1, minimum_required: 2 },
       provider_attempts: [{ status: "completed" }, { status: "failed", error: { code: "AUTHENTICATION_FAILED" } }] });
+    expect(attempt.review_policy).not.toHaveProperty("same_source_exclusions");
     const providerOutput = JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref));
     expect(JSON.parse(providerOutput.content).findings).toHaveLength(1);
     expect(canonical.findings).toEqual([expect.objectContaining({ providers: ["codex/luna"], source_strength: "single_source" })]);
@@ -1881,28 +1882,31 @@ describe("T006 explicit retry and current snapshot semantics", () => {
     expect(denied).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_NOT_ADMITTED" }, retry: { admitted: false } });
   });
 
-  it("requires an explicit retry after a verify-code snapshot moves", async () => {
+  it("reuses the one direct OCR review after verify-code snapshot and material moves", async () => {
     const { task, kernel, candidateWorkspace } = makeTask();
     let calls = 0;
     const runRound = async (input) => {
       calls += 1;
       return { ...baseResult(), stage: "verify-code", findings: [], provider_results: baseResult().provider_results.map((provider) => ({ ...provider, evidence_anchor_valid: [] })), material_id: createSimpleReviewPacket(input).material_id };
     };
-    const firstRequest = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    const firstRequest = { stage: "verify-code", materials: { implementation: "before" } };
     const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
     writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair.mjs"), "export const repaired = true;\n");
-    const blocked = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound });
+    const retried = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request: { ...firstRequest, retry: { requested: "malformed" } },
+      runRound,
+    });
     expect(calls).toBe(1);
-    expect(blocked).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED" } });
-    const retryRequest = { ...firstRequest, materials: { implementation: "after" }, retry: { requested: true, basis: "material_changed", reason: "current code snapshot changed" } };
-    const retried = await recordSimpleReviewRequest({ task, kernel, request: retryRequest, runRound });
-    expect(calls).toBe(2);
-    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { admitted: true } });
-    expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    expect(retried).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused" });
+    expect(retried).not.toHaveProperty("retry");
+    expect(retried.attempt_ref).toBe(first.attempt_ref);
     writeFileSync(join(candidateWorkspace.worktreeRoot, "verify-code-repair-2.mjs"), "export const repairedAgain = true;\n");
-    const blockedAgain = await recordSimpleReviewRequest({ task, kernel, request: { ...firstRequest, materials: { implementation: "third" } }, runRound });
-    expect(calls).toBe(2);
-    expect(blockedAgain).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED" } });
+    const newer = await recordSimpleReviewRequest({ task, kernel, request: { ...firstRequest, materials: { implementation: "third" } }, runRound });
+    expect(calls).toBe(1);
+    expect(newer).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused" });
+    expect(newer.attempt_ref).toBe(retried.attempt_ref);
   });
 });
 

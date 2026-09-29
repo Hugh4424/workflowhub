@@ -127,7 +127,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5134f714f3fb44c471ab1a94aa6070ea5ffab006417b25268b71c2399d5e3bbe
+    local_bundle_hash: a3d0a7a86870c947acb72748ece47c3eaa8951c35feec3996f056b866154bbfd
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -548,7 +548,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: d7a7a0ac7bc7d63d2ba5ea774f0cb902f0ab71e50c8d0d376d5153788d003257
+    local_bundle_hash: 32aa4e6d7f2727faa73e532b0a18d3384005c66794cfb8b3577b478c8658054e
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true

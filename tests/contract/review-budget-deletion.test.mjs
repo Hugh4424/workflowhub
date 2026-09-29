@@ -99,7 +99,7 @@ describe("review budget deletion contract", () => {
     expect(adr).not.toMatch(/`validateReviewBudget`/);
   });
 
-  it("does not auto-dispatch on snapshot-only changes, redispatches changed material, and keeps a judged retry idempotent", async () => {
+  it("does not redispatch identical material, redispatches changed material, and keeps a judged retry idempotent", async () => {
     const state = fixture();
     const baseRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
     let dispatches = 0;
@@ -122,17 +122,12 @@ describe("review budget deletion contract", () => {
       runRound,
     });
 
-    writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "ordinary code snapshot moved\n", "utf8");
-    const snapshotChanged = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
-
     expect(dispatches).toBe(2);
-    for (const value of [repeated, nullRetry, declinedRetry, snapshotChanged]) {
+    for (const value of [repeated, nullRetry, declinedRetry]) {
       expect(value).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref, report_ref: first.report_ref });
     }
     // D-007 with CONTEXT.md:412: changed material must not read back the earlier
-    // review; it dispatches its own canonical attempt. A code-snapshot-only move
-    // of build-code keeps its existing reuse behavior (snapshot currentness is
-    // only a hard guard for the verify-code terminal review).
+    // review; it dispatches its own canonical attempt.
     expect(materialChanged).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
     expect(materialChanged.attempt_ref).not.toBe(first.attempt_ref);
     expect(materialChanged.result_ref).not.toBe(first.result_ref);
@@ -204,31 +199,49 @@ describe("review budget deletion contract", () => {
     expect(idempotentJudgedRetry).toMatchObject({ reused: true, attempt_ref: judgedRetry.attempt_ref, result_ref: judgedRetry.result_ref, report_ref: judgedRetry.report_ref });
   });
 
-  it("requires an explicit judged retry when verify-code moves to a new snapshot", async () => {
+  it("runs direct OCR without host identity or retry controls", async () => {
     const state = fixture();
-    const baseRequest = { stage: "verify-code", host_provider: "codex/luna", materials: { implementation: "verify-before" } };
+    const baseRequest = { stage: "verify-code", materials: { implementation: "verify-before" } };
     let dispatches = 0;
     const runRound = async (input) => {
       dispatches += 1;
+      if (dispatches === 1) {
+        return {
+          status: "unavailable", stage: input.stage, material_id: reviewPacketMaterialId(input),
+          runtime_id: null, outcome: "unavailable", provider_results: [], findings: [],
+          error: { code: "OCR_PROVIDER_UNAVAILABLE", message: "fixture OCR provider unavailable" },
+        };
+      }
       return reviewResult(input);
     };
     const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
-    writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "verify snapshot moved\n", "utf8");
+    expect(first).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", result_ref: null });
+    expect(first).not.toHaveProperty("retry");
+    expect(JSON.parse(state.task.readRecord(first.attempt_ref))).not.toHaveProperty("review_policy");
 
-    const blocked = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
+    const retried = await recordSimpleReviewRequest({
+      task: state.task,
+      kernel: state.kernel,
+      request: { ...baseRequest, host_provider: "legacy/host", retry: { requested: "malformed" } },
+      resolveRouteIdentity: route,
+      runRound,
+    });
     expect(dispatches).toBe(1);
-    expect(blocked).toMatchObject({ status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED" } });
-    expect(blocked).not.toHaveProperty("attempt_ref", expect.stringContaining("quality/reviews/attempts/"));
+    expect(retried).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", result_ref: null });
+    expect(retried).not.toHaveProperty("retry");
+    expect(JSON.parse(state.task.readRecord(retried.attempt_ref))).not.toHaveProperty("review_policy");
+    expect(retried.attempt_ref).toBe(first.attempt_ref);
 
-    const retryRequest = {
-      ...baseRequest,
-      materials: { implementation: "verify-after" },
-      retry: { requested: true, basis: "material_changed", reason: "implementation snapshot changed and needs fresh terminal review" },
-    };
-    const retried = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: retryRequest, resolveRouteIdentity: route, runRound });
-    expect(dispatches).toBe(2);
-    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { requested: true, admitted: true } });
-    expect(retried.attempt_ref).not.toBe(first.attempt_ref);
+    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
+    expect(dispatches).toBe(1);
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: retried.attempt_ref, result_ref: retried.result_ref });
+
+    routeIdentity = null;
+    writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "verify snapshot moved\n", "utf8");
+    const snapshotChanged = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: baseRequest, resolveRouteIdentity: route, runRound });
+    expect(dispatches).toBe(1);
+    expect(snapshotChanged).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", result_ref: null });
+    expect(snapshotChanged.attempt_ref).toBe(retried.attempt_ref);
   });
 
   it("does not re-admit a retry after the current lineage head already consumed it", async () => {

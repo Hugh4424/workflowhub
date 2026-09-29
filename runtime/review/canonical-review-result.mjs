@@ -46,7 +46,7 @@ function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = fal
 // A provider label identifies the configured route, not necessarily the
 // complete member identity. Paired or multi-profile records can legitimately
 // carry the same provider label while differing by role/source/config. Keep
-// retries for the same member collapsible, but never collapse independent
+// retries for the same member collapsible, but never collapse configured
 // members merely because their provider label is equal.
 function reviewMemberKey(item) {
   const identity = item?.identity;
@@ -132,7 +132,7 @@ function clusterRecord(cluster, roleCoverage = []) {
 export function aggregateCanonicalProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [], requireIdentity = false, requireSourceId = false } = {}) {
   if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be positive");
   const priority = new Map(profilePriority.map((provider, index) => [provider, index]));
-  // A configured profile is an independent review member. Do not collapse
+  // A configured profile is a review member. Do not collapse
   // two profiles merely because they use the same CLI adapter; source/profile
   // identity is already carried by `provider` and is part of the contract.
   const byMember = new Map();
