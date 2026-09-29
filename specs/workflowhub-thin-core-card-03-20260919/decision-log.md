@@ -404,7 +404,7 @@ ois:
 - **本卡当前写面**：`specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（本文件，本轮由本子代理直接写入）与 `specs/workflowhub-thin-core-card-03-20260919/design.md`（v4 实施设计书，同目录，由本轮装配产出）；设计书是 build-plan 的输入原料；本阶段唯一必需的产物仍是本文件。另有两处**属于本卡、由另一个子代理执行**的写面——`CONTEXT.md`（T-023=B 的「子代理」权威定义）与 `docs/adr/0034-*.md`（T-025=A 判定要写的新 ADR）。
 - **推迟写面（本卡不做，留给 CARD-04 合并后的 build-plan／build-code）**：`runtime/evidence/**`（`runtime/evidence/quality-fact.mjs:48`、`runtime/evidence/canonical-evidence-validators.mjs:251`／`:322-328`／`:397-399`／`:433`、`runtime/evidence/research-report.mjs:22`、`runtime/evidence/freshness.mjs` 的 `ensureGitSnapshotObjectStore`／`materialRevisionFromValues` import）、`runtime/stage/stage-runner.mjs`、`tools/cli/stage-runtime.mjs`（T-018 的 H-1）。
 - 本卡本轮的改动**全部在已声明写面内**：`specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（本子代理直接写入）、`CONTEXT.md`（T-023=B；由另一个子代理写入）、`docs/adr/0034-subagent-dispatch-and-parallel-rules.md`（T-025=A；同一子代理写入）。实测 `git status --porcelain` ＝ ` M CONTEXT.md`、`?? docs/adr/0034-subagent-dispatch-and-parallel-rules.md`、`?? specs/workflowhub-thin-core-card-03-20260919/`；**「声明不实」的核对即以这一组已声明路径为准**（见第三节），除此之外本轮未改动仓库任何其它文件。
-  - **2026-09-28 更新（step 9 detail-advice 复核 P1-2）**：以上是当轮快照。其后「模板全中文化」「现在全落（16 条提案 22 落点）」与施工表行 43–51／53–67 已全部落盘（含 `AGENTS.md`、`docs/standard-workflow.md`、`workflows/build-code|build-spec`、`runtime/stage/*`、`runtime/task/*`、`skills/*`、`tests/*`），现行写面声明以 `## 决定` 段与 12.5 为准。
+  - **2026-09-28 更新（step 9 detail-advice 复核 P1-2）**：以上是当轮快照。其后「模板全中文化」「现在全落（16 条提案 22 落点）」与施工表行 43–51／53–67：其中行 43、45–51 与 53–67 已落盘；行 44 的 `skills/spec-plan/SKILL.md` 末句未落（同一命题由 `skills/spec-plan/templates/phase-template.md:147`／`:175` 的 `可观察接缝` 字段规范承载）；行 52 按既定口径错开实施（**2026-09-29 一致性复核更正**）。落盘范围含 `AGENTS.md`、`docs/standard-workflow.md`、`workflows/build-code|build-spec`、`runtime/stage/*`、`runtime/task/*`、`skills/*`、`tests/*`），现行写面声明以 `## 决定` 段与 12.5 为准。
 
 ### 七、CARD-04 在研写面撞车实测与本轮核对报告收口（事实登记，不是门禁）
 
@@ -592,7 +592,7 @@ T-013=A 已登记「与 CARD-04 的挂起碰撞由时间错开消解」。本节
 4. **用户「去掉『按真实时长切 Phase』」裁决未独立登记** ⇒ 新增 `T-037`（实质原在 §14.3 I-11 的逐字草案内，`grep` 六个关键词全 0 命中）。
 5. **`A5` §2 的 `X1–X12` 与 §3 的 ①–⑤ 未登记** ⇒ 新增 `T-038`；其中 X6 已被 `design.md` 覆盖、X8 登记未修复（在外部文档内，不在本卡写面）、X9 正是 `T-037` 的来源。
 
-**本节不改任何既有文件、不新增条文、不新增门禁**（SD-17）。施工表行 50／51／52 实测**已设计、未实施**（不是漏记）。
+**本节不改任何既有文件、不新增条文、不新增门禁**（SD-17）。施工表行 50／51／52 实测：行 50（`docs/standard-workflow.md:290-294`）与行 51（`runtime/stage/stage-handlers.mjs:294-295`）**已落地**，行 52 **已设计、未实施**（不是漏记；**2026-09-29 一致性复核更正**）。
 
 **本节亦登记一处不对称**：三份取证报告（`A2-plan-gaps.md`／`A3b-volume.md`／`A5-doc-crosscheck.md`）此前**只被 `design.md` 引用，本文件零引用**——已在 `design.md` §14.14.1 如实登记，不要求补写引用。
 
