@@ -285,10 +285,10 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
-   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，
-   不用「以后再说」这类模糊说法。三词只是同一份真实结果的大白话读法：上面那组机器取值
-   与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值。
-   未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
+   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
+   三词只是同一份真实结果的大白话读法：上面那组机器取值与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值——验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+   既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。
+   本词表只约束人读措辞；`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**。未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
 5. Use the review dependency declared in `skill-deps.yaml` directly for one
    review of the completed Phase. Preserve the actual findings,
    transport status, and provenance;

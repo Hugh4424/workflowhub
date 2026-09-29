@@ -346,8 +346,8 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 
 1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次最终 aggregate，
     逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
-    人读结论仍用三词：**达成／未达成（写明下一步）／退役**（退役＝不再做、已由决定退出，不用「以后再说」类说法）；
-    机器取值域不变——上面这组取值与验收证据的冻结机器取值域都不因三词增删；未达成如实记为未达成，不新增推进前置。
+    人读结论仍用三词：**达成／未达成（写明下一步）／退役**（退役＝不再做、已由决定退出，不用「以后再说」类说法）；机器取值域不变——上面这组取值与验收证据的冻结机器取值域都不因三词增删；验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+    既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。本词表只约束人读措辞：`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**；未达成如实记为未达成，不新增推进前置。
 2. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
     结果；当前 stage 修复实现或事实缺口。
 3. `publish-code-result`：交接实现和完整 build-code 摘要。已有 integration review 原件作为
