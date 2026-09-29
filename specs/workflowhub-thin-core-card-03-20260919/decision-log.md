@@ -687,6 +687,10 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 
 ### 十七、PaperBuilder 事故的机制落地（用户 4 项拍板 + M1–M5；2026-09-29）
 
+**落地层级标注（2026-09-29 加注）**：M1–M5 与 E1–E16 在本卡内为**文本级落地**；这些文本进入 `workflows/**`、`skills/**` 后的实际生效路径由 **build-plan 阶段复核**。
+
+**取证归档（2026-09-29）**：本节所依据的报告类原件已归档进仓，路径 `specs/workflowhub-thin-core-card-03-20260919/evidence/forensics/`（18 份 ＋ `README.md` 索引；每份头部加 3 行来源说明，正文未改）。上文 `/tmp/pb-forensics/**` 是**产出时点路径**，仓内归档副本为可回读的权威来源。
+
 本节登记一次**由外部事故触发的机制修补**；**本节每条都是一次决定**，不是进度。**来源**＝PaperBuilder 事故法证（`/tmp/pb-forensics/`：`proposal.md` 118 行方案本体、`verify-proposal.md` 对抗验证，另有三份根因报告与 `adds.tsv`、`errors.tsv`、`exec.tsv`、`guard-*.txt`、`bloat-and-guard.md`、`coverage-a.md`、`coverage-b.md`、`time-and-process.md` 等只读素材）。**流程**＝方案一轮 + **对抗验证一轮**；验证推翻或修正了方案中的 5 处措辞与前提（`gate_cmd` 的执行点、验收词表其实是机器八值域、M2 的强制半句、计划交付确认点已存在、`plan-eng-review` 的写面与哈希链），下文口径均为修正后的版本。**授权**＝用户在 step 10 对 4 项**直接拍板**（逐字见 17.1）。下文 `file:line` 均为本节落盘后的实读。
 
 #### 17.1 用户 4 项拍板与落地形态
@@ -694,7 +698,7 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 | # | 用户拍板（逐字） | 落地形态（只改文本与既有字段的用法） | 落点 |
 | --- | --- | --- | --- |
 | ① | 「计划交付时"默认继续"改成"必须三选一"」 | 在**既有**确认点的提问话术里写死三选一（①按现有材料把缺口修完再进／②指派缺口负责人后进／③取消本次执行）；未回答＝保持草稿、在本 task 内继续修复，缺的确认事实如实记为缺失，**不阻断**；复用既有 `human-confirmation.v3`，不新增确认点/字段/文件 | `workflows/build-plan/SKILL.md:143-146`；`docs/standard-workflow.md:281-283`。既有确认点（改前行号）＝`workflows/build-plan/steps.json` step 12 `publish-result-and-confirm`（`completion_evidence = confirmation quality/confirmations/<sha256>.json`）、`workflows/build-plan/SKILL.md:133-142`、`docs/standard-workflow.md:273-279` |
-| ② | 「验收词表删掉"以后再说"」 | **只在人读措辞层**立三词：达成／未达成（写明下一步）／退役；并注明机器取值域不变。**未删任何机器取值**：验收证据 `result` 仍是冻结八值（`pass`/`fail`/`inconclusive`/`deferred`/`missing`/`inconsistent`/`incomplete`/`unavailable`），build-code 的 AC 记录仍用 `pass`/`fail`/`unknown`/`deferred`/`not_applicable`；`quality/evidence/acceptance/**` 的 `result` 与决定处置列未动 | `workflows/build-code/SKILL.md:288-291`（2026-09-29 修订：该 4 行**就地重写、行数不变**，补列冻结八值与既有来源）；`docs/standard-workflow.md:349-350`（同批同款补写，**行数不变**；该两行现文含「本词表只约束人读措辞：`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**」）。未改 `runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`（2026-09-29 修订更正：原引 `runtime/schemas/ac-evidence-summary.schema.json` **该路径不存在**，真路径多一层 `review/`；本文件 `:472` 的 `runtime/schemas/skill-catalog.schema.json:17`/`:22` 实测存在，不动） |
+| ② | 「验收词表删掉"以后再说"」 | **只在人读措辞层**立三词：达成／未达成（写明下一步）／退役；并注明机器取值域不变。**未删任何机器取值**：验收证据 `result` 仍是冻结八值（`pass`/`fail`/`inconclusive`/`deferred`/`missing`/`inconsistent`/`incomplete`/`unavailable`），build-code 的 AC 记录仍用 `pass`/`fail`/`unknown`/`deferred`/`not_applicable`；`quality/evidence/acceptance/**` 的 `result` 与决定处置列未动 | `workflows/build-code/SKILL.md:288-291`（2026-09-29 修订：该 4 行**就地重写、行数不变**，补列冻结八值与既有来源）；`docs/standard-workflow.md:349-350`（同批同款补写，**行数不变**；该两行现文含「本词表只约束人读措辞：`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**」）。**八值来源**＝`runtime/evidence/acceptance-evidence-validator.mjs:6`（逐字 `const ACCEPTANCE_RESULTS = ["pass", "fail", "inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"];`）＋ `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（用户 2026-09-23 的冻结裁定，逐字注释「这是本升级的**冻结契约**，实现者不得增删」）；两者**均未改**。（2026-09-29 更正：原把 `runtime/review/schemas/ac-evidence-summary.schema.json:32-33` 与校验器**并列当作八值来源**——该 schema 实测**不是**八值来源：`:32` 的 `result` 只有 5 值、`:33` 的 `leaf_result` 只有 4 值，全文件 `inconsistent` **零命中**；真来源是校验器 `:6` 与上述冻结测试。schema 与校验器的口径不一致属**既存事实**，登记见 §17.5 第 5 条残余风险。） |
 | ③ | 「退役登记加"原本对应哪条需求"一栏」 | 官方作者模板新增 `## 退役登记（retirement）` 段：5 栏＝日期／哪张／为什么退役／谁决定／**原来的需求编号**；退役是一次**决定**、不是进度；「原来的需求编号」缺则写 `unknown`＋原因、不猜 | `skills/decision-log/templates/decision-log-template.md:314-327`；控制面登记 `AGENTS.md:68` |
 | ④ | 「危险操作范围扩到强推/删分支/删任务目录」 | 作为「适用既有 F7 不可逆授权边界」的**范围举例**写入：整树丢弃类动作（`git restore/reset/checkout -- :/`）、delete+add 整体替换权威材料、强推、删分支、删任务目录同属该边界；**未**写成「必须先人工确认才可执行」的新门禁 | `workflows/build-code/SKILL.md:379-383`；边界本体＝`CONSTITUTION.md:56`/`:172`/`:198`、本文件 `:111` R-014②、`design.md:2175` |
 
@@ -726,6 +730,8 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 
 **写面声明补充（本轮新增）**：`workflows/build-plan/SKILL.md` 此前**未**列入 §六写面清单、§12.5 落盘表或 `## 决定` 的已落盘改动面——它只在 T-030 的问答记录里以「删原 `:209-215` 七行字段枚举、文件 20113→20066 字符」的实例出现过（见 `:74`），而 `:424` 另记它在 2026-09-28 时点**不在** CARD-04 的在研写面。⇒ 自本节起，把 `workflows/build-plan/SKILL.md` 补进本卡写面。理由：M1 必须落在**既有确认点**的提问话术上，而该确认点的 SKILL 侧就在这个文件；改动仅 4 行、只加话术，不动字段、流程、确认点或 schema。
 
+**教训登记（本卡，2026-09-29）**：`workflows/build-plan/SKILL.md` 在本轮**第一批落地时未列写面即改**，事后才补进上述写面声明。**来源**＝用户在第 12/13 步未做完时当面质疑「你为什么在修改代码了？」。**规矩写清**：**凡写入面外的文件，必须先把该文件补进写面声明，再动手**——写面声明是动作的**前置**，不是事后补记；事后补记只能收口事实，不能替代前置声明。本卡按此规矩自我更正：本文件与 `design.md` 的后续改动、以及本轮归档目录 `evidence/forensics/` 均**先入写面再落盘**（见 §18 的写面登记）。
+
 #### 17.4 哈希链刷新（与改动同批）
 
 | 登记处 | 改前 | 改后 |
@@ -742,6 +748,7 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 2. 机器取值域**未动**：删 `deferred` 会红 ≥6 个测试文件（用户 2026-09-23 裁定「冻结契约，实现者不得增删」，`tests/contract/acceptance-result-machine-classes.test.mjs:95-99`）；本卡不删、不改。
 3. 退役登记表是本轮唯一的**新表**：已按 `AGENTS.md:68` 登记唯一 owner/consumer/替代关系/删除条件。表格落在**唯一的官方作者模板** `skills/decision-log/templates/decision-log-template.md` 的新节 `## 退役登记（retirement）`（`:314-327`；表头 **5 栏**＝日期／哪张（R/FR/AC/Phase/Task/材料 编号或 ID）／为什么退役／谁决定／原来的需求编号），**未**在本文件、`AGENTS.md` 或任何其它文件另立第二份表头（本文件只登记「谁在什么条件下读它」，不复制表头）。与本文件 `:434` 的关系：`:434` 讲的是 **Step×Executor 矩阵口径不在 decision-log 模板另立一处**（避免同一口径两处权威）；退役登记表是官方模板**自身**新增的一节、且全仓只有这一处，两者**一致**，不是新增第二处。（2026-09-29 修订更正：原句把「官方作者模板」与「decision-log 模板」写成两处而自相矛盾——二者就是同一个文件 `skills/decision-log/templates/decision-log-template.md`。）
 4. **待后续卡/人裁决**：(a) 退役登记目前只依赖 `make-decision` 主会话按模板写入，**没有**任何机器消费点，是否需要机器读数由后续卡决定，本卡不新增；(b) 销毁性动作的执行仍走既有 public runtime 动作，本卡未新增动作；若后续要把「强推/删分支/删任务目录」写进授权清单**枚举**，那属新控制面，须另立登记；(c) M5 在 `runtime/`／`tools/cli/` 内无拦截点（见 17.2 第 5 条的实测及其补全说明），本卡如实记为**纪律条款**；同仓 `workflows/build-code/diff-scanner.mjs:20-29` 的 `C2_IRREVERSIBLE_GIT_RULES` 虽已枚举同类动作，但没有任何运行时代码调用它（唯一调用点即其自带 CLI `:477`），故不构成本卡的机器门禁——残余风险见 17.2 第 5 条末段。
+5. **残余风险（既存不一致，本卡不修，指向后续卡）**：验收证据 `result` 的取值域在**两个既有载体之间口径不一致**——校验器 `runtime/evidence/acceptance-evidence-validator.mjs:6` 是**冻结八值**（`pass`/`fail`/`inconclusive`/`deferred`/`missing`/`inconsistent`/`incomplete`/`unavailable`）；而 `runtime/review/schemas/ac-evidence-summary.schema.json` 的 `criterion.result`（`:32`）只有 **5 值**（`pass`/`fail`/`inconclusive`/`deferred`/`unknown`）、`criterion.leaf_result`（`:33`）只有 **4 值**，`inconsistent` 全文件 **零命中**（另 `criterion.status`（`:34`）为第三套 6 值拼写 `passed`/`failed`/`unknown`/`unavailable`/`incomplete`/`missing`）。**本卡不修**：`runtime/**` 不是本卡写面（见 §六 `:402`/`:404` 与 `## 决定` T-018 的推迟写面登记），且改动取值域会撞用户 2026-09-23 的冻结裁定（`tests/contract/acceptance-result-machine-classes.test.mjs:95-99`）。**登记为事实、指向后续卡（CARD-06 或后续）**：需人裁决「schema 侧补齐到八值」还是「schema 侧按 5/6 值收敛并写明与校验器的映射关系」——两条路都不属本卡。本卡只保证**人读措辞**不引入第三套取值域（见 17.1②、18.1 E13）。
 
 ### 十八、build-plan 防臃肿与执行层防跑偏的落地（E1–E16；2026-09-29）
 
@@ -768,7 +775,7 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 | E15 | `skills/spec-specify/SKILL.md:46` | 选择或保留方案形状前，先用 `simplicity-guard` 核心问题自检（「这一层挣得自己的位置了吗？」「能不能由已有能力承担？」），结论写进既有取舍/非目标文本，不写进新产物 |
 | E16 | `skills/spec-plan/SKILL.md:20` | 每个 Phase 的范围与写入集走同一自检；收缩/退役/复用决定写进该 Phase 既有的非目标行；删除类计数由既有 `plan-eng-review` 读法报告（只报计数，不设配额） |
 
-**行数口径**：除 E14 按其「补一小节」的要求在 `skills/simplicity-guard/SKILL.md` 净增 15 行外，其余 8 个改动文件**净行数 0**（就地改文字，不重排、不改行数结构），既有行号锚点不漂移——E12 引入的 `workflows/build-code/SKILL.md:272-275` 自指因此仍然有效。
+**行数口径**：本提交（`8b452fc0`）**共 12 个改动文件**；除 E14 按其「补一小节」的要求在 `skills/simplicity-guard/SKILL.md` **净增 +15/−0 行**外，其余 **11 个文件净行数 0**（就地改文字，不重排、不改行数结构）——其中 **4 个是哈希/聚合登记文件**（`skills/catalog.yaml`、`skills/decision-log/skill-bundle.json`、`skills/spec-plan/skill-bundle.json`、`skills/spec-specify/skill-bundle.json`），故按「内容文件」口径为 **7 个**。既有行号锚点不漂移——E12 引入的 `workflows/build-code/SKILL.md:272-275` 自指因此仍然有效。复现命令：`git show --numstat 8b452fc0`（实测 12 行文件记录）。（2026-09-29 更正：原写「其余 **8 个**改动文件净行数 0」——该数只覆盖内容文件、且未说明口径，与同一提交实为 12 个文件的事实不符；已按上句改正，未引入新的计数值。）
 
 #### 18.2 哈希链刷新（与改动同批）
 
@@ -788,6 +795,7 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 #### 18.3 验证
 
 - 改前基线（改动前、干净工作区）：`npx --no-install vitest run <32 个相关测试文件>` ⇒ `Test Files 15 failed | 17 passed (32)`、`Tests 38 failed | 352 passed (390)`；证据 `/tmp/pb-land/evidence/baseline.txt` 与失败清单 `baseline-failures.txt`。
+- **基线清单口径补记（独立复核加注）**：上条基线在**落盘口径**上记为 **32 文件**（`Test Files 15 failed | 17 passed (32)`、`Tests 38 failed | 352 passed (390)`），但清单文件 `/tmp/pb-land/evidence/baseline.txt.files` 实测 **33 行**——被静默丢弃的是 `tests/contract/acceptance-result-machine-classes.test.mjs`（该文件 **28 tests 全部通过**；vitest 对不存在的单条路径静默丢弃，成因与本节下条已记的 `tests/contract/` 路径笔误相同）。**独立复核已用 33 文件清单在 parent（`0d7cf4f6`）与 HEAD 两侧各得 `Test Files 15 failed | 18 passed (33)`、`Tests 38 failed | 380 passed (418)`，失败测试名集合双向差集为空** ⇒ 「新增红 0」的结论**不受影响**（两侧同为 15 failed、失败名集合相同，差异只是各多 1 个文件、28 条全绿用例：352＋28＝380、390＋28＝418）。
 - 改后同集合：`Test Files 15 failed | 16 passed`、`Tests 38 failed | 348 passed`；**逐条比对失败测试名集合，双向差集为空**（无新增红、也无意外变绿）。差集比对前的补跑说明：`tests/decision-log-content-contract.test.mjs` 在改后首轮因命令行路径笔误漏跑（误写 `tests/contract/` 前缀，vitest 对单个不匹配路径静默丢弃），已单独补跑 ⇒ `Test Files 1 passed (1)`、`Tests 4 passed (4)`，故 32 文件集合的结论完整。
 - `npm run check:skill-closure` 仍只报**基线同样 3 条**既有红（`build-code: prompt references undeclared skill architect-code-review`、`build-code: forbidden external or user-local skill locator in prompt`、`verify-code: prompt references undeclared skill architect-code-review`），且**没有** `catalog local_bundle_hash does not match resolved bundle`——哈希链与 catalog 一致。
 - `markdownlint-cli2` 对 8 个改动文件报 2 条错（`skills/spec-plan/templates/phase-template.md:12` MD028、`:14` MD032）；把 HEAD 版本单独 lint 报**同样两条** ⇒ 既有错误，非本轮引入（本轮只动该文件 `:34/:39/:43/:185` 四行的行内文字）。`skills/simplicity-guard/SKILL.md` 在 `markdownlint` 忽略表内。
@@ -803,6 +811,12 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 
 1. E1「同一交付物的连续步骤进同一张卡」没有留下可机器判定的下界；是否需要后续卡给出跨 cohort 的读数口径。
 2. E5/E16 读的是既有减法载体与既有 `plan-eng-review` 读数，**没有新机器消费点**；是否需要机器读数由后续卡决定。
+
+#### 18.6 取证归档、本轮更正与写面登记（2026-09-29）
+
+- **取证归档（指针）**：本节与 §十七 所依据的报告类原件已归档进仓：`specs/workflowhub-thin-core-card-03-20260919/evidence/forensics/`（**18 份报告 `.md`（合计 247,909 字节）＋ `README.md` 索引**；每份头部加 3 行来源说明「产出／时间／支撑哪条结论」，正文未改）。原件产出路径＝`/tmp/pb-forensics/*.md`（12 份）、`/tmp/pb-audit/*.md`（4 份）、`/tmp/pb-replay/*.md`（1 份）、`/tmp/pb-land/landing-brief.md`（1 份）。归档**只收报告类 `.md`**，不收 `.tsv`／`.py`／中间数据。目录名取 `evidence/forensics/` 而非回退名 `evidence/paperbuilder-forensics/`：本卡 `specs/<card>/` 内**没有**既有 §14 系列证据目录（本卡证据在 Knowledge 任务根 `quality/evidence/**` 与 `/tmp/pb-land/evidence/**`），二者不冲突；`tools/cli/check-task-record-paths.mjs` 校验的是生产模块的直接文件系统写入者与 `specs` 字面派生，**不校验 `specs/<task-id>/` 的子目录名**——两个回退条件均未触发；仓内已有 `specs/<task-id>/evidence/` 先例（`specs/workflowhub-ui-frontend-capability-20260904/evidence/`）。
+- **本轮更正登记（文字级，不改任何机制、字段或门禁）**：①`#### 18.1` 原写「其余 **8 个**改动文件净行数 0」不实（`8b452fc0` 实为 **12 个文件**），已按 `git show --numstat 8b452fc0` 实读改成「12 个文件 ／ 除 `skills/simplicity-guard/SKILL.md`（+15/−0）外其余 **11 个**净 0 行 ／ 其中 **4 个**为哈希与聚合登记文件 ⇒ 内容文件口径 **7 个**」；②`#### 18.3` 补记基线清单的 **32 vs 33 文件**口径差（被静默丢弃的是 `tests/contract/acceptance-result-machine-classes.test.mjs`，28 tests 全绿）与独立复核用 33 文件清单在 parent（`0d7cf4f6`）与 HEAD 两侧的同结论实测；③§十七 17.1② 更正八值来源引证、§17.5 新增第 5 条残余风险（schema 5/6 值 vs 校验器 8 值的**既存**不一致，本卡不修、指向 CARD-06 或后续）；④§17.3 新增教训登记（写入面外的文件须先补写面声明再动手）。四项**均为文字级**：不新增门禁／字段／schema／确认点／阈值，不改任何机器取值域。
+- **写面登记（本轮）**：`specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（本文件）、同目录 `design.md`、**新增** `specs/workflowhub-thin-core-card-03-20260919/evidence/forensics/**`（18 份报告副本 ＋ `README.md`）。三者**先入写面再落盘**，遵守 §17.3 新立的教训规矩。除上述三处外本轮未改仓库任何其它文件；未触碰 `runtime/**`、`tools/**`、`CONSTITUTION.md`、`specs/archive/**`；未 push。
 
 ## 收敛检查
 

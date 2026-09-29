@@ -3421,6 +3421,8 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 
 **来源与流程**：PaperBuilder 事故法证（`/tmp/pb-forensics/`：`proposal.md` 方案本体、`verify-proposal.md` 对抗验证，加三份根因报告与只读素材）。方案一轮＋**对抗验证一轮**；验证推翻/修正了 5 处措辞与前提（`gate_cmd` 执行点、验收词表实为机器八值域、M2 的强制半句、计划交付确认点已存在、`plan-eng-review` 写面与哈希链）。**本节是设计陈述；决定登记在 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md` 的 `### 十七`**（含用户 4 项拍板逐字与哈希前后值）。
 
+**落地层级标注（2026-09-29 加注）**：M1–M5 与 E1–E16 在本卡内为**文本级落地**；这些文本进入 `workflows/**`、`skills/**` 后的实际生效路径由 **build-plan 阶段复核**。
+
 ### §15.1 设计原则（三条；违反任一条即回退重写）
 
 1. **只加人读措辞与执行纪律，不加机器门禁**：SD-17 的零阻断立场不变（`decision-log.md:111`）；每条都自述「不是新的 stage、gate 或质量结论」。
