@@ -8,14 +8,14 @@
 
 - 任务：`workflowhub-thin-core-card-03-20260919`（make-decision 阶段模块级设计）
 - 工作根（本文件所有相对路径的基准）：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919`
-- 参照树（只读）：主树 `/Users/Hugh/Hugh/Project/workflowhub`、CARD-04 worktree `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`
+- 参照树（只读）：主树 `/Users/Hugh/Hugh/Project/workflowhub`；CARD-04 材料改引归档 `specs/archive/workflowhub-thin-core-card-04-20260919/`（**2026-09-29 复核更正**：原列 CARD-04 worktree `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919` 为参照树，实测该目录整体已删除，改引本 worktree 内的归档副本）
 - 输入：`/tmp/wh-card03-design/A-rootcause.md`（根因账本 R1–R14）、`B-buildplan-artifacts.md`（材料解剖与缺口 G-1…G-9、契约测试约束）、`C-progress-authority.md`（进度载体与硬约束）、`D-constraints.md`（63 条硬约束、53 条已否决做法、14 处材料矛盾、写面撞车）、`E-s0921b.md`（776 行，**已到货**：card-02 的 verify-code 会话审计，§1.E 专门并入）。初始 `ls` 时 E 不存在，后续由父 agent 补入。
 - 本文件所写行号均为本次打开文件核对过；凡未复核者在原处标注「未核」。
 
 **引用约定（v2 新增，对应 F9.9 与 F9.2）**——一次性声明，后文不再重复解释：
 
 1. **基准**：所有仓库相对路径的基准是上面第 2 行的「工作根」。每个 `路径:行号` 都可在该 worktree 上用 `sed -n 'Np' <路径>` 复核；本文件不写未核过的仓库行号。
-2. **跨 worktree 的引用必须带全路径**：凡引用 CARD-04 的材料，一律写成 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/…`（§2 开头、§6.1 #12、§6.2 均已如此标注）。
+2. **跨 worktree 的引用必须带全路径**：凡引用 CARD-04 的材料，一律写成 `specs/archive/workflowhub-thin-core-card-04-20260919/…`（§2 开头、§6.1 #12、§6.2 均已如此标注。**2026-09-29 复核更正**：原例 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919/…` 所在的 worktree 目录整体已删除，CARD-04 材料现归档于本 worktree 的 `specs/archive/` 下）。
 3. **三处不可从本 worktree 解析的引用（如实登记，不假装可核）**：
    - `/tmp/wh-card03-session-analysis/s0922a.md`、`s0922b.md`、`talk-decision-record.md` —— 是**审计用的会话分析原稿**（仓库外、MB 级、本卡明令不读）。它们的行号**未经本卡复核**，全文件只作为「审计推断值的出处」出现，数字一律带「推断值，不作为验收指标」。
    - `handoff-build-code-1a409534.md` —— E 会话**运行期生成的 handoff 产物**，在本 worktree 里**不存在**（实测 `find` 无命中）。全文件只在一处作为「跨段重读」的现象例证，不作为可核引用。
@@ -560,7 +560,7 @@ node --test tests/skill-provenance-strict.test.mjs
 ## §3 `phases/P<n>.md` 节结构（重心）：让子代理只读这一个文件就知道"每个 phase 要什么、每个 task 做什么、做到什么算完"
 > 本节经 V3-P1 修订：F-1 三条不成立（见 §3.10）；改动落在 phase 模板尾注 3 行、`skills/spec-plan/SKILL.md:14` 末 1 句、`workflows/build-plan/SKILL.md:198` 之后 3 行。补丁全文：`/tmp/wh-card03-design/V3-P1.md`。
 
-> 落点文件：`skills/spec-plan/templates/phase-template.md`（**56 行**，本轮逐行核对；下文全部行号都是它的行号）。契约测试行号引自 `/tmp/wh-card03-design/NOTES-design-extract.md` §2（B §4 逐字）。
+> 落点文件：`skills/spec-plan/templates/phase-template.md`（**56 行**，本轮逐行核对；下文全部行号都是它的行号）。**2026-09-29 复核更正**：该模板经 `5202828a` 中文化重写后现为 **217 行 / 20694 B**，本行与 §3 全文中该模板的行号均属改写前的 56 行版本，行号复核见 §14.1 的「锚点复核更正」。契约测试行号引自 `/tmp/wh-card03-design/NOTES-design-extract.md` §2（B §4 逐字）。
 > **总原则（v2 定稿，按 D-FIELD=A 收紧）**：模板里已有的 38 个字段**一个都不改名**（改名会打断 `tests/contract/post-cohort-executable-authoring.test.mjs:29-33` 的 12 个 `toContain` 与 `tests/contract/spec-stage-artifact-closure.test.mjs:73-77` 的 5 个正则）；本设计只做**两件事**——**在头部/L1 新增 4 个字段**、**在尾注补一句回报形状**。v1 另外主张的 7 个字段（`Phase goal` / `Delta vs other Phases` / `Global goal pointer` / `Execution waves` / `Critical path` / `Entry conditions` / Task 卡 `Goal`）与 1 处 `Action` 措辞收紧**全部删除**，逐条理由见 §3.2。✅ 全文只出现这 4 个新增字段名。
 
 ### §3.0 用户五问的落点（v2 定稿）
@@ -591,7 +591,7 @@ node --test tests/skill-provenance-strict.test.mjs
 
 ### §3.2 为什么不加那 7 个字段（D-FIELD=A 的落点，逐条给依据）
 
-v1 主张「在 L0/L1/头部新增 10 个字段 + 收紧 1 处措辞」。逐行核对 `skills/spec-plan/templates/phase-template.md`（**56 行**）后，其中 7 个新增字段与 1 处收紧**在模板里已经有同义承载**；再加就是第二份会漂移的清单（用户抱怨的正是这类漂移），因此**全部删除**：
+v1 主张「在 L0/L1/头部新增 10 个字段 + 收紧 1 处措辞」。逐行核对 `skills/spec-plan/templates/phase-template.md`（**56 行**；**2026-09-29 复核更正**：该模板现为 **217 行**）后，其中 7 个新增字段与 1 处收紧**在模板里已经有同义承载**；再加就是第二份会漂移的清单（用户抱怨的正是这类漂移），因此**全部删除**：
 
 | v1 主张的字段 | 为什么删（模板里已有的同义承载，逐字） |
 | --- | --- |
@@ -749,7 +749,7 @@ node --test tests/contract/ui-stage-integration.test.mjs
 
 **`tests/contract/material-producer-consumer-roundtrip.test.mjs:17` 的 120 字符窗口：本会话 python 实测**
 
-对**当前** `skills/spec-plan/templates/phase-template.md`（实测 4874 字符 / 56 行）复算：`L0` 首次出现在字符偏移 **323**（`## L0 — Outcome and delta`，第 8 行），其后首个 `Goal`/`目标`（大小写不敏感）在偏移 **433**（第 10 行 `Point to the global goal`）。⇒ 两点距离 = **110** 字符；`[\s\S]{0,120}` 量词实际消费 **108** 字符；整条正则的匹配跨度 = **114** 字符。窗口上限 **120** ⇒ 余量 **10**（按两点距离）/ **12**（按量词预算）/ **6**（按整段匹配跨度）。**结论：不得在 `## L0` 与首个 `Goal`/`目标` 这两点之间插入任何字符。**
+对当时（`5202828a` 改写前）的 `skills/spec-plan/templates/phase-template.md`（实测 4874 字符 / 56 行；**2026-09-29 复核更正**：该模板现为 **20694 B / 217 行**，本段复算对应 56 行版本）复算：`L0` 首次出现在字符偏移 **323**（`## L0 — Outcome and delta`，第 8 行），其后首个 `Goal`/`目标`（大小写不敏感）在偏移 **433**（第 10 行 `Point to the global goal`）。⇒ 两点距离 = **110** 字符；`[\s\S]{0,120}` 量词实际消费 **108** 字符；整条正则的匹配跨度 = **114** 字符。窗口上限 **120** ⇒ 余量 **10**（按两点距离）/ **12**（按量词预算）/ **6**（按整段匹配跨度）。**结论：不得在 `## L0` 与首个 `Goal`/`目标` 这两点之间插入任何字符。**
 
 插在这两点**之外**不受影响，因为正则取的是**首次**匹配，且两点同步平移不改变它们的相对距离：插在 `L0` 之前（如头部 `:6` 之后的 `Progress cursor`）与插在首个 `goal` 之后（如 `## L1` `:15` 之后的 `Carry-over from spec`、`:17` 之后的 `Read set / first look`、`:21` 之后的 `Acceptance inline`）**均不影响**该窗口。**对本卡的结论**：P1 补丁要求新增的 `Progress cursor` 与 `Carry-over from spec` 都不落在该窗口内；P1-3 追加的那 1 空行 + 3 行「字段层级取法」落在**尾注之后**（尾注在模板第 50–52 行，首个 `goal` 在第 10 行），同样不触碰该窗口——**它没有落在 `L0` 与 `goal` 之间**。
 
@@ -876,7 +876,7 @@ C 的事实（`/tmp/wh-card03-design/NOTES-design-extract.md:135`）：card-03 w
 **本设计的处置（三条，全部是"加指针"而不是"加规则"）**：
 
 1. **不删、不改、不动它们**。历史已经证明删除不可持续（上面两个提交号），而"删除文件"本身也不是本项目规则体系里的动作。它们是别的任务的产物，删了就是改别的任务的状态。
-2. **把唯一权威做成"一跳可达"**：`phases/P<n>.md` 头部新增 `Progress cursor`（§3.1 逐字草案，值逐字 `facts.jsonl#build-code.phase_progress`），并**在 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md`（本卡新建的未跟踪文件，`git -C <card-03 worktree> status --porcelain` 实测 `?? docs/adr/0034-subagent-dispatch-and-parallel-rules.md`，12834 B）里增加一条**派发约定**：
+2. **把唯一权威做成"一跳可达"**：`phases/P<n>.md` 头部新增 `Progress cursor`（§3.1 逐字草案，值逐字 `facts.jsonl#build-code.phase_progress`），并**在 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md`（本卡新建的文件，12834 B。**2026-09-29 复核更正**：原记「未跟踪」并引 `git -C <card-03 worktree> status --porcelain` 实测 `?? docs/adr/0034-subagent-dispatch-and-parallel-rules.md` 为据，该断言不成立——该文件现已被 git 跟踪，首次提交 `8112a546`、末次 `2bca3411`）里增加一条**派发约定**：
    ```
    Progress a subagent may trust: the `phase_progress` cursor and `identity.material_revision` from a build-code `status --action=begin` call, plus the task facts it is pointed at. Zero-argument prose at the worktree root (progress notes, handoffs, active-plan markers) belongs to other tasks and is not progress for this one.
    ```
@@ -1069,7 +1069,7 @@ node --test tests/workflow-v2-contract.test.mjs
 
 （`AGENTS.md:21-22`：只跑受影响的针对性测试；禁止顺手跑全量回归。上表逐条对应的断言见 §5.3。）
 
-**v2 删掉的三条命令**（F9.1：**它们指向的文件在本卡 worktree 上不存在**）：`tests/contract/build-code-resume-cursor.test.mjs`、`tests/unit/phase-progress-cursor.test.mjs`、`tests/contract/interaction-contract.test.mjs`；同时删掉 v1 曾列的 `tests/contract/portable-workflow-run.test.mjs`（该文件整篇是 CARD-01 的 build-prd 运行器，与本节改动无关，见 §5.3 的"v1 引错"行）与 `tests/contract/review-step-forward-progress.test.mjs`。（`tests/contract/build-code-test-inventory.test.mjs` 原记「**只在 CARD-04 worktree 里、且未被 git 跟踪**，主树与本卡 worktree 都没有——所以它也不能进本卡的命令清单」。**2026-09-29 复核更正**：该断言不成立——card-04 的 `34b968c3` 已并入 main（`git merge-base --is-ancestor 34b968c3 HEAD` = YES），该文件实测在**主树与本卡 worktree 内且已被 git 跟踪**（129 行 / 6988 B），CARD-04 worktree 目录本身已不存在；「不进本卡命令清单」的处置保持不变，但其**原来那条理由已随合并失效**，是否仍排除该测试需另行判断。）
+**v2 删掉的三条命令**（F9.1：**它们指向的文件在本卡 worktree 上不存在**）：`tests/contract/build-code-resume-cursor.test.mjs`、`tests/unit/phase-progress-cursor.test.mjs`、`tests/contract/interaction-contract.test.mjs`；同时删掉 v1 曾列的 `tests/contract/portable-workflow-run.test.mjs`（该文件整篇是 CARD-01 的 build-prd 运行器，与本节改动无关，见 §5.3 的"v1 引错"行）与 `tests/contract/review-step-forward-progress.test.mjs`。（`tests/contract/build-code-test-inventory.test.mjs` 原记「**只在 CARD-04 worktree 里、且未被 git 跟踪**，主树与本卡 worktree 都没有——所以它也不能进本卡的命令清单」。**2026-09-29 复核更正**：该断言不成立——card-04 的 `34b968c3` 已并入 main（`git merge-base --is-ancestor 34b968c3 HEAD` = YES），该文件实测在**主树与本卡 worktree 内且已被 git 跟踪**（129 行 / 6988 B），CARD-04 worktree 目录本身已不存在；该文件现存在于本卡 worktree（6988 B / 129 行，末次提交 `34b968c3`，是本卡祖先），原记理由「本卡 worktree 无此文件」已于 2026-09-29 复核证伪；「不进本卡命令清单」的处置保持不变，**是否纳入本卡命令清单待 build-plan 决定，本卡暂未纳入**。）
 
 #### §5.5.1 改动前就已经红的两条：**既有红，非本卡引入**（F5.2，必须就地登记）
 
@@ -1330,7 +1330,7 @@ node --test tests/workflow-v2-contract.test.mjs
 
 **行号稳定（可安全用行号辅助定位的三处）**：`runtime/task/task-store.mjs`、`AGENTS.md`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json` **不在** CARD-04 写面 ⇒ 行号稳定。
 
-**新增文件处置（沿用 §6.4 原文）**：本设计**不新建任何生产文件**；唯一新文件 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md` 已在 card-03 worktree 未跟踪，只往里加一节（T-025=A）。q7_3 的 `docs/archive/retired-root-progress/` 由 `git mv` 产生，不是新写的生产文件。
+**新增文件处置（沿用 §6.4 原文）**：本设计**不新建任何生产文件**；唯一新文件 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md` 已在 card-03 worktree 并被 git 跟踪（**2026-09-29 复核更正**：原记「未跟踪」不成立，首次提交 `8112a546`），只往里加一节（T-025=A）。q7_3 的 `docs/archive/retired-root-progress/` 由 `git mv` 产生，不是新写的生产文件。
 
 ---
 
@@ -1483,7 +1483,7 @@ node --test tests/workflow-v2-contract.test.mjs
 
 ### §7-2 `Acceptance inline` 到底内联到什么程度？（这是 G-7「每次回读 149KB spec」的解法边界）
 
-**问题（大白话）**：CARD-04 那份 `spec.md` 有 149,322 B / 634 行（**跨 worktree 引用**：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919` 的 `specs/<card-04-task-id>/spec.md`），验收正文全在 `Appendix A`（从 `:503` 起），测试时每次回读很贵。phase 文件里要不要把验收判据抄一份？
+**问题（大白话）**：CARD-04 那份 `spec.md` 有 149,322 B / 634 行（**跨 worktree 引用**：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919` 的 `specs/<card-04-task-id>/spec.md`；**2026-09-29 复核更正**：该 worktree 目录整体已删除，CARD-04 材料改引归档 `specs/archive/workflowhub-thin-core-card-04-20260919/`，归档副本为更晚版本（实测 179416 B / 676 行），故此处 149,322 B / 634 行是当时实测值、现已不可复核），验收正文全在 `Appendix A`（从 `:503` 起），测试时每次回读很贵。phase 文件里要不要把验收判据抄一份？
 
 - **选项 A（推荐）**：只内联**引用行**——`AC-ID | oracle ID | 证据类型 | spec.md 锚`，判据正文仍只在 `Appendix A`。含义：拿到 AC ID 就能定位，不再全文回读，同时"唯一权威"不动。后果：G-7 的成本从"读 149KB"降到"读一行"。风险：锚点写错时子代理要回去找（一行锚点比整份 spec 便宜得多）。
 - **选项 B**：连 `通过：`/`失败：` 判据正文一起内联。含义：phase 文件自足。后果：完全不用回读 spec。风险：**同一判据出现两份副本**，一旦不同步就是新的矛盾源，且与"所有可判定验收正文只在 `Appendix A`"（`skills/spec-specify/templates/spec-template.md:7-8`）冲突。
@@ -1600,7 +1600,7 @@ node --test tests/workflow-v2-contract.test.mjs
 | **F5.5** | `:1026-1030`（新增 §5.5.3） | 保留不确定项，逐字写「**未跑测试故不能断言不红**」：`tests/step-manifest.test.mjs` 可能对 `observable_result` 做形状/词汇级校验 | `verify-progress-shipped.md` §5 不确定项第 1 条；FIX-LIST F5.5 |
 | **F6.1** | `:1069-1090`（§6.3 全表重排）；`:1071`（口径说明）；`:1079`（S 批）；`:1087`（唯一串行硬约束） | **消掉 v1 §6.3 的自相矛盾**（批 A 写「与 B/C/D 并行」、批 B 写「与 A/C/D 并行」，而硬约束又要求对 `skills/catalog.yaml` 串行）。重排后：A（`skills/spec-plan/**`）与 B（`skills/spec-specify/**`）**可并行**；**新拆出独占批 S ＝ 只改 `skills/catalog.yaml`**，回填 `:335`（spec-plan）与 `:286`（spec-specify）两处 `local_bundle_hash`，**S 必须串行于 A 与 B 都定稿之后**；表格每一行都逐条写明「与哪批可并行／与哪批必须串行」。依据：`skills/catalog.yaml:283-288`（`- name: spec-specify`，`:286` 哈希）与 `:332-337`（`- name: spec-plan`，`:335` 哈希）**同在一个文件**，v1 只把它归 A 批 | `skills/catalog.yaml:283-288`、`:332-337`（本卡 worktree 实测）；FIX-LIST F6.1 |
 | **F6.2** | `:1059`（§6.1 表新增第 21 行） | 补进逐条表：`CONTEXT.md` —— v1 自称「每一个文件（逐条）」却漏了它。实测 `git diff --numstat -- CONTEXT.md` = `11	0	CONTEXT.md`（**+11 行**），`git status --porcelain` = ` M CONTEXT.md`（已在 card-03 worktree 内改） | 本卡 worktree 实测；FIX-LIST F6.2 |
-| **F6.3** | `:1033-1060`（§6.1 表 #1–#20 保留）；`:1061-1068`（§6.2 结论 + 对账）；`:694`（§3.8 的 13/13 之外那处） | 保留已核实正确的部分：§6.2 实测 14 个已跟踪文件与各 `+N` 逐条一致；§6.1 #1–#13 **全部在 CARD-04 写面之外（13/13 实测）**；#11 判据 `?? docs/adr/0034-subagent-dispatch-and-parallel-rules.md`（12834 B）✓；#12 判据 `tests/contract/build-code-test-inventory.test.mjs` 主树与 card-03 **均不存在**、card-04 存在且未跟踪 ✓；实测**两棵树 worktree 重叠文件 = 0** | `verify-steps-and-collision.md` B6–B9；FIX-LIST F6.3 |
+| **F6.3** | `:1033-1060`（§6.1 表 #1–#20 保留）；`:1061-1068`（§6.2 结论 + 对账）；`:694`（§3.8 的 13/13 之外那处） | 保留已核实正确的部分：§6.2 实测 14 个已跟踪文件与各 `+N` 逐条一致；§6.1 #1–#13 **全部在 CARD-04 写面之外（13/13 实测）**；#11 判据 `?? docs/adr/0034-subagent-dispatch-and-parallel-rules.md`（12834 B）**2026-09-29 复核更正：该文件现已被 git 跟踪，原 `??` 状态不成立**；#12 判据 `tests/contract/build-code-test-inventory.test.mjs` 主树与 card-03 **均不存在**、card-04 存在且未跟踪（**2026-09-29 复核更正：该断言已被实测证伪**——该文件现存在于主树与本卡 worktree 且已被 git 跟踪（129 行 / 6988 B，末次提交 `34b968c3`），CARD-04 worktree 目录整体已删除，材料归档于 `specs/archive/workflowhub-thin-core-card-04-20260919/`）；实测**两棵树 worktree 重叠文件 = 0** | `verify-steps-and-collision.md` B6–B9；FIX-LIST F6.3 |
 | **F6.4** | `:1052`（§6.1 #14 的漂移提醒）；`:1053-1055`（#15）；`:1062`（§6.2 口径对账） | 保留两条保守判断，并补**合并后行号漂移**提醒：#14 的落地目标是 `workflows/build-code/SKILL.md:203-208`，CARD-04 插在旧 `:100` 之后（`@@ -98,6 +98,30 @@`，净增 24 行）⇒ 合并后 ≈ `:227-232`、被引用的 `:245-250` ≈ `:269-274`，**冻结候选不得写死行号**；#15 的 `workflows/verify-code/SKILL.md:108`/`:143` 未被 CARD-04 纯增 hunk 覆盖，**但合并后行号会漂移为 `:135`/`:170`**。另补两套口径的对账（「13 处重叠」= 文件级、14 = CARD-04 单侧改动面） | `verify-steps-and-collision.md` B6–B9 末段；FIX-LIST F6.4 |
 | **F6.5** | `:1075`（§6.3 表头）；`:917`（§4.12 验证命令）；`:735`（§3.9 验证命令） | §6 的验证命令一律按「**只跑受影响的针对性测试、禁止全量回归**」写（逐字引 `AGENTS.md:21-22`） | `AGENTS.md:21-22`；FIX-LIST F6.5 |
 | **F7.1** | `:1100-1108`（新增 §7.0） | 把 v1 六个决策点里**两个已被实测答案消解**的摘出：第 2 条（11 个还是 5 个字段）＝**已裁决 4 个**（D-FIELD=A）；第 4 条（一条命令答四问）＝**机制已发货，只能做「读一次 + index 行数」这一档**（§4.6）。两条都写明「不再问用户」并给依据行号 | FIX-LIST F7.1；`design-blue-conflicts.md` A.1；`verify-progress-shipped.md` §2 | 
@@ -1844,7 +1844,7 @@ node --test tests/workflow-v2-contract.test.mjs
 
 ## 第四节：`docs/standard-workflow.md` 的落点判定
 
-**判定：不需要方法正文落点（零新增行）。** 该文件 402 行，`grep -n "子代理\|派发\|并行\|工头"` **零命中**（M1 实测，本件复核同一区间）；最近的候选锚点是 `docs/standard-workflow.md:64` `### 执行 step`、`:81` `### review、测试和成本`、`:94` `### stage 结束`（无一个承载派发语义）。
+**判定：不需要方法正文落点（零新增行）。** 该文件 402 行（**2026-09-29 复核更正**：`docs/standard-workflow.md` 现为 **450 行**），`grep -n "子代理\|派发\|并行\|工头"` **零命中**（M1 实测，本件复核同一区间）；最近的候选锚点是 `docs/standard-workflow.md:64` `### 执行 step`、`:81` `### review、测试和成本`、`:94` `### stage 结束`（无一个承载派发语义）。
 **理由（逐条）**：
 1. 正文权威已经足量且已冻结：条款 1–9 的正文在 `docs/adr/0034-subagent-dispatch-and-parallel-rules.md:51-105`（决定十条）＋`AGENTS.md` 条②（`DESIGN-v3.md:71/75/78-81` 已把条款 7/9 的正文与引用句冻结，落点就在 `AGENTS.md:15` 与 `:16` 之间）＋`CONTEXT.md:455-464`（术语与产出契约）。再写一处＝第四套权威，正是 `docs/adr/0034-…:124-126` 明确否决的「同一判据两处权威」。
 2. `docs/standard-workflow.md:88-92` 是禁区（五行为 `没有真实主题变化，不重复全文读取、测试、review 或 analyzer。…不改变 provider status 的运行时所有权。`；`specs/workflowhub-thin-core-card-03-20260919/decision-log.md:35` 第 (3) 条明令，`DESIGN-v3.md:121` 复述），且 `:92` 之后的新增行已由 `DESIGN-v3.md:121/122`（R3）、`:196`（R8）、`:246`（R11）、`:394`（R15）排定；再插一条会形成第六处同位置文本（M3 §12.2 已主动撤回它把条款 7 落进该文件的提议）。
@@ -1875,7 +1875,7 @@ node --test tests/workflow-v2-contract.test.mjs
 9. **build-prd 的恢复条件未验证**：字段 6 的「提升为正式 stage」路径是推理，未实跑 `config/workflowhub.yaml` 的 consumer 与两条断言的联动态。**需要怎么测**：仅在该决定真的要做时，跑【build-prd】组的两个文件。
 
 ## §12 验收载体与丢失落点回填（V4-D 原始交付，附录）
-**性质**：填充件（不是判定书）。对象＝`/tmp/wh-card03-design/DESIGN-v3.md`（1368 行）+ `V4-M4.md`（216 行）；权威＝`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（474 行）。本次只读，未改任何仓库文件、未跑测试、未做 git 写。§2.6 与 §1.2 给出可直接粘贴的逐字块；每条回填都带授权来源，无授权的不写。
+**性质**：填充件（不是判定书）。对象＝`/tmp/wh-card03-design/DESIGN-v3.md`（1368 行）+ `V4-M4.md`（216 行）；权威＝`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（474 行；**2026-09-29 复核更正**：现为 **747 行**）。本次只读，未改任何仓库文件、未跑测试、未做 git 写。§2.6 与 §1.2 给出可直接粘贴的逐字块；每条回填都带授权来源，无授权的不写。
 
 ## 0. 三条口径（后面所有处置都按它判）
 - **处置列只描述执行时序，不描述归属**：`V4-M4.md:32-34` 逐字定义——「本卡内做」＝「按 §6.3 的批次直接写，**无需等待任何合并**」；「错开实施」＝「该落点所在文件在 CARD-04 写面内，但……**仍属本卡交付**（**不是**排除），在 CARD-04 分支合并进 main **之后**执行」。
@@ -2177,7 +2177,7 @@ Dispatch discipline and the subagent output contract (write artifacts before ret
 - **§0 的「本设计一律不做的事」清单**：不新增门禁/阻断/校验前置；不引入内容寻址哈希、receipt、快照 lineage；不新增第二套进度权威、projection、账本；不新增 public runtime 命令、action 或 `facts.jsonl` 键；不新建第二份 phase 模板；不把执行状态写进 `phases/P<n>.md` 或 `phases/index.md`。
 
 **本节数字的两个来源，别的来源一律不引**：
-- **来源甲（实测·本卡亲手跑）**＝CARD-04 真实材料（工作树 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919`，材料目录 `<W>/specs/workflowhub-thin-core-card-04-20260919/`）与 CARD-04 会话的转录派生件。
+- **来源甲（实测·本卡亲手跑）**＝CARD-04 真实材料（**2026-09-29 复核更正**：原引工作树 `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919` 目录整体已删除；材料现归档于本 worktree 的 `specs/archive/workflowhub-thin-core-card-04-20260919/`，原写的材料目录 `<W>/specs/workflowhub-thin-core-card-04-20260919/` 已不存在）与 CARD-04 会话的转录派生件。
 - **来源乙**＝`/tmp/wh-card03-s926/` 下四份取证报告：`A2-plan-gaps.md`（61 条缺口实例与处置分布）、`A3b-volume.md`（体量与审查逐次清单）、`A5-doc-crosscheck.md`（112 条断言核对）、`A5-doc-crosscheck.md` §10 的问题域清单。
 
 ---
@@ -2186,7 +2186,7 @@ Dispatch discipline and the subagent output contract (write artifacts before ret
 
 **第 2 条原文**：「补齐三个缺失字段：`Observable seam`（必须填仓库里**真实存在**的路径或符号）、`Risk and rollback`、`test change request`。」
 
-**实测更正：这三个字段在模板里已经存在，不需要「补」。** 本卡 worktree 逐行核对 `skills/spec-plan/templates/phase-template.md`（**56 行**）：
+**实测更正：这三个字段在模板里已经存在，不需要「补」。** 本卡 worktree 逐行核对 `skills/spec-plan/templates/phase-template.md`（**56 行**；**2026-09-29 复核更正**：该模板经 `5202828a` 中文化重写后现为 **217 行**，复核见下方「锚点复核更正」）：
 
 | 字段 | 模板位置 | 逐字（节选） |
 | --- | --- | --- |
@@ -2796,7 +2796,7 @@ function declaresField(line, name) {
 | `tests/contract/decision-convergence-depth.test.mjs` | **12/12 ✓** |
 | `tests/contract/post-phase-contract.test.mjs` | 1 ✗ —— **pre-existing**（`ENOENT …/specs/workflowhub-thin-core-card-05-20260919/phases/P5.md`，干净树同样红） |
 
-**「这红是我造成的吗」的判定方法（可复用，本节已用它把责任分清）**：`git stash push -m … -- <只包含本次改过的 tracked 路径>`（**不加 `-u`**，故 untracked 的 `specs/workflowhub-thin-core-card-03-20260919/` 与 `docs/adr/0034-*.md` 不受影响）退回干净树跑测试，再 `git stash pop`。判定结果：
+**「这红是我造成的吗」的判定方法（可复用，本节已用它把责任分清）**：`git stash push -m … -- <只包含本次改过的 tracked 路径>`（**不加 `-u`**；**2026-09-29 复核更正**：原注「故 untracked 的 `specs/workflowhub-thin-core-card-03-20260919/` 与 `docs/adr/0034-*.md` 不受影响」不成立——两者现均已被 git 跟踪，不加 `-u` 不再自动把它们排除在 stash 之外）退回干净树跑测试，再 `git stash pop`。判定结果：
 
 - **pre-existing（干净树同样红）**：`tests/stage-plan-task-contract-v3.test.mjs`（多出 `authenticated Phase review fact is unavailable`）；`tests/contract/post-phase-contract.test.mjs`；`tests/contract/stage-reflection-wiring.test.mjs`（`ENOENT …/specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md`）；`tests/integration/distribution-closure.test.mjs`（`skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; verify-code: …`）。
 - **本次造成的（干净树绿、改后红）**：**只有** `tests/contract/filled-plan-task-production.test.mjs` 一个文件，已修。
@@ -3136,7 +3136,7 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 
 1. **`AGENTS.md` 的 `14 0` 含别的卡相对 HEAD 的改动**；本次落盘（build-code P3b）的隔离口径是 `0 / 7+`。同理 `docs` 的 `39 0` 里本次落盘占 4 段。
 2. build-code P7a 的**整值替换**是否算违反「只插入、绝不删改既有行」——子代理自述判断为「块即完整新值，纯追加必然非法 JSON」，主会话**接受**该判断并在此登记。
-3. **行号会漂移**：本表行号对应 §14.13.5 的改后 md5；2026-09-29 复核实测 CARD-04 **只改了 `workflows/build-code/SKILL.md`**（`steps.json` 未被触碰），合并后该文件由 387 行增至 **417 行**，本表行号一律只作历史定位。
+3. **行号会漂移**：本表行号对应 §14.13.5 的改后 md5；2026-09-29 复核实测 CARD-04 **只改了 `workflows/build-code/SKILL.md`**（`steps.json` 未被触碰），合并后该文件由 387 行增至 **417 行**；同批复核 `docs/standard-workflow.md` 现为 **450 行**（本表该行记 `441`，为本次落盘当时的行数），本表行号一律只作历史定位。
 4. **本节与 §14.11.4 去重映射的关系未逐字复核**：§14.11.4 的「全新 5 条 / 部分重叠 4 条 / 重复 6 条 / 待核 1 条」只到 §14.7 施工表的一行摘要粒度；本节按该映射只给「全新 5 条」开了施工表行 63–67，其余 11 个插入点**未单独开行**（它们落在既有行 43–52 的范围内）。若后续要求逐条可追溯，需要把 §14.11.4 提升到正文级复核。
 5. build-spec 侧 **P4 是否已被 §14.5 的 I-7 五类缺口覆盖**仍未逐条映射（§14.11.6 第①条同款）。
 
@@ -3168,7 +3168,7 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 | `tests/stage-plan-task-contract.test.mjs` > `T1 AC-MS-005 > T1 AC-MS-005 uses one owner per equivalent definition` | `expected [ Array(1) ] to deeply equal []` | 同上，HEAD 同样 1 failed |
 | `tests/contract/material-producer-consumer-roundtrip.test.mjs` > `material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index` | `expected '---\nname: spec-plan…' to match /single phase engineering authority\|单…/i` | 同上，HEAD 同样 1 failed |
 
-- **stash 口径**：`git stash push -m "…" -- runtime/ skills/ tests/ docs/ workflows/ AGENTS.md CONTEXT.md`（**不加 `-u`**，untracked 的 `specs/<task>/` 与 `docs/adr/0034-*.md` 不受影响）；`git stash pop` 后逐文件 md5 与本节 §14.13.5 完全一致（28 个 ` M` 恢复）。
+- **stash 口径**：`git stash push -m "…" -- runtime/ skills/ tests/ docs/ workflows/ AGENTS.md CONTEXT.md`（**不加 `-u`**；**2026-09-29 复核更正**：原注「untracked 的 `specs/<task>/` 与 `docs/adr/0034-*.md` 不受影响」不成立——两者现均已被 git 跟踪，且本命令路径参数含 `docs/`，故 `docs/adr/0034-*.md` 会被纳入，`specs/` 不在参数内）；`git stash pop` 后逐文件 md5 与本节 §14.13.5 完全一致（28 个 ` M` 恢复）。
 - **落盘前**这 12 个文件是 `5 failed | 7 passed（7 failed / 158 passed）`，7 条红全部是 `Error: bundle sha256 mismatch: SKILL.md` ⇒ **§14.13.7 的第四次重算是把 7 条红降回 3 条 pre-existing 的直接原因**。
 - 另有 `tests/contract/stage-skill-invocation-contract.test.mjs`（8 tests，唯一调用 `resolveStageSkillPackages` 的活体校验）在哈希修好后**由红转绿**。
 
