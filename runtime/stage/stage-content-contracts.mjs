@@ -4294,9 +4294,89 @@ export function validateAcFourSegmentCards(markdown) {
   return materialContractResult(errors, "ready", { cards: Object.freeze(cards) });
 }
 
+// Authored materials may write every human-facing field label in Chinese. The canonical
+// English key stays the internal identity, so existing English materials, receipts, JSON
+// keys, and exported enums are unaffected: this table is purely additive.
+const FIELD_LABEL_ALIASES = Object.freeze({
+  "Global spec": ["全局规格"],
+  "Write set": ["写入集", "写集"],
+  Dependency: ["依赖"],
+  Consumer: ["消费者"],
+  "Inputs and outputs": ["输入与输出"],
+  NEW: ["新增"],
+  MODIFY: ["修改"],
+  "DO NOT TOUCH": ["禁止改动", "不得改动"],
+  "Task order": ["任务顺序"],
+  "Test strategy": ["测试策略"],
+  "coverage limit": ["覆盖边界", "覆盖上限"],
+  "Coverage limit": ["覆盖边界", "覆盖上限"],
+  STOP: ["停止"],
+  Done: ["完成"],
+  "Risk and rollback": ["风险与回滚"],
+  "Source / FR / AC": ["来源 / FR / AC"],
+  Inputs: ["输入"],
+  "Files / symbols": ["文件 / 符号"],
+  Action: ["动作"],
+  "Outputs / failure": ["输出 / 失败"],
+  "Boundary / DO NOT TOUCH": ["边界 / 禁止改动", "边界 / 不得改动"],
+  "Test tier / skill": ["测试层级 / 技能"],
+  "Scenario / fixture or service": ["场景 / 夹具或服务"],
+  "Prewritten test": ["预写测试"],
+  "Observable seam": ["可观察接缝"],
+  "RED/GREEN gate_cmd": ["RED/GREEN 门禁命令"],
+  expected_exit: ["预期退出码"],
+  "RED target failure": ["RED 目标失败"],
+  "RED evidence": ["RED 证据"],
+  "GREEN oracle": ["GREEN 判定器"],
+  Evidence: ["证据"],
+  "STOP / recovery": ["停止 / 恢复"],
+  "test change request": ["测试变更请求"],
+  gate_cmd: ["门禁命令"],
+  oracle: ["判定器"],
+  evidence_path: ["证据路径"],
+  Selected: ["已选"],
+  "Template version": ["模板版本", "模板版本号"],
+  Goal: ["目标"],
+  Files: ["文件"],
+  Tasks: ["任务"],
+  Verify: ["验证"],
+  Knowledge: ["知识"],
+  "Risks and rollback": ["风险与回滚"],
+  "Engineering Risk Handoff": ["工程风险交接"],
+  "Affected IDs": ["受影响 ID", "受影响编号"],
+  Trigger: ["触发条件"],
+  Consequence: ["后果"],
+  "Mitigation or STOP": ["缓解或停止"],
+  "Handling Stage": ["处理阶段"],
+  Verification: ["验证"],
+  "F10 real threat": ["F10 真实威胁"],
+  "F10 existing cover": ["F10 既有覆盖"],
+  "F10 bypassable": ["F10 可绕过"],
+  "F10 maintenance cost": ["F10 维护成本"],
+  "Constitution binding": ["宪法绑定"],
+  "Non-goals": ["非目标"],
+  "Global Constraints": ["全局约束"],
+});
+
+function escapeFieldLabel(label) {
+  return String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Sentinel for "no preceding Phase/Task", accepted in either language. */
+const WITHOUT_PREDECESSOR = /^(?:none|无|无前序|无依赖)$/i;
+
+/** Regex alternation accepting a canonical field label or any of its Chinese aliases. */
+function labelAlternation(name) {
+  return [name, ...(FIELD_LABEL_ALIASES[name] ?? [])].map(escapeFieldLabel).join("|");
+}
+
+/** True when a markdown line declares the given field, in either language. */
+function declaresField(line, name) {
+  return new RegExp(`^\\s*-\\s+\\*\\*(?:${labelAlternation(name)})\\*\\*\\s*[:：]`, "i").test(line);
+}
+
 function taskField(body, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return body.match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+  return body.match(new RegExp(`^\\s*-\\s+\\*\\*(?:${labelAlternation(name)})\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
 }
 
 function nonPlaceholderText(value) {
@@ -4390,7 +4470,7 @@ const PLAN_SECTIONS_V3 = Object.freeze([
 ]);
 const PLAN_SECTION_ALIASES = Object.freeze({
   "Quick Read": [/速读卡/, /Quick Read/i],
-  "Technical Context": [/Technical Context/i],
+  "Technical Context": [/Technical Context/i, /技术上下文/],
   "Global Constraints": [/Global Constraints/i, /全局约束/],
   "Code Anchors": [/Code Anchors/i, /代码锚点/],
   "Solution Design": [/Solution Design/i, /方案设计/],
@@ -4440,10 +4520,13 @@ const CURRENT_CONSTITUTION_CLAUSE_IDS = Object.freeze([
 function markdownSections(document, level, prefix = "") {
   const lines = document.split(/\r?\n/);
   const marker = "#".repeat(level);
+  const prefixes = (Array.isArray(prefix) ? prefix : [prefix]).filter(Boolean);
   const indexes = [];
   for (let index = 0; index < lines.length; index += 1) {
     const match = lines[index].match(new RegExp(`^${marker}\\s+(.+?)\\s*$`));
-    if (match && (!prefix || match[1].startsWith(prefix))) indexes.push({ index, heading: match[1] });
+    if (match && (prefixes.length === 0 || prefixes.some((item) => match[1].startsWith(item)))) {
+      indexes.push({ index, heading: match[1] });
+    }
   }
   return indexes.map((entry, position) => ({
     heading: entry.heading,
@@ -4456,7 +4539,7 @@ function taskBlocks(document) {
   const starts = [];
   let phase = null;
   for (let index = 0; index < lines.length; index += 1) {
-    const phaseMatch = lines[index].match(/^##\s+(Phase\s+.+?)\s*$/);
+    const phaseMatch = lines[index].match(/^##\s+((?:Phase|阶段)\s+.+?)\s*$/);
     if (phaseMatch) phase = phaseMatch[1];
     const taskMatch = lines[index].match(/^#{3,4}\s+(T\d+\b.*?)\s*$/);
     if (taskMatch) starts.push({ index, heading: taskMatch[1], phase });
@@ -4490,7 +4573,7 @@ function executionIndexRows(document) {
   if (!section) return null;
   const rows = [];
   for (const line of section.body.split(/\r?\n/)) {
-    if (!/^\s*\|/.test(line) || /^\s*\|\s*(?:---|phase\s*\|)/i.test(line)) continue;
+    if (!/^\s*\|/.test(line) || /^\s*\|\s*(?:---|phase\s*\||阶段\s*\|)/i.test(line)) continue;
     const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
     if (cells.length !== 6 || cells.every((cell) => /^-+$/.test(cell))) continue;
     const plain = (value) => value.replace(/^`|`$/g, "").trim();
@@ -4507,7 +4590,7 @@ function executionIndexRows(document) {
 }
 
 function phaseDeclaredWritePaths(filesBody) {
-  const writeSetLine = String(filesBody ?? "").split(/\r?\n/).find((line) => /\*\*write set\*\*/i.test(line));
+  const writeSetLine = String(filesBody ?? "").split(/\r?\n/).find((line) => declaresField(line, "Write set"));
   const explicit = inlinePaths(writeSetLine ?? "");
   return new Set(explicit.length > 0 ? explicit : [...phaseWritePaths(filesBody)]);
 }
@@ -4520,7 +4603,7 @@ function pointerPlanTaskRows({ plan, planPhaseRows, pointerRows, errors }) {
   const taskRows = [];
   const orderedIds = [];
   for (const [phaseIndex, phase] of planPhaseRows.entries()) {
-    const phaseId = phase.phase.match(/^Phase\s+(P\d+)\b/i)?.[1];
+    const phaseId = phase.phase.match(/^(?:Phase|阶段)\s+(P\d+)\b/i)?.[1];
     const indexRow = phaseId ? indexByPhase.get(phaseId) : null;
     if (!indexRow) {
       errors.push(`tasks execution index is missing ${phaseId ?? phase.phase}`);
@@ -4589,7 +4672,7 @@ function hasExecutableCommand(value) {
 }
 
 function templateVersion(document) {
-  return document.match(/^\s*(?:-\s+)?\*\*Template version\*\*\s*[:：]\s*`?([^`\s]+)`?\s*$/mi)?.[1] ?? null;
+  return document.match(new RegExp("^\\s*(?:-\\s+)?\\*\\*(?:" + labelAlternation("Template version") + ")\\*\\*\\s*[:：]\\s*`?([^`\\s]+)`?\\s*$", "mi"))?.[1] ?? null;
 }
 
 function placeholderOrTemplateNoise(document) {
@@ -4633,17 +4716,59 @@ function markdownStructureErrors(document, label) {
 }
 
 function parseConstitutionBinding(document) {
-  const value = document.match(/^\s*-\s+\*\*Constitution binding\*\*\s*[:：]\s*`(\{.*\})`\s*$/mi)?.[1];
+  const value = document.match(new RegExp(
+    `^\\s*-\\s+\\*\\*(?:${labelAlternation("Constitution binding")})\\*\\*\\s*[:：]\\s*\`(\\{.*\\})\`\\s*$`,
+    "mi",
+  ))?.[1];
   if (!value) return null;
   try { return JSON.parse(value); } catch { return null; }
 }
 
+/** Level-3 headings inside a plan Phase block, canonicalized so Chinese headings parse too. */
+const PHASE_HEADING_ALIASES = Object.freeze({
+  Goal: ["目标", "结果"],
+  Files: ["文件"],
+  Tasks: ["任务"],
+  Verify: ["验证"],
+  Knowledge: ["知识"],
+  STOP: ["停止"],
+  Done: ["完成"],
+  "Risks and rollback": ["风险与回滚"],
+});
+
+/** Level-3 headings inside spec.md Implementation Design, canonicalized the same way. */
+const SPEC_DESIGN_HEADING_ALIASES = Object.freeze({
+  "Code Anchors": ["代码锚点"],
+  "Interfaces and Failure Semantics": ["接口与失败语义"],
+  "Requirement-to-Task Trace": ["需求到任务追踪"],
+  "Global Verification Strategy": ["全局验证策略"],
+});
+
+/** Map a heading to its canonical name using an alias table (identity when unknown). */
+function canonicalHeading(heading, aliases) {
+  const trimmed = String(heading).trim();
+  for (const [canonical, list] of Object.entries(aliases)) {
+    if (trimmed === canonical || list.includes(trimmed)) return canonical;
+  }
+  return trimmed;
+}
+
+/** Map a level-3 Phase heading to its canonical field name (identity when unknown). */
+function canonicalPhaseHeading(heading) {
+  return canonicalHeading(heading, PHASE_HEADING_ALIASES);
+}
+
+/** Map a level-3 Implementation Design heading to its canonical name. */
+function canonicalDesignHeading(heading) {
+  return canonicalHeading(heading, SPEC_DESIGN_HEADING_ALIASES);
+}
+
 function phaseRows(document, fields, errors, label) {
-  const phases = markdownSections(document, 2, "Phase ");
+  const phases = markdownSections(document, 2, ["Phase ", "阶段 "]);
   if (phases.length === 0) errors.push(`${label} must contain at least one Phase`);
   return phases.map((phase) => {
     const sections = new Map(markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
-      .map((section) => [section.heading, section.body]));
+      .map((section) => [canonicalPhaseHeading(section.heading), section.body]));
     for (const field of fields) {
       const body = sections.get(field);
       if (body === undefined || body.trim() === "") errors.push(`${label} ${phase.heading} is missing ${field}`);
@@ -4662,8 +4787,8 @@ function inlinePaths(value) {
 
 function phasePaths(filesBody, includeReadOnlyConsumer = false) {
   const pattern = includeReadOnlyConsumer
-    ? /\*\*(?:NEW|MODIFY|READ-ONLY CONSUMER)\*\*/i
-    : /\*\*(?:NEW|MODIFY)\*\*/i;
+    ? /\*\*(?:NEW|MODIFY|READ-ONLY CONSUMER|新增|修改|只读消费者)\*\*/i
+    : /\*\*(?:NEW|MODIFY|新增|修改)\*\*/i;
   return new Set(String(filesBody ?? "").split(/\r?\n/)
     .filter((line) => pattern.test(line))
     .flatMap((line) => inlinePaths(line)));
@@ -4683,7 +4808,7 @@ function phaseWritePaths(filesBody) {
 function globalChangePaths(fileBoundaryBody) {
   const sections = markdownSections(`## File Boundary\n${fileBoundaryBody ?? ""}`, 3);
   return new Set(sections
-    .filter(({ heading }) => /^(?:NEW|MODIFY)$/i.test(heading))
+    .filter(({ heading }) => /^(?:NEW|MODIFY|新增|修改)$/i.test(heading))
     .flatMap(({ body }) => inlinePaths(body)));
 }
 
@@ -4711,9 +4836,8 @@ function nAWithReason(value, kind = "") {
 }
 
 function fieldValue(body, field) {
-  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return String(body ?? "").match(new RegExp(
-    `^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
+    `^\\s*-\\s+\\*\\*(?:${labelAlternation(field)})\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
     "mi",
   ))?.[1]?.trim() ?? null;
 }
@@ -5264,8 +5388,7 @@ function analyzeDeferredOpenHandoff({ decisionText, specText, planText, tasksTex
 }
 
 function analyzeField(body, label) {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return String(body ?? "").match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+  return String(body ?? "").match(new RegExp(`^\\s*-\\s+\\*\\*(?:${labelAlternation(label)})\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
 }
 
 function hasAnalyzeField(body, ...labels) {
@@ -6936,7 +7059,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       errors.push(`${expectedPath} is missing or empty`);
       continue;
     }
-    if (!new RegExp(`^#\\s+Phase\\s+${expectedId}\\b`, "m").test(body)) errors.push(`${expectedPath} must declare Phase ${expectedId}`);
+    if (!new RegExp(`^#\\s+(?:Phase|阶段)\\s+${expectedId}\\b`, "m").test(body)) errors.push(`${expectedPath} must declare Phase ${expectedId}`);
     for (const heading of ["L0", "L1", "L2"]) {
       if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
@@ -6950,11 +7073,11 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
     }
     const dependencyText = fieldValue(body, "Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
-    const phaseDependencies = dependency === "none" ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
-    const indexDependencies = row.dependency === "none" ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
+    const phaseDependencies = WITHOUT_PREDECESSOR.test(dependency ?? "") ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
+    const indexDependencies = WITHOUT_PREDECESSOR.test(row.dependency ?? "") ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
     if (!sameIds(phaseDependencies, indexDependencies)
-        || (dependency !== "none" && phaseDependencies.length === 0)
-        || (row.dependency !== "none" && indexDependencies.length === 0)
+        || (!WITHOUT_PREDECESSOR.test(dependency ?? "") && phaseDependencies.length === 0)
+        || (!WITHOUT_PREDECESSOR.test(row.dependency ?? "") && indexDependencies.length === 0)
         || phaseDependencies.some((id) => Number(id.slice(1)) >= position + 1)) {
       errors.push(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
     }
@@ -7006,7 +7129,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       if (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.includes(path))) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name owned write-set paths`);
       }
-      if (!/\b(?:symbol|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
+      if (!/(?:\bsymbol|符号|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name a symbol or explain N/A for non-code files`);
       }
       if (!hasExecutableCommand(fields["RED/GREEN gate_cmd"])) errors.push(`${expectedPath} ${taskId} needs one executable RED/GREEN gate_cmd`);
@@ -7021,7 +7144,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
           || !/GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "")) {
         errors.push(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
       }
-      if (!/(?:`[^`]+`|\bP\d+\b|\bT\d+\b|\bnone\b)/i.test(fields.Dependency ?? "")) {
+      if (!/(?:`[^`]+`|\bP\d+\b|\bT\d+\b|\bnone\b|无)/i.test(fields.Dependency ?? "")) {
         errors.push(`${expectedPath} ${taskId} Dependency must identify an existing prerequisite or none`);
       }
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
@@ -7034,7 +7157,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   }
   for (const [position, card] of taskCards.entries()) {
     const refs = identifiers(card.dependency, /\b[PT]\d+\b/g);
-    if (refs.length === 0 && !/\bnone\b/i.test(card.dependency)) {
+    if (refs.length === 0 && !WITHOUT_PREDECESSOR.test(card.dependency)) {
       errors.push(`${card.phase}/${card.id} dependency must be none or identify a Phase/Task`);
     }
     for (const ref of refs) {
@@ -7059,7 +7182,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   const design = markdownSections(spec, 2).find(({ heading }) => /^(?:实现设计（全局权威）|Implementation Design)$/i.test(heading));
   if (!design) errors.push("spec.md requires Implementation Design (全局权威)");
   const designSections = design ? markdownSections(`## ${design.heading}\n${design.body}`, 3) : [];
-  const designBody = Object.fromEntries(designSections.map(({ heading, body }) => [heading, body]));
+  const designBody = Object.fromEntries(designSections.map(({ heading, body }) => [canonicalDesignHeading(heading), body]));
   for (const heading of ["Code Anchors", "Interfaces and Failure Semantics", "Requirement-to-Task Trace", "Global Verification Strategy"]) {
     if (!designBody[heading] || placeholderOrTemplateNoise(designBody[heading])) errors.push(`spec.md Implementation Design requires concrete ${heading}`);
   }
@@ -7168,7 +7291,7 @@ export function validatePlanTaskContract({
       }
     }
     const quickRead = findPlanSection("Quick Read")?.body ?? "";
-    if (!/^\s*-\s+\*\*Non-goals\*\*\s*[:：]/mi.test(quickRead)
+    if (!new RegExp(`^\\s*-\\s+\\*\\*(?:${labelAlternation("Non-goals")})\\*\\*\\s*[:：]`, "mi").test(quickRead)
         || !/来源\s*[:：]|source\s*[:：]/i.test(quickRead)) {
       errors.push("plan Non-goals must preserve accepted source refs");
     }
@@ -7178,7 +7301,7 @@ export function validatePlanTaskContract({
     const globalConstraints = markdownSections(
       `## Technical Context\n${findPlanSection("Technical Context")?.body ?? ""}`,
       3,
-    ).find(({ heading }) => /^Global Constraints$/i.test(heading));
+    ).find(({ heading }) => new RegExp(`^(?:${labelAlternation("Global Constraints")})$`, "i").test(heading));
     if (!globalConstraints || globalConstraints.body.trim() === "") {
       errors.push("Technical Context is missing a non-empty Global Constraints subsection");
     }
@@ -7202,7 +7325,7 @@ export function validatePlanTaskContract({
     const riskHandoff = markdownSections(
       `## Rollback and Recovery\n${rollback}`,
       3,
-    ).find(({ heading }) => /^Engineering Risk Handoff$/i.test(heading))?.body;
+    ).find(({ heading }) => /^(?:Engineering Risk Handoff|工程风险交接)$/i.test(heading))?.body;
     if (!riskHandoff) errors.push("Rollback and Recovery is missing Engineering Risk Handoff");
     for (const field of [
       "Affected IDs", "Trigger", "Consequence", "Mitigation or STOP",

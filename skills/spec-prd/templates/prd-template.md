@@ -1,18 +1,18 @@
 # {{prd_title}}
 
-> Status: `{{prd_status}}` | Decision revision: {{decision_revision}} | Source revision: {{source_revision}}
-> Writer: `spec-prd` | Write target: `specs/{{task_id}}/prd.md`
+> 状态：`{{prd_status}}` | 决定版本：{{decision_revision}} | 来源版本：{{source_revision}}
+> 写入者：`spec-prd` | 写入目标：`specs/{{task_id}}/prd.md`
 
 ## 导航
 
-| Section | Purpose | Read when |
+| 章节 | 用途 | 何时读 |
 | --- | --- | --- |
-| 产品总览 | Confirmed direction, scope, non-goals, and current status | Always |
-| 共享定义 | Definitions and shared constraints referenced by cards | Before any card |
-| 任务地图 | Result-oriented card map and dependencies | Before map confirmation |
-| 任务卡 | Complete independently handoff-ready card detail | Before starting a card |
-| 风险与交付说明 | Open gaps, quality facts, attachments, and physical-delivery limits | Before handoff |
-| 变更说明 | Archived maintenance evidence and commitment impact | When maintaining |
+| 产品总览 | 已确认的方向、范围、非目标与当前状态 | 始终 |
+| 共享定义 | 各任务卡引用的定义与共享约束 | 开始任何任务卡之前 |
+| 任务地图 | 面向结果的任务卡地图与依赖 | 任务地图确认之前 |
+| 任务卡 | 可独立交接的完整任务卡细节 | 开始某张任务卡之前 |
+| 风险与交付说明 | 未决缺口、质量事实、附件与物理交付限制 | 交接之前 |
+| 变更说明 | 归档的维护证据与承诺影响 | 维护时 |
 
 ## 产品总览
 
@@ -30,17 +30,17 @@
 
 {{task_map}}
 
-Map confirmation: {{map_confirmation}}
-Map confirmation revision: {{map_confirmation_revision}}
+任务地图确认：{{map_confirmation}}
+任务地图确认版本：{{map_confirmation_revision}}
 
 ## 最终展示稿确认（第二次调用后）
 
 - **展示稿状态**：{{displayed_draft_status}}
 - **展示稿 hash**：{{displayed_draft_hash}}
-- **Decision revision**：{{decision_revision}}
-- **Source revision**：{{source_revision}}
-- **Map revision**：{{map_confirmation_revision}}
-- **PRD revision**：{{prd_revision}}
+- **决定版本（decision_revision）**：{{decision_revision}}
+- **来源版本（source_revision）**：{{source_revision}}
+- **地图版本（map_revision）**：{{map_confirmation_revision}}
+- **PRD 版本（prd_revision）**：{{prd_revision}}
 - **最终确认 revision**：{{final_confirmation_revision}}
 - **display_before_reply**：{{display_before_reply}}
 - **human_approved**：{{human_approved}}
@@ -57,12 +57,12 @@ Map confirmation revision: {{map_confirmation_revision}}
 
 以下是固定保留的 **16 个既有字段**；不得因卡片数量或实现层次删改字段名。
 
-- **结果与 consumer**：{{result_and_consumer}}
+- **结果与消费方**：{{result_and_consumer}}
 - **范围**：{{card_scope}}
 - **流程/状态**：{{flow_and_states}}
 - **FR**：{{fr_ids}}
 - **AC**：{{ac_ids_and_failure_criteria}}
-- **oracle**：{{oracle}}
+- **判定器**：{{oracle}}
 - **准备依赖**：{{preparation_dependencies}}
 - **实现依赖**：{{implementation_dependencies}}
 - **验收依赖**：{{acceptance_dependencies}}
@@ -97,8 +97,6 @@ Map confirmation revision: {{map_confirmation_revision}}
 
 {{change_notes}}
 
-For archived maintenance, retain the reason/evidence (`依据`), affected scope (`影响`),
-before/after commitments, source revision, confirmation reference, and in-flight
-impact. Small修 changes remain narrow; substantive changes require real confirmation
-before this section is updated. Historical decision, confirmation, review, test, and
-physical facts remain immutable.
+归档维护时保留原因/证据（`依据`）、受影响范围（`影响`）、承诺的前后对比、来源版本、
+确认引用，以及在途影响。小改保持范围狭窄；实质性变更必须先取得真实确认，才能更新本节。
+历史决定、确认、审查、测试与物理事实一律不可改写。

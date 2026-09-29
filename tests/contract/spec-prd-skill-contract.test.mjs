@@ -228,7 +228,7 @@ describe('ORACLE-P2-SPEC-PRD', () => {
       '产品总览',
       '共享定义',
       '任务卡',
-      '结果与 consumer',
+      '结果与消费方',
       '流程/状态',
       'FR',
       'AC',
@@ -319,7 +319,7 @@ describe('planning-hardening PRD handoff contracts', () => {
   it('planning-hardening AC-CONTRACT-001 preserves all 16 existing task-card fields', () => {
     const text = template();
     expectEvery(text, [
-      '结果与 consumer', '范围', '流程/状态', 'FR', 'AC', 'oracle',
+      '结果与消费方', '范围', '流程/状态', 'FR', 'AC', 'oracle',
       '准备依赖', '实现依赖', '验收依赖', '合并依赖',
       '共享资源冲突与集成责任', '来源/设计', '局部风险', '可后置技术项',
       '最小读取集', '五阶段开工说明',

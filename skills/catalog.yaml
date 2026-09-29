@@ -127,7 +127,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5134f714f3fb44c471ab1a94aa6070ea5ffab006417b25268b71c2399d5e3bbe
+    local_bundle_hash: 719bee2c51e672313a11da0ba2d966655f9cc3d58c3e03149bd98a5d3f3023d6
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -250,7 +250,7 @@ skills:
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 6efe67875f567b2746c79737151322b6b0d2b2b995ce1f4418ab45dbaa057891
+    local_bundle_hash: b8dc6399917d54a24429144c5e160d268ba77493debaa5e9c74f94c966eff23c
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -283,7 +283,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: bc09a6a95caf77a76618c3f659f02441998cc35c70a19da33d61797f53c8f25a
+    local_bundle_hash: 630a125087f72143bb3a0e1d8e33b3cb25792dd9583060b535ac40ea9aeca72f
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -332,7 +332,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: bb470db067aaed87d6a04829882f79af5a49a414dd07f8c456046c1311fbd2f4
+    local_bundle_hash: b1a6e954162da7506f18a74be37cb8b5cb63d14b386ad3b10fc98acb23dcc3e1
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -364,7 +364,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 72f1e186546c6454a13d49f5807e01f9f33ca54d91e2ff9298643921d99b626b
+    local_bundle_hash: b98e23358d82d77acd35549382c479862999ff6f05cb8964b2eae5b12fe96ed5
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -631,7 +631,7 @@ skills:
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c6f2106125692adf36a17ce6845b5615b6d060728efe9dd68fb6f2d2147319e4
+    local_bundle_hash: ef828eb4f76b66c6e86e49e6b64130362242d9937b203d96f9cab3eac84ec6b7
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true

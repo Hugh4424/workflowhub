@@ -3,7 +3,7 @@
   "skill": "spec-specify",
   "files": [
     { "path": "SKILL.md", "sha256": "fe95fe976f53e68ba26cee72c162594669bd3dd6ef14b26076d80d89318b9609" },
-    { "path": "templates/spec-template.md", "sha256": "56fc2078b38a927336361dbac2553421f034b3910dab46547e88171ce2bbf57c" }
+    { "path": "templates/spec-template.md", "sha256": "a2073aea0cba2f8c3a42b43d27145ba8ad3488736e591e70e2b80420d2cca60e" }
   ],
   "sources": [
     {

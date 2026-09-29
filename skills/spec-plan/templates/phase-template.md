@@ -1,56 +1,217 @@
-# Phase P<n> — [outcome]
+# Phase P<n> — [这一 Phase 的一个可独立验收的结果]
 
-- **Global spec**: `spec.md#[stable-goal-anchor]` (Global goal and implementation design)
-- **Write set**: [write set: exact file paths; one owner per path]
-- **Dependency**: [dependency: preceding Phase IDs or `none`, with serial reason]
-- **Consumer**: [real downstream reader or component]
+> **写完这张卡之前先回答三问。三问答不完整，就不要写 H1，先拆 Phase。**
+>
+> 1. 这一个 Phase 交付的是**一个**结果吗？把这个结果写成一句能判真假的话（不是一串名词，不是一份文件清单）。
+> 2. 谁来判它真假？指名哪条 AC 的哪个判定器，以及判它的那一刻用的是哪份真实产出。
+> 3. 它能独立提交吗？写完这个 Phase 就能 commit 并停手，不需要等同一计划里的另一个 Phase 才能验收？如果需要等，它们就是两个 Phase。
+>
+> **判定规则**：H1 里出现一个「并且」连接的两个交付物，或者「同时 / 以及 / 顺便」引出的第二件事，就已经是两个结果，必须拆。
+>
+> 本条是执行纪律，不是新的 stage、gate 或质量结论。
 
-## L0 — Outcome and delta
+> **怎么用这份文件**（人读，落盘后可删）：
+> 1. 本文件只写**本 Phase 的实现增量**，以及指向 `spec.md` 全局目标的稳定指针。全局产品契约与全局实现设计归 `spec.md`，本文件不复制、不改写、不重述。
+> 2. 本文件由人编写，**不写执行状态**。跑没跑过、RED 有没有真的出现、GREEN 是否成立，属于任务事实库，不属于本文件。
+> 3. 同一 Phase 的每个 Task 各占一张完整卡片，编号在全任务内唯一；卡片区（`### Tnnn` 三级标题开始，到 `## L2` 之前）是机器逐字检查的区域。
+> 4. 被检查的字段值留空、写成 `TBD` / `TODO` / `待补充`、或以 `[` 开头都会被拒收。确实不适用时写 `N/A — 一句理由`（裸 `N/A` 同样被拒收）。
+> 5. 下面五个字段名保持英文：`gate_cmd` / `oracle` / `evidence_path` / `STOP` / `Done`。它们由 runtime 按字面名读取，**不要翻译**。
+> 6. 落盘时把标题里的 `P<n>` 换成真实编号（例如 `# Phase P3`）：runtime 按 `# Phase P3` 逐字校验文件身份。
+> 7. 「本 Phase 材料导航」「交接知识」两节是给人对照干活用的：只写已核实的锚点与事实，每条带来源；runtime 不解析它们，但审查会按「列进来的锚点是否真的打开过」抽查。
+>
+> **模板版本（仅供人读，runtime 不解析）**：`phase-file.v1`
 
-[Observable outcome and how this Phase differs from other Phases. Point to the global goal; do not repeat its full narrative.]
+## Phase 契约头（文件级字段；runtime 逐字读取）
 
-## L1 — Executable contract
+- **全局规格**: `spec.md#[稳定目标锚点]`（全局目标与实现设计的唯一权威指针）
+- **写入集**: `[精确文件路径]`；`[精确文件路径]`（只写精确路径，不得写目录、模块名或 glob；每个路径全任务只有一个所有者；必须与 `phases/index.md` 逐条一致）
+- **依赖**: `[更早的 Phase 编号，例如 P1；没有就写 none]`（只能引用更早的 Phase；串行时写明理由；必须与 `phases/index.md` 一致）
+- **消费者**: [真实的下游读取方或组件]（必须与 `phases/index.md` 的 consumer 逐字一致）
+- **gate_cmd**: `[本 Phase 级可执行命令，例如 npx vitest run tests/xxx.test.mjs]`（必须是一条能直接执行的命令）
+- **oracle**: ORACLE-[P 编号与主题，全大写、连字符分隔，例如 P1-STRUCTURE]（整段必须以 `ORACLE-` 开头）
+- **evidence_path**: `[相对任务根的证据路径，例如 quality/evidence/<task-id>/P1-structure.json]`
+- **STOP**: [什么情况停下来、找谁、怎么修]（与 L1 的「停止」写同一件事，不许两处互相矛盾）
+- **Done**: [要诚实下结论还缺哪些 AC、测试、审查与交接证据]（与 L1 的「完成」写同一件事）
 
-- **Inputs and outputs**: [interfaces, types, state transition, failure semantics]
-- **FR / AC**: [source, FR, and AC IDs]
-- **NEW**: [exact paths or `N/A — reason`]
-- **MODIFY**: [exact paths or `N/A — reason`]
-- **DO NOT TOUCH**: [exact protected paths and reason]
-- **Task order**: [stable Task IDs unique across the whole task; number consecutively in index Phase order and within-Phase execution order, continuing after the previous Phase; explicit earlier dependencies and serial/parallel reason]
-- **Test strategy**: [cross-Task behavior, state, error, permission, concurrency and seam risks; `N/A — reason` per irrelevant dimension]
-- **coverage limit**: [what the full Phase evidence cannot establish; task-level limits remain in each card]
-- **STOP**: [condition, owning material, and repair route]
-- **Done**: [AC, test, review, and handoff evidence required for honest claim]
-- **Risk and rollback**: [trigger, impact, mitigation, reversible action]
+## 速读卡（人读；只写本 Phase 增量，不复制 `spec.md`）
 
-### Tnnn — [next globally unique Task ID and one observable result]
+- **本 Phase 结果**：[一句话说清交付什么、谁受益]
+- **非目标**：[本 Phase 明确不做的事，防止范围膨胀]
+- **改动前**：[已核实的当前状态与痛点]
+- **改动后**：[改动完成后的可观察状态]
+- **与相邻 Phase 的边界**：[上游给了什么、本 Phase 交给下游什么]
+- **主要风险**：[最可能让本 Phase 返工的一件事]
+- **下一步**：[本 Phase 结束后，谁接着做什么]
+- **动手前必读**: [本 Phase 动手改第一行代码之前必须读完的精确锚点：`文件路径:行号` 或材料节锚点；按读序排列]
+- **未决事实**: [已知但尚未核实的未知、它的影响、打算在哪个 Task 处理或交给谁；没有就写 `N/A — 理由`]
 
-- **Source / FR / AC**: [observable result; current decision-log verbatim source ID/location (and upstream PRD ref when applicable), decision, FR and AC IDs; retain quantifier, negation, order and failure strength; no ID-only coverage]
-- **Inputs**: [current material refs, producer Task, verified interface or fixture; `none` with reason if independent]
-- **Files / symbols**: [NEW/MODIFY paths within this Phase write set; existing symbol/signature/consumer and verification source; unknown with owner and STOP]
-- **Action**: [ordered edits or operations at each anchor, data and control flow, compatibility boundary; enough to identify the first edit without product inference]
-- **Outputs / failure**: [observable interface/schema/state result, invalid input and failure signal, cleanup/rollback effect]
-- **Boundary / DO NOT TOUCH**: [exact protected files or scope; why this Task must not edit them]
-- **Dependency**: [Task ID or none, producer artifact, file ownership and serial/parallel reason]
-- **Test tier / skill**: [`simple|feature|fullstack`; exactly one applicable concrete testing skill]
-- **Scenario / fixture or service**: [normal and named negative case; setup and cleanup]
-- **Prewritten test**: [exact owned test file, target assertion and author; build-plan writes it before implementation; if G-2 N/A, give reason, risk and objective alternative]
-- **Observable seam**: [the existing producer, persisted/current artifact, real reader/consumer, source denominator, and missing/invalid semantics for the AC; if absent, design and freeze this interface first and keep the AC incomplete rather than testing text]
-- **RED/GREEN gate_cmd**: [same executable, scoped command for this Task's target RED and paired GREEN; if legitimately not applicable, explain and give objective substitute]
-- **expected_exit**: [RED: nonzero from named target assertion, not setup; GREEN: 0]
-- **RED target failure**: [stable oracle ID and exact assertion/rejection that must fail before the change; setup or collection failure is not RED]
-- **RED evidence**: [actual build-plan command, exit, failing assertion, output/ref and material identity from existing task facts; missing execution is unavailable, not RED]
-- **GREEN oracle**: [same oracle ID; pass signal plus named negative behavior after the change]
-- **Evidence**: [task-relative planned RED and GREEN evidence refs; actual result belongs in task facts]
-- **Coverage limit**: [what this Task's evidence cannot establish]
-- **STOP / recovery**: [precise mismatch or unknown, owner/material to repair, safe resumption; no silent fallback]
-- **test change request**: [if the frozen test must change: explicit reason, old/new assertion, previous RED evidence, independent review ref; otherwise `none`]
-- **Done**: [AC result, target test, negative case, evidence/readback, and any review fact needed for truthful claim]
+## 本 Phase 材料导航（人读；只列本 Phase 实际用到的锚点）
 
-Repeat the whole `Tnnn` card for each Task. Use `T001` only for the task's first card;
-the next Phase continues the sequence instead of resetting to `T001`. Do not collapse multiple Tasks into one line,
-borrow another Phase's task body, or put execution status in this authored file.
+| 材料 / 锚点 | 本 Phase 用它做什么 | 读取时机 |
+| --- | --- | --- |
+| `spec.md#[填写：本 Phase 认领的全局目标或 FR/AC 锚点]` | [填写：本 Phase 要满足的具体行为、状态与判据] | M 开工前；S 按 Task 派生前 |
+| `decision-log.md#[填写：本 Phase 依据的决定条目锚点]` | [填写：方向、范围与非目标中与本 Phase 有关的条目] | M 写卡片前 |
+| `phases/P<n-1>.md` 的「交接知识」（有上游时） | [填写：上游留给本 Phase 的已核实事实] | M 开工前 |
 
-## L2 — Removable reference
+[填写：一句话兜底——没列进本表的材料不要凭印象引用；列进来的每条锚点在写卡片时都要实际打开过。]
 
-[Only non-authoritative hints useful during implementation. Name the condition under which this section can be deleted without changing L0/L1.]
+## L0 — 结果与变更
+
+[3–8 行讲清本 Phase 要改变的结果、为什么现在做、以及它与全局目标的关系。指向全局目标，不要重复它的完整叙述。]
+
+- **结果**: [可验收的结果，用外部可观察的语言写]
+- **非目标**: [明确排除的范围]
+- **与其它 Phase 的区别**: [本 Phase 与相邻 Phase 的分界]
+
+## L1 — 可执行契约
+
+### 文件边界
+
+- **新增**: [精确路径，或 `N/A — 理由`]
+- **修改**: [精确路径，或 `N/A — 理由`]
+- **禁止改动**: [精确的受保护路径与理由；逐条写清为什么本 Phase 不能碰它]
+
+### 任务顺序
+
+[全任务唯一且稳定的 Task 编号；按索引里的 Phase 顺序与 Phase 内执行顺序连续编号，接续上一个 Phase 而不是重新开始；显式写出更早的依赖与串行/并行理由。每个 Task 都必须有自己的卡片，不得把多个 Task 压成一行，也不得只留一个空的「任务」小节。]
+
+### 测试策略
+
+| 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
+| --- | --- | --- | --- | --- |
+| [填写：本 Phase 要保护的行为] | T001 | RED | [填写：同一命令] / `[填写：非零退出码]` | [填写：同一个判定器编号] / — |
+| [填写：同一行为] | T001 | GREEN | [填写：同一命令] / `0` | [填写：同一个判定器编号] / `[填写：证据路径]` |
+
+[跨 Task 的行为、状态、错误、权限、并发与接缝风险；每个不相关的维度都要写 `N/A — 理由`。写上测试层级与所选的具体测试技能、场景、夹具或服务。RED 必须来自真实执行记录；取不到就诚实写 `unavailable — 理由`，不得把草稿说成 RED。]
+
+### 覆盖边界
+
+- **覆盖上限**: [整份 Phase 证据最多能确立什么、覆盖到什么程度；防止用「全量绿」代替判据]
+- **显式不覆盖**: [整份 Phase 证据无法确立的东西与原因；Task 级限制仍写在各自卡片里]
+
+### 停止
+
+[条件、负责的材料与修复路径。不要写「继续观察」这类无法执行的话。]
+
+### 完成
+
+[要诚实下结论所需的 AC、测试、审查与交接证据，以及结论只能到什么强度。]
+
+### 风险与回滚
+
+- **风险**: [可证伪的风险，写触发条件而不是形容词]
+- **影响**: [最坏后果]
+- **缓解**: [现在做什么降低概率或影响]
+- **回滚**: [怎么退回上一个已知良好状态]
+- **触发条件**: [什么信号出现就执行回滚]
+
+### 交接知识（给下游 Phase 与审查的已核实事实）
+
+- [填写：下游 Phase 开工前必须知道的已核实事实，每条带来源——`文件路径:行号` 或 `实际命令 + 退出码`；只写核实过的事实，不写执行状态与进度]
+- 没有可交接的已核实事实时写 `N/A — 理由`。
+
+### 字段说明（人读；runtime 不解析本节，也不产生任何质量结论）
+
+下表把每个机器读的字段与其 runtime 规范名、是否会被逐字检查、以及写作下限放在一起。**机器必填=是**的字段留空或写成占位符会被拒收；**否**的字段写不写不改变任何校验结果，但它们是人读质量的来源。
+
+| 位置 | 字段 | runtime 规范名 | 机器必填 | 写作下限 |
+| --- | --- | --- | --- | --- |
+| 契约头 | 全局规格 | `Global spec` | 是 | 必须出现 `spec.md` |
+| 契约头 | 写入集 | `Write set` | 是 | 精确文件路径，不得目录/glob |
+| 契约头 | 依赖 | `Dependency` | 是 | 更早的 Phase 编号或 `none` |
+| 契约头 | 消费者 | `Consumer` | 是 | 真实读取方，与索引一致 |
+| 契约头 | gate_cmd | `gate_cmd` | 是 | 一条可执行命令 |
+| 契约头 | oracle | `oracle` | 是 | 以 `ORACLE-` 开头 |
+| 契约头 | evidence_path | `evidence_path` | 是 | 相对任务根的路径 |
+| 契约头 | STOP | `STOP` | 是 | 停止条件 + 材料 + 修复路径 |
+| 契约头 | Done | `Done` | 是 | 结论所需的 AC/测试/审查/交接证据 |
+| L1 | 输入与输出 | —（合并进 Task 卡） | 否 | 接口、类型、状态迁移、失败语义 |
+| L1 | FR / AC | —（合并进 Task 卡） | 否 | 来源、FR 与 AC 编号 |
+| L1 | 新增 / 修改 | — | 否 | 精确路径或 `N/A — 理由` |
+| L1 | 禁止改动 | — | 否（契约测试要求字段名存在） | 精确受保护路径 + 理由 |
+| L1 | 任务顺序 | — | 否 | 编号列表 + 依赖理由 |
+| L1 | 测试策略 | — | 否 | 每个不相关维度写 `N/A — 理由` |
+| L1 | 覆盖边界 | — | 否 | 上限 + 显式不覆盖 |
+| L1 | 停止 / 完成 | —（文件级同名由契约头承担） | 否 | 条件与材料，不得互相矛盾 |
+| L1 | 风险与回滚 | — | 否 | 触发条件、影响、缓解、回滚 |
+| 卡片 | 来源 / FR / AC | `Source / FR / AC` | 是 | 逐字来源编号/位置 + 决定 + FR/AC；不得只写编号不写内容 |
+| 卡片 | 文件 / 符号 | `Files / symbols` | 是 | 精确路径或符号/签名，未知项写负责人与停止条件 |
+| 卡片 | 动作 | `Action` | 是 | 有序改动、数据与控制流、兼容边界；足以让人不必猜产品就找到第一处改动 |
+| 卡片 | 输入 | `Inputs` | 是 | 上游材料、产出它的 Task、已核实的接口或夹具；独立 Task 写 `none` 并给理由 |
+| 卡片 | 输出 / 失败 | `Outputs / failure` | 是 | 可观察结果 + 非法输入与失败信号 + 清理/回滚效果 |
+| 卡片 | 边界 / 禁止改动 | `Boundary / DO NOT TOUCH` | 是 | 精确受保护范围 + 为什么不能改 |
+| 卡片 | 依赖 | `Dependency` | 是 | Task 编号或 `none`、上游产物、文件所有权、串行/并行理由 |
+| 卡片 | 测试层级 / 技能 | `Test tier / skill` | 是 | `simple` / `feature` / `fullstack` 之一 + 恰好一个具体测试技能 |
+| 卡片 | 场景 / 夹具或服务 | `Scenario / fixture or service` | 是 | 正常用例 + 具名反向用例 + 搭建与清理 |
+| 卡片 | 预写测试 | —（runtime 不查；契约测试要求字段名存在） | 否 | 独占测试文件、目标断言、作者；不适用时给理由、风险与客观替代 |
+| 卡片 | 可观察接缝 | —（runtime 与契约测试都不查） | 否 | 既有产出方 → 已持久化产物 → 真实读取方 → 来源分母；**并写清「我是怎么知道的」（至少一项 `文件路径:行号` 或 `命令 + 退出码`）**；不存在就写 `unverified`/`unknown` 并让该 AC 保持未完成 |
+| 卡片 | RED/GREEN 门禁命令 | `RED/GREEN gate_cmd` | 是 | 目标 RED 与配对 GREEN 共用同一条有范围的命令 |
+| 卡片 | 预期退出码 | `expected_exit` | 是 | RED：具名断言产生的非零退出码（setup 失败不算）；GREEN：0 |
+| 卡片 | RED 目标失败 | `RED target failure` | 是 | 稳定的判定器编号 + 改动前必须失败的确切断言 |
+| 卡片 | RED 证据 | —（runtime 不查；契约测试要求字段名存在） | 否 | 真实命令、退出码、失败断言、输出引用与材料身份；没有就是 `unavailable` |
+| 卡片 | GREEN 判定器 | `GREEN oracle` | 是 | 同一个判定器编号 + 通过信号 + 具名反向行为 |
+| 卡片 | 证据 | `Evidence` | 是 | 相对任务根的 RED 与 GREEN 证据引用 |
+| 卡片 | 覆盖上限 | `Coverage limit` | 是 | 本 Task 的证据无法确立的东西 |
+| 卡片 | 停止 / 恢复 | `STOP / recovery` | 是 | 精确的不匹配或未知项、负责修复的人与材料、安全恢复方式；不得静默回退 |
+| 卡片 | 测试变更请求 | —（runtime 不查；契约测试要求字段名存在） | 否 | 显式理由、旧/新断言、此前的 RED 证据、独立审查引用；否则写 `none` |
+| 卡片 | 完成 | `Done` | 是 | AC 结果、目标测试、反向用例、证据/回读与审查事实 |
+| 速读卡 | 动手前必读 | — | 否 | 精确锚点（`文件路径:行号` 或材料节锚点），按读序排列 |
+| 速读卡 | 未决事实 | — | 否 | 未知 + 影响 + 处理位置，或 `N/A — 理由` |
+| 导航 | 材料导航 | — | 否 | 每条锚点真实打开过；没列的材料不凭印象引用 |
+| L1 | 交接知识 | — | 否 | 已核实事实 + 来源锚点；不写执行状态与进度 |
+
+### Tnnn — [下一个全局唯一的 Task 编号与一个可观察结果]
+
+- **来源 / FR / AC**: [可观察结果；当前 decision-log 的逐字来源编号/位置（适用时附上游 PRD 引用）、决定、FR 与 AC 编号；保留量词、否定、顺序与失败强度；不得只写编号不写内容]
+- **输入**: [当前材料引用、产出它的 Task、已核实的接口或夹具；若本 Task 独立，写 `none` 并给理由]
+- **文件 / 符号**: [本 Phase 写入集内的新增/修改路径；既有符号/签名/消费者与核实来源；未知项要写明负责人与停止条件]
+- **动作**: [在每个锚点上的有序改动或操作、数据与控制流、兼容边界；要足以让人不必猜产品就找到第一处改动]
+- **输出 / 失败**: [可观察的接口、schema 或状态结果，非法输入与失败信号，清理或回滚效果]
+- **边界 / 禁止改动**: [精确的受保护文件或范围；以及为什么本 Task 不能改它们]
+- **依赖**: [Task 编号或 `无`、上游产出物、文件所有权与串行/并行理由]
+- **测试层级 / 技能**: [`simple|feature|fullstack`；恰好一个适用的具体测试技能]
+- **场景 / 夹具或服务**: [正常用例与具名的反向用例；搭建与清理]
+- **预写测试**: [本 Task 独占的测试文件、目标断言与作者；build-plan 在实现之前写好它；若 G-2 不适用，给出理由、风险与客观替代]
+- **可观察接缝**: [本 AC 对应的既有产出方 → 已持久化的产物 → 真实读取方/消费者；来源分母；缺失或非法的语义。**三项都要写「我是怎么知道的」**：至少一项是 `文件路径:行号`，或 `实际命令 + 退出码`。只写「将来如何观察效果」不算接缝。若这条接缝目前不存在，就写 `unverified` 或 `unknown`，同时把该 AC 标为未完成并写明负责人与下次核实动作——不要改去测文本，也不要把它留给 build-code]
+- **RED/GREEN 门禁命令**: [本 Task 的目标 RED 与配对 GREEN 共用同一条可执行、有范围的命令；若确实不适用，说明理由并给出客观替代]
+- **预期退出码**: [RED：由具名目标断言产生的非零退出码，不是 setup 失败；GREEN：0]
+- **RED 目标失败**: [稳定的判定器编号，以及改动之前必须失败的那条确切断言或拒绝；setup 或收集失败不算 RED]
+- **RED 证据**: [来自既有任务事实的真实 build-plan 命令、退出码、失败断言、输出/引用与材料身份；没有真实执行记录就是「不可用」，不是 RED]
+- **GREEN 判定器**: [同一个判定器编号；改动之后的通过信号，以及具名的反向行为]
+- **证据**: [相对任务根的计划 RED 与 GREEN 证据引用；真实结果属于任务事实库]
+- **覆盖上限**: [本 Task 的证据无法确立的东西]
+- **停止 / 恢复**: [精确的不匹配或未知项、负责修复的人与材料、安全恢复方式；不得静默回退]
+- **测试变更请求**: [若冻结测试必须改动：显式理由、旧/新断言、此前的 RED 证据、独立审查引用；否则写 `none`]
+- **完成**: [要诚实下结论所需的 AC 结果、目标测试、反向用例、证据/回读，以及任何审查事实]
+
+#### 示例：一张填满的 T001 卡片（人读，只示范结构；内容与你的仓库无关，照抄形状、不要照抄文字）
+
+- **来源 / FR / AC**: FR-004 / AC-004-2「配置读取失败必须给出可定位的错误，而不是默认值」；来源 `decision-log.md` 的 2026-03-02 决定条目与上游 PRD 引用，保留「必须报错、不得回退默认值」的否定强度。
+- **输入**: `spec.md` 的配置章节引用；T000 已产出的 `config.schema.json`；`tests/fixtures/config/broken.json`。
+- **文件 / 符号**: 修改 `src/config/load.ts:41-88` 的 `loadConfig()`；新增错误类型 `ConfigParseError`；消费者 `src/cli/main.ts:12`。
+- **动作**: 先在第一处改动——`loadConfig()` 的 `catch` 分支——去掉回退默认值的路径，改为抛出携带 `file:line` 的 `ConfigParseError`；再让 `src/cli/main.ts` 在顶层捕获并打印该错误、以退出码 `2` 结束；不得改动 schema 字段名。
+- **输出 / 失败**: 合法配置返回完整对象；解析失败抛出 `ConfigParseError` 且 `message` 含 `file:line`；进程退出码 `2`；不写任何部分结果到磁盘。
+- **边界 / 禁止改动**: 不许改 `config.schema.json` 的字段名与 `src/config/defaults.ts`；因为它们被 P1 的冻结契约引用。
+- **依赖**: `none`（本 Task 独立，前置于 T002）。
+- **测试层级 / 技能**: `feature`；`vitest`。
+- **场景 / 夹具或服务**: 正常用例 `tests/fixtures/config/ok.json`；反向用例 `broken.json`（第 7 行缺少 `name`）；无外部服务；用例后清理临时目录。
+- **预写测试**: `tests/config/load.test.mjs`（本 Task 独占），断言「抛出 `ConfigParseError` 且 `message` 含 `broken.json:7`」；由作者在实现前写好。
+- **可观察接缝**: 既有产出方 `loadConfig()` → 已持久化产物 `config.schema.json` → 真实读取方 `src/cli/main.ts`；来源分母为 2 个夹具；缺失语义＝文件不存在时抛 `ENOENT` 包装后的同类错误。**我是怎么知道的**：产出方读 `src/config/load.ts:41`、产物读 `config/config.schema.json:1-18`、读取方以 `rg 'loadConfig\(' src/cli/main.ts` 命中 `src/cli/main.ts:12`。
+- **RED/GREEN 门禁命令**: `npx vitest run tests/config/load.test.mjs`（RED 与 GREEN 共用同一条）。
+- **预期退出码**: RED：`1`（断言失败）；GREEN：`0`。
+- **RED 目标失败**: 判定器 `ORACLE-P3-CONFIG-ERROR`；改动前必须失败的确切断言＝`expect(() => loadConfig(broken)).toThrow(ConfigParseError)`。
+- **RED 证据**: `quality/evidence/<task-id>/P3-config-red.json`（真实命令、退出码、失败断言与输出引用）；尚未执行时写 `unavailable — 尚未取得真实 RED`。
+- **GREEN 判定器**: 同一个判定器编号 `ORACLE-P3-CONFIG-ERROR`；通过信号＝上述命令退出码 `0`；反向行为＝`ok.json` 仍能加载且字段不变。
+- **证据**: `quality/evidence/<task-id>/P3-config-green.json`；真实结果属于任务事实库。
+- **覆盖上限**: 不覆盖并发写入与 Windows 路径分隔符；这两项留给 P4。
+- **停止 / 恢复**: 若 `broken.json` 的失败信号不稳定，停止并交给配置模块作者用 `config.schema.json` 复核；不得放宽断言换绿。
+- **测试变更请求**: `none`。
+- **完成**: `AC-004-2` 的正反用例都通过、RED 与 GREEN 证据可回读、`load.ts` 与 `main.ts` 的改动已由独立审查确认。
+
+### 编号与交接
+
+每个 Task 都完整重复一张 `Tnnn` 卡片。`T001` 只用于全任务的第一个 Task 卡片；下一个 Phase 接续编号，而不是重新从 `T001` 开始。不要把多个 Task 压缩成一行、借用别的 Phase 的 Task 正文，或把执行状态写进这份由人编写的文件。本 Phase 的编号与写入集必须与 `phases/index.md` 的指针逐条一致。
+
+## L2 — 可删除参考
+
+[只在实现期间有用的非权威提示。写明在什么条件下删掉本节不会改变 L0/L1。]

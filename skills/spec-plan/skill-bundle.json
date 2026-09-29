@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "ef5ed76ba8cfdb3585334f940dc7c28b1d4ae63636bad684ec120e59b024e459"
+      "sha256": "80246fecb006c034564bcc323abe11cb8b3c3846119c314e94405e7c4db18151"
     },
     {
       "path": "templates/phase-template.md",
-      "sha256": "b5a4b739bcf61274e63cc35249dfdde989f884a635a5910931769a203747f753"
+      "sha256": "910b88980baecb125176607758552833c117e540d2da663a74372edb4760d54a"
     }
   ],
   "sources": [

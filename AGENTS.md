@@ -22,6 +22,20 @@
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
+### 证据硬规则（本任务后续执行）
+
+- 每类事实只留一份原始件：原始测试输出、正式 review 回执、review 原件各存一份，禁止复制镜像到 `quality/evidence/`。
+- 禁止把整棵工作树或整个目录作为证据保存（禁止目录快照、整树 tar、`git archive` 产物、文件树清单）。
+- 需要证明改动范围时，只存本 Phase 实际改动文件的原始字节 + 路径 + hash。
+- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### 证据只留原始件` 段；本条是执行纪律，不是新的 stage、gate 或质量结论。
+
+### 卡住与升级（本任务后续执行）
+
+- 卡住时必须先把话说明白再停：用日常语言写清「现在卡在哪、为什么不能继续、有几条路、每条路的代价与风险」，并给出可以直接回复的选项。
+- 禁止把阶段缩写、AC 编号、内部取值或其它只有读过材料的人才懂的词，作为唯一的说明。
+- 同一件事连续若干次没有产生任何新事实时，停止自动续跑，把上面这条报告写出来，不重复同一次无进展的尝试。
+- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### stage 结束` 段（R13 人类边界）之后；本条是沟通与停机纪律，不是新的 stage、gate 或质量结论。
+
 ## 入口文件
 
 - 项目说明：[README.md](README.md)

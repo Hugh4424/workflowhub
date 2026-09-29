@@ -13,6 +13,24 @@ version: 2.2.0
 pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
+### 计划缺口的集中退回
+
+发现在做的工作本身是计划缺口（Phase 的 allowed files/symbols 不对、覆盖的 AC 无法验证、
+Phase 之间的边界重叠、依赖顺序不成立、计划里的测试路由跑不起来），执行者必须**停下来成组退回**，
+而不是现场边做边改计划：
+
+1. **先列全，再退回**：把本 Phase 已发现的缺口一次性列全，每条写四样——缺口一句话、影响的 Phase/AC、
+   不修会怎样、需要 owner 回答什么。不要在只发现第一条时就退回，也不要发现第三条时再退一次。
+2. **只退回一次**：post 回 `build-plan` 的 `spec-clarify`，pre 回 `build-spec`/`build-plan`；方向性缺口回
+   `make-decision`。一次把全部缺口交出去，并在退回时说明"在等答复之前我不打算动哪些部分"。
+3. **退回期间停手范围**：只做不受该缺口影响的安全修复；受影响的部分在 task facts 里标
+   `blocked_by_plan_gap` 并写明是哪一条缺口，**不再猜着实现、不再自行改材料**。
+4. **第二次缺口并入第一份清单**：本 Phase 后续再发现缺口时，追加进同一份清单再退回一次，
+   不得就地自行决定。
+5. 确实需要"先按自己的理解做一点"时，先在 handoff 里写明理由和代价，再动。
+
+本条是执行纪律，不是新的 stage、gate 或质量结论；它不新增状态、不阻断同 task 的安全修复。
+
 ## Goal
 
 Implement the current task with the smallest correct change, real tests,
@@ -206,6 +224,15 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    covered ACs, non-goals, compatibility boundary, predesigned test route, stop
    conditions, and expected stage-end summary. Completion: the change boundary
    and its ACs are explicit before editing.
+
+   Phase Card 里再写两行**版本锚**（给人看的绑定，不是 machine gate）：
+   - `规则锚`：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。
+     不要写整份文件的哈希——材料里与本 Phase 无关的段落变化，不构成本 Phase 事实作废的理由。
+   - `材料变更影响`：本次实施预计会改动材料（`phases/P<n>.md`、`spec.md`）的哪些段落；
+     不会改动的段落**不在本 Phase 的审查与实现范围内**。
+   当材料发生变化时，先对照这两行判断"变的是不是我盯的那一段"：不是，就照常继续并只在 handoff 记一句；
+   是，才把本 Phase 的实施/测试/审查事实读为 stale。
+
 2. Apply the Task's predesigned route. When behavior can be tested, write the
    focused behavior test and capture real RED before implementation. Make the
    smallest production change, then inspect the actual changed files. A pure
@@ -232,11 +259,30 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    merely to chase an empty findings list. Completion: the review or its real
    unavailability is recorded with provenance; an unavailable attempt keeps the
    stage quality claim incomplete.
+
+   发起前先回答三个问题，并把答案写进本 Phase 的 task facts：
+   - **审什么**：列出本次审查范围 = `phase_id` + 本 Phase Card 的 allowed files/symbols + covered AC 列表，
+     作为 `review --action=record` 的 `subject` 原样提交。`subject` 不许留空；留空等于声明"范围未限定"。
+     同时必须显式写全 `review_scope="phase"`、`subject_kind="phase"`、`phase_id="P<n>"` 三者——
+     三者缺一时不要靠默认值，先补齐再提交。
+   - **审过了吗**：读当前 task 的 `quality/reviews/attempts/` 与 `quality/reviews/results/`，
+     列出同一 `phase_id` 下**已存在的成功回执**及其 `subject`。
+   - **要不要再派**：只有当本次范围**超出**已有回执范围（新增文件/新增 AC），或已有回执是 `unavailable`，
+     才发起一次新审查；必须写明"超出的是哪一条"。**修 finding 造成的材料字节变化不是重派理由。**
+   若本 Phase 仍然出现了第二次派发，必须在 Phase handoff 里写清两次 `subject` 的差异和第二次的必要性。
+   本条是执行纪律，不是新的 stage、gate 或质量结论。
+
 6. Inspect every finding and record `fixed`, `rejected_invalid`,
    `accepted_risk`, or `needs_human`. Repair valid findings in this same task and
    rerun affected checks. Reject invalid findings with evidence. Keep serious
    unresolved risk visible and obtain the user's exact acceptance before calling
    the affected work complete. Completion: no finding is unexplained.
+
+   修复前先写下**受影响的测试集合**（文件/用例名），只跑这一集合；把每条的 exit code 与结果直接写在
+   对应 finding 的处置里（哪个 finding → 跑了哪条命令 → 结果如何）。没有受影响的测试时写
+   `not_applicable` 和原因，**不要用全量回归代替定向复测**；确实需要一条例外命令时，
+   写清是谁要求的、范围是什么（照 `AGENTS.md` 的测试硬规则）。
+
 7. End the Phase with a plain-language handoff: delivered behavior, actual test
    layer and result, AC limits, review fact, finding disposition, unresolved
    risk, deferred work, and the next Task. For pre/history, update the existing
@@ -253,6 +299,13 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    affected AC results, evidence, review outcome, and handoff. Then continue
    with the next `pending` or `in_progress` Task; do not replay earlier Phases
    or reconstruct historical process indexes.
+
+   收尾时回答一句：当前推进中的 Phase 只有一个吗？如果有第二个已经开始，写清它是什么、为什么提前开始。
+
+   handoff 里再加一行**本 Phase 成本**，用大白话写数字；写不出就写 `unavailable` 和原因：
+   「改了几次实现、跑了几次 focused 测试（分别是什么）、发起过几次正式审查（含 unavailable 的尝试）、
+   等 provider 一共多久、改过几次材料、从开始到 handoff 一共多久」。
+   这一行只用于诊断，不设预算上限，也不作为推进条件；它不阻断任何后续动作。
 
 Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,

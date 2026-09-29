@@ -25,42 +25,42 @@ const fillPlaceholders = (text) => text
   .replace(/\[填写:[^\]]*\]/g, templateFiller)
   .replace(/\[填写[^\]]*\]/g, templateFiller);
 
-const globalFiles = `### NEW
+const globalFiles = `### 新增
 
 - \`tests/demo.test.mjs\`
 
-### MODIFY
+### 修改
 
 - \`core/demo.mjs\`
 
-### DO NOT TOUCH
+### 禁止改动
 
 - \`core/authority.mjs\``;
-const phaseFiles = `- **NEW**：\`tests/demo.test.mjs\`
-- **MODIFY**：\`core/demo.mjs\`
-- **DO NOT TOUCH**：\`core/authority.mjs\``;
+const phaseFiles = `- **新增**：\`tests/demo.test.mjs\`
+- **修改**：\`core/demo.mjs\`
+- **禁止改动**：\`core/authority.mjs\``;
 const constitutionBinding = `\`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"${"a".repeat(64)}","id":"CONSTITUTION","version":"1","clause_count":22}\``;
 
 function renderPlanTemplate() {
   let plan = fillPlaceholders(read("skills/spec-plan/templates/plan-template.md"));
   plan = plan
-    .replace(/^- \*\*Non-goals\*\*[:：].*$/m, "- **Non-goals**：不改无关运行时。来源：R-001 / D-001")
-    .replace(/- \*\*Constitution binding\*\*[:：].*$/m, `- **Constitution binding**：${constitutionBinding}`)
-    .replace(/## Implementation Order\n\n__TEMPLATE_FILL__/, "## Implementation Order\n\nP1：T001 RED → T002 GREEN → T003 FINAL。")
-    .replace(/- \*\*Dependencies\*\*[:：].*$/m, "- **Dependencies**：T001 → T002 → T003。")
-    .replace(/- \*\*Parallel work\*\*[:：].*$/m, "- **Parallel work**：无；三张卡共享一个行为边界。")
-    .replace(/- \*\*External dependencies\*\*[:：].*$/m, "- **External dependencies**：无；N/A — reason。")
+    .replace(/^- \*\*非目标\*\*[:：].*$/m, "- **非目标**：不改无关运行时。来源：R-001 / D-001")
+    .replace(/- \*\*宪法绑定\*\*[:：].*$/m, `- **宪法绑定**：${constitutionBinding}`)
+    .replace(/## 实施顺序\n\n__TEMPLATE_FILL__/, "## 实施顺序\n\nP1：T001 RED → T002 GREEN → T003 FINAL。")
+    .replace(/- \*\*依赖\*\*[:：].*$/m, "- **依赖**：T001 → T002 → T003。")
+    .replace(/- \*\*并行工作\*\*[:：].*$/m, "- **并行工作**：无；三张卡共享一个行为边界。")
+    .replace(/- \*\*外部依赖\*\*[:：].*$/m, "- **外部依赖**：无；N/A — 理由。")
     .replace(
       /\| __TEMPLATE_FILL__ \| __TEMPLATE_FILL__ \| __TEMPLATE_FILL__ \| __TEMPLATE_FILL__ \| __TEMPLATE_FILL__ \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \|/,
       "| R-001 / D-001 | FR-DEMO-001 | AC1 | P1/T001,T002,T003 | none | `tests/demo.test.mjs` | `npx vitest run tests/demo.test.mjs` / ORACLE-FINAL |",
     )
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
-    .replace(/### Verify\n\n__TEMPLATE_FILL__/, "### Verify\n\nORACLE-FINAL — npx vitest run tests/demo.test.mjs")
-    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
+    .replace(/### 验证\n\n__TEMPLATE_FILL__/, "### 验证\n\nORACLE-FINAL — npx vitest run tests/demo.test.mjs")
+    .replace("### 任务\n\n- `__TEMPLATE_FILL__`", "### 任务\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
     .replaceAll(templateFiller, "verified contract fact");
   return plan
-    .replace("### NEW\n\n- `verified contract fact`\n\n### MODIFY\n\n- `verified contract fact`\n\n### DO NOT TOUCH\n\n- `verified contract fact`", globalFiles)
-    .replace("- **NEW**：`verified contract fact`\n- **MODIFY**：`verified contract fact`\n- **DO NOT TOUCH**：`verified contract fact`", phaseFiles);
+    .replace("### 新增\n\n- `verified contract fact`\n\n### 修改\n\n- `verified contract fact`\n\n### 禁止改动\n\n- `verified contract fact`", globalFiles)
+    .replace("- **新增**：`verified contract fact`\n- **修改**：`verified contract fact`\n- **禁止改动**：`verified contract fact`", phaseFiles);
 }
 
 const taskShapes = {
@@ -80,7 +80,7 @@ function renderTasksTemplate() {
   tasks = tasks
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
     .replace("- **NEW**：`__TEMPLATE_FILL__`\n- **MODIFY**：`__TEMPLATE_FILL__`\n- **DO NOT TOUCH**：`__TEMPLATE_FILL__`", phaseFiles)
-    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
+    .replace("### 任务\n\n- `__TEMPLATE_FILL__`", "### 任务\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
     .replace(
       /\| `P1` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \| `__TEMPLATE_FILL__` \|/,
       "| `P1` | `plan.md` | `phase-p1-contract` | `tests/demo.test.mjs`; `core/demo.mjs` | `none` | `build-code` |",
@@ -138,7 +138,7 @@ const spec = `
 `;
 const plan = renderPlanTemplate();
 const tasks = renderTasksTemplate();
-const legacyPlan = `${plan.replace(/^- \*\*Template version\*\*[:：].*\n?/m, "")}
+const legacyPlan = `${plan.replace(/^- \*\*模板版本\*\*[:：].*\n?/m, "")}
 
 ## Global Constraints
 
@@ -213,8 +213,8 @@ describe("filled v3 planning sample", () => {
 
   it("projects Phase risk markers into pointer-only task rows for slice advisory", () => {
     const markedPlan = plan.replace(
-      "### Risks and rollback\n\nverified contract fact",
-      '### Risks and rollback\n\nslice-advisory: reason="shared contract update"; impact="two files change atomically"; owner="P1"; recheck="after GREEN"',
+      "### 风险与回滚\n\nverified contract fact",
+      '### 风险与回滚\n\nslice-advisory: reason="shared contract update"; impact="two files change atomically"; owner="P1"; recheck="after GREEN"',
     );
     const structural = validatePlanTaskContract({ spec, plan: markedPlan, tasks });
     expect(structural.ok, structural.errors.join("; ")).toBe(true);
@@ -232,7 +232,7 @@ describe("filled v3 planning sample", () => {
     expect(tasks).not.toMatch(new RegExp(templateFiller));
     expect(validatePlanTaskContract({ spec, plan: legacyPlan, tasks: validatorTasks })).toMatchObject({ ok: true, errors: [] });
     expect(validateExecutablePlanTaskMinimum({ spec, plan: legacyPlan, tasks: validatorTasks })).toMatchObject({ ok: true, errors: [] });
-    expect(tasks).toMatch(/## Execution Index/);
+    expect(tasks).toMatch(/## 执行索引/);
     expect(tasks).toMatch(/phase authority/);
     expect(tasks).toMatch(/\| `P1` \|/);
     expect(validatorTasks).toMatch(/## 4\. Final current-snapshot aggregate strategy/);
@@ -240,7 +240,7 @@ describe("filled v3 planning sample", () => {
     expect(validatorTasks).toMatch(/\*\*execution_contract\*\*：当前快照运行一次/);
     const finalCard = validatorTasks.split("#### T003")[1].split("## 4.")[0];
     expect(finalCard).toMatch(/\*\*oracle\*\*：ORACLE-FINAL/);
-    expect(plan).toMatch(/### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`/);
+    expect(plan).toMatch(/### 任务\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`/);
   });
 
   it("keeps the final route identical between T003 and the aggregate", () => {

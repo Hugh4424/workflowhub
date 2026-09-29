@@ -271,14 +271,19 @@ function acceptanceSemanticWarnings(item, coveredItems) {
 function completionReview(records) {
   const reviews = records.filter(Boolean);
   const statuses = reviews.map((entry) => entry.facts.status);
+  const providerResults = reviews.flatMap((entry) => entry.value?.provider_results ?? []);
+  const timings = providerResults.map((item) => item?.timing?.duration_ms ?? item?.execution?.timing?.duration_ms)
+    .filter((value) => Number.isSafeInteger(value) && value >= 0);
+  const usages = providerResults.map((item) => item?.usage ?? item?.execution?.usage)
+    .filter((value) => Number.isSafeInteger(value) && value >= 0);
   return {
     conclusion: statuses.length
       ? `异源质量建议已记录：${statuses.join(", ")}`
       : "异源质量建议暂不可用",
     status: statuses.length ? statuses.join("+") : "unavailable",
-    providers: [...new Set(reviews.flatMap((entry) => entry.value?.provider_results?.map(({ provider }) => provider) ?? []))],
-    duration_ms: null,
-    tokens: null,
+    providers: [...new Set(providerResults.map(({ provider }) => provider))],
+    duration_ms: timings.length ? timings.reduce((sum, value) => sum + value, 0) : null,
+    tokens: usages.length ? usages.reduce((sum, value) => sum + value, 0) : null,
     findings: reviews.flatMap((entry) => entry.value?.findings ?? []),
     refs: reviews.filter((entry) => entry.ref && entry.evidence).map((entry) => ({ ref: entry.ref, hash: entry.evidence.sha256 })),
   };
