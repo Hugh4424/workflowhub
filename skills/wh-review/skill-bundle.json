@@ -1,13 +1,6 @@
 {
   "schema_version": 1,
   "skill": "wh-review",
-  "runtime_dependencies": [
-    {
-      "name": "3rd-review-broker",
-      "version": ">=1.2.0",
-      "source": "host-provided broker; runtime compatibility probe reports unknown when semver is unavailable"
-    }
-  ],
   "files": [
     {
       "path": "SKILL.md",
@@ -18,12 +11,12 @@
       "sha256": "1600db35156dffc232224ff6e00cd4b55fcad5670b19c49f5c92294860b16ff8"
     },
     {
-      "path": "contracts/build-prd.md",
-      "sha256": "b1221d3397fc224755ac9a9a05f3378a47fa9822cf6ebf03969e622dc02f749d"
-    },
-    {
       "path": "contracts/build-plan.md",
       "sha256": "dd6cb2ac90391169a612f20481544da8b33f57ec9491f9e46fb058b8b26847ab"
+    },
+    {
+      "path": "contracts/build-prd.md",
+      "sha256": "b1221d3397fc224755ac9a9a05f3378a47fa9822cf6ebf03969e622dc02f749d"
     },
     {
       "path": "contracts/build-spec.md",
@@ -66,20 +59,24 @@
       "sha256": "a29471a869042030af782b0c94febdef8d5cd83e30a24e44507d92fe27d7a5db"
     },
     {
-      "path": "scripts/lib/safe-id.mjs",
-      "sha256": "38bdda4bf49378bc90790e694390bb64da537a8b47b3bd582ea838feaf25dcb0"
+      "path": "scripts/ac-evidence-summary.mjs",
+      "sha256": "5868ce6dad8181e476184e76ac32ec2c0fadf5b6c2a5e3f7e2111989b3fea466"
     },
     {
       "path": "scripts/integration-review-subject.mjs",
       "sha256": "32665440da77138d306c3481d88395c55bceb8c5ce5a6eac659f400066c11a54"
     },
     {
-      "path": "scripts/review-materials.mjs",
-      "sha256": "fc20d9ab18709b631cb04de0fb699f6801c1c83f89e97329007e7ea55fe65d35"
+      "path": "scripts/lib/safe-id.mjs",
+      "sha256": "38bdda4bf49378bc90790e694390bb64da537a8b47b3bd582ea838feaf25dcb0"
     },
     {
-      "path": "scripts/ac-evidence-summary.mjs",
-      "sha256": "5868ce6dad8181e476184e76ac32ec2c0fadf5b6c2a5e3f7e2111989b3fea466"
+      "path": "scripts/review-input-bounds.mjs",
+      "sha256": "c15ee499599ded1b94866666abeca018babbd661ac4b12672815c5eade088462"
+    },
+    {
+      "path": "scripts/review-materials.mjs",
+      "sha256": "04f53366a0cae6afdc8fd2c5b3ac5ffb18a3b4028c18f633865b3c9d50766b1c"
     },
     {
       "path": "scripts/review-output.mjs",
@@ -110,6 +107,10 @@
       "sha256": "abf5855e0f5b3ead8bfc1566bafe16ddb31d0e0b14d9ad245438d471f1525ec4"
     },
     {
+      "path": "scripts/simple-review-runner.mjs",
+      "sha256": "341db7ba109aad1646e60304917d721a1c985e123d648cbdbbe27d5f2b9a4cd8"
+    },
+    {
       "path": "scripts/third-review-host-config.mjs",
       "sha256": "353ed37cd83ee0fec1e1b56383158f87e3eb3e273e895c27030f8d6c7483ed44"
     },
@@ -118,16 +119,8 @@
       "sha256": "9d7e70f1eba9974097ab6d3bfd05e3c95a94f0fb1a2903c5346b7ed883bdcf2c"
     },
     {
-      "path": "scripts/simple-review-runner.mjs",
-      "sha256": "341db7ba109aad1646e60304917d721a1c985e123d648cbdbbe27d5f2b9a4cd8"
-    },
-    {
       "path": "stage-skill-plan.json",
       "sha256": "62d5c97617c273a198fe066d75e793645bac0bc5003eb96cfeb89742800b8170"
-    },
-    {
-      "path": "scripts/review-input-bounds.mjs",
-      "sha256": "c15ee499599ded1b94866666abeca018babbd661ac4b12672815c5eade088462"
     }
   ]
 }
