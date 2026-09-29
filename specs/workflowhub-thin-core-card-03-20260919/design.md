@@ -97,7 +97,7 @@
 
 - **机制**：`build-code` 的收尾步把「当前结果」与上一轮的字节级快照逐字节比对，材料任何变化都要求整段重做。
 - **落点（两个）**：① `docs/standard-workflow.md:334-338`（build-code step 11 `authenticate-current-task-completion` 的说明；**2026-09-29 锚点更正**：原记 `:289-290` 为合并前旧编号）；② `workflows/build-code/steps.json:15`（同一 step 的 `observable_result`）。
-- **逐字草案（替换 `docs/standard-workflow.md:334-338` 原文）** —— **2026-09-29 复核更正：该文案已落地**，`docs/standard-workflow.md:334-338` 现文即此稿；该落点由合并提交 `97092b30` 带入本卡 worktree（`git diff --stat '97092b30^1' 97092b30 -- docs/standard-workflow.md` 为空，即合并结果与 main 侧逐字节相同）。以下保留的是**设计期草案原文**，不是待办：
+- **逐字草案（替换 `docs/standard-workflow.md:334-338` 原文）** —— **2026-09-29 复核更正：该文案已落地**，`docs/standard-workflow.md:334-338` 现文即此稿；该落点由合并提交 `97092b30` 带入本卡 worktree（`97092b30^1` = **本卡侧 `5202828a`**、`97092b30^2` = **main 侧 `6848760d`**；实测 `git diff --stat '97092b30^1' 97092b30 -- docs/standard-workflow.md` 为空 ⇒ 该文档的合并结果与**本卡侧 `5202828a`** 逐字节相同；对 main 侧 `6848760d` 则 `docs/standard-workflow.md` 相差 **52 行**，另一落点 `workflows/build-code/steps.json` 相差 **4 行**。**2026-09-29 复核更正**：原文误写成「与 main 侧逐字节相同」，括注方向写反）。以下保留的是**设计期草案原文**，不是待办：
 
 ```markdown
 11. `authenticate-current-task-completion`：确认 task facts 绑定**该 phase 声明的写集**
@@ -3215,7 +3215,7 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 | S6 | 同一原件只存一份 | **已覆盖** | I-9；build-code P3「证据只留原始件」（`docs/standard-workflow.md:107-123` 已落盘） |
 | S7 | 业务规则绑稳定段落而非整份哈希 | **已采纳为新条目** | I-14；build-spec P5 已落盘 `workflows/build-spec/SKILL.md:90` |
 | S8 | 计划与执行记录分家 | **已覆盖** | I-1；施工表行 43 |
-| S9 | 用真实成本信号发现问题 | **已覆盖** | I-11；build-code P6（`docs/standard-workflow.md:94` 已落盘）；施工表行 51（**未实施**） |
+| S9 | 用真实成本信号发现问题 | **已覆盖** | I-11；build-code P6（`docs/standard-workflow.md:94` 已落盘）；施工表行 51（**已落地**，改后字段在 `runtime/stage/stage-handlers.mjs:294-295`；机制见 §14.6 第 4 条的消解注记；**2026-09-29 复核更正**：原记「未实施」，与施工表行 51「已落地」冲突，已按实测改为同一口径） |
 | S10 | 进度可见性：不靠 `list_agents`＋读时钟判断局面；相位指针带新鲜度语义 | **现仓已具备 ⇒ 不新增条目，改登记位置** | 见下方「S10 专项」 |
 | S11 | 目标从「零返工」改成可跟踪指标 | **部分采纳** | 见下方「S11 专项」 |
 | S12 | 面向用户的报告必须用大白话并附术语对照 | **已采纳为新条目** | I-12；`AGENTS.md:32-37`（`### 卡住与升级`）已落盘；`workflows/build-code/SKILL.md:39-42`（`## 阶段末遗漏披露`）已落盘 |
@@ -3291,15 +3291,15 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 | X11／X12 | 两处「非矛盾」限定 | **不落本卡** | — |
 | **①–⑤** | token 五种口径的边界（应用目标计数 46,631,377／主转录末值 1,264,453,587（cached 99.60%）／按回合聚合／子代理 70 份／`exec` 文本嵌套计数） | **采纳为「引用纪律」** | 本卡**任何**引用 token 数字的地方必须同时写明属于哪一种口径；本卡现行文本只引 21,135 秒静默（`design.md` 2 处、`decision-log.md` 1 处），**不是 token 口径**，故不受影响 |
 
-#### §14.14.7 施工表未实施的三行（不是漏记，是排队）
+#### §14.14.7 施工表未实施的两行（不是漏记，是排队；**2026-09-29 复核更正**：原列三行中的行 51 已落地，现余两行）
 
 `grep` 实测（2026-09-28）：
 
 - 行 50：`docs/standard-workflow.md` 里搜不到「交接前可执行性核查」⇒ **未实施**。
-- 行 51：`runtime/stage/stage-handlers.mjs#completionReview`（原记 `:280`，现 `:294`） 仍是 `duration_ms: null,`、`:281` 仍是 `tokens: null,` ⇒ **未实施**。
+- 行 51：**2026-09-29 复核更正：已落地**（不再是「未实施」，原记有误）。`runtime/stage/stage-handlers.mjs#completionReview`（原记 `:280`，现函数体 `:280-299`）的 `:294` 现为 `duration_ms: timings.length ? timings.reduce((sum, value) => sum + value, 0) : null,`、`:295`（原记 `:281`，该旧行号已错位）现为 `tokens: usages.length ? usages.reduce((sum, value) => sum + value, 0) : null,` ⇒ **已实施**；口径与施工表行 51「已落地，改后字段在 `:294-295`」及 §14.6 第 4 条的消解注记一致。
 - 行 52：`workflows/build-code/SKILL.md` 与 `workflows/build-plan/SKILL.md` 里 `并行上限`／`并发上限` 命中数＝**0** ⇒ **未实施**（该行标「错开实施」）。
 
-⇒ 三行**已设计、未实施**，不是登记缺口。
+⇒ 两行（行 50、行 52）**已设计、未实施**，不是登记缺口；原列三行中的行 51 已于 **2026-09-29 复核更正**为**已落地**（见上）。
 
 #### §14.14.8 本节新增的记账（写面）
 
