@@ -301,7 +301,8 @@ describe("close contract (T0-RED)", () => {
     });
     state.kernel.publishCanonicalRecord(fact.ref, fact.raw);
 
-    expect(() => prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery })).not.toThrow();
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(prepared.plan.delivery.quality_gaps).not.toContain(expect.stringContaining("QUALITY_FACT_INVALID"));
   });
 
   it("requires explicit user reply text and current-step provenance", () => {

@@ -456,6 +456,7 @@ function currentQualityValue(task, ref) {
             review: "review_result",
             acceptance_criterion: "acceptance_evidence",
             confirmation: "human_confirmation",
+            coverage: "coverage_audit",
           })[value.kind])
         || !Number.isFinite(Date.parse(value.recorded_at))) {
       const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has invalid quality fact fields`);
