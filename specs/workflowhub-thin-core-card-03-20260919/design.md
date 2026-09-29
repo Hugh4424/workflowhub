@@ -3446,3 +3446,34 @@ npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contrac
 - 退役登记表**无机器消费点**（只依赖 `make-decision` 主会话写模板）；是否加机器读数留给后续卡。
 - M5 **无机器拦截点**（2026-09-29 修订：补全事实，结论不变）：实测 `grep -rn "git checkout|git restore|git reset|force-with-lease|branch -D" runtime/ tools/cli/` 零命中；另如实补全一条**范围更窄的**既有机器侧——`workflows/build-code/diff-scanner.mjs:17-30` 的 `C2_IRREVERSIBLE_GIT_RULES`（`:20-29`）**已把** `git push --force-with-lease`、`git push --force`、`git push --delete`、`git push -f`、`git branch -d`、`git branch -D`、`git reset --hard` 归类为 `irreversible_git`（配套 `tests/build-code-diff-only.test.mjs:6`），但该清单当前**不是**门禁：全仓没有任何 `runtime/`／`tools/`／`skills/` 代码调用 `createPhaseDiffScan`（唯一调用点即其自带 CLI `workflows/build-code/diff-scanner.mjs:477`；其余命中在 `tests/build-code-diff-only.test.mjs` 与只读归档 `specs/archive/stage-interaction-handoff-completeness/spec.md:69` 的设计意图描述里），`workflows/build-code/SKILL.md` 对 scanner／C2／越界**零提及**，`tools/cli/check-task-record-paths.mjs:107` 只白名单其临时路径 ⇒ 「M5 当前不是机器门禁」实质成立，如实记为**纪律条款**，不宣称已机器化。**残余风险（如实登记）**：`specs/archive/m8-build-code/tasks.md:348` 记有既有意图「每次 git diff 后检查 C2 清单（调 diff-scanner.mjs），有 violations 时**停等确认**」——该语义比 M5 现文更接近被禁止的「必须先人工确认」；**本卡不动 scanner**，留后续卡对齐口径。若后续要把「强推/删分支/删任务目录」写进授权清单枚举，属新控制面，须另立登记。
 - `workflows/build-plan/steps.json` **未改**（其 step 12 `observable_result` 已含 `retains any actual user reply in the existing confirmation record`）；`decision-log.md:441` 记的冻结范围问题维持原状。
+
+## §16 build-plan 防臃肿与执行层防跑偏的设计（E1–E16；2026-09-29）
+
+**来源与流程**：落地清单 `/tmp/pb-land/landing-brief.md`（E1–E16 ＋ 硬约束 ＋ 验证与交付要求）。在同一 worktree 内**逐条 read 原件后**就地改文字；机制与哈希链见提交 `8b452fc0`。**本节是设计陈述；决定登记在 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md` 的 `### 十八`**（含逐条落点、哈希前后值与 4 项未落地理由）。
+
+### §16.1 设计原则（三条；违反任一条即回退重写）
+
+1. **只改既有文本字段与既有执行纪律，不加机器门禁**：不新增门禁/字段/schema/确认点/阈值/CLI 动词，不新增要让用户回答的问题；每条新增文字都落在既有段落或既有模板槽位里。
+2. **就地改文字、不重排、净行数 0**（唯一例外见 §16.3）：既有锚点依赖行号；E12 引入的 `workflows/build-code/SKILL.md:272-275` 自指只有在 build-code 行数不变时才成立。
+3. **英文文件写英文、中文文件写中文**；技能改动与哈希链**同批**刷新（`skills/<skill>/skill-bundle.json` ＋ `skills/catalog.yaml` 对应项），哈希只由机器实现重算，不手改字面量。
+
+### §16.2 十六处机制（三组）
+
+- **计划期防臃肿（E1、E2、E6、E7、E8、E9、E15、E16）**：Task 粒度＝一个用户可感知的交付增量，同一交付物的连续步骤不拆卡（此前只禁「一行任务」、没定义上限，于是每条风险与未验证项都升格成一张卡）；被取代的全文正文不留在活文件里（历史由 git 与既有归档承载）；切片两条件（① 存在可整片丢弃的切片：低价值或可推迟；② 各切片体量相当）＋「材料或范围超出一次可读上限时，动作是把问题拆小，不是继续往同一份里写」，两项都不设数值阈值；非目标写「本可做而明确不选＋理由」（不写否定句、不拿「防止范围膨胀」当理由）、主要风险写「若因它返工，替代走法是什么」、验收项写「没参与实现的人能用一条命令重放」的判据（写不出即算未达成、不得记为达成）；`simplicity-guard` 的核心问题在 `spec-specify` 与 `spec-plan` 两个写作点自检，结论写进既有取舍/非目标字段。
+- **执行期防跑偏（E10、E11、E12、E13）**：续跑第一步**先对现实**（`git status --short` ＋ 本 Phase 自己写的 `gate_cmd` 当前输出；材料与代码冲突时**代码赢**）；六段摘要的 `remaining risks` 必须对本轮失败信号给一句成句解读，唯一允许的空态写法是「这一轮没有失败信号」；**进展＝交付锚**（新提交或新证据）而非动作次数，拿不出外部锚时按既有 `:272-275` 判据自述一行、写不出即报告给人；**完成声明的上限＝独立来源的结论**（`adverse`/`unavailable` 时只声明到它允许的程度，但只限制措辞、**不阻断**同任务内修复；`docs/standard-workflow.md:88-92` 禁改区一字未动）。
+- **减法侧的读写闭环（E3、E4、E5、E14）**：删掉「没有更短的只附录决策形态」这句绝对化（它让全部 154 条登记等重）；`review finding` 收窄为 `load-bearing` review finding；build-plan 的输入装配同时读三类**既有**减法载体（`decision-omission-acceptance.v1` 的 accepted「不做」、`retain_or_delete` 的删除决定、`not_applicable` 的不适用），并写明「不做」是合法登记而非待补缺口；`simplicity-guard` 补一小节写清三处调用点、输出形态（结论只写既有文本字段）与空态「已读，无可删内容」的合法性，以及未引用调用点结论的删减类决定按既有合同记一条普通 finding。
+
+### §16.3 改动表面、行数与哈希链
+
+- 表面（8 文件）：`skills/spec-plan/SKILL.md`（`:12`/`:14`/`:20`）、`skills/spec-plan/templates/phase-template.md`（`:34`/`:39`/`:43`/`:185`）、`skills/decision-log/SKILL.md`（`:25`/`:148`）、`skills/simplicity-guard/SKILL.md`（新节「写作流程中的调用点与输出形态」）、`skills/spec-specify/SKILL.md`（`:46`）、`workflows/build-plan/SKILL.md`（`:202`/`:292`）、`workflows/build-code/SKILL.md`（`:256`/`:357`/`:367`）、`docs/standard-workflow.md`（`:305`）。
+- 行数：除 `skills/simplicity-guard/SKILL.md` 新增一小节（＋15 行；E14 明文要求「补一小节」）外，其余全部**净 0**。
+- 哈希链（改前→改后）：`skills/spec-plan/skill-bundle.json:7` `80246fec→2bf13c1f`；`:11` `910b8898→35ff23ef`；`skills/decision-log/skill-bundle.json:7` `9f0c3bc1→3daa24c2`；`skills/spec-specify/skill-bundle.json:5` `fe95fe97→882a961a`；`skills/catalog.yaml` 的 `local_bundle_hash`：spec-plan `b1a6e954→a5d2df7d`（`:335`）、decision-log `47974d73→5e0a116b`（`:130`）、spec-specify `630a1250→8ec7d43d`（`:286`）、simplicity-guard `c36970ae→599d8807`（`:218`）。重算用 `runtime/adapters/local-skill-resolver.mjs#validateSkillBundle`（`:108` 实算每文件 sha256、`:116` 按 `localeCompare` 排序后算 `bundleHash`），无手改哈希字面量；全仓 39 个 bundle 校验 fail=0。`skills/simplicity-guard/skill-bundle.json` 的 `files` 是字符串数组（无 `sha256` 字段），故只刷 catalog 聚合值；其 `review-bundle.json` 未改。
+- 未触碰：`runtime/**`、`tools/**`、`CONSTITUTION.md`、`specs/archive/**`；`docs/architecture/repository-inventory.tsv` **未重生成**（`tests/contract/repository-inventory.test.mjs:31` 要求它与 `HEAD` 逐字节相同）。
+- 验证口径：改后与改前逐条比对失败测试名集合，**双向差集为空**（38 条既有红逐条相同，无新增红）；`npm run check:skill-closure` 仍只报基线同样 3 条既有红且无 `catalog local_bundle_hash does not match resolved bundle`；`markdownlint-cli2` 报的 2 条错（`skills/spec-plan/templates/phase-template.md:12` MD028、`:14` MD032）在 HEAD 版本上同样复现，属既有。
+
+### §16.4 未落地项与残余风险（如实登记，不代用户决定）
+
+- 未落地 4 项同 `### 十八` 的 18.4：两个废弃模板未删（`skills/spec-plan/templates/plan-template.md`、`skills/spec-tasks/templates/tasks-template.md`）、`skills/wh-review/stage-skill-plan.json` 的 `required_skills` 未改（`tests/contract/stage-routing-and-concrete-testing.test.mjs:92-93` 冻结 `toEqual(["review"])`）、不新增复杂度预算/配额、`docs/architecture/repository-inventory.tsv` 未重生成。
+- **残余风险 1**：E5/E16 属「读既有登记／读既有读数」的纪律，**没有机器消费点**；若无人读，`decision-omission-acceptance` 仍可能被当成缺口、删除类计数仍可能不被报出。
+- **残余风险 2**：E14 的新节与 E15/E16 的调用点是文字约定，没有 schema 或 runner 强制。
+- **残余风险 3**：`skills/wh-review/stage-skill-plan.json` 只声明 `required_skills: ["review"]`，而 runner 侧把 `plan-eng-review` 列为必需技能；该不一致被上述测试冻结，本轮只登记、不改。
