@@ -21,7 +21,7 @@ index 1234567..abcdefg 100644
     expect(result.safe).toBe(true);
   });
 
-  it('case 2: diff containing git push → irreversible_git violation', () => {
+  it('case 2: diff containing git push → safe, no irreversible_git classification (rules deleted)', () => {
     const diffText = `diff --git a/scripts/deploy.mjs b/scripts/deploy.mjs
 --- a/scripts/deploy.mjs
 +++ b/scripts/deploy.mjs
@@ -30,10 +30,10 @@ index 1234567..abcdefg 100644
 +exec('git push origin main');
 `;
     const result = scanDiff(diffText);
-    expect(result.violations.some(v => v.type === 'irreversible_git' && v.pattern === 'git push')).toBe(true);
-    expect(result.safe).toBe(false);
-    const v = result.violations.find(v => v.type === 'irreversible_git' && v.pattern === 'git push');
-    expect(typeof v.line).toBe('number');
+    // CARD-03 T013 (G3): the uncalled C2_IRREVERSIBLE_GIT_RULES were deleted; M5 stays a
+    // written build-code boundary, so the scanner no longer classifies git commands.
+    expect(result.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
+    expect(result.safe).toBe(true);
   });
 
   it('case 3: diff touching package.json → external_dep violation', () => {
@@ -104,7 +104,7 @@ index 1234567..abcdefg 100644
 
   // --- NEW PATTERN TESTS ---
 
-  it('case 8: git branch -d → irreversible_git violation (branch deletion)', () => {
+  it('case 8: git branch -d → safe, no irreversible_git classification (rules deleted)', () => {
     const diffText = `diff --git a/scripts/cleanup.mjs b/scripts/cleanup.mjs
 --- a/scripts/cleanup.mjs
 +++ b/scripts/cleanup.mjs
@@ -112,11 +112,11 @@ index 1234567..abcdefg 100644
 +exec('git branch -d old-feature');
 `;
     const result = scanDiff(diffText);
-    expect(result.violations.some(v => v.type === 'irreversible_git' && v.pattern === 'git branch -d')).toBe(true);
-    expect(result.safe).toBe(false);
+    expect(result.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
+    expect(result.safe).toBe(true);
   });
 
-  it('case 9: git push --force → irreversible_git violation (force push)', () => {
+  it('case 9: git push --force → safe, no irreversible_git classification (rules deleted)', () => {
     const diffText = `diff --git a/scripts/release.mjs b/scripts/release.mjs
 --- a/scripts/release.mjs
 +++ b/scripts/release.mjs
@@ -124,11 +124,11 @@ index 1234567..abcdefg 100644
 +exec('git push --force origin main');
 `;
     const result = scanDiff(diffText);
-    expect(result.violations.some(v => v.type === 'irreversible_git' && v.pattern === 'git push --force')).toBe(true);
-    expect(result.safe).toBe(false);
+    expect(result.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
+    expect(result.safe).toBe(true);
   });
 
-  it('case 10: git reset --hard → irreversible_git violation (destructive reset)', () => {
+  it('case 10: git reset --hard → safe, no irreversible_git classification (rules deleted)', () => {
     const diffText = `diff --git a/scripts/reset.mjs b/scripts/reset.mjs
 --- a/scripts/reset.mjs
 +++ b/scripts/reset.mjs
@@ -136,8 +136,8 @@ index 1234567..abcdefg 100644
 +exec('git reset --hard origin/main');
 `;
     const result = scanDiff(diffText);
-    expect(result.violations.some(v => v.type === 'irreversible_git' && v.pattern === 'git reset --hard')).toBe(true);
-    expect(result.safe).toBe(false);
+    expect(result.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
+    expect(result.safe).toBe(true);
   });
 
   it('case 11: diff touching go.sum → external_dep violation', () => {
@@ -357,8 +357,8 @@ index 1234567..abcdefg 100644
     expect(result.safe).toBe(true);
   });
 
-  it('case 22: git push --force on a real added "+" line → irreversible_git still fires (positive not regressed)', () => {
-    // Falsifiable: if the guard is over-broad it would suppress this — it must NOT.
+  it('case 22: git push --force on a real added "+" line → safe, no irreversible_git classification (rules deleted)', () => {
+    // Falsifiable: fails while any C2 irreversible_git content rule is still present.
     const diffText = `diff --git a/scripts/release.mjs b/scripts/release.mjs
 --- a/scripts/release.mjs
 +++ b/scripts/release.mjs
@@ -368,8 +368,8 @@ index 1234567..abcdefg 100644
  module.exports = {};
 `;
     const result = scanDiff(diffText);
-    expect(result.violations.some(v => v.type === 'irreversible_git' && v.pattern === 'git push --force')).toBe(true);
-    expect(result.safe).toBe(false);
+    expect(result.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
+    expect(result.safe).toBe(true);
   });
 
   it('case 23: git push on a removed "-" line → safe:true (deleting a push is not an introduced violation)', () => {
@@ -419,11 +419,16 @@ index 1234567..abcdefg 100644
     const root = mkdtempSync(join(tmpdir(), 'phase-diff-stream-'));
     try {
       const diffPath = join(root, 'complete.diff');
-      const forbidden = "git " + "push origin main";
-      const diffText = `diff --git a/lib/large.mjs b/lib/large.mjs\n--- a/lib/large.mjs\n+++ b/lib/large.mjs\n@@ -1 +1,20001 @@\n${'+const harmless = true;\n'.repeat(20_000)}+exec('${forbidden}');\n`;
+      // CARD-03 T013 (G3): irreversible_git content rules are gone; the surviving added-line
+      // content rule (plugin-semver-bump) proves the late line is still streamed and scanned.
+      const diffText = `diff --git a/package.json b/package.json\n--- a/package.json\n+++ b/package.json\n@@ -1 +1,20001 @@\n${'+  "harmless": true,\n'.repeat(20_000)}+  "some-plugin": "^2.0.0"\n`;
       writeFileSync(diffPath, diffText);
-      expect(scanDiffFile(diffPath)).toEqual(scanDiff(diffText));
-      expect(scanDiffFile(diffPath).violations).toContainEqual(expect.objectContaining({ type: 'irreversible_git', pattern: "git " + "push" }));
+      const streamed = scanDiffFile(diffPath);
+      expect(streamed).toEqual(scanDiff(diffText));
+      const late = streamed.violations.find(v => v.pattern === 'plugin-semver-bump');
+      expect(late).toEqual(expect.objectContaining({ type: 'external_dep' }));
+      expect(late.line).toBeGreaterThan(20_000);
+      expect(streamed.violations.filter(v => v.type === 'irreversible_git')).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

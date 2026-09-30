@@ -99,6 +99,15 @@ describe("review budget deletion contract", () => {
     expect(adr).not.toMatch(/`validateReviewBudget`/);
   });
 
+  it("ORACLE-RT-002 stage-runtime run no longer accepts a review_budget input field", () => {
+    const cli = readFileSync(fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url)), "utf8");
+    const allowed = cli.match(/const allowedRunFields = new Set\(\[([\s\S]*?)\]\);/);
+    expect(allowed, "allowedRunFields literal must stay the run input whitelist").not.toBeNull();
+    expect(allowed[1]).toMatch(/"receipts"/);
+    expect(allowed[1]).not.toMatch(/"review_budget"/);
+    expect(cli).toMatch(/run input has unknown fields: /);
+  });
+
   it("does not redispatch identical material, redispatches changed material, and keeps a judged retry idempotent", async () => {
     const state = fixture();
     const baseRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
