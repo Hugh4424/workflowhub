@@ -341,8 +341,8 @@ outline_version：v1
     source: F-008盘点
     question: pre 任务数据怎么处置
     status: confirmed
-    selected_disposition: 外置目录 173 项中 pre 未 close 117 项只读归档不删除；历史材料/archive 94 条只读保留
-    evidence: F-008 pre 任务盘点表（117 项按 2026-07/08/09 分批清单）
+    selected_disposition: 外置目录 173 项中 pre 未 close 117 项只读归档不删除（经 G-004 核实全部为历史遗留记录、无活跃进行中任务）；归档时写根目录 README-ARCHIVED.md；历史材料/archive 94 条只读保留
+    evidence: F-008 盘点（117 项分批清单）+ G-004 核实（find/stat：7 天活跃任务仅 post 卡 5 个+readme 1 个）
     acceptance: 归档对象完整、只读、不补造 close
     counterexample: 任一归档对象被删或继续可写即违
     impact_dimensions: [scope]
@@ -588,6 +588,78 @@ derived_from: []
 artifacts: [本文档调研节；两调查报告原文在会话内，关键结论已结构化入本文档]
 ```
 
+### ADR-010 文档时机（Grill G-002）
+```text
+- **source**：G-002 挑战（doc-timing）
+- **decision**：折中——build-code 开工时在 AGENTS.md 顶部加"Card-06 删除进行中"临时横幅，其余治理文档仍按 ADR-004 批次 7 统一改写
+- **rationale**：两头都占——不被旧描述误导（Card-04 stale 教训）+ 避免 7 次中间态改写的工作量
+- **consequence**：批次 7 的文档任务减一小项（横幅移除并入）；横幅本身在收口时删除
+- **supersedes**：none（细化 ADR-004 批次 7）
+- **原始声明层**：G-002 用户选 C
+- **三级追溯**：R-001 → G-002 → ADR-010
+- **三档结论**：confirmed
+- **approval_binding**：Grill G-002 回复（2026-09-30）
+- **owner/next_action**：build-code 开工横幅、收口时移除
+module: 删除策略
+requirement_ids: [R-001]
+derived_from: [ADR-004]
+artifacts: [AGENTS.md 临时横幅]
+```
+
+### ADR-011 删除期间仓库使用（Grill G-003）
+```text
+- **source**：G-003 挑战（new-task-during）用户自由文本回复
+- **decision**：删除期间（Card-06 build-code 窗口）用户不会使用改到一半的 workflowhub 仓库——"新任务怎么走"风险项关闭，不设冻结机制（无需机制，用户事实承诺）
+- **rationale**：用户原话"不用管，我不会在这期间用改到一半的 workflowhub 的"——事实回答而非选项选择，比任何机制都可靠
+- **consequence**：Q2 风险从"需要裁决"降级为"已关闭"；不设冻结控制面（遵守"无消费者的新控制面不新增"）
+- **supersedes**：none
+- **原始声明层**：G-003 用户自由文本
+- **三级追溯**：R-001 → G-003 → ADR-011
+- **三档结论**：confirmed
+- **approval_binding**：Grill G-003 自由文本回复（2026-09-30）
+- **owner/next_action**：用户自律；build-code 开工时在首条汇报里复述此承诺作为对齐
+module: 开工节奏
+requirement_ids: [R-001]
+derived_from: [ADR-001]
+artifacts: [build-code 首条汇报对齐项]
+```
+
+### ADR-012 pre 归档形态修正（Grill G-004）
+```text
+- **source**：G-004 挑战（pre-archive-form）用户质疑 + 主会话核实
+- **decision**：①事实修正：F-008"pre 未 close 117 项"中**无任何活跃进行中任务**——核实（2026-09-30）外置任务存储 7 天内有事实写入的只有 5 个 post 卡（01/03/04/05/06）+1 个 readme 材料任务；117 项全部是历史遗留记录。归档语义=历史记录只读化，不存在"中断进行中任务"。②归档时写一份根目录 README 说明（为什么归档、怎么只读查、接续归 Card-08）
+- **rationale**：用户质疑触发核实，核实结果支持用户说法；README 防止未来误读未 close 目录为"还在进行"
+- **consequence**：OI-015 表述修正；ADR-002 的"接续"语义更清晰——无活可接，Card-08 接的是"历史查询"而非"任务继续"
+- **supersedes**：ADR-002 中"未完成 pre 任务不再继续"的表述（细化为"历史遗留记录无活跃任务"）
+- **原始声明层**：G-004 用户质疑原文 + 主会话 find/stat 核实事实
+- **三级追溯**：R-001 → G-004 → ADR-012
+- **三档结论**：confirmed
+- **approval_binding**：Grill G-004 澄清回复选 A（2026-09-30）
+- **owner/next_action**：批次执行时写 README；Card-08 消费
+module: 删除范围
+requirement_ids: [R-001]
+derived_from: [ADR-002]
+artifacts: [任务存储根 README-ARCHIVED.md]
+```
+
+### ADR-013 双层 hash 处置（Grill G-005）
+```text
+- **source**：G-005 挑战（dual-hash）
+- **decision**：catalog.yaml ↔ skill-bundle.json 双层 hash 随校验机器一起删（ADR-004 批次 5/6 随 schema/check-skill-closure 链处置）；不修成单一来源（修=变相保留机器）
+- **rationale**：hash 校验是机器门禁本体的一部分，属 OI-013 点名删除面；F-008 已知其手工同步必然遗漏（Card-07 会话踩过），保留即保留缺陷
+- **consequence**：迁移表批次 5/6 须排好顺序：先拆 check-skill-closure 消费链，再删 hash 字段；skills/catalog.yaml 本体保留（登记职责用）
+- **supersedes**：F-008"保留但需修双层 hash"的调查建议（改为删除）
+- **原始声明层**：G-005 用户选 A
+- **三级追溯**：R-001 → G-005 → ADR-013
+- **三档结论**：confirmed
+- **approval_binding**：Grill G-005 回复（2026-09-30）
+- **owner/next_action**：build-plan 排批次 5/6 顺序；build-code 执行
+module: 删除策略
+requirement_ids: [R-001]
+derived_from: [ADR-004]
+artifacts: [批次 5/6 迁移表条目]
+```
+
 ## 动态 Talk 批次
 
 | batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
@@ -630,7 +702,10 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 | grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
 | --- | --- | --- | --- | --- |
 | G-001 | pre 全删 vs Card-02"保留双 cohort"冲突 | 后果账摊开后用户确认退役（V-009）；取代关系写入 ADR-002 supersedes | 进行中（正式 Grill 批次见 step 6） | V-006/V-009 |
-| G-002~ | （step 6 grill-with-docs 正式执行后填） | | | |
+| G-002 | 文档时机：删除期间旧文档描述与实况脱节风险 | 折中：开工横幅+批次 7 统改（ADR-010） | 外部接口 pass / 命名 pass / 失败语义 pass / 范围 pass | 用户选 C |
+| G-003 | 删除期间新任务归属 | 用户事实回答：期间不使用仓库，风险关闭不设机制（ADR-011） | 同上 | 用户自由文本 |
+| G-004 | pre"进行中"判断被用户质疑 | 核实：7 天内活跃任务全为 post 卡，117 项均历史遗留无活跃（ADR-012） | 同上 | 用户质疑+find/stat 核实 |
+| G-005 | catalog↔bundle 双层 hash 双写 | 随校验机器删除，不修（ADR-013） | 同上 | 用户选 A |
 
 ## 审查处置
 
@@ -698,8 +773,8 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 
 ## 文档结果
 
-- CONTEXT.md：待 step 6 Grill 后填写 changed/no-change
-- ADR：本文档即 ADR 集；docs/adr 是否另建——待 Grill 三项判据评估
+- CONTEXT.md：no-change——Grill 未产生领域术语/含义/边界变化（G-002~G-005 均为执行层决策，不动 CONTEXT 词条）；理由：现有术语（cohort/窄工具/G-3）含义未变
+- ADR：本文档 ADR-001~013 集即决定记录；docs/adr 不另建——三项判据评估：hard to reverse=是（pre 退役不可逆）、surprising=否（十卡 PRD 明示）、genuine trade-off=否（方向唯一）——后两项不全真，不另建 ADR 文件
 - ADR criteria：待 Grill
 - 术语/ADR 冲突及处理：待 Grill
 - 不复制 spec 的边界：本文件只记决策索引与来源锚点，实现细节归 build-plan 的 spec.md/phases
