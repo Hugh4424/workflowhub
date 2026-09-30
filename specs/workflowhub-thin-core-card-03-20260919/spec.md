@@ -78,7 +78,7 @@
 - **PFACT-002**（verified）：`runtime/review/schemas/ac-evidence-summary.schema.json:32-34` 的 result 5 值、leaf_result 4 值、status 6 值；`runtime/evidence/acceptance-evidence-validator.mjs:6` 为 8 值。
 - **PFACT-003**（verified）：`C2_IRREVERSIBLE_GIT_RULES` 定义在 `workflows/build-code/diff-scanner.mjs:17`，唯一使用点 `:190`。
 - **PFACT-004**（verified）：`tools/cli/stage-runtime.mjs:2006` 仍含 `"review_budget"`。
-- **PFACT-005**（verified）：39 个 `skills/*/skill-bundle.json` 带 `files[].sha256`。
+- **PFACT-005**（verified）：`skills/` 下共 39 个 skill 包，其中 26 个带 `files[].sha256`（P2/T003 只清这 26 个），另外 13 个已经不带（anysearch、design-source-readiness、frontend-component-quality、intake-decision-review、plan-ceo-review、plan-design-review、plan-eng-review、requirement-lineage、resolving-merge-conflicts、review、simplicity-guard、ui-project-init、workflowhub-host-protocol）。
 - **PFACT-006**（inferred）：`review-record-route.mjs:1305/:1792/:1898` 的 `allowHistoricalPartialCoverage` 缺陷在 CARD-05 之后仍在；由 P4/T009 先核实。
 
 ## 5. 功能需求
@@ -120,7 +120,7 @@
 
 - 方法文本层（P1）：`workflows/*/SKILL.md`、`AGENTS.md`、`CONTEXT.md`、`docs/`。
 - 分发闭包层（P2）：`skills/**`、resolver、closure 检查、分发打包。
-- 证据绑定层（P3）：`runtime/evidence/**`、stage-runner、stage-runtime CLI。
+- 证据绑定层（P3）：`runtime/evidence/**`（`quality-fact.mjs` 除外：保留不改、只作来源记录，不在 P3 写集）、stage-runner、stage-runtime CLI。
 - 审查层（P4）：`runtime/review/**`、`skills/wh-review/scripts/*.mjs`。
 - 材料与扫描层（P5）：material-workspace、diff-scanner。
 
@@ -182,9 +182,9 @@ build-code 按 P1…P5 执行各卡 RED→GREEN，P6 在全部完成后跑 PRD A
 | `runtime/review/review-record-route.mjs:1410` | `recordSimpleReviewRequest` 无派发前预检 | 加预检 / P4 |
 | `runtime/review/review-record-route.mjs:1305`、`:1792`、`:1898`、`:2134` | partial coverage 与只导入缺陷待核实 | 核实后修 / P4 |
 | `runtime/review/review-input-bounds.mjs:7`、`:23` | 不按写集收窄 | 收窄选取 / P4 |
-| `skills/wh-review/scripts/review-materials.mjs:59` | 把 plan-eng-review 当必需 | 对齐 plan / P4 |
+| `skills/wh-review/scripts/review-materials.mjs:59` | 只作全量 diff 前缀；runner 只从 plan 的 required_skills 里选技能，本来就和 plan 一致（P4/T010 已核实，本轮实测通过） | 不改 runner；P4/T010 只用锁定测试断言 runner 与 plan 一致 / P4 |
 | `skills/wh-review/scripts/simple-review-runner.mjs` | 坏结果静默入账 | 记 unavailable / P4 |
-| `runtime/evidence/quality-fact.mjs:48` | 强制 material_revision + snapshot_tree | 收缩到写集 / P3 |
+| `runtime/evidence/quality-fact.mjs:48` | 强制 material_revision + snapshot_tree | 保留不改，只作来源记录（P3 核实裁决：改了会破坏 `qualityFactIdentity` 的事实身份；本卡不在 P3 写集）/ P3 |
 | `runtime/evidence/freshness.mjs:56`、`:710` | card-04 C-18 validateAcceptanceEvidence 链 | 保持该链语义 / P3 |
 | `tools/cli/stage-runtime.mjs:2006` | 残留 `review_budget` | 删除 / P3 |
 | `docs/quality/business-case-catalog.json` | `source.revision` 绑整文件 | 稳定锚点 / P3 |
@@ -209,7 +209,7 @@ design.md 参考行：T-018 冻结清单 `design.md:1397-1405`；稳定锚点 `d
 ### 全局文件边界与依赖
 
 - 写集按领地划分，一个路径只属一个 Phase，精确路径以各 `phases/P<n>.md` 写集为准。
-- 依赖：P1、P2、P3、P5 无前序；P4 依赖 P2（bundle 先不随文件内容变，P4 改 wh-review 脚本才不必碰 bundle）；P6 依赖 P1…P5。
+- 依赖：P1、P2、P3 无前序；P4 依赖 P2（bundle 与 catalog 的收敛先在 P2 完成，P4 只改 runtime、测试、工具与文档，不改任何 `skills/**` 包内被闭包收录的字节）；P5 依赖 P2、P3（以 `phases/P5.md` 头部与 `phases/index.md` 读取规则为准：P5/T012 依赖 P3 交付 `handoffDeclaration` 的 stage 参数；P5/T014 依赖 P2 把 index 模板标题改回 `## Execution Index`）；P6 依赖 P1…P5。
 - 跨领地需要时：卡片 STOP 写“需回到 Pn owner”，并报主会话，不扩自己的写集。
 - 冻结不动：`runtime/evidence/acceptance-evidence-validator.mjs`、`tests/contract/acceptance-result-machine-classes.test.mjs`、`skills/wh-review/stage-skill-plan.json`、`docs/architecture/repository-inventory.tsv`。
 
@@ -230,9 +230,9 @@ design.md 参考行：T-018 冻结清单 `design.md:1397-1405`；稳定锚点 `d
 | CARD-03 §二十 效力、A5 I-13 | FR-REV-002 / AC-REV-002 | P4/T009 | ORACLE-REV-002；partial 误判或重复派发即 RED | P2 |
 | CARD-03 §18.4 第 2 条、§二十 效力 | FR-SKL-003 / AC-SKL-003 | P4/T010 | ORACLE-SKL-003；runner 必需技能与 plan 不一致即 RED | P2 |
 | CARD-03 §二十-2 | FR-FIX-002 / AC-FIX-002 | P4/T011 | ORACLE-FIX-002；枚举缺校验器任一值即 RED | P2 |
-| CARD-03 §二十-1、§十九 | FR-FIX-001 / AC-FIX-001 | P5/T012 | ORACLE-FIX-001；make-decision 仍报 index 缺失即 RED | none |
+| CARD-03 §二十-1、§十九 | FR-FIX-001 / AC-FIX-001 | P5/T012 | ORACLE-FIX-001；make-decision 仍报 index 缺失即 RED | P3 |
 | CARD-03 §二十-3 | FR-FIX-003 / AC-FIX-003 | P5/T013 | ORACLE-FIX-003；死规则仍在即 RED | none |
-| CARD-03 T-031 | FR-FIX-004 / AC-FIX-004 | P5/T014 | ORACLE-FIX-004；四条既有红仍失败即 RED | none |
+| CARD-03 T-031 | FR-FIX-004 / AC-FIX-004 | P5/T014 | ORACLE-FIX-004；四条既有红仍失败即 RED | P2 |
 | R-006、R-007、R-008、R-009、R-010、R-012；PRD AC-11…AC-15 | FR-ACC-001 / AC-ACC-001 | P6/T015 | ORACLE-ACC-001；任一 ORACLE 未绿或基线红新增即 RED | P1…P5 |
 
 ### 全局验证策略

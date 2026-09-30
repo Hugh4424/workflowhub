@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { compactReviewDiff } from "../../runtime/review/review-input-bounds.mjs";
-import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 import { reviewPacketMaterialId } from "../../runtime/review/review-packet-identity.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
@@ -183,6 +183,77 @@ describe("ORACLE-REV-001 review request precheck, bad results and packet narrowi
   });
 });
 
+// 缺陷③ 夹具：当前命名空间的一对 canonical 评审记录（red/blue），写入后把其中一个
+// 成员记录的 pair 绑定字段（material_id）改坏。这不是 foreign 记录（stage/snapshot/
+// material_revision/review_scope 都与本次请求同命名空间），所以读取器不能按
+// 「旧 pair 跳过」处理。
+const DAMAGED_PAIR_ID = "card03-rev-002-damaged-pair";
+const DAMAGED_PAIR_REQUEST_KEY = "p".repeat(64);
+const DAMAGED_PAIR_MATERIAL_ID = "c".repeat(64);
+
+function pairMember(role, provider) {
+  const adapter = provider.startsWith("claude/") ? "claude" : "codex";
+  const identity = { provider, adapter, source_id: provider, config_id: "fixture-config", model: "gpt-5.6-luna" };
+  return {
+    status: "available",
+    stage: "build-code",
+    review_track: null,
+    review_kind: null,
+    review_scope: "integration",
+    subject_kind: "worktree",
+    role,
+    pair_id: DAMAGED_PAIR_ID,
+    minimum_heterologous: 1,
+    material_id: DAMAGED_PAIR_MATERIAL_ID,
+    runtime_id: "card03-review-fixture",
+    outcome: "completed",
+    provider_results: [{
+      provider,
+      status: "completed",
+      identity,
+      error: null,
+      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+      usage: null,
+      evidence_anchor_valid: [],
+    }],
+    findings: [],
+    provider_selection: { providers: [provider], provider_identities: { [provider]: identity } },
+  };
+}
+
+function writeDamagedPair(state) {
+  const red = pairMember("red", "codex/luna");
+  const blue = pairMember("blue", "claude/opus");
+  const summary = recordSimpleReviewResult({
+    task: state.task,
+    kernel: state.kernel,
+    requestKey: DAMAGED_PAIR_REQUEST_KEY,
+    result: {
+      status: "available",
+      stage: "build-code",
+      review_track: null,
+      review_kind: null,
+      review_scope: "integration",
+      subject_kind: "worktree",
+      pair_id: DAMAGED_PAIR_ID,
+      minimum_heterologous: 1,
+      material_id: DAMAGED_PAIR_MATERIAL_ID,
+      runtime_id: null,
+      outcome: "completed",
+      provider_results: [...red.provider_results, ...blue.provider_results],
+      findings: [],
+      role_results: { red, blue },
+    },
+  });
+  const damagedRef = summary.role_results.blue.attempt_ref;
+  const damaged = JSON.parse(state.task.readRecord(damagedRef));
+  // 只改坏「这条成员记录与那一对记录的绑定字段」，不改报告里的语义/覆盖声明：
+  // 这不是伪造 coverage（那仍须 fail-closed），而是配对链接断掉。
+  damaged.material_id = "d".repeat(64);
+  state.task.writeRecordAtomic(damagedRef, JSON.stringify(damaged));
+  return { summary, damagedRef, damagedBytes: state.task.readRecord(damagedRef) };
+}
+
 describe("ORACLE-REV-002 partial coverage and same-triple reuse", () => {
   it("no longer lets the historical flag release partial coverage", () => {
     expect(readRepo("runtime/review/review-record-route.mjs")).not.toMatch(/allowHistoricalPartialCoverage/);
@@ -197,6 +268,36 @@ describe("ORACLE-REV-002 partial coverage and same-triple reuse", () => {
     expect(dispatches).toBe(1);
     expect(repeated).toMatchObject({ reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref });
     expect(attemptCount(state.task)).toBe(1);
+  });
+
+  it("does not let one damaged pair member abort the whole history read", async () => {
+    const state = fixture();
+    // 同一命名空间里已有一条健康的历史（这一次请求自己的语义结果）。
+    const healthy = await recordSimpleReviewRequest({
+      task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route,
+      runRound: async (input) => reviewResult(input),
+    });
+    // 再放进一对成员记录被改坏的同命名空间 pair。
+    const { damagedRef, damagedBytes } = writeDamagedPair(state);
+
+    let dispatches = 0;
+    const settled = await recordSimpleReviewRequest({
+      task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route,
+      runRound: async (input) => { dispatches += 1; return reviewResult(input); },
+    }).then((value) => ({ value }), (error) => ({ error }));
+
+    // 一条损坏的 pair 成员只该让那一对记录被跳过：整次历史读取不得中断，同命名空间
+    // 里另一条健康的成员记录必须照常读回并被复用（零派发）。
+    expect(
+      settled.error,
+      `一条损坏的 pair 成员拖垮了整次历史读取：${settled.error?.code ?? ""} ${String(settled.error?.message ?? "")}`,
+    ).toBeUndefined();
+    expect(settled.value, "损坏成员所在的那对记录之外的健康成员必须照常读回").toMatchObject({
+      reused: true, dispatch_state: "reused", attempt_ref: healthy.attempt_ref, result_ref: healthy.result_ref,
+    });
+    expect(dispatches).toBe(0);
+    // 容忍 ≠ 删除：损坏记录原样保留，不被静默改写。
+    expect(state.task.readRecord(damagedRef)).toBe(damagedBytes);
   });
 });
 
