@@ -1,0 +1,168 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/acceptance/card-03-current.test.mjs (11 tests | 6 failed) 178ms
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > five formal stages each carry a dispatch section citing AGENTS.md (母 PRD 验收第 15 条) 13ms
+     → expected [] to deeply equal [ 'make-decision', 'build-spec', …(3) ]
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > delegation clauses, repair routing and G-1 text are in place (母 PRD 验收第 11、12、14 条) 3ms
+     → expected [] to deeply equal [ '不整份继承上下文', '不空转轮询', …(1) ]
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > phase template declares interface symbols, merge owner and progress cursor (母 PRD 验收第 13 条) 3ms
+     → expected [ '接口符号', '合并责任', 'progress_cursor' ] to deeply equal []
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > root progress files retired, bundles carry no per-file sha, retired templates removed 3ms
+     → expected { in_root: [ …(5) ], archived: [] } to deeply equal { in_root: [], archived: [ …(5) ] }
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > runtime and schema fixes are observable in current code 2ms
+     → expected true to be false // Object.is equality
+   × CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > skill closure check exits 0 with no undeclared or external skill references 151ms
+     → expected { exit_code: 1, …(1) } to deeply equal { exit_code: +0, stderr: '' }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > five formal stages each carry a dispatch section citing AGENTS.md (母 PRD 验收第 15 条)
+AssertionError: expected [] to deeply equal [ 'make-decision', 'build-spec', …(3) ]
+
+- Expected
++ Received
+
+- Array [
+-   "make-decision",
+-   "build-spec",
+-   "build-plan",
+-   "build-code",
+-   "verify-code",
+- ]
++ Array []
+
+ ❯ tests/acceptance/card-03-current.test.mjs:148:47
+    146|     expect(o.canonical_stages).toEqual([...STAGES]);
+    147|     expect(o.build_prd_na_reason).toBe(true);
+    148|     expect(o.dispatch_sections_citing_agents).toEqual([...STAGES]);
+       |                                               ^
+    149|   });
+    150| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > delegation clauses, repair routing and G-1 text are in place (母 PRD 验收第 11、12、14 条)
+AssertionError: expected [] to deeply equal [ '不整份继承上下文', '不空转轮询', …(1) ]
+
+- Expected
++ Received
+
+- Array [
+-   "不整份继承上下文",
+-   "不空转轮询",
+-   "跨 Phase 不绑定全量快照",
+- ]
++ Array []
+
+ ❯ tests/acceptance/card-03-current.test.mjs:153:30
+    151|   it("delegation clauses, repair routing and G-1 text are in place (母…
+    152|     const o = await observeWorkspace(cwd);
+    153|     expect(o.agents_clauses).toEqual(TARGET_OBSERVATIONS.agents_clause…
+       |                              ^
+    154|     expect(o.build_code_original_implementer).toBe(true);
+    155|     expect(o.g1_method_terms).toEqual(TARGET_OBSERVATIONS.g1_method_te…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > phase template declares interface symbols, merge owner and progress cursor (母 PRD 验收第 13 条)
+AssertionError: expected [ '接口符号', '合并责任', 'progress_cursor' ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "接口符号",
++   "合并责任",
++   "progress_cursor",
++ ]
+
+ ❯ tests/acceptance/card-03-current.test.mjs:164:45
+    162|     const o = await observeWorkspace(cwd);
+    163|     expect(o.spec_work_package_declaration).toBe(true);
+    164|     expect(o.phase_template_fields_missing).toEqual([]);
+       |                                             ^
+    165|   });
+    166| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > root progress files retired, bundles carry no per-file sha, retired templates removed
+AssertionError: expected { in_root: [ …(5) ], archived: [] } to deeply equal { in_root: [], archived: [ …(5) ] }
+
+- Expected
++ Received
+
+  Object {
+-   "archived": Array [
++   "archived": Array [],
++   "in_root": Array [
+      "HANDOFF-make-decision-card07.md",
+      "HANDOFF-make-decision.md",
+      "findings.md",
+      "progress.md",
+      "task_plan.md",
+    ],
+-   "in_root": Array [],
+  }
+
+ ❯ tests/acceptance/card-03-current.test.mjs:170:8
+    168|     const o = await observeWorkspace(cwd);
+    169|     expect({ in_root: o.root_progress_in_root, archived: o.root_progre…
+    170|       .toEqual({ in_root: [], archived: [...ROOT_PROGRESS_FILES] });
+       |        ^
+    171|     expect(o.bundle_count).toBeGreaterThan(0);
+    172|     expect(o.bundle_per_file_sha_paths).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > runtime and schema fixes are observable in current code
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/acceptance/card-03-current.test.mjs:178:43
+    176|   it("runtime and schema fixes are observable in current code", async …
+    177|     const o = await observeWorkspace(cwd);
+    178|     expect(o.stage_runtime_review_budget).toBe(false);
+       |                                           ^
+    179|     expect(o.schema_missing).toEqual({ result: [], leaf_result: [], st…
+    180|     expect(o.make_decision_material_set).toEqual(["decision-log.md"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/acceptance/card-03-current.test.mjs > CARD-03 current workspace reaches the target observables (ORACLE-ACC-001) > skill closure check exits 0 with no undeclared or external skill references
+AssertionError: expected { exit_code: 1, …(1) } to deeply equal { exit_code: +0, stderr: '' }
+
+- Expected
++ Received
+
+  Object {
+-   "exit_code": 0,
+-   "stderr": "",
++   "exit_code": 1,
++   "stderr": "- build-code: prompt references undeclared skill architect-code-review
++ - build-code: forbidden external or user-local skill locator in prompt
++ - verify-code: prompt references undeclared skill architect-code-review",
+  }
+
+ ❯ tests/acceptance/card-03-current.test.mjs:186:72
+    184|   it("skill closure check exits 0 with no undeclared or external skill…
+    185|     const result = spawnSync(process.execPath, ["runtime/evidence/chec…
+    186|     expect({ exit_code: result.status, stderr: result.stderr.trim() })…
+       |                                                                        ^
+    187|   });
+    188| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 5 passed (11)
+   Start at  01:53:09
+   Duration  467ms (transform 96ms, setup 0ms, collect 181ms, tests 178ms, environment 0ms, prepare 32ms)
+

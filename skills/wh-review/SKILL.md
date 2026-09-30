@@ -97,6 +97,8 @@ When a workflow is currently executing a declared review step and explicitly cal
 ## Responsibility boundary
 
 - `wh-review` does not write WorkflowHub task state or quality facts.
+- Empty findings are advice, never a pass; when a review round returns zero findings, the calling host adds one human-readable sentence to its own existing review record for that round — why zero findings, and what this round's review scope covered.
+- That sentence is a human-read discipline only: no new field, no findings-schema change, not a gate, does not block progress, and adds no confirmation point.
 - The calling stage records the returned review result and disposes each finding in its own material.
 - A review failure never blocks Talk, drafting, repair, or user confirmation.
 - Retry only when the previous call returned no semantic advice and the concrete transport/material problem changed.

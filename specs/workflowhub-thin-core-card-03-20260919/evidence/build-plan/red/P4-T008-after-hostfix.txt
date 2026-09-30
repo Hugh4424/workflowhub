@@ -1,0 +1,134 @@
+P4-T008 — RED facts AFTER the host_provider fix
+==============================================================
+Worktree: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+File under test: tests/contract/card03-review-orchestration.test.mjs (P4 pre-written, untracked)
+
+CHANGE MADE BEFORE THIS RUN
+ORACLE-REV-001 case `rejects an unresolvable host_provider before any attempt exists`
+was INVERTED (it asserted `await expectRejectedBeforeDispatch({ ...goodRequest, host_provider: "" }, /host_provider/)`)
+into `dispatches a request without a caller host_provider instead of requiring one`.
+host_provider is no longer a caller input, so a request without it must dispatch and
+record normally, and no error message may contain `host_provider is required`
+(the case also asserts that literal is absent from review-record-route.mjs,
+simple-review-runner.mjs and third-review-host-config.mjs).
+
+==============================================================
+COMMAND (exactly as requested)
+npx --no-install vitest run tests/contract/card03-review-orchestration.test.mjs -t "ORACLE-REV-001" --poolOptions.forks.singleFork --no-fileParallelism --reporter=dot
+
+EXIT CODE
+1
+
+RESULT LINE
+ Test Files  1 failed (1)
+      Tests  3 failed | 5 passed | 6 skipped (14)
+
+COUNT CHANGE
+before the inversion: 4 ORACLE-REV-001 failures + 1 ORACLE-REV-002 failure = 5 failures in this file
+after  the inversion: 3 ORACLE-REV-001 failures + 1 ORACLE-REV-002 failure = 4 failures in this file
+The `rejects an unresolvable host_provider before any attempt exists` failure is GONE; its
+inverted replacement passes (5 passed includes it). The remaining 3 ORACLE-REV-001 reds are
+pre-existing P4 RED unrelated to host_provider.
+
+==============================================================
+FAILING ASSERTION 1 OF 3 (ORACLE-REV-001)
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects material keys outside the stage semantic fields before any attempt exists
+AssertionError: promise resolved "{ status: 'recorded', …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- [Error: rejected promise]
++ Object {
++   "attempt_ref": "quality/reviews/attempts/5deb8488-91bc-58cd-adfc-8189284e6f35/attempt.json",
++   "dispatch_state": "dispatched",
++   "report_ref": "quality/reviews/reports/build-code-simple-5deb8488-91bc-58cd-adfc-8189284e6f35.md",
++   "result_ref": "quality/reviews/results/build-code-simple-5deb8488-91bc-58cd-adfc-8189284e6f35.json",
++   "reused": false,
++   "status": "recorded",
++ }
+
+ ❯ expectRejectedBeforeDispatch tests/contract/card03-review-orchestration.test.mjs:95:6
+     93|     task: state.task, kernel: state.kernel, request, resolveRouteIdent…
+     94|     runRound: async (input) => { dispatches += 1; return reviewResult(…
+     95|   })).rejects.toThrow(reason);
+       |      ^
+     96|   expect(Date.now() - startedAt).toBeLessThan(1000);
+     97|   expect(dispatches).toBe(0);
+ ❯ tests/contract/card03-review-orchestration.test.mjs:115:11
+
+==============================================================
+FAILING ASSERTION 2 OF 3 (ORACLE-REV-001)
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > records a malformed provider result as unavailable with a reason and does not redispatch it
+TypeError: review findings must be an array
+ ❯ prepareSimpleReviewRecord runtime/review/review-record-route.mjs:1850:46
+    1848|     throw new TypeError("review role provider selection does not match…
+    1849|   }
+    1850|   if (!Array.isArray(result.findings)) throw new TypeError("review fin…
+       |                                              ^
+    1851|   if (result.findings.some((finding) => !completed.some((item) => item…
+    1852|   const e2eBinding = executionBindingForResult(task, result, identity,…
+ ❯ recordSimpleReviewResult runtime/review/review-record-route.mjs:2219:22
+ ❯ operation runtime/review/review-record-route.mjs:1754:18
+
+==============================================================
+FAILING ASSERTION 3 OF 3 (ORACLE-REV-001)
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > narrows the review packet to declared write set ∩ real diff without binding identity
+AssertionError: expected 'diff --git a/runtime/review/in-scope.…' not to contain 'docs/out-of-scope.md'
+
+- Expected
++ Received
+
+- docs/out-of-scope.md
++ diff --git a/runtime/review/in-scope.mjs b/runtime/review/in-scope.mjs
++ --- a/runtime/review/in-scope.mjs
++ +++ b/runtime/review/in-scope.mjs
++ @@ -1 +1 @@
++ -old
++ +new
++ diff --git a/docs/out-of-scope.md b/docs/out-of-scope.md
++ --- a/docs/out-of-scope.md
++ +++ b/docs/out-of-scope.md
++ @@ -1 +1 @@
++ -old
++ +new
++
+
+ ❯ tests/contract/card03-review-orchestration.test.mjs:180:32
+    178|     const compacted = compactReviewDiff(diff, { writeSet: ["runtime/re…
+    179|     expect(compacted.diff).toContain("runtime/review/in-scope.mjs");
+    180|     expect(compacted.diff).not.toContain("docs/out-of-scope.md");
+       |                                ^
+    181|     expect(compacted.diff).not.toContain("runtime/review/untouched.mjs…
+    182|     expect(JSON.stringify(compacted.index)).not.toMatch(/material_id|s…
+
+==============================================================
+ORACLE-REV-002 — CONFIRMED P4 PRE-WRITTEN RED
+The requested count "5 failures" for ORACLE-REV-002 is not what the file contains: ORACLE-REV-002 has
+exactly 2 tests, of which 1 is red. The "5" observed earlier was the file total
+(4 ORACLE-REV-001 + 1 ORACLE-REV-002) before the host_provider case was inverted.
+
+COMMAND
+npx --no-install vitest run tests/contract/card03-review-orchestration.test.mjs -t "ORACLE-REV-002" --poolOptions.forks.singleFork --no-fileParallelism --reporter=dot
+
+EXIT CODE
+1
+
+RESULT LINE
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 12 skipped (14)
+
+FAILING ASSERTION (ORACLE-REV-002, 1 of 1)
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-002 partial coverage and same-triple reuse > no longer lets the historical flag release partial coverage
+AssertionError: expected 'import { createHash, randomUUID } fro…' not to match /allowHistoricalPartialCoverage/
+
+- Expected:
+/allowHistoricalPartialCoverage/
+
++ Received:
+<the entire source text of runtime/review/review-record-route.mjs, which still contains
+ the identifier allowHistoricalPartialCoverage — the leading lines are
+ `import { createHash, randomUUID } from "node:crypto";` … `const DEFAULT_REVIEW_ROUND_TIMEOUT_MS = 65_000;`>
+
+Verdict: P4 pre-written RED, as expected. It is a source-side RED (the flag still exists in
+runtime/review/review-record-route.mjs), not caused by the host_provider change.

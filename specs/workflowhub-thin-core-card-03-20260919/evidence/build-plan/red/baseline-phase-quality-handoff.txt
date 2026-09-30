@@ -1,0 +1,67 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/phase-quality-handoff.test.mjs (10 tests | 2 failed) 8427ms
+   × Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks 4ms
+     → handoff materials require an authenticated ArtifactDir reader
+   × Phase quality and handoff contract > keeps the post Phase index pointer-only 1ms
+     → expected '# Phase 索引 — [任务名]\n\n> 指向各 Phase 独立权…' to match /Execution Index/
+   ✓ Phase quality and handoff contract > derives committed Phase files from the commit parent and candidate tree 800ms
+   ✓ Phase quality and handoff contract > records a dirty Phase without inventing a commit 741ms
+   ✓ Phase quality and handoff contract > invalidates a Phase review when its committed tree differs from the candidate tree 716ms
+   ✓ Phase quality and handoff contract > T004 keeps finding dispositions on one stage row and renders the same row in the current handoff 1497ms
+   ✓ Phase quality and handoff contract > T004 projects the real build-plan handler result into the row before its handoff reads it 4664ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks
+Error: handoff materials require an authenticated ArtifactDir reader
+ ❯ fail runtime/stage/stage-handoff.mjs:196:17
+    194| 
+    195| function fail(message, code = "STAGE_HANDOFF_INPUT_INVALID") {
+    196|   const error = new Error(message);
+       |                 ^
+    197|   error.code = code;
+    198|   throw error;
+ ❯ materialSourceRefs runtime/stage/stage-handoff.mjs:234:59
+ ❯ Module.renderStageHandoff runtime/stage/stage-handoff.mjs:342:55
+ ❯ tests/contract/phase-quality-handoff.test.mjs:41:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > keeps the post Phase index pointer-only
+AssertionError: expected '# Phase 索引 — [任务名]\n\n> 指向各 Phase 独立权…' to match /Execution Index/
+
+- Expected: 
+/Execution Index/
+
++ Received: 
+"# Phase 索引 — [任务名]
+
+> 指向各 Phase 独立权威的纯指针。由 Phase 标题重新生成；本文件没有实现或完成权威。
+> 每个 `phases/P<n>.md` 恰好一行；请替换示例编号与路径。
+
+## 执行索引
+
+| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |
+| --- | --- | --- | --- | --- | --- |
+| `P1` | `phases/P1.md` | `[稳定的 L0/L1 锚点]` | `[精确路径]` | `[P 编号或无]` | `[真实读取方]` |
+
+pre cohort 的旧任务卡只读保留，在本文件中没有有效行。
+"
+
+ ❯ tests/contract/phase-quality-handoff.test.mjs:107:22
+    105|     expect(tasks).toMatch(/pure pointer index/);
+    106|     expect(tasks).toMatch(/not a task card, Phase procedure, progress …
+    107|     expect(template).toMatch(/Execution Index/);
+       |                      ^
+    108|     expect(template).not.toMatch(/gate_cmd|expected_exit|\boracle\b/);
+    109|     expect(tasks).toMatch(/Do not copy its L0\/L1\/L2 body[\s\S]*execu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 passed (10)
+   Start at  23:03:23
+   Duration  9.19s (transform 277ms, setup 0ms, collect 642ms, tests 8.43s, environment 0ms, prepare 29ms)
+

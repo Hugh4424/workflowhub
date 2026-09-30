@@ -1,0 +1,27 @@
+{
+ "phaseFilesFromIndex": [
+  "phases/P1.md",
+  "phases/P2.md",
+  "phases/P3.md",
+  "phases/P4.md",
+  "phases/P5.md",
+  "phases/P6.md"
+ ],
+ "specNav": {
+  "ok": true,
+  "status": "ready",
+  "errors": [],
+  "header_line": 21,
+  "row_count": 46
+ },
+ "ok": true,
+ "errors": [],
+ "phase_count": 6,
+ "task_count": 15,
+ "fr": 15,
+ "ac": 15,
+ "acceptance": {
+  "status": "ready",
+  "errors": []
+ }
+}

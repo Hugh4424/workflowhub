@@ -1,0 +1,92 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/post-phase-contract.test.mjs (16 tests | 4 failed) 1014ms
+   × post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index 4ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage 1ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge 0ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs 1ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   ✓ post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 998ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:162:49
+    160|   it("accepts two separate Phase files with one pure pointer index", (…
+    161|     const result = validatePostPhaseContract({ spec, index, phases });
+    162|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    163|     expect(result.facts).toMatchObject({
+    164|       phase_count: 2,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:179:49
+    177|     // P2 and its trace remain as historical material; only P1 is curr…
+    178|     const result = validatePostPhaseContract({ spec: deferredSpec, ind…
+    179|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    180|     expect(result.facts.ac_coverage).toMatchObject({
+    181|       accepted_count: 1,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:205:49
+    203|     const parallelIndex = index.replace("| `P2` | `phases/P2.md` | `ph…
+    204|     const result = validatePostPhaseContract({ spec, index: parallelIn…
+    205|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    206|   });
+    207| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:247:49
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 12 passed (16)
+   Start at  23:03:33
+   Duration  1.66s (transform 237ms, setup 0ms, collect 532ms, tests 1.01s, environment 0ms, prepare 27ms)
+

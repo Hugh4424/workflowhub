@@ -1,0 +1,112 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs (24 tests | 7 failed) 109806ms
+   × P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence 7536ms
+     → expected 'e79feac8ffbbe3182f8ad165dcc9d7f79f082…' to be 'e3b0c44298fc1c149afbf4c8996fb92427ae4…' // Object.is equality
+   × P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence 7245ms
+     → expected '561c7cc80c4331b20ba40a6e565819abbb6fc…' to be 'e3b0c44298fc1c149afbf4c8996fb92427ae4…' // Object.is equality
+   ✓ P10 fixed targeted capture > preserves first pass and second real failure raw and stderr through the failed outer receipt 7217ms
+   ✓ P10 fixed targeted capture > stops before execution when a mixed change contains an unknown path 3463ms
+   ✓ P10 fixed targeted capture > does not create a receipt or start a child when every changed path is unknown 2833ms
+   ✓ P10 fixed targeted capture > does not run an earlier safe case when a later mixed-case target is unsafe 2787ms
+   ✓ P10 fixed targeted capture > does not run a mixed case when the catalog source binding is stale 2818ms
+   ✓ P10 fixed targeted capture > does not start a mixed case with a foreign task workspace 3102ms
+   ✓ P10 fixed targeted capture > executes a fresh fixed command twice and binds inner argv, raw reporter and canonical outer receipts 23560ms
+   ✓ P10 fixed targeted capture > keeps a missing canonical effect subject unavailable after a real fixture test run 11235ms
+   ✓ P10 fixed targeted capture > rejects unsafe registry targets before any selected child test runs 2718ms
+   ✓ P10 fixed targeted capture > rejects a source snapshot changed by the selected test 6240ms
+   ✓ P10 fixed targeted capture > rejects two selected cases sharing one test file before the child test can run 6417ms
+   ✓ P10 fixed targeted capture > kills an inner test with the outer timeout before its delayed side effect 13302ms
+   ✓ P10 fixed targeted capture > releases a TERM-resistant grandchild and its listening port on outer timeout 9326ms
+   × P10 outer readback of actual per-target reporter bytes > accepts only the three original, complete reporter documents and exact aggregate bytes 1ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+   × P10 outer readback of actual per-target reporter bytes > rejects missing actual leaves even when the manifest hashes are recalculated 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+   × P10 outer readback of actual per-target reporter bytes > rejects extra actual leaves even when the manifest hashes are recalculated 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+   × P10 outer readback of actual per-target reporter bytes > rejects skipped actual leaves even when the manifest hashes are recalculated 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+   × P10 outer readback of actual per-target reporter bytes > rejects a self-hashed aggregate that differs from ordered per-target raw bytes 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 fixed targeted capture > keeps failed child with empty stderr visible in outer failure evidence
+AssertionError: expected 'e79feac8ffbbe3182f8ad165dcc9d7f79f082…' to be 'e3b0c44298fc1c149afbf4c8996fb92427ae4…' // Object.is equality
+
+Expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+Received: "e79feac8ffbbe3182f8ad165dcc9d7f79f082f3f073cb63cbffea5eb10562d92"
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:161:37
+    159|     expect(hash(state.task.readRecord(first.stderr_ref))).toBe(first.s…
+    160|     const key = stream === "stdout" ? "raw" : "stderr";
+    161|     expect(second[`${key}_sha256`]).toBe(hash(""));
+       |                                     ^
+    162|     expect(second[`${key}_ref`]).toBeNull();
+    163|     expect(second[`${key}_status`]).toBe("no_readable_artifact");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 fixed targeted capture > keeps failed child with empty stdout visible in outer failure evidence
+AssertionError: expected '561c7cc80c4331b20ba40a6e565819abbb6fc…' to be 'e3b0c44298fc1c149afbf4c8996fb92427ae4…' // Object.is equality
+
+Expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+Received: "561c7cc80c4331b20ba40a6e565819abbb6fcee03ca1ae2969c8d7a2ec88b2fd"
+
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:161:37
+    159|     expect(hash(state.task.readRecord(first.stderr_ref))).toBe(first.s…
+    160|     const key = stream === "stdout" ? "raw" : "stderr";
+    161|     expect(second[`${key}_sha256`]).toBe(hash(""));
+       |                                     ^
+    162|     expect(second[`${key}_ref`]).toBeNull();
+    163|     expect(second[`${key}_status`]).toBe("no_readable_artifact");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > accepts only the three original, complete reporter documents and exact aggregate bytes
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+ ❯ sample tests/contract/build-code-targeted-capture.test.mjs:572:33
+    570|   function sample() {
+    571|     const dir = resolve(workflowRoot, "quality/evidence/stage-quality/…
+    572|     const manifest = JSON.parse(readFileSync(join(dir, "inner-manifest…
+       |                                 ^
+    573|     const rawReports = manifest.reports.map((_report, index) =>
+    574|       readFileSync(join(dir, `case-${index + 1}.raw.json`), "utf8"));
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:585:48
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects missing actual leaves even when the manifest hashes are recalculated
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects extra actual leaves even when the manifest hashes are recalculated
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects skipped actual leaves even when the manifest hashes are recalculated
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+ ❯ sample tests/contract/build-code-targeted-capture.test.mjs:572:33
+    570|   function sample() {
+    571|     const dir = resolve(workflowRoot, "quality/evidence/stage-quality/…
+    572|     const manifest = JSON.parse(readFileSync(join(dir, "inner-manifest…
+       |                                 ^
+    573|     const rawReports = manifest.reports.map((_report, index) =>
+    574|       readFileSync(join(dir, `case-${index + 1}.raw.json`), "utf8"));
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:590:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/contract/build-code-targeted-capture.test.mjs > P10 outer readback of actual per-target reporter bytes > rejects a self-hashed aggregate that differs from ordered per-target raw bytes
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/quality/evidence/stage-quality/build-code/P10/targeted-fixture-sample-v2/inner-manifest.json'
+ ❯ sample tests/contract/build-code-targeted-capture.test.mjs:572:33
+    570|   function sample() {
+    571|     const dir = resolve(workflowRoot, "quality/evidence/stage-quality/…
+    572|     const manifest = JSON.parse(readFileSync(join(dir, "inner-manifest…
+       |                                 ^
+    573|     const rawReports = manifest.reports.map((_report, index) =>
+    574|       readFileSync(join(dir, `case-${index + 1}.raw.json`), "utf8"));
+ ❯ tests/contract/build-code-targeted-capture.test.mjs:617:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 17 passed (24)
+   Start at  01:18:13
+   Duration  110.28s (transform 164ms, setup 0ms, collect 360ms, tests 109.81s, environment 0ms, prepare 25ms)
+

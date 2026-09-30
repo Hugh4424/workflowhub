@@ -1,0 +1,325 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/material-producer-consumer-roundtrip.test.mjs (1 test | 1 failed) 3ms
+   × material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index 2ms
+     → expected '---\nname: spec-plan\ndescription: Au…' to match /single phase engineering authority|单…/i
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/material-producer-consumer-roundtrip.test.mjs > material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index
+AssertionError: expected '---\nname: spec-plan\ndescription: Au…' to match /single phase engineering authority|单…/i
+
+- Expected: 
+/single phase engineering authority|单一 phase 工程权威/i
+
++ Received: 
+"---
+name: spec-plan
+description: Author implementation design in spec.md and independent Phase files for post-cohort build-plan.
+---
+
+# Spec Plan
+
+## Post-cohort authoring contract
+
+Read the confirmed `decision-log.md`, current `spec.md`, and verified code facts from the frozen stage packet. `spec.md` owns the global product contract **and implementation design**: code anchors, chosen solution, interfaces, global file boundary, dependency graph, source → FR → AC → Phase → oracle trace, risks, rollback, and testing strategy. Extend its implementation design section in place; preserve its product narrative and acceptance criteria.
+
+This skill is the sole Phase engineering author. Write one independent `phases/P<n>.md` file per Phase using `templates/phase-template.md`. A Phase contains only its implementation delta and a stable pointer to the global goal in `spec.md`, not a copy of the global design or another Phase. A superseded full-text body does not stay in this file either; the superseded text is carried by git and the existing archives, not by rewriting the live file in place. The separate `spec-tasks` skill renders the pointer index. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
+
+Each Phase owns L0 outcome, machine-checkable L1 contract, removable L2 reference, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback. Within L1, write an executable card for **every** Task using `templates/phase-template.md`. One Task is one user-perceivable delivery increment: consecutive steps of the same deliverable belong in one card's step sequence, not in separate cards. A one-line task list or Phase-level command is not a substitute for task inputs, exact code anchors/actions, outputs, paired RED/GREEN, failure oracle, evidence, and recovery. Keep actual execution status in task facts; authored cards describe intent, not invented completion.
+
+Task IDs are unique across the entire task, not per Phase. Assign `T001`, `T002`, … in `phases/index.md` Phase order and within-Phase execution order; the next Phase continues after the previous Phase's last ID. A Task dependency may name only an earlier Phase or already-defined Task. Never restart at `T001` in each Phase.
+
+## Design and boundary
+
+Choose reuse, then narrow extension, then new mechanism with stated consumer, owner, test, and removal condition. Record verified interfaces and failure behavior. Unknown facts stay `unknown` with owner and next action. Declare global NEW, MODIFY, and DO NOT TOUCH exact paths in `spec.md`. Every Phase write set is a subset of that boundary; each implementation path has one Phase owner. Order producers before consumers. Parallel work requires independent inputs, dependencies, and file ownership. No directory-wide or glob write set is valid. When authoring each Phase's scope and write set, run the same self-check with `simplicity-guard`'s core questions — has this layer earned its place, and can an existing capability carry it — record any shrink, retire, or reuse decision in that Phase's existing 非目标 line, and let the existing `plan-eng-review` reading report the deletion-class count (count only; no quota).
+
+凡写入 DO NOT TOUCH、或依赖「外部尚未改动」的受保护文件，计划里必须留下核实那一刻的实读结果：文件路径、读到的字段/签名/版本项**逐字清单**、读取所用的命令或工具、日期。字段个数、必填项、版本项这类断言只能来自实读，不能来自记忆、推断或上游摘要——上游摘要是线索，不是证据。实读结果与已有断言不一致时，先改断言再继续；本轮无法实读就写 `unknown`，并写明 owner 与下次核实动作。计划里出现「恰含 N 个字段」「签名未变」「只依赖既有接口」这类句子而没有实读记录时，按未核实处理。
+
+Trace every current source requirement, FR, and AC to a Phase, Task, and objective oracle. Read the original requirement as well as the decision: a compact decision summary is not proof that every requested behavior reached the plan. Check both directions: every in-scope source has implementation and a failure oracle, and every task has an authorized source. A mere ID occurrence is not coverage. Resolve an omitted source before calling the plan executable. A direction-changing gap returns to `make-decision`; a product-detail gap returns to the owning `spec-specify`/`spec-clarify` step. Continue unaffected planning and same-task repair.
+
+## Test design and quality
+
+For each applicable behavior change, build-plan authors a real executable test before implementation, runs its scoped `gate_cmd`, and preserves actual RED evidence. RED is valid only when the named target assertion fails, not setup/environment/configuration; a planned command or unrelated nonzero is not RED. Freeze that test and any scoring logic in DO NOT TOUCH. A later test change needs an explicit change request, reason, previous evidence, and independent review; build-code changes implementation to make the same test/oracle GREEN without silently relaxing assertions. Every behavior Task records tier, concrete testing skill, scenario/input, fixture or service, command, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. G-2 for pure documentation or exploratory work permits N/A only with a concrete reason, risk, objective alternative (prefer a falsifiable check), and acceptance disclosure; do not manufacture a failure. The final aggregate is an ordinary Phase task, not a new gate.
+
+计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。
+
+Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md`, and generated `phases/index.md` for omissions, contradictions, cycles, duplicated bodies, boundary widening, and two-way traceability. Perform an execution dry-run on each Task card: can an implementer using only current spec, index, and that Phase identify the first symbol to inspect, the first edit, target RED, GREEN, negative case, and recovery without inventing a product choice? Repair any no. Independent findings review and final `spec-analyze` are quality facts, not work permits. Preserve partial and unavailable facts honestly; repair valid findings in this task.
+
+Bind output to the stage-input packet's task, material revision, snapshot, and source digests. A missing or invalid packet is `unavailable` with owner and next action, not empty content.
+
+# 实现计划：[填写：功能名]
+
+- **输入材料**：`[填写：decision-log.md 引用]`、`[填写：spec.md 引用]`
+- **模板版本**：`plan-task.v4`
+
+## 材料导航
+
+[填写：根据当前四份材料的实际章节与锚点再生成本表；仅用于定位，正文仍由各自材料负责。M/S/B/P 表示主会话、子代理、后台执行和并行工作在何时读取，不产生第五份权威材料。]
+
+| 章节 / 材料锚点 | 职责与摘要 | M/S/B/P 读取时机 |
+| --- | --- | --- |
+| `decision-log.md#[填写：实际决策锚点]` | 已确认的方向、范围、理由与非目标 | [填写：读取角色与时机] |
+| `spec.md#[填写：实际 FR/AC 锚点]` | 产品行为、状态、验收判据与失败边界 | [填写：读取角色与时机] |
+| `plan.md#[填写：实际工程方案锚点]` | 工程方案、接口、依赖、验证与恢复策略 | [填写：读取角色与时机] |
+| `tasks.md#[填写：实际 Phase/Task 锚点]` | 可执行任务边界、命令及实际完成记录 | [填写：读取角色与时机] |
+
+## 速读卡
+
+- **目标**：[填写：完成后的可观察结果]
+- **非目标**：[填写：明确不做什么]（来源：[填写：已确认的来源/决定引用]；决定：[填写：决定编号]）
+- **改动前**：[填写：已核实的当前行为或缺口]
+- **改动后**：[填写：目标行为]
+- **主要风险**：[填写：最可能影响交付的风险]
+- **下一步**：[填写：首个可执行动作或停止条件]
+
+## 技术上下文
+
+### 全局约束
+
+- **已核实事实**：[填写：影响实现的仓库、接口、数据和运行事实]
+- **语言 / 运行时**：[填写：已核实版本]
+- **主要依赖**：[填写：已有依赖及用途；无则写 `N/A — 理由`]
+- **存储 / 状态**：[填写：数据与持久化边界；无则写 `N/A — 理由`]
+- **测试**：[填写：真实测试工具、资源和清理约束]
+- **目标环境**：[填写：目标环境与兼容范围]
+- **规模 / 范围**：[填写：文件、模块和数据范围]
+- **未决事实**：[填写：未知事实、影响、处理阶段；无则写 `N/A — 理由`]
+
+## 代码锚点
+
+- **已核实锚点**：[填写：精确路径、符号、现有消费者]
+- **既有接口**：[填写：已核实签名、schema 或事件；无则写 `N/A — 理由`]
+- **现在必读**：[填写：设计阶段必须读取的最小锚点]
+- **动手前必读**：[填写：执行前才需要读取的锚点；无则写 `N/A — 理由`]
+- **上下文模式**：[填写：Lite / Full / N/A — 工程理由]
+
+### 复用 → 扩展 → 新增
+
+| 能力 | 决策 | 既有锚点 | 理由 / 删除条件 |
+| --- | --- | --- | --- |
+| [填写：能力] | 复用 / 扩展 / 新增 | `[填写：路径:符号]` | [填写：最小方案理由；新增需写消费者、负责人、测试、删除条件] |
+
+## 方案设计
+
+### 总览
+
+[填写：用 2–4 个短段落讲清完整技术链路、关键数据流和最小改动方式。]
+
+### 模块职责
+
+#### [填写：模块名称]
+
+- **职责**：[填写：单一职责]
+- **消费**：[填写：准确接口或 schema]
+- **产出**：[填写：准确接口或 schema]
+- **不得决定**：[填写：权威边界]
+
+### 接口、数据与生命周期
+
+- **接口 / schema**：[填写：签名、数据契约和兼容边界；无则写 `N/A — 理由`]
+- **数据流 / 状态**：[填写：输入、变换、输出、失败与恢复]
+- **API 契约**：[填写：method、path、request、response、error；无则写 `N/A — 理由`]
+- **UI / 外部代码**：[填写：信息层级、交互、可访问性或最小 hook；无则写 `N/A — 理由`]
+- **明确失败**：[填写：无效输入或状态如何明确失败]
+
+## UI 交付契约（仅 UI phase/task 使用）
+
+- **UI 适用性**：`ui_scope` / `non_ui` / `unknown`；若无 UI 改动填 `N/A — 理由`。
+- **组件动作**：`reuse` / `modify` / `extend-state-or-variant` / `add-local` / `extract-shared` / `remove-after-no-consumers`。
+- **真实消费者**：[填写真实页面/组件消费者；没有时写 `unknown — 理由`]
+- **状态归属**：[填写状态所属组件或 hook]
+- **类型化视图模型**：[填写输入/输出类型、adapter 或 `N/A — 理由`]
+- **样式 / token 归属**：[填写样式与 token 所有者、边界和禁止的全局覆盖]
+- **夹具 / 视口**：[填写假数据夹具、视口名称/尺寸和响应式断点]
+- **浏览器 / a11y / 性能**：[填写交互、键盘、无障碍、性能测试路线]
+- **截图交接**：[填写截图路径/命令；被阻塞或未知时写失败原因]
+- **覆盖边界**：[填写不覆盖的浏览器、视觉、API 或性能范围]
+- **N/A 或未知的理由**：[填写为什么无法执行或只能人工确认]
+
+### 设计缺项交接（不改变 Design.md 权威）
+
+- `design_status`（设计状态）：`approved` / `acknowledged` / `not_approved` / `unknown`。
+- `missing_items`（缺项与原因）：[填写缺项和原因；没有缺项填 `[]`]
+- `fallback_visual_basis`（降级视觉依据）：[填写真实组件+假数据、设计工具结果或 `N/A — 理由`]
+- `constraints` / `assumptions`（约束与假设）：[填写交互、label、组件限制和实现假设]
+- `rework_risk` / `human_confirmation`（返工风险与人工确认）：[填写返工风险与人工确认事实]
+- `current_material_ref` / `design_revision`（当前材料引用与设计版本）：[填写当前四份材料引用和 Design.md 版本字符串]
+- `visible_labels`（可见文案）：[填写页面和操作的可见 label]
+- `preview_refs` / `fixture_refs` / `viewport_refs` / `screenshot_refs`（可回放引用）：[填写可回放引用；缺失必须保留 `unknown` 或 `N/A — 理由`]
+- `responsive` / `a11y`（响应式与无障碍）：[每个状态填写窄视口重排、溢出、焦点、键盘、语义和错误关联意图]
+
+## 文件边界
+
+### 新增
+
+- `[填写：精确新增文件路径 / N/A — 理由]`
+
+### 修改
+
+- `[填写：精确修改文件路径]`
+
+### 禁止改动
+
+- `[填写：精确保护文件路径及理由]`
+
+## 技术决策
+
+### DEC-001 — [填写：决策名称]
+
+- **问题**：[填写：真实工程问题]
+- **候选方案**：[填写：候选方案及取舍]
+- **已选**：[填写：复用 / 扩展 / 新增 及选择]
+- **理由**：[填写：为什么是最简单的充分方案]
+- **后果 / 风险**：[填写：代价和风险]
+- **回退方式**：[填写：边界内回退方式]
+- **F10 真实威胁**：[填写：仅「已选」为新增时保留]
+- **F10 既有覆盖**：[填写：仅「已选」为新增时保留]
+- **F10 可绕过**：[填写：仅「已选」为新增时保留]
+- **F10 维护成本**：[填写：仅「已选」为新增时保留]
+- **F10 处置**：[填写：`keep` / `simplify` / `remove`]
+
+## 测试策略
+
+设计 RED/GREEN，不在 build-plan 执行命令。两者使用同一条 `gate_cmd` 和
+同一个判据身份；`gate_cmd` 只是测试命令，不是工作许可证。
+
+| 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
+| --- | --- | --- | --- | --- |
+| [填写：FR/AC] | [填写：T-ID] | RED | `[填写：可执行命令]` / `[填写：非零]` | `[填写：ORACLE-ID、失败信号、相对任务根路径]` |
+| [填写：FR/AC] | [填写：T-ID] | GREEN | `[填写：同一命令]` / `0` | `[填写：同一 ORACLE-ID、成功/负例、相对任务根路径]` |
+
+规划涉及真实验收时，在现有接口契约和任务卡中绑定 tier、数据来源/样例/场景、逐 AC 判据与原始证据消费者。`command` 设计 argv/timeout；`service` 设计相对工作树的 module/export/input/timeout；精确 JSON 形状与逐 AC `entries[].assertions` 输出见 tasks-template 的交付契约字段。build-plan 只设计，build-code 的认证结果驱动真实执行；verify-code 认证当前执行、普通独立审查与用户确认，三者缺一保持缺失/不可用。
+
+审查通过既有入口产生 canonical attempt/result，消费者使用实际引用/哈希认证；partial、provider/transport 失败及缺失 usage/timing 保留原事实。阶段反思使用 v2、唯一显式结果与返回的语义引用/原始哈希，A 复用首件、B 保留 A；原 stage 错误与 reflection_error 分别披露。这些约束写进现有任务输出/证据/恢复栏，不增加执行状态权威。
+
+## 风险与回滚
+
+- **全局恢复规则**：[填写：只回滚当前实现，保留四份材料和既有质量事实]
+- **不可逆边界**：[填写：需要明确授权的 commit/push/merge/archive/cleanup；无则写 `N/A — 理由`]
+- **恢复负责人**：[填写：失败后由谁执行哪一步]
+
+### 工程风险交接
+
+- **PLAN-RISK-001**：[填写：风险主题]
+  - **受影响 ID**：[填写：来源/FR/AC/T-ID]
+  - **触发条件**：[填写：何时发生]
+  - **后果**：[填写：可观察后果]
+  - **缓解或停止**：[填写：最小缓解或停止条件]
+  - **处理阶段**：[填写：build-plan / build-code / verify-code]
+  - **验证**：[填写：如何证明已处理或仍存在]
+
+## 实施顺序
+
+[填写：producer-before-consumer 顺序、Phase 编号和必须串行的原因。]
+
+## 依赖与并行
+
+- **依赖**：[填写：producer → consumer 及串行原因；无则写 `N/A — 理由`]
+- **并行工作**：[填写：独立输入、依赖和文件所有权；无则写 `N/A — 理由`]
+- **外部依赖**：[填写：已核实依赖与缺失语义；无则写 `N/A — 理由`]
+
+## 需求与验证追踪
+
+| 来源 / 决定 | FR | AC | Phase / Task | 依赖 | 精确文件 | 命令 / 判据 |
+| --- | --- | --- | --- | --- | --- | --- |
+| [填写：R*/D*] | [填写：FR-ID] | [填写：AC-ID] | [填写：P1/T001] | [填写：T-ID / 无] | `[填写：精确路径]` | `[填写：命令 / ORACLE-ID]` |
+
+## 治理同步矩阵
+
+| 治理面 | 实际文件 | 变更 / 不变更 | Task 编号 | 理由 |
+| --- | --- | --- | --- | --- |
+| [填写：宪法/技能/测试/文档] | `[填写：精确路径]` | 变更 / 不变更 | [填写：T-ID] | [填写：边界理由] |
+
+## 宪法逐项检查
+
+- **宪法绑定**：`{\"artifact_kind\":\"constitution\",\"ref\":\"[填写：constitution-checklist.md 引用]\",\"hash\":\"[填写：真实 SHA-256]\",\"id\":\"CONSTITUTION\",\"version\":\"[填写：版本]\",\"clause_count\":22}`
+- **F1**：[填写：逐条事实与证据]
+- **F2**：[填写：逐条事实与证据]
+- **F3**：[填写：逐条事实与证据]
+- **F4**：[填写：逐条事实与证据]
+- **F5**：[填写：逐条事实与证据]
+- **F6**：[填写：逐条事实与证据]
+- **F7**：[填写：逐条事实与证据]
+- **F8**：[填写：逐条事实与证据]
+- **F9**：[填写：逐条事实与证据]
+- **F10**：[填写：逐条事实与证据]
+- **F11**：[填写：逐条事实与证据]
+- **Q1**：[填写：逐条事实与证据]
+- **Q2**：[填写：逐条事实与证据]
+- **Q3**：[填写：逐条事实与证据]
+- **S1**：[填写：逐条事实与证据]
+- **S2**：[填写：逐条事实与证据]
+- **S3**：[填写：逐条事实与证据]
+- **S4**：[填写：逐条事实与证据]
+- **S5**：[填写：逐条事实与证据]
+- **S6**：[填写：逐条事实与证据]
+- **S7**：[填写：逐条事实与证据]
+- **S8**：[填写：逐条事实与证据]
+
+## Phase P1 — [填写：Phase 名]
+
+### 目标
+
+[填写：本 Phase 的可观察结果。]
+
+### L0 — 目标
+
+[填写：本包为什么存在、用户或消费者能观察到什么。]
+
+### L1 — 契约
+
+[填写：可机检的输入/输出、不变量、失败语义和所有者。]
+
+### L2 — 可删除参考
+
+[填写：只帮助当前执行者的参考；删除它不得改变 L0/L1，写明退出条件。]
+
+### 文件
+
+- **写入集**：[填写：本 Phase 精确文件集；不得用目录或 glob]
+- **新增**：`[填写：精确路径 / N/A — 理由]`
+- **修改**：`[填写：精确路径]`
+- **禁止改动**：`[填写：精确保护路径及理由]`
+
+### 任务
+
+- `[填写：T-ID：一行结果]`
+
+### 验证
+
+[填写：命令、预期退出码、判据、证据路径；与本 Phase 任务判据对齐。]
+
+### 知识
+
+[填写：下一阶段必须知道的已核实事实。]
+
+### 停止
+
+[填写：返回哪个归属材料的具体条件。]
+
+### 完成
+
+[填写：可以诚实报告的测试、AC、审查、证据和交接事实。]
+
+### 风险与回滚
+
+[填写：受影响 ID、触发条件、后果、缓解办法、回滚。]
+"
+
+ ❯ tests/contract/material-producer-consumer-roundtrip.test.mjs:15:47
+     13|     const indexSkill = read("skills/spec-tasks/SKILL.md");
+     14| 
+     15|     expect(`${phaseSkill}\n${phaseTemplate}`).toMatch(/single phase en…
+       |                                               ^
+     16|     expect(phaseTemplate).toMatch(/^## Phase P1/m);
+     17|     expect(phaseTemplate).toMatch(/L0[\s\S]{0,120}(?:Goal|目标)/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  23:01:51
+   Duration  107ms (transform 8ms, setup 0ms, collect 5ms, tests 3ms, environment 0ms, prepare 22ms)
+

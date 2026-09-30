@@ -1,0 +1,236 @@
+## cmd: npx vitest run tests/contract/card03-runtime-binding.test.mjs  (exit=1)
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs (7 tests | 7 failed) 350ms
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 phaseWriteSetChanges reports only declared write-set paths 122ms
+     → expected 'undefined' to be 'function' // Object.is equality
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a test receipt survives an unrelated-file change but not a write-set change 113ms
+     → expected [Function] to not throw an error but 'Error: canonical test receipt provena…' was thrown
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 an implementation receipt survives an unrelated-file change but not a write-set change 111ms
+     → expected [Function] to throw an error
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a research report stays current when only the code tree moved 2ms
+     → expected [] to have a length of 1 but got +0
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 business-case-catalog binds stable anchors, not whole-file sha256 1ms
+     → CARD04-DECISION-LOG-CENSUS: expected 'sha256:dd6b46604c71bb6aaf9f3feea9cc49…' to match /^anchor:#{2,3} \S/
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a one-word edit outside the anchored section keeps the case bound; losing the anchor does not 0ms
+     → expected 'undefined' to be 'function' // Object.is equality
+   × CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 handoffDeclaration takes the current stage for P5/T012 0ms
+     → expected [Function] to not throw an error but 'TypeError: post Phase index is missing' was thrown
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 phaseWriteSetChanges reports only declared write-set paths
+AssertionError: expected 'undefined' to be 'function' // Object.is equality
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:66:52
+     64|   it("ORACLE-RT-001 phaseWriteSetChanges reports only declared write-s…
+     65|     const { repo, A, B, C, writeSet } = trees();
+     66|     expect(typeof validators.phaseWriteSetChanges).toBe("function");
+       |                                                    ^
+     67|     expect(validators.phaseWriteSetChanges({ root: repo, fromTree: A, …
+     68|     expect(validators.phaseWriteSetChanges({ root: repo, fromTree: A, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a test receipt survives an unrelated-file change but not a write-set change
+AssertionError: expected [Function] to not throw an error but 'Error: canonical test receipt provena…' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: canonical test receipt provenance is invalid"
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:75:91
+     73|     const options = (tree) => ({ taskId: "card03-p3", stage: "build-co…
+     74|       currentSnapshot: { root: repo, tree, writeSet } });
+     75|     expect(() => validators.validateCanonicalTestReceipt(testReceipt(A…
+       |                                                                                           ^
+     76|     expect(() => validators.validateCanonicalTestReceipt(testReceipt(A…
+     77|       .toThrow(/write set changed.*src\/owned\.mjs/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 an implementation receipt survives an unrelated-file change but not a write-set change
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:85:8
+     83|     expect(() => validators.validateCanonicalImplementationReceipt(imp…
+     84|     expect(() => validators.validateCanonicalImplementationReceipt(imp…
+     85|       .toThrow(/write set changed.*src\/owned\.mjs/);
+       |        ^
+     86|   });
+     87| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a research report stays current when only the code tree moved
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:108:21
+    106|       materialScopeRevision: identity.material_scope_revision, snapsho…
+    107|     });
+    108|     expect(records).toHaveLength(1);
+       |                     ^
+    109|   });
+    110| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 business-case-catalog binds stable anchors, not whole-file sha256
+AssertionError: CARD04-DECISION-LOG-CENSUS: expected 'sha256:dd6b46604c71bb6aaf9f3feea9cc49…' to match /^anchor:#{2,3} \S/
+
+- Expected: 
+/^anchor:#{2,3} \S/
+
++ Received: 
+"sha256:dd6b46604c71bb6aaf9f3feea9cc4956c8d4a8b172f4b15075afb0b4d1f90970"
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:115:36
+    113|     for (const entry of catalog.cases) {
+    114|       for (const revision of [entry.source?.revision, entry.rule?.revi…
+    115|         expect(revision, entry.id).toMatch(/^anchor:#{2,3} \S/);
+       |                                    ^
+    116|       }
+    117|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 a one-word edit outside the anchored section keeps the case bound; losing the anchor does not
+AssertionError: expected 'undefined' to be 'function' // Object.is equality
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:126:60
+    124| 
+    125|   it("ORACLE-RT-001 a one-word edit outside the anchored section keeps…
+    126|     expect(typeof reconciliation.businessCaseAnchorErrors).toBe("funct…
+       |                                                            ^
+    127|     const texts = {
+    128|       "spec/source.md": "## 需求变更记录\n原文 A\n## 其他章节\n旧词\n",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/contract/card03-runtime-binding.test.mjs > CARD-03 P3 runtime binding: phase write set instead of whole-tree snapshot > ORACLE-RT-001 handoffDeclaration takes the current stage for P5/T012
+AssertionError: expected [Function] to not throw an error but 'TypeError: post Phase index is missing' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"TypeError: post Phase index is missing"
+
+ ❯ tests/contract/card03-runtime-binding.test.mjs:151:111
+    149|     const decisionOnly = { "decision-log.md": "# d\n", "spec.md": "# s…
+    150|     let declaration;
+    151|     expect(() => { declaration = handoffDeclaration(decisionOnly, "pos…
+       |                                                                                                               ^
+    152|     expect(declaration.value).toBeNull();
+    153|     expect(() => handoffDeclaration(decisionOnly, "post", { stage: "bu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  01:39:29
+   Duration  1.05s (transform 263ms, setup 0ms, collect 585ms, tests 350ms, environment 0ms, prepare 34ms)
+
+
+## cmd: npx vitest run tests/contract/business-case-source-binding.test.mjs  (exit=1)
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/business-case-source-binding.test.mjs (19 tests | 7 failed) 34ms
+   × CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS binds its source and rule revision to a stable anchor in the current material 7ms
+     → expected [ 'wrong source.path', …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES binds its source and rule revision to a stable anchor in the current material 1ms
+     → expected [ 'wrong source.path', …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION binds its source and rule revision to a stable anchor in the current material 0ms
+     → expected [ 'wrong source.path', …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds its source and rule revision to a stable anchor in the current material 2ms
+     → expected [ 'wrong source.path', …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds its source and rule revision to a stable anchor in the current material 1ms
+     → expected [ 'wrong source.path', …(3) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect 2ms
+     → expected [ 'wrong source.path', …(4) ] to deeply equal []
+   × CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect 2ms
+     → expected [ 'wrong source.path', …(4) ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS binds its source and rule revision to a stable anchor in the current material
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES binds its source and rule revision to a stable anchor in the current material
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION binds its source and rule revision to a stable anchor in the current material
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds its source and rule revision to a stable anchor in the current material
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds its source and rule revision to a stable anchor in the current material
+AssertionError: expected [ 'wrong source.path', …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "wrong source.path",
++   "missing declared source",
++   "stale source.revision",
++   "stale rule.revision",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:207:55
+    205|     it(`${id} binds its source and rule revision to a stable anchor in…
+    206|       expect(cases.has(id)).toBe(true);
+    207|       expect(bindingErrors(cases.get(id), authority)).toEqual([]);
+       |                                                       ^
+    208|     });
+    209|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect
+AssertionError: expected [ 'wrong source.path', …(4) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "wrong source.path",
++   "missing declared source",
++   "stale source.revision",
++   "stale rule.revision",
++   "missing real trigger or consumer edge",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:271:60
+    269|     it(`${id} binds the finite business rule, real consumer, all runne…
+    270|       expect(cases.has(id)).toBe(true);
+    271|       expect(finiteP9CaseErrors(cases.get(id), authority)).toEqual([]);
+       |                                                            ^
+    272|     });
+    273|     it(`${id} selects its case when only its own test file changes and…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 12 passed (19)
+   Start at  01:39:30
+   Duration  152ms (transform 14ms, setup 0ms, collect 15ms, tests 34ms, environment 0ms, prepare 28ms)
+

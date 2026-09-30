@@ -1,0 +1,76 @@
+FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > records task strategy and execution facts in the canonical step manifest
+FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > requires per-phase execution facts and a final task strategy summary
+FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope
+FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative
+FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts
+FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities
+FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections
+FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area
+FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > Phase 3 canonical review reuse and explicit retry contracts > keeps phase review lineage separate from the integration review lineage
+FAIL  tests/contract/governance-review-dispatch-boundary.test.mjs > governance review dispatch boundary > keeps standard workflow without a unified budget gate
+FAIL  tests/contract/material-producer-consumer-roundtrip.test.mjs > material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index
+FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > keeps the post Phase index pointer-only
+FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks
+FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge
+FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index
+FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage
+FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs
+FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings
+FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > selects every reviewable implementation and test diff above 486777B
+FAIL  tests/contract/stage-reflection-skill-contract.test.mjs > stage-reflection skill contract > declares the v2 six-block judgment protocol and a valid bundle
+FAIL  tests/contract/stage-routing-and-concrete-testing.test.mjs > D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion
+FAIL  tests/contract/tier-c-deletion-boundary.test.mjs > Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history
+FAIL  tests/contract/workflow-quality-regression.test.mjs > workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code
+FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects missing bytes after a valid baseline
+FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects tampered bytes after a valid baseline
+FAIL  tests/integration/distribution-closure.test.mjs > carries the canonical shared definitions owner through the runner import closure
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > contains the five workflows and their declared skill closure only
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects an unsafe release manifest file
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects hard-linked release source files
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects removal of the persisted portable workflow closure
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects unmanifested files in a closed release
+FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk
+FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-015: current four materials are authoritative
+FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-025: content skills and templates are consumed
+FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-029: restored content skills have auditable provenance
+FAIL  tests/step-manifest.test.mjs > canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate
+FAIL  tests/step-manifest.test.mjs > canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers
+× D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion 4ms
+× ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 4ms
+× ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts 1ms
+× ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 8ms
+× P5 released workflow source rejects missing bytes after a valid baseline 52ms
+× P5 released workflow source rejects tampered bytes after a valid baseline 55ms
+× P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections 3ms
+× P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area 1ms
+× Phase 3 canonical review reuse and explicit retry contracts > keeps phase review lineage separate from the integration review lineage 3915ms
+× Phase quality and handoff contract > keeps the post Phase index pointer-only 1ms
+× Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks 3ms
+× Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history 19ms
+× build-code apply quality contract > records task strategy and execution facts in the canonical step manifest 1ms
+× build-code apply quality contract > requires per-phase execution facts and a final task strategy summary 1ms
+× build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope 4ms
+× canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate 1ms
+× canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers 3ms
+× carries the canonical shared definitions owner through the runner import closure 60ms
+× current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings 1702ms
+× current review material and capture contracts > selects every reviewable implementation and test diff above 486777B 7ms
+× governance review dispatch boundary > keeps standard workflow without a unified budget gate 2ms
+× material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index 3ms
+× portable build-prd workflow closure > contains the five workflows and their declared skill closure only 61ms
+× portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it 138ms
+× portable build-prd workflow closure > rejects an unsafe release manifest file 54ms
+× portable build-prd workflow closure > rejects hard-linked release source files 142ms
+× portable build-prd workflow closure > rejects removal of the persisted portable workflow closure 55ms
+× portable build-prd workflow closure > rejects unmanifested files in a closed release 55ms
+× portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk 52ms
+× post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge 0ms
+× post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index 4ms
+× post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage 1ms
+× post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs 1ms
+× requirements-completeness-audit current acceptance matrix > AC-015: current four materials are authoritative 6ms
+× requirements-completeness-audit current acceptance matrix > AC-025: content skills and templates are consumed 1ms
+× requirements-completeness-audit current acceptance matrix > AC-029: restored content skills have auditable provenance 3ms
+× stage-reflection skill contract > declares the v2 six-block judgment protocol and a valid bundle 5ms
+× workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code 3ms

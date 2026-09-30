@@ -1,0 +1,27 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/review-step-forward-progress.test.mjs (4 tests | 1 failed) 5ms
+   × review manifest and active-prose forward-progress contract > keeps one current stage or phase review per declared scope and advances without task-level replay 3ms
+     → build-code:final-integration-review: expected undefined to be defined
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/review-step-forward-progress.test.mjs > review manifest and active-prose forward-progress contract > keeps one current stage or phase review per declared scope and advances without task-level replay
+AssertionError: build-code:final-integration-review: expected undefined to be defined
+ ❯ tests/contract/review-step-forward-progress.test.mjs:97:50
+     95|         const review = bySlug.get(reviewSlug);
+     96|         const successor = bySlug.get(contract.successors[index]);
+     97|         expect(review, `${stage}:${reviewSlug}`).toBeDefined();
+       |                                                  ^
+     98|         expect(successor, `${stage}:${contract.successors[index]}`).to…
+     99|         expect(successor.order, `${stage}:${reviewSlug} must advance`)…
+ ❯ tests/contract/review-step-forward-progress.test.mjs:94:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  23:01:50
+   Duration  472ms (transform 161ms, setup 0ms, collect 364ms, tests 5ms, environment 0ms, prepare 23ms)
+

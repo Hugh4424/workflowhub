@@ -1,0 +1,122 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/card03-review-orchestration.test.mjs (14 tests | 4 failed | 6 skipped) 6218ms
+   ✓ ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects a request that also carries a result before any attempt exists 467ms
+   ✓ ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects host-owned identity fields before any attempt exists 484ms
+   ✓ ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects a stage without semantic_fields in stage-materials.json before any attempt exists 474ms
+   × ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects material keys outside the stage semantic fields before any attempt exists 1610ms
+     → promise resolved "{ status: 'recorded', …(5) }" instead of rejecting
+   × ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects an unresolvable host_provider before any attempt exists 1602ms
+     → promise resolved "{ status: 'recorded', …(5) }" instead of rejecting
+   × ORACLE-REV-001 review request precheck, bad results and packet narrowing > records a malformed provider result as unavailable with a reason and does not redispatch it 1578ms
+     → review findings must be an array
+   × ORACLE-REV-001 review request precheck, bad results and packet narrowing > narrows the review packet to declared write set ∩ real diff without binding identity 1ms
+     → expected 'diff --git a/runtime/review/in-scope.…' not to contain 'docs/out-of-scope.md'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects material keys outside the stage semantic fields before any attempt exists
+AssertionError: promise resolved "{ status: 'recorded', …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- [Error: rejected promise]
++ Object {
++   "attempt_ref": "quality/reviews/attempts/9d62f400-fc1e-5dae-a01a-0e0c8a668901/attempt.json",
++   "dispatch_state": "dispatched",
++   "report_ref": "quality/reviews/reports/build-code-simple-9d62f400-fc1e-5dae-a01a-0e0c8a668901.md",
++   "result_ref": "quality/reviews/results/build-code-simple-9d62f400-fc1e-5dae-a01a-0e0c8a668901.json",
++   "reused": false,
++   "status": "recorded",
++ }
+
+ ❯ expectRejectedBeforeDispatch tests/contract/card03-review-orchestration.test.mjs:95:6
+     93|     task: state.task, kernel: state.kernel, request, resolveRouteIdent…
+     94|     runRound: async (input) => { dispatches += 1; return reviewResult(…
+     95|   })).rejects.toThrow(reason);
+       |      ^
+     96|   expect(Date.now() - startedAt).toBeLessThan(1000);
+     97|   expect(dispatches).toBe(0);
+ ❯ tests/contract/card03-review-orchestration.test.mjs:115:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > rejects an unresolvable host_provider before any attempt exists
+AssertionError: promise resolved "{ status: 'recorded', …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- [Error: rejected promise]
++ Object {
++   "attempt_ref": "quality/reviews/attempts/166be6a6-a4ae-515d-af3a-ff1aea6a2a7b/attempt.json",
++   "dispatch_state": "dispatched",
++   "report_ref": "quality/reviews/reports/build-code-simple-166be6a6-a4ae-515d-af3a-ff1aea6a2a7b.md",
++   "result_ref": "quality/reviews/results/build-code-simple-166be6a6-a4ae-515d-af3a-ff1aea6a2a7b.json",
++   "reused": false,
++   "status": "recorded",
++ }
+
+ ❯ expectRejectedBeforeDispatch tests/contract/card03-review-orchestration.test.mjs:95:6
+     93|     task: state.task, kernel: state.kernel, request, resolveRouteIdent…
+     94|     runRound: async (input) => { dispatches += 1; return reviewResult(…
+     95|   })).rejects.toThrow(reason);
+       |      ^
+     96|   expect(Date.now() - startedAt).toBeLessThan(1000);
+     97|   expect(dispatches).toBe(0);
+ ❯ tests/contract/card03-review-orchestration.test.mjs:122:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > records a malformed provider result as unavailable with a reason and does not redispatch it
+TypeError: review findings must be an array
+ ❯ prepareSimpleReviewRecord runtime/review/review-record-route.mjs:1850:46
+    1848|     throw new TypeError("review role provider selection does not match…
+    1849|   }
+    1850|   if (!Array.isArray(result.findings)) throw new TypeError("review fin…
+       |                                              ^
+    1851|   if (result.findings.some((finding) => !completed.some((item) => item…
+    1852|   const e2eBinding = executionBindingForResult(task, result, identity,…
+ ❯ recordSimpleReviewResult runtime/review/review-record-route.mjs:2219:22
+ ❯ operation runtime/review/review-record-route.mjs:1754:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-001 review request precheck, bad results and packet narrowing > narrows the review packet to declared write set ∩ real diff without binding identity
+AssertionError: expected 'diff --git a/runtime/review/in-scope.…' not to contain 'docs/out-of-scope.md'
+
+- Expected
++ Received
+
+- docs/out-of-scope.md
++ diff --git a/runtime/review/in-scope.mjs b/runtime/review/in-scope.mjs
++ --- a/runtime/review/in-scope.mjs
++ +++ b/runtime/review/in-scope.mjs
++ @@ -1 +1 @@
++ -old
++ +new
++ diff --git a/docs/out-of-scope.md b/docs/out-of-scope.md
++ --- a/docs/out-of-scope.md
++ +++ b/docs/out-of-scope.md
++ @@ -1 +1 @@
++ -old
++ +new
++
+
+ ❯ tests/contract/card03-review-orchestration.test.mjs:157:32
+    155|     const compacted = compactReviewDiff(diff, { writeSet: ["runtime/re…
+    156|     expect(compacted.diff).toContain("runtime/review/in-scope.mjs");
+    157|     expect(compacted.diff).not.toContain("docs/out-of-scope.md");
+       |                                ^
+    158|     expect(compacted.diff).not.toContain("runtime/review/untouched.mjs…
+    159|     expect(JSON.stringify(compacted.index)).not.toMatch(/material_id|s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 4 passed | 6 skipped (14)
+   Start at  00:56:47
+   Duration  6.75s (transform 184ms, setup 0ms, collect 412ms, tests 6.22s, environment 0ms, prepare 32ms)
+

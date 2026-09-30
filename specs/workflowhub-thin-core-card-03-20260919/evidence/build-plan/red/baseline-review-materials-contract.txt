@@ -1,0 +1,88 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+stderr | tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > RED: records and drops a near-miss material key while preserving true forbidden keys
+MATERIAL_UNKNOWN_KEY_DROPPED: acceptance_criterias is not in the stage material allowlist
+
+ ❯ tests/contract/review-materials-contract.test.mjs (54 tests | 2 failed) 48817ms
+   ✓ current review material and capture contracts > RED: records and drops a near-miss material key while preserving true forbidden keys 2350ms
+   ✓ current review material and capture contracts > reports all missing verify-code materials in one preflight 446ms
+   ✓ current review material and capture contracts > normalizes identity aliases and rejects inherited material keys 437ms
+   ✓ current review material and capture contracts > RED: rejects retired material keys and enumerates the canonical legal keys 424ms
+   × current review material and capture contracts > selects every reviewable implementation and test diff above 486777B 5ms
+     → expected [ …(2) ] to deeply equal [ 'tests/z.test.ts', …(2) ]
+   × current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings 1372ms
+     → MATERIAL_INCOMPLETE: verify-code requires an included test diff when that kind changed
+   ✓ current review material and capture contracts > uses the current canonical receipt writer through both build and verify capture wrappers 2885ms
+   ✓ current review material and capture contracts > keeps the build-plan projection for spec-analyze without sending a second copy to the provider 547ms
+   ✓ current review material and capture contracts > sends post build-plan independent Phase files and rejects absent or legacy substitutes 535ms
+   ✓ current review material and capture contracts > delivers a large non-build-code packet without truncating its provider material 535ms
+   ✓ current review material and capture contracts > delivers a complete task-bound provider packet above 486777B without truncation 517ms
+   ✓ current review material and capture contracts > constructs both mini-task packets and binds implementation evidence to the current snapshot 1390ms
+   ✓ current review material and capture contracts > keeps a near-limit mini-task design packet provider-visible without dropping frozen materials 510ms
+   ✓ current review material and capture contracts > fails a mini-task packet when the decision log cannot yield the bounded original requirement 1183ms
+   ✓ current review material and capture contracts > rejects a mini-task implementation test receipt from an older snapshot 1376ms
+   ✓ current review material and capture contracts > captures the complete changed file set without caller path filters 686ms
+   ✓ current review material and capture contracts > keeps committed task changes visible to the current review Workspace 1523ms
+   ✓ current review material and capture contracts > rejects a build-code phase test receipt from an older snapshot 1360ms
+   ✓ current review material and capture contracts > accepts a phase test receipt across execution-status-only tasks writeback 3376ms
+   ✓ current review material and capture contracts > rejects a phase test receipt without canonical provenance 1243ms
+   ✓ current review material and capture contracts > accepts an integration packet when only the execution-status block changed 2628ms
+   ✓ current review material and capture contracts > accepts a current passing integration receipt with its actual limited command 2299ms
+   ✓ current review material and capture contracts > still builds a semantic integration packet when the test receipt is unavailable 1329ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: only candidate integration receives the real diff and full AC text 1419ms
+   ✓ current review material and capture contracts > delivers the full frozen diff for every change in a large candidate integration packet 1596ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate receives full AC beside a sharded real diff 1467ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for missing acceptance criteria 1388ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for empty acceptance criteria 1399ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for incomplete acceptance criteria 1426ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for partial current AC set acceptance criteria 1430ms
+   ✓ current review material and capture contracts > treats an explicit missing integration test receipt as unavailable 1273ms
+   ✓ current review material and capture contracts > rejects unavailable integration test evidence bound to an older snapshot 1272ms
+   ✓ current review material and capture contracts > keeps the integration AC trace host-only 2608ms
+   ✓ current review material and capture contracts > bounds integration provider context to delivery-critical excerpts 2347ms
+   ✓ current review material and capture contracts > does not duplicate acceptance sections inside the integration approved spec 2228ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > selects every reviewable implementation and test diff above 486777B
+AssertionError: expected [ …(2) ] to deeply equal [ 'tests/z.test.ts', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+-   "tests/z.test.ts",
+    "paperbuilder/application/core.py",
+    "frontend/src/secondary.ts",
+  ]
+
+ ❯ tests/contract/review-materials-contract.test.mjs:450:69
+    448|     ];
+    449|     expect(sections.reduce((total, section) => total + section.bytes.l…
+    450|     expect([...selectVerifyCodeDiffPaths(sections, "verify-code")]).to…
+       |                                                                     ^
+    451|       "tests/z.test.ts",
+    452|       "paperbuilder/application/core.py",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings
+Error: MATERIAL_INCOMPLETE: verify-code requires an included test diff when that kind changed
+ ❯ validateDiffIndexBundle skills/wh-review/scripts/review-materials.mjs:1705:45
+    1703|       .filter(Boolean));
+    1704|     for (const kind of requiredKinds) {
+    1705|       if (!verifyCodeKinds.has(kind)) throw new Error(`MATERIAL_INCOMP…
+       |                                             ^
+    1706|     }
+    1707|   }
+ ❯ Module.buildReviewMaterials skills/wh-review/scripts/review-materials.mjs:2238:3
+ ❯ tests/contract/review-materials-contract.test.mjs:467:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 52 passed (54)
+   Start at  23:01:52
+   Duration  49.32s (transform 185ms, setup 0ms, collect 394ms, tests 48.82s, environment 0ms, prepare 26ms)
+

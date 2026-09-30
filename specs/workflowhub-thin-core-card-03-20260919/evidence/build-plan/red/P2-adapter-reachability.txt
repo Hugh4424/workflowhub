@@ -1,0 +1,177 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs (17 tests | 9 failed) 37408ms
+   × verify-code canonical review binding derivation > derives the exact dsh-code-review pair from the authenticated outcome when host omits it 1544ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > accepts an equal host ref without changing the authenticated binding 1479ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > keeps a malformed optional outcome unavailable without deriving code-review quality 979ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > keeps a completed outcome that binds an unavailable review attempt unavailable 1471ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > rejects non-canonical leading-dot review refs before path resolution 1488ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > keeps a malformed bound review hash unavailable without publishing code-review quality 1501ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × verify-code canonical review binding derivation > rejects a host ref conflict with a frozen non-enumerable binding diagnostic 2037ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   × P3 T009 explicit confirmation receipt consumer > admits a post-review confirmation without upgrading a historical review into execution acceptance 1483ms
+     → verify-code manifests must declare architect-code-review and finalize-code-review
+   ✓ verify-code review currentness and resolved-source binding > rejects a legacy DSH review even when its snapshot matches 3082ms
+   × verify-code review currentness and resolved-source binding > does not mark a non-OCR current-session review repair resolved 3816ms
+     → expected [Function] to throw error matching /authenticated OCR provider result/i but got 'verify-code repair review must be an …'
+   ✓ verify-code review currentness and resolved-source binding > resolves current-session repairs from one authenticated OCR provider 5616ms
+   ✓ verify-code review currentness and resolved-source binding > does not turn a retired stage-outcome review into an OCR repair 2523ms
+   ✓ verify-code deferred E2E acceptance authentication > authenticates a current missing fact and exposes the conditional predicate as missing 1930ms
+   ✓ verify-code deferred E2E acceptance authentication > does not project an authenticated missing fact from an older snapshot as current 2531ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with foreign task identity 1940ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with mismatched nested hash 1943ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with stale snapshot 2044ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > derives the exact dsh-code-review pair from the authenticated outcome when host omits it
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:355:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > accepts an equal host ref without changing the authenticated binding
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:379:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > keeps a malformed optional outcome unavailable without deriving code-review quality
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:396:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > keeps a completed outcome that binds an unavailable review attempt unavailable
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:421:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > rejects non-canonical leading-dot review refs before path resolution
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:446:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > keeps a malformed bound review hash unavailable without publishing code-review quality
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:471:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > rejects a host ref conflict with a frozen non-enumerable binding diagnostic
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:496:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > P3 T009 explicit confirmation receipt consumer > admits a post-review confirmation without upgrading a historical review into execution acceptance
+Error: verify-code manifests must declare architect-code-review and finalize-code-review
+ ❯ buildCodeReviewOutcome runtime/stage/stage-agent-outcome-adapter.mjs:620:42
+    618|   const reviewStep = manifest.steps.find((step) => step.step_slug === …
+    619|   const reviewSkill = skills.skills?.find((skill) => skill.name === "a…
+    620|   if (!reviewStep || !reviewSkill) throw new Error("verify-code manife…
+       |                                          ^
+    621|   const result = object(input.result, "execution.code_review.result");
+    622|   const allowed = new Set(["status", "findings", "summary", "focus", "…
+ ❯ Module.publishStageAgentOutcome runtime/stage/stage-agent-outcome-adapter.mjs:857:7
+ ❯ publishOutcome tests/contract/verify-code-binding-derivation.test.mjs:208:10
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:520:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code review currentness and resolved-source binding > does not mark a non-OCR current-session review repair resolved
+AssertionError: expected [Function] to throw error matching /authenticated OCR provider result/i but got 'verify-code repair review must be an …'
+
+- Expected: 
+/authenticated OCR provider result/i
+
++ Received: 
+"verify-code repair review must be an authenticated OCR result or eligible Architect fallback"
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:572:5
+    570|     const { repairs } = createRepairEvidence(state, review, "non-dsh-c…
+    571| 
+    572|     await expect(runOfficialStage("verify-code", state.context, {
+       |     ^
+    573|       attempt_id: "verify-code-non-dsh-current-review-repair-attempt",
+    574|       receipts: { quality_review: review.resultRef },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 8 passed (17)
+   Start at  01:16:11
+   Duration  38.22s (transform 316ms, setup 0ms, collect 692ms, tests 37.41s, environment 0ms, prepare 28ms)
+

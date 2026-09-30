@@ -1,0 +1,33 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/tier-c-deletion-boundary.test.mjs (5 tests | 1 failed) 87ms
+   × Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history 32ms
+     → expected [Function] to not throw an error but 'Error: Command failed: git diff --qui…' was thrown
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/tier-c-deletion-boundary.test.mjs > Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history
+AssertionError: expected [Function] to not throw an error but 'Error: Command failed: git diff --qui…' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: Command failed: git diff --quiet c33acd3b36d59ea37c97e3784706a8a57fd6f0b7 -- docs/research specs/archive"
+
+ ❯ tests/contract/tier-c-deletion-boundary.test.mjs:118:125
+    116|     const fixture = read("tests/fixtures/public-behavior-baseline/v1/c…
+    117|     expect(fixture).not.toMatch(/product_release|quality\/verify\.json…
+    118|     expect(() => execFileSync("git", ["diff", "--quiet", BASE, "--", "…
+       |                                                                                                                             ^
+    119|   });
+    120| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  23:27:53
+   Duration  256ms (transform 32ms, setup 0ms, collect 55ms, tests 87ms, environment 0ms, prepare 27ms)
+

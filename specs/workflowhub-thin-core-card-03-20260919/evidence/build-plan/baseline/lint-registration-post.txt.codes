@@ -1,0 +1,14 @@
+   2 MD009/no-trailing-spaces
+   2 MD010/no-hard-tabs
+  10 MD012/no-multiple-blanks
+  34 MD022/blanks-around-headings
+   1 MD024/no-duplicate-heading
+   1 MD025/single-title
+   1 MD028/no-blanks-blockquote
+  11 MD031/blanks-around-fences
+  55 MD032/blanks-around-lists
+  13 MD036/no-emphasis-as-heading
+  75 MD038/no-space-in-code
+  47 MD040/fenced-code-language
+  11 MD056/table-column-count
+   3 MD058/blanks-around-tables

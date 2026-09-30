@@ -1,0 +1,165 @@
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /private/tmp/card03-bp/sim-adapter
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs (17 tests | 6 failed) 59235ms
+   × verify-code canonical review binding derivation > derives the exact dsh-code-review pair from the authenticated outcome when host omits it 4455ms
+     → expected { …(13) } to match object { status: 'recorded', …(1) }
+(12 matching properties omitted from actual)
+   × verify-code canonical review binding derivation > accepts an equal host ref without changing the authenticated binding 3259ms
+     → code review receipt is not an authenticated OCR delegation result or eligible Architect fallback
+   ✓ verify-code canonical review binding derivation > keeps a malformed optional outcome unavailable without deriving code-review quality 3748ms
+   ✓ verify-code canonical review binding derivation > keeps a completed outcome that binds an unavailable review attempt unavailable 4349ms
+   ✓ verify-code canonical review binding derivation > rejects non-canonical leading-dot review refs before path resolution 4488ms
+   ✓ verify-code canonical review binding derivation > keeps a malformed bound review hash unavailable without publishing code-review quality 4370ms
+   × verify-code canonical review binding derivation > rejects a host ref conflict with a frozen non-enumerable binding diagnostic 4007ms
+     → expected undefined to deeply equal { check_id: 'review_binding', …(2) }
+   × P3 T009 explicit confirmation receipt consumer > admits a post-review confirmation without upgrading a historical review into execution acceptance 4354ms
+     → verify-code receipts.review only accepts a build-code Phase review; use receipts.quality_review for OCR code review
+   ✓ verify-code review currentness and resolved-source binding > rejects a legacy DSH review even when its snapshot matches 3156ms
+   × verify-code review currentness and resolved-source binding > does not mark a non-OCR current-session review repair resolved 3753ms
+     → expected [Function] to throw error matching /authenticated OCR provider result/i but got 'verify-code repair review must be an …'
+   ✓ verify-code review currentness and resolved-source binding > resolves current-session repairs from one authenticated OCR provider 5776ms
+   × verify-code review currentness and resolved-source binding > does not turn a retired stage-outcome review into an OCR repair 2711ms
+     → expected [Function] to throw an error
+   ✓ verify-code deferred E2E acceptance authentication > authenticates a current missing fact and exposes the conditional predicate as missing 1989ms
+   ✓ verify-code deferred E2E acceptance authentication > does not project an authenticated missing fact from an older snapshot as current 2688ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with foreign task identity 2012ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with mismatched nested hash 2073ms
+   ✓ verify-code deferred E2E acceptance authentication > does not authenticate a missing fact with stale snapshot 2045ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > derives the exact dsh-code-review pair from the authenticated outcome when host omits it
+AssertionError: expected { …(13) } to match object { status: 'recorded', …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+    "evidence": Array [
+      Object {
+-       "ref": "quality/reviews/results/verify-code-default-364a8dca-b586-4dd4-ba17-2879bd3eeec4.json",
+-       "sha256": "3f0c2ce480cc20842de311bf0e3613c501dac786eeb41891d9c8d05e6f83330c",
++       "ref": "quality/evidence/stage-quality-missing/verify-code/code_review-0756e033607e6cbacaf07cdecc640ae7bf61f8dbbd1e3e0eb9ac281e30ce9cd1.json",
++       "sha256": "0756e033607e6cbacaf07cdecc640ae7bf61f8dbbd1e3e0eb9ac281e30ce9cd1",
+      },
+    ],
+-   "status": "recorded",
++   "status": "missing",
+  }
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:366:31
+    364| 
+    365|     expect(codeReviewFact).toHaveLength(1);
+    366|     expect(codeReviewFact[0]).toMatchObject({
+       |                               ^
+    367|       status: "recorded",
+    368|       evidence: [{ ref: review.resultRef, sha256: reviewHash }],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > accepts an equal host ref without changing the authenticated binding
+Error: code review receipt is not an authenticated OCR delegation result or eligible Architect fallback
+ ❯ runStage.stageReflectionInput.stageReflectionInput runtime/stage/stage-runner.mjs:4976:17
+    4974|           ? authenticatedVerifyCodeReviewResult(ctx.task, codeReviewRe…
+    4975|           : authenticatedOcrCodeReviewResult(ctx.task, codeReviewRecor…
+    4976|           throw new Error("code review receipt is not an authenticated…
+       |                 ^
+    4977|         }
+    4978|       }
+ ❯ runStage runtime/stage/stage-runner.mjs:3581:32
+ ❯ Module.runOfficialStage runtime/stage/stage-runner.mjs:4875:29
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:380:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code canonical review binding derivation > rejects a host ref conflict with a frozen non-enumerable binding diagnostic
+AssertionError: expected undefined to deeply equal { check_id: 'review_binding', …(2) }
+
+- Expected: 
+Object {
+  "actual": Object {
+    "ref": "quality/reviews/results/verify-code-default-f65a59fc-ca3c-4f47-8d0a-f20c80b8f355.json",
+  },
+  "check_id": "review_binding",
+  "expected": Object {
+    "hash": "a97f052d2c89c0079ce9c83e69307f70992a07ee0a3257ca7503556c9efe1cb9",
+    "ref": "quality/reviews/results/verify-code-default-3124c05f-81c2-48fa-b4a0-bdb58a041b16.json",
+  },
+}
+
++ Received: 
+undefined
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:504:30
+    502|     expect(error).toBeInstanceOf(Error);
+    503|     expect(Object.keys(error)).not.toContain("diagnostic");
+    504|     expect(error.diagnostic).toEqual({
+       |                              ^
+    505|       check_id: "review_binding",
+    506|       expected: { ref: outcomeReview.resultRef, hash: sha256(state.tas…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > P3 T009 explicit confirmation receipt consumer > admits a post-review confirmation without upgrading a historical review into execution acceptance
+Error: verify-code receipts.review only accepts a build-code Phase review; use receipts.quality_review for OCR code review
+ ❯ runtime/stage/stage-handlers.mjs:4375:11
+    4373|   const phaseReview = phaseReviewFacts(worker, input);
+    4374|   if (input.receipts?.review !== undefined && phaseReview === null) {
+    4375|     throw new Error("verify-code receipts.review only accepts a build-…
+       |           ^
+    4376|   }
+    4377|   const reviewConclusions = partitionVerifyReviewConclusions({ phaseRe…
+ ❯ runtime/stage/stage-handlers.mjs:4464:12
+ ❯ runStage.stageReflectionInput.stageReflectionInput runtime/stage/stage-runner.mjs:5031:71
+ ❯ runStage runtime/stage/stage-runner.mjs:3581:32
+ ❯ Module.runOfficialStage runtime/stage/stage-runner.mjs:4875:29
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:525:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code review currentness and resolved-source binding > does not mark a non-OCR current-session review repair resolved
+AssertionError: expected [Function] to throw error matching /authenticated OCR provider result/i but got 'verify-code repair review must be an …'
+
+- Expected: 
+/authenticated OCR provider result/i
+
++ Received: 
+"verify-code repair review must be an authenticated OCR result or eligible Architect fallback"
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:572:5
+    570|     const { repairs } = createRepairEvidence(state, review, "non-dsh-c…
+    571| 
+    572|     await expect(runOfficialStage("verify-code", state.context, {
+       |     ^
+    573|       attempt_id: "verify-code-non-dsh-current-review-repair-attempt",
+    574|       receipts: { quality_review: review.resultRef },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/contract/verify-code-binding-derivation.test.mjs > verify-code review currentness and resolved-source binding > does not turn a retired stage-outcome review into an OCR repair
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ tests/contract/verify-code-binding-derivation.test.mjs:615:9
+    613|         },
+    614|       },
+    615|     })).toThrow(/manifests must declare architect-code-review/);
+       |         ^
+    616|   });
+    617| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 11 passed (17)
+   Start at  01:22:54
+   Duration  60.08s (transform 342ms, setup 0ms, collect 736ms, tests 59.23s, environment 0ms, prepare 27ms)
+

@@ -1,0 +1,44 @@
+## cmd: npx vitest run tests/contract/review-budget-deletion.test.mjs  (exit=1)
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/review-budget-deletion.test.mjs (5 tests | 1 failed) 19988ms
+   × review budget deletion contract > ORACLE-RT-002 stage-runtime run no longer accepts a review_budget input field 3ms
+     → expected '\n      "receipts", "attempt_id", "ac…' not to match /"review_budget"/
+   ✓ review budget deletion contract > does not redispatch identical material, redispatches changed material, and keeps a judged retry idempotent 11884ms
+   ✓ review budget deletion contract > runs direct OCR without host identity or retry controls 4380ms
+   ✓ review budget deletion contract > does not re-admit a retry after the current lineage head already consumed it 3718ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/review-budget-deletion.test.mjs > review budget deletion contract > ORACLE-RT-002 stage-runtime run no longer accepts a review_budget input field
+AssertionError: expected '\n      "receipts", "attempt_id", "ac…' not to match /"review_budget"/
+
+- Expected: 
+/"review_budget"/
+
++ Received: 
+"
+      \"receipts\", \"attempt_id\", \"acceptance_coverage\", \"finding_dispositions\", \"contract_facts\",
+      \"fallback_protocol\", \"review_budget\", \"user_reply\", \"stage_reflection\",
+      ...(values.stage === \"build-code\" ? [\"phase_progress\"] : []),
+      ...(values.stage === \"make-decision\" ? [\"research_report\"] : []),
+      ...(values.stage === \"build-spec\" || values.stage === \"build-plan\" ? [\"decision_freeze\"] : []),
+      ...(values.stage === \"verify-code\" ? [\"code_review_repairs\"] : []),
+    "
+
+ ❯ tests/contract/review-budget-deletion.test.mjs:107:28
+    105|     expect(allowed, "allowedRunFields literal must stay the run input …
+    106|     expect(allowed[1]).toMatch(/"receipts"/);
+    107|     expect(allowed[1]).not.toMatch(/"review_budget"/);
+       |                            ^
+    108|     expect(cli).toMatch(/run input has unknown fields: /);
+    109|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  01:39:31
+   Duration  20.45s (transform 159ms, setup 0ms, collect 355ms, tests 19.99s, environment 0ms, prepare 30ms)
+
