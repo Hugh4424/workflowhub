@@ -174,7 +174,7 @@ outline_version：v1
     source: 母OI-006/OI-012/OI-013
     question: 删完后留下什么
     status: confirmed
-    selected_disposition: 两道人为门 + 5 窄工具（工作区核对/命令采集/安全写入/Git 授权/冲突中断保护）+ 可搬运技能 + 真实命令证据/原子写/失败事实/历史只读
+    selected_disposition: 两道人为门 + 5 窄工具（工作区核对/命令采集/安全写入/Git 授权/冲突中断保护）+ 可搬运技能 + 真实命令证据/原子写/失败事实/历史只读；记录层同步改用普通文件名（日期+序号+描述、append-only、纯文本引用，SD-17/ADR-016）
     evidence: 母 OI-006 resolution L303 + SD-04；F-007 五工具现行实现定位
     acceptance: 保留集与母决策逐条对应
     counterexample: 任一保留项被误删或任一删除项被保留即错
@@ -314,7 +314,7 @@ outline_version：v1
     source: 母PRD
     question: 与 Card-08/09 的幸存者协调
     status: confirmed
-    selected_disposition: 回读检查（Card-08）与写入量相关文件（Card-09）为显式幸存者，删除前标记
+    selected_disposition: 回读检查（Card-08）与写入量相关文件（Card-09）为显式幸存者，删除前标记；新审查链四审查点（SD-07：build-plan 合并审查/build-code 每 phase/全 phase 集成/verify-code 终末）同为显式保留边界（ADR-014）
     evidence: 母 PRD Card-06 依赖节 + F-007 current-close-projection 幸存判定
     acceptance: 幸存者清单进迁移表且批前标记
     counterexample: 幸存者被误删即违
@@ -660,6 +660,60 @@ derived_from: [ADR-004]
 artifacts: [批次 5/6 迁移表条目]
 ```
 
+### ADR-014 审查节奏保留边界（SD-07 补登）
+```text
+- **source**：母 PRD Card-06 结果节"审查节奏不在删除清单（SD-07 四审查点保留，只换工具）"+ 最终确认卡复查（用户要求核对原始需求）
+- **decision**：新审查链四审查点——build-plan 合并审查一次、build-code 每 phase 一次、全 phase 集成审查一次、verify-code 终末代码审查一次——为删除面**显式保留边界**，build-code 拆审查相关文件（批次 3/4/5）时逐文件核对，不得误删（Card-05 已替换工具，删的是旧 wh-review/broker 不是新链）
+- **rationale**：用户要求复查原始需求时发现遗漏；只登记"旧链退出"而没有"新链不可误删"的反向边界，执行时有误伤风险
+- **consequence**：批次 3/4/5 的删除清单要过两遍——删旧链 + 保新链；G-3 扫描时新链四审查点列入"必留"名单
+- **supersedes**：none（补登母 PRD 显式条款）
+- **原始声明层**：母 PRD Card-06 结果节
+- **三级追溯**：R-001 → 母 SD-07 → ADR-014
+- **三档结论**：confirmed
+- **approval_binding**：最终确认卡复查轮（2026-09-30）
+- **owner/next_action**：build-plan 迁移表加"审查节奏保留"行；build-code 批次 3/4/5 执行核对
+module: 删除范围
+requirement_ids: [R-001]
+derived_from: [ADR-002]
+artifacts: [迁移表·审查节奏保留条目]
+```
+
+### ADR-015 验收纪律（finding#16 补登）
+```text
+- **source**：母 PRD 风险段 finding#16"拒绝把真实验收/有效 RED/oracle 分离/回读检查降级为 advisory" + 最终确认卡复查
+- **decision**：四项验收纪律为不可降级底线：真实验收必须真实入口联通实跑；有效 RED 必须因目标行为失败（非环境/夹具错误）；oracle 分离（期望与实际分列）必须保持；回读检查（Card-08 幸存机制）必须真实执行。任何"降级为 advisory/参考"的提议在执行中直接拒绝并回报用户
+- **rationale**：用户要求复查原始需求时发现遗漏；本卡自身 verify-code 与未来每卡都依赖这条纪律防"假绿"
+- **consequence**：约法三章增加实质判据；verify-code 设计 AC 时四项逐项有检查形态
+- **supersedes**：none（补登母 PRD 显式条款）
+- **原始声明层**：母 PRD finding#16
+- **三级追溯**：R-001 → 母 finding#16 → ADR-015
+- **三档结论**：confirmed
+- **approval_binding**：最终确认卡复查轮（2026-09-30）
+- **owner/next_action**：verify-code 合同声明；本卡自举演练同样遵守
+module: 验收
+requirement_ids: [R-001]
+derived_from: [ADR-007]
+artifacts: [verify-code 验收合同条款]
+```
+
+### ADR-016 记录层新形态（SD-17 补登）
+```text
+- **source**：母 PRD Card-06 结果节"记录层改用普通文件名（不可变命名：日期+序号+描述，append-only）+纯文本路径引用，不用内容寻址哈希（SD-17）" + OI-013 resolution + 最终确认卡复查
+- **decision**：删除哈希/内容寻址机器（批次 4/5）时，新记录形态必须同步就位：事实文件用普通文件名（日期+序号+描述）、只追加不覆盖、文件间用纯文本路径引用；不得为"过渡方便"临时保留任何内容寻址
+- **rationale**：用户要求复查原始需求时发现遗漏；只删旧不立新的中间态会造成记录层真空
+- **consequence**：批次 4/5 的任务里各加一条"新记录形态就位"验收；R7 风险（文件名碰撞）由不可变命名+append-only 纪律缓解（已在风险表）
+- **supersedes**：none（补登母 PRD 显式条款，强化 OI-003/R7）
+- **原始声明层**：母 PRD SD-17
+- **三级追溯**：R-001 → 母 SD-17/OI-013 → ADR-016
+- **三档结论**：confirmed
+- **approval_binding**：最终确认卡复查轮（2026-09-30）
+- **owner/next_action**：build-code 批次 4/5 就位与验证
+module: 窄工具
+requirement_ids: [R-001]
+derived_from: [ADR-003]
+artifacts: [批次 4/5 迁移表条目；记录层命名规则]
+```
+
 ## 动态 Talk 批次
 
 | batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
@@ -746,6 +800,8 @@ module-convergence 记录（step 7）：当前 OI v1 共 18 条全部 confirmed�
 | R7 | 文件名碰撞/覆盖 | 不可变命名（日期+序号+描述）+append-only | 记录层全程 |
 | G-3 | 待删机制担安全职责 | 批次暂停等用户裁决 | 每批前扫描 |
 | OPEN-risk | Card-06 task.json 未创建 | publish/reflection 无 task store 可写 | step 12 前处理或披露 |
+| R-SD07 | 误删新审查链四审查点 | Card-05 新链被当旧链拆掉 | 批次 3/4/5 逐文件核对（ADR-014） |
+| R-SD17 | 删哈希机器后记录层真空 | 事实文件无处写、临时保留内容寻址 | 批次 4/5 新记录形态同步就位（ADR-016） |
 | OPEN-risk | main 审查路径 host_provider bug | direction/detail advice 可能 unavailable | 等 Card-03 合并 26786b61 后重试 |
 
 ### 质量边界
