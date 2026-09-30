@@ -492,7 +492,7 @@ artifacts: [runtime/interface 瘦身结果]
 - **source**：V-004、V-010
 - **decision**：方案 B 逐批删除，八批：0 窄工具独立化 → 1 只保护流程形状的测试 → 2 workflows/steps+config（固定轮次/14 步锁）→ 3 skills 旧绑定（wh-review/broker 退出）→ 4 runtime 机制核心（kernel/fact graph/completion/evidence）→ 5 CLI 旧入口+schemas → 6 runtime 瘦身+move-map → 7 治理文档
 - **rationale**：先立新后拆旧、先删看守再删牢房；每批前消费者扫描+G-3，每批后针对性验证+向用户汇报
-- **consequence**：总时长比一次性删除长；中间态需防"双轨并存"被误读为新增双写
+- **consequence**：总时长比一次性删除长；中间态需防"双轨并存"被误读为新增双写；批次 3 含过渡基线 SD-16 实体化——runtime/review/*、skills/wh-review/* 逐条"转只读历史或删除"由 build-plan 迁移表产出、build-code 按条执行（AC-53/R-SD16）
 - **supersedes**：none
 - **原始声明层**：V-004、V-010
 - **三级追溯**：R-001 → OI-002 → ADR-004
@@ -865,7 +865,7 @@ module-convergence 记录（step 7）：当前 OI v1 共 18 条全部 confirmed�
 
 ## Append-only 更正
 
-（暂无）
+- 2026-09-30 补登更正①：最终确认（V-015@2ab8c77e，绑定 16 个 ADR）之后，经 spec-analyze 复查补登 ADR-014/015/016/017（均为母 PRD 显式条款的落实补登，方向未变，按 ADR 各自 approval_binding 说明不重新确认）；最终确认节的"16 个 ADR@2ab8c77e"绑定记录保持原样，本条说明补登事实。does_not_rewrite_upstream=true。
 
 ## 文档结果
 
