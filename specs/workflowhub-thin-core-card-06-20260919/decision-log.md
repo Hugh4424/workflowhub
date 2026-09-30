@@ -636,7 +636,7 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 
 | finding_id | 原始事实/来源 | 后果 | status | next_action/evidence_ref | owner/consumer/retain_or_delete |
 | --- | --- | --- | --- | --- | --- |
-| DIR-001 | direction-advice 审查 2026-09-30 真实执行 1 次：review --action=record 在 openTask 阶段 ENOENT（外置任务存储未注册） | 无 attempt/result/report 产生；provider 未启动；不构成 pass 也不构成 findings | unavailable | bootstrap 已修复（2026-09-30，cohort=post，task.json 创建）→ 重试 1 次；若撞 host_provider bug（26786b61 未在 Card-06）则记 unavailable 等 Card-03 合并后重试 | owner=make-decision / consumer=step4 完成事实 / retain |
+| DIR-001 | direction-advice 审查 2026-09-30 两次真实执行：①首试 openTask ENOENT（task store 未注册）②修复后重试命中 REVIEW_EXECUTION_FAILED「host_provider is required」（review-route-identity.mjs 两参调用 vs 四参签名；26786b61 在 Card-03 分支未合入） | attempt_ref=quality/reviews/attempts/c0985e26-96e1-5304-ae7f-290f411560dc/attempt.json；report_ref=quality/reviews/reports/make-decision-simple-c0985e26….md；blocked_before_dispatch、provider_attempts=[]、findings=[]、terminal_status=unavailable；provider 未启动，不构成 pass 也不构成 findings | unavailable | 按契约不再重试；等 Card-03 合并 26786b61 修复 route 后按普通步骤重做 1 次；snapshot_tree 2a44c5af 绑定当前 HEAD | owner=make-decision / consumer=step4 完成事实 + 阶段末披露 / retain |
 | DIR-002 | analyzeDecisionOutline 严格性观察（121→0 已修复） | 材料形态对齐 reader 链，detail/approve 消费无障碍 | fixed | 三 reader 终验 2026-09-30：outline [] / census 0 / convergence 8 项全 passed | owner=make-decision / consumer=detail-advice,approve / retain |
 
 ## 最终确认
