@@ -90,7 +90,7 @@
 ## 原始声明层
 
 - 母 cohort 原始八点需求与 U-010 三点：见 `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` L46-57、L113-115（OI/SD/R 体系唯一权威，本文档不复制原文，只按 ID 引用）
-- Card-06 直接来源条款：OI-003（L235-254）、OI-006（L297-316）、OI-012（L420-437）、OI-013（L439-458）、保留工具删除职责节（L662-668）、Grill G-3（L857）、最小 runtime 重访条款（L694）
+- Card-06 直接来源条款：OI-003（L235-254）、OI-006（L297-316）、OI-012（L420-437）、OI-013（L439-458）、SD-12（损失清单四项）、保留工具删除职责节（L662-668）、Grill G-3（L857）、最小 runtime 重访条款（L694）
 - 阶段事实：本会话 ask_user_question 六批（T-001~T-006）真实回复为本文件唯一交互凭证来源
 
 ## 三级追溯链
@@ -716,6 +716,39 @@ derived_from: [ADR-003]
 artifacts: [批次 4/5 迁移表条目；记录层命名规则]
 ```
 
+### 验收模块（AC 可执行形态，GAP-1 修复）
+
+| AC | 通过条件 | 执行形态 | 失败判据 |
+| --- | --- | --- | --- |
+| AC-27 删除清单逐项执行 | 每文件有「文件→消费者→处置」记录，消费者核对 100% | 迁移表 + 每批删除清单 diff + 消费者 grep 反查记录 | 任一被删职责换新名重现且消费者未变 |
+| AC-28 窄工具独立可用 | 隔离目录（无 kernel）逐项调用 5/5 返回真实结果 | 批次 0：临时隔离目录只拷窄工具文件 + 逐项调用脚本 + 真实输出留证 | 任一工具必须经 kernel 才能工作 |
+| AC-29 日常路径无 kernel | 发起→实施→验收实跑全程无 kernel/fact graph 调用点、无校验机器前置 | 本卡 build-code→verify-code 自举 + 调用点静态扫描（grep kernel/fact graph import） | 任一环节被 kernel 缺失或校验机器阻断 |
+| AC-30 损失清单书面承认 | 删除前书面清单存在且 SD-12 四项逐项承认 | 损失清单文档（四轮：自动拒错绑证据/跨宿主版本批准/跨宿主自动恢复/机器可查状态）+ 承认记录 | 未承认损失即删或清单缺项 |
+| AC-31 G-3 安全闸 | 待删机制担安全职责时立即停下并向用户回报、等待决定 | 每批 G-3 扫描记录；触发时的停下回报凭证 | 自行保留静默回写或继续删除 |
+| AC-32 旧审查路径退出 | 正常审查无 wh-review/broker 调用；历史原件只读可查；无路径当可执行 fallback | 批次 3 删除 + 正常路径审查链路 grep 验证 + 历史目录只读标记 | 换名在 Skill 内继续执行或被当 fallback 调用 |
+| AC-52 迁移表七类面 | 七类面每条四要素（现有消费者→目标消费者→保留/删除→回滚方式）；首删晚于冻结 | 迁移表文档冻结记录（git 提交）+ build-plan 核查产出 | 任一面缺失/条缺四要素/未冻结即动手 |
+| AC-53 快照与回退 | 每批 backup 标签存在；切换点/失败回退/dirty worktree 处置写明且被遵守；过渡基线按表处置 | 每批 git tag backup/card-06-b<N> + 回退演练一次 + dirty worktree 处置记录 | 无快照即删、切换点缺失、dirty 被静默处置、过渡基线静默留存 |
+
+执行度量：以上每条在 verify-code 各有一条对应 structured 产出（ADR-007 第 4 条的逐 AC 声明在 build-plan 合同化）。
+
+### ADR-017 损失清单书面承认（SD-12 补登，GAP-2 修复）
+```text
+- **source**：母 PRD FR-30/AC-30 + SD-12 + spec-analyze GAP-2
+- **decision**：删除通用事实引擎前必须完成书面损失清单，逐项书面承认 SD-12 四项：①自动拒绝错绑或过期证据的能力；②跨宿主"此答复批准此版本"的绑定能力；③跨宿主自动恢复能力；④机器可查阶段状态。清单随损失清单文档落盘并经用户过目；任一项的缓解方式（窄工具/真实验收/人为门/Card-08 回读）在清单中注明
+- **rationale**：spec-analyze 发现 AC-30 无认领——"删除前书面承认损失"是 PRD 显式前置（OI-003 acceptance：删除前承认损失清单），缺认领会导致 build-code 直接开删而无承认记录
+- **consequence**：批次 4 动手前增加损失清单 gate（人为门：用户过目确认）；不新增机器 gate
+- **supersedes**：none（补登母 PRD 显式条款）
+- **原始声明层**：母 PRD SD-12/OI-003 acceptance
+- **三级追溯**：R-001 → 母 SD-12 → ADR-017
+- **三档结论**：confirmed
+- **approval_binding**：spec-analyze 修复轮（2026-09-30，方向不变故不重新确认）
+- **owner/next_action**：build-code 批次 4 前产出损失清单文档 + 用户过目
+module: 验收
+requirement_ids: [R-001]
+derived_from: [ADR-002]
+artifacts: [损失清单文档 quality/evidence/loss-acknowledgement/]
+```
+
 ## 动态 Talk 批次
 
 | batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
@@ -804,6 +837,7 @@ module-convergence 记录（step 7）：当前 OI v1 共 18 条全部 confirmed�
 | G-3 | 待删机制担安全职责 | 批次暂停等用户裁决 | 每批前扫描 |
 | OPEN-risk | Card-06 task.json 未创建 | publish/reflection 无 task store 可写 | step 12 前处理或披露 |
 | R-SD07 | 误删新审查链四审查点 | Card-05 新链被当旧链拆掉 | 批次 3/4/5 逐文件核对（ADR-014） |
+| R-SD16 | 过渡基线静默留存 | runtime/review/*、skills/wh-review/* 未按表处置残留 | 批次 3 迁移表逐条处置+执行记录（ADR-004 批次 3 补登） |
 | R-SD17 | 删哈希机器后记录层真空 | 事实文件无处写、临时保留内容寻址 | 批次 4/5 新记录形态同步就位（ADR-016） |
 | OPEN-risk | main 审查路径 host_provider bug | direction/detail advice 可能 unavailable | 等 Card-03 合并 26786b61 后重试 |
 
