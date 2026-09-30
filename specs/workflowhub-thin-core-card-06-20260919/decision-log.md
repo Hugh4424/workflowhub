@@ -699,6 +699,8 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 
 ## grill
 
+module-convergence 记录（step 7）：当前 OI v1 共 18 条全部 confirmed，无 open；Grill G-002~G-005 后队列中无 high/medium 待答项——本轮零问题合法收敛。开放问题见"## 未决项"（OPEN-001/002/004/005，均为 deferred 处置，有 owner 与触发条件）。write-decision-draft（step 8）：本文件决定区 ADR-001~013 已按 decision-entry.v1 全字段成型，含 supersedes 链（ADR-002 取代双 cohort 临时安排、ADR-012 细化 ADR-002、ADR-008 修正 U-003），草案即本文档。
+
 | grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
 | --- | --- | --- | --- | --- |
 | G-001 | pre 全删 vs Card-02"保留双 cohort"冲突 | 后果账摊开后用户确认退役（V-009）；取代关系写入 ADR-002 supersedes | 进行中（正式 Grill 批次见 step 6） | V-006/V-009 |
