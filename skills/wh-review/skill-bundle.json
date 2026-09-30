@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "c8d28bb073bbffd830a9a480480bb8e8d56b1ac2610887d1ae7a0e06833a5040"
+      "sha256": "4fc2951ebead6bb7326058ab9e050e1bd039f9d7655069216d97407915d4f6e4"
     },
     {
       "path": "contracts/build-code.md",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "8fb40d932c0aa0b849ffeb13cdc058d7373c565d9fd5c53253120872ce08dbdb"
+      "sha256": "3980cccefaea6b2798ec2c68e464020a93ec90b4022bb644c84f09f39f01c403"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -108,15 +108,15 @@
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "341db7ba109aad1646e60304917d721a1c985e123d648cbdbbe27d5f2b9a4cd8"
+      "sha256": "2767bcba150a4dbe1ae751c67c37d38426ad4ea7dad647026c990fcbff0b3f4e"
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "353ed37cd83ee0fec1e1b56383158f87e3eb3e273e895c27030f8d6c7483ed44"
+      "sha256": "3ea6f1f5b50f805038b8c7028b430c0e32cf94677cf2e6bccf8b34ff9d4753d2"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "9d7e70f1eba9974097ab6d3bfd05e3c95a94f0fb1a2903c5346b7ed883bdcf2c"
+      "sha256": "673f937772f467fc01dd83d49a9eaca27fb2a01749c0704ab39380a83b634737"
     },
     {
       "path": "stage-skill-plan.json",

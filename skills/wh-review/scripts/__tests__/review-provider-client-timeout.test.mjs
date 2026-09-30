@@ -95,7 +95,8 @@ const member = (provider, adapter = provider.split("/", 1)[0], status = "complet
 
 function group(providers = ["opencode/v4flash", "codex/luna"]) {
   return {
-    host_provider: "codex/terra",
+    // The broker echoes the fixed WorkflowHub host identity it was sent.
+    host_provider: "dsh",
     material_id: "material-id",
     outcome: "completed",
     providers: providers.map((provider) => member(provider)),

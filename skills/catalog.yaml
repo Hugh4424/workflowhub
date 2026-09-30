@@ -548,7 +548,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: be01a089429539927595cf77c4dabb20ac6f2c1b131eb52d22ebf54341f975b5
+    local_bundle_hash: 1af3dbeaaa44e9da7638943afbc3bd1f4e44c8386152caec1866530ecae5eb81
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -566,7 +566,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 8bb9c5fa5f3752dc25a936b1a7e797a027e06b31e0c491471c23b4a47ea66522
+    local_bundle_hash: f4d8b285cfa5072338f2290b260d019fa69e335199a4b1d8df8fc27f1d915886
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false

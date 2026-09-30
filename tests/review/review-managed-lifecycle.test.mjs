@@ -8,7 +8,7 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
-import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
+import { BROKER_HOST_PROVIDER, ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
@@ -99,9 +99,11 @@ const managedMaterials = {
   deliveryManifest: [{ path: "materials/implementation.md", bytes: 16, sha256: "a".repeat(64) }],
 };
 
+// card-03: host_provider is no longer a caller input. The client always sends
+// BROKER_HOST_PROVIDER and validates the broker echo against it, so no test
+// context carries a caller host any more.
 function managedContext(overrides = {}) {
   return {
-    hostProvider: "codex",
     providers: [managedProvider],
     materials: managedMaterials,
     prompt: "review the submitted material",
@@ -139,7 +141,7 @@ function managedMember(overrides = {}) {
 
 function managedGroup(outcome = "completed", member = managedMember()) {
   return {
-    host_provider: "codex",
+    host_provider: BROKER_HOST_PROVIDER,
     outcome,
     providers: [member],
     round: 1,
@@ -214,7 +216,7 @@ function managedV3Member(overrides = {}) {
 
 function managedV3Group({ outcome = "completed", members = [managedV3Member()], overrides = {} } = {}) {
   return {
-    host_provider: "codex",
+    host_provider: BROKER_HOST_PROVIDER,
     material_id: materialId,
     outcome,
     providers: members,
@@ -811,7 +813,9 @@ describe("managed review lifecycle boundary", () => {
         // sessions and this caller moved to v3 + negotiated delivery so an
         // embedded-only provider (codex) is no longer excluded before dispatch.
         required_result_protocol: "workflowhub-result.v3",
-        host_provider: "codex",
+        // card-03: the caller no longer chooses the host; the client pins the
+        // broker host constant and this is the only accepted echo.
+        host_provider: BROKER_HOST_PROVIDER,
         provider_allowlist: [managedProvider],
         deadline_ms: null,
       },
@@ -1284,7 +1288,7 @@ console.error("To resume this session: kimi -r fake-kimi-session");
         version: "workflowhub-run.v1", request_id: requestId, runtime_id: runtimeV3, state, material_id: bundleId,
         ...(state === "terminal" ? {
           group: {
-            host_provider: "codex",
+            host_provider: BROKER_HOST_PROVIDER,
             material_id: bundleId,
             outcome: "completed",
             providers: [managedV3Member({
