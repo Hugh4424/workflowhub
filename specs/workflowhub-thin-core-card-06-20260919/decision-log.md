@@ -15,10 +15,10 @@
 
 | source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
 | --- | --- | --- | --- |
-| R-001 | 按标准 WorkflowHub 开始 Card-06：先建 worktree，从 make-decision 开始，不跳阶段；梳理大纲/扩散/方案/验收；Talk/Grill 大白话；主会话只做规划、派发、交互 | V-001（U-001） | D-001~008 全部 |
-| R-002 | 派子代理调研 4 个 codex 历史会话，找问题与对本任务的帮助 | V-001（U-002） | D-009（调研事实层，见调研节） |
-| R-003 | 开工节奏：make-decision/build-plan 先行，build-code 前完成 Card-03 并合并 | V-002（U-003） | D-001 |
-| R-004 | 流程边界纠正：本会话严格执行 make-decision 流程；build-plan 是其他会话的任务，不归本会话 | V-014（U-004） | D-008 |
+| R-001 | 按标准 WorkflowHub 开始 Card-06：先建 worktree，从 make-decision 开始，不跳阶段；梳理大纲/扩散/方案/验收；Talk/Grill 大白话；主会话只做规划、派发、交互 | V-001（U-001） | covered（ADR-001~009） |
+| R-002 | 派子代理调研 4 个 codex 历史会话，找问题与对本任务的帮助 | V-001（U-002） | covered（ADR-009 调研节 F-001~F-009） |
+| R-003 | 开工节奏：make-decision/build-plan 先行，build-code 前完成 Card-03 并合并 | V-002（U-003） | covered（ADR-001） |
+| R-004 | 流程边界纠正：本会话严格执行 make-decision 流程；build-plan 是其他会话的任务，不归本会话 | V-014（U-004） | covered（ADR-008） |
 
 ## 需求变更记录
 
@@ -121,7 +121,7 @@ outline_version：v1
 | N-background | background | OI-001 | false | |
 | N-problem | problem | OI-002 | false | |
 | N-goal | goal | OI-003 | false | |
-| N-solution | solution | OI-004~OI-011 | false | |
+| N-solution | solution | OI-004、OI-005、OI-006、OI-007、OI-008、OI-009、OI-010、OI-011 | false | |
 | N-acceptance | acceptance | OI-012 | false | |
 | N-extension | extension | OI-013、OI-017 | false | |
 
@@ -139,34 +139,268 @@ outline_version：v1
 #### OI records
 
 ```yaml
-- {task_id: workflowhub-thin-core-card-06-20260919, outline_version: v1, oi_id: OI-001, category: background, source: R-001/母decision-log, question: Card-06 在十卡拓扑中的位置与前置是什么, status: confirmed, selected_disposition: Group 2 先行串行卡；实现依赖 01/02/03/04/05/07 就位（03 收尾中）, impact_dimensions: [goal], requires_user_decision: false}
-- {oi_id: OI-002, category: problem, source: R-001/U-010-R-018/R-019, question: 要删的机器保安具体是哪些职责, status: confirmed, selected_disposition: stage completion 通用认证、kernel/fact graph 强制依赖、多层 evidence 包装、plan/tasks 双写、固定 Talk 轮次、强制 handoff/不变路线重选、全部校验机器（revision 绑定/快照树/材料身份哈希/回执）+ 只保护流程形状的测试, impact_dimensions: [scope], requires_user_decision: false}
-- {oi_id: OI-003, category: goal, source: 母 OI-006/OI-012/OI-013, question: 删完后留下什么, status: confirmed, selected_disposition: 两道人为门 + 5 窄工具（工作区核对/命令采集/安全写入/Git 授权/冲突中断保护）+ 可搬运技能 + 真实命令证据/原子写/失败事实/历史只读, impact_dimensions: [goal], requires_user_decision: false}
-- {oi_id: OI-004, category: solution, source: V-002, question: 开工节奏, status: confirmed, selected_disposition: make-decision 现在做；build-code 待 Card-03 完成并合并；build-plan 移交其他会话, impact_dimensions: [goal], requires_user_decision: true, visible_group_id: T-001}
-- {oi_id: OI-005, category: solution, source: V-004/V-006/V-009, question: 删除范围（post 与 pre 的边界）, status: confirmed, selected_disposition: post 机器门禁全删 + pre 整体退役只读归档（取代 Card-02 双 cohort 临时安排）, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-002/T-003}
-- {oi_id: OI-006, category: solution, source: V-007, question: 5 窄工具落点, status: confirmed, selected_disposition: runtime/ 瘦身为纯工具模块（否决新目录/融入 skills）, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-002}
-- {oi_id: OI-007, category: solution, source: V-004/V-010, question: 删除策略与批次顺序, status: confirmed, selected_disposition: 方案 B 八批：0 窄工具→1 测试→2 流程→3 技能→4 机制核心→5 CLI/schema→6 瘦身→7 文档, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-001/T-004}
-- {oi_id: OI-008, category: solution, source: V-011, question: 执行弹性（补记/快照/演练）, status: confirmed, selected_disposition: append-only 补记+即报；每批 backup 标签；AC-29 用本卡 build-code→verify-code 自举, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-004}
-- {oi_id: OI-009, category: solution, source: V-005/V-008, question: 执行纪律, status: confirmed, selected_disposition: 约法三章 7 条全生效, impact_dimensions: [goal], requires_user_decision: true, visible_group_id: T-001/T-002}
-- {oi_id: OI-010, category: solution, source: 母 G-3, question: G-3 安全闸协议, status: confirmed, selected_disposition: 当场停→大白话回报→等拍板；禁止自行保留静默回写, impact_dimensions: [goal], requires_user_decision: false}
-- {oi_id: OI-011, category: solution, source: V-003/V-012, question: main 孤儿改动处置, status: confirmed, selected_disposition: 直接还原（git checkout），main 已干净；Card-03 合并须带 26786b61 进 main, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-001/T-005}
-- {oi_id: OI-012, category: acceptance, source: 母 PRD AC-27~32/52/53, question: 验收怎么执行, status: confirmed, selected_disposition: 8 条 AC 转本卡可执行检查项（见决定区·验收模块）, impact_dimensions: [acceptance], requires_user_decision: false}
-- {oi_id: OI-013, category: extension, source: 母 PRD, question: 与 Card-08/09 的幸存者协调, status: confirmed, selected_disposition: 回读检查（Card-08）与写入量相关文件（Card-09）为显式幸存者，删除前标记, impact_dimensions: [scope], requires_user_decision: false}
-- {oi_id: OI-014, category: complete_user_flow, source: 母 AC-29, question: 删后日常工作流怎么走, status: confirmed, selected_disposition: 发起→实施→验收走四阶段无机器门禁；本卡 build-code→verify-code 自举演练, impact_dimensions: [goal], requires_user_decision: false}
-- {oi_id: OI-015, category: data_state, source: F-008 盘点, question: pre 任务数据怎么处置, status: confirmed, selected_disposition: 外置目录 173 项中 pre 未 close 117 项只读归档不删除；历史材料/specs archive 94 条只读保留, impact_dimensions: [scope], requires_user_decision: true, visible_group_id: T-003}
-- {oi_id: OI-016, category: success_failure_boundary, source: 母 PRD + finding#16, question: 成败边界, status: confirmed, selected_disposition: 8 条 AC 全过为成；换名复活/无快照即删/外层 resolved 覆盖快照不匹配/G-3 自行处置为败；质量事实缺失保持 unknown 不伪造, impact_dimensions: [acceptance], requires_user_decision: false}
-- {oi_id: OI-017, category: deferred, source: 母 L694/Q8, question: 什么留给后续, status: confirmed, selected_disposition: 具体删除文件清单归 build-plan 核查产出；最小 runtime 重访触发条件=删除后出现窄工具+真实验收无法发现的实际失败, impact_dimensions: [scope], requires_user_decision: false}
-- {oi_id: OI-018, category: non_goals, source: 母 PRD, question: 非目标, status: confirmed, selected_disposition: 删除清单最终定死（归 build-plan）；审查选型（Card-05 已了）；回读检查幸存登记（Card-08）；不做 token 统计/后台平台/UI 改动, impact_dimensions: [scope], requires_user_decision: false}
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-001
+    category: complete_user_flow
+    source: R-001/母decision-log
+    question: Card-06 在十卡拓扑中的位置与前置是什么
+    status: confirmed
+    selected_disposition: Group 2 先行串行卡；实现依赖 01/02/03/04/05/07 就位（03 收尾中）
+    evidence: 母 PRD L112 起 CARD-06 全文 + 拓扑图
+    acceptance: Card-06 在 Group 2 串行就位，前置卡齐
+    counterexample: 若 PRD 拓扑非 10 卡或 Group 划分不同即错
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-002
+    category: success_failure_boundary
+    source: R-001/母R-018/R-019
+    question: 要删的机器保安具体是哪些职责
+    status: confirmed
+    selected_disposition: stage completion 通用认证、kernel/fact graph 强制依赖、多层 evidence 包装、plan/tasks 双写、固定 Talk 轮次、强制 handoff/不变路线重选、全部校验机器（revision 绑定/快照树/材料身份哈希/回执）+ 只保护流程形状的测试
+    evidence: 母 OI-012/OI-013 resolution 逐字 + F-007 校验机器清单（11 组文件级定位）
+    acceptance: 删除面覆盖母 PRD 点名的全部八项职责 + OI-013 五类校验机器
+    counterexample: 任一被点名职责未出现在删除面即漏
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-003
+    category: data_state
+    source: 母OI-006/OI-012/OI-013
+    question: 删完后留下什么
+    status: confirmed
+    selected_disposition: 两道人为门 + 5 窄工具（工作区核对/命令采集/安全写入/Git 授权/冲突中断保护）+ 可搬运技能 + 真实命令证据/原子写/失败事实/历史只读
+    evidence: 母 OI-006 resolution L303 + SD-04；F-007 五工具现行实现定位
+    acceptance: 保留集与母决策逐条对应
+    counterexample: 任一保留项被误删或任一删除项被保留即错
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-002
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-004
+    category: complete_user_flow
+    source: V-002
+    question: 开工节奏
+    status: confirmed
+    selected_disposition: make-decision 现在执行；build-code 待 Card-03 完成并合并；build-plan 移交其他会话（ADR-001/008）
+    evidence: V-002 原文 + U-004 纠正
+    acceptance: 本卡材料先行、实施窗口后移；Card-03 合并带 26786b61
+    counterexample: build-code 在 Card-03 合并前动手即违
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-005
+    category: success_failure_boundary
+    source: V-006/V-009
+    question: 删除范围（post 与 pre 的边界）
+    status: confirmed
+    selected_disposition: post 机器门禁全删 + pre 整体退役只读归档（ADR-002）
+    evidence: V-006/V-009 两次拍板 + F-008 的 117 项归档对象清单
+    acceptance: pre 机制全删、117 项只读归档、历史可查
+    counterexample: pre 机制残留可执行路径或归档对象被删即错
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-002/T-003
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-006
+    category: data_state
+    source: V-007
+    question: 5 窄工具落点
+    status: confirmed
+    selected_disposition: runtime/ 瘦身为纯工具模块（ADR-003）
+    evidence: V-007 + F-007 五工具独立性评估
+    acceptance: runtime/interface/ 只留窄工具实现，其余分区清空
+    counterexample: 窄工具落点另起目录或融入 skills 即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-002
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-007
+    category: complete_user_flow
+    source: V-004/V-010
+    question: 删除策略与批次顺序
+    status: confirmed
+    selected_disposition: 方案 B 八批：0 窄工具→1 测试→2 流程→3 技能→4 机制核心→5 CLI/schema→6 瘦身→7 文档（ADR-004）
+    evidence: V-004/V-010 + F-007/F-008 面清单
+    acceptance: 每批按序执行，批前扫描批后验证
+    counterexample: 跳批或倒序执行即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-001/T-004
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-008
+    category: data_state
+    source: V-011
+    question: 执行弹性（补记/快照/演练）
+    status: confirmed
+    selected_disposition: append-only 补记+即报；每批 backup 标签；AC-29 本卡自举演练（ADR-005）
+    evidence: V-011
+    acceptance: 冻结后首删晚于冻结；漏网消费者补记不静默
+    counterexample: 静默改冻结条目或无快照即删即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-004
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-009
+    category: success_failure_boundary
+    source: V-005/V-008
+    question: 执行纪律
+    status: confirmed
+    selected_disposition: 约法三章 7 条全生效（ADR-007）
+    evidence: V-005/V-008 + F-003~F-006 四次会话教训
+    acceptance: 7 条写进执行全程
+    counterexample: 审查超 2 轮未停下问或收官未拍板即违
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-001/T-002
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-010
+    category: success_failure_boundary
+    source: 母G-3(L857)
+    question: G-3 安全闸协议
+    status: confirmed
+    selected_disposition: 当场停→大白话回报→等拍板；禁止自行保留/静默回写（ADR-006）
+    evidence: 母 decision-log L857 + F-007/F-008 的 16 项 G-3 候选点名
+    acceptance: 每批前安全职责扫描；触发即停
+    counterexample: 任何自行处置或静默回写即违
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-002
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-011
+    category: data_state
+    source: V-003/V-012
+    question: main 孤儿改动处置
+    status: confirmed
+    selected_disposition: 直接还原（git checkout）已执行；Card-03 合并须带 26786b61（ADR-001 红线）
+    evidence: F-009 调查报告 + V-012
+    acceptance: main 干净；26786b61 进 main 后审查路径可修
+    counterexample: 孤儿改动被提交或 26786b61 未进 main 即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-001/T-005
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-012
+    category: success_failure_boundary
+    source: 母PRD AC-27~32/52/53
+    question: 验收怎么执行
+    status: confirmed
+    selected_disposition: 8 条 AC 转本卡可执行检查项（决定区验收模块）
+    evidence: 母 PRD AC 原文 + finding#16
+    acceptance: 逐条有可执行形态和失败判据
+    counterexample: 任一 AC 无执行形态或失败判据被放宽即错
+    impact_dimensions: [acceptance]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-013
+    category: deferred
+    source: 母PRD
+    question: 与 Card-08/09 的幸存者协调
+    status: confirmed
+    selected_disposition: 回读检查（Card-08）与写入量相关文件（Card-09）为显式幸存者，删除前标记
+    evidence: 母 PRD Card-06 依赖节 + F-007 current-close-projection 幸存判定
+    acceptance: 幸存者清单进迁移表且批前标记
+    counterexample: 幸存者被误删即违
+    impact_dimensions: [ordinary_detail]
+    requires_user_decision: false
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-014
+    category: complete_user_flow
+    source: 母AC-29
+    question: 删后日常工作流怎么走
+    status: confirmed
+    selected_disposition: 发起→实施→验收走四阶段无机器门禁；本卡 build-code→verify-code 自举演练
+    evidence: 母 OI-012 resolution + ADR-005
+    acceptance: AC-29 实跑无任何 kernel 调用点
+    counterexample: 任一环节因 kernel 不存在而阻断、或因校验机器前置而卡住，即失败
+    impact_dimensions: [goal]
+    requires_user_decision: true
+    visible_group_id: T-004
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-015
+    category: data_state
+    source: F-008盘点
+    question: pre 任务数据怎么处置
+    status: confirmed
+    selected_disposition: 外置目录 173 项中 pre 未 close 117 项只读归档不删除；历史材料/archive 94 条只读保留
+    evidence: F-008 pre 任务盘点表（117 项按 2026-07/08/09 分批清单）
+    acceptance: 归档对象完整、只读、不补造 close
+    counterexample: 任一归档对象被删或继续可写即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-003
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-016
+    category: success_failure_boundary
+    source: 母PRD+finding#16
+    question: 成败边界
+    status: confirmed
+    selected_disposition: 8 条 AC 全过为成；换名复活/无快照即删/外层 resolved 覆盖快照不匹配/G-3 自行处置为败
+    evidence: 母 PRD oracle 节 + finding#16
+    acceptance: 成功失败判据写死、执行中不降级
+    counterexample: 任一把失败事实写成通过即违
+    impact_dimensions: [acceptance]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-017
+    category: deferred
+    source: 母L694/Q8
+    question: 什么留给后续
+    status: confirmed
+    selected_disposition: 具体删除文件清单归 build-plan 核查产出；最小 runtime 重访触发条件=删除后出现窄工具+真实验收无法发现的实际失败
+    evidence: 母 L694 + Q8
+    acceptance: make-decision 不定死清单；重访条款存活
+    counterexample: 本阶段定死具体文件清单即越权
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-001
+  - task_id: workflowhub-thin-core-card-06-20260919
+    outline_version: v1
+    oi_id: OI-018
+    category: non_goals
+    source: 母PRD
+    question: 非目标
+    status: confirmed
+    selected_disposition: 删除清单最终定死（归 build-plan）；审查选型（Card-05）；回读检查幸存登记（Card-08）；token 统计/后台平台/UI 改动不做
+    evidence: 母 PRD out-of-scope 节 + R-006/R-020
+    acceptance: 非目标四条边界写死
+    counterexample: 越界承接他卡职责即违
+    impact_dimensions: [scope]
+    requires_user_decision: true
+    visible_group_id: T-001
 ```
+
 
 ## 目标
 
 - 目标：把 WorkflowHub 的 post 机器门禁全部拆除、pre 路径整体退役，只留两道人为门 + 5 项可脱离 kernel 独立调用的窄工具 + 可搬运技能；七类面迁移表冻结后逐批删除，8 条 AC 全过。
 
-## 成功/失败边界
+## 验收标准
 
-- 成功边界：AC-27/28/29/30/31/32/52/53 全过（执行形态见决定区·验收模块）；删除后日常路径无 kernel/校验机器前置。
-- 失败边界：任一被删职责换新名复活且消费者未变；任一工具必须经 kernel；无快照即删；损失清单缺项；G-3 自行保留静默回写；wh-review/broker 换名搬进 Skill 或被当 fallback。
+- 通过条件（可验证）：AC-27/28/29/30/31/32/52/53 全过（执行形态见决定区·验收模块）；删除后日常路径无 kernel/校验机器前置；质量事实缺失保持 incomplete 由用户拍板，不伪造通过。
+- 失败条件（边界）：任一被删职责换新名复活且消费者未变；任一工具必须经 kernel；无快照即删；损失清单缺项；G-3 自行保留静默回写；wh-review/broker 换名搬进 Skill 或被当 fallback；任一把失败事实写成通过。
 
 ## 范围
 
@@ -402,7 +636,8 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 
 | finding_id | 原始事实/来源 | 后果 | status | next_action/evidence_ref | owner/consumer/retain_or_delete |
 | --- | --- | --- | --- | --- | --- |
-| （step 4 direction-advice / step 9 detail-advice 执行后填） | | | | | |
+| DIR-001 | direction-advice 审查 2026-09-30 真实执行 1 次：review --action=record 在 openTask 阶段 ENOENT（外置任务存储未注册） | 无 attempt/result/report 产生；provider 未启动；不构成 pass 也不构成 findings | unavailable | bootstrap 已修复（2026-09-30，cohort=post，task.json 创建）→ 重试 1 次；若撞 host_provider bug（26786b61 未在 Card-06）则记 unavailable 等 Card-03 合并后重试 | owner=make-decision / consumer=step4 完成事实 / retain |
+| DIR-002 | analyzeDecisionOutline 严格性观察（121→0 已修复） | 材料形态对齐 reader 链，detail/approve 消费无障碍 | fixed | 三 reader 终验 2026-09-30：outline [] / census 0 / convergence 8 项全 passed | owner=make-decision / consumer=detail-advice,approve / retain |
 
 ## 最终确认
 
@@ -448,7 +683,7 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 | --- | --- | --- | --- |
 | OPEN-001 | 具体删除文件清单 | PRD Q8：归 build-plan 核查产出 | build-plan 会话 |
 | OPEN-002 | 审查路径 host_provider bug | 正解 26786b61 在 Card-03 分支未合 main | 用户 Card-03 合并时 |
-| OPEN-003 | Card-06 task.json 未创建 | 任务记录未引导 | step 12 前处理或披露 |
+| OPEN-003 | ~~Card-06 task.json 未创建~~ | ~~任务记录未引导~~ | 已关闭：2026-09-30 task-bootstrap 注册（canonical_resolver，cohort=post，worktree 绑定 baseline be8500e4） |
 | OPEN-004 | 窄工具③④⑤剥离方案 | F-007：③在 kernel 句柄内、④必经 kernel、⑤无单一实现 | build-plan/批次 0 |
 | OPEN-005 | 冲突中断保护⑤选哪个候选 | 三候选（workspace 冲突拒绝/记录锁/project lock）各有耦合 | build-plan 定死 |
 
@@ -475,3 +710,15 @@ Talk 收敛状态：v1 队列无 high/medium 未答项；架构方向与用户�
 - owner/接口一致：待 step 6/11 核验
 - 失败语义明确：待 step 6/11 核验
 - 范围与延期明确：待 step 6/11 核验
+
+## 核心需求
+
+把 WorkflowHub 里所有"机器保安"（哈希/快照/身份/材料/回执校验、stage completion 认证、task kernel/fact graph 强制依赖、evidence 多层包装、plan/tasks 双写、固定 Talk 轮次、强制 handoff、只保护流程形状的测试）全部拆除——post 新路径拆干净、pre 旧路径整体退役只读归档；只留下两道"人为门"（你点头确认 + Git 不可逆授权）和 5 样能脱离 kernel 独立使用的窄工具。
+
+## 核心目标
+
+目标达成标志——删完之后：任何人走"发起→实施→验收"日常工作流，全程没有一个环节会被机器门禁卡住；5 项窄工具在没有 kernel 的环境下逐项可用（5/5 真实结果）；仓库里不存在换名复活的旧机制；删除前的一切损失都有白纸黑字的承认和后悔药（快照）。
+
+## 决定
+
+方向一句话：先立新、后拆旧、分批拆、拆完验证——按已经拍板的 8 批顺序（先立窄工具 → 测试看守 → 流程 → 技能 → 机制核心 → CLI/schema → 瘦身 → 文档），每批删之前扫描谁在用它、查它有没有暗中干安全活（G-3），删完立刻验证并向你汇报。范围边界：具体删哪些文件由 build-plan 核查定，本阶段不定死；Card-08 的回读检查和 Card-09 的写入量文件是显式幸存者。验收：PRD 的 8 条 AC 一条不能少，质量缺口如实带 incomplete 由你拍板，不伪造通过。
