@@ -21,7 +21,7 @@
 | R-004 | 流程边界纠正：本会话严格执行 make-decision 流程；build-plan 是其他会话的任务，不归本会话 | V-014（U-004） | covered（ADR-008） |
 | R-013 | build-plan 回流：wh-review 按分工保留（文档面 wh-review、代码面 OCR）、审查点以 Card-05 D-044 为准、授权只核对 Git 提交号、OCR 合同补齐 + 未装 OCR 回退 wh-review | V-016、V-017、V-018、V-019、V-020、V-021 | covered（ADR-018~021） |
 | R-015 | 流程纪律回流：防止 card-03 式阻塞复发（质量缺项≠停止前置、校验器批量报错先疑读取器、派发继承最小化、AGENTS.md 纪律常驻化） | V-023 | covered（ADR-023） |
-| R-016 | handoff 技能保留：handoff 不得再成为门，但每个 stage 结尾仍执行 handoff 技能产出交接文件，供用户向其它会话交接进度 | V-024 | covered（ADR-024） |
+| R-016 | handoff 技能保留：handoff 不得再成为门，但每个 stage 结尾仍执行 handoff 技能产出交接文件，供用户向其它会话交接进度；删除面复审闭环（requirement-lineage 确认删除） | V-024、V-025 | covered（ADR-024、ADR-025） |
 
 ## 需求变更记录
 
@@ -71,7 +71,7 @@
 | R-012 | V-014、V-015 | D-008 | 流程纪律纠正 + 最终确认定稿 |
 | R-014 | V-022 | D-022 | G-3 预处置延后到独立审查、宪法修订授权、冻结提交授权 |
 | R-015 | V-023 | D-023 | ADR-023 阻塞防复发三原则与 AGENTS.md 执行纪律常驻化 |
-| R-016 | V-024 | D-024 | ADR-024 handoff 技能保留执行（非门）+ 删除面复审红线 |
+| R-016 | V-024、V-025 | D-024、D-025 | ADR-024 handoff 技能保留执行（非门）+ 红线复审；ADR-025 复审闭环 requirement-lineage 确认删除 |
 | R-013 | V-016、V-017、V-018、V-019、V-020、V-021 | D-018 | ADR-018~021（D-018/019/020/021）build-plan 回流增量决策：wh-review 按分工保留、三审查点、授权核对提交号、OCR 合同补齐与未装回退 |
 
 ## 逐字声明层（verbatim）
@@ -101,6 +101,7 @@
 | V-021 | 用户 | C-003·ocr-portability 自由文本 | "保留一个检测和回退机制，没安装ocr就是用wh-review进行代码审查" |
 | V-022 | 用户 | build-plan 初稿汇报回复 2026-09-30 | "需要拍板的事情，需要你在后续审查的时候再看应该如何决定；宪法修订和冻结提交授权没问题，可以的" |
 | V-023 | 用户 | ADR-023 拍板回复 2026-10-01 | "A"（在 card-03 会话阻塞分析后，选择完整方案：追加三条操作层原则 + AGENTS.md 纪律节去任务化） |
+| V-025 | 用户 | requirement-lineage 拍板 2026-10-01 | "requirement-lineage可删" |
 | V-024 | 用户 | handoff 保留指正 2026-10-01 | "stage-handoff不要删掉，handoff 等步骤不得再成为门，但是还是得正常执行啊。我需要每个stage结尾执行这个技能，方便我用这个handoff文件向其他会话交接进度。请再次检查你的删除计划是不是删的太多了？" |
 
 ## 原始声明层
@@ -887,6 +888,24 @@ module: 删除范围
 requirement_ids: [R-016]
 derived_from: [ADR-002, ADR-004]
 artifacts: [skills/stage-handoff/；quality/evidence/handoff/]
+```
+
+### ADR-025 删除面复审闭环：requirement-lineage 确认删除
+```text
+- **source**：V-025（用户拍板，2026-10-01）
+- **decision**：删除面按 ADR-024④红线复审后唯一存疑项 `skills/requirement-lineage/`（MT-3-032，无真实消费者）经用户确认 **DELETE B3/P4 不变**；复审闭环：397 个 DELETE 分类（tests 258 / schemas 30 / tools 29 / runtime 48 / workflows 12 / scripts 6 / skills 10）中无其它"流程产物误删"。
+- **rationale**：用户确认该方法技能无需保留；其注册面（config M2）与对应 schema 同批消亡
+- **consequence**：无需改表（原处置即 DELETE）；T015 认领该删除动作；spec §12 登记复审闭环
+- **supersedes**：无（确认 ADR-024 复审的悬置项）
+- **原始声明层**：V-025
+- **三级追溯**：R-016 → V-025 → ADR-025
+- **三档结论**：confirmed
+- **approval_binding**：V-025（2026-10-01）
+- **owner/next_action**：build-code P4/T015 执行删除
+module: 删除范围
+requirement_ids: [R-016]
+derived_from: [ADR-024]
+artifacts: [迁移表 MT-3-032；quality/reviews/build-plan-merge/disposition.md]
 ```
 
 ## 动态 Talk 批次
