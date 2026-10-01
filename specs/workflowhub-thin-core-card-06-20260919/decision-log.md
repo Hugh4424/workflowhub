@@ -21,6 +21,7 @@
 | R-004 | 流程边界纠正：本会话严格执行 make-decision 流程；build-plan 是其他会话的任务，不归本会话 | V-014（U-004） | covered（ADR-008） |
 | R-013 | build-plan 回流：wh-review 按分工保留（文档面 wh-review、代码面 OCR）、审查点以 Card-05 D-044 为准、授权只核对 Git 提交号、OCR 合同补齐 + 未装 OCR 回退 wh-review | V-016、V-017、V-018、V-019、V-020、V-021 | covered（ADR-018~021） |
 | R-015 | 流程纪律回流：防止 card-03 式阻塞复发（质量缺项≠停止前置、校验器批量报错先疑读取器、派发继承最小化、AGENTS.md 纪律常驻化） | V-023 | covered（ADR-023） |
+| R-016 | handoff 技能保留：handoff 不得再成为门，但每个 stage 结尾仍执行 handoff 技能产出交接文件，供用户向其它会话交接进度 | V-024 | covered（ADR-024） |
 
 ## 需求变更记录
 
@@ -70,6 +71,7 @@
 | R-012 | V-014、V-015 | D-008 | 流程纪律纠正 + 最终确认定稿 |
 | R-014 | V-022 | D-022 | G-3 预处置延后到独立审查、宪法修订授权、冻结提交授权 |
 | R-015 | V-023 | D-023 | ADR-023 阻塞防复发三原则与 AGENTS.md 执行纪律常驻化 |
+| R-016 | V-024 | D-024 | ADR-024 handoff 技能保留执行（非门）+ 删除面复审红线 |
 | R-013 | V-016、V-017、V-018、V-019、V-020、V-021 | D-018 | ADR-018~021（D-018/019/020/021）build-plan 回流增量决策：wh-review 按分工保留、三审查点、授权核对提交号、OCR 合同补齐与未装回退 |
 
 ## 逐字声明层（verbatim）
@@ -99,6 +101,7 @@
 | V-021 | 用户 | C-003·ocr-portability 自由文本 | "保留一个检测和回退机制，没安装ocr就是用wh-review进行代码审查" |
 | V-022 | 用户 | build-plan 初稿汇报回复 2026-09-30 | "需要拍板的事情，需要你在后续审查的时候再看应该如何决定；宪法修订和冻结提交授权没问题，可以的" |
 | V-023 | 用户 | ADR-023 拍板回复 2026-10-01 | "A"（在 card-03 会话阻塞分析后，选择完整方案：追加三条操作层原则 + AGENTS.md 纪律节去任务化） |
+| V-024 | 用户 | handoff 保留指正 2026-10-01 | "stage-handoff不要删掉，handoff 等步骤不得再成为门，但是还是得正常执行啊。我需要每个stage结尾执行这个技能，方便我用这个handoff文件向其他会话交接进度。请再次检查你的删除计划是不是删的太多了？" |
 
 ## 原始声明层
 
@@ -866,6 +869,24 @@ module: 流程纪律
 requirement_ids: [R-015]
 derived_from: [ADR-007, ADR-022]
 artifacts: [AGENTS.md 常驻纪律节；card-03 会话阻塞分析原件]
+```
+
+### ADR-024 handoff 技能保留执行（非门）+ 删除面"流程产物 vs 机器门"复审红线
+```text
+- **source**：V-024（用户 handoff 保留指正，2026-10-01）
+- **decision**：①handoff 保留为可执行技能：`skills/stage-handoff/` 从 DELETE 改 **NARROW B3/P4**——剥掉机器绑定（`locks/stage-handoff/` 强制发布、快照绑定、stage-runner 的 skill-deps 引用），保留「阶段末写交接 md」方法正文，新消费者=各 stage 主会话与用户交接。②运行时强制发布机器 `runtime/stage/stage-handoff.mjs`（MT-1-068）**仍 DELETE**——「不得成为门」删除的是门属性（强制、锁、快照认证），不是技能本身。③每个 stage 结尾由主会话执行该技能，产出 `quality/evidence/handoff/<stage>.md`（窄工具③写入，含冻结锚点/材料现状/下一步要点）；执行不是门，缺失只记录汇报（与 ADR-023①一致）。④删除面复审红线：凡「人仍在使用的流程产物」（技能方法、交接/复盘文档、用户读的事实报告）不得因机器绑定被一并删除；只删绑定本身。
+- **rationale**：用户明确 handoff 文件是其跨会话交接进度的载体；build-plan 把「不得成为门」误读为「整体删除」，纠正为「去门留技」
+- **consequence**：MT-3-055 改 NARROW B3/P4；spec 执行纪律 +1 条（stage 末 handoff，非门）；T014 改文项替换；删除面按红线复审并报告
+- **supersedes**：MT-3-055 原 DELETE 预处置；spec 一句话需求中「强制 handoff」表述的解读
+- **原始声明层**：V-024
+- **三级追溯**：R-016 → V-024 → ADR-024
+- **三档结论**：confirmed
+- **approval_binding**：V-024（2026-10-01）
+- **owner/next_action**：build-code P4/T014 按 NARROW 改文；各 stage 主会话执行 handoff 技能；删除面复审报告随本 ADR 提交
+module: 删除范围
+requirement_ids: [R-016]
+derived_from: [ADR-002, ADR-004]
+artifacts: [skills/stage-handoff/；quality/evidence/handoff/]
 ```
 
 ## 动态 Talk 批次

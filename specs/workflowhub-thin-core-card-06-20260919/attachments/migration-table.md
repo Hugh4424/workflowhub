@@ -11,16 +11,16 @@
 - 首次删除动作必须是冻结提交的后代且晚于它；冻结后只允许 append-only 补记行（id 用 `MT-<面>-A<NNN>`）并立即向用户汇报。
 - 每批首个改动提交之前打本地标签 `backup/card-06-b<N>`（N=批次号 0～7），不推送。
 
-**冻结记录**：`a2d85fdec4c0c80c3fe15fc541f7c46f786a19f7`（build-plan 材料终稿提交，2026-10-01 冻结；首个删除提交必须是它的后代）
+**冻结记录**：待冻结（build-plan 用户确认并提交后填写）
 
 **处置计数**
 
 | 处置 | 行数 |
 | --- | --- |
 | ARCHIVE | 35 |
-| DELETE | 398 |
+| DELETE | 397 |
 | MOVE | 2 |
-| NARROW | 270 |
+| NARROW | 271 |
 | NEW | 18 |
 | PENDING | 3 |
 | SURVIVOR | 125 |
@@ -244,7 +244,7 @@
 | MT-3-052 | skills/spec-tasks/templates/tasks-template.md | 无（pre 模板，无引用） | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/spec-tasks/templates/tasks-template.md` | — | 是 | 报告标 ARCHIVE（pre tasks 双写模板）→ 归档口径落为删除；**待裁定**，见 §D-1 |
 | MT-3-053 | skills/spec-tasks/templates/index-template.md | spec-tasks/SKILL.md | 同左（phases/index.md 指针索引） | NARROW | B3/P4 | `git revert <B3 提交>` | — | 是 | R2 裁定：备注要求改文/改断言（A-14「有改动即非 SURVIVOR」），改 NARROW，批次维持登记批。 去 hash/readback 措辞（1 处），指针索引职责保留 |
 | MT-3-054 | skills/spec-tasks/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
-| MT-3-055 | skills/stage-handoff/ | 4 个 workflow skill-deps（`stage-runner#runStageEndReflection`） | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/stage-handoff/` | — | 否 | 母 PRD 要求删除「强制 handoff」；跨会话续跑由 Card-08 窄状态集+回读检查承接（P4 T014） |
+| MT-3-055 | skills/stage-handoff/ | 4 个 workflow skill-deps（`stage-runner#runStageEndReflection`） | 无 | NARROW | B3/P4 | `git checkout backup/card-06-b3 -- skills/stage-handoff/` | — | 否 | ADR-024 裁定：handoff 技能保留执行（非门）——剥机器绑定（locks/stage-handoff 强制发布、快照绑定、stage-runner skill-deps 引用），保留「阶段末写交接 md」方法正文；新消费者=各 stage 主会话与用户跨会话交接；T014 按此改文。 母 PRD 要求删除「强制 handoff」；跨会话续跑由 Card-08 窄状态集+回读检查承接（P4 T014） |
 | MT-3-056 | skills/stage-reflection/SKILL.md | 5 个 SJ 末步 + 5 个 SD | 宿主读（可选方法） | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | L95-129/177 删 v2 schema、identity 快照、`run --action=reflect`；改为可选、阶段末写一份普通 md（P4） |
 | MT-3-057 | skills/stage-reflection/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
 | MT-3-058 | skills/talk-with-zhipeng/SKILL.md | make-decision SK/SD、build-spec/build-plan SK | 宿主读、交互技能 | NARROW | B3/P4 | `git revert <B3 提交>` | G3-12 | 否 | R2 裁定：备注要求改文/改断言（A-14「有改动即非 SURVIVOR」），改 NARROW，批次维持登记批。 R2 §4：L33/97-98 `reply_ref/reply_hash`、round 生命周期改文；「不预设轮数」保留 |
