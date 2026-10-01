@@ -1,0 +1,1322 @@
+# 迁移表 — workflowhub-thin-core-card-06-20260919（Card-06 删除与窄工具保留）
+
+> 本表是本卡逐文件处置的唯一权威（AC-52）。七类面：①runtime ②CLI ③skills ④workflows/steps ⑤manifest/schema ⑥测试夹具 ⑦治理文档。
+> 每行四要素：**现有消费者 → 目标消费者 → 保留/删除 → 回滚方式**。列：`id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注`。
+> 一个路径只出现一行、只归一个批次（该批次的唯一 owner Phase）。批次 `B<n>/P<m>`：B0/P1 窄工具独立化 → B1/P2 流程形状测试 → B2/P3 workflows+config → B3/P4 skills 文本 → B4/P5 runtime 机制核心 → B5/P6 CLI+schema+双层 hash → B6/P7 瘦身归位 → B7/P8 治理文档。
+
+## 0. 冻结规则与计数
+
+**冻结规则**
+- 冻结 = 本 build-plan 完成后的那一次提交（用户已授权，ADR-022）；提交号填入下方「冻结记录」。
+- 首次删除动作必须是冻结提交的后代且晚于它；冻结后只允许 append-only 补记行（id 用 `MT-<面>-A<NNN>`）并立即向用户汇报。
+- 每批首个改动提交之前打本地标签 `backup/card-06-b<N>`（N=批次号 0～7），不推送。
+
+**冻结记录**：待冻结（build-plan 用户确认并提交后填写）
+
+**处置计数**
+
+| 处置 | 行数 |
+| --- | --- |
+| ARCHIVE | 35 |
+| DELETE | 405 |
+| MOVE | 2 |
+| NARROW | 231 |
+| NEW | 18 |
+| PENDING | 4 |
+| SURVIVOR | 168 |
+| **合计** | **863** |
+
+**批次计数**
+
+| 批次 | 行数 | 写集文件数 |
+| --- | --- | --- |
+| B0/P1 | 15 | 14 |
+| B1/P2 | 113 | 102 |
+| B2/P3 | 31 | 27 |
+| B3/P4 | 60 | 34 |
+| B4/P5 | 280 | 256 |
+| B5/P6 | 181 | 181 |
+| B6/P7 | 75 | 38 |
+| B7/P8 | 46 | 68 |
+| — （SURVIVOR/PENDING，无批次） | 62 | — |
+## 1. 逐文件处置（主表）
+
+### 1.1 ① runtime / core / scripts 生产代码（88 行）
+
+| id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-1-001 | runtime/interface/safe-write.mjs | 无（新增） | ③ 原子写：task-handle、task-store、core/artifact-dir、material-workspace（B4/P5 改接后） | NEW | B0/P1 | 删除该文件 | G3-03 | 否 | 抽 ③：`writeFileAtomic`+`createFileOnce`+`appendRecord`；只 import `node:*`；合并四处 O_EXCL+fsync+rename 重复实现 |
+| MT-1-002 | runtime/interface/record-lock.mjs | 无（新增） | ⑤ 记录锁：core/task-close、canonical-receipt-writer、review-record-route、mini-task-runner、stage-handoff 等7处 | NEW | B0/P1 | 删除该文件 | G3-04 | 否 | 抽 ⑤：搬 `withRecordLockAt`+`lockOwnerDeadOrExpired`+machine 判定，去 task root 身份复核；CLI 超时 exit 75 |
+| MT-1-003 | runtime/interface/workspace-check.mjs | 无（新增） | ① 工作区/范围核对：tools/cli/task-bootstrap、core/task-close、stage-context、tools/cli/stage-runtime | NEW | B0/P1 | 删除该文件 | G3-08 | 否 | 抽 ①：Git 顶层/注册/分支/dev-ino + dirty 分类 + `git diff` 范围 + protected 命中；dirty 只是事实（exit 0），`--require-clean` 才 exit 1 |
+| MT-1-004 | runtime/interface/run-command.mjs | 无（新增） | ② 命令采集：workflows/verify-code/capture、workflows/build-code/capture、mini-task-runner、tools/cli/stage-runtime | NEW | B0/P1 | 删除该文件 | G3-14 | 否 | 抽 ②：搬 `runBoundCommand`/`runAsyncBoundCommand`（无能力参数、收绝对 cwd）；进程组 TERM、超时 124、输出上限随迁；回执 `output_ref` 纯路径 |
+| MT-1-005 | runtime/interface/git-authorize.mjs | 无（新增） | ④ 不可逆授权：core/task-close、skills/mini-task/mini-task-runner、tools/cli/stage-runtime（authorize 分支） | NEW | B0/P1 | 删除该文件 | G3-01 | 否 | 抽 ④：只写 分支+当时 HEAD，consume 前比对当前 HEAD（ADR-020）；不写内容哈希/material_revision/snapshot_tree |
+| MT-1-006 | runtime/interface/human-confirm.mjs | 无（新增） | 人为门①：tools/cli/stage-runtime（confirm 分支）、core/task-close（确认引用） | NEW | B0/P1 | 删除该文件 | G3-10 | 否 | 抽 `publishHumanConfirmation` 记录本体；coverage audit / quality fact / risk pause 绑定不搬 |
+| MT-1-007 | core/artifact-dir.mjs | core/task-close、runtime/evidence/freshness、runtime/review/review-record-route、runtime/stage/stage-context、runtime/stage/stage-runner 等14处（T73） | 职责由 runtime/interface/safe-write.mjs（写）+ runtime/task/material-workspace.mjs（no-follow 材料读）承接 | MOVE→runtime/evidence/artifact-dir.mjs | B6/P7 | 反向 git mv | G3-03 | 否 | ③ 接管 `writeAtomic`（L255-275），删 `MigrationArtifactInspector`；保留 specs 材料目录 no-follow 读与目录检查；归位后 move-map 登记 |
+| MT-1-008 | core/dispatch-component.mjs | runtime/evidence/kernel.mjs、tools/cli/check-extensibility.mjs（test:exclusive） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | 原始"核心只做调度"链，唯一生产消费者 kernel.mjs 同批删除；无需改名即可消解 AC-29 "kernel" 静态扫误中 |
+| MT-1-009 | core/load-config.mjs | runtime/evidence/kernel.mjs、tools/cli/stage-runtime、tools/cli/task-bootstrap、tools/cli/task-close（T2） | 职责由 runtime/task/load-config.mjs 承接 | MOVE→runtime/task/load-config.mjs | B6/P7 | 反向 git mv | — | 否 | 任务路径解析（`resolveCanonicalTaskPath`）是窄工具/入口共同前置；ADR-003 后 runtime/interface 只留窄工具，故落 runtime/task |
+| MT-1-010 | core/parse-framework-config.mjs | 无生产消费者（仅 core/__tests__ 1 处） | 无（职责删除） | DELETE | B2/P3 | git revert B2 提交 | — | 否 | 零生产消费者孤儿，属 ADR-004 批 2 config 退役；move-map 旧条目 `retain` 需在 B6/P7 更新为 delete |
+| MT-1-011 | core/resolve-component.mjs | runtime/evidence/kernel.mjs（T1） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | 同 dispatch-component 的孤儿 registry 链，registry 按 workflowId 找 entry 属固定工作流锁 |
+| MT-1-012 | core/runtime-mode.mjs | runtime/stage/stage-context、tools/cli/stage-runtime、tools/cli/task-bootstrap（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- core/runtime-mode.mjs | G3-06 | 否 | cutover 哨兵/权限锁/quiesce/`assertLegacyBridgeReadOnly` 随 pre 退役失去对象；batch 4 CLI 同步去掉 L1501 调用 |
+| MT-1-013 | core/task-close.mjs | tools/cli/task-close、skills/mini-task/scripts/mini-task-runner（串 runner-release、current-close-projection、wh-review/review-materials 等） | 本文件减薄后继续承接 close 执行器 + 窄工具①④⑤ 消费者 | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- core/task-close.mjs | G3-02 | 否 | 剥掉 `authenticateReviewEvidence`/`closePlanHash`/材料 revision·快照绑定/plan hash 目录；改接①④⑤；安全检查语义全保留（脏源预检 L2155、worktree 清理扫描、merge 失败 `--abort`） |
+| MT-1-014 | runtime/adapters/local-skill-resolver.mjs | runtime/distribution/skill-bundle-release、runtime/evidence/check-skill-closure、runtime/stage/stage-skill-runtime（串 skills/catalog.yaml，T7） | 技能包定位（去 hash 对账后）由本文件继续承接 | NARROW | B5/P6 | git revert B5 提交 | G3-22 | 否 | 删 `validateSkillBundle` 逐文件 sha256 与 `validateReviewBundleProjection`（ADR-013 双层 hash）；保留路径逃逸检查（G3-22 保留） |
+| MT-1-015 | runtime/adapters/resolve-path.mjs | core/parse-framework-config（孤儿）、workflows/_spike/design*.mjs（T2） | 无（职责删除） | DELETE | B2/P3 | git revert B2 提交 | — | 否 | 唯一生产链是孤儿 + spike；随批 2 config 退役 |
+| MT-1-016 | runtime/distribution/runner-release.mjs | tools/architecture/clean-install（T5） | 跨宿主 runner 安装面（去 sha256 清单校验后）由本文件承接 | NARROW | B5/P6 | git revert B5 提交 | — | 否 | 删 `validateRunnerRelease` 文件 sha256 清单与对 check-skill-closure 的依赖；保留 release 构建/安装清单（普通文件名） |
+| MT-1-017 | runtime/distribution/skill-bundle-release.mjs | runtime/distribution/runner-release、tools/architecture/clean-install（T6） | 技能 bundle 发布（去双层 hash 后）由本文件承接 | NARROW | B5/P6 | git revert B5 提交 | — | 否 | ADR-013：先拆 check-skill-closure 消费链，再删 catalog↔skill-bundle 双层 hash 字段与校验；`skills/catalog.yaml` 本体保留登记职责 |
+| MT-1-018 | runtime/evidence/acceptance-evidence-validator.mjs | core/task-close、runtime/evidence/freshness、runtime/review/review-record-route、runtime/stage/stage-end-report、runtime/task/task-kernel-implementation 等6处（T2） | Card-04 真实验收链（ADR-015 不可降级）由本文件承接 | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `validateAcceptanceEvidence` 的 snapshot_tree/source_digest/freshness 字段约束；保留 acceptance-evidence.v1 形状校验 |
+| MT-1-019 | runtime/evidence/canonical-evidence-validators.mjs | core/task-close、canonical-receipt-writer、freshness、workflow-evolution、review-record-route、stage-handlers 等17处（T9） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 多层 evidence 包装 + 回执校验本体（stage outcome proof/test·implementation receipt/canonical full-test）；残留形状校验由 runtime/review/schema-validator.mjs 与保留的 acceptance-evidence-validator 承接 |
+| MT-1-020 | runtime/evidence/canonical-receipt-writer.mjs | freshness、review-record-route、stage-handlers、stage-runner、mini-task-runner、tools/cli/stage-runtime 等10处（T20） | 职责由 runtime/interface/run-command.mjs（②）承接 | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/evidence/canonical-receipt-writer.mjs | G3-09 | 否 | ② 现役入口（`verify --action=execute`）；只把 L746-803 事实字段（exit_code/124/timeout、signal、时长、failure_attribution）搬进②；测试前后快照比对 DELETE 并进损失清单（G3-09）、哈希复用/回执包装全删 |
+| MT-1-021 | runtime/evidence/canonical-source.mjs | runtime/evidence/stage-content-evidence、runtime/task/material-workspace、tools/cli/source-manifest（T2） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | RFC8785 规范 JSON/`contentHash`/source manifest 生成与校验＝内容寻址本体（SD-17 删除面） |
+| MT-1-022 | runtime/evidence/canonical-utils.mjs | 全仓最广 52 处：runtime 30+、skills、tools、workflows（T4） | 幸存者最小集：runtime/review/**、runtime/task/**、tools/cli/** | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `SHA256_HEX`/内容寻址助手；保留 `canonicalJson`/`deepEqual`/`isRuntimeOnlyPath` |
+| MT-1-023 | runtime/evidence/check-skill-closure.mjs | runtime/distribution/skill-bundle-release（串 package.json `check`/`check:skill-closure`、skills/workflowhub-multica-sync，T4） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- runtime/evidence/check-skill-closure.mjs | — | 否 | ADR-013 点名；技能闭包职责由 local-skill-resolver + skill-static-deps 保留面分担；同批改 `package.json` 的 `check` 链 |
+| MT-1-024 | runtime/evidence/codex-transcript-adapter.mjs | runtime/evidence/host-session-transcript、runtime/stage/stage-agent-outcome-adapter（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | "此答复批准此版本"跨宿主绑定（SD-12 损失②）；只服务旧 bridge/stage agent，随认证链删 |
+| MT-1-025 | runtime/evidence/dsh-transcript.mjs | runtime/evidence/host-session-transcript（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | DSH 会话转录取需求原文机制，同跨宿主绑定链 |
+| MT-1-026 | runtime/evidence/fact-collector.mjs | runtime/evidence/codex-transcript-adapter、host-session-transcript（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 转录源 reader + `authenticateRegisteredRequirementMessages`，随需求原文认证删 |
+| MT-1-027 | runtime/evidence/freshness.mjs | runtime/review/review-record-route、runtime/stage/stage-runner、runtime/task/task-kernel-implementation、tools/cli/stage-runtime、tools/host/bridge 等6处（T20） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/evidence/freshness.mjs | — | 否 | 2008 行 `authenticate*` 全家（build-code completion/P5/P10/confirmation/quality fact）；新鲜度不再是推进门（ADR-002/OI-013） |
+| MT-1-028 | runtime/evidence/host-session-transcript.mjs | tools/host/workflowhub-stage-agent-bridge（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 唯一消费者＝旧 bridge（AGENTS：不得再成为门） |
+| MT-1-029 | runtime/evidence/invocation-identity.mjs | runtime/evidence/write-boundary-preflight、tools/cli/task-bootstrap（T3） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 官方调用身份（runner dirty/source_clean）+ `identity/executions/*.json` 产物；删除后 task 目录不再产生 identity/ |
+| MT-1-030 | runtime/evidence/kernel.mjs | tools/cli/check-extensibility.mjs（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | `runKernel` 原始薄核心（**不是** task kernel）；AC-29 "kernel" 静态扫的误中点，须在片段 3/6 的扫描规则里说明 |
+| MT-1-031 | runtime/evidence/protected-paths.mjs | 无生产消费者（仅 core/__tests__/protected-paths.test.mjs，T1） | 无（职责删除） | DELETE | B4/P5 | git revert B3 提交 | G3-07 | 否 | 聚合裁定 A-8：原落 B3/P4 与 G-3 登记表（B4/P5）不一致；protected-paths 是 runtime/evidence 机制模块，归 runtime 机制核心批；其唯一消费者 `core/__tests__/protected-paths.test.mjs` 同批删除（A-9），不留悬空测试。 零生产消费者孤儿（原消费者 boundary-confirm 全仓已不存在）；G-3 候选待独立审查确认 |
+| MT-1-032 | runtime/evidence/quality-fact.mjs | core/task-close、freshness、review-record-route、stage-runner、task-kernel-implementation（T8） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | quality fact 身份/摘要/发布（fact graph 写入点 `quality/facts/<sha256>.json`） |
+| MT-1-033 | runtime/evidence/quality-store.mjs | workflows/build-code/case-reconciliation（串 tools/cli/produce-final-current-snapshot，T8） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | AGENTS C6 已规定移除 active `quality/verify.v1` object graph；`validateVerifyLeaves`+`atomicCreate` 同删 |
+| MT-1-034 | runtime/evidence/research-report.mjs | runtime/stage/stage-handlers、runtime/task/task-kernel-implementation、tools/cli/stage-runtime(status)（T2） | 普通文件名调研报告（ADR-016）由本文件 NARROW 后承接 | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `researchReportHash` 与 `listCurrentResearchReports` 的 snapshot/material-scope 过滤；保留报告形状校验并按目录+文件名排序列举。调研报告 01 §2.3 建议 DELETE，本表按 ADR-016"新记录形态同步就位"取 NARROW（见存疑清单 S-1） |
+| MT-1-035 | runtime/evidence/runner-identity.mjs | runtime/evidence/invocation-identity（T3） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | `assertTaskRunnerIdentity` 随 invocation-identity 整链删除 |
+| MT-1-036 | runtime/evidence/skill-static-deps.mjs | runtime/evidence/check-skill-closure（T1） | 技能可搬运校验（改由片段 3 CLI `check` 直接调用） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | 保留"未声明静态依赖"扫描（真正服务技能可搬运）；消费者 check-skill-closure 同批删除后必须改接，否则成孤儿 |
+| MT-1-037 | runtime/evidence/stage-completion-facts.mjs | runtime/stage/stage-handlers、stage-runner（T2） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | `reconcileStageCompletion`/`assertCompletionViewsConsistent`＝stage completion 通用认证 |
+| MT-1-038 | runtime/evidence/stage-content-evidence.mjs | runtime/stage/stage-handlers、stage-runner（T4） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | G3-12 | 否 | 证据包装全删；结构化问答卡机器校验（`validateTalkQuestion` 的 card_hash）删，IO 契约文本保留（G3-12） |
+| MT-1-039 | runtime/evidence/storage-root.mjs | core/load-config、runtime/stage/stage-context、tools/cli/stage-runtime、tools/cli/task-bootstrap（T2） | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 纯路径解析，无机器依赖；B6/P7 归位时 move-map 登记 |
+| MT-1-040 | runtime/evidence/validate-contract.mjs | tools/cli/check-contract、tools/cli/check-metrics-schema（串 metrics/*.mjs，T2） | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | metrics 合同最小校验，不在本卡删除职责内 |
+| MT-1-041 | runtime/evidence/workflow-evolution.mjs | runtime/stage/stage-reflect、tools/cli/append-lesson-observation、build-reflection-page、derive-consumption-edges（T4） | 反思观察/候选/质量税投影（去项目锁后）由本文件承接 | NARROW | B4/P5 | git revert B4 提交 | G3-05 | 否 | 删 `acquireProjectLock`/`assertProjectLockCurrent` 与 guard（G3-05）及哈希派生 id（`deriveObservationId`）；保留 observation/candidate 投影，消费者随片段 3 CLI 改接 |
+| MT-1-042 | runtime/evidence/write-boundary-preflight.mjs | runtime/stage/stage-context、tools/cli/task-close（T1） | 职责由 runtime/interface/workspace-check.mjs（①）承接 | NARROW | B4/P5 | git revert B4 提交 | G3-08 | 否 | 去 `authenticateOfficialInvocation`/`persistOfficialInvocation` 与 L73 字节身份校验；路径一致性核对并入①，本文件转薄壳后随调用方改接再评估 DELETE |
+| MT-1-043 | runtime/interface/runner-contract.mjs | runtime/interface/runtime-facade、runtime/distribution/runner-release、skill-bundle-release、tools/cli/stage-runtime（T2） | 公共行为前置断言（改名单后）由本文件承接 | NARROW | B5/P6 | git revert B5 提交 | — | 否 | 版本兼容断言（非哈希）保留；名单随分发链去双层 hash 调整，避免断言引用已删 bundle 字段 |
+| MT-1-044 | runtime/interface/runtime-facade.mjs | tools/cli/stage-runtime（串 scripts/constitution-mapping-check、tools/architecture/complexity-report，T4） | 七类公共行为门面（实质保留） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 七类名单保留；`BEHAVIOR_BY_INTERNAL_OPERATION` 随私有路由删除重写；ADR-003 要求 B6/P7 以 move-map 澄清 runtime/interface 只留窄工具 |
+| MT-1-045 | runtime/review/canonical-review-result.mjs | core/task-close、freshness、review-record-route、stage-handlers、skills/wh-review/review-result、simple-review-runner（T7） | OCR 结果落盘（parse+聚合）由本文件承接 | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `authenticateCanonicalReviewResult`/`conservativelyAssessUnattestedAnchors` 认证；保留 `parseCanonicalReviewerOutput`/`aggregateCanonicalProviderResults`（OCR 落盘必需） |
+| MT-1-046 | runtime/review/integration-review-subject.mjs | skills/wh-review/scripts/integration-review-subject（串 tools/cli/check-task-record-paths，T2） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | ADR-019：全 phase 集成审查已非正常审查点（集成测试/聚合/逐 AC 验收照常）；唯一生产消费者在 wh-review，OCR integration scope 不用它 |
+| MT-1-047 | runtime/review/ocr-delegation-adapter.mjs | tools/cli/stage-runtime（T5） | 代码审查三审查点执行者（本文件，NARROW 后） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-021①：把 build-code/verify-code 审查合同、`stageReviewFocus`、provider 协议、lens 技能正文补进 OCR 包（搬文本不搬流程）；删 `deliveredMaterialId`/`authenticatedEvidenceDigest`/`materialManifest`/`readVerifiedOcrBundleFile`/`ocrSnapshotPathReader` 材料身份；ADR-021③：补 OCR 未安装/不可运行→回退 wh-review 并记录 fallback 事实 |
+| MT-1-048 | runtime/review/provider-material-projection.mjs | runtime/review/ocr-delegation-adapter、review-packet-identity、skills/wh-review/review-materials、simple-review-runner、tools/cli/stage-runtime（T1） | OCR 与 wh-review 文档面共同的材料投影脱敏（本文件） | NARROW | B4/P5 | git revert B4 提交 | G3-15 | 否 | 保留 `redactHostPathText`/`redactProviderHostPaths`（G3-15 保留脱敏/symlink/nlink/realpath，只删哈希）；删 `AUTHENTICATED_EVIDENCE_PATH` 与 pre/post cohort 部分；SD-16 条目在本表显式登记 |
+| MT-1-049 | runtime/review/review-input-bounds.mjs | runtime/review/review-packet-identity（串 skills/wh-review/simple-review-runner，T1） | 审查材料压缩（OCR 大材料）由本文件承接 | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | 唯一生产消费者 review-packet-identity 去哈希后复核；若 OCR 不再需要压缩则同批 DELETE（见存疑清单 S-2） |
+| MT-1-050 | runtime/review/review-output.mjs | core/task-close、freshness、canonical-review-result、ocr-delegation-adapter、stage-handlers、wh-review/review-output | OCR findings 解析（本文件） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | `parseReviewerOutput` + 输出字节上限；ADR-014/019 必留审查链的解析底座 |
+| MT-1-051 | runtime/review/review-packet-identity.mjs | freshness、ocr-delegation-adapter、review-record-route、skills/wh-review/simple-review-runner、tools/cli/stage-runtime（T8） | 包路径/材料白名单读取辅助（哈希身份删除后） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `reviewPacketMaterialId`/`deliveredMaterialId`/`authenticatedEvidenceDigest` 全部哈希身份（FR-57/SD-17）；**必须先改** OCR 与 review-record-route 两个消费者；若删后无残余职责则转 DELETE |
+| MT-1-052 | runtime/review/review-policy.mjs | review-packet-identity、review-record-route、review-route-identity、stage-handlers、skills/wh-review×6 等10处（T2） | wh-review 文档面 + OCR 代码面的审查身份/规则（本文件） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 保留 `reviewIdentityFromInput`（OCR 经 review-route-identity 依赖）；`minimumReviewersFor` 等多 provider 规则按 ADR-018 分工收缩，不整删（文档面仍用 wh-review） |
+| MT-1-053 | runtime/review/review-record-route.mjs | tools/cli/stage-runtime、skills/wh-review/wh-review-cli（T20） | 三审查点记录唯一落盘处（本文件，NARROW 后） | NARROW | B4/P5 | git revert B4 提交 | G3-13 | 否 | 删材料身份哈希/快照绑定/回执 readback/`IN_PROCESS_REQUEST_LOCKS` 的 requestLockHash（改⑤，G3-13 保留中断信号处理与记录 flush）；**保留** finding schema、严重级、锚点校验、并集、unavailable 语义；wh-review 文档面分支按 ADR-018 保留，仅删代码面残留 |
+| MT-1-054 | runtime/review/review-route-identity.mjs | ocr-delegation-adapter、review-record-route、skills/wh-review/simple-review-runner（T1） | provider 身份记录（本文件） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | FR-53 provider 身份记录；路由 hash 仅用于身份记录，不是推进前置 |
+| MT-1-055 | runtime/review/schema-validator.mjs | core/task-close、canonical-receipt-writer、freshness、review-record-route、stage-handlers、stage-runner 等10处（T3） | 保留面 AJV 校验（本文件） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | 随 `runtime/review/schemas/**` 处置（片段 4）；本面仅登记，不改 |
+| MT-1-056 | runtime/review/stage-materials.json | review-policy、skills/wh-review/review-materials、review-semantic-projection、simple-review-runner（串 runner-release，T1） | wh-review 文档面 + OCR 材料清单（本文件，收缩后） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 随 review-policy 收缩：删 pre/post cohort 与已删 stage 条目，保留现行三类审查点 stage 清单 |
+| MT-1-057 | runtime/review/stage-review-disposition.mjs | core/task-close、freshness、stage-handlers、stage-runner、task-kernel-implementation、mini-task-runner（T4） | finding 处置值语义（本文件） | NARROW | B4/P5 | git revert B4 提交 | G3-11 | 否 | 删 `validateRiskAcceptance`/risk-cards 机器部分（G3-11），`accepted_risk` 保留为 finding 处置值；保留严重发现暂停与 `validateReportableFindingDispositions` |
+| MT-1-058 | runtime/stage/completion-predicates.mjs | core/task-close、freshness、quality-fact、stage-completion-facts、stage-review-disposition、stage-handlers、stage-runner、task-store 等11处（T29） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/stage/completion-predicates.mjs | G3-11 | 否 | stage completion 通用认证本体；**先解耦** task-store 的 `STAGE_ROW_FINDING_DISPOSITION_FIELDS`/`summarizeStageRowFindingDispositions` 与游标用的 `stageMaterialScopeRevision`；accepted_risk 授权规则随 G3-11 |
+| MT-1-059 | runtime/stage/current-close-projection.mjs | tools/cli/task-close（T3） | close 只读四域状态展示（Card-08 回读，本文件） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 零依赖只读投影（自称零写）；ADR-014 必留；wh-review/review-materials 消费者随片段 4 处置；B6/P7 归位登记 |
+| MT-1-060 | runtime/stage/protocol-error-whitelist.mjs | runtime/stage/stage-runner（T2） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 为 bind_outcome/outcome_current/review_binding 绑定检查分类，绑定检查一删即无对象 |
+| MT-1-061 | runtime/stage/stage-acceptance-policy.mjs | 无生产消费者（仅 core/__tests__，T2） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | 零生产消费者孤儿；human/automatic 验收模式随 stage 机器退役，两道人为门由 human-confirm + ④ 承接 |
+| MT-1-062 | runtime/stage/stage-agent-outcome-adapter.mjs | tools/host/workflowhub-stage-agent-bridge（T7） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | G3-12 | 否 | 旧 bridge 链（AGENTS：外部 Stage Agent 不得再成为门）；内含交互轮次校验（G3-12 结构化问答卡机器校验删） |
+| MT-1-063 | runtime/stage/stage-content-contracts.mjs | core/task-close、canonical-evidence-validators、canonical-receipt-writer、stage-content-evidence、integration-review-subject、stage-handlers、stage-runner 等14处（T44） | 现行合同面（本文件，拆分后保留 post phase/decision/交互 IO 合同文本） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/stage/stage-content-contracts.mjs | G3-12 | 是 | 8500 行必须拆：`validatePlanTaskContract`（plan/tasks 双写合同）随 B2/P3 退役删；`validateInteractionQuestionBatch` 机器校验删（IO 契约文本保留，G3-12）；**保留** `validatePostPhaseContract`（phase_progress 游标用）与 decision-log 合同；Card-03 新增中文别名/E1–E16 需逐条区分存留 |
+| MT-1-064 | runtime/stage/stage-context.mjs | tools/cli/stage-runtime、tools/cli/source-manifest、tools/host/bridge、skills/wh-review/wh-review-cli、metrics/collector（T4） | 七类入口公共上下文（task+workspace+artifacts） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 去 `createTaskKernel`（L57/199/220/267）与 `authenticateStageWriteBoundary` 的身份/字节部分；保留 `bootstrapStage`、`prepareMakeDecisionWorkspace`、工作区绑定 |
+| MT-1-065 | runtime/stage/stage-end-report.mjs | runtime/evidence/freshness、runtime/stage/stage-runner（T2） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | `collectStageEndReportFacts` 的 P5 报告认证随 stage-runner 整链删 |
+| MT-1-066 | runtime/stage/stage-end-report.test.mjs | 自身（runtime/ 内测试） | 无（职责删除） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 只保护流程形状的测试；随 stage-end-report 删除（测试资产处置在片段 5 测试面复核） |
+| MT-1-067 | runtime/stage/stage-handlers.mjs | runtime/stage/stage-runner、tools/cli/stage-runtime（T27） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/stage/stage-handlers.mjs | — | 是 | `certifyBuildCodeQualityBasis`/`certifyCurrentTaskCompletion`/`verifyUnavailableReview`＝stage completion 通用认证；Card-03 改动（11 行）随文件一并回退 |
+| MT-1-068 | runtime/stage/stage-handoff.mjs | runtime/stage/stage-runner（串 skills/stage-handoff/skill-bundle.json，T5） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | 强制 handoff 发布（task 下 `locks/stage-handoff/` + 快照绑定）是显式点名删除项；AGENTS：handoff 不得再成为门 |
+| MT-1-069 | runtime/stage/stage-reflect.mjs | runtime/stage/stage-runner、tools/cli/stage-runtime（`run --action=reflect`）（T3） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | G3-05 | 否 | 反思发布随 `run:reflect` 退役；项目锁经 workflow-evolution（G3-05）；REFL-001 失败面转片段 6 损失清单（ADR-017） |
+| MT-1-070 | runtime/stage/stage-runner.mjs | runtime/stage/stage-reflect、tools/cli/stage-runtime（T41） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/stage/stage-runner.mjs | — | 否 | 5231 行 kernel/fact graph 强制依赖主干；七类入口的公共上下文由 runtime/interface + 窄工具承接，stage outcome 认证不保留 |
+| MT-1-071 | runtime/stage/stage-runner.test.mjs | 自身（runtime/ 内测试） | 无（职责删除） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 只保护流程形状的测试；随 stage-runner 删除 |
+| MT-1-072 | runtime/stage/stage-skill-runtime.mjs | runtime/stage/stage-agent-outcome-adapter、stage-runner、tools/architecture/clean-install、tools/cli/smoke-local-skill-dispatch（npm `check`）（T6） | 技能包装载（去固定步骤清单后）由本文件承接 | NARROW | B2/P3 | git revert B2 提交 | — | 否 | ADR-004 批 2：去 `workflows/*/steps.json` 固定步骤清单加载与 14 步锁（依赖 Card-07 新路径就位）；保留技能 manifest/包定位；npm `smoke:skill-packages` 同步改 |
+| MT-1-073 | runtime/stage/step-manifest.mjs | runtime/stage/stage-agent-outcome-adapter、stage-runner、stage-skill-runtime（串 check-skill-closure、runtime/schemas/steps.schema.json，T5） | 无（职责删除） | DELETE | B2/P3 | git revert B2 提交 | — | 否 | `validateStepManifest`/`validateAllStageManifests`＝固定轮次/14 步锁机器端；删除以 Card-07 新路径就位为前置（build-plan 待核项） |
+| MT-1-074 | runtime/task/git-worktree-snapshot.mjs | core/task-close、canonical-receipt-writer、freshness、invocation-identity、integration-review-subject、completion-predicates、stage-agent-outcome-adapter、workspace 等21处（T22） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/git-worktree-snapshot.mjs | G3-02 | 否 | 快照树认证本体（`captureGitWorktreeSnapshot`/`materialRevisionFromValues`/`assertCurrentSourceDigest`）；**先剥离** workspace.mjs、phase_progress 游标、wh-review review-source 的 import；close 前 sidecar 预检（`assertNoCloseExecutionSidecars`）语义并入 core/task-close 的①④⑤改接（G3-02） |
+| MT-1-075 | runtime/task/material-workspace.mjs | core/task-close、freshness、integration-review-subject、review-record-route、completion-predicates、stage-content-contracts、stage-context 等14处（T8） | post 材料清单/phase 索引（本文件，NARROW 后） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/material-workspace.mjs | G3-03 | 是 | 保留 `phaseFilesFromIndex`（Card-02/03 材料权威）与 post 材料清单；`replaceMaterialAtomic`/私有 `atomicWrite` 改调③并去 sha256 返回；删 `materialDigestAxes`/`material_digest`/`verifyStageInputPacket`/`verifyWorkerBrief` 与 pre 四材料分支 |
+| MT-1-076 | runtime/task/portable-workflow-run.mjs | tools/cli/stage-runtime（T2） | build-prd 可搬运规划旅程（本文件，NARROW 后） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 去 6 步硬编码与 `STEP_RESULT_REF` sha256 文件名，改普通文件名 append-only（ADR-016）；保留 7 值终态与规划旅程记录 |
+| MT-1-077 | runtime/task/task-capability.mjs | core/artifact-dir、runtime/review/review-record-route、runtime/task/task-handle、runtime/task/workspace | TaskHandle 品牌断言（本文件） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 保留 handle 品牌与断言；删 `brandTaskKernel`/`assertTaskKernel`（kernel WeakSet 能力认证） |
+| MT-1-078 | runtime/task/task-handle.mjs | core/task-close、metrics/collector、canonical-receipt-writer、freshness、invocation-identity、stage-content-evidence、write-boundary-preflight、stage-agent-outcome-adapter 等28处（T130） | task.json 读写 + 记录层路径防护（本文件） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/task-handle.mjs | G3-03, G3-04 | 否 | `writeAtomicAt`/`createOnlyAt`/`writeRecordAtomic` 交③、`withRecordLockAt`/claim 锁交⑤（调用方 B4/P5 改接）；删 L26 kernel import 与 `createTaskKernel`/`assertPublicRecordWritable`/CAS/sourceBytes；保留路径逃逸与祖先目录 dev/ino 与 symlink 防护（G3-03 保留面）；归零后评估 DELETE |
+| MT-1-079 | runtime/task/task-identity.mjs | core/artifact-dir、core/load-config、runner-identity、stage-context、task-handle、tools/cli/stage-runtime、workflows/verify-code/facts-assembly（T2） | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 纯 project/task id 校验与 task 路径推导，无机器依赖；窄工具与入口共同前置 |
+| MT-1-080 | runtime/task/task-kernel-implementation.mjs | canonical-receipt-writer、task-handle、task-kernel、skills/wh-review/ac-evidence-summary（T3） | 职责由 runtime/interface/git-authorize.mjs（④）+ human-confirm.mjs（人为门①）承接 | DELETE | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/task-kernel-implementation.mjs | G3-01 | 否 | kernel 本体；两道人为门**必须先**抽成④/human-confirm（ADR-004 批 0→4）；currentContext/quality fact 发布/调研发布/review risk pause 全删；授权 revision·快照 stale 绑定按 ADR-020 改为只比对 git HEAD |
+| MT-1-081 | runtime/task/task-kernel.mjs | core/task-close、canonical-receipt-writer、stage-agent-outcome-adapter、stage-context、stage-handoff、stage-reflect、stage-runner、tools/cli/task-close（T7） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 2 行 re-export 门面，随 kernel 本体删 |
+| MT-1-082 | runtime/task/task-store.mjs | core/task-close、quality-store、stage-handoff、stage-runner、task-kernel-implementation、tools/cli/stage-runtime、tools/cli/task-bootstrap（T30） | facts.jsonl + phase_progress 单行游标唯一写者（本文件） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/task-store.mjs | G3-04 | 否 | 去 L5 `completion-predicates` import 与 finding 处置字段依赖；`STAGE_ROW_KEYS` 删 material_digest/snapshot_tree/layer_states；`atomicWrite`/`withStoreLock` 改调③⑤；**保留** AGENTS 登记的单行当前游标（stale 判定改材料版本，不依赖代码快照） |
+| MT-1-083 | runtime/task/task-topology.mjs | runtime/stage/stage-context、tools/cli/stage-runtime（T3） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | pre cohort 退役（ADR-002）后 pre/post 二选一拓扑失去意义；`recordTypeAttempt` 属附加记录 |
+| MT-1-084 | runtime/task/workspace-runner.mjs | canonical-receipt-writer、review-record-route、stage-runner（T2） | ② 执行核心（本文件保留主体，CLI 改接 runtime/interface/run-command.mjs） | NARROW | B4/P5 | git revert B4 提交 | G3-14 | 否 | 保留 `runBoundCommand`/`runAsyncBoundCommand`（进程组 TERM、超时、输出上限，G3-14）；去能力参数改收绝对 cwd；删能力壳 `runWorkspaceCommand`/`runCandidateWorkspaceCommand`（批次 4 后），从而切断对 workspace→快照的间接依赖 |
+| MT-1-085 | runtime/task/workspace.mjs | core/task-close、canonical-receipt-writer、freshness、write-boundary-preflight、review-record-route、stage-context、task-kernel-implementation、workspace-runner 等18处（T95） | ① 范围核对 + worktree 清理执行器（本文件与 runtime/interface/workspace-check.mjs 分工） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- runtime/task/workspace.mjs | G3-08 | 否 | 保留 `inspectTargetStatus`（去 `status_digest`）、`inspectWorktreeCleanup`（常量内联）、`validateExistingWorkspaceBinding`、`prepareTaskWorkspace`（path/branch 冲突拒绝）、`createTaskWorktreeRemoval`；删能力品牌/candidate 身份组/`captureExecutionSnapshot`+`EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES` import |
+| MT-1-086 | scripts/constitution-mapping-check.mjs | 无生产消费者（串 tools/cli/check-task-record-paths L119、move-map） | CONSTITUTION 修宪映射生成（本文件，去报告哈希后） | NARROW | B7/P8 | git revert B7 提交 | G3-20 | 否 | CONSTITUTION 条款修订（G3-20/B7/P8）配套的映射/checklist 生成；报告用 sha256 改普通文件名（ADR-016）；调研报告 01 判 ARCHIVE，本表按修宪依赖取 NARROW（见存疑清单 S-3） |
+| MT-1-087 | scripts/dead-code-scan.mjs | 无生产消费者（串 tools/cli/check-task-record-paths L120、move-map） | AC-27 零消费者证明采集（本文件） | SURVIVOR | B7/P8 | 无需回滚（无改动） | — | 否 | 零生产消费者，但 B7/P8 聚合证据（AC-27 零消费者证明）需要它；不新增能力、不进 Runner/Skill Bundle |
+| MT-1-088 | scripts/dual-track-evaluate.mjs | 无生产消费者（串 tools/cli/check-task-record-paths L121、docs/operations/deferred-tasks-m17.md L56-60） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | M17 文档已写"退役"；facts.jsonl vs quality/facts 双轨评估对象本卡删除 |
+
+### 1.2 ② CLI 与仓库配置（44 行）
+
+| id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-2-001 | tools/cli/append-lesson-observation.mjs | runtime/stage/stage-reflect.mjs、2 个测试（调研 03 §2.1） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/append-lesson-observation.mjs | — | 否 | stage-reflection lesson 追加，服务已删机制；P6 卡 T024 明列「lesson」属旧 CLI 删除面；与片段 1 MT-1-041（workflow-evolution 判 NARROW 承接投影、备注「消费者随片段 3 CLI 改接」）冲突，见存疑 S-1 |
+| MT-2-002 | tools/cli/build-reflection-page-template.html | tools/cli/build-reflection-page.mjs、2 个测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/build-reflection-page-template.html | — | 否 | M16 反思页模板，随 MT-2-003 一并删（同批同提交，避免留孤儿资产） |
+| MT-2-003 | tools/cli/build-reflection-page.mjs | 4 个测试 + fixture（含 schema sha256 identity） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/build-reflection-page.mjs | — | 否 | M16 workflow-evolution 反思页生成（`schema_identity.sha256` 属内容寻址）；P6 卡 T024 明列「reflection」；见存疑 S-1 |
+| MT-2-004 | tools/cli/check-anti-host.mjs | `run-checks` 注册表、core/__tests__/check-anti-host、tests/host-independence | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 对应「技能/工具不绑死单一宿主」；runtime 瘦身后扫描面变小但仍成立；B6/P7 move-map 登记（`run-checks` 注册表条目在 B1/P2 已定，本件本体不改） |
+| MT-2-005 | tools/cli/check-contract.mjs | `run-checks`、check-metrics-schema、core/__tests__/check-contract.test.mjs | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/check-contract.mjs | — | 否 | 校验 `contracts/component-output.contract.json`（M2 微内核组件合同）；其对象 `runtime/evidence/kernel.mjs`/`core/dispatch-component.mjs`/`resolve-component.mjs` 属删除面（片段 1 MT-1-080 = B4/P5；其测试调研 05 判 B5）→ 本件成无对象孤儿。报告判 PENDING，本表按 M2 去留已定取 DELETE（见存疑 S-6） |
+| MT-2-006 | tools/cli/check-decision-log-chain.mjs | `run-checks`、skills/decision-log/SKILL.md、1 个测试 | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 明确 advisory、恒 exit 0、不加载 `decision-entry.v1` schema；不是推进门；B6/P7 move-map 登记 |
+| MT-2-007 | tools/cli/check-extensibility.mjs | `run-checks`、`test:exclusive`、check-task-record-paths 白名单 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/check-extensibility.mjs | — | 否 | 用 `runKernel` 证明 registry 可替换；M2 kernel（B4/P5）+ config registry（B2/P3）删除后无对象；`test:exclusive` script 同批（B1/P2）已删。报告判 PENDING，见存疑 S-6 |
+| MT-2-008 | tools/cli/check-metrics-schema.mjs | `run-checks` | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/check-metrics-schema.mjs | — | 否 | metrics execution-record/knowledge-card 合同校验；P6 卡 T024 明列「metrics」属旧 CLI 删除面；R-006「不建 token/时间统计」同向 |
+| MT-2-009 | tools/cli/check-stage-quality.mjs | `run-checks`、tests/stage-quality | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 扫 metrics/+scripts/ 的「质量类阻断」反模式，与「不引入阻断推进的质量门」同向；扩扫描面不在本卡；B6/P7 move-map 登记 |
+| MT-2-010 | tools/cli/check-task-record-paths.mjs | `run-checks` 注册表、3 个测试、tools/architecture/reference-audit 白名单（40 个写权威） | 无（职责删除） | DELETE | B1/P2 | git revert B1 提交 或 git checkout backup/card-06-b1 -- tools/cli/check-task-record-paths.mjs | G3-24 | 否 | G3-24：静态禁止 caller 传 storage/task path、禁止未登记直写者。守的是要删的 kernel 写权威表，且 7 条 FAIL 全为本文件（`stage-runtime.mjs` cwd/storage path、targeted-capture、case-reconciliation、ocr-delegation-adapter、stage-end-report.test）→ 受保护路径静态防护改由 B1/P2 残留扫描测试承接；同步改 `run-checks.mjs` 注册表（MT-2-016）。**批次分歧**：片段 6 G3-24 表记 B5/P6，P2 卡 T003/T004 + 片主规则 3 记 B1/P2，见存疑 S-3 |
+| MT-2-011 | tools/cli/derive-consumption-edges.mjs | runtime/evidence/workflow-evolution.mjs、build-reflection-page、stage-reflection SKILL、6 个测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/derive-consumption-edges.mjs | — | 否 | 在 `<sha256>.json` 事实之间推导消费边 = fact graph + 内容寻址；消费者均在 reflection/evolution 链上一并处理；见存疑 S-1 |
+| MT-2-012 | tools/cli/import-historical-reflection.mjs | 1 个测试（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/import-historical-reflection.mjs | — | 否 | 把历史反思导入新记录，违反「无 history runtime branch / historical import」（AGENTS vNext 永久实施边界）；内部 renameSync 原子写模式别处另有（③） |
+| MT-2-013 | tools/cli/measure-test-runtime-profile.mjs | 1 个测试；package.json `test:profile` | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/measure-test-runtime-profile.mjs | — | 否 | 流程形状度量 + R-006 时间统计；工具②的忠实现在 `workflows/*/capture.mjs`；`test:profile` script 已在 B1/P2 删（MT-2-042） |
+| MT-2-014 | tools/cli/noop.mjs | config/workflowhub.yaml（M2 registry 默认 demo 组件）、core/__tests__/kernel.test | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/noop.mjs | — | 否 | M2 registry 演示组件；registry 在 B2/P3 摘除（MT-2-040）、kernel/dispatch 在 B4/P5 删除 → 无加载者。报告判 PENDING，见存疑 S-6 |
+| MT-2-015 | tools/cli/produce-final-current-snapshot.mjs | 3 个测试（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/produce-final-current-snapshot.mjs | — | 否 | T013 终态验收快照（`git-worktree-snapshot` 快照树认证）；快照树机器属删除面（片段 1 MT-1-074） |
+| MT-2-016 | tools/cli/run-checks.mjs | package.json（`check`、`test:profile`）、check-metrics-schema、7 个测试 | `npm run check` 三段之一的 checker 聚合器（markdownlint + verify-structure + 本件）；保留 checker 的定向调用能力 | NARROW | B1/P2 | git revert B1 提交 或 git checkout backup/card-06-b1 -- tools/cli/run-checks.mjs | — | 否 | 删 `--runtime-profile` 模式（`test:profile` 同删）与 `--self-test` 段；注册表按本表同步（删 check-task-record-paths，条目随各批被删 checker 收敛）。共享文件按 spec「一个路径一行一批次 + 共享文件合并到最早批次」在 B1/P2 一次改完。调研 03 §8 #12 `resolveProfileEvidencePath`（证据只许写 quality/tests）随 profile 模式删除，未进入 G3-01~25 合并表，故 G-3=`—` |
+| MT-2-017 | tools/cli/run-wh-review-audit-e2e.mjs | scripts/__tests__、skills/wh-review 测试、check-task-record-paths 白名单 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/run-wh-review-audit-e2e.mjs | — | 是 | wh-review fake broker 夹具；ADR-018 下 wh-review 文档面本体保留，夹具不是历史记录，故删；Card-03 曾改本件（host_provider 注入 26786b61），删前确认新链不依赖该修复 |
+| MT-2-018 | tools/cli/run-wh-review-provider-smoke.mjs | scripts/__tests__、check-task-record-paths 白名单 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/run-wh-review-provider-smoke.mjs | — | 是 | wh-review provider smoke 夹具，可伪造可用性证据；与 MT-2-017 同批同因（Card-03 同源改动） |
+| MT-2-019 | tools/cli/scan-core-files.mjs | check-anti-host、check-extensibility、1 个测试 | 同左（不变，取消 extensibility 消费者） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | anti-host/extensibility 的扫描面锚点；extensibility 删后仍随 anti-host 存活；B6/P7 move-map 登记 |
+| MT-2-020 | tools/cli/smoke-local-skill-dispatch.mjs | package.json（`smoke:skill-packages`，B1/P2 删）、scripts/__tests__ 2 个 | 技能包「路径不逃逸」断言（可独立调用，供测试按需调用）；不进 `check` | NARROW | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/smoke-local-skill-dispatch.mjs | G3-22 | 否 | ADR-013：去 `bundle_hash` 为 64hex 断言与 `SHA256_HEX`，**保留** resolved path 逃逸/包含检查（G3-22 保留面，与片段 1 MT-1-014 同批）；现基线红（`bundle sha256 mismatch: scripts/review-materials.mjs`）正是手工同步 hash 漏项的证据。批次：片段 6 G3-22 表记 B4/P5，本表按 ADR-013 顺序与片段 1 取 B5/P6，见存疑 S-4 |
+| MT-2-021 | tools/cli/source-manifest.mjs | 无（仅 docs/architecture/move-map.json 登记） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/source-manifest.mjs | — | 否 | canonical-source 材料清单 CLI = 材料身份机器，无生产消费者孤儿（报告判 DELETE） |
+| MT-2-022 | tools/cli/stage-runtime.mjs | 代码 70、测试 54；生产：task-close.mjs、tools/host bridge、clean-install、public-behavior-baseline、runtime/distribution/runner-release、workflows/build-code/targeted-capture、skills/wh-review/review-materials；文档 245 文件提及 | 七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tools/cli/stage-runtime.mjs | G3-01, G3-06, G3-10, G3-11, G3-13 | 否 | 2251 行单体的收缩清单：删 `run:execute`/`run:preflight` 的官方 stage 发布、`review:risk`、`run:reflect`、`capture-evidence` 私有 op；去 `assertRuntimeAuthority`（G3-06）/`bootstrapStage`/`authenticateStageWriteBoundary` 调用；`review:record` 保留但去 wh-review simple 分支与哈希认证（G3-11 风险输入机器删；ADR-014/019 三审查点必留，不得误删）；保留 `runReviewRecordWithSignalHandling` 中断信号处理（G3-13）；`run:draft` 原子写改走③（G3-03）；ADR-021：补 OCR 审查包合同（build-code/verify-code 合同、stageReviewFocus、provider 协议、lens 技能正文）、doctor 增加 OCR 可用性检测、OCR 未安装时回退 wh-review 并在审查记录写明 fallback 事实。片段 6 G3-13 表记「B5/P6（CLI）」，与片主规则 1 的 B4/P5 冲突，取 B4/P5（P5 卡 T017~T023 逐条覆盖本文件） |
+| MT-2-023 | tools/cli/task-bootstrap.mjs | 代码 24、测试 19；生产：runner-release、workflowhub-multica-sync、clean-install、public-behavior-baseline | 建/开 task 目录、原子发布 task.json；改接①（工作区/范围核对）③（原子写） | NARROW | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/task-bootstrap.mjs | G3-03, G3-08 | 否 | 去掉 invocation-identity / activation cohort（pre 退役）/kernel store 依赖，**保留**已认证并行 worktree 隔离与 task.json 原子发布（G3-08 工作区隔离 + G3-03 原子写）；批次按片主规则 4 与 P6 卡 T024 明列取 B5/P6（不由 B4/P5 承担） |
+| MT-2-024 | tools/cli/task-close.mjs | 代码 30、测试 18；生产：core/task-close 链、runtime/stage/current-close-projection、skills/mini-task/mini-task-runner、wh-review/review-materials；文档 CONSTITUTION.md、docs/standard-workflow.md | close 执行器 CLI：不可逆 Git 授权消费（④/ADR-020）+ 记录锁（⑤）+ 脏源/脏目标预检（①） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tools/cli/task-close.mjs | G3-02, G3-08 | 否 | 不可逆 Git 动作所在；删 `closePlanHash`/confirmClosePlan 的 plan hash 目录/材料 revision·快照绑定校验；**保留**授权与写边界预检（`authenticateWriteBoundary` 语义并入①，G3-08）、worktree 清理、merge 失败 `--abort`；授权核对改「分支 + 当时 HEAD」（ADR-020）。**批次分歧**：片段 6 G3-02 表把 `tools/cli/task-close.mjs` 记 B5/P6，本表按片主批次定义 + P5 卡 T018（Files/symbols 明列本件）取 B4/P5，见存疑 S-2 |
+| MT-2-025 | tools/cli/validate-field-mapping.mjs | 无（仅 docs/architecture/move-map.json 登记） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/validate-field-mapping.mjs | — | 否 | spec/plan/tasks 字段映射 + sha256 = plan/tasks 双写合同 + 哈希，孤儿（报告判 DELETE） |
+| MT-2-026 | tools/cli/validate-stage-reflection.mjs | runtime/stage/stage-reflect.mjs、skills/stage-reflection/SKILL.md、4 个测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/cli/validate-stage-reflection.mjs | — | 否 | reflection v1/v2 校验；P6 卡 T024 明列整文件删除；REFL-001 已记录它与 current-session 身份校验矛盾（机器无法在不伪造身份下满足） |
+| MT-2-027 | tools/cli/verify-structure.mjs | package.json（`check` 第二段） | 同左（不变） | SURVIVOR | B7/P8 | 无需回滚（无改动） | — | 否 | 宪法 22 条/checklist 锚点/README 段/CONTEXT 术语的治理结构检查，非推进门；**现为红**（`README 缺段「五段流程」`），B7/P8 改文档后 P8 oracle 要求本件 exit 0（P8 卡 GREEN oracle 点名）；本卡不改本文件 |
+| MT-2-028 | tools/architecture/clean-install.mjs | tests/integration/runner-clean-install（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/clean-install.mjs | — | 否 | runner/skill-bundle release 干净安装验证（含 skill-bundle.json fileHash，ADR-013 面）；报告判 PENDING（随 runtime/distribution 去留），本表按片主规则 5「tools/architecture 全删」取 DELETE，见存疑 S-5 |
+| MT-2-029 | tools/architecture/complexity-report.mjs | reference-audit、1 个测试、docs/architecture/complexity-baseline.json（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/complexity-report.mjs | — | 否 | `--check-hard-gates` 复杂度基线 = 硬门形态的度量，不符「不卡推进」；只读诊断，无 Runner/Skill Bundle 消费者 |
+| MT-2-030 | tools/architecture/history-inventory.mjs | retention-audit、tests/integration/history-read-only（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/history-inventory.mjs | — | 否 | 历史区清单；历史只读由 git 历史 + 只读归档承担（ADR-002/005），不需要生成清单的工具；与 Card-08 的协调项转报 |
+| MT-2-031 | tools/architecture/inventory.mjs | 其他 4 个 arch 工具、5 个测试、docs/architecture/{deletions-proof,retention-manifest}.json | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/inventory.mjs | — | 否 | 仓库交付面清单 + `--require-zero` legacy 零检查；其扫描职责（AC-27「无换名残留」）由 B1/P2 写入的残留扫描测试承接（片主规则 5） |
+| MT-2-032 | tools/architecture/phase0-deletion-disposition.mjs | 1 个测试（无生产消费者） | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/phase0-deletion-disposition.mjs | — | 否 | 上一轮 Phase0 删除处置检查，旧任务专用 |
+| MT-2-033 | tools/architecture/public-behavior-baseline.mjs | package.json（`probe:public-behavior`、`compare:public-behavior`，B1/P2 删）、2 个测试、fixture | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/public-behavior-baseline.mjs | — | 否 | 固定 baseline commit 的公共行为探测/比较（canonical-receipt-writer 面）；两个 script 同批在 B1/P2 删；ADR-020 后授权只核对 Git 提交号，不需要 baseline 比对机器 |
+| MT-2-034 | tools/architecture/reference-audit.mjs | complexity-report、verify-final-coverage、1 个测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/reference-audit.mjs | — | 否 | 退役锚点引用审计（空目标不算证据）；AC-27 调用点扫描由 B1/P2 残留扫描测试承接（片主规则 5） |
+| MT-2-035 | tools/architecture/retention-audit.mjs | 2 个 `governance-*-non-gate` 测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/retention-audit.mjs | — | 否 | 保留清单核对；删除后的保留事实由 B6/P7 `move-map.json` 单一事实承担，不另留对账工具（避免第二控制面） |
+| MT-2-036 | tools/architecture/verify-final-coverage.mjs | 3 个测试 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/architecture/verify-final-coverage.mjs | — | 否 | 旧任务终态 AC 覆盖核对；本卡 AC 用 ADR-007④ 结构化产出 + P8 逐 AC 聚合读回，不用本工具 |
+| MT-2-037 | tools/host/workflowhub-stage-agent-bridge.mjs | 生产 0；测试 10；docs/cli-tool-mapping.md、docs/architecture/*.json、.planning（AGENTS：bridge 不再是推进前置） | 无（职责删除） | DELETE | B4/P5 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/host/workflowhub-stage-agent-bridge.mjs | — | 否 | 外部 Stage Agent 生命周期事件绑定 TaskKernel；依赖 stage-runtime/freshness/host-session-transcript。**顺序风险**：片段 1 MT-1-062 `runtime/stage/stage-agent-outcome-adapter.mjs` 归 B4/P5 删除，本件 import 会悬空到 B5/P6（见发现 3），聚合时可考虑把本件前移 B4/P5 |
+| MT-2-038 | tools/host/workflowhub-stage-agent-protocol.mjs | tests/m15-stage-outcome-stop-hook.test.mjs | 无（职责删除） | DELETE | B4/P5 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/host/workflowhub-stage-agent-protocol.mjs | — | 否 | Stage Agent 无法完成时的 unavailable 标记，随 bridge 一并删（同批同提交） |
+| MT-2-039 | tools/host/workflowhub-stage-outcome-stop-hook.mjs | tests/m15-stage-outcome-stop-hook.test.mjs；`~/.claude/settings*.json` 未发现挂载 | 无（职责删除） | DELETE | B5/P6 | git revert B5 提交 或 git checkout backup/card-06-b5 -- tools/host/workflowhub-stage-outcome-stop-hook.mjs | — | 否 | Claude Stop hook：缺 execution packet 时阻止结束 = 强制 handoff/outcome 形状（AGENTS 禁止项）；外部宿主挂载未查全，删前按 ADR-006 做一次宿主侧核对并记录 |
+| MT-2-040 | config/workflowhub.yaml | core/load-config.mjs（`loadConfig` 仅被 runtime/evidence/kernel.mjs 调用）、runtime/evidence/check-skill-closure.mjs `workflowDeclarations`、metrics/collector.mjs、5 个测试 | `task_dir` 等必要键（任务目录解析）；M2 registry 与 metrics_path 删除 | NARROW | B2/P3 | git revert B2 提交 或 git checkout backup/card-06-b2 -- config/workflowhub.yaml | — | 否 | 删 M2 registry（noop + 6 个 stage SKILL.md + build-prd portable_workflow + decision-log + requirement-lineage；消费者 noop/kernel/closure 同批删除）与 `metrics_path`；**保留** `task_dir` 与必要键。注意 `runtime/review/ocr-delegation-adapter.mjs`/`review-route-identity.mjs` 里的 `loadConfig` 是注入的审查配置函数，不读本文件（勿误改审查链） |
+| MT-2-041 | config/.gitkeep | 无 | 同左（不变） | SURVIVOR | B2/P3 | 无需回滚（无改动） | — | 否 | 目录约定占位符；归 config 面 owner 批次登记，本卡不改文件（片段 1 对 `.gitkeep` 不计行，本片按片主规则 8 登记一行以免漏项） |
+| MT-2-042 | package.json | `npm run check`（markdownlint + verify-structure + run-checks + check:skill-closure + smoke:skill-packages）、`test`/`test:safe`/`test:profile`/`test:acceptance`/`probe:*`/`compare:*` 的调用者（仓内无 `.github/workflows`，无 CI 消费的仓内证据） | `check` = markdownlint-cli2 + `node tools/cli/verify-structure.mjs` + `node tools/cli/run-checks.mjs`；`test:skills` 与存活目录的 `test:<dir>` 定向入口（AGENTS 测试硬规则：无范围全量聚合） | NARROW | B1/P2 | git revert B1 提交 或 git checkout backup/card-06-b1 -- package.json | — | 否 | 删 `test`、`test:safe`、`test:profile`、`test:acceptance`、`probe:*`、`compare:*`、`check:skill-closure`、`smoke:skill-packages`；`test:root` 修为实际存在目录（现含不存在的 `workflows/build-code/__tests__` 与 0 测试的 `specs`）；`check` 去掉 closure 与 smoke 两段（ADR-013 顺序要求：本改动必须早于 hash 字段删除）。dependencies `ajv`/`js-yaml` 删后仍被 `runtime/review/schema-validator.mjs` 与读 catalog/skill-deps 的代码使用，不删。与 `vitest.config.mjs` 同为共享文件，按 spec「一个路径一行一批次」在 B1/P2 一次改完 |
+| MT-2-043 | vitest.config.mjs | vitest 收集面 = `npm run test:*` 各段与技能/运行时共置测试 | 定向入口的收集配置；exclude 去已删项，保留 `passWithNoTests: false`（防空跑假绿） | NARROW | B1/P2 | git revert B1 提交 或 git checkout backup/card-06-b1 -- vitest.config.mjs | — | 否 | include 去 `workflows/build-code/__tests__/**`（目录不存在）；exclude 中指向已删/已退役测试的条目随各批同步；与 `tests/contract/test-entry-grouping.test.mjs`、`tests/vitest-resource-policy.test.mjs` 同批（后两件属片段 5）改为「无全量聚合、每个 script 指向存在路径」的断言；线程/分叉资源策略参数保留（Card-09 相关） |
+| MT-2-044 | .markdownlint-cli2.jsonc | package.json（`check` 第一段） | 同左（不变） | SURVIVOR | B7/P8 | 无需回滚（无改动） | — | 否 | markdown 规则集与 ignores 不动；B7/P8 **可在同一批次**精简 ignores 中指向已删文件的条目（若精简则本行在同批改为 NARROW，不拆两个批次）；现状 252 条违规多数在 `.planning/`、本卡 specs、HANDOFF 文件，不属删除面 |
+
+### 1.3 ③ skills 与 workflows / config（133 行）
+
+| id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-3-001 | skills/catalog.yaml | check-skill-closure、workflow-evolution、build-reflection-page、local-skill-resolver | local-skill-resolver、技能登记读者 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 删 `local_bundle_hash`/`snapshot_sha256`（45 处）并清理 B3 删除技能的悬空登记；B3~B6 期间悬空属已知中间态（ADR-013）。**与片段 5 重复登记**（MT-6-437 落 B1/P2）：按 spec.md「文件归属」节须合并为一行——hash 字段必须在 `check-skill-closure` 消费链拆除之后删（P6 T024 顺序、片段 1 MT-1-014），故建议合并到 B5/P6 并把 L1008 测试登记一并去掉；见 §D-5 |
+| MT-3-002 | skills/reuse-registry.md | 文档消费者（无代码） | 同左 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | L13/29/53/62-100/158 以 wh-review/3rd-review/skill-deps 为前提，按分工与去 hash 改文 |
+| MT-3-003 | skills/.gitkeep | 无 | 无 | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 目录占位，无改动 |
+| MT-3-004 | skills/anysearch/ | make-decision/skill-deps.yaml | 同左 | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 纯可搬运检索 CLI，无 kernel 依赖，bundle 无 hash |
+| MT-3-005 | skills/architect-code-review/SKILL.md | 宿主读；verify-code OCR 回退执行者 | 同左 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | R2 §4：L23-24 的 `receipts.review`/`receipts.quality_review` 改纯文本；SD-08 fallback 合同保留 |
+| MT-3-006 | skills/architect-code-review/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 sha256/digest 字段（1 处） |
+| MT-3-007 | skills/backend-testing/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处）；SKILL.md 未改动 |
+| MT-3-008 | skills/debate/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（9 处）；SKILL.md/references 未改动 |
+| MT-3-009 | skills/decision-log/SKILL.md | 5 个 stage 的 SK/SJ/SD | 宿主读、阶段材料作者 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | R2 §4：L177/226/241/255 删 `report_ref/report_sha256` 与 decision hash；改普通文件名（SD-17） |
+| MT-3-010 | skills/decision-log/templates/decision-log-template.md | decision-log/SKILL.md | 同上 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | L247-257 `<sha256>` 文件名改普通命名 |
+| MT-3-011 | skills/decision-log/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-012 | skills/deep-research/SKILL.md | make-decision SK/SD | 宿主读、规划期调研 | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | 聚合裁定 A-14：原落 SURVIVOR 但备注要求清理 L47-53 的内容寻址/回读校验/`run --action=execute`/`receipts.research` 文本——有改动即为 NARROW，批次仍 B3/P4。 R2 §4：L47-53 内容寻址 `<sha256>.json`、回读校验、`run --action=execute`、`receipts.research` 改普通文件名+纯路径 |
+| MT-3-013 | skills/deep-research/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-014 | skills/design-source-readiness/SKILL.md | （原）build-spec SJ/SK/SD | 宿主读（UI 组，B2 后挂 build-plan step 5） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | L14 `content_sha256` anchor 改文；build-spec 退役后需在 build-plan step 5 显式挂接（§1.2） |
+| MT-3-015 | skills/diagnosing-bugs/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（4 处） |
+| MT-3-016 | skills/frontend-component-quality/ | build-code/build-plan/verify-code SK+SD | 同左 | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 脚本与上游材料独立，只需改 skill-deps 绑定（B2/P3） |
+| MT-3-017 | skills/frontend-prototype-render/SKILL.md | （原）build-spec SK/SD | 宿主读（UI 组） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | R2 §4：L28-53 `preview_hash/screenshot_hash/material_revision/snapshot_tree/confirmation_hash`、`quality/confirmations/<sha256>.json` 改纯文本；按 ADR-018 组规则不删技能（**争议**：报告倾向 NARROW，见 §D-2） |
+| MT-3-018 | skills/frontend-prototype-render/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-019 | skills/frontend-testing/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-020 | skills/fullstack-slice-testing/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-021 | skills/grill-with-docs/SKILL.md | make-decision SJ/SK/SD、build-spec SK | 宿主读、交互技能 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | G3-12 | 否 | L24 `reply_ref/reply_hash`、L70 已认证原始消息 → 去机器校验，保留 IO 契约文本 |
+| MT-3-022 | skills/grill-with-docs/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（3 处） |
+| MT-3-023 | skills/intake-decision-review/SKILL.md | wh-review `stage-skill-plan.json` 选入 packet | 文档审查面 lens（ADR-018 保留） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | L8-9「only used by wh-review direction track」改文；随 wh-review 文档面保留 |
+| MT-3-024 | skills/isolated-browser-qa/SKILL.md | build-code SK | 同左（可搬运 QA 网关） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | R2 §4：L241 `{ref,sha256}` 证据改纯路径；清理脚本只杀自有 pid，保留 |
+| MT-3-025 | skills/isolated-browser-qa/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（11 处） |
+| MT-3-026 | skills/mini-task/SKILL.md | 宿主读；`task-close execute` 配套 | 宿主读（纯方法 + 窄工具④⑤） | NARROW | B3/P4 | `git revert <B3 提交>` | G3-25 | 否 | L23-31 wh-review 调用与 task-close 读回改窄工具表述；命令动作集合不变 |
+| MT-3-027 | skills/mini-task/scripts/mini-task-runner.mjs | SKILL.md、授权/锁调用点 | 窄工具①④⑤ | NARROW | B4/P5 | `git revert <B4 提交>` | G3-25、G3-01 | 是 | 改接 ④ 授权（HEAD 核对/一次性消费）与 ⑤ 锁、① 脏源预检；删除 kernel 快照/stale 绑定，安全检查语义全保留（P5 T018） |
+| MT-3-028 | skills/mini-task/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-029 | skills/plan-ceo-review/SKILL.md | （原）build-spec SJ/SK/SD | 文档审查面 lens | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | L9「由 wh-review 放进同一 packet」改文（§2.3 lens 文本清单） |
+| MT-3-030 | skills/plan-design-review/SKILL.md | （原）build-spec SJ/SK/SD | 文档审查面 lens（UI 组） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | L10「before the final wh-review」改文 |
+| MT-3-031 | skills/plan-eng-review/SKILL.md | build-plan SK/SD | 文档审查面 lens | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | L11/L47 wh-review 描述改文；Card-03 已改过此文件，改文需叠加 |
+| MT-3-032 | skills/requirement-lineage/ | config/workflowhub.yaml:32 登记，无代码消费者 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/requirement-lineage/` | — | 否 | 报告 §1.2 建议 DELETE（无真实 consumer）；随附登记删除在 config 面同批（**待裁定**，见 §D-1） |
+| MT-3-033 | skills/resolving-merge-conflicts/SKILL.md | core/task-close.mjs、宿主读 | 宿主读（窄工具④配套） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | G3-01 | 否 | L9/L22 `task-close execute` 表述随 ④ 改写同步改文；不可逆 Git 授权语义保留 |
+| MT-3-034 | skills/review/ | 5 个 stage 的 SJ/SK/SD、OCR packet `required_skills` | 同左（审查点必留 lens） | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 纯 lens，无 kernel/hash 绑定；ADR-014/019 审查点必留 |
+| MT-3-035 | skills/simplicity-guard/SKILL.md | build-spec SJ/SK/SD、build-plan SK/SD、OCR packet | 同左（审查点必留 lens） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | L10「放入 wh-review 冻结 packet」改文 |
+| MT-3-036 | skills/spec-analyze/SKILL.md | 5 个 stage | 宿主读、阶段末一致性分析 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | R2 §4：L39/58/63-64/105-107/115/134/151 去「atomically writes authenticated result」与快照/材料 revision 绑定 |
+| MT-3-037 | skills/spec-analyze/packet-lens.md | spec-analyze/SKILL.md、wh-review packet | 同左 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | 去 packet hash/receipt 措辞，分析要求保留 |
+| MT-3-038 | skills/spec-analyze/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（2 处） |
+| MT-3-039 | skills/spec-clarify/SKILL.md | build-spec/build-plan/make-decision 等 | 宿主读、交互技能 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | G3-12 | 否 | R2 §4：L16 `reply_ref/reply_hash`、L73「Only the registered transcript may authenticate」改文；IO 契约文本保留 |
+| MT-3-040 | skills/spec-clarify/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-041 | skills/spec-plan/SKILL.md | build-plan SJ/SK/SD | 宿主读、spec/phases 作者 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | L144 ref/hash 认证 review 改文；post 主作者保留 |
+| MT-3-042 | skills/spec-plan/templates/phase-template.md | spec-plan/SKILL.md | 同左 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | L48 evidence/readback 表述改文（若指 Card-08 回读检查则保留语义） |
+| MT-3-043 | skills/spec-plan/templates/plan-template.md | 无（pre 模板，无引用） | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/spec-plan/templates/plan-template.md` | — | 是 | 报告标 ARCHIVE（pre plan/tasks 双写模板，post 不再生成 plan.md）→ 按本卡归档口径落为删除；**待裁定**，见 §D-1 |
+| MT-3-044 | skills/spec-plan/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-045 | skills/spec-prd/SKILL.md | build-prd SJ/SK/SD | 宿主读、PRD 作者 | NARROW | B3/P4 | `git revert <B3 提交>` | G3-18 | 否 | L30-116 四 revision + `displayed_draft_hash` 绑定改为「展示稿 + confirm 人为门」；SD-12 ② 损失在损失清单承认 |
+| MT-3-046 | skills/spec-prd/templates/prd-template.md | spec-prd/SKILL.md | 同左 | NARROW | B3/P4 | `git revert <B3 提交>` | G3-18 | 是 | 去 revision/hash 字段（11 处），保留模板结构 |
+| MT-3-047 | skills/spec-prd/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-048 | skills/spec-research/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处）；SKILL.md 未改动 |
+| MT-3-049 | skills/spec-specify/SKILL.md | build-spec/build-plan | 宿主读、spec.md 作者 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | R2 §4：L26/31-32 `material_revision/snapshot_tree/packet hash` 改文 |
+| MT-3-050 | skills/spec-specify/templates/spec-template.md | spec-specify/SKILL.md | 同左 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | 去 hash/revision 字段（6 处），模板结构保留 |
+| MT-3-051 | skills/spec-specify/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-052 | skills/spec-tasks/templates/tasks-template.md | 无（pre 模板，无引用） | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/spec-tasks/templates/tasks-template.md` | — | 是 | 报告标 ARCHIVE（pre tasks 双写模板）→ 归档口径落为删除；**待裁定**，见 §D-1 |
+| MT-3-053 | skills/spec-tasks/templates/index-template.md | spec-tasks/SKILL.md | 同左（phases/index.md 指针索引） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 是 | 去 hash/readback 措辞（1 处），指针索引职责保留 |
+| MT-3-054 | skills/spec-tasks/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 hash 字段（2 处） |
+| MT-3-055 | skills/stage-handoff/ | 4 个 workflow skill-deps（`stage-runner#runStageEndReflection`） | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/stage-handoff/` | — | 否 | 母 PRD 要求删除「强制 handoff」；跨会话续跑由 Card-08 窄状态集+回读检查承接（P4 T014） |
+| MT-3-056 | skills/stage-reflection/SKILL.md | 5 个 SJ 末步 + 5 个 SD | 宿主读（可选方法） | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | L95-129/177 删 v2 schema、identity 快照、`run --action=reflect`；改为可选、阶段末写一份普通 md（P4） |
+| MT-3-057 | skills/stage-reflection/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-058 | skills/talk-with-zhipeng/SKILL.md | make-decision SK/SD、build-spec/build-plan SK | 宿主读、交互技能 | SURVIVOR | B3/P4 | `git revert <B3 提交>` | G3-12 | 否 | R2 §4：L33/97-98 `reply_ref/reply_hash`、round 生命周期改文；「不预设轮数」保留 |
+| MT-3-059 | skills/talk-with-zhipeng/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处） |
+| MT-3-060 | skills/test-routing-advisor/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（2 处）；`scripts/route.mjs` 纯函数保留 |
+| MT-3-061 | skills/testing-system-blueprint/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（1 处）；SKILL.md 未改动 |
+| MT-3-062 | skills/ui-project-init/SKILL.md | （原）build-spec SJ/SK/SD | 宿主读（UI 组） | SURVIVOR | B3/P4 | `git revert <B3 提交>` | — | 否 | L18 `content_sha256` anchor 改文；B2 后需在 build-plan step 5 显式挂接 |
+| MT-3-063 | skills/workflowhub-host-protocol/SKILL.md | repo-skills.manifest、stage-runner 注释 | 宿主读（协议说明） | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | R2 §4：L10-16/58-64 的 `stage-runtime run --action=execute` 发布与 status 读回改写为「两道人为门 + 5 窄工具 + 纯文本路径」 |
+| MT-3-064 | skills/workflowhub-multica-sync/SKILL.md | check-task-record-paths | 宿主读、同步审计 | NARROW | B3/P4 | `git revert <B3 提交>` | G3-17 | 否 | L45/58/92/99/107 主文件 hash/steps.json 三件套描述随 B2/P3 形态改文；同步阻断语义保留 |
+| MT-3-065 | skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs | SKILL.md、check-task-record-paths | 宿主读 | NARROW | B3/P4 | `git revert <B3 提交>` | G3-17 | 否 | L33 7 个 public 命令正则与 L37 提示词块随 B4 公共入口语义复核；**必须保留** `dirty_worktree`/`main_origin_mismatch` 阻断（L368-370）与确认后才改外部 Multica |
+| MT-3-066 | skills/workflowhub-multica-sync/skill-bundle.json | check-skill-closure、skill-bundle-release | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 否 | 去 hash 字段（2 处） |
+| MT-3-067 | skills/wh-review/SKILL.md | 3 个 workflow skill-deps、catalog.yaml、repo-skills.manifest | 宿主读、OCR 回退执行者 | NARROW | B3/P4 | `git revert <B3 提交>` | — | 是 | 按 ADR-018 改写为「文档审查面执行者 + OCR 未装时代码面回退者」，删「过渡基线」表述（P4 T015） |
+| MT-3-068 | skills/wh-review/manifest.json | 无（登记） | 技能登记读者 | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | 去 build-spec 合同登记与旧 CLI 命令描述，与 ADR-018 分工一致 |
+| MT-3-069 | skills/wh-review/skill-bundle.json | 3 个 skill-deps（bundle 字段）、check-skill-closure | 技能加载 | NARROW | B5/P6 | `git revert <B5 提交>` | G3-22 | 是 | 去 sha256/digest 字段（30 处，ADR-013） |
+| MT-3-070 | skills/wh-review/stage-skill-plan.json | review-materials.mjs:15、check-skill-closure、material-workspace | 文档面 + OCR packet 的 lens 选择 | NARROW | B3/P4 | `git revert <B3 提交>` | — | 否 | 删 build-spec track（B2/P3 已退役）；**consumer 显式改为 OCR 适配 + 文档面，禁止换名搬进 runtime/review**（R1/AC-32 风险） |
+| MT-3-071 | skills/wh-review/contracts/build-code.md | review-materials.mjs:2198（写入 packet） | OCR reviewer 合同（ADR-021） | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 现正文是「当前普通流程」描述（L17-20 `receipts.review`/`quality_review`、`review --action=record`）而非审查合同；ADR-021 要求补进 OCR 包 → 需在 B4 改写为 reviewer 合同（**与 P5 T020「合同文件本身不改」冲突**，见 §D-2） |
+| MT-3-072 | skills/wh-review/contracts/build-plan.md | review-materials | 文档面合并审查合同 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-11 | 否 | L13/22/38-39 manifest SHA-256/`material_id`/snapshot 绑定与 accepted_risk 机器绑定文本剥离；审查指令保留 |
+| MT-3-073 | skills/wh-review/contracts/build-prd.md | review-materials | 文档面 build-prd 审查合同 | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | 无 hash/receipt 命中；随 build-prd 文档面保留（ADR-018） |
+| MT-3-074 | skills/wh-review/contracts/build-spec.md | review-materials | 无（build-spec 已退役） | DELETE | B5/P6 | `—（未改动）` | G3-11 | 否 | 聚合裁定 A-13：build-spec 工作流已在 B2/P3 退役，其审查合同无消费者；按删除面处理（B5/P6 与 wh-review 瘦身同批），不留孤本。 pre build-spec 审查合同，B2/P3 后无 consumer；报告标 ARCHIVE → 只读保留。**建议改 DELETE（待裁定）**，见 §D-1 |
+| MT-3-075 | skills/wh-review/contracts/make-decision.md | review-materials、CONTEXT.md | 文档面方向/细节审查合同 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | L3/13/16-17/46 `snapshot_tree`/`material_id`/`semantic hash`/`interaction_hash` 文本剥离；方向/细节两 track 指令保留 |
+| MT-3-076 | skills/wh-review/contracts/mini-task-design.md | review-materials | mini-task 审查合同 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-11 | 否 | L15-16 accepted_risk「真实用户风险确认」绑定随机器删除改文；finding 处置语义保留 |
+| MT-3-077 | skills/wh-review/contracts/mini-task-implementation.md | review-materials | mini-task 审查合同 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-11 | 否 | L7/12-13/27/31 snapshot/review/hash 绑定文本剥离 |
+| MT-3-078 | skills/wh-review/contracts/provider-protocol.md | review-materials.mjs:2204（写入 packet） | OCR + 文档面 reviewer 输出协议 | NARROW | B4/P5 | `—（未改动）` | — | 否 | 聚合裁定 A-12：正文含 `material_id` 定义（L9/50-55/65），按 OI-013 须与审查链哈希剥离同步改写为 reviewer 输出协议；不再是「原路径读入不改」。 T020 原路径读入 OCR 包、不复制不改名；正文含 material_id 定义（L9/50-55/65）——若 B4 剥哈希则须同步改文（见 §D-2） |
+| MT-3-079 | skills/wh-review/contracts/verify-code.md | review-materials | OCR reviewer 合同（ADR-021） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-11 | 否 | L17-22 `material_revision`/`material_id`/字节哈希/stage-runtime 校验与 `dsh-code-review` canonical 表述须改；审查重点 7 条与固定顺序保留；**含 ADR-021 fallback 语义，与 T020「不改」冲突**（§D-2） |
+| MT-3-080 | skills/wh-review/contracts/workflowhub-result.v1.json | review-provider-client（legacy） | 同左（broker 协议只读） | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | v1 legacy 协议，manifest 未登记为当前契约；只读保留 |
+| MT-3-081 | skills/wh-review/contracts/workflowhub-result.v2.json | review-provider-client、manifest legacy | 3rd-review broker 协议 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | L7 `material_id` 64-hex 必填属材料身份哈希；去必填需与跨仓 3rd-review broker 同步（T019 coverage limit 之外）→ 见 §D-3 |
+| MT-3-082 | skills/wh-review/contracts/workflowhub-result.v3.json | review-provider-client、manifest `provider_result_contract` | 3rd-review broker 协议 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 同 v2；当前 provider 结果契约，去 material_id 哈希需 broker 同步（§D-3） |
+| MT-3-083 | skills/wh-review/scripts/ac-evidence-summary.mjs | review-materials | verify-code OCR 的 AC 摘要校验 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 去 `task-kernel-implementation#validateAcceptanceEvidence` 依赖（kernel 在 B4 删除）；AC 摘要事实逻辑保留 |
+| MT-3-084 | skills/wh-review/scripts/integration-review-subject.mjs | check-task-record-paths | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/integration-review-subject.mjs` | — | 否 | 19 行纯转发 shim（runtime 同名模块）；ADR-019 集成审查已停派 |
+| MT-3-085 | skills/wh-review/scripts/lib/safe-id.mjs | 仅 skill-bundle.json:69 登记 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/lib/safe-id.mjs` | — | 否 | 孤儿：全仓无 importer |
+| MT-3-086 | skills/wh-review/scripts/review-input-bounds.mjs | 无 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/review-input-bounds.mjs` | — | 否 | 与 `runtime/review/review-input-bounds.mjs` 逐字节相同（重复） |
+| MT-3-087 | skills/wh-review/scripts/review-materials.mjs | stage-runtime.mjs:74（`buildReviewMaterials`/`validateVerifyAcceptanceSummary`，OCR 使用） | 文档面 + OCR packet 组装 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 否 | 保留 realpath/symlink/nlink 校验（L1119）、原子写（L1184）与 `redactProviderHostPaths`（L2151）；删 manifest 字节/hash 绑定（L1426-1452）与 `freezeCanonicalEvidence` 回执 readback 前置（L2283-2294） |
+| MT-3-088 | skills/wh-review/scripts/review-output.mjs | wh-review 内部 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/review-output.mjs` | — | 否 | 1 行 re-export（runtime/review/review-output.mjs） |
+| MT-3-089 | skills/wh-review/scripts/review-provider-client.mjs | simple-review-runner、wh-review-cli、provider-smoke | 文档面 broker 客户端 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 是 | 保留 spawn 与私有路径/secret 脱敏（L55-58、L174-180、L897）；去 material_id/route hash 校验（L474/602/1769 对应机器在 T019 剥离） |
+| MT-3-090 | skills/wh-review/scripts/review-result.mjs | wh-review 内部 | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | G3-11 | 否 | 旧结果写入（canonical-receipt-writer）+ accepted_risk；转只读、无新写者（报告标 ARCHIVE） |
+| MT-3-091 | skills/wh-review/scripts/review-runner.mjs | wh-review-cli | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | 旧 runner；随 wh-review-cli 保留入口只读（报告标 ARCHIVE） |
+| MT-3-092 | skills/wh-review/scripts/review-semantic-projection.mjs | wh-review 内部 | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | 语义投影；转只读（报告标 ARCHIVE） |
+| MT-3-093 | skills/wh-review/scripts/review-source.mjs | stage-runtime.mjs:73（`captureReviewSource`，OCR 使用） | 同左（工作区 diff 采集） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 否 | 保留 source/target realpath 边界（L69/206/220）；删 `captureExecutionSnapshot`/`snapshotTree`（L105-181）与 git-worktree-snapshot 依赖 |
+| MT-3-094 | skills/wh-review/scripts/schema-validator.mjs | wh-review 内部 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/schema-validator.mjs` | — | 否 | 1 行 re-export（runtime/review/schema-validator.mjs） |
+| MT-3-095 | skills/wh-review/scripts/simple-review-runner.mjs | stage-runtime.mjs:66（`runSimpleReview`，L1865/1951 非 OCR 默认 runRound）、run-wh-review-audit-e2e | 文档审查面执行者（ADR-018） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-13、G3-15 | 是 | 保留文档面派发与脱敏；删 material_id 重建/比对（L474/602/1769）、managed status identity、脱敏以外 hash；信号/中断处理保留（G3-13） |
+| MT-3-096 | skills/wh-review/scripts/third-review-host-config.mjs | stage-runtime.mjs:75（`loadTrustedThirdReviewConfig`，OCR 与旧链都用）、simple-review-runner | 同左（可信宿主配置加载） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-16 | 是 | **保留** `atomicReplace`（L75-78）与预期 hash 守卫的用户 `~/.config` 配置迁移/恢复（L26-151）、realpath/symlink 校验；只删其余 route/config hash |
+| MT-3-097 | skills/wh-review/scripts/wh-review-cli.mjs | runtime/distribution/runner-release.mjs、mini-task-runner | mini_task 改接后仅保留必要分支 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-25 | 是 | 旧 CLI 入口；mini-task 改接窄工具④⑤后删 `mini_task.*` 分支，`build_prd` 分支随文档面保留（是否整体转只读待 P5 裁定） |
+| MT-3-119 | workflows/.gitkeep | 无 | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/.gitkeep` | — | 否 | 目录非空（报告标「可选删除」） |
+| MT-3-120 | workflows/_spike/intake.mjs | 仅 check-task-record-paths:133 白名单 | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/_spike/intake.mjs` | — | 否 | archived spike fixture，无真实 consumer；git 历史可追溯 |
+| MT-3-121 | workflows/_spike/design.mjs | 同上 | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/_spike/design.mjs` | — | 否 | 同上 |
+| MT-3-122 | workflows/_spike/design-variant.mjs | 同上 | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/_spike/design-variant.mjs` | — | 否 | 同上 |
+| MT-3-123 | workflows/make-decision/SKILL.md | 宿主读 | 宿主读（纯方法说明） | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | R2 §4（L116/123-127/140/170-172/272/366/408）；写明 confirm 仅在本 stage 收口、三审查点位置；删 reflect/sha256/`stage-handlers#researchFacts`/`ref+sha` |
+| MT-3-124 | workflows/make-decision/steps.json | step-manifest、stage-runner、stage-skill-runtime、stage-content-contracts、stage-agent-outcome-adapter、portable-workflow-run、check-skill-closure、skill-bundle-release、multica-sync、44 测试 | 宿主读（极简清单） | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 只留 `step_id`/`step_slug`/`observable_result`；删 `entry_conditions`/`completion_evidence`（step 3 `<sha256>.json`、step 8 `source/hash`）/线性 `depends_on`、step 13 stage-reflection |
+| MT-3-125 | workflows/make-decision/skill-deps.yaml | stage-skill-runtime、stage-runner、stage-agent-outcome-adapter、check-skill-closure、runner-release、skill-bundle-release、clean-install、host-protocol、29 测试 | doctor（capability）+ 宿主读 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 删 `consumer.target/inputs/identity/result`、`bundle`、`owner`；保留 `{name,path,trigger}`；`runtime_capabilities`/`external_capabilities` 保留并加 `ocr-cli`（ADR-021）；`wh-review-provider` 按 ADR-018 保留；删 6 处 `receipts.*` 与 reflection/handoff 绑定 |
+| MT-3-126 | workflows/build-plan/SKILL.md | 宿主读 | 宿主读（纯方法说明） | NARROW | B2/P3 | `git revert <B2 提交>` | — | 是 | R2 §4（L52/64/71-73/138/217/232-246/303）；删 broker request/`wh-review` adapter 派发描述，保留合并审查点位置（wh-review 执行）；已认证 worktree/`quality/confirmations/<sha256>.json` 改纯文本 |
+| MT-3-127 | workflows/build-plan/steps.json | 同 124 各组 | 同 124 | NARROW | B2/P3 | `git revert <B2 提交>` | G3-11 | 否 | 去 step 2 `<sha256>.json`、step 9 `attempts/<attempt_id>/attempt.json` 与 owner=wh-review 机器字段、step 10 accepted_risk 机器校验（语义保留）、step 11 `oracle-provenance-prewritten-irreversible` 认证名、step 12 `quality/confirmations/<sha256>.json`、step 13 reflection |
+| MT-3-128 | workflows/build-plan/skill-deps.yaml | 同 125 各组 | 同 125 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 同 125 规则；5 处 receipts 删；`stage-content-contracts#validateComponentQualityMap` 等 consumer target 删；wh-review 条目按 ADR-018 保留 |
+| MT-3-129 | workflows/build-code/SKILL.md | 宿主读 | 宿主读（纯方法说明） | NARROW | B2/P3 | `git revert <B2 提交>` | — | 是 | R2 §4（L28/35-39/56/103-122/158-179/186-192/204/217/222-229）；写明 build-code 每 phase 审查走 OCR、未装回退 wh-review（ADR-021，取代「禁止把 wh-review 当 fallback」表述）；删逐项读回/`run --action=reflect`/sha256/`status --action=begin`/`receipts.review` |
+| MT-3-130 | workflows/build-code/steps.json | 同 124 各组 | 同 124 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 是 | 去 step 11 `authenticate-current-task-completion`、step 6「official handler/private runner」、step 8 `run receipts.review`、step 15 reflection；card03 只改了 steps 9/11 文案，此处需叠加 |
+| MT-3-131 | workflows/build-code/skill-deps.yaml | 同 125 各组 | 同 125 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 同 125 规则；3 处 `receipts.tests` 删；consumer target 删；OCR 相关 capability 加 `ocr-cli` |
+| MT-3-132 | workflows/build-code/capture.mjs | stage-runner、stage-runtime、case-reconciliation | 窄工具② | NARROW | B4/P5 | `git revert <B4 提交>` | G3-14 | 否 | 多层 manifest/case/raw 哈希链改②事实回执；真实 exit/output 与失败归因语义保留（跨面候选：runtime/窄工具面） |
+| MT-3-133 | workflows/build-code/targeted-capture.mjs | capture.mjs | 窄工具② | NARROW | B4/P5 | `git revert <B4 提交>` | G3-14 | 否 | 去 stage-runtime 与 receipt 包装，改接②（跨面候选） |
+| MT-3-134 | workflows/build-code/targeted-runner.mjs | targeted-capture.mjs | 窄工具②执行核心 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-14 | 否 | **保留** spawn 前 safeTarget 路径包含校验、拒 `..`/绝对路径、8MiB 输出上限；去哈希（跨面候选） |
+| MT-3-135 | workflows/build-code/change-scope.mjs | stage-runtime、stage-runner、capture | 窄工具① | NARROW | B4/P5 | `git revert <B4 提交>` | G3-08 | 否 | 去 task-handle/kernel 依赖与 `execution_manifest_hash` 自校验；范围改为 `git diff --name-status <baseline>` + untracked（跨面候选） |
+| MT-3-136 | workflows/build-code/case-reconciliation.mjs | stage-runner、stage-runtime、capture | 无 | DELETE | B4/P5 | `git checkout backup/card-06-b4 -- workflows/build-code/case-reconciliation.mjs` | — | 否 | acceptance-evidence-validator/哈希链/快照树绑定（跨面候选） |
+| MT-3-137 | workflows/build-code/case-selection.mjs | 多个 | 窄工具②（选 case） | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 纯函数；是否保留取决于②是否需要 case 选择（**PENDING**，见 §D-1；跨面候选） |
+| MT-3-138 | workflows/build-code/test-asset-inventory.mjs | 多个 | 窄工具② | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 去 git-worktree-snapshot 依赖（**PENDING**；跨面候选） |
+| MT-3-139 | workflows/build-code/diff-scanner.mjs | 仅 check-task-record-paths 白名单（B1 删） | 无 | DELETE | B4/P5 | `git checkout backup/card-06-b4 -- workflows/build-code/diff-scanner.mjs` | — | 否 | 唯一引用随 B1/P2 删除；若 build-code scan-diff 步骤实际使用则改 SURVIVOR（**待裁定**，见 §D-1；跨面候选） |
+| MT-3-140 | workflows/build-prd/SKILL.md | 宿主读 | 宿主读（纯方法说明） | NARROW | B2/P3 | `git revert <B2 提交>` | G3-18 | 否 | 删 L81-110 `kernel.publishCanonicalRecord` 代码片段与 readback hash 校验整段；step 5 确认改为「展示稿 + confirm 人为门」；四 revision 与展示稿 hash 绑定 DELETE（G3-18，SD-12 ② 损失在损失清单承认） |
+| MT-3-141 | workflows/build-prd/steps.json | 同 124；另有 `portable-workflow-run.mjs:10-41` 6 slug 硬编码 | 同 124 | NARROW | B2/P3 | `git revert <B2 提交>` | G3-18 | 否 | 6/6 步 `portable-workflow-outcomes/build-prd/<sha256>.json`、step 5 四 revision+`displayed_draft_hash`+`human_approved`、step 6 raw-byte SHA/validated readback、step 6 handoff 全删；`portable-workflow-run` 硬编码随 runtime 删（B4） |
+| MT-3-142 | workflows/build-prd/skill-deps.yaml | 同 125 各组 | 同 125 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 最轻：删 `consumer.target=build-prd#orchestrate` 等字段 |
+| MT-3-143 | workflows/build-spec/SKILL.md | 宿主读（pre） | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/build-spec/SKILL.md` | — | 是 | pre 整体退役（ADR-002）；git 历史 + `backup/card-06-b2` 即只读归档；AGENTS.md 中 accepted_risk owner=build-spec 属 G3-11，文本由 B7 改 |
+| MT-3-144 | workflows/build-spec/steps.json | 同 124 各组（pre） | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/build-spec/steps.json` | — | 否 | 同上；其 15 步锁随文件消失 |
+| MT-3-145 | workflows/build-spec/skill-deps.yaml | 同 125 各组（pre） | 无 | DELETE | B2/P3 | `git checkout backup/card-06-b2 -- workflows/build-spec/skill-deps.yaml` | — | 否 | 同上；含 wh-review 条目与 8×`stage-handlers#` |
+| MT-3-146 | workflows/verify-code/SKILL.md | 宿主读 | 宿主读（纯方法说明） | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | R2 §4（L26/33-37/82/135/158-160/170-189/204/217）；删 reflect/sha256/canonical 读回/`receipts.quality_review`/`receipts.confirmation`/`run --action=preflight`；fallback 表述改 ADR-021（未装 OCR 回退 wh-review） |
+| MT-3-147 | workflows/verify-code/steps.json | 同 124 各组 | 同 124 | NARROW | B2/P3 | `git revert <B2 提交>` | G3-11 | 否 | 去 steps 2/3/9/10 canonical result_ref/读回、2 处 receipts、step 7 accepted_risk 机器校验（语义保留）、step 12 reflection |
+| MT-3-148 | workflows/verify-code/skill-deps.yaml | 同 125 各组 | 同 125 | NARROW | B2/P3 | `git revert <B2 提交>` | — | 否 | 同 125 规则；reflection→stage-runner 绑定删；`ocr-cli` capability 加（ADR-021） |
+| MT-3-149 | workflows/verify-code/capture.mjs | stage-runtime、case-reconciliation | 窄工具② | NARROW | B4/P5 | `git revert <B4 提交>` | G3-14 | 否 | receipt writer 薄包装改②（跨面候选） |
+| MT-3-150 | workflows/verify-code/freshness.mjs | 无（此前命中的是 runtime/evidence/freshness.mjs） | 无 | DELETE | B4/P5 | `git checkout backup/card-06-b4 -- workflows/verify-code/freshness.mjs` | — | 否 | freshness 属校验机器，无生产 consumer（跨面候选） |
+| MT-3-151 | workflows/verify-code/facts-assembly.mjs | 无 | 无 | DELETE | B4/P5 | `git checkout backup/card-06-b4 -- workflows/verify-code/facts-assembly.mjs` | — | 否 | 孤儿（跨面候选） |
+| MT-3-152 | workflows/verify-code/metrics-writer.mjs | 无（导入 metrics/collector.mjs） | Card-09 写入量（待确认） | SURVIVOR | B6/P7 | `—（未改动）` | — | 否 | 与 Card-09 写入量有关，先确认 Card-09 是否需要（**PENDING**，见 §D-1；跨面候选） |
+| MT-3-153 | workflows/verify-code/design-alignment.mjs | verify-code/SKILL.md | 同左（UI 组） | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 去 `stage-content-contracts` kernel 依赖；UI 设计对齐方法保留（跨面候选） |
+| MT-3-154 | workflows/verify-code/isolated-browser-qa.md | verify-code/SKILL.md | 同左 | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 方法文档；QA 网关仍可搬运 |
+
+### 1.5 ⑤ manifest / schema（53 行）
+
+| id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-5-001 | runtime/review/schemas/attempt.schema.json | 生产：runtime/review/schema-validator.mjs（SCHEMAS.attempt）→ review-record-route.mjs L1076/L2156、runtime/evidence/freshness.mjs、canonical-receipt-writer.mjs、runtime/stage/stage-handlers.mjs、skills/wh-review；测试 2 | Card-05 新审查链 `review:record` → review-record-route → validateSchema（ADR-019 三审查点：build-plan 合并 / build-code 每 phase / verify-code 终末） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/review/schemas/attempt.schema.json | — | 否 | 去 `snapshot_tree`、`material_id` 必填（连带 `authenticated_evidence_sha256`/`material_revision`/`policy_snapshot_hash` 按 ADR-016/OI-013 剥离），**不删文件**：ADR-014/019 审查点必留、Card-05 新链正在用；Card-03 改过其消费者 stage-handlers.mjs 与 tests/review/review-record-route.test.mjs，执行前须以合并后 main 为基线核对 |
+| MT-5-002 | runtime/review/schemas/result.schema.json | 生产：schema-validator.mjs（SCHEMAS.result）→ review-record-route.mjs、runtime/review/ocr-delegation-adapter.mjs（Card-05 新链）、freshness.mjs、canonical-receipt-writer.mjs、stage-handlers.mjs、stage-runner.mjs、skills/mini-task；测试 12 提及 | 同 MT-5-001（三审查点结果落盘形状） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/review/schemas/result.schema.json | — | 否 | 去 `snapshot_tree`/`material_id` 必填与 `semantic_hash`/`source_result_hash` 类哈希绑定，保留 findings/adjudication/provider_results；ADR-014/019 必留边界 |
+| MT-5-003 | runtime/review/schemas/ac-evidence-summary.schema.json | 生产：schema-validator.mjs（SCHEMAS.ac_evidence_summary）、skills/wh-review/scripts/ac-evidence-summary.mjs L232 → review-materials.mjs；测试 3；skills/wh-review/manifest.json 声明；runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 必填 snapshot_tree/source_digest/test_receipt = 回执 + 快照树（OI-013）；ADR-018 保留的是 wh-review **文档**审查面，本件是逐 AC 证据摘要（代码面，OCR 已取代）→ 删；执行时同步 schema-validator.mjs 的 SCHEMAS 表、skills/wh-review/manifest.json 与 runner-release 清单 |
+| MT-5-004 | runtime/review/schemas/stage-materials.schema.json | 无生产加载者（review-policy.mjs 直接 import stage-materials.json，不校验）；测试 skills/wh-review/scripts/__tests__/simple-contracts.test.mjs、tests/contract/build-prd-review-contract.test.mjs；skills/wh-review/manifest.json 声明；runner-release 清单 | 与 stage-materials.json 同形的审查材料矩阵合同（文档审查面保留后矩阵仍是被消费对象） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/review/schemas/stage-materials.schema.json | — | 否 | 与 MT-5-005 同批 NARROW（去被删机制的 stage/材料项），ADR-018 后矩阵存活则形状合同随之留存；若 build-plan 裁定矩阵不再需要 runtime 形状合同 → 转 DELETE（唯一真实校验者只剩测试） |
+| MT-5-006 | runtime/schemas/ambiguity-ledger.v1.json | 生产：runtime/evidence/stage-content-evidence.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | stage 内容认证（歧义账）本体，唯一加载者 stage-content-evidence.mjs 在删除面 |
+| MT-5-007 | runtime/schemas/ambiguity-ledger.v2.json | 生产：stage-content-evidence.mjs（DELETE）、runtime/stage/stage-content-contracts.mjs（PENDING，含 plan/tasks 双写合同段 DELETE）；.planning 历史 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 同 v1；第二消费者 stage-content-contracts.mjs 为 Card-03-touch 文件，但 Card-03 改的是中文字段别名表，本 schema 无对应字段 |
+| MT-5-008 | runtime/schemas/audit-summary.schema.json | 无代码消费者（仅 docs/audit-contracts.md、docs/reuse-registry.md 文本提及；连 runner-release 清单都未收录） | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 完全孤儿；两处文档提及随文档面（批次 7）处置 |
+| MT-5-009 | runtime/schemas/browser-qa-evidence.v1.json | 生产：runtime/evidence/freshness.mjs（DELETE）、runtime/evidence/stage-content-evidence.mjs（DELETE）；测试 tests/contract/ui-frontend-governance.test.mjs L147/200/219（按路径断言） | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 全部真实加载者在删除面；仅治理测试按路径引用，执行时须同批调整该测试（测试面归属他人，需与该面迁移表对齐）；若 build-plan 裁定 UI 浏览器 QA 证据需 runtime 形状合同 → 转 NARROW（去 snapshot_tree/source_digest） |
+| MT-5-010 | runtime/schemas/decision-correction-appendix.v1.json | 生产：stage-content-evidence.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 决策更正附录=材料形状机器（含 source_decision_hash），消费者全在删除面 |
+| MT-5-011 | runtime/schemas/decision-coverage-audit.v1.json | 生产：stage-content-evidence.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 决策覆盖审计（decision_log_hash 链），同上 |
+| MT-5-012 | runtime/schemas/decision-entry.v1.json | 生产：stage-content-evidence.mjs（DELETE）、stage-content-contracts.mjs（Card-03-touch，PENDING）；.planning 历史 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 必填 approval_ref/approval_hash/…= 决策条目的机器形状校验；删除后决策条目按文档形态承载（ADR-016 普通文件名 + 纯文本引用）；tools/cli/check-decision-log-chain.mjs 只作文本告警、不加载本 schema，不受影响 |
+| MT-5-013 | runtime/schemas/decision-log-contract.v1.json | 生产：stage-content-evidence.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | decision-log 合同（main_hash/ref 链），同上 |
+| MT-5-014 | runtime/schemas/decision-omission-acceptance.v1.json | 生产：stage-content-evidence.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 遗漏接受（card_hash/reply_hash 全哈希绑定），同上 |
+| MT-5-015 | runtime/schemas/human-confirmation.v1.schema.json | 无生产加载者（runner-release 清单 + move-map/repository-inventory 登记）；现行人为门①记录 v3 内联在 runtime/task/task-kernel-implementation.mjs L955（v1 只读不可授权 L113） | 人为门①（confirm）新落点的确认记录形状（去哈希绑定、普通文件名） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/schemas/human-confirmation.v1.schema.json | G3-10 | 否 | 去 `attempt_ref`/`checkpoint_plan_hash` 哈希绑定，保留 decision/confirmed_at/stage 等纯文本字段；判据：G3-11「删 kernel 时 confirm 记录无处落，需先给新落点」（调研 03 §8 #11）+ ADR-016「批次 4/5 新记录形态同步就位」；若 build-plan 改由独立 NEW schema 承载门①记录 → 本行转 DELETE |
+| MT-5-016 | runtime/schemas/interaction-completion.v1.json | 生产：runtime/evidence/stage-content-evidence.mjs（DELETE）；测试 tests/contract/four-material-non-gate-contract.test.mjs、tests/final-cutover-guards.red.test.mjs；串 runner-release 清单 | 结构化问答卡记录形状（AGENTS 登记控制面：owner=各交互 stage 主会话，删除条件=被经审查的替代机制取代，条件未满足） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/schemas/interaction-completion.v1.json | G3-12 | 否 | 去 `rounds`/`workspace_tree`/`previous_grill`/`material_revision`（固定轮次 + 快照绑定 + ref/hash），保留 interaction_type/grill/question_batch_version；风险：唯一加载者 stage-content-evidence.mjs 在删除面 → build-plan 须同时给新落点（交互 stage 主会话/技能声明），否则本件成无加载者的形状合同，届时应转 DELETE |
+| MT-5-017 | runtime/schemas/plan-task-contract.v1.json | 生产：stage-content-evidence.mjs（DELETE）；串 runner-release 清单；测试 tests/stage-plan-task-contract.test.mjs | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | plan/tasks 双写合同（plan_hash/tasks_hash），ADR-016 后 post 不再双写 |
+| MT-5-018 | runtime/schemas/plan-task-contract.v2.json | 生产：stage-content-evidence.mjs（DELETE）、stage-content-contracts.mjs（Card-03-touch，`validatePlanTaskContract` 段 DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 同 v1；stage-content-contracts.mjs 须先解耦 plan/tasks 双写合同段再删本件 |
+| MT-5-019 | runtime/schemas/quality-fact.v1.json | 生产：runtime/evidence/canonical-evidence-validators.mjs（DELETE，内存加载 JSON）；测试 tests/contract/stage-reflection-paths.test.mjs；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 必填 material_revision/snapshot_tree/evidence.sha256 = revision 绑定 + 快照树 + fact graph；消费者 canonical-evidence-validators.mjs 在删除面 |
+| MT-5-020 | runtime/schemas/repository-structure.v1.json | 仅 tests/contract/repository-governance.test.mjs L7/L11（读文件断言 schema_version 与 directories/rules 形状）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 无生产加载者，且 schema 本身不编码具体目录（无过时内容）；删除需同批调整该治理测试断言（测试面归属他人）；若 build-plan 要保留「仓库结构治理」检查 → 转 SURVIVOR（零成本，文件本身不过时） |
+| MT-5-021 | runtime/schemas/requirement-ledger.schema.json | 无代码消费者（仅 docs/audit-contracts.md 文本；repo-inventory/move-map 登记）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 需求账（source_manifest_hash/ledger_hash）孤儿；requirement-lineage 技能不引用 |
+| MT-5-022 | runtime/schemas/requirements-coverage.schema.json | 无代码消费者（repo-inventory/move-map 登记）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 覆盖账孤儿，同上 |
+| MT-5-023 | runtime/schemas/research-report.v1.json | 生产：runtime/evidence/research-report.mjs（DELETE：哈希寻址 + snapshot/materialScope 发布与列举）；测试 tests/contract/research-report.test.mjs；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 必填 snapshot_tree/material_scope_revision = 哈希 + 快照绑定；ADR-016 后调研报告改普通文件名（本卡调研报告即新形态），无机器合同；若 Card-07/make-decision 需要形状合同，按 AGENTS 登记另立 NEW |
+| MT-5-024 | runtime/schemas/review-bundle.schema.json | 生产：runtime/evidence/check-skill-closure.mjs（`validateReviewBundle`，唯一加载者，随 ADR-013 删）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | ADR-013 三 schema 之一：review-bundle 投影（projectionHash 链）随 check-skill-closure 一起删 |
+| MT-5-025 | runtime/schemas/risk-acceptance.v1.json | 记录写入者：runtime/review/stage-review-disposition.mjs L258（`schema_version: "risk-acceptance.v1"`，PENDING：accepted_risk 是 AGENTS 登记控制面）；无 schema 文件加载者（runner-release 清单收录）；串 stage-handlers.mjs / task-kernel / freshness（均删除面） | accepted_risk 记录形状（经审查风险接收，去哈希绑定） | NARROW | B4/P5 | git checkout backup/card-06-b4 -- runtime/schemas/risk-acceptance.v1.json | G3-11 | 否 | 去 `workflow_run_id`/`snapshot_tree`/`review_hash`/`finding_hash`/`evidence_hash`/`card_hash`/`reply_hash` 等必填哈希绑定，保留 issue/impact_scope/consequences/selected_option/accepted_at；判据=G3-04（accepted_risk 是 AGENTS 登记控制面，输入全为 hash 绑定需换新绑定）；执行时须与 stage-review-disposition.mjs（PENDING）及 ADR-020 的授权核对方式对齐 |
+| MT-5-026 | runtime/schemas/runner-release.schema.json | 生产：runtime/distribution/runner-release.mjs（PENDING，内存加载）；测试 tests/contract/runner-contract.test.mjs、tests/integration/runner-clean-install.test.mjs、tier-c-deletion-boundary；串 move-map/repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | **条件性行**：files[].sha256 清单属 ADR-013 哈希面，但 distribution 面（runtime/distribution/**、tools/architecture/clean-install.mjs）在调研 01 判 PENDING；若 distribution 保留 → 本行转 NARROW（去 sha256；若整体不保留跨宿主安装能力则按本行 DELETE），须与该面迁移表对齐 |
+| MT-5-027 | runtime/schemas/skill-bundle.schema.json | 生产：runtime/evidence/check-skill-closure.mjs（DELETE，ADR-013）、runtime/distribution/skill-bundle-release.mjs（PENDING）；测试 tests/integration/distribution-closure.test.mjs；串 move-map/repo-inventory | skill-bundle.json 的纯路径文件清单（技能可搬运打包：26 个 bundle NARROW、13 个已是纯路径 SURVIVOR） | NARROW | B5/P6 | git checkout backup/card-06-b5 -- runtime/schemas/skill-bundle.schema.json | — | 否 | ADR-013：去掉 `files[].sha256`、`sources[].snapshot_sha256` 属性（bundle 字段同步改纯路径字符串）；顺序必须在拆完 check-skill-closure 消费者之后、且以 Card-03 合并后的 main 为基线（Card-03 改了 7 个 bundle 的 hash） |
+| MT-5-028 | runtime/schemas/skill-catalog.schema.json | 生产：runtime/evidence/check-skill-closure.mjs `schemaValidator(root,"skill-catalog")`（唯一加载者，随 ADR-013 删）；串 move-map/repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | ADR-013 三 schema 之一：`local_bundle_hash` 必填（43 条手工同步、F-008 活证据）；catalog.yaml 本体保留（登记职责），但不再机器校验 |
+| MT-5-029 | runtime/schemas/skills-inventory.schema.json | 仅 tests/m14a-audit-contract-layer.test.mjs L11（与 specs/m14a-audit-contract-layer/skills-inventory.schema.json 历史副本比对）；串 docs/architecture/history-inventory.json、move-map；runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 无生产消费者（孤儿）；删除需同批调整该历史治理测试（M14–M17 只读保留面，测试面归属他人） |
+| MT-5-030 | runtime/schemas/source-manifest.schema.json | 无加载者（runtime/task/git-worktree-snapshot.mjs 内联写 v1；tools/cli/source-manifest.mjs 孤儿 DELETE）；串 move-map/repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 材料源清单/材料身份（manifest_hash）；ADR-016 后材料身份机器整体退役 |
+| MT-5-031 | runtime/schemas/stage-completion-facts.v1.json | 生产：runtime/evidence/stage-content-evidence.mjs（DELETE）、runtime/evidence/stage-completion-facts.mjs（DELETE）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | stage completion 通用认证本体（ref+hash），消费者全在删除面 |
+| MT-5-032 | runtime/schemas/stage-content-evidence.v1.json | 生产：runtime/evidence/stage-content-evidence.mjs（DELETE，AJV 加载全部 stage 内容 schema 的信封）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 内容证据信封本体（content_hash/snapshot_head/snapshot_tree）；删除是本面多个 schema（MT-5-006~014、031、034）失去唯一加载者的根因，须作为 B5 的**首删项** |
+| MT-5-033 | runtime/schemas/stage-reflection.v1.json | 生产：tools/cli/validate-stage-reflection.mjs（PENDING）、tools/cli/build-reflection-page.mjs（PENDING）；串 skills/stage-reflection/SKILL.md；测试 3；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | **条件性行**：消费者是反思/演进链，调研 01/03 判 PENDING（REFL-001 与 current-session 校验矛盾，去留未定）；本行按删除面默认 DELETE，若 build-plan 裁定反思链保留 → 转 NARROW（去 identity/output_hash 哈希字段） |
+| MT-5-034 | runtime/schemas/stage-reflection.v2.json | 生产：同 v1（validate-stage-reflection.mjs、build-reflection-page.mjs，均 PENDING）；docs/adr/0023；测试 3；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 同 MT-5-033（含 status_matrix / output_hash / identity 哈希面）；与 v1 同批处置，不得只删其一 |
+| MT-5-035 | runtime/schemas/stage-skill-deps.schema.json | 生产：runtime/evidence/check-skill-closure.mjs（DELETE，ADR-013）、runtime/distribution/skill-bundle-release.mjs（PENDING）；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | **条件性行**：唯一确删除的加载者是 check-skill-closure；workflows/*/skill-deps.yaml 本体是技能登记，若保留则改为纯文本声明、弃机器校验（本 schema 删）；若 build-plan 要给 skill-deps 保留校验器 → 需按 AGENTS 登记新加载者，本行转 NARROW |
+| MT-5-036 | runtime/schemas/steps.schema.json | 无加载者（runtime/stage/step-manifest.mjs 手写校验，该文件 DELETE）；仅 docs/audit-contracts.md 文本 + runner-release 清单 + move-map/repo-inventory 登记 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 14 步锁 / 固定步骤的 schema 端；消费者在 ADR-004 批次 2（B2/P3）先消失，文件在批次 5 随 schema 清扫一并删（中间态只是无人读取的 schema，不构成双轨机制） |
+| MT-5-037 | runtime/schemas/task-fact.v1.json | 无生产加载者（唯一引用是 runner-release 发布清单）；串 repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 哈希化事实行（material_digest/source_digest/content_hash）孤儿；Card-08 新记录形态不得依赖它（ADR-016 普通文件名 + 内存消解 fact graph） |
+| MT-5-038 | runtime/schemas/task-index.v1.json | 无生产加载者（runner-release 清单）；串 repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | index（ref+sha256+content_hash）孤儿，同 MT-5-037 |
+| MT-5-039 | runtime/schemas/workflow-evolution.v1.json | 生产：runtime/evidence/workflow-evolution.mjs（PENDING，`schema_identity.sha256`）、tools/cli/build-reflection-page.mjs（PENDING）；测试 2；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | **条件性行**：M16 演进/反思链在调研 01 判 PENDING；若链保留 → 转 NARROW（必须去掉 `schema_identity.sha256`，ADR-016 禁内容寻址）；与 MT-5-033/034 同批裁定 |
+| MT-5-040 | docs/architecture/complexity-baseline.json | tools/architecture/complexity-report.mjs（DELETE：硬门度量）、tools/architecture/inventory.mjs（PENDING）；docs/architecture/{deletions-proof.json,real-entry-inventory.md,repository-inventory.tsv}；测试 repository-inventory.test.mjs | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务复杂度基线（硬门形态，不符「不卡推进」）；消费者全在删除/PENDING 面；与调研 06 §1.3 的 ARCHIVE 口径差异见页首第 6 条 |
+| MT-5-041 | docs/architecture/control-plane-inventory.json | tools/architecture/phase0-deletion-disposition.mjs（DELETE）；测试 control-plane-governance / current-close-projection-readback / review-budget-deletion / tier-c-deletion-boundary；docs/adr/0029 | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 12 条控制面登记（stage-handoff、review-packet-identity、review-input-bounds…）多数随 B4/B5 删除；旧清单是一次性调查产物，删除后真实控制面由 AGENTS 「新增控制面登记」条承载 |
+| MT-5-042 | docs/architecture/deletion-plan.json | tools/architecture/phase0-deletion-disposition.mjs（DELETE）、docs/architecture/repository-inventory.tsv（DELETE）；测试 tier-c-deletion-boundary、governance-diagnostics-non-gate | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务 Phase-0 删除计划（DEL-01~12 + c6_amendment，policy「缺证明一律 KEEP」）；本卡迁移表另起，不复用其结论 |
+| MT-5-043 | docs/architecture/deletions-proof.json | tools/architecture/inventory.mjs（PENDING）；测试 tests/contract/repository-inventory.test.mjs；docs/architecture/{final-complexity-report.json,legacy-import-proof.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务删除证明（aggregate sha256）一次性产物，消费者全在删除/未定面 |
+| MT-5-044 | docs/architecture/final-complexity-report.json | tools/architecture/complexity-report.mjs（DELETE）、tools/architecture/inventory.mjs（PENDING）；docs/architecture/final-coverage-audit.md、repository-inventory.tsv；测试 repository-inventory.test.mjs | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 含 `snapshot_tracked_tree_sha256` 的终态复杂度报告（硬门 + 快照树认证），随 ADR-016 退役 |
+| MT-5-045 | docs/architecture/history-inventory.json | tools/architecture/history-inventory.mjs、retention-audit.mjs、phase0-deletion-disposition.mjs（均删除/PENDING 面）；测试 history-read-only.test.mjs、governance-diagnostics-non-gate.test.mjs；docs/architecture/{legacy-task-inventory.json,repository-inventory.tsv,retention-manifest.json} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 465 文件字节 oracle（历史区快照树认证）；**注意**：Card-08「历史只读」若仍需清单须由 Card-08 另立（AGENTS 禁 history runtime branch），不得靠保留本件；与调研 06 §1.3 ARCHIVE 口径差异见页首第 6 条 |
+| MT-5-046 | docs/architecture/legacy-import-proof.json | tools/architecture/inventory.mjs（PENDING）；测试 legacy-zero.test.mjs、repository-inventory.test.mjs；docs/architecture/{deletions-proof.json,history-inventory.json,retention-manifest.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 旧任务历史导入的 aggregate sha256 证明；本卡明令禁止 historical import / 历史回写 runtime |
+| MT-5-047 | docs/architecture/legacy-task-inventory.json | tools/architecture/inventory.mjs（PENDING）；测试 legacy-zero.test.mjs、history-read-only.test.mjs；docs/architecture/{history-inventory.json,retention-manifest.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 106 任务（legacy 66 / unsupported 40）、`user_confirmation: pending` 的历史口径，与现行外置任务目录数字不一致；**Card-08 依赖同 MT-5-045** |
+| MT-5-048 | docs/architecture/move-map.json | AGENTS.md、CLAUDE.md、README.md、docs/operations/deferred-tasks-m17.md；runtime/evidence/workflow-evolution.mjs（PENDING）、tools/cli/build-reflection-page.mjs（PENDING）、tools/architecture/phase0-deletion-disposition.mjs（DELETE）；治理测试 4；tests/fixtures/workflow-evolution/run-browser-qa.sh | 删除后目录迁移唯一事实（AGENTS「未列入 move-map 的文件保持原位」继续生效）：登记 runtime 各区、tools/、skills/、docs/architecture 的真实存活清单 | NARROW | B6/P7 | git checkout backup/card-06-b6 -- docs/architecture/move-map.json | — | 否 | 重写为删除后的真实状态；去掉 `sha256_before`/`sha256_after` 等 402 条目中的内容哈希（ADR-016 禁内容寻址），保留 path/职责/consumer/删除条件登记；ADR-003 要求批次 6「以 move-map 登记澄清 runtime 名称」，故不能整件退役 |
+| MT-5-049 | docs/architecture/repository-inventory.tsv | tools/architecture/inventory.mjs（PENDING）、phase0-deletion-disposition.mjs（DELETE）；治理测试 3 | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 一次性交付面清单（125 行）；若 build-plan 要复用 inventory.mjs 做 AC-27「无换名残留」扫描，应在新位置重建最小清单，而非保留本件 |
+| MT-5-050 | docs/architecture/retention-manifest.json | tools/architecture/retention-audit.mjs、reference-audit.mjs、phase0-deletion-disposition.mjs（均在删除/PENDING 面）；测试 governance-diagnostics-non-gate.test.mjs；docs/architecture/repository-inventory.tsv | 删除后真实保留面（只列确认幸存者，不再整目录 retain） | NARROW | B6/P7 | git checkout backup/card-06-b6 -- docs/architecture/retention-manifest.json | — | 否 | **必须先重写或退役**：其 `retain` 现整目录保留 `runtime/evidence/`、`runtime/review/`、`tests/`、`evidence/`、`reviews/`，并把将删的 `tools/host/workflowhub-stage-agent-bridge.mjs`、`runtime/review/stage-review-disposition.mjs` 标 KEEP，与本卡删除面正面冲突；其消费者 retention-audit.mjs / reference-audit.mjs 若不改，审计脚本会把本卡删除报成违规 —— 重写须与 tools/architecture 面（PENDING）同批完成 |
+| MT-5-051 | docs/architecture/final-coverage-audit.md | tools/architecture/inventory.mjs（PENDING）；docs/architecture/repository-inventory.tsv（DELETE）；测试 repository-inventory.test.mjs | — | ARCHIVE→docs/archive/ | B7/P8 | git revert <B7 提交> | — | 否 | 前任务 AC 覆盖终审说明，描述的是已删机制（coverage/hash 口径），属过时说明 → 按调研 06 §1.3 转 `docs/archive/` 只读；如 build-plan 认为无历史价值可在同批改为 DELETE |
+| MT-5-052 | docs/architecture/real-entry-inventory.md | docs/architecture/test-asset-governance-rules.md（文本引用）；无代码消费者 | 保留（SD-05 真实入口实跑依据） | SURVIVOR | B7/P8 | — | — | 否 | 调研 06 §1.3 判「保留」；其罗列的入口若随本卡删除变化，批次 7 就地刷新条目（刷新不是重写机制） |
+| MT-5-053 | docs/architecture/test-asset-governance-rules.md | vitest.config.mjs L26（注释引用）；无代码消费者 | 保留（真实测试/验收资产规则） | SURVIVOR | B7/P8 | — | — | 否 | 调研 06 §1.3 判「保留」；本卡不改内容，批次 7 仅复核规则与删除后测试面是否一致 |
+| MT-5-054 | docs/architecture/test-asset-inventory.md | 无消费者 | — | ARCHIVE→docs/archive/ | B7/P8 | git revert <B7 提交> | — | 否 | CARD-04 P9 测试资产盘点（一次性调查、无消费者）→ `docs/archive/` 只读；如 build-plan 认为无历史价值可在同批改为 DELETE |
+
+### 1.6 ⑥ 测试与夹具（433 行）
+
+| id | path | 被测对象 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-6-001 | tests/contract/narrow-tool-safe-write.test.mjs | runtime/interface/safe-write.mjs（工具③） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-03 | 否 | AC-28：writeFileAtomic/createFileOnce/appendRecord 的 EEXIST 幂等、O_EXCL+fsync+rename、append-only；build-plan 预写并冻结 |
+| MT-6-002 | tests/contract/narrow-tool-record-lock.test.mjs | runtime/interface/record-lock.mjs（工具⑤） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-04 | 否 | AC-28：同一记录互斥、owner 死亡/过期判定、超时 exit 75；build-plan 预写并冻结 |
+| MT-6-003 | tests/contract/narrow-tool-workspace-check.test.mjs | runtime/interface/workspace-check.mjs（工具①） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-08 | 否 | AC-28：Git 顶层/注册/分支/dev-ino、dirty 仅是事实（exit 0）、--require-clean 才 exit 1；build-plan 预写并冻结 |
+| MT-6-004 | tests/contract/narrow-tool-run-command.test.mjs | runtime/interface/run-command.mjs（工具②） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-14 | 否 | AC-28：argv-only、绝对 cwd、进程组 TERM、超时 124、输出上限、防 NODE_OPTIONS 预加载伪造通过；build-plan 预写并冻结 |
+| MT-6-005 | tests/contract/narrow-tool-git-authorize.test.mjs | runtime/interface/git-authorize.mjs（工具④） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-01 | 否 | AC-28/ADR-020：授权只写分支+当时 HEAD，消费前比对当前 HEAD，不一致拒绝并要求重新授权，单次消费；build-plan 预写并冻结 |
+| MT-6-006 | tests/contract/narrow-tool-human-confirm.test.mjs | runtime/interface/human-confirm.mjs（人为门） | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-10 | 否 | AC-28：confirm 记录本体与 authorize 分离；不含 coverage audit/quality fact/risk pause 绑定；build-plan 预写并冻结 |
+| MT-6-007 | tests/contract/narrow-tools-isolation.test.mjs | runtime/interface 五窄工具 | 测试文件（随被测对象处置） | NEW | B0/P1 | 删除该文件 | G3-01, G3-03, G3-04, G3-08, G3-14 | 否 | AC-28：五工具只 import node:*、互不 import、不被 kernel/fact graph 反向依赖；build-plan 预写并冻结 |
+| MT-6-008 | tests/contract/card06-migration-ledger.test.mjs | 迁移表本身（AC-27/AC-52） | 测试文件（随被测对象处置） | NEW | B1/P2 | 删除该文件 | — | 否 | AC-27/52：按 CARD06_BATCH 环境变量逐批启用的迁移台账断言；build-plan 预写并冻结 |
+| MT-6-009 | tests/contract/thin-core-residue.test.mjs | AC-29 残留扫描（按批次分组） | 测试文件（随被测对象处置） | NEW | B1/P2 | 删除该文件 | — | 否 | AC-29：按批次分组扫描已删对象残留（kernel/hash/receipt/cohort/reflection/bridge 关键词）；build-plan 预写并冻结 |
+| MT-6-010 | tests/contract/ocr-review-contract-bundle.test.mjs | OCR 审查包合同补齐（ADR-021①） | 测试文件（随被测对象处置） | NEW | B4/P5 | 删除该文件 | — | 否 | ADR-021①：断言 build-code/verify-code 审查合同、stageReviewFocus、provider 协议与 lens 技能正文进入 OCR 审查包；build-plan 预写并冻结 |
+| MT-6-011 | tests/contract/code-review-ocr-fallback.test.mjs | 代码审查面 OCR 未装回退 wh-review（ADR-021③） | 测试文件（随被测对象处置） | NEW | B4/P5 | 删除该文件 | — | 否 | ADR-021③：仅"OCR 未安装/不可运行"这一可检测条件允许回退，回退写入审查记录（fallback 事实+原因）；OCR 已装但失败不回退；build-plan 预写并冻结 |
+| MT-6-012 | core/__tests__/artifact-dir.test.mjs | core/artifact-dir, R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | G3-03 | 否 | ①路径包含/只读 open/拒伪造 handle；剥离 TaskHandle 品牌依赖 |
+| MT-6-013 | core/__tests__/canonical-review-result.test.mjs | R/review/canonical-review-result, core/task-close | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 审查结果认证（身份/哈希）=回执校验机器 |
+| MT-6-014 | core/__tests__/check-anti-host.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | PENDING：宿主无关扫描守护"可搬运技能"应保留，但属 run-checks 聚合/exclusive 组；随入口收敛去分组耦合［报告判 PENDING/待定］ |
+| MT-6-015 | core/__tests__/check-contract.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | component-output 合同=kernel 组件分发形状 |
+| MT-6-016 | core/__tests__/check-extensibility.test.mjs | 文本:T/check-extensibility, R/evidence/kernel | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | verifySwappability 基于 runtime/evidence/kernel；exclusive 组 |
+| MT-6-017 | core/__tests__/check-skill-closure.test.mjs | R/evidence/check-skill-closure, R/adapters/local-skill-resolver | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | skill 闭包哈希=ADR-013 双层 hash 删除面；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-018 | core/__tests__/invocation-identity.test.mjs | R/evidence/invocation-identity, R/evidence/write-boundary-preflight, R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-08 | 否 | runner/invocation 身份哈希删；write-boundary 三输入 fail-closed 用例并入工具① |
+| MT-6-019 | core/__tests__/kernel.test.mjs | R/evidence/kernel, core/load-config, core/resolve-component | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 组件 kernel（runKernel）本体 |
+| MT-6-020 | core/__tests__/load-config.test.mjs | core/load-config, core/__tests__/core/load-config | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：core/load-config 被 stage-runtime/task-bootstrap/metrics 消费，片段 1 MT-1-009 定 MOVE→runtime/task 且 B6/P7 归位，测试同批跟随［报告判 PENDING/待定］ |
+| MT-6-021 | core/__tests__/local-skill-resolver.test.mjs | R/adapters/local-skill-resolver | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | G3-22 | 否 | 保留 traversal/逃逸 symlink 拒绝；删 bundle 哈希校验 |
+| MT-6-022 | core/__tests__/parse-framework-config.test.mjs | core/parse-framework-config, R/adapters/resolve-path | 测试文件（随被测对象处置） | DELETE | B2/P3 | git revert B2 提交 | — | 否 | PENDING：被测对象零生产消费者（片段 1 MT-1-010 DELETE B2/P3），测试同批删除［报告判 PENDING/待定］ |
+| MT-6-023 | core/__tests__/protected-paths.test.mjs | R/evidence/protected-paths | 测试文件（随被测对象处置） | DELETE | B4/P5 | 无需回滚（无改动） | G3-07 | 否 | 聚合裁定 A-9：被测模块 `runtime/evidence/protected-paths.mjs` 在 B4/P5 删除（零生产消费者，G3-07），本测试随之删除，不保留悬空测试；若独立审查裁定 G3-07 改为保留，则本行与 MT-1-031 同时改回并重新登记测试。 protected-paths 安全职责；生产模块当前 0 消费者（孤儿），需 build-plan 定是否接入工具① |
+| MT-6-024 | core/__tests__/resolve-path.test.mjs | R/adapters/resolve-path | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 显式路径解析，工具①底座（storage-root/parse-config 消费） |
+| MT-6-025 | core/__tests__/run-checks.test.mjs | T/run-checks | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | PENDING：run-checks 聚合的子检查大多进删除面；保留 test:profile 包真实命令的部分（片段 5 静态清单同步同批）［报告判 PENDING/待定］ |
+| MT-6-026 | core/__tests__/runtime-mode.test.mjs | core/runtime-mode | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | G3-04 | 否 | 并发 initializer 只一方胜/拒 split root=工具⑤；epoch rebind/quiesce 属禁用 rebind 机制删 |
+| MT-6-027 | core/__tests__/skill-static-deps.test.mjs | R/evidence/skill-static-deps | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：技能静态依赖扫描保留（片段 1 MT-1-036 NARROW B5/P6），随 check-skill-closure 消费链拆除后改接［报告判 PENDING/待定］ |
+| MT-6-028 | core/__tests__/stage-acceptance-policy.test.mjs | R/stage/stage-acceptance-policy | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage 完成/验收策略=通用认证 |
+| MT-6-029 | core/__tests__/stage-skill-runtime.test.mjs | R/stage/stage-skill-runtime | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | steps.json/skill-deps 绑定的 stage skill runtime（身份哈希）；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-030 | core/__tests__/storage-root.test.mjs | R/evidence/storage-root | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 任务存储根解析，记录层写入前提 |
+| MT-6-031 | core/__tests__/task-identity.test.mjs | R/task/task-identity | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | storage 路径派生+拒相对根保留；去 kernel 引用 |
+| MT-6-032 | core/__tests__/task-kernel-security.test.mjs | R/stage/stage-context, R/task/task-handle, R/task/task-kernel, R/task/task-kernel-implementation | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-02 | 否 | kernel 品牌/authority 用例删；"close 授权不可重复消费/不可跨 step 复用"并入工具④ |
+| MT-6-033 | core/__tests__/validate-contract.test.mjs | R/evidence/validate-contract | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：消费者 check-contract 删(B5/P6)、metrics 不在本面；随 runtime/evidence/validate-contract 归位保留 metrics 合同最小校验［报告判 PENDING/待定］ |
+| MT-6-034 | core/__tests__/workspace-manager.test.mjs | R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | G3-08 | 否 | 路径/分支冲突 fail-loud+脏目标诊断=工具①⑤；attempt facts 部分删 |
+| MT-6-035 | core/__tests__/workspace-runner.test.mjs | R/task/task-handle, R/task/workspace, R/task/workspace-runner | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | argv-only 在工作区根执行=工具②；B6 去 Branded Workspace |
+| MT-6-038 | scripts/__tests__/canonical-archive-skill-dispatch.test.mjs | T/smoke-local-skill-dispatch | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | smoke-local-skill-dispatch 的 canonical archive 形状 |
+| MT-6-039 | scripts/__tests__/run-wh-review-audit-e2e.test.mjs | T/run-wh-review-audit-e2e, R/task/task-handle, R/task/task-identity | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 旧 wh-review e2e 工具对应的测试，工具本体随 CLI 批删除 |
+| MT-6-040 | scripts/__tests__/run-wh-review-provider-smoke.test.mjs | T/run-wh-review-provider-smoke | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 旧 wh-review provider smoke 工具对应的测试，工具本体随 CLI 批删除 |
+| MT-6-041 | scripts/__tests__/smoke-local-skill-dispatch.test.mjs | T/smoke-local-skill-dispatch | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 依赖已被 Card-03 删的 plan-template；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-042 | scripts/__tests__/stage-runtime-acceptance-publication.test.mjs | T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | publish acceptance=私有 publish-* |
+| MT-6-043 | scripts/__tests__/task-bootstrap.test.mjs | T/task-bootstrap, R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | G3-08 | 否 | 拒嵌套/非 Git 目标（工具①）与旧 manifest 只读保留；删 invocation 认证 |
+| MT-6-044 | skills/debate/__tests__/skill-contract.test.mjs | skills/debate/pk-rules.ts | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 可搬运技能自测 |
+| MT-6-045 | skills/diagnosing-bugs/__tests__/skill-contract.test.mjs | skills/diagnosing-bugs/scripts/validate-diagnosis | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 可搬运技能自测 |
+| MT-6-046 | skills/isolated-browser-qa/__tests__/skill-contract.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 可搬运技能可移植性 |
+| MT-6-047 | skills/test-routing-advisor/__tests__/skill-contract.test.mjs | skills/test-routing-advisor/scripts/route | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 可搬运技能脚本 |
+| MT-6-048 | skills/wh-review/__tests__/human-brief-behavioral.test.mjs | 文本:W/verify-code/steps.json, R/review/schemas/attempt.schema.json, R/review/schemas/result.schema.json | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留 result/attempt schema 行为断言，删 verify-code steps.json 文本形状［报告判 DELETE/B3］ |
+| MT-6-049 | skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs | R/task/task-handle, WR/ac-evidence-summary | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留 AC 证据汇总行为，去 task-handle 身份［报告判 DELETE/B3］ |
+| MT-6-050 | skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs | WR/wh-review-cli, WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留 broker managed channel 行为，去请求锁哈希［报告判 DELETE/B3］ |
+| MT-6-051 | skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs | WR/simple-review-runner, WR/review-materials | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留最小输入校验，去 review-materials 摘要断言［报告判 DELETE/B3］ |
+| MT-6-052 | skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs | core/artifact-dir, R/task/task-handle, WR/integration-review-subject, R/review/integration-review-subject | 测试文件（随被测对象处置） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | ADR-019：全 phase 集成审查已非正常审查点；被测 runtime/review/integration-review-subject 同批删除（片段 1 MT-1-046） |
+| MT-6-053 | skills/wh-review/scripts/__tests__/make-decision-direction-reveal.test.mjs | WR/review-runner | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；方向披露为文档面纯行为，无身份机器［报告判 DELETE/B3］ |
+| MT-6-054 | skills/wh-review/scripts/__tests__/material-redaction.test.mjs | WR/simple-review-runner, WR/review-materials, R/review/provider-material-projection, R/review/review-packet-identity | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-15 | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；脱敏用例（G3-15）与 runtime/review/provider-material-projection 一起保留，只删哈希部分 |
+| MT-6-055 | skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs | WR/review-provider-client, WR/simple-review-runner | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；provider 输出形状纯行为［报告判 DELETE/B3］ |
+| MT-6-056 | skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs | WR/review-provider-client | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs | — | 是(M) | ADR-018：broker 客户端保留，超时=真实失败行为；Card-03 过渡基线（SD-16）改为正式保留［报告判 DELETE/B3］ |
+| MT-6-057 | skills/wh-review/scripts/__tests__/review-provider-client-v3.test.mjs | WR/review-provider-client | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 是(M) | ADR-018：broker v3 客户端保留；去 v3 过渡基线（SD-16）与哈希断言［报告判 DELETE/B3］ |
+| MT-6-058 | skills/wh-review/scripts/__tests__/review-runner.test.mjs | WR/review-output, WR/review-result, WR/review-runner, WR/simple-review-runner, R/task/task-handle …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留 review-output/result 行为，去 task-handle 身份［报告判 DELETE/B3］ |
+| MT-6-059 | skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs | WR/review-semantic-projection | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；语义投影纯行为［报告判 DELETE/B3］ |
+| MT-6-060 | skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs | R/task/task-handle, WR/review-result, WR/schema-validator | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留 review 写者行为，去 TaskHandle 品牌［报告判 DELETE/B3］ |
+| MT-6-061 | skills/wh-review/scripts/__tests__/schema-validator.test.mjs | WR/schema-validator | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；finding/result schema 校验被新链与文档面共用［报告判 DELETE/B3］ |
+| MT-6-062 | skills/wh-review/scripts/__tests__/simple-contracts.test.mjs | WR/review-provider-client, WR/simple-review-runner, WR/review-result | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-11 | 是(M) | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；accepted_risk 断言按 G3-11 保留为处置值语义［报告判 DELETE/B3］ |
+| MT-6-063 | skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs | WR/simple-review-runner, T/run-wh-review-audit-e2e | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留故障注入行为，删除对 run-wh-review-audit-e2e 工具的 import（该工具 B5/P6 删）［报告判 DELETE/B3］ |
+| MT-6-064 | skills/wh-review/scripts/__tests__/simple-reliability.red.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留可靠性 RED 断言中仍成立的部分［报告判 DELETE/B3］ |
+| MT-6-065 | skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs | WR/simple-review-runner, WR/third-review-host-config, R/review/review-packet-identity | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs | — | 是(M) | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；2459 行主体测试：保留文档面执行/编排/结果行为，去材料身份哈希、快照绑定、回执 readback 前置［报告判 DELETE/B3］ |
+| MT-6-066 | skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs | WR/third-review-host-config, WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 是(M) | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；可信宿主配置保留，去过渡基线［报告判 DELETE/B3］ |
+| MT-6-067 | skills/wh-review/scripts/__tests__/wh-review-cli-bounds.test.mjs | WR/review-input-bounds | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；review-input-bounds 保留（防超大材料），去哈希断言［报告判 DELETE/B3］ |
+| MT-6-068 | skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs | R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 是(M) | ADR-018：wh-review 文档审查面保留（代码面走 OCR、未装 OCR 时回退 wh-review），故不删；去 OI-013 身份/哈希断言；保留文档面 CLI 行为，去 task-handle/workspace 身份认证［报告判 DELETE/B3］ |
+| MT-6-069 | workflows/verify-code/phase-1-contract.test.mjs | W/verify-code/freshness | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | verify-code freshness |
+| MT-6-070 | tests/acceptance/build-prd-current.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | PENDING：package.json test:acceptance 唯一入口；保留 build-prd 规划路径真实验收生产者，随入口收敛改造［报告判 PENDING/待定］ |
+| MT-6-071 | tests/acceptance/card-01-current.mjs | 文本:WR/__tests__/simple-review-runner.test | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | ARCHIVE：卡片专属历史验收生产者（引用 wh-review 测试）；只读保留，不入 vitest 分组。报告判 ARCHIVE（非 DELETE） |
+| MT-6-072 | tests/acceptance/card-02-current.mjs | R/stage/stage-content-contracts, R/task/material-workspace | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | ARCHIVE：卡片专属历史验收生产者（cohort 材料）；只读保留，不入 vitest 分组。报告判 ARCHIVE（非 DELETE） |
+| MT-6-073 | tests/acceptance/card-02-current.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | ARCHIVE：卡片专属历史验收生产者；只读保留，不入 vitest 分组。报告判 ARCHIVE（非 DELETE） |
+| MT-6-074 | tests/acceptance/card-07-current.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | ARCHIVE：卡片专属历史验收生产者；只读保留，不入 vitest 分组。报告判 ARCHIVE（非 DELETE） |
+| MT-6-075 | tests/acceptance/workflow-execution-current-task.test.mjs | 文本:WR/__tests__/simple-review-runner.test, WR/__tests__/review-provider-client-v3.test, WR/__tests__/review-provider-client-timeout.test | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 已被 vitest exclude 的死文件（空 suite 豁免） |
+| MT-6-076 | tests/acceptance/workflowhub-research-handoff-hardening.acceptance.mjs | core/artifact-dir, R/evidence/storage-root, R/task/git-worktree-snapshot, R/task/material-workspace, R/task/task-handle …(+1) | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | ARCHIVE：历史任务验收聚合（快照重）；只读保留，不入 vitest 分组。报告判 ARCHIVE（非 DELETE） |
+| MT-6-077 | tests/close/cleanup-resume-finalize.test.mjs | core/task-close, core/artifact-dir, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | 授权后 finalize/cleanup=工具④；resume 机制删 |
+| MT-6-078 | tests/close/close-authorization-outcome-ref-guard.test.mjs | R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | PENDING：G3-01：授权绑定 stage outcome ref＝revision 绑定链，但承担授权防误用；保留防误用用例，去 revision/outcome 绑定［报告判 PENDING/B4］ |
+| MT-6-079 | tests/close/close-contract.test.mjs | core/task-close, core/artifact-dir, R/task/task-handle, R/task/git-worktree-snapshot, R/task/task-store …(+3) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tests/close/close-contract.test.mjs | G3-01, G3-02 | 否 | close plan hash/completion 部分删；不可逆 Git 授权用例提取为工具④测试 |
+| MT-6-080 | tests/close/freshness-consistency.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 源文本"已退役"守卫=流程形状 |
+| MT-6-081 | tests/contract/acceptance-execution-inner.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | inner profile 与 runtime 合同绑定 |
+| MT-6-082 | tests/contract/acceptance-execution-medium.test.mjs | R/task/task-handle, R/task/workspace, R/task/workspace-runner | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | G3-14 | 否 | 真实 git 命令 argv/stdout/stderr、非零 exit 保留、进程组取消=工具② |
+| MT-6-083 | tests/contract/acceptance-execution-producer.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | G3-14 | 否 | 工具② helper：真实 vitest JSON→行 |
+| MT-6-084 | tests/contract/acceptance-execution-producer.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 保留失败子断言、不解释 shell=工具② |
+| MT-6-085 | tests/contract/acceptance-execution-tier.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-runner, R/stage/completion-predicates …(+12) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 回执/完成谓词链（V440）；浏览器真实执行若要保留需新写窄测试 |
+| MT-6-086 | tests/contract/acceptance-result-machine-classes.test.mjs | R/evidence/acceptance-evidence-validator, R/evidence/freshness, R/evidence/quality-fact, R/evidence/quality-store | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 机器裁决类+freshness；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-087 | tests/contract/acceptance-single-writer-empty-values.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/git-worktree-snapshot, R/stage/stage-runner …(+2) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage 单写者/fact graph |
+| MT-6-088 | tests/contract/acceptance-verdict-independence.test.mjs | R/stage/stage-handlers, R/stage/completion-predicates | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | completion-predicates |
+| MT-6-089 | tests/contract/activation-cohort.test.mjs | T/task-bootstrap, R/task/task-topology | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | pre/post cohort 机制 |
+| MT-6-090 | tests/contract/build-code-apply-contract.test.mjs | 文本:W/build-code/SKILL.md, W/build-code/skill-deps.yaml, W/build-code/steps.json …(+1) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | SKILL.md/steps.json 文本形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-091 | tests/contract/build-code-candidate-snapshot.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-handlers, H/stage-outcome | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 候选快照 |
+| MT-6-092 | tests/contract/build-code-case-reconciliation.test.mjs | W/build-code/case-reconciliation, T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/capture …(+6) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-04 真实验收用例对账（ADR-015 不可降级）保留；去回执/身份（V366）［报告判 PENDING/待定］ |
+| MT-6-093 | tests/contract/build-code-case-selection.test.mjs | T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/capture, W/build-code/change-scope …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-04 变更→用例选择属真实验收成分；去身份绑定［报告判 PENDING/待定］ |
+| MT-6-094 | tests/contract/build-code-change-scope.test.mjs | T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/capture | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | G3-08 | 否 | 可信变更范围=工具①；去 task-bootstrap/handle 认证 |
+| MT-6-095 | tests/contract/build-code-preexecution-source.test.mjs | T/task-bootstrap, R/evidence/canonical-utils, R/task/task-handle, R/task/workspace, W/build-code/capture …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 执行前源身份=快照认证 |
+| MT-6-096 | tests/contract/build-code-targeted-capture.test.mjs | T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/change-scope, W/build-code/capture …(+1) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-04 定向采集保留工具②成分；去重身份（V199）［报告判 PENDING/待定］ |
+| MT-6-097 | tests/contract/build-code-targeted-runner.test.mjs | W/build-code/targeted-runner | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | G3-14 | 否 | 真实执行、防 NODE_OPTIONS 伪造通过=工具②完整性 |
+| MT-6-098 | tests/contract/build-code-test-inventory.test.mjs | TA/inventory, T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/capture | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 测试身份清单 |
+| MT-6-099 | tests/contract/build-code-test-registry.test.mjs | T/task-bootstrap, R/task/task-handle, R/task/workspace, W/build-code/capture, W/build-code/test-asset-inventory | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-04"源自有测试 vs 可运行"属真实验收成分；去 task-bootstrap/handle 身份［报告判 PENDING/待定］ |
+| MT-6-100 | tests/contract/build-prd-review-contract.test.mjs | R/review/review-policy, WR/review-materials, WR/third-review-host-config, WR/review-semantic-projection, WR/simple-review-runner …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：build-prd 审查是保留的文档审查面；保留审查政策/材料行为，去回执与身份断言［报告判 DELETE/B3］ |
+| MT-6-101 | tests/contract/build-reflection-page.test.mjs | 文本:T/build-reflection-page, R/schemas/stage-reflection.v1.json | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 页 CLI |
+| MT-6-102 | tests/contract/business-case-catalog.test.mjs | 文本:R/evidence/freshness, W/build-code/capture, W/build-code/case-selection …(+4) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-04 业务用例目录保留；去送入目标绑定［报告判 PENDING/待定］ |
+| MT-6-103 | tests/contract/business-case-source-binding.test.mjs | W/build-code/case-selection | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是(M) | 用例源绑定=revision 绑定链 |
+| MT-6-104 | tests/contract/card04-final-aggregate.test.mjs | R/evidence/freshness, R/evidence/canonical-receipt-writer, R/evidence/canonical-evidence-validators, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | Card-04 回执聚合；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-105 | tests/contract/census-upstream-authoring.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 模板/SKILL 三节格式［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-106 | tests/contract/claude-outcome-packet.test.mjs | TH/workflowhub-stage-agent-bridge, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 外部 Stage Agent bridge |
+| MT-6-107 | tests/contract/cli-parity.test.mjs | TH/workflowhub-stage-agent-bridge, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | bridge parity |
+| MT-6-108 | tests/contract/close-authorization-diagnostics.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/evidence/canonical-receipt-writer, H/stage-outcome …(+1) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | PENDING：G3-01：close 授权诊断保留；去回执写入，提取为工具④测试［报告判 PENDING/B4］ |
+| MT-6-109 | tests/contract/close-remote-branch-cleanup.test.mjs | core/task-close, R/stage/current-close-projection, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | 授权前不删远端分支、失败删除可见=工具④；去 projection 依赖 |
+| MT-6-110 | tests/contract/close-sidecar-and-archive.test.mjs | core/task-close, R/task/git-worktree-snapshot, R/task/task-handle, R/task/workspace, R/review/review-record-route …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | PENDING：G3-01：sidecar 预检/归档历史只读保留；去 review route 依赖［报告判 PENDING/B4］ |
+| MT-6-111 | tests/contract/confirmation-authorization.test.mjs | R/stage/completion-predicates, R/stage/stage-acceptance-policy, R/evidence/canonical-evidence-validators, R/stage/stage-handlers, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tests/contract/confirmation-authorization.test.mjs | G3-10 | 否 | 两道人为门 confirm/authorize 分离保留；completion-predicates 部分删 |
+| MT-6-112 | tests/contract/control-plane-governance.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 治理 inventory JSON 形状 |
+| MT-6-113 | tests/contract/core-runtime-layering.test.mjs | 文本:R/evidence/freshness, R/evidence/acceptance-evidence-validator | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | import SCC/TaskKernel 独立性形状 |
+| MT-6-114 | tests/contract/current-close-projection-readback.test.mjs | R/stage/current-close-projection, R/stage/completion-predicates, T/stage-runtime | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/contract/current-close-projection-readback.test.mjs | — | 否 | 保留：close 只读四域投影回读（Card-08 回读候选，与片段 1 MT-1-059 同批 B6/P7）；去 K2/K5 事实绑定［报告判 NARROW/B4］ |
+| MT-6-115 | tests/contract/decision-convergence-depth.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | make-decision 收敛深度=固定 Talk 轮次 |
+| MT-6-116 | tests/contract/decision-freeze-current-oi.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | OI 冻结形状 |
+| MT-6-117 | tests/contract/decision-log-census.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 普查分母形状 |
+| MT-6-118 | tests/contract/decision-log-chain-warnings.test.mjs | T/check-decision-log-chain | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | decision-log 链校验工具 |
+| MT-6-119 | tests/contract/derive-consumption-edges.test.mjs | R/evidence/workflow-evolution | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution |
+| MT-6-120 | tests/contract/diff-evidence-capture-point.test.mjs | core/artifact-dir, R/task/task-kernel, R/task/task-handle, R/stage/stage-handlers, R/evidence/canonical-receipt-writer …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | diff 证据回执 |
+| MT-6-121 | tests/contract/doctor-interface.test.mjs | R/interface/runtime-facade, T/stage-runtime | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/contract/doctor-interface.test.mjs | — | 否 | 公共 doctor/status 接口 |
+| MT-6-122 | tests/contract/doctor-storage-consistency.test.mjs | core/artifact-dir, R/task/task-handle, T/stage-runtime, H/stage-outcome | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | doctor 报 writer 源漂移且不失败；去 stage-outcome helper |
+| MT-6-123 | tests/contract/dsh-requirement-source.test.mjs | R/evidence/host-session-transcript | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 宿主 transcript 需求源（bridge 消费） |
+| MT-6-124 | tests/contract/evidence-publish-roundtrip.test.mjs | core/artifact-dir, R/evidence/canonical-receipt-writer, R/task/task-handle, R/task/task-kernel, H/stage-outcome …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 证据发布包装 |
+| MT-6-125 | tests/contract/execution-identity.test.mjs | R/evidence/invocation-identity, R/task/task-handle | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 执行身份 |
+| MT-6-126 | tests/contract/execution-outcome.test.mjs | R/stage/completion-predicates | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | completion 语义投影 |
+| MT-6-127 | tests/contract/external-supplement-window.test.mjs | WR/review-provider-client, WR/simple-review-runner | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：provider 外部补充窗口是文档面真实行为［报告判 DELETE/B3］ |
+| MT-6-128 | tests/contract/external-threshold-contract.test.mjs | WR/review-provider-client, WR/simple-review-runner, WR/third-review-host-config | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：外部阈值合同保留［报告判 DELETE/B3］ |
+| MT-6-129 | tests/contract/filled-plan-task-production.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 是(M) | plan/tasks 双写合同；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-130 | tests/contract/final-coverage.test.mjs | TA/verify-final-coverage, TA/inventory | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | tools/architecture 终态覆盖校验 |
+| MT-6-131 | tests/contract/final-current-snapshot.test.mjs | T/produce-final-current-snapshot, R/task/git-worktree-snapshot | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 快照生产 CLI |
+| MT-6-132 | tests/contract/five-stage-spec-analyze-wiring.test.mjs | R/stage/completion-predicates, R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | spec-analyze 接线形状 |
+| MT-6-133 | tests/contract/four-domain-close-status.test.mjs | R/stage/current-close-projection | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/contract/four-domain-close-status.test.mjs | — | 否 | PENDING：current-close-projection 三域读者；被测对象片段 1 MT-1-059 判 SURVIVOR B6/P7［报告判 PENDING/待定］ |
+| MT-6-134 | tests/contract/four-material-non-gate-contract.test.mjs | R/stage/completion-predicates, R/stage/stage-skill-runtime, R/task/task-handle, R/evidence/stage-content-evidence | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | pre 四材料 cohort；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-135 | tests/contract/freeze-classification-budget-usage-protocol.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/review/canonical-review-result, R/review/stage-review-disposition …(+6) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | G3-11 | 否 | 冻结/分类/风险接收机器（含 accepted_risk）；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-136 | tests/contract/freshness-removal-preservation.test.mjs | R/evidence/canonical-evidence-validators, R/stage/completion-predicates, R/task/task-handle, R/task/task-store | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | freshness 绑定 |
+| MT-6-137 | tests/contract/frontend-component-quality-static.test.mjs | skills/frontend-component-quality/scripts/check-frontend-component-quality | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 技能脚本静态检查（node runner，vitest 排除） |
+| MT-6-138 | tests/contract/frontend-prototype-render-skill.test.mjs | 文本:skills/catalog.yaml, skills/reuse-registry.md, W/build-spec/SKILL.md …(+1) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | catalog/SKILL 文本；catalog.yaml:1008 登记为该技能 test，需同步改 |
+| MT-6-139 | tests/contract/governance-review-dispatch-boundary.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | ADR 文档文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-140 | tests/contract/governance-startup-event-early-failure.test.mjs | T/task-bootstrap | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：启动早失败＝失败事实应保留；改为不经 task-bootstrap 身份的窄写法［报告判 PENDING/待定］ |
+| MT-6-141 | tests/contract/host-outcome-bridge.test.mjs | T/stage-runtime, TH/workflowhub-stage-agent-bridge, R/task/task-handle, R/task/task-kernel, R/task/material-workspace …(+2) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 外部 bridge |
+| MT-6-142 | tests/contract/human-confirmation-v3.test.mjs | R/task/task-kernel-implementation, R/stage/stage-content-contracts, R/task/git-worktree-snapshot, R/task/task-handle, core/artifact-dir …(+5) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tests/contract/human-confirmation-v3.test.mjs | G3-10 | 否 | confirm 人为门记录保留；kernel/快照/覆盖认证删 |
+| MT-6-143 | tests/contract/identity-resolution.test.mjs | T/stage-runtime, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 身份解析 |
+| MT-6-144 | tests/contract/import-historical-reflection.test.mjs | T/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入 CLI |
+| MT-6-145 | tests/contract/integration-review-subject.test.mjs | R/review/integration-review-subject | 测试文件（随被测对象处置） | DELETE | B3/P4 | git revert B3 提交 | — | 否 | PENDING：ADR-019：集成审查点退出正常流程；被测 runtime/review/integration-review-subject 片段 1 MT-1-046 DELETE B3/P4［报告判 PENDING/待定］ |
+| MT-6-146 | tests/contract/legacy-zero.test.mjs | R/distribution/runner-release, R/distribution/skill-bundle-release, TA/inventory | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | legacy 缺失守卫 |
+| MT-6-147 | tests/contract/lessons-jsonl.test.mjs | T/append-lesson-observation | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-03, G3-04 | 否 | PENDING：［报告判 PENDING/待定］ |
+| MT-6-148 | tests/contract/make-decision-artifact-path.test.mjs | core/artifact-dir, R/stage/stage-context, R/stage/stage-runner, R/task/task-handle, R/task/git-worktree-snapshot …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage 路径认证 |
+| MT-6-149 | tests/contract/make-decision-interaction-publication.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/git-worktree-snapshot, R/stage/stage-content-contracts …(+5) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 聚合写入/发布 |
+| MT-6-150 | tests/contract/material-oracle-context-packet.test.mjs | R/stage/stage-content-contracts, R/task/material-workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 材料包 verify |
+| MT-6-151 | tests/contract/material-producer-consumer-roundtrip.test.mjs | 文本:skills/spec-plan/templates/plan-template.md, skills/spec-tasks/templates/tasks-template.md, skills/spec-plan/SKILL.md …(+1) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | plan/tasks 模板；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-152 | tests/contract/material-workspace.test.mjs | R/task/material-workspace, core/artifact-dir, R/task/task-handle, R/stage/completion-predicates | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 或 git checkout backup/card-06-b6 -- tests/contract/material-workspace.test.mjs | G3-03 | 否 | replaceMaterialAtomic=工具③；digest 轴/导航校验删 |
+| MT-6-153 | tests/contract/metrics-enabled-report.test.mjs | R/evidence/check-skill-closure | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | check-skill-closure metrics |
+| MT-6-154 | tests/contract/no-external-stage-agent-gate.test.mjs | R/stage/stage-handlers, T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 源文本缺失守卫 |
+| MT-6-155 | tests/contract/ocr-ac001-013-experiments.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-05 go/no-go 实验转为新链回归；ADR-021④ 未装 OCR 时显式 skip［报告判 PENDING/待定］ |
+| MT-6-156 | tests/contract/ocr-ac006-011-experiments.test.mjs | core/artifact-dir, R/review/ocr-delegation-adapter, R/task/task-handle, R/task/workspace, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：同上：Card-05 实验转新链回归，加 ADR-021④ skipIf［报告判 PENDING/待定］ |
+| MT-6-157 | tests/contract/ocr-ac006-wallclock.test.mjs | R/review/ocr-delegation-adapter | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-021④：真实墙钟/取消用例需显式 skipIf（未装 OCR）；其余行为保留［报告判 SURVIVOR/—］ |
+| MT-6-158 | tests/contract/ocr-delegation-adapter.test.mjs | R/review/ocr-delegation-adapter, R/review/review-packet-identity | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tests/contract/ocr-delegation-adapter.test.mjs | G3-15 | 否 | ADR-021④：真实调用 ocr 且无 skipIf，未装 OCR 机器必失败，须加显式 skip 并报告；同时按 OI-013 窄化 manifest sha256 断言，保留 fail-closed/拒越界/脱敏/取消（G3-15）［报告判 SURVIVOR/B4］ |
+| MT-6-159 | tests/contract/ocr-delegation-route.test.mjs | R/task/task-handle, R/task/workspace, core/artifact-dir, R/review/ocr-delegation-adapter, R/review/review-packet-identity …(+1) | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- tests/contract/ocr-delegation-route.test.mjs | — | 否 | 新链公共 review 路由；packet identity 断言需窄化 |
+| MT-6-160 | tests/contract/ocr-production-cutover.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/review/ocr-delegation-adapter, R/review/review-packet-identity …(+1) | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- tests/contract/ocr-production-cutover.test.mjs | — | 否 | 新链生产默认值；identity 断言需窄化 |
+| MT-6-161 | tests/contract/oracle-mirror.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | Card-04 仓库外 oracle 镜像，环境依赖 |
+| MT-6-162 | tests/contract/p5-same-run-report-source.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/evidence/canonical-receipt-writer …(+7) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 同 run 报告源回执 |
+| MT-6-163 | tests/contract/per-ac-material-freshness.test.mjs | R/evidence/freshness, R/evidence/quality-fact | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | per-AC 材料绑定 |
+| MT-6-164 | tests/contract/performance-budget.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 认证操作性能预算 |
+| MT-6-165 | tests/contract/phase-quality-handoff.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-handoff …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 强制 handoff；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-166 | tests/contract/plan-acceptance-task-gate.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | plan 验收任务合同［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-167 | tests/contract/portable-workflow-run.test.mjs | R/task/task-handle, R/task/portable-workflow-run | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- tests/contract/portable-workflow-run.test.mjs | — | 否 | PENDING：保留：Card-01 可搬运 runner 真实执行；报告判 PENDING，本表按规则 6 保留（去"无认证步骤证据"绑定断言）［报告判 PENDING/待定］ |
+| MT-6-168 | tests/contract/post-acceptance-chain-source-index.test.mjs | R/stage/stage-content-contracts, R/stage/stage-runner | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 验收链源索引 |
+| MT-6-169 | tests/contract/post-build-plan-missing-index.test.mjs | R/task/task-handle, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：缺 Phase index 真报失败＝失败事实保留；去 stage-runtime 身份/授权［报告判 PENDING/待定］ |
+| MT-6-170 | tests/contract/post-business-browser-reconciliation.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 浏览器对账表示 |
+| MT-6-171 | tests/contract/post-cohort-authoring-files.test.mjs | 文本:W/build-plan/SKILL.md, skills/spec-plan/SKILL.md, skills/spec-plan/templates/phase-template.md …(+3) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 是(M) | cohort 文本形状［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-172 | tests/contract/post-cohort-downstream-workflows.test.mjs | R/stage/step-manifest | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cohort 文本形状 |
+| MT-6-173 | tests/contract/post-cohort-executable-authoring.test.mjs | 文本:skills/spec-specify/templates/spec-template.md, skills/spec-plan/SKILL.md, skills/spec-plan/templates/phase-template.md …(+4) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 是(M) | cohort 文本形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-174 | tests/contract/post-cohort-governance-materials.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cohort 治理文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-175 | tests/contract/post-cohort-runtime-binding.test.mjs | R/task/git-worktree-snapshot, R/task/task-handle, R/task/workspace, R/evidence/freshness, R/stage/stage-runner …(+2) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | cohort 材料绑定 |
+| MT-6-176 | tests/contract/post-cohort-spec-design-authority.test.mjs | 文本:skills/spec-specify/SKILL.md, skills/spec-specify/templates/spec-template.md | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cohort 文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-177 | tests/contract/post-integration-review-subject.test.mjs | core/artifact-dir, R/task/task-handle, WR/integration-review-subject | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | ADR-019：集成审查点退出正常流程，旧 wh-review 包装随被测对象删除 |
+| MT-6-178 | tests/contract/post-ordinary-review-material-binding.test.mjs | R/task/git-worktree-snapshot, R/evidence/freshness | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 审查材料绑定 |
+| MT-6-179 | tests/contract/post-phase-contract.test.mjs | R/stage/stage-content-contracts, R/stage/stage-runner | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | Phase 文件结构合同；main 基线已红（7 条）［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-180 | tests/contract/post-phase-official-handler.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-handlers …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | build-plan 官方 handler 认证 |
+| MT-6-181 | tests/contract/post-quality-fact-scope.test.mjs | R/evidence/quality-fact, core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 质量事实范围 |
+| MT-6-182 | tests/contract/post-review-cohort-binding.test.mjs | R/review/review-record-route | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | cohort 审查绑定 |
+| MT-6-183 | tests/contract/post-spec-analyze-original-source.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 原始源普查 |
+| MT-6-184 | tests/contract/protocol-error-classification.test.mjs | R/stage/protocol-error-whitelist | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 白名单（stage-runner 消费） |
+| MT-6-185 | tests/contract/protocol-error-trace.test.mjs | R/evidence/canonical-source, R/stage/stage-runner, R/task/task-handle, R/task/git-worktree-snapshot, R/task/task-store …(+2) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error trace |
+| MT-6-186 | tests/contract/public-behavior-baseline.test.mjs | TA/public-behavior-baseline, core/artifact-dir, R/task/task-handle, R/task/workspace, H/stage-outcome | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | tools/architecture 行为基线 |
+| MT-6-187 | tests/contract/reference-audit.test.mjs | TA/reference-audit | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b1 -- tests/contract/reference-audit.test.mjs | — | 否 | PENDING：保留：tools/architecture 引用审计可复用为 AC-27 消费者核对证据［报告判 PENDING/待定］ |
+| MT-6-188 | tests/contract/repository-governance.test.mjs | 文本:R/schemas/repository-structure.v1.json, TA/inventory | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 结构 schema 形状 |
+| MT-6-189 | tests/contract/repository-inventory.test.mjs | TA/inventory, TA/complexity-report | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/contract/repository-inventory.test.mjs | — | 否 | PENDING：保留：inventory 服务 move-map 登记（B6/P7 归位批）［报告判 PENDING/待定］ |
+| MT-6-190 | tests/contract/requirement-convergence-regression.test.mjs | core/artifact-dir, R/stage/stage-runner, R/task/task-handle, R/task/workspace, H/formal-review …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 收敛回归（stage-runner） |
+| MT-6-191 | tests/contract/research-report.test.mjs | R/evidence/research-report | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 研究报告哈希合同 |
+| MT-6-192 | tests/contract/review-budget-deletion.test.mjs | core/artifact-dir, R/review/review-record-route, R/review/review-packet-identity, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是(M) | review record route 预算；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-193 | tests/contract/review-budget-namespace.test.mjs | R/task/task-handle, R/task/workspace, core/artifact-dir, R/review/review-record-route | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 审查历史命名空间 |
+| MT-6-194 | tests/contract/review-history-canonical-reader.test.mjs | core/artifact-dir, R/review/review-record-route, R/task/task-handle, R/task/workspace, WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：审查历史只读读取保留；去 canonical 身份断言［报告判 PENDING/待定］ |
+| MT-6-195 | tests/contract/review-input-bounds-portability.test.mjs | R/review/review-input-bounds, R/distribution/skill-bundle-release | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：review-input-bounds 保留；去 skill-bundle-release 双层哈希与可搬运性断言［报告判 DELETE/B3］ |
+| MT-6-196 | tests/contract/review-layering.test.mjs | R/review/canonical-review-result, R/stage/completion-predicates, ../runtime/review/review-output | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 审查分层认证 |
+| MT-6-197 | tests/contract/review-material-change-redispatch.test.mjs | core/artifact-dir, R/evidence/freshness, R/review/review-record-route, R/review/review-packet-identity, R/task/task-handle …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 材料变化重派=快照认证 |
+| MT-6-198 | tests/contract/review-materials-contract.test.mjs | R/task/material-workspace, R/task/task-handle, R/task/workspace, W/build-code/capture, W/verify-code/capture …(+5) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：文档面材料合同保留；删 build-code/verify-code 采集绑定部分［报告判 DELETE/B3］［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-199 | tests/contract/review-public-entrypoints.test.mjs | R/task/task-handle, R/task/workspace, core/artifact-dir, R/stage/stage-runner, T/stage-runtime …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018/021：公共 review 入口按 分工（文档面 wh-review、代码面 OCR）重写断言 |
+| MT-6-200 | tests/contract/review-step-forward-progress.test.mjs | WR/review-runner | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | manifest 文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-201 | tests/contract/runner-contract.test.mjs | R/interface/runner-contract | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：runtime/interface/runner-contract 保留（片段 1 MT-1-043 NARROW B5/P6），随分发链去双层 hash 调整名单［报告判 PENDING/待定］ |
+| MT-6-202 | tests/contract/runtime-facade.test.mjs | R/interface/runtime-facade, R/interface/runner-contract, T/stage-runtime | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/contract/runtime-facade.test.mjs | — | 否 | 七类公共行为（AGENTS 硬约束） |
+| MT-6-203 | tests/contract/runtime-profile-consumer-readback.test.mjs | T/run-checks, R/stage/stage-content-contracts, skills/test-routing-advisor/scripts/route, T/measure-test-runtime-profile | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 测试 profile 回执 readback（test:profile） |
+| MT-6-204 | tests/contract/session-binding-removed.test.mjs | 文本:TH/workflowhub-codex-session-state, TH/workflowhub-codex-session-hook, TH/workflowhub-codex-session-event …(+8) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 已退役缺失守卫；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-205 | tests/contract/spec-analyze-cli-executor.test.mjs | T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | spec-analyze executor 认证 |
+| MT-6-206 | tests/contract/spec-analyze-completeness.test.mjs | R/stage/stage-content-contracts, WR/review-materials | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 普查完整性 |
+| MT-6-207 | tests/contract/spec-analyze-truthfulness.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 普查诊断 |
+| MT-6-208 | tests/contract/spec-prd-skill-contract.test.mjs | 文本:skills/spec-prd/SKILL.md, skills/spec-prd/skill-bundle.json, skills/spec-prd/templates/prd-template.md …(+2) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 是(M) | SKILL/bundle 文本+哈希 |
+| MT-6-209 | tests/contract/spec-stage-artifact-closure.test.mjs | WR/review-materials, R/adapters/local-skill-resolver | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 是(M) | 材料闭包形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-210 | tests/contract/stage-agent-outcome-post-cohort.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/step-manifest, R/stage/stage-skill-runtime …(+1) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | stage agent adapter |
+| MT-6-211 | tests/contract/stage-completion.test.mjs | R/stage/completion-predicates | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage completion 通用认证本体 |
+| MT-6-212 | tests/contract/stage-context-workspace-degrade.test.mjs | R/task/task-handle, R/task/workspace, R/stage/stage-context | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | ENOENT 可见/写上下文真报失败=失败事实 |
+| MT-6-213 | tests/contract/stage-handoff.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/completion-predicates …(+6) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 强制 handoff |
+| MT-6-214 | tests/contract/stage-interaction-batching.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | G3-12 | 否 | Talk 批次/问答选项校验=结构化问答卡［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-215 | tests/contract/stage-order-and-host-interaction.test.mjs | R/stage/stage-content-contracts, R/stage/stage-agent-outcome-adapter | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | G3-12 | 否 | stage 顺序锁+Talk ask-wait-reply 缝 |
+| MT-6-216 | tests/contract/stage-progress-contract.test.mjs | R/stage/completion-predicates, T/stage-runtime | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- tests/contract/stage-progress-contract.test.mjs | — | 否 | 保留：进度事实读回；报告判 DELETE B4，本表按规则 6 改为 SURVIVOR（去 completion-predicates 通用认证后保留游标读回断言）［报告判 DELETE/B4］ |
+| MT-6-217 | tests/contract/stage-reflect.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-reflect, T/stage-runtime …(+4) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage-reflect |
+| MT-6-218 | tests/contract/stage-reflection-e2e-constructed.test.mjs | core/artifact-dir, R/evidence/canonical-evidence-validators, R/stage/stage-runner, R/task/task-handle, R/task/workspace …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | reflection 链；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-219 | tests/contract/stage-reflection-paths.test.mjs | R/evidence/canonical-evidence-validators | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | reflection 路径文本 |
+| MT-6-220 | tests/contract/stage-reflection-schema.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection schema |
+| MT-6-221 | tests/contract/stage-reflection-skill-contract.test.mjs | 文本:skills/stage-reflection/SKILL.md, skills/stage-reflection/skill-bundle.json, W/make-decision/SKILL.md …(+6) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | SKILL 文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-222 | tests/contract/stage-reflection-wiring.test.mjs | T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 接线文本 |
+| MT-6-223 | tests/contract/stage-routing-and-concrete-testing.test.mjs | 文本:skills/wh-review/stage-skill-plan.json, W/build-plan/SKILL.md, W/build-spec/SKILL.md …(+4) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 路由文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-224 | tests/contract/stage-runner-on-stage-end.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-runner, H/stage-outcome | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage-end 调度 |
+| MT-6-225 | tests/contract/stage-runner-reflection.test.mjs | R/stage/stage-handlers, core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-runner …(+5) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | reflection transfer |
+| MT-6-226 | tests/contract/stage-runtime-material-check.test.mjs | R/task/task-handle, T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 材料检查前置 |
+| MT-6-227 | tests/contract/stage-runtime-preflight.test.mjs | R/interface/runtime-facade, R/stage/stage-handlers, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-03, G3-04 | 否 | PENDING：G3-03/G3-04：SIGTERM/SIGINT 下记录落盘＝原子写/中断保护证据，抽出后其余私有 preflight 删［报告判 PENDING/待定］ |
+| MT-6-228 | tests/contract/stage-runtime-reflect-entry.test.mjs | R/task/task-handle, R/task/task-store, R/task/workspace, T/stage-runtime, T/task-bootstrap …(+1) | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | G3-10 | 否 | 保留 human-boundary（confirm/authorize）入口用例；reflect 入口删 |
+| MT-6-229 | tests/contract/stage-skill-consumer-contract.test.mjs | R/stage/stage-skill-runtime, R/stage/stage-handlers, R/stage/stage-runner, R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 声明→消费者形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-230 | tests/contract/stage-skill-invocation-contract.test.mjs | R/adapters/local-skill-resolver, R/stage/stage-skill-runtime | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | catalog/bundle 形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-231 | tests/contract/stalled-consumer-delta.test.mjs | R/review/schema-validator, R/task/task-store, WR/review-provider-client, WR/review-result | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：broker stalled 语义属保留的文档面 broker 行为［报告判 DELETE/B3］ |
+| MT-6-232 | tests/contract/status-derivation.test.mjs | R/stage/completion-predicates, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | 公共 status 保留；completion 根因推导删 |
+| MT-6-233 | tests/contract/task-bootstrap-integrity.test.mjs | T/task-bootstrap, R/task/task-handle, R/task/workspace, core/artifact-dir | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 原始需求哈希完整性 |
+| MT-6-234 | tests/contract/task-close-cli-resolution.test.mjs | R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | G3-01 | 否 | task-close CLI 路径解析（工具④入口） |
+| MT-6-235 | tests/contract/task-handle.test.mjs | R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 或 git checkout backup/card-06-b6 -- tests/contract/task-handle.test.mjs | G3-03, G3-04 | 否 | symlink/身份变化/EEXIST/锁=工具①③⑤；内容寻址 kernel 部分删 |
+| MT-6-236 | tests/contract/task-topology-projection.test.mjs | R/task/task-topology, R/task/task-handle, T/stage-runtime | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-01 任务类型拓扑保留；去 cohort 投影（cohort 机制 B1/P2 删）［报告判 PENDING/待定］ |
+| MT-6-237 | tests/contract/test-capture-reuse.test.mjs | R/evidence/canonical-receipt-writer, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | G3-09 | 否 | G3-09：测试采集前后快照比对（canonical-receipt-writer L746-803）是点名删除面，回执复用测试随回执包装删 |
+| MT-6-238 | tests/contract/test-entry-grouping.test.mjs | 文本:core/__tests__/check-extensibility.test, core/__tests__/check-anti-host.test | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | 防假绿 meta 测试；每批删测试都要同步 package.json 分组 |
+| MT-6-239 | tests/contract/test-runtime-profile.test.mjs | R/stage/stage-content-contracts, R/evidence/canonical-receipt-writer, R/evidence/canonical-evidence-validators, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | profile 回执 |
+| MT-6-240 | tests/contract/tier-c-deletion-boundary.test.mjs | R/distribution/runner-release | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 已删对象缺失守卫；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-241 | tests/contract/ui-applicability-contract.test.mjs | R/task/material-workspace, R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | UI 适用性结构化事实形状 |
+| MT-6-242 | tests/contract/ui-applicability-must-ask.test.mjs | core/artifact-dir, R/stage/stage-runner, R/task/task-handle, R/task/workspace, H/formal-review …(+2) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | G3-12 | 否 | UI 适用性"缺记录则问用户" |
+| MT-6-243 | tests/contract/ui-design-confirmation-gate.test.mjs | core/artifact-dir, R/stage/stage-runner, R/task/task-handle, R/task/git-worktree-snapshot, R/task/workspace …(+2) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-10 | 否 | PENDING：G3-10：UI 设计人确认门保留；去快照链与覆盖认证［报告判 PENDING/B4］ |
+| MT-6-244 | tests/contract/ui-frontend-governance.test.mjs | 文本:skills/spec-plan/templates/plan-template.md, skills/spec-tasks/templates/tasks-template.md, skills/frontend-testing/SKILL.md …(+7) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | node runner；依赖已删 plan/tasks 模板 |
+| MT-6-245 | tests/contract/ui-skill-contract.test.mjs | 文本:skills/ui-project-init/SKILL.md, skills/ui-project-init/skill-bundle.json, skills/design-source-readiness/SKILL.md …(+7) | 测试文件（随被测对象处置） | NARROW | B3/P4 | git revert B3 提交 | — | 否 | PENDING：UI 技能包可搬运性保留；去 skill-bundle 哈希（ADR-013）［报告判 PENDING/待定］ |
+| MT-6-246 | tests/contract/ui-stage-integration.test.mjs | R/stage/stage-content-contracts, W/verify-code/design-alignment | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | node runner；stage 接线文本 |
+| MT-6-247 | tests/contract/upstream-coverage-ledger.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 覆盖账本 |
+| MT-6-248 | tests/contract/validate-stage-reflection.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 校验 CLI |
+| MT-6-249 | tests/contract/verify-architect-acceptance.test.mjs | R/evidence/canonical-receipt-writer | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | verify-code 终末代码审查形状；删后须有替代断言证明 ADR-014 终末审查点仍在 |
+| MT-6-250 | tests/contract/verify-authority-boundary.test.mjs | R/stage/completion-predicates, R/stage/stage-handlers, T/stage-runtime | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | verify 权威边界 |
+| MT-6-251 | tests/contract/verify-code-binding-derivation.test.mjs | core/artifact-dir, R/evidence/canonical-receipt-writer, R/evidence/freshness, R/task/task-handle, R/stage/stage-runner …(+7) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | verify-code 审查绑定推导 |
+| MT-6-252 | tests/contract/verify-code-business-handoff.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | handoff 语义文本 |
+| MT-6-253 | tests/contract/verify-code-dsh-public-run.test.mjs | core/artifact-dir, R/evidence/canonical-receipt-writer, R/task/task-handle, R/task/workspace, T/stage-runtime …(+3) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | verify-code OCR 终末审查经公共路由（ADR-014）保留；回执部分删 |
+| MT-6-254 | tests/contract/verify-final-coverage.test.mjs | TA/verify-final-coverage | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 终态覆盖校验 |
+| MT-6-255 | tests/contract/verify-publication.test.mjs | R/evidence/quality-store, R/task/task-handle, R/task/task-store | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 已退役缺失守卫 |
+| MT-6-256 | tests/contract/workflow-evolution-browser-manifest.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 |
+| MT-6-257 | tests/contract/workflow-evolution-candidates.test.mjs | 文本:W/build-spec/steps.json, T/derive-consumption-edges, W/build-plan/steps.json …(+1) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 |
+| MT-6-258 | tests/contract/workflow-evolution-final-aggregate.test.mjs | WR/simple-review-runner | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16（含 wh-review） |
+| MT-6-259 | tests/contract/workflow-evolution-governance.test.mjs | R/evidence/workflow-evolution | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 |
+| MT-6-260 | tests/contract/workflow-quality-regression.test.mjs | 文本:W/verify-code/steps.json, skills/catalog.yaml, skills/reuse-registry.md …(+1) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | manifest/catalog 形状［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-261 | tests/contract/workflow-synchronization-consumer.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/stage/stage-skill-runtime, R/stage/stage-handlers …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 声明到消费者同步 |
+| MT-6-262 | tests/contract/workspace-binding.test.mjs | core/artifact-dir, R/stage/stage-context, R/task/workspace, R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | G3-08 | 否 | 绑定已有 worktree/Windows 根=工具① |
+| MT-6-263 | tests/contract/workspace-cleanup.test.mjs | R/task/workspace | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | G3-08 | 否 | 清理分类（生成物/sidecar）=工具①脏工作区处置 |
+| MT-6-264 | tests/contract/write-identity-workspace.test.mjs | T/task-bootstrap, T/stage-runtime, TH/workflowhub-stage-agent-bridge | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | G3-08 | 否 | 写字节前拒错误 worktree=工具①；去 bridge |
+| MT-6-265 | tests/contract/writer-resolution-source.test.mjs | T/task-bootstrap | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 旧 manifest 可读=历史只读 |
+| MT-6-266 | tests/contract/zero-machine-gate-advancement.test.mjs | core/artifact-dir, R/evidence/canonical-receipt-writer, R/stage/stage-handlers, R/stage/stage-runner, R/task/task-handle …(+3) | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | PENDING：可并入 AC-29 残留扫描（NEW tests/contract/thin-core-residue.test.mjs）；否则保留零机器门禁守卫［报告判 PENDING/待定］ |
+| MT-6-267 | tests/e2e/card-04-real-entry-chain-e2e.test.mjs | R/task/task-handle, R/evidence/freshness | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：真实 CLI 子进程全链＝AC-29 日常路径演练候选；去 freshness，改写为公共七类入口路径［报告判 PENDING/待定］ |
+| MT-6-268 | tests/e2e/claude-outcome-packet.test.mjs | TH/workflowhub-stage-agent-bridge, R/task/task-handle, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | bridge |
+| MT-6-269 | tests/e2e/stage-reflect-real-chain.test.mjs | core/artifact-dir, T/task-bootstrap, T/stage-runtime, R/task/task-handle, R/task/workspace …(+1) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection |
+| MT-6-270 | tests/e2e/stage-reflection-real-task.test.mjs | core/artifact-dir, T/task-bootstrap, T/stage-runtime, R/task/task-handle, R/task/workspace …(+6) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection |
+| MT-6-271 | tests/e2e/stage-runtime-five-stage-e2e.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 公共行为面只有 7 类 |
+| MT-6-272 | tests/e2e/ui-e2e-contract-dogfood.test.mjs | core/task-close, R/task/task-handle, R/task/workspace, R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | UI 合同回执 |
+| MT-6-273 | tests/e2e/vnext-five-stage-current.test.mjs | core/artifact-dir, R/task/task-handle, R/task/task-store, R/stage/stage-runner, R/stage/stage-content-contracts …(+6) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 五阶段回执 e2e（V415）；需新日常路径 e2e 替代 |
+| MT-6-274 | tests/e2e/workflow-evolution-current.test.mjs | R/evidence/workflow-evolution | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 |
+| MT-6-275 | tests/helpers/formal-review.mjs | R/evidence/canonical-receipt-writer, WR/review-result | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | fact graph 夹具枢纽（15 消费者）；随最后一个 B4/P5 消费者删除 |
+| MT-6-276 | tests/helpers/human-confirmation.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 0 消费者孤儿（唯一消费者 read-only-runner-fixture 本身也是孤儿） |
+| MT-6-277 | tests/helpers/read-only-runner-fixture.mjs | R/distribution/runner-release, R/distribution/skill-bundle-release, R/task/task-handle, R/task/git-worktree-snapshot, H/human-confirmation | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 0 消费者孤儿 |
+| MT-6-278 | tests/helpers/stage-outcome.mjs | R/task/git-worktree-snapshot, R/stage/stage-content-contracts, R/stage/completion-predicates, R/evidence/codex-transcript-adapter, R/evidence/fact-collector | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | fact graph 夹具枢纽（35 消费者）；随最后一个 B4/P5 消费者删除，NARROW 改写后的测试不得再依赖 |
+| MT-6-279 | tests/integration/build-prd-delivery.test.mjs | core/task-close, R/task/task-handle, R/task/git-worktree-snapshot, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | build-prd close 交付认证 |
+| MT-6-280 | tests/integration/card-01-dual-journey.test.mjs | R/task/portable-workflow-run, R/task/task-topology, R/task/task-handle | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-01 双旅程投影保留；去 topology/cohort 投影［报告判 PENDING/待定］ |
+| MT-6-281 | tests/integration/distribution-closure.test.mjs | R/task/material-workspace, R/distribution/skill-bundle-release, R/distribution/runner-release, R/evidence/check-skill-closure, R/adapters/local-skill-resolver …(+1) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | bundle 哈希闭包（ADR-013）；main 基线已红（12 条）［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-282 | tests/integration/execution-snapshot-isolation.test.mjs | R/task/git-worktree-snapshot | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 快照树 |
+| MT-6-283 | tests/integration/first-three-stage-cutover.test.mjs | core/artifact-dir, R/task/task-handle, R/stage/stage-runner, R/task/workspace, R/evidence/freshness …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | cutover |
+| MT-6-284 | tests/integration/governance-diagnostics-non-gate.test.mjs | TA/phase0-deletion-disposition, TA/retention-audit | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | tools/architecture 诊断 |
+| MT-6-285 | tests/integration/governance-learning-non-gate.test.mjs | TA/retention-audit | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | retention-audit |
+| MT-6-286 | tests/integration/history-read-only.test.mjs | TA/history-inventory, R/evidence/freshness | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/integration/history-read-only.test.mjs | — | 否 | 保留：历史只读事实（AGENTS 边界）；去 freshness 断言［报告判 NARROW/B6］ |
+| MT-6-287 | tests/integration/interrupted-same-task-recovery.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, H/stage-outcome | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：Card-08 接续诚续跑候选；保留读回事实，去 recovery 对象（AGENTS 禁止 recovery）［报告判 PENDING/待定］ |
+| MT-6-288 | tests/integration/journal-replacement.test.mjs | R/task/task-handle, R/task/task-store, R/evidence/quality-store | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | journal 替换 |
+| MT-6-289 | tests/integration/mini-task-a-resume.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, skills/mini-task/scripts/mini-task-runner | 测试文件（随被测对象处置） | NARROW | B3/P4 | git revert B3 提交 | G3-25 | 否 | PENDING：G3-25：mini-task runner 去留由 skills 面定，测试随技能处置［报告判 PENDING/待定］ |
+| MT-6-290 | tests/integration/mini-task-delivery.test.mjs | core/artifact-dir, R/evidence/canonical-receipt-writer, R/task/task-handle, R/task/git-worktree-snapshot, R/task/workspace …(+2) | 测试文件（随被测对象处置） | NARROW | B3/P4 | git revert B3 提交 | G3-25 | 否 | PENDING：G3-25：同上（V306）［报告判 PENDING/待定］ |
+| MT-6-291 | tests/integration/minimal-task-storage.test.mjs | R/task/task-handle, R/task/task-store, R/evidence/quality-store | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/integration/minimal-task-storage.test.mjs | — | 否 | 保留：phase_progress 单行游标/旧行只读/畸形行真报失败＝Card-08 回读最近幸存者；同一行内去 freshness 依赖［报告判 NARROW/B6］ |
+| MT-6-292 | tests/integration/mutation-guards.test.mjs | R/evidence/freshness, R/stage/completion-predicates, R/distribution/skill-bundle-release, R/adapters/local-skill-resolver | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 五道变异守卫=校验机器 |
+| MT-6-293 | tests/integration/projection-replacement.test.mjs | R/task/task-handle, R/task/task-store, R/evidence/quality-store | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | projection |
+| MT-6-294 | tests/integration/protocol-error-in-place-resend.test.mjs | R/stage/stage-runner, R/task/task-handle, R/task/task-store, R/task/workspace, core/artifact-dir …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error |
+| MT-6-295 | tests/integration/quality-store-concurrency.test.mjs | R/task/task-handle, R/task/task-store, R/evidence/quality-store, core/artifact-dir, R/task/workspace …(+1) | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b6 -- tests/integration/quality-store-concurrency.test.mjs | G3-03, G3-04 | 否 | 保留：EEXIST 幂等/拒 symlink 别名/双进程写＝工具③⑤ 唯一现存行为证据（G3-03/G3-04）；报告判 NARROW，本表按规则 6 判 SURVIVOR（不删），断言窄化仍按 NARROW 做法执行［报告判 NARROW/B6］ |
+| MT-6-296 | tests/integration/review-test-close-freshness-matrix.test.mjs | R/review/stage-review-disposition, R/stage/completion-predicates | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | G3-11 | 否 | freshness 矩阵（accepted_risk 引用） |
+| MT-6-297 | tests/integration/runner-clean-install.test.mjs | R/distribution/runner-release, R/distribution/skill-bundle-release, TA/clean-install | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：保留跨宿主干净安装可搬运验证；去 sha256 清单与双层 hash［报告判 PENDING/待定］［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-298 | tests/integration/stage-outcome-record-row-redirect.test.mjs | core/artifact-dir, R/task/task-handle, R/task/task-store, R/task/workspace, R/stage/completion-predicates …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage row |
+| MT-6-299 | tests/integration/stage-row-merge-freshness-delta.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-runner …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage row |
+| MT-6-300 | tests/integration/stage-row-publication.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-runner …(+3) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage row |
+| MT-6-301 | tests/integration/stage-row-scope-digest.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-runner …(+2) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage row digest |
+| MT-6-302 | tests/integration/stage-row-verify-code.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/task/task-store, R/stage/stage-runner …(+4) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage row |
+| MT-6-303 | tests/integration/task-fact-index-consistency.test.mjs | R/task/task-handle, R/task/task-store | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | fact index |
+| MT-6-304 | tests/integration/verify-freshness-selection.test.mjs | R/evidence/freshness, R/evidence/quality-fact, R/stage/completion-predicates | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | freshness |
+| MT-6-305 | tests/integration/vnext-delivery-close.test.mjs | core/artifact-dir, core/task-close, R/task/task-handle, R/task/git-worktree-snapshot, R/task/workspace …(+3) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-01 | 否 | PENDING：G3-01：close 交付含工具④成分，抽出授权用例后其余删［报告判 PENDING/B4］ |
+| MT-6-306 | tests/integration/vnext-official-stage-run.test.mjs | core/artifact-dir, R/task/task-handle, R/stage/stage-runner, R/stage/stage-agent-outcome-adapter, TH/workflowhub-stage-agent-bridge …(+13) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | bridge+回执（2943 行） |
+| MT-6-307 | tests/integration/wh-review-v3-broker-contract.test.mjs | WR/wh-review-cli | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review broker 合同保留［报告判 DELETE/B3］ |
+| MT-6-308 | tests/left-shift/left-shift-suite.test.mjs | WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：左移套件保留，随 package.json test:left-shift 入口收敛同步改［报告判 DELETE/B3］ |
+| MT-6-309 | tests/review/dsh-code-review-publication.test.mjs | R/task/task-handle, R/task/workspace, core/artifact-dir, R/review/review-record-route | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：DSH 代码审查发布属新链成分保留；去 review-record-route 回执绑定［报告判 PENDING/待定］ |
+| MT-6-310 | tests/review/ocr-ac002-007-experiments.test.mjs | core/artifact-dir, R/review/review-record-route, R/task/task-handle, R/task/workspace, WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：Card-05 实验转新链回归；ADR-021④ 未装 OCR 显式 skip［报告判 PENDING/待定］ |
+| MT-6-311 | tests/review/review-foreign-pair-history.test.mjs | core/artifact-dir, R/review/review-record-route, R/task/task-handle, R/task/workspace, WR/simple-review-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | ADR-018：审查历史读取保留，去历史对身份绑定［报告判 DELETE/B3］ |
+| MT-6-312 | tests/review/review-managed-lifecycle.test.mjs | R/task/task-handle, R/task/workspace, core/artifact-dir, WR/simple-review-runner, WR/review-provider-client …(+1) | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b4 -- tests/review/review-managed-lifecycle.test.mjs | — | 是(M) | ADR-018：broker managed 生命周期随 wh-review 保留；与 Card-09 FR-43（孤儿 manager/provider 回收）需协调（见 S 行）［报告判 DELETE/B3］ |
+| MT-6-313 | tests/review/review-policy-compatibility.test.mjs | WR/third-review-host-config | 测试文件（随被测对象处置） | SURVIVOR | B4/P5 | 无需回滚（无改动） | — | 否 | ADR-018：wh-review 审查政策兼容保留［报告判 DELETE/B3］ |
+| MT-6-314 | tests/review/review-record-route.test.mjs | core/artifact-dir, R/task/task-handle, R/task/workspace, R/review/review-record-route, R/review/schema-validator …(+6) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 或 git checkout backup/card-06-b4 -- tests/review/review-record-route.test.mjs | — | 是(M) | PENDING：必须拆：新链入口 recordSimpleReviewRequest（stage-runtime 消费）保留，材料身份哈希/快照绑定/回执 readback 删（与片段 1 MT-1-053 同批）［报告判 PENDING/B4］ |
+| MT-6-315 | tests/review/review-result-content-binding.test.mjs | R/review/canonical-review-result, R/stage/stage-handlers | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 结果内容绑定 |
+| MT-6-316 | tests/baseline.test.mjs | metrics/baseline, metrics/record-schema | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | PENDING：metrics/ 历史区不在本卡删除面（metrics 面由其它片段裁定）［报告判 PENDING/待定］ |
+| MT-6-317 | tests/build-code-diff-only.test.mjs | W/build-code/diff-scanner, src/add | 测试文件（随被测对象处置） | SURVIVOR | B0/P1 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b0 -- tests/build-code-diff-only.test.mjs | G3-21 | 是(M) | G3-21 保留：识别 git push/外部依赖/.env.production 的危险 diff 预检，是工具①/④前置扫描来源。Card-03 冻结基线有 3 条红，进任何 gate 前必须先修（见 S 行）［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-318 | tests/canonical-source.test.mjs | R/evidence/canonical-source | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | canonical 输入源身份 |
+| MT-6-319 | tests/contract-freeze.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | validated_by_stage 冻结谓词=流程形状 |
+| MT-6-320 | tests/decision-log-content-contract.test.mjs | 文本:skills/decision-log/SKILL.md, skills/decision-log/templates/decision-log-template.md, W/make-decision/SKILL.md | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | decision-log 模板文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-321 | tests/deferred-acceptance-semantics.test.mjs | R/evidence/freshness, R/evidence/quality-fact, R/evidence/quality-store, R/stage/stage-handlers, R/stage/stage-runner | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | freshness/quality-store |
+| MT-6-322 | tests/dsh-transcript.test.mjs | R/evidence/dsh-transcript | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | DSH transcript 解析（仅 bridge 链消费） |
+| MT-6-323 | tests/execution-record.test.mjs | metrics/execution-record | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | PENDING：metrics/ 历史区，同上［报告判 PENDING/待定］ |
+| MT-6-324 | tests/facts-subschema.test.mjs | 文本:R/evidence/canonical-receipt-writer | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 源文本形状 |
+| MT-6-325 | tests/final-cutover-guards.red.test.mjs | R/stage/stage-handlers, R/task/task-kernel, WR/review-result, R/review/stage-review-disposition | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cutover 守卫（V627，含 wh-review） |
+| MT-6-326 | tests/five-stage-facts-v2.test.mjs | R/task/task-kernel | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | task-kernel facts schema |
+| MT-6-327 | tests/host-independence.test.mjs | 文本:core/multica-source-adapter, skills/catalog.yaml, skills/reuse-registry.md …(+2) | 测试文件（随被测对象处置） | NARROW | B1/P2 | git revert B1 提交 | — | 否 | PENDING：保留宿主中立/可搬运扫描；删已退役对象缺失守卫清单［报告判 PENDING/待定］ |
+| MT-6-328 | tests/interaction-quality-contract.test.mjs | R/stage/completion-predicates, R/stage/stage-content-contracts, R/evidence/research-report, R/stage/stage-handlers | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 交互质量形状 |
+| MT-6-329 | tests/knowledge-card.test.mjs | metrics/knowledge-card | 测试文件（随被测对象处置） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | PENDING：metrics/ 历史区，同上［报告判 PENDING/待定］ |
+| MT-6-330 | tests/m12-reuse-registry.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | registry 文档文本（M12） |
+| MT-6-331 | tests/m14a-audit-contract-layer.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | M14 schema（M14–M17 只读归档） |
+| MT-6-332 | tests/m15-stage-outcome-stop-hook.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | Stage Agent stop hook |
+| MT-6-333 | tests/metrics-smoke.test.mjs | R/task/task-handle, W/verify-code/metrics-writer, metrics/collector | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：metrics/ 与 verify-code metrics-writer 保留最小冒烟［报告判 PENDING/待定］ |
+| MT-6-334 | tests/metrics-taskhandle-v2.test.mjs | R/task/task-handle, metrics/collector | 测试文件（随被测对象处置） | NARROW | B6/P7 | git revert B6 提交 | — | 否 | PENDING：metrics/ 保留；去 task-handle 身份认证［报告判 PENDING/待定］ |
+| MT-6-335 | tests/moat-skills-phase1.test.mjs | 文本:skills/talk-with-zhipeng/SKILL.md, skills/grill-with-docs/SKILL.md, skills/intake-decision-review/SKILL.md | 测试文件（随被测对象处置） | NARROW | B3/P4 | git revert B3 提交 | — | 否 | PENDING：技能文件存在性检查随 skills 面处置；保留可搬运技能清单核对［报告判 PENDING/待定］ |
+| MT-6-336 | tests/moat-skills-phase2.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B3/P4 | 无需回滚（无改动） | — | 否 | 保留：.mcp.json 占位符无真实 API key、无本地绝对路径＝秘密安全/可搬运 |
+| MT-6-337 | tests/official-component-receipts.test.mjs | R/evidence/canonical-receipt-writer, R/evidence/acceptance-evidence-validator, R/evidence/canonical-evidence-validators, R/task/git-worktree-snapshot, R/task/task-handle …(+7) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 官方组件回执权威 |
+| MT-6-338 | tests/official-make-decision-cli.test.mjs | core/artifact-dir, R/task/task-handle, R/task/task-store, R/task/workspace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | make-decision CLI cutover 认证 |
+| MT-6-339 | tests/p0-foundation-contracts.test.mjs | R/stage/step-manifest | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | step-manifest/config 形状；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-340 | tests/per-invocation-doc-contract.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 宪法文本对齐 |
+| MT-6-341 | tests/per-invocation-execution-identity.test.mjs | R/task/task-handle, R/evidence/invocation-identity | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 执行身份 |
+| MT-6-342 | tests/requirements-completeness-audit-acceptance.test.mjs | 文本:R/stage/completion-predicates, R/stage/stage-handlers, R/stage/stage-content-contracts …(+24) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 审计矩阵文本；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-343 | tests/reuse-registry.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | registry 文本 |
+| MT-6-344 | tests/skill-provenance-strict.test.mjs | R/evidence/check-skill-closure, R/adapters/local-skill-resolver | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | skill provenance 哈希；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-345 | tests/smoke.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 否 | 保留：测试 harness 冒烟，B1/P2 入口收敛后仍是唯一全量入口哨兵 |
+| MT-6-346 | tests/spec-content-profile.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | spec 内容 profile |
+| MT-6-347 | tests/spike-intake-design.test.mjs | W/_spike/intake, W/_spike/design, W/_spike/design-variant, R/evidence/validate-contract | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | workflows/_spike 历史 spike |
+| MT-6-348 | tests/stage-completion-facts.test.mjs | R/evidence/stage-completion-facts | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage completion facts |
+| MT-6-349 | tests/stage-decision-contract.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | decision-entry 形状 |
+| MT-6-350 | tests/stage-interaction-contract.test.mjs | R/stage/stage-content-contracts | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | G3-12 | 否 | 交互边界文本（user-reply append 缝） |
+| MT-6-351 | tests/stage-plan-task-contract-v3.test.mjs | R/stage/stage-content-contracts, R/stage/stage-handlers | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | plan-task v3 双写合同 |
+| MT-6-352 | tests/stage-plan-task-contract.test.mjs | R/stage/stage-content-contracts, R/evidence/canonical-utils | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | plan-task v1 双写合同 |
+| MT-6-353 | tests/stage-quality.test.mjs | T/check-stage-quality, tests/contracts/stage-result.contract | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b1 -- tests/stage-quality.test.mjs | — | 否 | PENDING：保留：check-stage-quality 检测"自动阻断质量门"违宪＝零门禁守卫；依赖的 tests/contracts/* 仅临时写入，需在 B1/P2 改为临时目录［报告判 PENDING/待定］ |
+| MT-6-354 | tests/stage-review-cost-policy.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 审查成本策略文本 |
+| MT-6-355 | tests/stage-risk-acceptance.test.mjs | core/artifact-dir, core/task-close, R/task/task-handle, R/task/workspace, T/stage-runtime …(+1) | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | G3-11 | 否 | PENDING：G3-11：accepted_risk 风险接收保留为 finding 处置值语义；删 risk-cards 机器部分［报告判 PENDING/B4］ |
+| MT-6-356 | tests/step-manifest.test.mjs | R/stage/step-manifest | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | canonical step manifest=14 步锁；main 基线已红［main 基线红：删除不使 gate 变红，保留者须先修］ |
+| MT-6-357 | tests/task-record-paths-check.test.mjs | 文本:T/check-task-record-paths, R/evidence/unregistered-evolution, core/task-dir-parser …(+1) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | G3-24 | 否 | PENDING：G3-24：check-task-record-paths 守卫本体删除（见静态清单同步行），测试同批删除［报告判 PENDING/待定］ |
+| MT-6-358 | tests/verify-code-design-alignment.test.mjs | W/verify-code/design-alignment | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | PENDING：verify-code UI 设计对齐事实保留；去身份/回执绑定［报告判 PENDING/待定］ |
+| MT-6-359 | tests/verify-code-facts.test.mjs | W/verify-code/facts-assembly, W/verify-code/design-alignment, R/evidence/quality-store, R/stage/stage-handlers, R/task/task-handle …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | verify-code facts 组装 |
+| MT-6-360 | tests/verify-code-freshness.test.mjs | W/verify-code/freshness, W/verify-code/design-alignment | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | freshness |
+| MT-6-361 | tests/verify-requirement-replay-contract.test.mjs | 文本:W/verify-code/SKILL.md | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | SKILL 文本 |
+| MT-6-362 | tests/vitest-resource-policy.test.mjs | 文本:core/__tests__/check-extensibility.test, core/__tests__/check-anti-host.test, T/run-checks | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b1 -- tests/vitest-resource-policy.test.mjs | — | 否 | 保留：vitest 并发上限/独占批（Card-09 资源相关）；B1/P2 去掉钉死具体文件清单（见片段 5 静态清单同步） |
+| MT-6-363 | tests/workflow-v2-contract.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cohort 材料权威文本 |
+| MT-6-364 | tests/workflowhub-multica-sync.test.mjs | skills/workflowhub-multica-sync/scripts/multica-skill-sync | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：multica 同步技能保留；去 check-skill-closure 哈希依赖（ADR-013）［报告判 PENDING/待定］ |
+| MT-6-365 | tests/acceptance/card-03-current.mjs | T/stage-runtime、R/evidence/canonical-evidence-validators | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 是(A) | ARCHIVE：卡片专属验收生产者，冻结 33 文件/38 失败基线；只读保留不入 vitest 分组 |
+| MT-6-366 | tests/acceptance/card-03-current.test.mjs | 同上 | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 是(A) | ARCHIVE：同上 |
+| MT-6-367 | tests/contract/ac-evidence-schema-domain.test.mjs | R/review/schema-validator | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是(A) | 验证器枚举域形状（绑定链） |
+| MT-6-368 | tests/contract/card03-dispatch-method.test.mjs | AGENTS.md 文本 | 测试文件（随被测对象处置） | DELETE | B7/P8 | git revert B7 提交 | — | 是(A) | 治理文档文本形状；批次 7 改写文档时同步 |
+| MT-6-369 | tests/contract/card03-review-orchestration.test.mjs | R/review/review-record-route、review-packet-identity、review-input-bounds | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 是(A) | PENDING："phase review 绑定 T0"＝revision 绑定，但属新链 phase 审查点（ADR-014/019）；需 build-plan 裁定保留范围 |
+| MT-6-370 | tests/contract/card03-runtime-binding.test.mjs | canonical-evidence-validators、case-reconciliation | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是(A) | 回执在写集变化下失效＝绑定链 |
+| MT-6-371 | tests/contract/card03-skill-bundle-closure.test.mjs | check-skill-closure、skill-bundle-release | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 是(A) | ADR-013：聚合摘要＝双层 hash |
+| MT-6-372 | tests/contract/material-set-per-stage.test.mjs | material-workspace、stage-runner | 测试文件（随被测对象处置） | NARROW | B4/P5 | git revert B4 提交 | — | 是(A) | 保留"缺 Phase index 真报失败"，去 stage-runner 认证 |
+| MT-6-373 | tests/fixtures/claude-outcome/valid-session.json | tests/contract/claude-outcome-packet(B5)、tests/e2e/claude-outcome-packet(B5)、tests/integration/vnext-official-stage-run(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | bridge 夹具，随最后一个消费者删 |
+| MT-6-374 | tests/fixtures/host-outcome/legacy-execution.json | tests/contract/host-outcome-bridge | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 外部 bridge 夹具 |
+| MT-6-375 | tests/fixtures/host-outcome/valid-unavailable.json | tests/contract/host-outcome-bridge | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 外部 bridge 夹具 |
+| MT-6-376 | tests/fixtures/diff-evidence/historical-untracked-mismatch.json | tests/contract/diff-evidence-capture-point | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | diff 证据回执夹具，随消费者删 |
+| MT-6-377 | tests/fixtures/historical-import/sample-package/lessons/build-code.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-378 | tests/fixtures/historical-import/sample-package/lessons/build-plan.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-379 | tests/fixtures/historical-import/sample-package/lessons/build-spec.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-380 | tests/fixtures/historical-import/sample-package/lessons/make-decision.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-381 | tests/fixtures/historical-import/sample-package/lessons/verify-code.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-382 | tests/fixtures/historical-import/sample-package/quality/evidence/transcript-index.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-383 | tests/fixtures/historical-import/sample-package/quality/stage-reflection/historical-records.jsonl | tests/contract/import-historical-reflection | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 历史导入样本包（7 件），随 CLI 删 |
+| MT-6-384 | tests/fixtures/metrics-scan/catalog.json | tests/contract/metrics-enabled-report | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | check-skill-closure metrics 扫描输入 |
+| MT-6-385 | tests/fixtures/mutations/bundle-pollution.json | tests/contract/final-coverage(B5)、tests/integration/mutation-guards(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 校验机器变异样本（五道变异守卫同删） |
+| MT-6-386 | tests/fixtures/mutations/confirmation-authorization.json | tests/contract/final-coverage(B5)、tests/integration/mutation-guards(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | G3-10 | 否 | 校验机器变异样本（五道变异守卫同删） |
+| MT-6-387 | tests/fixtures/mutations/identity-tree-hash.json | tests/contract/final-coverage(B5)、tests/integration/mutation-guards(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 校验机器变异样本（五道变异守卫同删） |
+| MT-6-388 | tests/fixtures/mutations/missing-completion.json | tests/contract/final-coverage(B5)、tests/integration/mutation-guards(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 校验机器变异样本（五道变异守卫同删） |
+| MT-6-389 | tests/fixtures/mutations/review-major.json | tests/contract/final-coverage(B5)、tests/integration/mutation-guards(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 校验机器变异样本（五道变异守卫同删） |
+| MT-6-390 | tests/fixtures/protocol-errors/README.md | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 白名单夹具说明 |
+| MT-6-391 | tests/fixtures/protocol-errors/build-code-acceptance-coverage.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-392 | tests/fixtures/protocol-errors/build-code-schema.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-393 | tests/fixtures/protocol-errors/close-authorization.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-394 | tests/fixtures/protocol-errors/legacy-authorization-record.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-395 | tests/fixtures/protocol-errors/legacy-stage-outcome.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-396 | tests/fixtures/protocol-errors/verify-code-binding.json | tests/contract/protocol-error-classification、protocol-error-trace | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | protocol-error 分类样本（7 件含 README） |
+| MT-6-397 | tests/fixtures/public-behavior-baseline/v1/baseline.json | tests/contract/public-behavior-baseline(B5)、tier-c-deletion-boundary | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 生产 tools/architecture/public-behavior-baseline.mjs 硬编码 FIXTURE_ROOT，须与其同批删 |
+| MT-6-398 | tests/fixtures/public-behavior-baseline/v1/candidate.json | tests/contract/public-behavior-baseline(B5)、tier-c-deletion-boundary | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 生产 tools/architecture/public-behavior-baseline.mjs 硬编码 FIXTURE_ROOT，须与其同批删 |
+| MT-6-399 | tests/fixtures/public-behavior-baseline/v1/manifest.json | tests/contract/public-behavior-baseline(B5)、tier-c-deletion-boundary | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | 生产 tools/architecture/public-behavior-baseline.mjs 硬编码 FIXTURE_ROOT，须与其同批删 |
+| MT-6-400 | tests/fixtures/reflection-page/availability-facts.json | tests/contract/build-reflection-page | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 页 CLI 夹具 |
+| MT-6-401 | tests/fixtures/reflection-page/five-states.json | tests/contract/build-reflection-page | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 页 CLI 夹具 |
+| MT-6-402 | tests/fixtures/stage-reflect/judgment-invalid.json | tests/contract/stage-reflect | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage-reflect 夹具，随 stage-reflect 删 |
+| MT-6-403 | tests/fixtures/stage-reflect/judgment-valid.json | tests/contract/stage-reflect | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage-reflect 夹具，随 stage-reflect 删 |
+| MT-6-404 | tests/fixtures/stage-reflect/transfer-matrix.json | tests/contract/stage-reflect | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | stage-reflect 夹具，随 stage-reflect 删 |
+| MT-6-405 | tests/fixtures/stage-reflection/ac-mapping.md | tests/contract/validate-stage-reflection(B5)、stage-reflection-e2e-constructed(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 记录样本，随最后消费者删 |
+| MT-6-406 | tests/fixtures/stage-reflection/v1-legacy-record.json | tests/contract/validate-stage-reflection(B5)、stage-reflection-e2e-constructed(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 记录样本，随最后消费者删 |
+| MT-6-407 | tests/fixtures/stage-reflection/v2-invalid-missing-trio.json | tests/contract/validate-stage-reflection(B5)、stage-reflection-e2e-constructed(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 记录样本，随最后消费者删 |
+| MT-6-408 | tests/fixtures/stage-reflection/v2-valid.json | tests/contract/validate-stage-reflection(B5)、stage-reflection-e2e-constructed(B4) | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | reflection 记录样本，随最后消费者删 |
+| MT-6-409 | tests/fixtures/workflow-evolution/atomic-write-final-aggregate.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-410 | tests/fixtures/workflow-evolution/check-red-authenticity.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-411 | tests/fixtures/workflow-evolution/extreme.json | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-412 | tests/fixtures/workflow-evolution/red-baseline.v1.json | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-413 | tests/fixtures/workflow-evolution/run-browser-qa.sh | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-414 | tests/fixtures/workflow-evolution/run-final-aggregate.sh | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-415 | tests/fixtures/workflow-evolution/run-final-review-chain.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-416 | tests/fixtures/workflow-evolution/run-red-green-gate.sh | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-417 | tests/fixtures/workflow-evolution/setup-browser-fixture.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-418 | tests/fixtures/workflow-evolution/validate-browser-manifest.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-419 | tests/fixtures/workflow-evolution/validate-final-review-chain.mjs | tests/contract/workflow-evolution-browser-manifest/-final-aggregate/-governance | 测试文件（随被测对象处置） | DELETE | B5/P6 | git revert B5 提交 | — | 否 | M16 workflow-evolution 夹具（11 件，含 import wh-review 的脚本），随 M16 链删 |
+| MT-6-420 | tests/fixtures/workflow-quality-cost-sample.json | tests/contract/workflow-quality-regression | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | manifest/catalog 形状测试夹具 |
+| MT-6-421 | tests/fixtures/catalog-drift/catalog.yaml | 无测试引用（仅 docs/architecture/move-map.json） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具；删除时 append-only 同步 move-map.json / repository-inventory.tsv |
+| MT-6-422 | tests/fixtures/derived-review-provider.mjs | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具 |
+| MT-6-423 | tests/fixtures/interaction-quality/r9-spec-clarify.json | 无（仅 docs/architecture inventory/proof json） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具 |
+| MT-6-424 | tests/fixtures/planning-workflow-hardening-acceptance.mjs | 无测试（move-map 登记） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 历史验收生产者孤儿；报告判 ARCHIVE 或 DELETE，本表取 DELETE（无测试引用），同步 move-map/inventory |
+| MT-6-425 | tests/fixtures/step-audit/duplicate.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-426 | tests/fixtures/step-audit/missing.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-427 | tests/fixtures/step-audit/normal.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-428 | tests/fixtures/step-audit/out-of-order.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-429 | tests/fixtures/step-audit/stale.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-430 | tests/fixtures/step-audit/tampered-hash.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-431 | tests/fixtures/step-audit/unexpected.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-432 | tests/fixtures/step-audit/unknown.json | 无（仅 repository-inventory.tsv） | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | 孤儿夹具（8 件，含哈希篡改样本） |
+| MT-6-439 | tests/contract/card03-completion-separation.test.mjs | runtime/stage/completion-predicates.mjs、stage-handlers.mjs（deriveStageCompletion/acceptanceCoverageSummary） | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是 | card-03 新增（合并后补登）：被测对象 completion-predicates.mjs（MT-1-058）与 stage-handlers.mjs completion 认证段（MT-1-067）均 DELETE B4/P5，本测试随之删除 |
+| MT-6-440 | tests/contract/card03-conditional-acceptance-contract.test.mjs | runtime/stage/stage-content-contracts.mjs（validateStageSpecAnalyzeProfile） | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是 | card-03 新增（合并后补登）：validateStageSpecAnalyzeProfile 是带 material_revision/snapshot_tree 绑定的验收链机器校验，随 stage-content-contracts.mjs NARROW（MT-1-063）删除；调用点 stage-runtime.mjs L1316/L1399 由 T017 去、stage-runner/stage-agent-outcome-adapter 随文件删 |
+| MT-6-441 | tests/contract/card03-projection-root-causes.test.mjs | runtime/stage/stage-runner.mjs（buildPostAcceptanceChainRows） | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是 | card-03 新增（合并后补登）：被测对象 stage-runner.mjs（MT-1-070）DELETE B4/P5，本测试随之删除 |
+
+### 1.7 ⑦ 治理文档（112 行）
+
+| id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| MT-7-001 | AGENTS.md | 19 个 .mjs 引用路径串，前 8：`core/__tests__/invocation-identity.test.mjs`、`core/__tests__/protected-paths.test.mjs`、`runtime/distribution/runner-release.mjs`（打包清单 L120）、`runtime/evidence/protected-paths.mjs` L21、`runtime/evidence/runner-identity.mjs` L67、`runtime/stage/stage-handlers.mjs` L2114、`runtime/task/git-worktree-snapshot.mjs` L639、`scripts/__tests__/task-bootstrap.test.mjs`；另 `tools/cli/verify-structure.mjs` L94 | 0（新治理文本不再被 runtime 读取） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- AGENTS.md` | G3-11、G3-12 | card03-touch | 改「当前目录职责（Phase 8）」八分区、「当前治理边界」cohort pre/post 材料与 bridge 段、「本任务新增控制面登记」两条（结构化问答工具卡、accepted_risk confirm 语义扩展，改写明语义保留项）、「vNext 永久实施边界」七类 runtime 与 phase_progress 游标；ADR-010 开工横幅改挂 `CARD-06-IN-PROGRESS.md`。**依赖 B1/P2 + B5/P6**（runner-release 打包、runner-identity 存在性检查、verify-structure L94） |
+| MT-7-002 | CLAUDE.md | `tools/cli/verify-structure.mjs` L94（存在性/术语） | 同左（不变） | SURVIVOR | — | 不适用 | — | — | 不动；仅「目录约定」段提 `core/scripts/schemas` 历史兼容区与 move-map 先行，若 move-map 退役（见 MT-7-076 PENDING）再改 1 行 |
+| MT-7-003 | CONTEXT.md | 11 个 .mjs：`core/__tests__/protected-paths.test.mjs`、`runtime/evidence/protected-paths.mjs`、`tests/contract/post-cohort-governance-materials.test.mjs`、`tests/contract/stage-reflection-e2e-constructed.test.mjs`、`tests/contract/tier-c-deletion-boundary.test.mjs`、`tests/contract/ui-frontend-governance.test.mjs`、`tests/workflow-v2-contract.test.mjs`、`tools/architecture/reference-audit.mjs`；另 `tools/cli/verify-structure.mjs` L98-102（五段术语必须出现/排除术语不得出现） | 交互 stage 的术语查阅（人工/AI 阅读） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- CONTEXT.md` | — | card03-touch | 删 L6-24 cohort 路线、L39 stage-reflection、L42-44 stage-handoff 固定写路径、L51 status_matrix、L102-107 执行身份认证/per_invocation、L118 journal+receipt、L123 交互完成记录、L131-137 stage outcome/host bridge、L155 步骤对照、L262 冻结事实集合、L275-278 3rd-review/wh-review 现行术语、L296-298 快照绑定终审、L379-384 阶段完成判据、L412-416 make-decision 完成谓词；历史段就地标「仅审计」；L421/L433 状态更新为已实施；保留 SD-03 7 值、两道人为门、5 窄工具、SD-07 审查点术语。**依赖 B1/P2 + B5/P6** |
+| MT-7-004 | CONSTITUTION.md | 16 个 .mjs，前 8：`core/__tests__/invocation-identity.test.mjs`、`core/__tests__/protected-paths.test.mjs`、`runtime/distribution/runner-release.mjs` L121（打包）、`runtime/evidence/invocation-identity.mjs` L58（对 CONSTITUTION.md 取 sha256 = 材料身份哈希）、`runtime/evidence/protected-paths.mjs`、`scripts/__tests__/task-bootstrap.test.mjs`、`tests/contract/execution-identity.test.mjs`、`tests/contract/post-cohort-governance-materials.test.mjs`；另 `tools/cli/verify-structure.mjs` L20-60 | 0（材料身份哈希消费链随 B5/P6 删除） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- CONSTITUTION.md` | G3-20 | — | 硬件级约束：**用户已确认 L176「身份与完整性所需现有绑定必须保留」可修订**（改为只保留 Git 提交号 + 不可逆授权核对）；仍须按其自身 Governance 同步规则执行：版本号 v1.9.1 → v1.10.0、修订记录、旧→新映射、checklist 22 条不增减。改 F3 L28-30、F4 L35、F6 L49、F7 L56-58、F8 L63-65、F9 L72、F11 L85-87、Q1 L93、Q2 L100-102、Q3 L107、治理边界 L172 七类、负向条款 L176；保留 close 三义 L194-202 与 F7 不可逆授权语义。**依赖 B5/P6**（invocation-identity 取 sha256、runner-release 打包） |
+| MT-7-005 | constitution-checklist.md | 9 个 .mjs：`tests/contract/filled-plan-task-production.test.mjs`、`tests/contract/post-cohort-governance-materials.test.mjs`、`tests/contract/spec-prd-skill-contract.test.mjs`、`tests/per-invocation-doc-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`tests/stage-risk-acceptance.test.mjs`、`tools/architecture/reference-audit.mjs`、`tools/architecture/verify-final-coverage.mjs`；另 `tools/cli/verify-structure.mjs` L52-60（逐条恰 1 个宪法锚点） | 同左（条目数 = 宪法条目数） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- constitution-checklist.md` | G3-20 | — | 与宪法同批同步：改 F3 L11、F6 L14、F8 L16、F11 L19、Q2 L24 判据（去 cohort/认证/preflight）、L47-51 同步记录、L57 close 三义复核；条目数保持 22。**依赖 B1/P2 + B5/P6** |
+| MT-7-006 | README.md | `tools/cli/verify-structure.mjs` L87（真实读取本文件；另 72 个 .mjs 命中「README.md」多为测试夹具自带 README） | 同左 | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- README.md` | — | — | 改 L7「按冻结 activation cohort 选择路线」、L24 `check` 说明、L28-31 pre/post 路线与 `stage-runtime status --action=begin` cohort 回显、L33-41 五阶段速览（删仅 pre 的 build-spec）、L45「已认证的 task worktree」与 host bridge；改为单一四阶段 + 规划两阶段路线。**依赖 B1/P2** |
+| MT-7-007 | docs/3rd-review-error-and-recovery.md | 无代码消费者（仅 `docs/architecture/repository-inventory.tsv` 记录） | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- <path>`；`git mv docs/archive/3rd-review-error-and-recovery.md docs/` | — | — | 旧 broker/3rd-review 异常恢复说明，机制已删；AC-32 历史原件只读可查 |
+| MT-7-008 | docs/3rd-review-provider-contract.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上（`git mv` 反向） | — | — | 旧 provider 合同随旧 broker 退出正常路径（ADR-018 后文档审查面由 wh-review 现行实现承担） |
+| MT-7-009 | docs/3rd-review-redesign-draft.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 旧 3rd-review 重设计草案（v1），描述已删 broker/sealed contract |
+| MT-7-010 | docs/3rd-review-redesign-v2.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 同上（v2），随旧链路整组归档 |
+| MT-7-011 | docs/audit-contracts.md | `tests/host-independence.test.mjs` | 0（测试随 B1/P2 删/改） | DELETE | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/audit-contracts.md` | — | — | 全文 = `steps.json` 唯一拓扑权威 + journal/entry-exit receipt 唯一观察事实 + requirement ledger hash 与 stale 传播，均为已删机制；报告 §1.6 判 DELETE（若要保历史可改 ARCHIVE） |
+| MT-7-012 | docs/cli-tool-mapping.md | 无代码消费者 | 0（人工阅读） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/cli-tool-mapping.md` | — | — | 改「按冻结 cohort 选 pre 五阶段 / post 四阶段」为单一路线；公共工具表改为 5 窄工具 + `confirm`/`authorize` |
+| MT-7-013 | docs/freeze-and-retire.md | 无代码消费者 | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | 同上（`git mv` 反向） | — | — | agenthub 冻结退役规则（N₁=3/N₂=5、五局三胜指标、基线快照）属已结束的 m 系/agenthub era，无现行 route 引用；报告 §1.6 因「与 Card-06 删除面无关」判 SURVIVOR，本表按「过时说明文档」统一归口归档，避免 era 文档与现行文档混放 |
+| MT-7-014 | docs/human-brief-template.md | 无代码消费者 | 各交互 stage 的大白话输出规则 | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/human-brief-template.md` | — | — | 大白话摘要模板现行保留（Card-03「证据只留原始件」同源）；只改 L97「计划 hash 只在内部」为窄工具④的 Git 提交号核对（ADR-020） |
+| MT-7-015 | docs/migration-and-fallback.md | `tests/host-independence.test.mjs` | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | canonical cutover + `audit_summary_hash` tuple + 四分支判定（D8/D11）= 已删机制 |
+| MT-7-016 | docs/multica-monitoring-sop.md | 无代码消费者（正文引用 `skills/wh-review/contracts/provider-protocol.md`） | 同左（wh-review 文档面按 ADR-018 保留） | SURVIVOR | — | 不适用 | — | — | 不动；Multica 事实口径（Issue/run/评论不作阶段完成证明）现行有效，与 G3-17 的 `dirty_worktree`/`main_origin_mismatch` 阻断同属必留 |
+| MT-7-017 | docs/plain-language-mechanism-design.md | 无代码消费者 | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 「三 gate 两 auto」含仅 pre 的 build-spec 自动放行与「Handoff 累积」，路线已删；大白话原则已由 Card-03 证据硬规则与 `docs/human-brief-template.md` 承接 |
+| MT-7-018 | docs/reuse-registry.md | `tests/p0-foundation-contracts.test.mjs`、`tests/reuse-registry.test.mjs` | 0（测试随 B1/P2 删/改） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/reuse-registry.md` | — | — | 把「X3 保持独立 3rd-review broker，经 wh-review 薄入口声明 ≥1.2.0 依赖」改为历史条目（ADR-018：文档审查面由 wh-review 现行实现承担） |
+| MT-7-019 | docs/skill-version-bump.md | 无代码消费者 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；现行 skill manifest 版本规则，ADR-013 只删 catalog↔skill-bundle 双层 hash、不删版本规则（「记在每个 execution record」一句可在后续单独收） |
+| MT-7-020 | docs/stage-atomic-step-inventory.md | `tests/p0-foundation-contracts.test.mjs`、`tests/workflow-v2-contract.test.mjs`（流程形状测试） | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 固定步骤锁的文档面（`steps.json` 唯一拓扑权威 + legacy section mapping + fail-closed）；报告 §1.6 允许 DELETE 或 ARCHIVE，本表取 ARCHIVE 以保历史可查 |
+| MT-7-021 | docs/standard-workflow.md | 12：`AGENTS.md`、`docs/adr/0023-…`、`docs/architecture/move-map.json`、`findings.md`、`tests/contract/freeze-classification-budget-usage-protocol.test.mjs`、`tests/contract/governance-review-dispatch-boundary.test.mjs`、`tests/contract/post-cohort-governance-materials.test.mjs`、`tests/contract/stage-reflection-e2e-constructed.test.mjs`、`stage-reflection-skill-contract`、`tier-c-deletion-boundary`、`workflow-quality-regression`、`tests/fixtures/stage-reflection/ac-mapping.md` | 各 stage 流程说明（人工阅读） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/standard-workflow.md` | — | card03-touch | 改 L5/L12-22「先记住三条规则」、L29-42 cohort 表、L44-54 十读取入口、L56-121 通用执行合同（**L84 wh-review 退出正常路径必改**）、L123-185 make-decision（对齐 Card-07 现状）、L187-229 build-spec 节删或挪历史附注、L231-268 build-plan 去 pre 双写、L270-319 build-code 删 `authenticate-current-task-completion` 与快照绑定、L321-360 verify-code 删 receipt、L362-369 mini-task、L371-392 close 五动作**保留**、L394-402 四层状态按 projection 去留改写。**依赖 B1/P2**（12 个 doc-text 测试） |
+| MT-7-022 | docs/wh-review-e2e.md | 无代码消费者 | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 旧 wh-review e2e 记录基于已删的 sealed contract/snapshot 机制；AC-32 历史原件只读可查（wh-review 本体按 ADR-018 保留，归档的是这份旧 e2e 说明） |
+| MT-7-023 | docs/adr/0001-two-layer-review-architecture.md | 无 | 无（历史决策记录） | SURVIVOR | — | 不适用 | — | — | 不动；两层审查（broker 分离）已取代，由 B7/P8 新增 Card-06 ADR 追加「由 Card-06 取代」一行 |
+| MT-7-024 | docs/adr/0002-requirement-lineage-and-step-audit.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；requirement lineage & step audit 属已删机制，靠 Card-06 ADR 取代注说明 |
+| MT-7-025 | docs/adr/0002-v4-review-exception-state-matrix.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；V4 审查异常矩阵已取代 |
+| MT-7-026 | docs/adr/0003-explicit-task-root-and-upstream-lineage.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；显式任务根与血缘已取代 |
+| MT-7-027 | docs/adr/0004-minimal-run-model.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；minimal run model 已取代 |
+| MT-7-028 | docs/adr/0005-deterministic-task-directory.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；确定性任务目录与单一 Task 上下文已实施，加取代注说明 kernel 消失后的落点 |
+| MT-7-029 | docs/adr/0006-single-build-code-contract-with-composable-roles.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；SD-07 每 phase 审查依据，ADR-014/019 显式必留 |
+| MT-7-030 | docs/adr/0007-phase-and-integration-review-material-architecture.md | `tests/contract/governance-review-dispatch-boundary.test.mjs`、`tests/workflow-v2-contract.test.mjs` | 同左（B1/P2 后为新链测试） | SURVIVOR | — | 不适用 | — | — | 不动；SD-07 审查材料架构，必留边界 |
+| MT-7-031 | docs/adr/0008-same-task-recovery-is-append-only.md | `tests/per-invocation-doc-contract.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；同任务恢复追加已废止，加取代注 |
+| MT-7-032 | docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；同 snapshot Phase recovery（Superseded） |
+| MT-7-033 | docs/adr/0009-stage-content-authority.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；stage content authority 属 stage completion/认证面，加取代注 |
+| MT-7-034 | docs/adr/0010-serious-review-disposition.md | 无 | 无 | SURVIVOR | — | 不适用 | G3-11 | — | 原文不动；其 `accepted_risk` / repair-or-risk 实现面处置见 G3-11（机器部分 DELETE，语义保留为 finding 处置值） |
+| MT-7-035 | docs/adr/0011-authenticated-review-flow-generations.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；认证 review-flow generation 属 OI-013 删除面，加取代注 |
+| MT-7-036 | docs/adr/0012-task-local-monitoring-and-derived-projections.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；任务本地监控与派生投影属已删机制 |
+| MT-7-037 | docs/adr/0013-mini-task-compact-delivery-flow.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 原文不动；mini-task 依赖 task-close 与 cohort 材料，其去留在 G3-25 预处置中登记 |
+| MT-7-038 | docs/adr/0014-vnext-current-material-authority-and-stage-local-repair.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；vNext 根目录四材料（pre 形态）随 pre 退役，post 材料形态见 AGENTS.md vNext 边界 |
+| MT-7-039 | docs/adr/0015-ui-design-source-and-initialization.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；UI 设计源，不在删除面 |
+| MT-7-040 | docs/adr/0016-external-first-frontend-component-quality.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；前端组件质量，不在删除面 |
+| MT-7-041 | docs/adr/0017-stage-quality-fact-freshness-scope.md | `tests/contract/tier-c-deletion-boundary.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；质量事实新鲜度范围属 freshness 链（B4/P5 删除面），加取代注 |
+| MT-7-042 | docs/adr/0018-single-close-delivery.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；close 唯一交付动作 = 不可逆授权必留语义 |
+| MT-7-043 | docs/adr/0019-canonical-quality-ownership-and-compatibility.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；质量事实单一归属与旧记录兼容属已删机制 |
+| MT-7-044 | docs/adr/0020-close-five-actions-quality-transcription.md | `tests/contract/tier-c-deletion-boundary.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；close 五动作逐项授权必留（G3-02/窄工具④语义来源） |
+| MT-7-045 | docs/adr/0021-stage-reflection-judgment-layer.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；强制 reflection（REFL-001 事故来源）属已删机制 |
+| MT-7-046 | docs/adr/0022-candidate-pool-judgment-whitelist.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；候选池白名单属已删机制 |
+| MT-7-047 | docs/adr/0023-stage-reflection-execution-and-status.md | `docs/standard-workflow.md`（反向引用） | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；stage-reflection 执行闭环属已删机制 |
+| MT-7-048 | docs/adr/0024-remove-host-session-binding.md | `tests/contract/session-binding-removed.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；移除宿主会话绑定与薄核心方向一致，保留 |
+| MT-7-049 | docs/adr/0025-convergence-outline-and-close-loop.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；收敛大纲与收口闭环属已删机制 |
+| MT-7-050 | docs/adr/0025-planning-branch-and-maintainable-prd.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；规划支线与可维护 PRD = 新路线依据 |
+| MT-7-051 | docs/adr/0025-review-dispatch-preflight-boundaries.md | `tests/contract/governance-review-dispatch-boundary.test.mjs` | 同左（B1/P2 后为新链测试） | SURVIVOR | — | 不适用 | — | — | 不动；review dispatch preflight 属已删机制 |
+| MT-7-052 | docs/adr/0026-equivalent-stage-outcome-attempts.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；等价 stage outcome attempts 属已删机制 |
+| MT-7-053 | docs/adr/0027-planning-task-question-boundary.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；规划任务提问边界 = 新路线依据（结构化问答卡的文本契约来源之一） |
+| MT-7-054 | docs/adr/0027-test-feedback-runtime-profile.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 原文不动；test runtime profile（`measure-test-runtime-profile.mjs` receipt）去留属 PENDING，不在本面裁定 |
+| MT-7-055 | docs/adr/0028-plan-slicing-and-review-budget.md | `tests/contract/review-budget-deletion.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；计划切片与审查结果复用属已删机制 |
+| MT-7-056 | docs/adr/0029-current-ac-and-close-state.md | `tests/contract/tier-c-deletion-boundary.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 原文不动；`current-close-projection` 为 Card-08 幸存（见第 5 节），随 projection 去留的登记见 G3-23 |
+| MT-7-057 | docs/adr/0030-mechanism-simplification-deletion-boundary.md | `tests/contract/tier-c-deletion-boundary.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；机制简化删除边界，Card-06 迁移表另起不复用其 `deletion-plan.json` |
+| MT-7-058 | docs/adr/0031-hosted-method-toolkit-direction.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；宿主承载方法工具包方向 = 新路线依据 |
+| MT-7-059 | docs/adr/0031-review-check-downgrade-and-identity-boundary.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；审查「非身份类严格判定」降级与身份边界属身份面，加取代注 |
+| MT-7-060 | docs/adr/0032-review-chain-delegation-and-layer-contract.md | 无 | 无 | SURVIVOR | — | 不适用 | — | card03-touch | 不动；Card-05 新审查链（ADR-014/019 必留边界）；Card-03 分支改过本文件，合并后按 Card-03 文本为准 |
+| MT-7-061 | docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 原文不动；标题含 cohort parity，cohort 消失后由 B7/P8 新增 Card-06 ADR 取代注覆盖，不改原文（ADR append-only） |
+| MT-7-063 | docs/architecture/deletion-plan.json | `tests/contract/tier-c-deletion-boundary.test.mjs`、`tests/integration/governance-diagnostics-non-gate.test.mjs`、`tools/architecture/phase0-deletion-disposition.mjs` | 0（历史只读可查） | ARCHIVE→docs/archive/ | B6/P7 | `git revert <B6 提交>`；`git checkout backup/card-06-b6 -- <path>`；`git mv` 反向 | — | — | 前任务 Phase 0 删除计划（DEL-01~12 + `c6_amendment`）；policy「缺证明或用户确认一律 KEEP」冻结为历史，本卡迁移表另起不复用 |
+| MT-7-064 | docs/architecture/retention-manifest.json | `tests/integration/governance-diagnostics-non-gate.test.mjs`、`tools/architecture/phase0-deletion-disposition.mjs`、`tools/architecture/reference-audit.mjs`、`tools/architecture/retention-audit.mjs` | 批次 6 削删后的留存量表 | PENDING | B6/P7 | 同上 | — | — | `retain` 整目录保留 `runtime/evidence/`、`runtime/review/`、`tests/` 与本卡删除面正面冲突，且把 bridge/stage-review-disposition 标 KEEP；必须改写 retain 或整体退役，否则 `retention-audit.mjs`/`reference-audit.mjs` 把删除报成违例 |
+| MT-7-065 | docs/architecture/control-plane-inventory.json | `docs/adr/0029-…`、`tests/contract/control-plane-governance.test.mjs`、`tests/contract/current-close-projection-readback.test.mjs`、`tests/contract/review-budget-deletion.test.mjs`、`tests/contract/tier-c-deletion-boundary.test.mjs` | 删后逐条 disposition 改写的登记表 | PENDING | B6/P7 | 同上 | — | — | 12 controls 逐条改 disposition；`current-close-projection` 与 Card-08 幸存一致（第 5 节） |
+| MT-7-066 | docs/architecture/complexity-baseline.json | `tools/architecture/{inventory,complexity-report,retention-audit,phase0-deletion-disposition}.mjs` | 0（只读冻结） | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 前任务复杂度基线，不再作为任何门的输入 |
+| MT-7-067 | docs/architecture/final-complexity-report.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 含 `snapshot_tracked_tree_sha256` 的快照树认证产物，只读冻结 |
+| MT-7-068 | docs/architecture/deletions-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 前任务删除证明（aggregate sha256），只读冻结 |
+| MT-7-069 | docs/architecture/legacy-import-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 多 aggregate sha256 的 import 证明，只读冻结 |
+| MT-7-070 | docs/architecture/history-inventory.json | `tools/architecture/history-inventory.mjs`、`tools/architecture/retention-audit.mjs`、`tests/integration/history-read-only.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 465 文件字节 oracle，历史快照只读 |
+| MT-7-071 | docs/architecture/repository-inventory.tsv | `tools/architecture/inventory.mjs`、`tests/contract/repository-inventory.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 仓库盘点 TSV，只读冻结 |
+| MT-7-073 | docs/architecture/legacy-task-inventory.json | `tests/contract/legacy-zero.test.mjs`、`tests/integration/history-read-only.test.mjs`、`tools/architecture/inventory.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 历史口径 106 任务（legacy 66 / unsupported 40）、`active_count` 91、`user_confirmation: pending`，与第 2 节 124 项口径不同；保留只读并在 `README-ARCHIVED.md` 说明 |
+| MT-7-075 | docs/architecture/real-entry-inventory.md | 无代码消费者 | 同左（人工阅读） | SURVIVOR | — | 不适用 | — | — | 不动；SD-05「真实入口实跑」依据，保留 |
+| MT-7-076 | docs/architecture/test-asset-governance-rules.md | `vitest.config.mjs` L26（注释） | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；真实测试/验收规则，保留（与 `docs/quality/*` 的 PENDING 不同，本文件是规则不是机器消费清单） |
+| MT-7-077 | docs/contracts/C2-scope-bounds.md | `workflows/build-code/diff-scanner.mjs`（文档引用） | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；diff-scanner 有界改动合同 = 窄工具①范围核对依据（G3-21 必留） |
+| MT-7-078 | docs/contracts/card-01-stage-material-interface.md | `tests/integration/card-01-dual-journey.test.mjs` | 0（测试随 B1/P2 删/改） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/contracts/card-01-stage-material-interface.md` | — | — | 删 cohort 材料接口（pre 四材料 / post 三件），改为单一材料形态描述 |
+| MT-7-079 | docs/contracts/task-context.md | `tests/per-invocation-doc-contract.test.mjs` | 同左 | NARROW | B7/P8 | 同上 | — | — | 去 kernel 措辞与 L25「每次调用认证与遗留迁移」整段，保留 `storageRoot`/`taskPath` 路径解析（= 窄工具①） |
+| MT-7-080 | docs/quality/business-case-catalog.json | 10：`runtime/stage/stage-runner.mjs`、`tools/cli/stage-runtime.mjs` L1404、`workflows/build-code/{capture,case-reconciliation,targeted-capture}.mjs`、测试 `build-code-case-reconciliation`、`build-code-targeted-capture`、`business-case-catalog`、`business-case-source-binding` | 待定（F-007 裁定） | PENDING | B2/P3 | 决定后按 NARROW/ARCHIVE 同法：`git revert <B2 提交>`；`git checkout backup/card-06-b2 -- <path>` | — | — | 去留取决于 F-007 对 `workflows/build-code/{capture,case-reconciliation,targeted-capture}.mjs` 的裁定；真实命令采集若留为窄工具②则本体保留（与 G3-14 同批） |
+| MT-7-081 | docs/quality/test-asset-registry.json | 10：`workflows/build-code/{case-reconciliation,case-selection,test-asset-inventory}.mjs`、测试 `build-code-case-*`、`build-code-test-registry`、`card04-final-aggregate` | 待定（F-007 裁定） | PENDING | B2/P3 | 同上 | — | — | 同 MT-7-080；机器消费清单，随 build-code case 机制裁定 |
+| MT-7-082 | docs/operations/claude-e2e-sample.md | 无 | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- <path>`；`git mv` 反向 | — | — | M17 运维留档（outcome-packet 样例），机制已删 |
+| MT-7-083 | docs/operations/clean-install-archive.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | M17 干净安装留档 |
+| MT-7-084 | docs/operations/codex-support-verification.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | M17 codex 支持验证留档 |
+| MT-7-085 | docs/operations/deferred-tasks-m17.md | `docs/architecture/move-map.json`（反向引用） | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | M17 延期任务留档；move-map 引用随 B6/P7 一并处置 |
+| MT-7-086 | docs/operations/old-tree-archive.md | 无 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | M17 旧树归档留档 |
+| MT-7-087 | docs/superpowers/plans/2026-07-12-wh-review-v4-implementation.md | 仅 `docs/architecture/repository-inventory.tsv` 记录 | 0（历史只读可查） | ARCHIVE→docs/archive/ | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- <path>`；`git mv` 反向 | — | — | wh-review V4 实施计划，V4/sealed contract 机制已删 |
+| MT-7-088 | docs/superpowers/plans/2026-07-13-unstaged-review-snapshots.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | unstaged review snapshot 设计，快照机制已删 |
+| MT-7-089 | docs/superpowers/plans/2026-07-13-wh-review-v4-design-gap-closure.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | V4 设计缺口闭合计划 |
+| MT-7-090 | docs/superpowers/plans/2026-07-14-review-delivery-plan.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | review delivery 计划 |
+| MT-7-091 | docs/superpowers/plans/2026-07-15-wh-review-quality-repair.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | wh-review 质量修复计划 |
+| MT-7-092 | docs/superpowers/plans/2026-07-15-wh-review-sealed-contract-recovery.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | sealed contract 恢复计划（机制已删） |
+| MT-7-093 | docs/superpowers/plans/2026-07-15-wh-review-simple-reliable-plan.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | wh-review 简化计划（历史计划，被 ADR-018 取代） |
+| MT-7-094 | docs/superpowers/specs/2026-07-12-wh-review-v4-redesign-design.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | V4 重设计稿 |
+| MT-7-095 | docs/superpowers/specs/2026-07-14-local-skill-closure-design.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | local skill closure 设计（双层 hash 校验机器已随 ADR-013 删除） |
+| MT-7-096 | docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 自标「现行简化设计（2026-09-28）」，仍属旧 wh-review 简化稿；归档时必须追加历史标注，否则仍像现行路径 |
+| MT-7-097 | docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-review.md | 同上 | 0 | ARCHIVE→docs/archive/ | B7/P8 | 同上 | — | — | 上述设计的评审记录 |
+| MT-7-098 | docs/research/ai-cli-host-skill-distribution.md | 无代码消费者 | 同左（只读调研） | SURVIVOR | — | 不适用 | — | — | 不动；`docs/research/**` 整片只读保留 |
+| MT-7-099 | docs/research/claude-code-plugin-system-research-2026-09-05.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；调研报告只读 |
+| MT-7-100 | docs/research/design-md-executable-source-research-2026-08-22.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-101 | docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-102 | docs/research/reviews/workflow-path-claude-code.json | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；`reviews/` 子目录同属只读 |
+| MT-7-103 | docs/research/reviews/workflow-path-kimi.json | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-104 | docs/research/reviews/workflow-path-opencode.json | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-105 | docs/research/ui-delivery-contract-external-practices-2026-08-22.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-106 | docs/research/ui-frontend-simple-workflow-design-2026-08-22.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-107 | docs/research/workflow-path-architecture-blind-review.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-108 | docs/research/workflowhub-batch-governance-inventory-20260825.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-109 | docs/research/workflowhub-batch-governance-simplification-design-20260825.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-110 | docs/research/workflowhub-branch-worktree-audit-20260825.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-111 | docs/research/workflowhub-execution-first-redesign-20260825.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动 |
+| MT-7-112 | docs/research/workflowhub-wh-review-material-identity-incident-20260825.md | 无 | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；材料身份事故调研，是本卡 OI-013 删除哈希的原始依据，只读保留 |
+| MT-7-113 | docs/templates/project-gitignore.md | `tests/contract/close-sidecar-and-archive.test.mjs` | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；新项目 sidecar `.gitignore` 模板，与删除面无关（close sidecar 预检属 G3-02 必留语义） |
+| MT-7-114 | CARD-06-IN-PROGRESS.md | 无（本次新增） | 仓库读者（开工横幅） | NEW | B0/P1 | 删除该文件 | — | 否 | ADR-010 开工横幅改用根目录临时文件，不写进 AGENTS.md；B7/P8 删除，文件生命周期由 P1 声明、P8 收口 |
+| MT-7-115 | docs/adr/0034-subagent-dispatch-and-parallel-rules.md | 人读（ADR 决策记录） | 同左 | SURVIVOR | — | 不适用 | — | 是 | card-03 新增 ADR（合并后补登）：按 §1.3 全量 SURVIVOR 原位保留规则，不入批、无改动 |
+
+## 2. 未改动文件（无行，SURVIVOR by omission）
+
+本次卡不改动的在范围内文件共 52 个，不逐行登记；删除/改写动作发生前若命中这些路径即为越界。清单：
+
+- `docs/archive/retired-root-progress/HANDOFF-make-decision-card07.md`
+- `docs/archive/retired-root-progress/HANDOFF-make-decision.md`
+- `docs/archive/retired-root-progress/findings.md`
+- `docs/archive/retired-root-progress/progress.md`
+- `docs/archive/retired-root-progress/task_plan.md`
+- `skills/backend-testing/SKILL.md`
+- `skills/debate/LICENSE`
+- `skills/debate/SKILL.md`
+- `skills/debate/examples/sample-input.md`
+- `skills/debate/examples/sample-verdict.md`
+- `skills/debate/pk-rules.test.ts`
+- `skills/debate/pk-rules.ts`
+- `skills/debate/references/anti-bias-guardrails.md`
+- `skills/debate/references/arbitration-protocol.md`
+- `skills/debate/references/output-template.md`
+- `skills/debate/references/role-spawn-templates.md`
+- `skills/design-source-readiness/skill-bundle.json`
+- `skills/diagnosing-bugs/LICENSE`
+- `skills/diagnosing-bugs/SKILL.md`
+- `skills/diagnosing-bugs/hitl-loop.template.sh`
+- `skills/diagnosing-bugs/scripts/validate-diagnosis.mjs`
+- `skills/frontend-testing/SKILL.md`
+- `skills/fullstack-slice-testing/SKILL.md`
+- `skills/grill-with-docs/ADR-FORMAT.md`
+- `skills/grill-with-docs/CONTEXT-FORMAT.md`
+- `skills/intake-decision-review/skill-bundle.json`
+- `skills/isolated-browser-qa/references/agent-browser.md`
+- `skills/isolated-browser-qa/references/auth.md`
+- `skills/isolated-browser-qa/references/browser-use.md`
+- `skills/isolated-browser-qa/references/fallback.md`
+- `skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh`
+- `skills/isolated-browser-qa/scripts/browser-qa-context.sh`
+- `skills/isolated-browser-qa/scripts/browser-qa-doctor.sh`
+- `skills/isolated-browser-qa/scripts/cleanup-browser-qa.sh`
+- `skills/isolated-browser-qa/scripts/cleanup-codex-qa.sh`
+- `skills/plan-ceo-review/review-bundle.json`
+- `skills/plan-ceo-review/skill-bundle.json`
+- `skills/plan-design-review/review-bundle.json`
+- `skills/plan-design-review/skill-bundle.json`
+- `skills/plan-eng-review/review-bundle.json`
+- `skills/plan-eng-review/skill-bundle.json`
+- `skills/resolving-merge-conflicts/skill-bundle.json`
+- `skills/simplicity-guard/review-bundle.json`
+- `skills/simplicity-guard/skill-bundle.json`
+- `skills/spec-analyze/review-bundle.json`
+- `skills/spec-research/SKILL.md`
+- `skills/spec-tasks/SKILL.md`
+- `skills/test-routing-advisor/SKILL.md`
+- `skills/test-routing-advisor/scripts/route.mjs`
+- `skills/testing-system-blueprint/SKILL.md`
+- `skills/ui-project-init/skill-bundle.json`
+- `skills/workflowhub-host-protocol/skill-bundle.json`
+
+## 3. 聚合裁定（合并 6 份分面编制记录时的处理）
+
+| # | 事项 | 处理 | 依据 |
+| --- | --- | --- | --- |
+| A-1 | `skills/catalog.yaml` 在片段 3（B5/P6）与片段 5（B1/P2）各有一行 | 保留 B5/P6 一行；丢弃片段 5 的重复行。L1008 的测试登记一并去除 | ADR-013 顺序：hash 字段必须在 check-skill-closure 消费链拆除之后删；本文件在 B1/P2 不属测试入口收敛范围 |
+| A-2 | `docs/architecture/move-map.json` 三处登记（MT-5-048 / MT-6-438 / MT-7-062） | 保留 B6/P7 一行 | P7/T026 是该文件的唯一 owner；测试面与文档面不再登记 |
+| A-3 | `docs/architecture/final-coverage-audit.md`、`test-asset-inventory.md` 在片段 4（B6/P7）与片段 6（B7/P8）各一行 | 统归 B6/P7 | 与 docs/architecture 其它一次性证明产物同批删除 |
+| A-4 | 21 个 wh-review 测试文件在片段 3（MT-3-098~118）与片段 5（MT-6-052~077）重复，处置与批次一致 | 保留片段 5 的 21 行，丢弃片段 3 的重复行 | 测试面是这些文件的唯一 owner |
+| A-5 | `tools/host/**` 三件在片段 2 落 B5/P6，而其消费的 `runtime/stage/stage-agent-outcome-adapter.mjs` 在片段 1 落 B4/P5 | 三件前移 **B4/P5** 同批删除 | 避免跨批悬空 import 窗口；P5 gate 已覆盖 |
+| A-6 | 片段 4 使用调研 03 §8 的局部 G-3 编号 | 按片段 6 §4 的 25 项规范表批量改写：`G3-04→G3-11`（accepted_risk）、`G3-05→G3-12`（结构化问答卡）、`G3-11→G3-10`（人为门①记录） | 片段 6 §4 是唯一编号源 |
+| A-7 | 片段 3 约定「只列被改动文件」，未改动 skills 文件不逐行登记 | 接受；未改动文件清单见 §2 | 本表登记的是处置动作，不是文件普查 |
+| A-8 | `runtime/evidence/protected-paths.mjs` 在片段 1 落 B3/P4，而 G-3 登记表落 B4/P5 | 统一 **B4/P5** | 它是 runtime/evidence 机制模块，归 runtime 机制核心批；B3/P4 是 skills 文本批 |
+| A-9 | 上述模块的唯一消费者 `core/__tests__/protected-paths.test.mjs` 在片段 5 落 SURVIVOR | 改 **DELETE B4/P5**，与模块同批 | 不留悬空测试；若独立审查把 G3-07 改判保留，两行同时改回并重新登记测试 |
+| A-10 | 两个 runtime 共置测试（stage-end-report、stage-runner）在片段 1 与片段 5 各登记一次，处置批次相同 | 保留片段 1 的行，丢弃片段 5 的重复行 | `runtime/**` 的 owner 是片段 1 |
+| A-11 | 56 行以 `PENDING：` 前缀标注（调研判 PENDING/待定） | 保留预填处置与备注前缀，交由独立审查裁定 | ADR-022：G-3 与待定项不在 build-plan 定死 |
+| A-12 | `skills/wh-review/contracts/provider-protocol.md` 在片段 3 落 SURVIVOR，但正文含 `material_id` 定义 | 改 **NARROW B4/P5** | 与审查链哈希剥离同步改写；否则合同文本与实现相矛盾 |
+| A-13 | `skills/wh-review/contracts/build-spec.md` 在片段 3 保守落 SURVIVOR | 改 **DELETE B5/P6** | build-spec 工作流已在 B2/P3 退役，合同无消费者（片段 3 §D-1 建议） |
+| A-14 | `skills/deep-research/SKILL.md` 在片段 3 落 SURVIVOR，但备注列了 L47-53 文本清理 | 改 **NARROW B3/P4** | 有文本改动即非 SURVIVOR；批次不变 |
+| A-15 | 开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建、P8 收口删除，跨两个 Phase | 只登记在 P1 写集（MT-7-114，owner=P1）；P8/T027 执行其声明的收口删除，不重复登记 | 校验器要求一个路径一个 Phase owner；本卡唯一此类路径，已在 `spec.md#全局文件边界与依赖` 登记 |
+| A-16 | Card-03 进 main（dd27a79a）后合入本分支（741e1768）：3 个 card-03 新测试无行；`validateStageSpecAnalyzeProfile` 无处置；ADR-0034 无行 | 补登 MT-6-439/440/441 = DELETE B4/P5（随被测对象）；ADR-0034 = SURVIVOR；`validateStageSpecAnalyzeProfile` 随 stage-content-contracts.mjs NARROW 删除，stage-runtime.mjs 两处调用由 T017 移除 | 该函数是带 material 绑定的验收链机器校验，属 Card-06 删除面；补登不改变任何既有行的处置与批次 |
+
+## 4. G-3 汇总（25 项，规范编号）
+
+> 按 ADR-022，逐项裁定留待 build-plan 之后的独立审查；本表只登记候选、预处置建议与批次。
+
+## 4. G-3 汇总（25 项）
+
+- 来源：5 个调研面的 G-3 候选合并去重（`01` §6 16 项、`02` §7 14 项、`03` §8 12 项、`04` §5 12 项、`05` §2 14 项 → 合并为 25 项）。
+- **用户确认状态一律为「待审查时确认」**：ADR-022 已裁定 25 项预处置**不在 build-plan 定死**，留到后续独立审查逐项裁定；本表只登记候选、预处置建议与批次。
+- 预处置口径：`B0/P1` 窄工具独立化、`B2/P3` workflows/skills 文本、`B3/P4` skills 旧绑定、`B4/P5` runtime 机制核心、`B5/P6` CLI/schemas、`B7/P8` 治理文档。
+
+| G3-NN | 对象 | 安全职责 | 预处置 | 批次 | 用户确认状态 |
+|---|---|---|---|---|---|
+| G3-01 | kernel 不可逆授权：`runtime/task/task-kernel-implementation.mjs` 的 `publishIrreversibleAuthorization`（L1091-1094 revision/快照绑定）与 `consumeIrreversibleAuthorization`（L1110-1160 一次性消费/同 step 幂等） | 不可逆授权防错绑/防过期/防重放 | 抽为窄工具④；ADR-020 只核对 Git HEAD，不绑 material_revision/snapshot_tree | B0/P1（抽取）→ B4/P5（删 kernel） | 待审查时确认 |
+| G3-02 | task-close 执行器与 close 旁路：`core/task-close.mjs` `executeClosePlan`/`sourceWorktreeStatus` L2155/`createTaskWorktreeRemoval`/`inspectWorktreeCleanup`、`close.execution.lock`、`git-worktree-snapshot.mjs` `assertNoCloseExecutionSidecars`/`listCloseExecutionSidecarPaths` | 不可逆 Git 执行互斥、脏源/脏目标预检、worktree 清理、close sidecar 残留预检 | NARROW 改接①④⑤，语义全保留 | B4/P5（core）+ B5/P6（`tools/cli/task-close.mjs`） | 待审查时确认 |
+| G3-03 | 原子写系列：`task-handle.mjs` `writeAtomicAt`/`writeRecordAtomic` + 祖先目录 dev/ino 复核 + `readRegularFileNoFollow`/`assertInside`（O_NOFOLLOW/O_DIRECTORY）、`core/artifact-dir` `writeAtomic`、`material-workspace` `replaceMaterialAtomic` | 原子写、防 symlink/TOCTOU/路径逃逸 | 合一进窄工具③ | B4/P5 | 待审查时确认 |
+| G3-04 | 记录锁/store 锁/claim 锁：`task-handle.mjs` `withRecordLockAt`/`lockOwnerDeadOrExpired`/claim 锁、`task-store.mjs` `withStoreLock`、`review-record-route.mjs` `IN_PROCESS_REQUEST_LOCKS`/`requestLockHash`、`canonical-receipt-writer.mjs` `withRecordLock(TEST_CAPTURE_LOCK_REF)` | 互斥、陈旧锁回收（pid/host/machine_id）、防重复派发、测试采集并发 | 合一进窄工具⑤ | B4/P5 | 待审查时确认 |
+| G3-05 | `runtime/evidence/workflow-evolution.mjs` 的 `acquireProjectLock`/`assertProjectLockCurrent` | project lock（反思/lesson 并发写） | DELETE | B4/P5 | 待审查时确认 |
+| G3-06 | `core/runtime-mode.mjs` `assertRuntimeAuthority`/`quiesceRuntime`/`assertLegacyBridgeReadOnly`（`stage-runtime.mjs` L11 调用） | 运行模式切换互斥、静默期防并发写、历史 bridge 只读 | DELETE | B4/P5 | 待审查时确认 |
+| G3-07 | `runtime/evidence/protected-paths.mjs`（`PROTECTED_PATHS`=CONSTITUTION/AGENTS/CONTEXT，`findViolation`；生产零消费者） | protected-paths 改动提醒 | DELETE | B4/P5 | 待审查时确认 |
+| G3-08 | `runtime/evidence/write-boundary-preflight.mjs` `assertWriteBoundary`、`runtime/task/workspace.mjs` `prepareTaskWorkspace` L425 path/branch 冲突拒绝、`inspectTargetStatus`、`inspectWorktreeCleanup` | 写边界一致性、冲突拒绝、脏目标预检 | 并入窄工具① | B4/P5 | 待审查时确认 |
+| G3-09 | `runtime/evidence/canonical-receipt-writer.mjs` `captureTests` 的测试前后快照比对（L750-751） | 防测试命令改动被测代码 | DELETE（进损失清单） | B4/P5 | 待审查时确认 |
+| G3-10 | `task-kernel-implementation.mjs` `publishHumanConfirmation`（`withStoreLock` 临界区）与 human-confirmation 记录形状（v3 内联） | 人为门①的并发一致性 + 记录落点 | 抽为 human-confirm 记录（窄工具④/人为门①的实现），临界区语义保留 | B0/P1（抽取）→ B4/P5（删除原实现） | 待审查时确认 |
+| G3-11 | accepted_risk 机器部分：`prepareReviewRiskPause`/`acceptReviewRisk`、`runtime/review/stage-review-disposition.mjs` `buildRiskAcceptance`/`validateRiskAcceptance`、`completion-predicates.mjs` L215-218、`docs/adr/0010`、`risk-acceptance.v1.json`、build-plan `steps.json` step 10、verify-code `steps.json` step 7 | accepted_risk / 风险暂停（AGENTS.md 登记控制面） | DELETE 机器部分；语义保留为 finding 处置值（IO 契约文本保留） | B4/P5 + B3/P4（skill 合同文本） | 待审查时确认 |
+| G3-12 | 结构化问答卡机器校验：`stage-content-contracts` `validateInteractionQuestionBatch`、`stage-content-evidence` `validateTalkQuestion`、`stage-agent-outcome-adapter` `validateStageAgentInteractionRounds`、`runtime/schemas/interaction-completion.v1.json`（rich-v1 question batch）、spec-clarify/talk-with-zhipeng/grill-with-docs 的 `reply_ref`/`reply_hash` | 结构化问答工具卡（AGENTS.md 登记控制面） | DELETE 机器校验；IO 契约文本保留 | B4/P5 + B2/P3 | 待审查时确认 |
+| G3-13 | 审查中断信号处理：`tools/cli/stage-runtime.mjs` `runReviewRecordWithSignalHandling`；请求锁哈希：`review-record-route.mjs` `IN_PROCESS_REQUEST_LOCKS`/`requestLockHash` | 中断时保证记录 flush；防重复派发 | 保留信号处理；请求锁哈希改用窄工具⑤ | B4/P5（runtime）+ B5/P6（CLI） | 待审查时确认 |
+| G3-14 | `workflows/build-code/targeted-runner.mjs` 进程组 TERM/超时 kill/8MiB 输出上限；workspace-runner 进程组保护 | 孤儿进程与输出体量保护（窄工具②安全边界） | 并入窄工具② | B2/P3 | 待审查时确认 |
+| G3-15 | review 路径脱敏与边界：`skills/wh-review/scripts/review-materials.mjs` L1119 realpath/symlink/nlink、L1184 renameSync 原子写、L2151 `redactProviderHostPaths`；`review-source.mjs` L69/206/220-221 | 数据外发前脱敏、路径包含边界 | 保留（只删材料身份哈希） | B3/P4 | 待审查时确认 |
+| G3-16 | `skills/wh-review/scripts/third-review-host-config.mjs` `atomicReplace`（L75-78）+ 预期 hash 守卫的用户 `~/.config` 配置迁移/恢复（L26-151，realpath/symlink 校验） | 用户全局配置原子写 + 防覆盖 | 保留 | B3/P4 | 待审查时确认 |
+| G3-17 | `skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs` `dirty_worktree`/`main_origin_mismatch` 同步阻断（L368-370） | 同步前阻断脏工作树/主仓 origin 不一致 | 保留（改提示词正则时不得丢） | B2/P3 | 待审查时确认 |
+| G3-18 | build-prd `steps.json` step 5 四 revision + 展示稿 hash + `human_approved` | confirm 人为门的版本绑定（「此答复批准此版本」= SD-12 ②） | DELETE 绑定（进损失清单②） | B2/P3 | 待审查时确认 |
+| G3-19 | build-plan `steps.json` step 11 `self_check oracle-provenance-prewritten-irreversible` | 不可逆动作前的 oracle 预写自检 | DELETE | B2/P3 | 待审查时确认 |
+| G3-20 | `CONSTITUTION.md` F7 + close 三义 L194-202 + 负向条款 L176「身份与完整性所必需的现有绑定仍须保留」 | 不可逆授权的宪法文本 | B7/P8 修宪（**用户已确认可改**：改为只保留 Git 提交号与不可逆授权核对；版本号/修订记录/映射/22 项 checklist 同步） | B7/P8 | 待审查时确认 |
+| G3-21 | `workflows/build-code/diff-scanner.mjs` 危险 diff 预检（git push、依赖文件、.env.production） | 危险改动识别（窄工具①/④前置扫描） | 保留 | B2/P3 | 待审查时确认 |
+| G3-22 | `runtime/adapters/local-skill-resolver.mjs` 路径包含/符号链接逃逸检查（+ `smoke-local-skill-dispatch.mjs` resolved path 断言） | 防技能包路径逃出 `skills/` | 保留（删 hash 比对） | B4/P5 | 待审查时确认 |
+| G3-23 | 外置 pre 任务的 `operations/close/manual-risk-close.json`（5 个）与 `locks/` 目录 | accepted_risk 历史记录、锁 | 只读保留（归档形态 A：不改目录、不改权限，不改其可读性） | B7/P8 | 待审查时确认 |
+| G3-24 | `tools/cli/check-task-record-paths.mjs`（静态禁止 caller 传 storage/task path、禁止未登记直写者） | 受保护路径静态防护 | DELETE | B5/P6 | 待审查时确认 |
+| G3-25 | `skills/mini-task/scripts/mini-task-runner.mjs`：`task-close-confirmation.v1`/`authorizeResumeOperations`（L742）、`withRecordLock("locks/close.execution.lock")`（L759）、「HEAD changed before authorized commit/merge」漂移预检（L770-808） | 不可逆授权 + 锁 + 漂移预检 | NARROW 改接①④⑤ | B3/P4 | 待审查时确认 |
+
+**阈值结论**：G-3 候选总数 **25 项 > decision-log 推翻阈值 16 项**，已在 build-plan 重估批次计划；**结论是批次顺序不变，只把预处置一次性提前到 build-plan，批次内 G-3 扫描收窄为「未预处置的新发现」**（ADR-022 ①；ADR-006 停下回报协议不变）。
+
+## 2. pre 归档清单（124 项，只读归档）
+
+### 2.1 口径与形态
+
+- **口径**：非 post（无 `task.json.activation_cohort` 字段或旧形态无 `task.json`）且无 `operations/close/completed.json`。
+- **decision-log 原口径「117 项」不可复现**：四种口径分别为 124（非 post 且无 `completed.json`）、116（非 post 且无 `operations/close`）、118（非 post、无 `completed.json`、无 `results/verify-code`）、82（有 `task.json` 的 pre 且无 `completed.json`），**无单一口径得 117**；F-008 原始清单未落盘（ADR-009）。本表以 124 项显式口径为归档对象，117 标为「未复现的旧口径」。
+- **归档形态取 A（ADR-012 下限）**：只在存储根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/` 写一份 `README-ARCHIVED.md`（为什么归档、本 124 项清单 = 纯文本目录名 + 最后修改日期、只读查阅方式、接续归 Card-08），**不改任何目录、不改权限、不移动**。
+  - 其余候选利弊（报告 §2.4）：**B** README + `chmod -R a-w` 真正防写、可逆，但与 post 任务同父目录，父目录无法只读，且会复制 Card-09 ①「只读目录导致 cleanup 删不掉」的痛点，并改动文件 mode；**C** 移入 `../tasks-archive/` 活跃/历史物理分离最清晰，但破坏 `~/.workflowhub/task-index.json`（112 条）与 facts/quality 内绝对路径引用、`resolveCanonicalTaskPath` 找不到旧任务、移动不可原子回滚，与 CARD-08「不借迁移动用户文件」精神有张力；**D** macOS `chflags uchg` 防写最强但不可搬运（SD-04）、清理需先解锁。
+- **计数说明**：`Projects/`（含一份嵌套的 simplicity-close-repair 残留）与 `lessons/`（`make-decision.jsonl`）不是任务目录，一并只读保留但从「任务」计数剔除 → **任务口径 122**。
+- 已 close 的 pre 任务 44 项历史只读保留，不在本清单内（报告附录 A 附列）。另有 `/Users/Hugh/Hugh/Knowledge/activation/card-01.json` 激活标记，pre 退役后失去消费者，随 pre 机制一并归档。
+- 批次列统一写 `B7/P8`（治理文档批）；报告 §2.3 的 A/B/C/D 月分批见下表统计，仅用于执行时分段核对，不构成额外阶段。
+
+| 月分批 | 最后修改月 | 项数 |
+|---|---|---:|
+| A | 2026-06 | 7 |
+| B | 2026-07 | 85 |
+| C | 2026-08 | 22 |
+| D | 2026-09 | 10 |
+| **合计** | — | **124** |
+
+### 2.2 逐项清单
+
+`| id | 目录名 | 最后修改月 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |`
+
+| id | 目录名 | 最后修改月 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| PRE-001 | `m10-baseline-switch` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-002 | `m2-microkernel` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-003 | `m3-narrow-contract` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-004 | `m4-metrics-foundation` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-005 | `m5-quality-mechanism` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-006 | `m6-five-stage-skeleton` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-007 | `m8-build-code` | 2026-06 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 A） |
+| PRE-008 | `m11-build-spec-v1` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-009 | `m12-build-plan-v1` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-010 | `m13a-moat-skills` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-011 | `m9-verify-code` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-012 | `verify-code-work1-hook-review-20260703T073122Z-da8c04` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-013 | `verify-code-work1-hook-review-20260703T073637Z-e8f128` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-014 | `m13-make-decision-v1` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-015 | `m1-scaffold` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-016 | `m13b-build-spec-deepening` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-017 | `m13c-build-plan-deepening` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-018 | `m13d-build-code-deepening` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-019 | `m13e-verify-code-deepening` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-020 | `m7-intake-v1` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-021 | `multica-cost-review` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-022 | `step-gated-audit` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-023 | `wh-review-rebuild` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-024 | `worktree-unification` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-025 | `repo-root-cleanup-20260709T071500Z` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-026 | `m14a-spec-review-wh-fix-1783691538698` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-027 | `m14a-wh-review-acceptance-1783689955377` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-028 | `m14a-wh-review-e2e-82acb86` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-029 | `m14a-wh-review-e2e-82acb86-claude` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-030 | `m14a-wh-review-final-1783690575795` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-031 | `wh-review-e2e-20260710-build-spec` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-032 | `wh-review-e2e-final` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-033 | `wh-review-m14a-43adf99-e2e` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-034 | `m14a-spec-dual-claude-20260711T0025` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-035 | `m14a-spec-dual-kimi-20260711T0025` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-036 | `review-fix-20260711` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-037 | `wh-quality-convergence` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-038 | `ZHI-138` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-039 | `make-decision-audit` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-040 | `m14a-audit-contract-layer` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-041 | `m14b-fact-collection` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-042 | `multica-isolation-recovery` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-043 | `multica-isolation-recovery-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-044 | `multica-minimal-recovery-v4` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-045 | `v4-gap-final-advice-review-20260717` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-046 | `v4-gap-final-advice-review-20260717-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-047 | `m14b-fact-collection-g2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-048 | `multica-isolation-recovery-v3` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-049 | `prompt-root-init-review-20260719` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-050 | `prompt-root-init-review-20260719-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-051 | `flow-reliability-cli-guidance-review-20260720` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-052 | `flow-reliability-cli-guidance-review-20260720-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-053 | `flow-reliability-cli-guidance-review-20260720-v3` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-054 | `flow-reliability-current-tree-review-20260720000708` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-055 | `flow-reliability-current-tree-review-20260720000735` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-056 | `preaccept-build-repair-guidance-review-20260720` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-057 | `preaccept-build-repair-guidance-review-20260720-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-058 | `self-contained-stage-skill-review-20260720` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-059 | `multica-flow-reliability-final` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-060 | `interaction-quality-amendment` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-061 | `stage-interaction-handoff-completeness` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-062 | `multica-workflowhub-reliability` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-063 | `test-parallel-batch` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-064 | `multica-38f9c897-c4e8-4c13-b4ba-4609fc05f035` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-065 | `multica-3a84ec8b-4601-4fda-8cc9-eefd8350ae5b` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-066 | `multica-5e184887-46f6-4b95-aa9b-878f2e2379c5` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-067 | `multica-6a6ee876-9efa-4a47-933b-9b866a4dfab6` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-068 | `multica-7c039943-bff7-4047-87c8-a02799634564` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-069 | `multica-a0bd3b63-89e7-4519-bfbb-05235ee0434a` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-070 | `multica-b166d00d-23e4-474f-bee8-de1291129fc4` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-071 | `multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-072 | `multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-restart-20260724` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-073 | `multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-runnerfix-20260724` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-074 | `multica-workflowhub-reliability-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-075 | `wh-review-bundle-closure-skill-sync` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-076 | `wh-review-materials-v3` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-077 | `build-plan-baseline-rebind` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-078 | `multica-006caae8-09ee-43cd-98ba-fca3f0b94077` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-079 | `multica-1fb79706-c6d9-4284-9e55-d4a4cc9e37a4` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-080 | `multica-296db234-125d-40eb-96d5-abf702d2dbe4` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-081 | `multica-ZHI-850` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-082 | `multica-ZHI-851` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-083 | `multica-ZHI-851-contract-revision-01` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-084 | `multica-ZHI-891` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-085 | `close-conflict-simple` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-086 | `fix-wh-review-predispatch-v2-20260727` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-087 | `review-foundation-baseline` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-088 | `review-foundation-baseline-v2` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-089 | `make-decision-bootstrap-repair` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-090 | `multica-identity-materials-state` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-091 | `review-flow-reset` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-092 | `review-entry-aggregation-simplification` | 2026-07 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 B） |
+| PRE-093 | `workflowhub-complexity-governance-v2` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-094 | `workflowhub-complexity-governance-v3-20260802` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-095 | `requirements-completeness-review-20260805` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-096 | `m15-process-degradation-dashboard` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-097 | `_discarded-m16-experience-loop-repair` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-098 | `m15-verification-receipt-boundary` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-099 | `m15-verify-entry-wiring-20260815` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-100 | `m15-runtime-observability-repair-live-20260815` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-101 | `m15-verify-entry-wiring-live-20260815` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-102 | `m15-verify-receipt-entry-live-20260816` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-103 | `m15-verify-receipt-entry-live-20260816-2` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-104 | `m15-verify-receipt-entry-live-20260816-3` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-105 | `wh-review-adversarial-quality-cost-redesign` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-106 | `wh-review-deferred-exception-close` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-107 | `m15-runtime-observability-repair` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-108 | `workflowhub-core-delivery-boundary-repair-20260819` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-109 | `workflowhub-standard-stage-flow-hardening-20260820` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-110 | `trust-recovery-frontend-followup` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-111 | `workflowhub-local-object-integrity-recovery-20260824` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-112 | `make-decision-requirement-convergence-20260828` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-113 | `Projects` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-114 | `agenthub-extraction-program` | 2026-08 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 C） |
+| PRE-115 | `ui-e2e-delivery-contract-20260830` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-116 | `workflowhub-m16-evolution-20260831` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-117 | `workflowhub-stage-reflection-usability-20260901` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-118 | `workflowhub-m17-repo-skills-multicli-20260903` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-119 | `lessons` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-120 | `workflowhub-close-readiness-governance-20260906` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-121 | `workflowhub-ui-b0-baseline-t01` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-122 | `workflowhub-ui-t02-m0-foundation-20260908` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-123 | `workflowhub-mechanism-simplification-20260910` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+| PRE-124 | `workflowhub-thin-core-rebuild-planning-20260919` | 2026-09 | 只读归档 | B7/P8 | 不适用 | — | 否 | 归档对象，不改动（月分批 D） |
+
+## 3. 仓库内 pre cohort 机制入口点（报告 §5）
+
+### 3.1 判定源（决定 pre/post 的地方）
+
+| 文件:行 | 机制 | 批次 |
+|---|---|---|
+| `tools/cli/task-bootstrap.mjs` L40-77、L226 | `resolveCard01Activation` 读 `<storageRoot>/activation/card-01.json`，缺失/无效 → `pre`；写 `activation_cohort`/`_frozen_at`/`entry_release_commit`；`activation_cohort_observation` 诊断 | B4/P5 |
+| `runtime/task/task-topology.mjs` L97-120 | `readActivationCohort`（非 post 一律 pre）、`resolveTopology`/`validateStageForTopology`（pre 五阶段 / post 四阶段） | B4/P5 |
+| `runtime/task/material-workspace.mjs` L43-60、L120、L163 | `materialFilesForCohort`（pre = 四材料）、`materialDigestAxes`、`inspectMaterialWorkspace` | B4/P5 |
+| `runtime/stage/stage-context.mjs` L8、L38、L92-94、L269 | 上下文按 cohort 装配 | B4/P5 |
+
+### 3.2 分支消费点（`activation_cohort ?? "pre"` 等）
+
+| 文件 | 命中数 | 代表行 | 批次 |
+|---|---:|---|---|
+| `tools/cli/stage-runtime.mjs` | 47 | L54、85-86、173-190、524、809-861（`deriveNamedStatusRefs`/`deriveStatusRootCauses` 默认 pre）、1056 | B4/P5（CLI 瘦身随 B5/P6） |
+| `runtime/stage/stage-runner.mjs` | 46 | L323-349、539、742、1236、1348、1639-1692、1824、2284、2387-2434（`handoffDeclaration`）、3074-3097、3205、3420、3802、4163-4191、4486-4511、4640、4870、5073-5080 | B4/P5 |
+| `runtime/stage/stage-agent-outcome-adapter.mjs` | 20 | L211-250、332、469、564、656、725、769、866、1138、1156 | B4/P5 |
+| `runtime/task/git-worktree-snapshot.mjs` | 14 | L35-37、265、269、434-524、597（`captureGitWorktreeSnapshot`/`captureExecutionSnapshot`/`assertCurrentSourceDigest` 带 cohort 参数） | B4/P5 |
+| `runtime/stage/stage-handlers.mjs` | 14 | L100、1612、2100、2186-2187、2794、3766、3962、4160-4222 | B4/P5 |
+| `runtime/stage/completion-predicates.mjs` | 14 | L21-28、47-55、1016-1028 | B4/P5 |
+| `runtime/review/integration-review-subject.mjs` | 13 | L41-68、387-445 | B4/P5 |
+| `runtime/task/task-kernel-implementation.mjs` | 11 | L694-731、919、981、1036、1056 | B4/P5 |
+| `runtime/stage/stage-content-contracts.mjs` | 11 | L5923-5924、6455、6510、6534、6566、6640 | B4/P5 |
+| `skills/wh-review/scripts/review-materials.mjs` | 10 | L916-949、1966-2015、2138 | B3/P4（ADR-018 按分工瘦身；技能内代码，非 runtime 分支） |
+| `runtime/review/review-record-route.mjs` | 8 | L212-214、1399-1407（`bindBuildPlanReviewCohort`） | B4/P5 |
+| `tools/cli/task-close.mjs` / `core/task-close.mjs` | 7 / 4 | L141-182 / L994-999 | B5/P6 / B4/P5 |
+| `runtime/review/provider-material-projection.mjs` | 7 | L80-88（`reviewActivationCohort`） | B4/P5 |
+| `runtime/evidence/canonical-receipt-writer.mjs` | 6 | L400、488、518-520、736、750 | B4/P5 |
+| `runtime/evidence/freshness.mjs` | 5 | L1872 等 | B4/P5 |
+| `runtime/stage/stage-handoff.mjs` | 4 | L21、174、181、298 | B4/P5 |
+| `skills/wh-review/scripts/simple-review-runner.mjs` | 4 | L367、470、691、729 | B3/P4 |
+| `workflows/build-code/change-scope.mjs` / `test-asset-inventory.mjs` | 2 / 1 | L158、180 / L51 | B2/P3 |
+| `runtime/task/workspace.mjs`、`runtime/evidence/quality-fact.mjs`、`runtime/evidence/invocation-identity.mjs` | 各 1 | L368 / L54 / L47 | B4/P5 |
+
+### 3.3 文档 / 技能 / 配置层入口
+
+| 对象 | 命中 | 批次 |
+|---|---|---|
+| `workflows/build-plan/{SKILL.md(9), steps.json(3: L5,10,11)}` | 12 | B2/P3 |
+| `workflows/build-code/{SKILL.md(5), steps.json(2: L5,17)}` | 7 | B2/P3 |
+| `workflows/build-spec/SKILL.md(3)` | 3 | B2/P3 |
+| `workflows/verify-code/SKILL.md(2)` | 2 | B2/P3 |
+| `skills/catalog.yaml`（L305、329、361、393） | 4 | B2/P3 |
+| `skills/spec-analyze/{SKILL.md(11), packet-lens.md(3)}` | 14 | B2/P3 |
+| `skills/spec-specify/SKILL.md(10)` | 10 | B2/P3 |
+| `skills/spec-plan/SKILL.md(3)` + `templates/{phase,plan}-template.md` | 3+ | B2/P3 |
+| `skills/spec-tasks/SKILL.md(2)` + `templates/{tasks,index}-template.md` | 2+ | B2/P3 |
+| `skills/decision-log/SKILL.md(2)` | 2 | B2/P3 |
+| `skills/stage-reflection/SKILL.md(1)` | 1 | B2/P3 |
+| `skills/testing-system-blueprint/SKILL.md(1)` | 1 | B2/P3 |
+| `skills/wh-review/contracts/build-plan.md(2)` | 2 | B2/P3（文本面；wh-review 本体按 ADR-018 B3/P4 瘦身） |
+| 治理文档：`AGENTS.md`、`CONSTITUTION.md`、`CONTEXT.md`、`README.md`、`constitution-checklist.md`、`docs/standard-workflow.md`、`docs/cli-tool-mapping.md`、`docs/contracts/card-01-stage-material-interface.md`、`docs/stage-atomic-step-inventory.md`、`docs/adr/0033-…` | — | B7/P8（本表 §1 逐条） |
+| 测试：43 个测试文件含 cohort，名称直指的有 `tests/contract/activation-cohort.test.mjs`、`post-cohort-*`（7）、`post-review-cohort-binding`、`stage-agent-outcome-post-cohort`、`tests/integration/card-01-dual-journey.test.mjs` 等 | 43 | B1/P2 |
+| 外部数据：`/Users/Hugh/Hugh/Knowledge/activation/card-01.json`（激活标记）；126 个 `task.json` 无 cohort 字段 | — | B7/P8（归档时只读保留，不改文件） |
+
+## 5. Card-08 / Card-09 幸存者
+
+### 5.1 Card-08「记录完整性回读检查」在当前仓库的对应物
+
+| 路径：函数 | 作用 | 批次 | 理由 / 附注 |
+|---|---|---|---|
+| `runtime/task/task-store.mjs`：`readTaskFacts`/`parseFactRecords`/`validateStageRow`（L168-235）、`writeStageRow`（L417-450，保留 `phase_progress`）、`atomicWrite`（L64）、`withStoreLock` | 单文件接续记录读写；坏 JSON 行/未知字段直接抛错；原子写 + 锁 | B4/P5（NARROW 为窄版） | 40 个文件 import；行 schema 仍含 `material_digest`/`snapshot_tree`，NARROW 时须改；G3-03/G3-04 |
+| `tools/cli/stage-runtime.mjs`：`derivePhaseProgressStatus`（L1014-1028）+ status 读回 `phaseProgressReadback`（L1697-1711，读不到 facts 报 `facts_jsonl_unreadable`） | 读回 build-code 续跑游标，判 `current`/`stale`（`material_revision_mismatch`） | B5/P6（函数需搬出宿主文件） | 当前唯一「发现陈旧接续记录」的现成检查且非阻断；**冲突**：stale 判据是 `material_revision`（材料内容哈希），与 OI-013 冲突——它只是读回信号、非推进前置，是否算「校验机器」需 build-plan 定（PENDING）；消费者 `tests/contract/stage-progress-contract.test.mjs` |
+| `tools/cli/stage-runtime.mjs`：`currentPostPhaseMaterialState`/游标写入校验（L1054-1125，目标 phase/task 必须在当前 index 内） | 写入时拒绝指向不存在 Phase 的游标 | B5/P6 | 属「不完整记录」检查；依赖 `validatePostPhaseContract`（post 合同校验，去留随 F-007） |
+| `runtime/task/portable-workflow-run.mjs`：`TERMINAL_STATES`（L8，恰好 SD-03 7 值）、`projectPortableWorkflowStatus`/`readLatestPortableTerminal` | build-prd 便携工作流的 7 值终态读回 | B4/P5（改写而非原样保留） | 仓库里唯一现成的 7 值实现，无 kernel import（只 import `node:*`）；结果文件名用 sha256（`STEP_RESULT_REF`）与 ADR-016 普通文件名规则冲突，须改写；消费者 `tools/cli/stage-runtime.mjs`、`tests/contract/portable-workflow-run.test.mjs`、`tests/acceptance/card-01-current.mjs`、`tests/integration/card-01-dual-journey.test.mjs` |
+| `runtime/stage/current-close-projection.mjs`（273 行）：`deriveCurrentCloseProjection`、`derivePhysicalDeliveryStatus` | 只读组合 close 计划 + 物理事实读回；readback 完整则当前状态跟随 readback；自述不拥有存储、不写记录 | B4/P5（调用链去 kernel） | F-007 已判幸存（OI-017）；调用方 `tools/cli/task-close.mjs` L175-179 经 `createTaskKernel` 取快照 → 需去 kernel；测试 `current-close-projection-readback`、`close-remote-branch-cleanup`、`four-domain-close-status`、`tier-c-deletion-boundary` |
+
+幸存测试（真实失败/数据完整性，非流程形状，B1/P2 后保留）：`tests/contract/stage-progress-contract.test.mjs`、`tests/contract/current-close-projection-readback.test.mjs`、`tests/contract/portable-workflow-run.test.mjs`、`tests/integration/minimal-task-storage.test.mjs`、`tests/integration/quality-store-concurrency.test.mjs`。
+
+### 5.2 Card-09 ③「减少材料与证据写入量」
+
+Writing-volume sources（**这些是删除对象，不是幸存者**；删它们本身就是写入量下降来源）：
+
+| 写入源 | 路径模式 | 位置 | 批次 |
+|---|---|---|---|
+| stage-quality 证据 + acceptance 镜像 | `quality/evidence/stage-quality/<stage>/<subject>-<hash>.json`、`quality/evidence/acceptance/<stage>/…` | `runtime/stage/stage-runner.mjs` L2239/L2259（另 L2850、L2908、P5 L4720-4771、P10 L5218） | B4/P5 |
+| stage-quality-missing | `quality/evidence/stage-quality-missing/<stage>/…` | `stage-runner.mjs` L3281-3291 | B4/P5 |
+| reflection availability | `quality/evidence/stage-reflection-availability/<hash>.json` | `runtime/stage/stage-reflect.mjs` L483-502 | B4/P5 |
+| targeted capture | `quality/evidence/build-code-targeted/{raw,case,manifest}-<hash>` | `workflows/build-code/targeted-capture.mjs` L22-244 | B2/P3 |
+
+需要显式保留（幸存者）：
+
+| 文件/对象 | 批次 | 理由 |
+|---|---|---|
+| `runtime/task/task-store.mjs`（单文件 `facts.jsonl`，同 stage 原位替换） | B4/P5（NARROW） | 写入量最小的记录形态本身；Card-09 削减以它为落点 |
+| `runtime/evidence/quality-store.mjs`：`publishQualityFact` | B4/P5（NARROW） | 若新记录层继续用 `quality/facts`，它是唯一 writer；须按 ADR-016 改普通文件名（当前内容寻址） |
+| 真实命令原始输出的单份写入（窄工具②；当前混在 `targeted-capture.mjs` 里） | B2/P3 | Card-03「证据只留原始件」要求每类事实只留一份原始件；②剥离后留一个 writer |
+| `runtime/review/review-output.mjs` `MAX_REVIEWER_OUTPUT_BYTES`（128 KiB） | B3/P4 | 审查输出体量上限，与写入量直接相关；属 Card-05 新链 |
+| `AGENTS.md`「证据硬规则」段 + `docs/standard-workflow.md` `### 证据只留原始件`（均 **card03-touch**） | B7/P8 | 写入量削减的现行规则来源，批次 7 改写治理文档时**不得删** |
+| Card-03 `specs/workflowhub-thin-core-card-03-20260919/attachments/A3b-volume.md` | — | 现成的「修复前」文件数基线 |
+
+**时序风险与处置（用户要求）**：AC-45 要求「同一任务前后对比」。若 B4/P5 先删掉证据包装，Card-09 就失去「修复前」对照。故 **Card-09 写入量基线必须在 B4/P5 首删之前采集一次文件数**，写法：
+
+```bash
+find <task> -type f | wc -l
+```
+
+（沿用 A3b 口径：Card-04 任务目录 7469 文件 / 173 MB，其中 `quality/evidence/stage-quality/` 6580 文件占 97%；也可由 Card-09 直接引用 A3b 作为基线，二者取其一须在 Card-09 build-plan 明确。）
+
+## 8. 分面编制记录（可追溯附录）
+
+本表的行由 6 份分面编制记录合并而成，原文保留在同目录，供审查逐条回读：
+
+- `attachments/migration-table-part1-runtime.md` — runtime / core / scripts 生产代码
+- `attachments/migration-table-part2-cli.md` — CLI 与仓库配置
+- `attachments/migration-table-part3-skills-workflows.md` — skills 与 workflows / config
+- `attachments/migration-table-part4-schema-manifest.md` — manifest / schema
+- `attachments/migration-table-part5-tests.md` — 测试与夹具
+- `attachments/migration-table-part6-docs-pre-g3.md` — 治理文档
+

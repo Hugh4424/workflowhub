@@ -19,6 +19,7 @@
 | R-002 | 派子代理调研 4 个 codex 历史会话，找问题与对本任务的帮助 | V-001（U-002） | covered（ADR-009 调研节 F-001~F-009） |
 | R-003 | 开工节奏：make-decision/build-plan 先行，build-code 前完成 Card-03 并合并 | V-002（U-003） | covered（ADR-001） |
 | R-004 | 流程边界纠正：本会话严格执行 make-decision 流程；build-plan 是其他会话的任务，不归本会话 | V-014（U-004） | covered（ADR-008） |
+| R-013 | build-plan 回流：wh-review 按分工保留（文档面 wh-review、代码面 OCR）、审查点以 Card-05 D-044 为准、授权只核对 Git 提交号、OCR 合同补齐 + 未装 OCR 回退 wh-review | V-016、V-017、V-018、V-019、V-020、V-021 | covered（ADR-018~021） |
 
 ## 需求变更记录
 
@@ -66,6 +67,8 @@
 | R-010 | V-003、V-012 | D-001 | OI-011→ADR-001 红线：dirty 处置与 Card-03 合并跟进 |
 | R-011 | V-013 | D-008 | 任务身份节：普通任务 |
 | R-012 | V-014、V-015 | D-008 | 流程纪律纠正 + 最终确认定稿 |
+| R-014 | V-022 | D-022 | G-3 预处置延后到独立审查、宪法修订授权、冻结提交授权 |
+| R-013 | V-016、V-017、V-018、V-019、V-020、V-021 | D-018 | ADR-018~021（D-018/019/020/021）build-plan 回流增量决策：wh-review 按分工保留、三审查点、授权核对提交号、OCR 合同补齐与未装回退 |
 
 ## 逐字声明层（verbatim）
 
@@ -86,6 +89,13 @@
 | V-013 | 用户 | T-006·task-type 回复 | "普通任务（推荐）" |
 | V-014 | 用户 | 用户消息 2026-09-30 | "你完全没有按照make-decision的流程严格执行，遗漏了太多步骤和技能！另外，我没让你执行build-plan，那是我在其他会话要进行的任务！请重新调整todo list！" |
 | V-015 | 用户 | 最终确认卡 v2 回复 2026-09-30 | "确认通过，可以定稿了，请完成make-decision收口把" |
+| V-016 | 用户 | build-plan spec-clarify 批 C-001·doc-review 自由文本 2026-09-30 | "搞错了吧，“ wh-review 要按 AC-32 退出日常流程”是错误的决策！build-plan 合并审查、make-decision 方向/细节审查、build-prd 审查还都得依赖wh-review啊" |
+| V-017 | 用户 | C-001·integration-review 回复 | "以 Card-05 D-044 为准 (Recommended)" |
+| V-018 | 用户 | C-001·git-auth 回复 | "只核对 Git 提交号 (Recommended)" |
+| V-019 | 用户 | C-002·wh-review-boundary 自由文本 | "选1，按分工划分，但是需要检查一下现在的ocr审查有没有把原来wh-review里面build-code和verify-code的审查质量、合同等核心拿过去用？还是说只是简单调用了ocr而已？另外，ocr相关的东西有没有放在workflowhub里？其他的电脑没有安装ocr怎么办？" |
+| V-020 | 用户 | C-003·ocr-contract 回复 | "本卡把合同补进 OCR 审查包 (Recommended)" |
+| V-021 | 用户 | C-003·ocr-portability 自由文本 | "保留一个检测和回退机制，没安装ocr就是用wh-review进行代码审查" |
+| V-022 | 用户 | build-plan 初稿汇报回复 2026-09-30 | "需要拍板的事情，需要你在后续审查的时候再看应该如何决定；宪法修订和冻结提交授权没问题，可以的" |
 
 ## 原始声明层
 
@@ -749,6 +759,94 @@ derived_from: [ADR-002]
 artifacts: [损失清单文档 quality/evidence/loss-acknowledgement/]
 ```
 
+### ADR-018 wh-review 按分工保留（build-plan 回流增量决策）
+```text
+- **source**：V-016、V-019（build-plan spec-clarify C-001/C-002；调研 2026-09-30-04 §2.2-2.3、2026-09-30-07）
+- **decision**：wh-review 不退出日常流程。文档审查面（make-decision 方向/细节、build-plan 合并审查、build-prd 审查）正式由 wh-review（含其 broker 调用）执行；代码审查面（build-code 每 phase、verify-code 终末）正常走 Card-05 OCR 委托；wh-review 中只服务代码面且已被 OCR 取代的部分删除或转只读。wh-review 与 OCR 内部的 OI-013 校验机器（材料身份哈希、快照树绑定、回执 readback 前置、请求锁哈希）照删；SD-16"过渡基线"改为正式保留代码
+- **rationale**：用户纠正；调研证实三个文档面唯一执行者是 runSimpleReview，Card-05 只替换代码面
+- **consequence**：AC-32 在本卡改写为"按分工"形态（见 ADR-021）；批次 3 由"wh-review 退出"改为"wh-review 按分工瘦身"
+- **supersedes**：母 PRD CARD-06 结果节/FR-32/AC-32 中"旧 wh-review/broker 退出正常审查路径"在本卡的适用（母 PRD 只读，本条记录取代事实）；ADR-004 批次 3 "wh-review/broker 退出" 表述；R2 风险中"wh-review 换名搬进 Skill"判据保留
+- **原始声明层**：V-016、V-019
+- **三级追溯**：R-001 → V-016/V-019 → ADR-018
+- **三档结论**：confirmed
+- **approval_binding**：V-016、V-019（2026-09-30）
+- **owner/next_action**：build-plan 迁移表按分工标注 wh-review 逐文件处置；build-code 批次 3 执行
+module: 删除范围
+requirement_ids: [R-013]
+derived_from: [ADR-004, ADR-014]
+artifacts: [迁移表 wh-review 条目]
+```
+
+### ADR-019 审查点以 Card-05 D-044 为准（ADR-014 更正）
+```text
+- **source**：V-017
+- **decision**：必留审查点为三个——build-plan 合并审查、build-code 每 phase 一次、verify-code 终末代码审查；"全 phase 集成审查"按 Card-05 D-044 不再是正常流程审查点（集成测试、最终聚合、逐 AC 验收照常执行）
+- **rationale**：审查选型与节奏归 Card-05；本卡不越界重建审查面
+- **consequence**：ADR-014 的"四审查点"读为三审查点；显式 CLI/API 的 integration 兼容保留与否按迁移表
+- **supersedes**：ADR-014 中"四审查点"表述（ADR-014 原文保留）
+- **原始声明层**：V-017
+- **三级追溯**：R-001 → Card-05 D-044 → V-017 → ADR-019
+- **三档结论**：confirmed
+- **approval_binding**：V-017（2026-09-30）
+module: 删除范围
+requirement_ids: [R-013]
+derived_from: [ADR-014]
+artifacts: [迁移表审查节奏保留条目]
+```
+
+### ADR-020 不可逆 Git 授权只核对 Git 提交号
+```text
+- **source**：V-018（G-3 候选：授权与 revision/快照绑定，调研 2026-09-30-02 §1.4）
+- **decision**：窄工具④授权记录写入 分支 + 当时 HEAD 提交号；消费（执行不可逆动作）前比对当前 HEAD，不一致则拒绝并要求重新授权。只用 Git 自带提交号，不计算内容哈希、不绑定 material_revision/snapshot_tree
+- **rationale**：守住"授权后代码被改"这一最危险场景，同时满足 OI-013 删除自建哈希校验机器
+- **consequence**：迁移表须写明它与旧 revision 绑定链的差别（只读 git HEAD、不认证材料、不是推进前置，只约束不可逆动作本身）；SD-12 损失①②在损失清单中注明此缓解
+- **supersedes**：none
+- **原始声明层**：V-018
+- **三级追溯**：R-001 → G-3 → V-018 → ADR-020
+- **三档结论**：confirmed
+- **approval_binding**：V-018（2026-09-30）
+module: 窄工具
+requirement_ids: [R-013]
+derived_from: [ADR-003, ADR-006]
+artifacts: [runtime/interface 窄工具④]
+```
+
+### ADR-021 OCR 审查合同补齐 + 未安装 OCR 时回退 wh-review
+```text
+- **source**：V-019、V-020、V-021（调研 2026-09-30-07：OCR packet 过滤掉 contracts/build-code.md、verify-code.md、provider-protocol.md 与 lens SKILL；review-instructions 被短指令替换；doctor 不探测 OCR；OCR 为仓库外 npm 全局包 @alibaba-group/open-code-review）
+- **decision**：①本卡把 build-code/verify-code 审查合同、审查重点（stageReviewFocus）、provider 协议与 lens 技能正文补进 OCR 审查包——搬合同文本，不搬旧执行流程；②doctor 增加 OCR 可用性检测（命令存在与版本）；③代码审查面在检测到 OCR 未安装/不可运行时，回退由 wh-review 执行同一审查面并在审查记录中写明 fallback 事实与原因；OCR 已安装但审查失败时不回退，按既有 unavailable/SD-08 事实处理；④依赖真实 OCR 的测试在未安装时显式 skip 并报告
+- **rationale**：用户要求保留检测与回退；可移植性缺口（其他电脑未装 OCR）必须有可工作的代码审查路径
+- **consequence**：AC-32 在本卡改写为：正常路径按分工；wh-review 仅在"OCR 未安装"这一可检测条件下作为代码面 fallback，且每次回退有记录；任何其他条件下代码面调用 wh-review 即失败
+- **supersedes**：母 PRD FR-32/AC-32"不作为可执行 fallback"在本卡的适用；Card-05 SD-08 在"OCR 未安装"条件下的适用（OCR 已装但失败时 SD-08 仍适用）；build-code/verify-code SKILL.md 中"禁止把 wh-review 当 fallback"的表述（批次 2 改写）
+- **原始声明层**：V-019、V-020、V-021
+- **三级追溯**：R-001 → V-019~V-021 → ADR-021
+- **三档结论**：confirmed
+- **approval_binding**：V-020、V-021（2026-09-30）
+- **owner/next_action**：build-plan 排入具体 Phase；build-code 执行
+module: 删除范围
+requirement_ids: [R-013]
+derived_from: [ADR-018]
+artifacts: [OCR 审查包合同补齐；doctor OCR 检测；代码面 fallback 记录]
+```
+
+### ADR-022 G-3 预处置延后、宪法修订与冻结授权（build-plan 初稿汇报回合）
+```text
+- **source**：V-022（build-plan 初稿汇报回复）
+- **decision**：①G-3 的 25 项预处置**不在 build-plan 定死**，留到后续独立审查时再逐项裁定；build-plan 只在迁移表登记候选、预处置建议与批次，批次内 G-3 扫描收窄为"未预处置的新发现"，遇到即停下回报（ADR-006 不变）。②CONSTITUTION.md 中"身份与完整性所需现有绑定必须保留"条款**允许修订**，改为只保留 Git 提交号与不可逆授权核对；仍须按其自身同步规则执行（版本号、修订记录、映射、22 项 checklist）。③**冻结提交获得用户授权**：build-plan 完成后由本会话提交一次（迁移表 + spec + phases + 决策补记），该提交即迁移表冻结记录；首个删除提交必须是它的后代。
+- **rationale**：用户认为 G-3 逐项裁定需要独立审查上下文，不宜在 build-plan 单方定死；宪法条款与冻结提交属方向与不可逆边界，用户明确授权
+- **consequence**：迁移表 G-3 节保留"待审查时确认"状态；宪法条款修订在 B7/P8 执行；冻结提交成为 AC-52 的判据锚点
+- **supersedes**：none（明确 ADR-006 的裁定时机；授权 ADR-005 的冻结动作）
+- **原始声明层**：V-022
+- **三级追溯**：R-001 → G-3/OI-009 → V-022 → ADR-022
+- **三档结论**：confirmed
+- **approval_binding**：V-022（2026-09-30）
+- **owner/next_action**：build-plan 提交冻结；独立审查裁定 G-3；build-code 执行宪法修订
+module: 安全闸
+requirement_ids: [R-013]
+derived_from: [ADR-005, ADR-006]
+artifacts: [迁移表 G-3 节；冻结提交；CONSTITUTION 修订]
+```
+
 ## 动态 Talk 批次
 
 | batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
@@ -867,6 +965,8 @@ module-convergence 记录（step 7）：当前 OI v1 共 18 条全部 confirmed�
 ## Append-only 更正
 
 - 2026-09-30 补登更正①：最终确认（V-015@2ab8c77e，绑定 16 个 ADR）之后，经 spec-analyze 复查补登 ADR-014/015/016/017（均为母 PRD 显式条款的落实补登，方向未变，按 ADR 各自 approval_binding 说明不重新确认）；最终确认节的"16 个 ADR@2ab8c77e"绑定记录保持原样，本条说明补登事实。does_not_rewrite_upstream=true。
+- 2026-09-30 补登更正③（build-plan 初稿汇报回合）：用户 V-022 追加 ADR-022——G-3 预处置延后到独立审查裁定、宪法修订条款获授权、迁移表冻结提交获授权。方向级事实，本文件追加记录；ADR-002/004/014 正文与 V-015 确认记录保持原样。does_not_rewrite_upstream=true。
+- 2026-09-30 补登更正②（build-plan 回流）：build-plan 会话 spec-clarify 发现 ADR 与现行代码/兄弟卡冲突，用户真实回复 V-016~V-021 形成 ADR-018~021（方向变化，按统一回退协议在本文件增量追加）：ADR-018 取代"wh-review 退出日常流程"；ADR-019 更正 ADR-014 四审查点为三审查点；ADR-020 定 OPEN/G-3 的授权核对方式；ADR-021 定 OCR 合同补齐与未安装回退。原 ADR-002/004/014 正文与 V-015 确认记录保持原样。does_not_rewrite_upstream=true（母 PRD 只读，取代事实只在本卡生效）。
 
 ## 文档结果
 
