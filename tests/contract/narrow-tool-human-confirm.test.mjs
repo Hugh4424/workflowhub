@@ -1,6 +1,7 @@
 // build-plan 预写测试（冻结）：断言变更须走 test change request + 独立审查
+import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,10 +31,22 @@ function walkFiles(dir, acc = []) {
 async function recordInTempDir(fields) {
   const dir = join(tempRoot("wh-human-confirm-"), "stage-area");
   mkdirSync(dir);
+  const git = (args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git(["init", "-q", "-b", "main"]);
+  git(["config", "user.name", "WorkflowHub tests"]);
+  git(["config", "user.email", "tests@workflowhub.local"]);
+  writeFileSync(join(dir, "baseline.txt"), "confirmation fixture\n");
+  git(["add", "baseline.txt"]);
+  git(["commit", "-qm", "baseline"]);
+  const expectedHead = git(["rev-parse", "HEAD"]);
   process.chdir(dir);
   const before = new Set(walkFiles(dir));
   await recordConfirmation(fields);
   const created = walkFiles(dir).filter((path) => !before.has(path));
+  const records = created.filter((path) => path.endsWith(".json"));
+  expect(records).toHaveLength(1);
+  const record = JSON.parse(readFileSync(records[0], "utf8"));
+  expect(record.head).toBe(expectedHead);
   return { dir, created };
 }
 
@@ -57,9 +70,11 @@ describe("human-confirm recordConfirmation", () => {
     const reply = "YES, proceed — but only with plan B.\nSecond verbatim line kept as-is.";
     const materialRefs = ["specs/workflowhub-thin-core-card-06-20260919/spec.md", "docs/architecture/move-map.json"];
     const { created } = await recordInTempDir({ stage: "build-plan", decision: "accepted", reply, materialRefs });
-    const text = created.map((path) => readFileSync(path, "utf8")).join("\n");
-    expect(text).toContain(reply);
-    for (const ref of materialRefs) expect(text).toContain(ref);
+    const records = created.filter((path) => path.endsWith(".json"));
+    expect(records).toHaveLength(1);
+    const record = JSON.parse(readFileSync(records[0], "utf8"));
+    expect(record.reply).toBe(reply);
+    expect(record.material_refs).toEqual(materialRefs);
   });
 
   it("never binds material_revision or snapshot_tree", async () => {

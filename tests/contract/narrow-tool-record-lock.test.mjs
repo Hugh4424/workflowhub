@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { withLock } from "../../runtime/interface/record-lock.mjs";
@@ -37,12 +37,12 @@ async function discoverLockFile(dir) {
   return observed[0];
 }
 
-function fabricateLock(dir, lockFile, pid) {
+function fabricateLock(dir, lockFile, pid, host = hostname()) {
   writeFileSync(
     join(dir, lockFile),
     JSON.stringify({
       pid,
-      host: "lock-test-host",
+      host,
       started_at: new Date().toISOString(),
       nonce: `nonce-${pid}`,
     }),
@@ -125,4 +125,17 @@ describe("record-lock withLock", () => {
     // 确实经历了等待而不是立即失败。
     expect(Date.now() - started).toBeGreaterThanOrEqual(300);
   });
+  it("does not reclaim a foreign-host lock merely because its pid is dead locally", async () => {
+    const root = tempRoot("wh-record-lock-foreign-");
+    const dir = join(root, "locks");
+    mkdirSync(dir);
+    const lockFile = await discoverLockFile(dir);
+    fabricateLock(dir, lockFile, await deadPid(), `${hostname()}-foreign-${process.pid}`);
+    const before = readFileSync(join(dir, lockFile), "utf8");
+    const error = await rejection(withLock(dir, LOCK_NAME, async () => "never", { waitMs: 100 }));
+    expect(error).toBeInstanceOf(Error);
+    expect(error.exitCode).toBe(75);
+    expect(readFileSync(join(dir, lockFile), "utf8")).toBe(before);
+  });
+
 });

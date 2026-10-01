@@ -1309,3 +1309,14 @@ find <task> -type f | wc -l
 - `attachments/migration-table-part5-tests.md` — 测试与夹具
 - `attachments/migration-table-part6-docs-pre-g3.md` — 治理文档
 
+
+## 9. 冻结后规则补记候选（待用户决定）
+
+- **MT-7-A001 — 仅 move-map 的六工具登记/迁移更新串行例外**：2026-10-02 提案；新增规则例外，未获具体用户批准前不生效。原主表 MT-5-048（B6/P7）、A-2、A-15、冻结记录与计数全部原文保留；本条不是第二条 path 迁移记录，不增加主表路径/批次计数。用户明确批准本021提案后，仅对本表开头“一个路径只归一个批次”、A-2“P7/T026 唯一 owner”和 spec 全局共享文件合并规则作如下限定修正：既有 `docs/architecture/move-map.json` 由 P1/T008 先登记六个新增窄工具的真实职责/owner/当前消费者/替代及删除条件，P7/T026 严格在 P1～P6 完成后更新迁移完成的职责和消费者并保留/复用六条，不能丢条或重复条。六路径仅为 `runtime/interface/{safe-write,record-lock,workspace-check,run-command,git-authorize,human-confirm}.mjs`。P1 仅新增六条既有 `entries`，不得改原条目、头部或其它文件职责；P7 仍为 MT-5-048 整体归位更新的主迁移 owner。两个 Phase 写集可以且仅为此元数据文件重叠，执行必须严格串行，不并行双写、不造第二 registry/schema/object/command；除此限定修改外，全部路径继续一行/单 owner 的原合并规则，banner 的原创建/删除交接例外不扩大。
+- **生效与真实性**：采用上述具体例外的用户决定由主会话绑定本021提案/ref/hash记录；未取得明确答复，不应用候选。当前首次创建早于登记的缺口作为历史事实保留，首次只可补登记，不能据此追认“创建前已登记”；未来新增文件依 AGENTS 先登记再创建。当前消费者只为真实 contract/standalone API/CLI，P5 生产改接尚未发生。旧消费链的 DELETE/MOVE/保留依原冻结逐路径批次，不泛称 P5 删除全部旧文件。
+- **计数说明**：冻结851主表行、B0/P1原15行和B6/P7原64行保留为冻结事实；上述规则补记没有新增主表迁移行。批准后 P1 的实际执行写集因该现有 metadata 文件由15增至16，P7仍保留原写集；具体执行写集以同步后的 Phase 正文与纯指针 index 读回，不把冻结计数当作新增执行状态。
+
+## 10. 023实际批准与A-3归属的技术解释补记（028）
+
+- **MT-7-A002 — A-3的归属/动作解释纠正**：2026-10-02 技术纠正；逐文件唯一权威主表 MT-5-051 / MT-5-054 已将 `docs/architecture/final-coverage-audit.md`、`docs/architecture/test-asset-inventory.md` 定为 `ARCHIVE→docs/archive/`、B7/P8；P8/index已同时列出这两源路径与对应archive目的路径，P7写集不含它们。本条明确以主表及P8同步职责为准：两文档归P8归档，不归P7、不作整件删除。旧A-3“统归B6/P7/同批删除”的解释不作为迁移依据；原A-3、所有主表行/冻结记录/计数完整保留，只追加纠正说明，不新增path行/owner/动作或改变已定生产处置。P7不提前归档两文档，P8按原职责落实，其他Phase正文不改。
+- **023批准事实读回**：§9 MT-7-A001的具体用户批准条件现已满足，唯一原件 `quality/confirmations/2026-10-01-001-build-code-accepted.json`，SHA256 `ea10e39dc293431bc838842decf75a69c3c12236da06b9d56f06c2fc8134357a`，HEAD ec9dec41caaee0d5d45e073f585ec7e3b45feb5e，两个material_refs绑定023实际proposal/patch。§9原条件/候选文字保留为历史原文，本追加事实说明现已满足；不把021设计来源或“自主修复”替代该具体授权，不将该原件decision=accepted理解成整stage质量接受。

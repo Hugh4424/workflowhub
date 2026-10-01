@@ -4,7 +4,7 @@
 
 - **功能名**：薄核心删除与窄工具保留
 - **来源**：`decision-log.md` ADR-001～021、OI-001～018、U-001～004、V-001～021；母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` CARD-06（FR-27～32/51/52、AC-27～32/52/53）
-- **状态**：build-plan 初稿（待用户确认；确认后冻结迁移表）
+- **状态**：设计材料已于冻结记录 `d3cd1cdfc99304f6700cb0f5c8a26f331a33a458` 固定；023 的限定登记例外已获具体用户批准（原件 `quality/confirmations/2026-10-01-001-build-code-accepted.json`）。设计冻结与该具体授权分别按原件读回，本状态行不证明正式 build-plan 阶段完成或整体质量接受。
 
 ## 速读卡（30 秒）
 
@@ -398,11 +398,12 @@
 
 ### 全局文件边界与依赖
 
-- **NEW / MODIFY / DELETE**：唯一权威为 `attachments/migration-table.md`，每个路径一行、一个批次（=唯一 owner Phase）。build-plan 新增并冻结的 oracle 测试：`tests/contract/narrow-tool-*.test.mjs`（6 个）、`tests/contract/narrow-tools-isolation.test.mjs`、`tests/contract/card06-migration-ledger.test.mjs`、`tests/contract/thin-core-residue.test.mjs`、`tests/contract/ocr-review-contract-bundle.test.mjs`、`tests/contract/code-review-ocr-fallback.test.mjs`。
+- **NEW / MODIFY / DELETE**：唯一权威为 `attachments/migration-table.md`，每个路径一行、一个批次（=唯一 owner Phase）；唯一的同文件串行 MODIFY 例外仅为下述已获023具体用户批准的 move-map 六工具登记与后续迁移更新（批准原件与范围见下述），迁移主表仍保留该路径一行。build-plan 新增并冻结的 oracle 测试：`tests/contract/narrow-tool-*.test.mjs`（6 个）、`tests/contract/narrow-tools-isolation.test.mjs`、`tests/contract/card06-migration-ledger.test.mjs`、`tests/contract/thin-core-residue.test.mjs`、`tests/contract/ocr-review-contract-bundle.test.mjs`、`tests/contract/code-review-ocr-fallback.test.mjs`。
 - **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
 - **全局依赖**：P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8，严格串行（ADR-004）。串行原因：先立新后拆旧；P5 前人为门与审查链必须已有替代；P6 的 hash 字段删除依赖 P5 已删除 closure 以外的全部消费者；P8 文档依赖前面批次删除了守护文档文本的测试。
-- **文件归属**：迁移表批次列唯一；多批次都需要改的共享文件按"最早一次改完、会打断存活消费者则推后"合并到一个批次（迁移表备注写合并原因）。合并过程中的 14 条判据见迁移表 `#3-聚合裁定`（A-1～A-14）。
-- **跨 Phase 交接的已知例外**：开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建（迁移表 MT-7-114，owner=P1），P8/T027 执行其声明的收口删除。为避免同一路径出现两个 Phase owner，它只登记在 P1 写集；这是本卡唯一一处"创建 Phase 与删除 Phase 不同"的路径，已在迁移表 A-14 登记。
+- **文件归属**：迁移表批次列唯一；多批次都需要改的共享文件按"最早一次改完、会打断存活消费者则推后"合并到一个批次（迁移表备注写合并原因）。上述合并原则仅对下述已获023具体用户批准的 move-map 元数据限定例外作唯一豁免（批准原件与范围见下述）；除此以外不得跨 Phase 分拆同路径修改。合并过程中的 14 条判据见迁移表 `#3-聚合裁定`（A-1～A-14）。
+- **既有创建/删除交接例外**：开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建（迁移表 MT-7-114，owner=P1），P8/T027 执行其声明的收口删除。为避免同一路径出现两个 Phase owner，它只登记在 P1 写集；这是本卡唯一一处"创建 Phase 与删除 Phase 不同"的路径，已在迁移表 A-14 登记。
+- **新增元数据串行修改例外（023具体批准已记录）**：仅 `docs/architecture/move-map.json`，P1/T008 在既有 `entries` 预登记六个 `runtime/interface/{safe-write,record-lock,workspace-check,run-command,git-authorize,human-confirm}.mjs` 的职责、owner、真实当前消费者、替代/删除条件；当前首次实施已先创建，首次只能如实补登记，不能回填事前事实。P7/T026 在 P1～P6 完成后更新迁移完成的真实职责/消费者，保留并复用六条 P1 登记，不丢弃或重复登记。仅此元数据文件分别列入 P1/P7 写集、严格串行，不并行双写；主表 MT-5-048 的 B6/P7 主迁移 owner 与路径唯一性不变，其余路径仍按单 owner 合并原则。迁移表 §9 的 `MT-7-A001` 明确对原 A-2 及全局共享文件规则的限定修正；它不新增生产接口、registry、schema、对象或命令。本例外的具体批准已由唯一原件 `quality/confirmations/2026-10-01-001-build-code-accepted.json` 证明（SHA256 `ea10e39dc293431bc838842decf75a69c3c12236da06b9d56f06c2fc8134357a`），HEAD `ec9dec41caaee0d5d45e073f585ec7e3b45feb5e`，material_refs 绑定 `2026-10-02-023-p1-registration-and-raw-path-final-candidate.md` 与同stem patch。021是方案设计来源，023是实际批准/应用字节；此例外现已生效，仅限已批准范围，不将该授权解释成正式stage或整体质量接受。
 - **回滚与恢复**：见"迁移契约"。
 
 ### Requirement-to-Task Trace

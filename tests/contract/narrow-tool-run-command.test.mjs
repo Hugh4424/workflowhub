@@ -30,9 +30,13 @@ describe("run-command captureCommand", () => {
     expect(ok.exit).toBe(0);
     const fail = await captureCommand({ cwd: root, recordDir, slug: "fail", argv: node("process.exit(3)"), timeoutMs: 10000 });
     expect(fail.exit).toBe(3);
+    const receiptFiles = readdirSync(recordDir).filter((name) => name.endsWith(".json"));
+    expect(receiptFiles).toHaveLength(2);
+    const receipts = receiptFiles.map((name) => JSON.parse(readFileSync(join(recordDir, name), "utf8")));
+    expect(receipts.map((receipt) => receipt.exit_code).sort()).toEqual([0, 3]);
   });
 
-  it("persists stdout and stderr verbatim into two newly named files under recordDir", async () => {
+  it("persists both streams into one output file and a JSON receipt under recordDir", async () => {
     const root = tempRoot("wh-run-command-");
     const recordDir = join(root, "records");
     mkdirSync(recordDir);
@@ -47,9 +51,26 @@ describe("run-command captureCommand", () => {
     expect(result.exit).toBe(0);
     const created = readdirSync(recordDir).filter((name) => !before.has(name));
     expect(created.length).toBe(2);
-    const contents = created.map((name) => readFileSync(join(recordDir, name), "utf8"));
-    expect(contents).toContain("out-line\n");
-    expect(contents).toContain("err-line\n");
+    const outputs = created.filter((name) => name.endsWith(".output"));
+    const receipts = created.filter((name) => name.endsWith(".json"));
+    expect(outputs).toHaveLength(1);
+    expect(receipts).toHaveLength(1);
+    expect(outputs[0]).toMatch(/^\d{4}-\d{2}-\d{2}-\d{3}-echo\.output$/);
+    const outputPath = join(recordDir, outputs[0]);
+    const output = readFileSync(outputPath, "utf8");
+    // Cross-stream order is unspecified; preserve each original byte sequence exactly once.
+    expect(output.match(/out-line\n/g)).toHaveLength(1);
+    expect(output.match(/err-line\n/g)).toHaveLength(1);
+    expect(output.length).toBe("out-line\nerr-line\n".length);
+    const receipt = JSON.parse(readFileSync(join(recordDir, receipts[0]), "utf8"));
+    expect(receipt.exit_code).toBe(0);
+    expect(receipt.cwd).toBe(root);
+    expect(receipt.argv).toEqual(node("process.stdout.write('out-line\\n'); process.stderr.write('err-line\\n')"));
+    expect(receipt.timed_out).toBe(false);
+    expect(receipt.truncated).toBe(false);
+    expect(receipt.output_ref).toBeTypeOf("string");
+    const referenced = receipt.output_ref.startsWith("/") ? receipt.output_ref : join(recordDir, receipt.output_ref);
+    expect(realpathSync(referenced)).toBe(realpathSync(outputPath));
   });
 
   it("supports shell mode", async () => {

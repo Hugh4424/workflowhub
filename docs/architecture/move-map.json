@@ -3584,6 +3584,60 @@
       "consumer": "targeted Vitest exercising current post build-code spec-analyze source projection",
       "delete_condition": "remove after equivalent independent valid-edge and duplicate-source controls replace this suite in the existing census contract tests",
       "content_change": "preserve authenticated local U/V edges when another census edge is invalid and reject ambiguous duplicate R entries"
+    },
+    {
+      "source": "runtime/interface/safe-write.mjs",
+      "destination": "runtime/interface/safe-write.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T002",
+      "consumer": "当前：tests/contract/narrow-tool-safe-write.test.mjs、tests/contract/narrow-tools-isolation.test.mjs 直接 API 调用；node runtime/interface/safe-write.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "原子写、create-only 幂等与普通日期编号记录追加；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
+    },
+    {
+      "source": "runtime/interface/record-lock.mjs",
+      "destination": "runtime/interface/record-lock.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T003",
+      "consumer": "当前：tests/contract/narrow-tool-record-lock.test.mjs、tests/contract/narrow-tools-isolation.test.mjs 直接 API 调用；node runtime/interface/record-lock.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "同机记录锁互斥、持有者校验与陈旧锁回收；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
+    },
+    {
+      "source": "runtime/interface/workspace-check.mjs",
+      "destination": "runtime/interface/workspace-check.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T004",
+      "consumer": "当前：tests/contract/narrow-tool-workspace-check.test.mjs、tests/contract/narrow-tools-isolation.test.mjs 直接 API 调用；node runtime/interface/workspace-check.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "当前 cwd 的真实 Git 工作区、分支、HEAD 与 dirty 检查；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
+    },
+    {
+      "source": "runtime/interface/run-command.mjs",
+      "destination": "runtime/interface/run-command.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T005",
+      "consumer": "当前：tests/contract/narrow-tool-run-command.test.mjs、tests/contract/narrow-tools-isolation.test.mjs 直接 API 调用；node runtime/interface/run-command.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "用户命令执行、合并输出采集、真实 exit 与超时进程组清理；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
+    },
+    {
+      "source": "runtime/interface/git-authorize.mjs",
+      "destination": "runtime/interface/git-authorize.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T006",
+      "consumer": "当前：tests/contract/narrow-tool-git-authorize.test.mjs、tests/contract/narrow-tools-isolation.test.mjs 直接 API 调用；node runtime/interface/git-authorize.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "当前 cwd Git 身份绑定的不可逆操作授权记录与一次消费；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
+    },
+    {
+      "source": "runtime/interface/human-confirm.mjs",
+      "destination": "runtime/interface/human-confirm.mjs",
+      "status": "add",
+      "owner": "CARD-06 P1 / runtime/interface / T007",
+      "consumer": "当前：tests/contract/narrow-tool-human-confirm.test.mjs 直接 API 调用；外置 quality/tests/2026-10-02-013-card06-p1-six-tools-isolation-current.mjs:132–138 的真实 API/CLI 调用；node runtime/interface/human-confirm.mjs 的独立 CLI 调用。P5 公共入口、close/mini-task 与审查链改接尚未发生。",
+      "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
+      "content_change": "当前 cwd 真实 HEAD 绑定的人类逐字回复与材料引用记录；替代原 kernel/TaskHandle 中对应散落能力；对应旧消费链按冻结迁移表的实际批次处置，P5 改接前旧调用点保持原状、不双写。2026-10-02 补登：文件已先创建，未满足创建前登记时序；本条不回填为事前登记。"
     }
   ]
 }
