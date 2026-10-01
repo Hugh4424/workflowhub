@@ -113,23 +113,6 @@ function validUiRun(overrides = {}) {
   };
 }
 
-test("UI plan and task templates make component and QA handoff executable", () => {
-  requireTerms("skills/spec-plan/templates/plan-template.md", uiContractTerms);
-  requireTerms("skills/spec-plan/templates/plan-template.md", designGapTerms);
-  requireTerms("skills/spec-tasks/templates/tasks-template.md", uiContractTerms);
-  requireTerms("skills/spec-tasks/templates/tasks-template.md", designGapTerms);
-
-  for (const path of [
-    "skills/spec-plan/templates/plan-template.md",
-    "skills/spec-tasks/templates/tasks-template.md",
-  ]) {
-    const content = read(path);
-    assert.match(content, /UI phase|UI task|ui_scope/i, `${path}: UI applicability marker missing`);
-    assert.match(content, /N\/A|unknown/i, `${path}: unknown/N\/A handoff is missing`);
-    assert.match(content, /design_revision.{0,120}(version|版本)/is, `${path}: design revision must be a version`);
-  }
-});
-
 test("frontend and browser skills preserve state, evidence, and truthful failure semantics", () => {
   requireTerms("skills/frontend-testing/SKILL.md", [
     "loading", "empty", "error", "cancel", "boundary", "permission",
@@ -193,8 +176,6 @@ test("UI governance records have one owner, consumer, and deletion condition", (
   const moveMap = json("docs/architecture/move-map.json");
   const entriesBySource = new Map((moveMap.entries ?? []).map((entry) => [entry.source, entry]));
   for (const path of [
-    "skills/spec-plan/templates/plan-template.md",
-    "skills/spec-tasks/templates/tasks-template.md",
     "skills/frontend-testing/SKILL.md",
     "skills/isolated-browser-qa/SKILL.md",
     "runtime/schemas/browser-qa-evidence.v1.json",
@@ -212,8 +193,6 @@ test("UI governance records have one owner, consumer, and deletion condition", (
 
   const inventory = read("docs/architecture/repository-inventory.tsv");
   for (const path of [
-    "skills/spec-plan/templates/plan-template.md",
-    "skills/spec-tasks/templates/tasks-template.md",
     "skills/frontend-testing/SKILL.md",
     "skills/isolated-browser-qa/SKILL.md",
     "runtime/schemas/browser-qa-evidence.v1.json",

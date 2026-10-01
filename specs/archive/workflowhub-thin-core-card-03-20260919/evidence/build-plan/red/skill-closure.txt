@@ -1,0 +1,3 @@
+- build-code: prompt references undeclared skill architect-code-review
+- build-code: forbidden external or user-local skill locator in prompt
+- verify-code: prompt references undeclared skill architect-code-review

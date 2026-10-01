@@ -11,6 +11,13 @@ const MAKE_DECISION_ONLY_SKILLS = new Set(["talk-with-zhipeng", "grill-with-docs
 const FORMAL_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const PORTABLE_WORKFLOW_KIND = "portable_workflow";
 
+// Explicit repository-relative calls are part of the portable skill closure.
+// Original component paths in provenance notes remain historical references.
+export function promptSkillReferences(prompt) {
+  return [...new Set(prompt.split("\n").filter((line) => !line.includes("原组件路径"))
+    .flatMap((line) => [...line.matchAll(/skills\/([a-z][a-z0-9-]*)\/SKILL\.md/g)].map((match) => match[1])))];
+}
+
 export function workflowDeclarations(packageRoot) {
   const root = fs.realpathSync(packageRoot);
   const configPath = path.join(root, "config/workflowhub.yaml");
@@ -698,11 +705,21 @@ export function checkSkillClosure(packageRoot) {
       }
     }
     const prompt = fs.readFileSync(path.join(root, `workflows/${stage}/SKILL.md`), "utf8");
-    for (const line of prompt.split("\n")) {
-      if (line.includes("原组件路径")) continue;
-      for (const match of line.matchAll(/skills\/([a-z][a-z0-9-]*)\/SKILL\.md/g)) {
-        if (!manifestNames.has(match[1])) pushError(errors, `${stage}: prompt references undeclared skill ${match[1]}`);
+    for (const name of promptSkillReferences(prompt)) {
+      if (manifestNames.has(name)) continue;
+      declared.add(name);
+      const entry = byName.get(name);
+      if (!entry) {
+        pushError(errors, `${stage}: prompt references skill missing from catalog: ${name}`);
+        continue;
       }
+      if (MAKE_DECISION_ONLY_SKILLS.has(name) && stage !== "make-decision") {
+        pushError(errors, `${stage}: ${name} is owned exclusively by make-decision`);
+      }
+      try {
+        const checked = validateSkillBundle(root, `skills/${name}/skill-bundle.json`, entry.path);
+        validateSchema(validateBundle, checked.bundle, `${stage}/${name}: explicit bundle`, errors);
+      } catch (error) { pushError(errors, `${stage}: invalid explicit skill ${name}: ${error.message}`); }
     }
     // Prompts are shipped as portable bundle bytes. Reject every host-local
     // locator, independently of the platform that authored the prompt:
@@ -710,12 +727,13 @@ export function checkSkillClosure(packageRoot) {
     // and the well-known user-local skill roots. Repository-relative
     // `skills/<name>/SKILL.md` references are checked against the manifest
     // above and remain valid.
+    const pathScanPrompt = prompt.replace(/-- :\/(?=[\s`]|$)/g, "-- pathspec");
     const forbiddenAbsolutePath = [
       /(?:^|[\s"'(=,:])\/(?!\/\/)\S+/,
       /(?:^|[\s"'(=,:])[A-Za-z]:[\\/]\S+/,
       /(?:^|[\s"'(=,:])\\\\\S+/,
       /(?:^|[\s"'(=,:])~[\\/]\S+/,
-    ].some((pattern) => pattern.test(prompt));
+    ].some((pattern) => pattern.test(pathScanPrompt));
     const forbiddenSkillLocator = /(?:^|[\s"'(=,:])(?:~[\\/])?(?:\.claude|\.codex)[\\/]skills(?:[\\/]|$)/i;
     if (forbiddenAbsolutePath || forbiddenSkillLocator.test(prompt)) {
       pushError(errors, `${stage}: forbidden external or user-local skill locator in prompt`);

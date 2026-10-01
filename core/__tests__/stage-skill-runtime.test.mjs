@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 import * as stageSkillRuntime from "../../runtime/stage/stage-skill-runtime.mjs";
 
 const {
@@ -178,7 +179,7 @@ describe("stage skill portable package runtime", () => {
     });
   });
 
-  it("rejects a bundle with an incorrect asset hash", () => {
+  it("uses current aggregate bytes rather than a legacy per-asset hash", () => {
     const root = fixture();
     writeJson(path.join(root, "skills/beta/skill-bundle.json"), {
       schema_version: 1,
@@ -186,7 +187,10 @@ describe("stage skill portable package runtime", () => {
       files: [{ path: "SKILL.md", sha256: "0".repeat(64) }],
     });
 
-    expect(() => resolveStageSkillPackages({ packageRoot: root, stage: "build-code" }))
-      .toThrow(/bundle sha256 mismatch/);
+    const before = validateSkillBundle(root, "skills/beta/skill-bundle.json", "skills/beta/SKILL.md");
+    expect(before.bundleHash).toMatch(/^[a-f0-9]{64}$/);
+    fs.appendFileSync(path.join(root, "skills/beta/SKILL.md"), "\nchanged bytes\n");
+    const after = validateSkillBundle(root, "skills/beta/skill-bundle.json", "skills/beta/SKILL.md");
+    expect(after.bundleHash).not.toBe(before.bundleHash);
   });
 });

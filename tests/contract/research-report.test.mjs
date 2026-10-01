@@ -86,7 +86,9 @@ describe("T001 research report contract", () => {
     });
     expect(record.raw).toBe(raw);
     expect(record.sha256).toBe(ref.slice("quality/evidence/research/".length, -".json".length));
-    expect(() => readResearchReport({ read: () => raw, ref, ...expectedIdentity, snapshotTree: "c".repeat(40) })).toThrow(/snapshot identity mismatch/);
+    expect(() => readResearchReport({ read: () => raw, ref, ...expectedIdentity, snapshotTree: "c".repeat(40) })).not.toThrow();
+    expect(() => readResearchReport({ read: () => raw, ref, ...expectedIdentity, taskId: "wrong-task" })).toThrow(/task identity mismatch/);
+    expect(() => readResearchReport({ read: () => raw, ref, ...expectedIdentity, stage: "build-plan" })).toThrow(/stage identity mismatch/);
     expect(() => readResearchReport({ read: () => `${raw}tampered`, ref, ...expectedIdentity })).toThrow(/hash/);
   });
 
@@ -267,7 +269,7 @@ describe("T001 research report contract", () => {
     const records = listCurrentResearchReports({
       task: { listCanonicalResearchReportRefs: () => [ref], readRecord: () => raw },
       ...expectedIdentity,
-      snapshotTree: "d".repeat(40),
+      materialScopeRevision: `revision-${"d".repeat(64)}`,
     });
     expect(records).toEqual([]);
     expect(deriveResearchStatus(records)).toMatchObject({ status: "unavailable", reason: "research_record_missing" });

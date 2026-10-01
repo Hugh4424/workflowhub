@@ -34,7 +34,7 @@
     "verify-code": {
       "contract": "contracts/verify-code.md",
       "problem_order": ["implementation", "consumer", "correctness", "lifecycle_security", "test_strength"],
-      "semantic_fields": ["changed_files", "implementation_assessment", "test_context", "open_risks", "architect_assessment", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner", "design_alignment"]
+      "semantic_fields": ["changed_files", "acceptance_criteria", "implementation_assessment", "test_context", "open_risks", "architect_assessment", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner", "design_alignment"]
     },
     "mini-task/design": {
       "contract": "contracts/mini-task-design.md",

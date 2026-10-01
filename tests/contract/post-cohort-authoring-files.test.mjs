@@ -13,8 +13,8 @@ describe("post-cohort build-plan material authors", () => {
     expect(author).toContain("phases/P<n>.md");
     expect(author).toMatch(/spec\.md[\s\S]*implementation design/i);
     expect(author).not.toMatch(/Write only `plan\.md`/);
-    expect(template).toMatch(/Global spec.*spec\.md/i);
-    for (const field of ["L0", "L1", "L2", "write set", "dependency", "STOP", "gate_cmd", "oracle", "coverage limit", "DO NOT TOUCH"]) {
+    expect(template).toMatch(/全局规格[\s\S]*spec\.md/);
+    for (const field of ["L0", "L1", "L2", "写入集", "依赖", "停止", "RED/GREEN 门禁命令", "判定器", "覆盖上限", "禁止改动"]) {
       expect(template, field).toContain(field);
     }
     expect(template).not.toContain("plan.md");
@@ -27,8 +27,8 @@ describe("post-cohort build-plan material authors", () => {
     expect(author).toContain("phases/index.md");
     expect(author).not.toMatch(/Write only `tasks\.md`/);
     expect(template).toMatch(/phases\/P<n>\.md/);
-    for (const field of ["semantic anchor", "write set", "dependency", "consumer"]) expect(template).toContain(field);
-    for (const forbidden of ["gate_cmd", "expected_exit", "oracle", "evidence_path", "execution status"]) {
+    for (const field of ["语义锚点", "写入集", "依赖", "消费者"]) expect(template).toContain(field);
+    for (const forbidden of ["gate_cmd", "expected_exit", "oracle", "evidence_path", "execution status", "门禁命令", "预期退出码", "判定器", "证据路径", "执行状态"]) {
       expect(template).not.toContain(forbidden);
     }
   });

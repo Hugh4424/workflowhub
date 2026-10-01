@@ -2,10 +2,7 @@
   "schema_version": 1,
   "skill": "testing-system-blueprint",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "c810e64c772ab66dee91f4970c2ed403afce5e07c425f18514abcfd82717fc70"
-    }
+    "SKILL.md"
   ],
   "sources": [
     {

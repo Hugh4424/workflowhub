@@ -12,7 +12,7 @@ const PHASE_FILE = /^phases\/P([1-9][0-9]*)\.md$/;
 export function phaseFilesFromIndex(index) {
   if (typeof index !== "string" || index.trim() === "") throw new TypeError("post Phase index is missing");
   const lines = index.split(/\r?\n/);
-  const section = lines.findIndex((line) => /^## Execution Index\s*$/.test(line.trim()));
+  const section = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/.test(line.trim()));
   if (section < 0) throw new TypeError("post Phase index lacks Execution Index section");
   const body = [];
   for (const line of lines.slice(section + 1)) {
@@ -21,8 +21,8 @@ export function phaseFilesFromIndex(index) {
   }
   const cells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
   const header = body.length ? cells(body[0]) : [];
-  const phaseColumn = header.indexOf("phase");
-  const authorityColumn = header.indexOf("authority ref");
+  const phaseColumn = header.findIndex((cell) => /^(?:phase|阶段)$/i.test(cell));
+  const authorityColumn = header.findIndex((cell) => /^(?:authority ref|权威引用|权威来源)$/i.test(cell));
   if (phaseColumn < 0 || authorityColumn < 0) throw new TypeError("post Phase index lacks phase/authority ref columns");
   const refs = body.slice(1).filter((line) => !/^\|\s*:?-{2,}/.test(line)).map((line) => {
     const row = cells(line);
@@ -40,9 +40,10 @@ export function phaseFilesFromIndex(index) {
   return Object.freeze(refs);
 }
 
-export function materialFilesForCohort(activationCohort = "pre", materials = {}) {
+export function materialFilesForCohort(activationCohort = "pre", materials = {}, { stage } = {}) {
   if (activationCohort === "pre") return CURRENT_MATERIAL_FILES;
   if (activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
+  if (stage === "make-decision") return Object.freeze(["decision-log.md"]);
   if (materials?.["phases/index.md"] == null) {
     if (Object.keys(materials).some((file) => file.startsWith("phases/") && file !== "phases/index.md")) {
       throw new TypeError("post material map has Phase files without an index");

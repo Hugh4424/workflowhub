@@ -2,14 +2,8 @@
   "schema_version": 1,
   "skill": "workflowhub-multica-sync",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "57f157ed6217db413e777cfe0c316eebe93f88e114abbd62c86318087e9df010"
-    },
-    {
-      "path": "scripts/multica-skill-sync.mjs",
-      "sha256": "a7e261cbfe74436981a0d673c8c9d0a8ca1ae3d55da95d73a86938ce94d6949f"
-    }
+    "SKILL.md",
+    "scripts/multica-skill-sync.mjs"
   ],
   "runtime_dependencies": [
     {

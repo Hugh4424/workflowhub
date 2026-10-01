@@ -339,10 +339,15 @@ ledger, controlled-writer protocol, per-round writer, question-card archive, or
 Grill history. These direct facts add no new stage and are no gate for same-task
 repair.
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。调研、材料深读与草稿实施派子代理，方向审查与红队交独立审查子代理；测试仅在有可检验行为时派，修复回原实施子代理。Talk、Grill 和用户确认由主会话执行，不代答。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
+
 ## Execution model (M/S/B/P)
 
 这是执行方式说明，不是新的 stage、public command、runtime gate 或质量通过条件。
-口径唯一来自 decision-log 的“Step×Executor 矩阵”和“上下文守恒规则”。
+口径见本节下方真实的 step×executor 表与 `### Context conservation rules`，不引用不存在的矩阵。
 
 | step | executor | handoff |
 | --- | --- | --- |
@@ -365,7 +370,7 @@ repair.
 
 1. 全量 research-report、审查原始结果、debate 产物和草稿全文都落到 task_dir 的质量证据区或 worktree artifact；主会话只保留 `ref + sha256 + 结构化摘要（≤500 字）`。
 2. S 回传必须是结论条目、证据 ref、置信度；研究/草稿/汇总类不超过 500 字，复核类按 `severity|位置|问题|建议` 一行一条，不回传长日志。
-3. 并行上限固定为：研究 4、debate 4、红蓝 2；交互步骤与依赖链按顺序执行，不为并行而并行。
+3. 并发按 `AGENTS.md` 的五阶段共用纪律与本任务当前并行方案执行；交互步骤与依赖链按顺序执行，不为并行而并行。
 4. 问题卡与用户回复只登记在 decision-log T 表；交互由 M 发出，不能由 S/B 代答。
 5. 候选由 S 生成、M 选择；方向级或影响验收的争议交用户，实施级争议交独立 debate/复核，M 只登记。
 6. M 每步只依赖上一步的决策摘要和材料 ref；S 可按任务需要读取已落盘的完整材料，但不能把旧步骤全文重新塞回 M。

@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { phaseFilesFromIndex } from "../task/material-workspace.mjs";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import qualityFactSchema from "../schemas/quality-fact.v1.json" with { type: "json" };
-import { validateTestRuntimeProfile } from "../stage/stage-content-contracts.mjs";
+import { validatePostPhaseContract, validateTestRuntimeProfile } from "../stage/stage-content-contracts.mjs";
 import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const HASH = SHA256_HEX;
@@ -239,8 +243,53 @@ function object(value, label) {
   return value;
 }
 
+/** Read only the current physical Phase write set; missing scope stays conservative. */
+export function currentPhaseWriteSetSnapshot(root, taskId, tree, phaseId, command) {
+  if (!root || (phaseId !== undefined && !/^P[1-9][0-9]*$/.test(phaseId))) return undefined;
+  const materialRoot = join(root, "specs", taskId);
+  try {
+    const index = readFileSync(join(materialRoot, "phases/index.md"), "utf8");
+    const phases = Object.fromEntries(phaseFilesFromIndex(index).map((path) =>
+      [path, readFileSync(join(materialRoot, path), "utf8")]));
+    const parsed = validatePostPhaseContract({ spec: readFileSync(join(materialRoot, "spec.md"), "utf8"), index, phases });
+    const candidates = (parsed.facts?.phase_rows ?? []).filter((entry) => phaseId === undefined
+      ? typeof command === "string" && entry.command?.replace(/^`([\s\S]*)`$/, "$1") === command
+      : entry.id === phaseId);
+    const row = candidates.length === 1 ? candidates[0] : null;
+    return row?.write_set?.length ? { root, tree, writeSet: row.write_set } : undefined;
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+/** Compare only the declared Phase write set; snapshot IDs remain provenance. */
+export function phaseWriteSetChanges({ root, fromTree, toTree, writeSet }) {
+  if (!OID.test(fromTree ?? "") || !OID.test(toTree ?? "") || typeof root !== "string" || !root
+      || !Array.isArray(writeSet) || writeSet.some((path) => typeof path !== "string" || !SAFE_PATH.test(path.replace(/\/$/, "")))) {
+    throw new TypeError("phase write set comparison requires valid trees, root, and paths");
+  }
+  if (fromTree === toTree) return [];
+  const raw = execFileSync("git", ["diff", "--name-only", "--no-renames", "-z", fromTree, toTree, "--"],
+    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+  return [...new Set(raw.split("\0").filter((path) => path && writeSet.some((entry) => {
+    const owned = entry.replace(/\/$/, "");
+    return path === owned || path.startsWith(`${owned}/`);
+  })))].sort();
+}
+
+function assertCurrentWriteSet(value, currentSnapshot, label) {
+  if (!currentSnapshot) return;
+  if (!Array.isArray(currentSnapshot.writeSet) || currentSnapshot.writeSet.length === 0) {
+    throw new TypeError(`${label} Phase write set is unavailable`);
+  }
+  const paths = phaseWriteSetChanges({ root: currentSnapshot.root, fromTree: value.snapshot_tree,
+    toTree: currentSnapshot.tree, writeSet: currentSnapshot.writeSet });
+  if (paths.length) throw new Error(`${label} write set changed: ${paths.join(", ")}`);
+}
+
 export function validateCanonicalTestReceipt(value, {
-  taskId, stage, snapshotTree, expectedProducerComponent = undefined, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false, requireRuntimeProfile = false,
+  taskId, stage, snapshotTree, currentSnapshot, expectedProducerComponent = undefined, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false, requireRuntimeProfile = false,
 } = {}) {
   object(value, "canonical test receipt");
   if (value.schema_version !== "workflowhub-receipt.v1"
@@ -248,7 +297,7 @@ export function validateCanonicalTestReceipt(value, {
       || value.producer?.stage !== stage
       || typeof value.producer?.component !== "string" || value.producer.component.trim() === ""
       || (expectedProducerComponent !== undefined && value.producer.component !== expectedProducerComponent)
-      || value.snapshot_tree !== snapshotTree || !OID.test(value.snapshot_tree ?? "")
+      || (!currentSnapshot && value.snapshot_tree !== snapshotTree) || !OID.test(value.snapshot_tree ?? "")
       || !HASH.test(value.command_hash ?? "")
       || hashText(value.command ?? "") !== value.command_hash
       || (expectedCommand !== undefined && value.command !== expectedCommand)
@@ -256,6 +305,7 @@ export function validateCanonicalTestReceipt(value, {
       || !HASH.test(value.output_hash ?? "") || typeof value.output_ref !== "string" || !TEST_OUTPUT_REF.test(value.output_ref)) {
     throw new Error("canonical test receipt provenance is invalid");
   }
+  assertCurrentWriteSet(value, currentSnapshot, "canonical test receipt");
   if (allowedProducerComponents !== undefined
       && (!Array.isArray(allowedProducerComponents)
         || !allowedProducerComponents.includes(value.producer.component))) {
@@ -414,7 +464,7 @@ export function validateMiniTaskAcTrace(value, {
 }
 
 /** Validate the immutable implementation receipt and its bound diff bytes. */
-export function validateCanonicalImplementationReceipt(value, { taskId, snapshotTree = value?.snapshot_tree, read } = {}) {
+export function validateCanonicalImplementationReceipt(value, { taskId, snapshotTree = value?.snapshot_tree, currentSnapshot, read } = {}) {
   object(value, "canonical implementation receipt");
   const allowed = new Set(["schema_version", "task_id", "stage", "producer", "changed", "snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]);
   if (Object.keys(value).some((key) => !allowed.has(key))
@@ -430,12 +480,13 @@ export function validateCanonicalImplementationReceipt(value, { taskId, snapshot
       || !OID.test(value.snapshot_head ?? "")
       || !OID.test(value.snapshot_tree ?? "")
       || !OID.test(value.snapshot_commit ?? "")
-      || value.snapshot_tree !== snapshotTree
+      || (!currentSnapshot && value.snapshot_tree !== snapshotTree)
       || !IMPLEMENTATION_DIFF_REF.test(value.diff_ref ?? "")
       || value.diff_ref.slice("quality/evidence/implementation/".length, -".diff".length) !== value.diff_hash
       || !HASH.test(value.diff_hash ?? "")) {
     throw new Error("canonical implementation receipt provenance is invalid");
   }
+  assertCurrentWriteSet(value, currentSnapshot, "canonical implementation receipt");
   if (typeof read !== "function") return value;
   let raw;
   try { raw = read(value.diff_ref); } catch { throw new Error("canonical implementation diff evidence is missing"); }

@@ -1,0 +1,33 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/workflow-quality-regression.test.mjs (7 tests | 1 failed) 11ms
+   × workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code 4ms
+     → expected 'After finding disposition and the las…' to match /checks|检查|evidence|证据/i
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/workflow-quality-regression.test.mjs > workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code
+AssertionError: expected 'After finding disposition and the las…' to match /checks|检查|evidence|证据/i
+
+- Expected: 
+/checks|检查|evidence|证据/i
+
++ Received: 
+"After finding disposition and the last material revision, the current build-plan session actually invokes spec-analyze on authenticated raw requirements, decision-log, spec, index and every Phase; it publishes and reads back one identity-bound report-only quality fact. Missing original source, semantic mismatch, or absent execution remains material_incomplete, inconsistent, or unavailable, never a clean result or work gate."
+
+ ❯ tests/contract/workflow-quality-regression.test.mjs:71:42
+     69|       const analyzer = manifest.steps.find((step) => ["stage-end-spec-…
+     70|       expect(analyzer, `${stage}: analyzer step`).toBeTruthy();
+     71|       expect(analyzer.observable_result).toMatch(/checks|检查|evidence…
+       |                                          ^
+     72|       expect(analyzer.completion_evidence.some((item) => item.kind ===…
+     73|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  23:27:53
+   Duration  184ms (transform 14ms, setup 0ms, collect 10ms, tests 11ms, environment 0ms, prepare 43ms)
+

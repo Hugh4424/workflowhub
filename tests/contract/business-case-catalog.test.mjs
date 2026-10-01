@@ -10,8 +10,8 @@ import { describe, expect, it } from "vitest";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const catalogPath = resolve(root, "docs/quality/business-case-catalog.json");
 const actualSources = [
-  "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-  "specs/workflowhub-thin-core-card-04-20260919/spec.md",
+  "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+  "specs/archive/workflowhub-thin-core-card-04-20260919/spec.md",
   "tests/contract/decision-log-census.test.mjs",
   "tests/contract/census-upstream-authoring.test.mjs",
   "tests/contract/acceptance-result-machine-classes.test.mjs",
@@ -94,7 +94,7 @@ describe("CARD-04 business-case catalog: explicit sourced business relationships
     expect(census.intent).toBe("feature");
     expect(census.execution.target).toBe("tests/contract/decision-log-census.test.mjs");
     expect(census.ac_ids).toContain("AC-26");
-    expect(census.change_triggers).toContain("specs/workflowhub-thin-core-card-04-20260919/decision-log.md");
+    expect(census.change_triggers).toContain("specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md");
     expect(acceptance.execution.target).toBe("tests/contract/acceptance-result-machine-classes.test.mjs");
     expect(acceptance.ac_ids).toContain("AC-27");
     expect(deferred.intent).toBe("regression");
@@ -163,7 +163,7 @@ describe("CARD-04 business-case catalog: explicit sourced business relationships
         expect(existsSync(resolve(root, entry.independent_review_ref)), `${phase}/${task} review ref missing`).toBe(true);
       }
       expect(entry.ac_ids).toContain(ac);
-      expect(entry.source_path).toBe(`specs/workflowhub-thin-core-card-04-20260919/phases/${phase}.md`);
+      expect(entry.source_path).toBe(`specs/archive/workflowhub-thin-core-card-04-20260919/phases/${phase}.md`);
       expect(entry.consumer_path).toBe(consumer);
       expect(entry.consumer_status).toBe(entry.status === "active" ? "verified" : consumerStatus);
       expect(entry.change_trigger, `${phase}/${task} needs a sourced change trigger`).toBe(trigger);

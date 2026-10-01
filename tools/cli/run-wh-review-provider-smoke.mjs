@@ -19,7 +19,6 @@ export async function runProviderSmoke(input) {
   const result = await runSimpleReview({
     stage: required(input, "stage"),
     review_track: input.review_track ?? null,
-    host_provider: required(input, "host_provider"),
     materials,
   }, {
     loadConfig: () => ({ attachmentRoot, whReview: {}, config: {} }),

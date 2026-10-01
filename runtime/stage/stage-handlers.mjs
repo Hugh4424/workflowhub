@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
-import { STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+import { phaseWriteSetChanges, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 import { SHA256_HEX, normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
 import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
@@ -13,7 +13,7 @@ import { authenticateCanonicalReviewResult } from "../review/canonical-review-re
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateBrowserQaEvidence, validateReviewAttemptObservation } from "../evidence/stage-content-evidence.mjs";
 import { readResearchReport, deriveResearchStatus } from "../evidence/research-report.mjs";
-import { buildStageInputPacket, materialFilesForCohort, verifyStageInputPacket } from "../task/material-workspace.mjs";
+import { phaseFilesFromIndex, buildStageInputPacket, materialFilesForCohort, verifyStageInputPacket } from "../task/material-workspace.mjs";
 import {
   validateAcceptanceDesignMinimum,
   validateExecutablePlanTaskMinimum,
@@ -280,14 +280,19 @@ function acceptanceSemanticWarnings(item, coveredItems) {
 function completionReview(records) {
   const reviews = records.filter(Boolean);
   const statuses = reviews.map((entry) => entry.facts.status);
+  const providerResults = reviews.flatMap((entry) => entry.value?.provider_results ?? []);
+  const timings = providerResults.map((item) => item?.timing?.duration_ms ?? item?.execution?.timing?.duration_ms)
+    .filter((value) => Number.isSafeInteger(value) && value >= 0);
+  const usages = providerResults.map((item) => item?.usage ?? item?.execution?.usage)
+    .filter((value) => Number.isSafeInteger(value) && value >= 0);
   return {
     conclusion: statuses.length
       ? `质量建议已记录：${statuses.join(", ")}`
       : "质量建议暂不可用",
     status: statuses.length ? statuses.join("+") : "unavailable",
-    providers: [...new Set(reviews.flatMap((entry) => entry.value?.provider_results?.map(({ provider }) => provider) ?? []))],
-    duration_ms: null,
-    tokens: null,
+    providers: [...new Set(providerResults.map(({ provider }) => provider))],
+    duration_ms: timings.length ? timings.reduce((sum, value) => sum + value, 0) : null,
+    tokens: usages.length ? usages.reduce((sum, value) => sum + value, 0) : null,
     findings: reviews.flatMap((entry) => entry.value?.findings ?? []),
     refs: reviews.filter((entry) => entry.ref && entry.evidence).map((entry) => ({ ref: entry.ref, hash: entry.evidence.sha256 })),
   };
@@ -408,11 +413,11 @@ function shapeDiagnosticError(message, path, expected, actual, ErrorClass = Erro
 }
 
 function stageInputKeys(stage) {
-  if (stage === "build-code") return ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply"];
+  if (stage === "build-code") return ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "user_reply"];
   if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
-    return ["receipts", "attempt_id", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
+    return ["receipts", "attempt_id", "finding_dispositions", "contract_facts", "fallback_protocol", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
   }
-  return ["receipts", "attempt_id", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
+  return ["receipts", "attempt_id", "finding_dispositions", "fallback_protocol", "user_reply"];
 }
 
 export function validateStageInvocation(stage, input, {
@@ -630,6 +635,24 @@ export function validateAcceptanceCoverageShape(value, {
   return { ...value, accepted_criterion_ids: [...acceptedIds], items };
 }
 
+/** Summarize already authenticated coverage without changing any leaf verdict.
+ * This helper does not authenticate sources and cannot grant work authority. */
+export function acceptanceCoverageSummary(coverage) {
+  const ids = coverage?.accepted_criterion_ids;
+  const items = coverage?.items;
+  const completeSet = Array.isArray(ids) && ids.length > 0 && new Set(ids).size === ids.length
+    && Array.isArray(items) && items.length === ids.length
+    && new Set(items.map((item) => item.acceptance_criterion_id)).size === ids.length
+    && items.every((item) => ids.includes(item.acceptance_criterion_id));
+  const evaluated = completeSet && items.every((item) =>
+    (item.status === "not_applicable" && typeof item.not_applicable_reason === "string" && item.not_applicable_reason.trim() !== "")
+    || (Array.isArray(item.evidence_refs) && item.evidence_refs.length > 0));
+  const passed = evaluated && items.every((item) => item.status === "covered" || item.status === "not_applicable");
+  const failed = evaluated && items.some((item) => item.evaluation_result === "failed" || item.status === "failed");
+  return Object.freeze({ evaluation_status: evaluated ? "evaluated" : "missing",
+    result: passed ? "passed" : failed ? "failed" : evaluated ? "inconclusive" : "missing" });
+}
+
 function subjectFact(status, evidenceRefs = [], detail = null, attributes = {}) {
   if (!new Set(["passed", "failed", "inconclusive", "deferred", "missing"]).has(status)) {
     throw new Error(`unsupported stage subject status: ${status}`);
@@ -638,6 +661,7 @@ function subjectFact(status, evidenceRefs = [], detail = null, attributes = {}) 
     status,
     evidence_refs: Object.freeze(evidenceRefs.map(({ ref, sha256 }) => Object.freeze({ ref, sha256 }))),
     ...(detail ? { detail } : {}),
+    ...(attributes.evaluation_status ? { evaluation_status: attributes.evaluation_status } : {}),
     ...(Array.isArray(attributes.execution_items) ? {
       execution_items: Object.freeze(attributes.execution_items.map((item) => Object.freeze({ ...item }))),
     } : {}),
@@ -1632,6 +1656,34 @@ export async function acceptanceExecutionFacts(worker, snapshotTree) {
       missing_items: Object.freeze(projection.errors),
     });
   }
+  // The runner privately authenticates immutable prior execution; invocation
+  // input cannot offer an execution aggregate or a reuse flag.
+  if (typeof worker.readCurrentAcceptanceExecution === "function") {
+    const source = await worker.readCurrentAcceptanceExecution({ snapshot_tree: snapshotTree, projection });
+    if (source !== null && source !== undefined) {
+      if (source.authenticated !== true) throw new Error("acceptance reuse source is unauthenticated");
+      const prior = object(source.execution, "authenticated acceptance execution");
+      if (!Array.isArray(prior.items) || prior.items.length !== projection.scenarios.length
+          || prior.requires_execution !== true
+          || prior.requires_independent_verdict !== projection.requires_independent_verdict
+          || !prior.execution_binding || prior.execution_binding.task_id !== worker.identity.taskId
+          || prior.execution_binding.stage !== worker.stage
+          || prior.execution_binding.material_revision !== worker.currentMaterialRevision) {
+        throw new Error("acceptance reuse identity or scenario set mismatch");
+      }
+      for (const [index, scenario] of projection.scenarios.entries()) {
+        const item = prior.items[index];
+        if (canonicalJson(Object.fromEntries(Object.keys(scenario).filter((key) => key !== "task_id").map((key) => [key, item?.[key]]))) !== canonicalJson(Object.fromEntries(Object.entries(scenario).filter(([key]) => key !== "task_id")))
+            || item.task_id !== worker.identity.taskId || !new Set(["executed", "unavailable", "failed"]).has(item.status)
+            || !Array.isArray(item.evidence_refs)
+            || item.evidence_refs.some((ref) => typeof ref.ref !== "string" || !ref.ref.startsWith("quality/evidence/") || ref.ref.includes("..") || !SHA256_HEX.test(ref.sha256 ?? ""))
+            || (item.status === "executed" && item.evidence_refs.length === 0)) {
+          throw new Error("acceptance reuse scenario or canonical evidence mismatch");
+        }
+      }
+      return Object.freeze(prior);
+    }
+  }
   const unavailable = (scenario, reason) => Object.freeze({
     ...scenario,
     task_id: worker.identity.taskId,
@@ -1731,6 +1783,9 @@ export function e2eAcceptanceFacts(worker) {
   if (execution.status !== "passed") missing.push(`E2E execution is ${execution.status ?? "missing"}`);
   if (review.status !== "recorded") missing.push(`independent review is ${review.status ?? "missing"}`);
   if (confirmation.status !== "accepted") missing.push(`user confirmation is ${confirmation.status ?? "missing"}`);
+  for (const [label, value] of [["E2E execution", execution], ["independent review", review], ["user confirmation", confirmation]]) {
+    if (typeof value.reason === "string" && value.reason.trim()) missing.push(`${label}: ${value.reason}`);
+  }
   if (!execution.executor_actor || typeof execution.executor_actor !== "object" || typeof execution.executor_actor.source_id !== "string" || execution.executor_actor.source_id.trim() === "") missing.push("E2E executor identity is unavailable");
   if (!review.reviewer_actor || typeof review.reviewer_actor !== "object" || typeof review.reviewer_actor.source_id !== "string" || review.reviewer_actor.source_id.trim() === "") {
     missing.push("reviewer identity is unavailable");
@@ -1807,7 +1862,7 @@ function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execut
       const value = record.value;
       if (record.sha256 !== reference.sha256 || value.schema_version !== "stage-quality-evidence.v1"
           || value.task_id !== worker.identity.taskId || value.stage !== "build-code"
-          || value.snapshot_tree !== snapshotTree || value.material_revision !== worker.currentMaterialRevision
+          || value.snapshot_tree !== (execution.execution_binding?.snapshot_tree ?? snapshotTree) || value.material_revision !== worker.currentMaterialRevision
           || !item.acceptance_criterion_ids?.includes(value.subject)
           || !execution.execution_binding
           || canonicalJson(value.subject_fact?.execution_binding) !== canonicalJson(execution.execution_binding)
@@ -1858,6 +1913,9 @@ function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execut
       return {
         acceptance_criterion_id,
         status,
+        // Preserve failed versus incomplete leaf judgment even when the
+        // compatibility coverage status uses missing for both.
+        evaluation_result: status === "covered" ? "passed" : statuses.includes("failed") ? "failed" : "inconclusive",
         evidence_refs,
         ...(status === "covered" ? {} : { semantic_gap }),
         ...(["deferred", "unavailable"].includes(status) ? { reason: semantic_gap } : {}),
@@ -2424,7 +2482,7 @@ function canonicalReviewBudgetAttempts(worker) {
   });
 }
 
-function findingDispositions(reviews, invocation, currentMaterialRevision = null) {
+export function findingDispositions(reviews, invocation, currentMaterialRevision = null) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
   const attemptFacts = reviewRecords.map((review) => ({
     status: review?.facts?.status ?? "unknown",
@@ -2443,16 +2501,21 @@ function findingDispositions(reviews, invocation, currentMaterialRevision = null
     return !terminal || !review?.value;
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
-    const onlyUnavailable = reviewRecords.length > 0 && reviewRecords.every((review) => review?.facts?.status === "unavailable");
+    const onlyUnavailable = reviewRecords.length > 0 && reviewRecords.every((review) => review?.facts?.status === "unavailable" && review.authenticated_unavailable_source === true);
     if (onlyUnavailable) {
-      const separated = separateAttemptFindingFacts({
-        attempt_status: "unavailable",
-        attempt_error: attemptFacts.find((entry) => entry.error)?.error ?? null,
-        findings: [],
-      });
       return {
-        facts: { status: "missing", items: [], attempts: [separated.attempt] },
-        missing_items: ["current review result is unavailable for finding disposition"],
+        facts: {
+          status: "not_applicable", items: [],
+          attempts: reviewRecords.map((review) => ({ ...separateAttemptFindingFacts({
+            attempt_status: "unavailable", attempt_error: review.facts.error ?? null, findings: [],
+          }).attempt,
+            attempt_ref: review.ref, attempt_hash: review.evidence.sha256,
+            material_revision: review.value.material_revision, snapshot_tree: review.value.snapshot_tree,
+          })),
+          source_review_refs: reviewRecords.map((review) => ({ ref: review.ref, sha256: review.evidence.sha256 })),
+          reason: "authenticated unavailable review produced no findings; review availability remains unavailable",
+        },
+        missing_items: [],
       };
     }
     const reasons = dispositionReviews.length === 0
@@ -2671,6 +2734,7 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
         snapshot_tree: item.value.snapshot_tree, material_id: item.value.material_id,
         error: { code, message }, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope),
       },
+      authenticated_unavailable_source: true,
       ref: item.ref,
       evidence: item.evidence,
       value: item.value,
@@ -4128,6 +4192,31 @@ HANDLERS.set("build-plan", async (worker, input) => {
     verification: `${post ? "spec 与独立 Phase 文件可读，Phase 合同" : "四份当前材料可读，plan-task"}最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? "unknown"}`,
   });
 });
+function currentBuildCodePhaseSnapshot(worker, input, tree, command) {
+  if (worker.manifest?.activation_cohort !== "post" || !worker.workspace?.worktreeRoot) return undefined;
+  const index = worker.readArtifact("phases/index.md");
+  const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, worker.readArtifact(ref)]));
+  const parsed = validatePostPhaseContract({ spec: worker.readArtifact("spec.md"), index, phases });
+  const rows = parsed.facts?.phase_rows ?? [];
+  let phaseId;
+  if (input.receipts?.review !== undefined) {
+    const review = safeReviewFacts(worker, input, "review", undefined, "build-code", {
+      requireRiskAcceptance: false, requireDispositions: false,
+    });
+    if (review.value?.subject_kind === "phase" && review.value.review_scope === "phase") phaseId = review.value.phase_id;
+  }
+  const matchingCommand = rows.filter((row) => typeof command === "string" && row.command?.replace(/^`([\s\S]*)`$/, "$1") === command);
+  if (phaseId && matchingCommand.length === 1 && matchingCommand[0].id !== phaseId) return undefined;
+  const candidates = phaseId ? rows.filter((row) => row.id === phaseId) : matchingCommand;
+  const row = candidates.length === 1 ? candidates[0] : null;
+  return row?.write_set?.length ? { root: worker.workspace.worktreeRoot, tree, writeSet: row.write_set } : undefined;
+}
+
+function buildCodeSnapshotChanged(tree, currentTree, currentSnapshot) {
+  return currentSnapshot ? phaseWriteSetChanges({ ...currentSnapshot, fromTree: tree, toTree: currentTree }).length > 0
+    : tree !== currentTree;
+}
+
 HANDLERS.set("build-code", async (worker, input) => {
   // Implementation and test facts describe quality; they are not the work
   // authority.  A vNext run with only the four materials stays runnable.
@@ -4135,6 +4224,8 @@ HANDLERS.set("build-code", async (worker, input) => {
   recordConsumerInvocation(worker, "stage-handlers#buildCodeContractFacts");
   const contractFactsBase = buildCodeContractFacts(input, currentSnapshotTree);
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
+  const tests = currentOnly && input.receipts.tests === undefined ? null : testFacts(worker, input);
+  const currentSnapshot = tests ? currentBuildCodePhaseSnapshot(worker, input, currentSnapshotTree, tests.facts.command) : undefined;
   // Supplied receipts must be authenticated before either browser path runs.
   // Absent receipts still leave the current task free to continue working.
   const impl = currentOnly && input.receipts.implementation === undefined
@@ -4143,20 +4234,18 @@ HANDLERS.set("build-code", async (worker, input) => {
     if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
     for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
     if (currentOnly) validateCanonicalImplementationReceipt(impl.value, {
-      taskId: worker.identity.taskId, snapshotTree: currentSnapshotTree,
+      taskId: worker.identity.taskId, snapshotTree: currentSnapshotTree, currentSnapshot,
       read: (ref) => worker.readEvidence(ref).bytes,
     });
   }
   const actualChangedFiles = impl ? authenticatedImplementationChanged(worker, impl.value) : null;
-  const tests = currentOnly && input.receipts.tests === undefined
-    ? null : testFacts(worker, input);
   if (currentOnly && tests) {
     const testRecord = worker.readReceipt(tests.facts.receipt_ref);
     if (testRecord.sha256 !== tests.evidence.sha256) {
       throw materialIncomplete("build-code test receipt changed between authentication and validation");
     }
     validateCanonicalTestReceipt(testRecord.value, {
-      taskId: worker.identity.taskId, stage: "build-code", snapshotTree: currentSnapshotTree,
+      taskId: worker.identity.taskId, stage: "build-code", snapshotTree: currentSnapshotTree, currentSnapshot,
       ...(worker.manifest?.activation_cohort === "post"
         ? { expectedProducerComponent: "build-code-test-capture" }
         : { allowedProducerComponents: ["build-code-test-capture", "tests"] }),
@@ -4168,8 +4257,8 @@ HANDLERS.set("build-code", async (worker, input) => {
       throw materialIncomplete("build-code test output hash does not match the original bytes");
     }
   }
-  if ((impl && impl.value.snapshot_tree !== currentSnapshotTree)
-      || (tests && tests.facts.snapshot_tree !== currentSnapshotTree)) {
+  if ((impl && buildCodeSnapshotChanged(impl.value.snapshot_tree, currentSnapshotTree, currentSnapshot))
+      || (tests && buildCodeSnapshotChanged(tests.facts.snapshot_tree, currentSnapshotTree, currentSnapshot))) {
     throw materialIncomplete("build-code supplied implementation and test receipts do not bind the current snapshot");
   }
   if (currentOnly
@@ -4266,8 +4355,8 @@ HANDLERS.set("build-code", async (worker, input) => {
   // A Phase review's snapshot remains provenance after same-task repairs.
   // Implementation and test receipts still bind the current tree.
   const snapshotMismatch = currentFactsSnapshot === null
-    || impl.value.snapshot_tree !== currentFactsSnapshot
-    || tests.facts.snapshot_tree !== currentFactsSnapshot;
+    || buildCodeSnapshotChanged(impl.value.snapshot_tree, currentFactsSnapshot, currentSnapshot)
+    || buildCodeSnapshotChanged(tests.facts.snapshot_tree, currentFactsSnapshot, currentSnapshot);
   if (snapshotMismatch) {
     missingItems.push("implementation and tests do not bind the current snapshot; current completion was not certified");
   }
@@ -4297,12 +4386,8 @@ HANDLERS.set("build-code", async (worker, input) => {
       review: review.facts,
       acceptanceCoverage: coverage,
     });
-  const acceptanceComplete = coverage.accepted_criterion_ids.length > 0
-    && coverage.items.length === coverage.accepted_criterion_ids.length
-    && coverage.items.every((entry) => (entry.status === "covered" && entry.evidence_refs.length > 0)
-      || (entry.status === "not_applicable"
-        && typeof entry.not_applicable_reason === "string"
-        && entry.not_applicable_reason.trim() !== ""));
+  const acceptanceSummary = acceptanceCoverageSummary(coverage);
+  const acceptanceComplete = acceptanceSummary.result === "passed";
   return addCompletion("build-code", {
     fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
@@ -4318,7 +4403,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       acceptance_coverage: coverage,
       ...(uiQa ? { ui_qa: uiQa.facts } : {}),
       completion_subjects: {
-        acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
+        acceptance_criteria: subjectFact(acceptanceSummary.result, coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage", { evaluation_status: acceptanceSummary.evaluation_status }),
         ...(acceptanceExecution.requires_execution ? {
           acceptance_execution: subjectFact(
             acceptanceExecution.status === "executed" ? "passed" : "missing",
@@ -4348,7 +4433,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       // An empty or unavailable coverage object must never become green via
       // Array.prototype.every([]).  Coverage is a quality fact, not a default
       // success value.
-      acceptance_criteria: acceptanceComplete ? "covered" : "unknown",
+      acceptance_criteria: acceptanceComplete ? "covered" : acceptanceSummary.result === "failed" ? "failed" : "unknown",
     },
     audit,
     verification: review.facts.status === "unavailable"

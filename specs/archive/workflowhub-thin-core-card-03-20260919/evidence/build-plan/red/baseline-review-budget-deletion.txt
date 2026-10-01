@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ✓ tests/contract/review-budget-deletion.test.mjs (4 tests) 20692ms
+   ✓ review budget deletion contract > does not redispatch identical material, redispatches changed material, and keeps a judged retry idempotent 12129ms
+   ✓ review budget deletion contract > runs direct OCR without host identity or retry controls 4620ms
+   ✓ review budget deletion contract > does not re-admit a retry after the current lineage head already consumed it 3940ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  23:03:01
+   Duration  21.23s (transform 169ms, setup 0ms, collect 412ms, tests 20.69s, environment 0ms, prepare 32ms)
+

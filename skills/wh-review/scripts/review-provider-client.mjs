@@ -18,6 +18,13 @@ const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 })();
 
+// The external 3rd-review broker (3rd-review/lib/broker.mjs:678) still requires
+// a supported host_provider on every request. WorkflowHub no longer reads a
+// caller host: this constant is only the host identity sent to (and echoed by)
+// the broker. "dsh" is a host-identity-only adapter there, so it never matches
+// a reviewer and never takes part in choosing reviewers.
+export const BROKER_HOST_PROVIDER = "dsh";
+
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
 function validateMinimumHeterologous(minimumHeterologous, minimum_heterologous) {
@@ -26,8 +33,13 @@ function validateMinimumHeterologous(minimumHeterologous, minimum_heterologous) 
     throw failure("THRESHOLD_INVALID", "minimum_heterologous aliases disagree");
   }
   const value = minimumHeterologous === undefined ? minimum_heterologous : minimumHeterologous;
+  // minimum_heterologous is no longer a caller-filled headcount gate (card-03):
+  // a review dispatches with whatever configured providers the route yields, so
+  // omitting both aliases means the broker-side minimum is 1. An explicitly
+  // supplied value is still validated and rejected when it is not usable.
+  if (value === undefined) return 1;
   if (!Number.isSafeInteger(value) || value < 1) {
-    throw failure("THRESHOLD_INVALID", "minimum_heterologous must be an explicit positive integer");
+    throw failure("THRESHOLD_INVALID", "minimum_heterologous must be a positive integer");
   }
   return value;
 }
@@ -901,12 +913,11 @@ export class ReviewProviderClient {
     this.timeoutMs = timeoutMs;
   }
 
-  async startManaged({ requestId, hostProvider, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
+  async startManaged({ requestId, providers, materials, prompt, reviewMode = null, reviewFlow = null, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
     if (!(typeof requestId === "string" && requestId.trim() !== "" && !containsPrivatePath(requestId)
-        && typeof hostProvider === "string" && hostProvider.trim() !== "" && !containsPrivatePath(hostProvider)
         && Array.isArray(providers) && providers.length > 0
         && materials?.bundleRoot && materials?.materialId && prompt)) {
-      throw new TypeError("requestId, hostProvider, providers, materials, and prompt are required");
+      throw new TypeError("requestId, providers, materials, and prompt are required");
     }
     if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "") || new Set(providers).size !== providers.length) {
       throw new TypeError("providers must be a unique non-empty string array");
@@ -919,7 +930,7 @@ export class ReviewProviderClient {
     }));
     const request = {
       version: 4,
-      host_provider: hostProvider,
+      host_provider: BROKER_HOST_PROVIDER,
       // Option 1 (user decision 2026-09-11), both halves landed: 3rd-review now
       // accepts v3 for managed sessions and this caller uses the same protocol +
       // negotiated delivery as runGroup. Before this, an embedded-only provider
@@ -946,19 +957,15 @@ export class ReviewProviderClient {
     });
     return parseManagedEnvelope(wire, {
       command: "start", requestId, runtimeId: null, materialId: materials.materialId,
-      hostProvider, providers: new Set(providers),
+      hostProvider: BROKER_HOST_PROVIDER, providers: new Set(providers),
     });
   }
 
-  async statusManaged({ runtimeId = null, requestId = null, hostProvider, providers, materials, signal = null } = {}) {
-    if (typeof hostProvider === "string" && containsPrivatePath(hostProvider)) {
-      throw failure("PUBLIC_RESULT_INVALID", "hostProvider contains a private path");
-    }
+  async statusManaged({ runtimeId = null, requestId = null, providers, materials, signal = null } = {}) {
     if (!(((runtimeId === null && this.command === null)
         || (typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)))
-        && typeof hostProvider === "string" && hostProvider.trim() !== "" && !containsPrivatePath(hostProvider)
         && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {
-      throw new TypeError("runtimeId, hostProvider, providers, and materials are required");
+      throw new TypeError("runtimeId, providers, and materials are required");
     }
     if (requestId !== null && (typeof requestId !== "string" || requestId.trim() === "" || containsPrivatePath(requestId))) {
       throw new TypeError("requestId must be null or a non-empty public identifier");
@@ -969,18 +976,14 @@ export class ReviewProviderClient {
     const wire = await this.invoke({ command: "status", runtimeId, ...(signal === null || signal === undefined ? {} : { signal }) });
     return parseManagedEnvelope(wire, {
       command: "status", requestId, runtimeId, materialId: materials.materialId,
-      hostProvider, providers: new Set(providers),
+      hostProvider: BROKER_HOST_PROVIDER, providers: new Set(providers),
     });
   }
 
-  async cancelManaged({ runtimeId, requestId = null, hostProvider, providers, materials } = {}) {
-    if (typeof hostProvider === "string" && containsPrivatePath(hostProvider)) {
-      throw failure("PUBLIC_RESULT_INVALID", "hostProvider contains a private path");
-    }
+  async cancelManaged({ runtimeId, requestId = null, providers, materials } = {}) {
     if (!(typeof runtimeId === "string" && runtimeId.trim() !== "" && !containsPrivatePath(runtimeId)
-        && typeof hostProvider === "string" && hostProvider.trim() !== ""
         && Array.isArray(providers) && providers.length > 0 && materials?.materialId)) {
-      throw new TypeError("runtimeId, hostProvider, providers, and materials are required");
+      throw new TypeError("runtimeId, providers, and materials are required");
     }
     if (requestId !== null && (typeof requestId !== "string" || requestId.trim() === "" || containsPrivatePath(requestId))) {
       throw new TypeError("requestId must be null or a non-empty public identifier");
@@ -991,12 +994,12 @@ export class ReviewProviderClient {
     const wire = await this.invoke({ command: "cancel", runtimeId });
     return parseManagedEnvelope(wire, {
       command: "cancel", requestId, runtimeId, materialId: materials.materialId,
-      hostProvider, providers: new Set(providers),
+      hostProvider: BROKER_HOST_PROVIDER, providers: new Set(providers),
     });
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
-    if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
+  async runGroup({ providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null, strictProtocol = true, minimumHeterologous, minimum_heterologous, signal = null } = {}) {
+    if (!(Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
     const minimum = validateMinimumHeterologous(minimumHeterologous, minimum_heterologous);
     if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
@@ -1021,7 +1024,7 @@ export class ReviewProviderClient {
     // cross-caller deduplication, so WorkflowHub does not claim it here.
     const request = {
       version: 4,
-      host_provider: hostProvider,
+      host_provider: BROKER_HOST_PROVIDER,
       required_result_protocol: protocol,
       provider_allowlist: [...providers],
       minimum_heterologous: minimum,
@@ -1059,7 +1062,7 @@ export class ReviewProviderClient {
         });
       }
       const validated = validateV3Group(result, {
-        hostProvider,
+        hostProvider: BROKER_HOST_PROVIDER,
         providers: new Set(providers),
         materialId: materials.materialId,
         contractId: materials.contractId ?? null,

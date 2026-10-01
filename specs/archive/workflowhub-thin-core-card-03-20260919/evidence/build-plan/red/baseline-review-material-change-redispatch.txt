@@ -1,0 +1,18 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ✓ tests/contract/review-material-change-redispatch.test.mjs (10 tests) 18697ms
+   ✓ review material change reuse contract > ORACLE-P2-PLAIN-PATH dispatches a plain text material path without caller metadata 1444ms
+   ✓ review material change reuse contract > redispatches a new canonical attempt on changed material and reuses identical material 3260ms
+   ✓ review material change reuse contract > does not redispatch a blocked quorum result for the same review fingerprint 2100ms
+   ✓ review material change reuse contract > authenticates a recorded build-code review after its material revision moves 1905ms
+   ✓ review material change reuse contract > does not reuse a recorded review when the authenticated Workspace drifts before the reuse check 2227ms
+   ✓ review material change reuse contract > blocks a provider dispatch when the source changes while the trusted route resolves 2464ms
+   ✓ review material change reuse contract > retains a dispatched source/material drift failure and admits a material_changed retry 3704ms
+   ✓ review material change reuse contract > records an unavailable fact when post-dispatch result validation fails 1591ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  23:02:41
+   Duration  19.13s (transform 141ms, setup 0ms, collect 323ms, tests 18.70s, environment 0ms, prepare 27ms)
+

@@ -13,6 +13,8 @@
 
 **现行修订（2026-09-28，用户确认）**：撤销“同源 reviewer 必须排除”的要求。OCR 派发不再要求或读取调用方提供的 `host_provider`，不再以 reviewer/host 的 source、model、adapter 是否相同阻止派发，也不再以 `minimum_heterologous` 作为 OCR 结果的完成条件。provider/source/config 仍可作为诊断 provenance 保存，但不成为 stage caller 的输入、route gate 或质量完成门。历史 `host_provider`、独立性和 quorum 字段只读兼容；新 writer 不应新增对应的阻塞对象。
 
+**现行更正（2026-09-29，适用范围，CARD-03 decision-log §二十一）**：上一段的撤销适用于**所有审查路径**，不限于 OCR：simple-review（build-spec、make-decision、build-plan 等阶段）、wh-review CLI 与 mini-task 同样不再要求或读取调用方的 `host_provider`，不做同源排除，也不以 `minimum_heterologous` 作完成条件。外部 3rd-review broker 仍要求合法 host 名，发给它时固定写宿主标识 `dsh`，只作标识，不参与选审查人。
+
 **现行修订（2026-09-29，直接 provider 增量处理）**：direct OCR provider 不受 WorkflowHub 额外固定 wall-clock deadline；provider 到自己的终态或调用方明确取消前持续运行，liveness/输出采样只作诊断。首个 provider 到终态后立即通过增量结果回调进入 findings 处理，后续 provider 继续运行，迟到 findings 到达时再次进入同一处理回调；不得因首个结果取消 sibling。完整 round 返回值保留所有终态 provider provenance，部分成功记 `available-with-failures`，全路失败才记 `unavailable`。显式取消直接终止已登记的 provider process group，再终止 supervisor；Kimi 通过 packet-local、只开放 `Read` 的 agent file 运行；只有当前 OpenCode direct CLI 没有可强制只读工具边界，才记 `OCR_PROVIDER_UNSUPPORTED`。reviewed execution 的输出按 `ref+hash` 去重，UTF-8 流只传一次文本表示，provider packet 的当前材料拆为可按需读取的 context 文件，完整 canonical evidence 仍保留在 task store；不新增 caller 配置、route identity、review policy、stage、gate 或持久对象。
 
 **现行更正（2026-09-29）**：上一段关于“Kimi direct CLI 直接 `OCR_PROVIDER_UNSUPPORTED`”的能力判断已被真实 CLI 验证推翻。Kimi 通过 packet-local agent file 只开放 `Read`，并禁用 user/project skill 自动发现；因此它与 Codex/Antigravity 一样可以进入 direct OCR。reviewed execution 的 stdout/stderr 按 `ref+hash` 去重，UTF-8 流只传一次文本表示，临时 packet 的 `.git` 内部文件不进入 manifest；canonical 原始记录仍完整保留。只有当前 OpenCode direct CLI 没有可强制只读工具边界，仍保留 `OCR_PROVIDER_UNSUPPORTED`。

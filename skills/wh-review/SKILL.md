@@ -22,7 +22,6 @@ It does not open or validate a Workspace, TaskHandle, Git repository, branch, sn
 {
   "stage": "make-decision",
   "review_track": "detail",
-  "host_provider": "codex",
   "materials": {
     "raw_requirement": "...",
     "approved_direction": "...",
@@ -34,16 +33,17 @@ It does not open or validate a Workspace, TaskHandle, Git repository, branch, sn
 Required fields:
 
 - `stage`: current review stage.
-- `host_provider`: current host provider, used only to select a heterologous reviewer.
 - `materials`: the complete material bytes for this review.
 
 `review_track` is required only for `make-decision`; `review_kind` is used only for mini-task reviews.
+
+`host_provider` is no longer read. A caller that still sends it has it ignored; it never selects, excludes, or blocks a reviewer.
 
 Do not send `task_path`, `project_name`, `task_id`, Workspace, Git, snapshot, revision, provider allowlist, or result-storage fields. Extra task/workspace fields from an older caller are ignored and never become review gates.
 
 ## Behavior
 
-1. Select the configured heterologous reviewer route for the supplied stage/track.
+1. Select the configured reviewer route for the supplied stage/track (every configured profile; no same-source exclusion and no minimum headcount).
 2. Generate the stage-focused review instructions.
 3. Freeze exactly the submitted `materials` into one temporary bundle and hash those bytes.
 4. Make one broker group request.
@@ -85,7 +85,7 @@ Unavailable:
 }
 ```
 
-`available` only means at least one heterologous reviewer returned valid findings JSON. Empty findings are advice, not completion or approval. `unavailable` is not empty findings and must not be rewritten as pass.
+`available` only means at least one reviewer returned valid findings JSON. Empty findings are advice, not completion or approval. `unavailable` is not empty findings and must not be rewritten as pass.
 An unavailable response preserves the real public result and provenance: it is never a pass. The `error.code` must preserve the failure category: use `ROUTE_UNAVAILABLE` or `REVIEW_BROKER_START_FAILED` only for route/start failures; use `REVIEW_EXECUTION_TIMEOUT`, `REVIEW_CANCELLED`, `REVIEW_PROVIDER_OUTPUT_INVALID`, `MATERIAL_INCOMPLETE`, `RATE_LIMITED`, or the broker's original code for other failures. A timeout, signal, non-zero broker exit, malformed output, or one rate-limited sibling must never be relabeled `REVIEW_PROVIDER_UNAVAILABLE`; one valid semantic sibling keeps the aggregate `available`.
 
 ## Long-review host convention
@@ -97,6 +97,8 @@ When a workflow is currently executing a declared review step and explicitly cal
 ## Responsibility boundary
 
 - `wh-review` does not write WorkflowHub task state or quality facts.
+- Empty findings are advice, never a pass; when a review round returns zero findings, the calling host adds one human-readable sentence to its own existing review record for that round — why zero findings, and what this round's review scope covered.
+- That sentence is a human-read discipline only: no new field, no findings-schema change, not a gate, does not block progress, and adds no confirmation point.
 - The calling stage records the returned review result and disposes each finding in its own material.
 - A review failure never blocks Talk, drafting, repair, or user confirmation.
 - Retry only when the previous call returned no semantic advice and the concrete transport/material problem changed.
@@ -105,6 +107,6 @@ When a workflow is currently executing a declared review step and explicitly cal
 
 ```bash
 node skills/wh-review/scripts/wh-review-cli.mjs run <<'JSON'
-{"stage":"make-decision","review_track":"detail","host_provider":"codex","materials":{"decision":"..."}}
+{"stage":"make-decision","review_track":"detail","materials":{"decision":"..."}}
 JSON
 ```

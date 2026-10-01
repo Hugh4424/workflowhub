@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ✓ tests/contract/acceptance-result-machine-classes.test.mjs (28 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+   Start at  23:03:23
+   Duration  522ms (transform 166ms, setup 0ms, collect 389ms, tests 7ms, environment 0ms, prepare 33ms)
+

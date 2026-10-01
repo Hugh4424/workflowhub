@@ -1,0 +1,91 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/ac-evidence-schema-domain.test.mjs (6 tests | 3 failed) 5ms
+   × ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.result enum contains every validator value 3ms
+     → criterion.result is missing validator values: expected [ 'missing', 'inconsistent', …(2) ] to deeply equal []
+   × ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.leaf_result enum contains every validator value 0ms
+     → criterion.leaf_result is missing validator values: expected [ 'missing', 'inconsistent', …(2) ] to deeply equal []
+   × ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.status enum contains every validator value 0ms
+     → criterion.status is missing validator values: expected [ Array(5) ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/ac-evidence-schema-domain.test.mjs > ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.result enum contains every validator value
+AssertionError: criterion.result is missing validator values: expected [ 'missing', 'inconsistent', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "missing",
++   "inconsistent",
++   "incomplete",
++   "unavailable",
++ ]
+
+ ❯ tests/contract/ac-evidence-schema-domain.test.mjs:47:73
+     45|       const allowed = criterionProperties()[field].enum;
+     46|       const missing = validatorResults().filter((value) => !allowed.in…
+     47|       expect(missing, `criterion.${field} is missing validator values`…
+       |                                                                         ^
+     48|     });
+     49|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/ac-evidence-schema-domain.test.mjs > ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.leaf_result enum contains every validator value
+AssertionError: criterion.leaf_result is missing validator values: expected [ 'missing', 'inconsistent', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "missing",
++   "inconsistent",
++   "incomplete",
++   "unavailable",
++ ]
+
+ ❯ tests/contract/ac-evidence-schema-domain.test.mjs:47:73
+     45|       const allowed = criterionProperties()[field].enum;
+     46|       const missing = validatorResults().filter((value) => !allowed.in…
+     47|       expect(missing, `criterion.${field} is missing validator values`…
+       |                                                                         ^
+     48|     });
+     49|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/ac-evidence-schema-domain.test.mjs > ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator > criterion.status enum contains every validator value
+AssertionError: criterion.status is missing validator values: expected [ Array(5) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "pass",
++   "fail",
++   "inconclusive",
++   "deferred",
++   "inconsistent",
++ ]
+
+ ❯ tests/contract/ac-evidence-schema-domain.test.mjs:47:73
+     45|       const allowed = criterionProperties()[field].enum;
+     46|       const missing = validatorResults().filter((value) => !allowed.in…
+     47|       expect(missing, `criterion.${field} is missing validator values`…
+       |                                                                         ^
+     48|     });
+     49|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed (6)
+   Start at  00:52:45
+   Duration  187ms (transform 11ms, setup 0ms, collect 70ms, tests 5ms, environment 0ms, prepare 26ms)
+

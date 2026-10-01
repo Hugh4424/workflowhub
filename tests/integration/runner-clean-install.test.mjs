@@ -49,7 +49,7 @@ async function installPreflightFixture() {
   // Use the real five-stage declared closure so install preflight is reached
   // through a valid bundle; each negative case mutates exactly one input later.
   await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: skillBundleRoot });
-  const locator = "skills/spec-plan/templates/plan-template.md";
+  const locator = "skills/spec-plan/templates/phase-template.md";
   const bytes = fs.readFileSync(path.join(skillBundleRoot, locator), "utf8");
   return { releaseRoot, skillBundleRoot, locator, bytes, ...isolatedEnvironment(isolated) };
 }

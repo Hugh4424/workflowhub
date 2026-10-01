@@ -123,10 +123,23 @@ it.each(["runtime_capabilities", "external_capabilities"])("requires %s to remai
     .toMatch(new RegExp(`${group}/fixture-capability absence_semantics must be diagnostic`));
 });
 
-it("fails when a prompt bypasses its manifest", () => {
-  const result = checkSkillClosure(fixture({ manifestSkill: false }));
+it("accepts an explicit registered skill call without a duplicate manifest dependency", () => {
+  expect(checkSkillClosure(fixture({ manifestSkill: false }))).toEqual({ ok: true, errors: [] });
+});
+
+it("fails an explicit skill call when its portable bundle is missing", () => {
+  const root = fixture({ manifestSkill: false });
+  fs.rmSync(path.join(root, "skills/demo/skill-bundle.json"));
+  const result = checkSkillClosure(root);
   expect(result.ok).toBe(false);
-  expect(result.errors.join("\n")).toMatch(/prompt references undeclared skill demo/);
+  expect(result.errors.join("\n")).toMatch(/invalid explicit skill demo/);
+});
+
+it("accepts the git root pathspec without accepting a host absolute locator", () => {
+  expect(checkSkillClosure(fixture({ prompt: "Use `git restore -- :/`." })))
+    .toEqual({ ok: true, errors: [] });
+  expect(checkSkillClosure(fixture({ prompt: "Use `git restore -- :/` then /Users/me/private." })).errors.join("\n"))
+    .toMatch(/forbidden external/);
 });
 
 it("fails user-local and external framework locators", () => {
@@ -195,8 +208,8 @@ it("rejects release files without an authenticated content hash", () => {
 
 
 it.each([
-  ["spec-plan", "templates/plan-template.md"],
-  ["spec-tasks", "templates/tasks-template.md"],
+  ["spec-plan", "templates/phase-template.md"],
+  ["spec-tasks", "templates/index-template.md"],
   ["wh-review", "scripts/review-provider-client.mjs"],
 ])("P5 current %s bundle authenticates its changed %s bytes", (name, changedPath) => {
   const bundleRef = `skills/${name}/skill-bundle.json`;
@@ -205,10 +218,9 @@ it.each([
   // here rather than becoming an expected rejection that hides release drift.
   const bundle = validateSkillBundle(REPOSITORY_ROOT, bundleRef, entryRef);
   const declaration = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, bundleRef), "utf8"));
-  const entry = declaration.files.find((item) => item.path === changedPath);
+  const entry = declaration.files.find((item) => item === changedPath);
   expect(entry).toBeDefined();
-  const actualHash = createHash("sha256").update(fs.readFileSync(path.join(REPOSITORY_ROOT, `skills/${name}`, changedPath))).digest("hex");
-  expect(entry.sha256).toBe(actualHash);
+  expect(declaration.files.every((item) => typeof item === "string")).toBe(true);
   const catalog = yaml.load(fs.readFileSync(path.join(REPOSITORY_ROOT, "skills/catalog.yaml"), "utf8"));
   expect(catalog.skills.find((item) => item.name === name).local_bundle_hash).toBe(bundle.bundleHash);
 });
@@ -218,7 +230,7 @@ it.each(["missing", "tampered"])("P5 isolated hashed skill rejects %s source aft
   const skillPath = path.join(root, "skills/demo/SKILL.md");
   const manifestPath = path.join(root, "skills/demo/skill-bundle.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  manifest.files = [{ path: "SKILL.md", sha256: createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex") }];
+  manifest.files = ["SKILL.md"];
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   const { bundleHash } = validateSkillBundle(root, "skills/demo/skill-bundle.json", "skills/demo/SKILL.md");
   const catalogPath = path.join(root, "skills/catalog.yaml");
@@ -230,5 +242,5 @@ it.each(["missing", "tampered"])("P5 isolated hashed skill rejects %s source aft
   else fs.appendFileSync(skillPath, "\nChanged after its hash was declared.\n");
   const result = checkSkillClosure(root);
   expect(result.ok).toBe(false);
-  expect(result.errors.join("\n")).toMatch(/missing|sha256 mismatch/);
+  expect(result.errors.join("\n")).toMatch(/missing|local_bundle_hash does not match/);
 });

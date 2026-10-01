@@ -38,18 +38,20 @@ afterEach(() => {
 
 describe("Phase quality and handoff contract", () => {
   it("renders post-cohort handoff pointers without resurrecting plan/tasks", () => {
+    const materials = {
+      "decision-log.md": "# Decision\n\n## 目标\n- keep the current direction.\n",
+      "spec.md": "# Spec\n\n## 速读卡\n- use the current implementation design.\n",
+      "phases/index.md": "# Phase index\n\n| P1 | phases/P1.md |\n",
+      "phases/P1.md": "# Phase P1\n\n- first implementation task.\n",
+    };
     const rendered = renderStageHandoff({
       taskId: "post-handoff-fixture",
       stage: "build-code",
       snapshotTree: "a".repeat(40),
       materialScopeRevision: `revision-${"b".repeat(64)}`,
       reflectionStatus: "unavailable",
-      materials: {
-        "decision-log.md": "# Decision\n\n## 目标\n- keep the current direction.\n",
-        "spec.md": "# Spec\n\n## 速读卡\n- use the current implementation design.\n",
-        "phases/index.md": "# Phase index\n\n| P1 | phases/P1.md |\n",
-        "phases/P1.md": "# Phase P1\n\n- first implementation task.\n",
-      },
+      materials,
+      artifacts: { read: (name) => materials[name] },
     });
     expect(rendered).toContain("非权威 current handoff，只以当前 cohort 材料和正式质量原件为准");
     expect(rendered).toContain("`phases/index.md`");

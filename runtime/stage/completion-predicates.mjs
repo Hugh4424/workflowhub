@@ -455,6 +455,8 @@ export function deriveStageCompletion(stage, observations = [], {
   const result = Object.freeze({
     stage,
     status: missing.length === 0 && conflicts.size === 0 ? "completed" : "in_progress",
+    // Quality predicates do not establish implementation completeness.
+    ...(stage === "build-code" ? { implementation_completion: "unknown" } : {}),
     predicates: Object.freeze(predicates),
     fact_refs: Object.freeze([...satisfied.values()].map((entry) => entry.fact.ref).sort()),
     missing: Object.freeze(missing),

@@ -185,7 +185,9 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(stepSlugs("build-code").indexOf("stage-end-spec-analyze")).toBeGreaterThan(stepSlugs("build-code").indexOf(aggregate.step_slug));
     const verifySteps = steps("verify-code");
     const finalReview = verifySteps.find((step) => step.step_slug === "ocr-code-review");
-    expect(finalReview.observable_result).toMatch(/一次 OCR 独立代码审查/);
+    expect(finalReview.observable_result).toMatch(/一次 OCR 代码审查/);
+    expect(finalReview.observable_result).not.toMatch(/独立代码审查/);
+    expect(finalReview.observable_result).toMatch(/同源不影响派发/);
     expect(verifySteps.find((step) => step.step_slug === "publish-code-review-fact").observable_result)
       .toMatch(/code_review 质量事实/);
   });

@@ -51,6 +51,19 @@ The current `spec.md` remains the single revision target; never create a
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
+交接前可执行性自问（逐条写答案；答不上来的写 `unavailable` 并写明 owner，不要留到 build-plan 或 build-code）：
+
+1. 每个 Phase 是不是一个可独立验收、可独立提交的结果？有没有哪张卡里混了两个用「并且」连接的交付物？
+2. 每条关键 AC 的真实入口、真实消费者、独立判据都在计划里指名了吗？还是只有「将来如何观察效果」的说法？
+3. 受保护文件、外部前置条件和预写测试的形式断言，是**实读**来的还是推断来的？实读记录写在哪一行？
+4. 每条预写红测，是因目标行为失败，还是夹具/环境失败，还是本来就通过？
+5. 有没有用整份常变文件的哈希，当作一条稳定规则的版本？
+6. 同一主题的复核件有没有重复保留？复核材料有没有整目录复制？
+7. 跨 Phase 的写入集与消费者顺序走一遍能连上吗？有没有哪个消费者要等一个还没安排的产出方？
+8. 这次交接里，哪些风险是计划缺口、哪些是实现未知？两类分得开吗？
+
+八条里任何一条答「不能确定」，就写进上面的阶段末遗漏披露，并写明它属于计划缺口还是实现未知。
+
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
 若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
@@ -74,9 +87,15 @@ manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。
 
 本阶段只细化当前决策与规格；未来 `plan.md`、`tasks.md` 的完备性不成为写规格的前置。AC 保留场景、数据来源、可判真 oracle 和失败条件。实际 command/service 验收由 build-code 的现有执行器产生原件，verify-code 消费同次独立 review 与真实用户确认；规格审查与 AC 文本都不替代执行证据。
 
+稳定业务规则、接口契约与 oracle 的版本锚，只能指向那段规则本身：规则所在文件 + 小节标题或显式 anchor（需要哈希时，哈希算在那段规则文本上）。不得用整份计划文件、流水账或综合文档的全文哈希，充当一条稳定规则的版本——那会让一次与这条规则无关的文字修订把全部旧证据判成过期。自检标准：如果这次改动只动了与这条规则无关的段落，这条规则的版本应当不变；如果它变了，说明版本锚挂错了地方。
+
 当前 WorkflowHub 会话直接执行规格阶段并通过现有 `run` 发布事实；不需要外部 Stage Agent、bridge、session 或 stage outcome。旧 outcome 只作历史 provenance 读取，不能成为规格写入或复盘的前置条件。
 
 通过既有 `review --action=record` 的 `request` 路径审查当前规格，保留实际 `attempt_ref`、可空的 `result_ref`、`report_ref`，并把 canonical result 或 unavailable attempt 的实际 ref 放入 `receipts.review`，由 `stage-handlers#safeReviewFacts` 认证。保留每个角色的语义、provider、transport、错误与 provenance；不得把记录成功、空 findings、partial 或 unavailable 当作规格通过，也不为 clean 标签重复整轮审查。usage/timing 只回读已认证 attempt 的 `provider_attempts[].execution`，缺失保留 unavailable，实际零值仍为零。
+
+禁止把整棵工作树、整个目录、或同一份材料的多个副本当作复核材料或证据反复复制；复核材料只包含本次判断真正读到的那些文件。
+
+本条是执行纪律，不是新的 stage、gate 或质量结论。
 
 方向批准从当前依赖的 canonical confirmation、quality fact 与真实 approve-decision outcome 认证；当前 `spec.md` 的细化不改变已批准 decision 内容范围，真正方向变化仍回 make-decision。风险接受与本阶段自己的确认继续使用严格材料/身份绑定。
 
@@ -278,6 +297,11 @@ complete applicable subsection or one factual `N/A — reason` line.
 The specification must not create a second authority, status projection, or
 process summary. Quality facts may be referenced by path and source, but a
 review or test result never changes product scope automatically.
+
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。调研、规格草稿实施、适用的测试与独立审查/红队派子代理；修复回原实施子代理。澄清问答与适用的 UI 设计确认由主会话执行；纯材料任务的运行时测试不适用，写明理由。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
 
 ## Work sequence
 

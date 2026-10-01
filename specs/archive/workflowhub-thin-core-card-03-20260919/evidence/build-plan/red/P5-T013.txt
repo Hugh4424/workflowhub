@@ -1,0 +1,147 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/build-code-diff-only.test.mjs (33 tests | 5 failed) 1446ms
+   × scanDiff > case 2: diff containing git push → safe, no irreversible_git classification (rules deleted) 5ms
+     → expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+   × scanDiff > case 8: git branch -d → safe, no irreversible_git classification (rules deleted) 1ms
+     → expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+   × scanDiff > case 9: git push --force → safe, no irreversible_git classification (rules deleted) 0ms
+     → expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+   × scanDiff > case 10: git reset --hard → safe, no irreversible_git classification (rules deleted) 0ms
+     → expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+   × scanDiff > case 22: git push --force on a real added "+" line → safe, no irreversible_git classification (rules deleted) 0ms
+     → expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/build-code-diff-only.test.mjs > scanDiff > case 2: diff containing git push → safe, no irreversible_git classification (rules deleted)
+AssertionError: expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "line": 6,
++     "pattern": "git push",
++     "type": "irreversible_git",
++   },
++ ]
+
+ ❯ tests/build-code-diff-only.test.mjs:35:74
+     33|     // CARD-03 T013 (G3): the uncalled C2_IRREVERSIBLE_GIT_RULES were …
+     34|     // written build-code boundary, so the scanner no longer classifie…
+     35|     expect(result.violations.filter(v => v.type === 'irreversible_git'…
+       |                                                                          ^
+     36|     expect(result.safe).toBe(true);
+     37|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/build-code-diff-only.test.mjs > scanDiff > case 8: git branch -d → safe, no irreversible_git classification (rules deleted)
+AssertionError: expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "line": 5,
++     "pattern": "git branch -d",
++     "type": "irreversible_git",
++   },
++ ]
+
+ ❯ tests/build-code-diff-only.test.mjs:115:74
+    113| `;
+    114|     const result = scanDiff(diffText);
+    115|     expect(result.violations.filter(v => v.type === 'irreversible_git'…
+       |                                                                          ^
+    116|     expect(result.safe).toBe(true);
+    117|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/build-code-diff-only.test.mjs > scanDiff > case 9: git push --force → safe, no irreversible_git classification (rules deleted)
+AssertionError: expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "line": 5,
++     "pattern": "git push --force",
++     "type": "irreversible_git",
++   },
++ ]
+
+ ❯ tests/build-code-diff-only.test.mjs:127:74
+    125| `;
+    126|     const result = scanDiff(diffText);
+    127|     expect(result.violations.filter(v => v.type === 'irreversible_git'…
+       |                                                                          ^
+    128|     expect(result.safe).toBe(true);
+    129|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/build-code-diff-only.test.mjs > scanDiff > case 10: git reset --hard → safe, no irreversible_git classification (rules deleted)
+AssertionError: expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "line": 5,
++     "pattern": "git reset --hard",
++     "type": "irreversible_git",
++   },
++ ]
+
+ ❯ tests/build-code-diff-only.test.mjs:139:74
+    137| `;
+    138|     const result = scanDiff(diffText);
+    139|     expect(result.violations.filter(v => v.type === 'irreversible_git'…
+       |                                                                          ^
+    140|     expect(result.safe).toBe(true);
+    141|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/build-code-diff-only.test.mjs > scanDiff > case 22: git push --force on a real added "+" line → safe, no irreversible_git classification (rules deleted)
+AssertionError: expected [ { type: 'irreversible_git', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "line": 6,
++     "pattern": "git push --force",
++     "type": "irreversible_git",
++   },
++ ]
+
+ ❯ tests/build-code-diff-only.test.mjs:371:74
+    369| `;
+    370|     const result = scanDiff(diffText);
+    371|     expect(result.violations.filter(v => v.type === 'irreversible_git'…
+       |                                                                          ^
+    372|     expect(result.safe).toBe(true);
+    373|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 28 passed (33)
+   Start at  00:50:51
+   Duration  1.56s (transform 18ms, setup 0ms, collect 21ms, tests 1.45s, environment 0ms, prepare 25ms)
+

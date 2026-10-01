@@ -1,0 +1,534 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs (5 tests | 3 failed) 7ms
+   × build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope 4ms
+     → expected 'stage: build-code\nskills:\n  - { nam…' to contain 'wh-review'
+   × build-code apply quality contract > requires per-phase execution facts and a final task strategy summary 1ms
+     → expected '---\nname: build-code\ndescription: I…' to match /dedicated final Task\/Phase…/Phase card
+   × build-code apply quality contract > records task strategy and execution facts in the canonical step manifest 1ms
+     → expected [ 'test_strategy' ] to deeply equal [ 'test_strategy', 'stage_outcome' ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope
+AssertionError: expected 'stage: build-code\nskills:\n  - { nam…' to contain 'wh-review'
+
+- Expected
++ Received
+
+- wh-review
++ stage: build-code
++ skills:
++   - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, trigger: every_behavior_phase_actual_scope, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#buildCodeContractFacts", inputs: ["contract_facts"], identity: ["task_id", "stage", "workspace_path"], result: "facts.contract_facts" } }
++   - { name: backend-testing, path: skills/backend-testing/SKILL.md, execution: independent, trigger: actual_backend_test, bundle: skills/backend-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: frontend-testing, path: skills/frontend-testing/SKILL.md, execution: independent, trigger: actual_frontend_test, bundle: skills/frontend-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: actual_frontend_test, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#controlledBrowserQaFacts", inputs: ["contract_facts.component_quality_map"], identity: ["task_id", "stage", "workspace_path"], result: "facts.ui_qa" } }
++   - { name: fullstack-slice-testing, path: skills/fullstack-slice-testing/SKILL.md, execution: independent, trigger: actual_fullstack_test, bundle: skills/fullstack-slice-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts" } }
++   - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_reflection" } }
++   - { name: stage-handoff, path: skills/stage-handoff/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-handoff/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_handoff" } }
++ runtime_capabilities:
++   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
++   - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: phase_execution, absence_semantics: diagnostic }
++   - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: diagnostic }
++ external_capabilities:
++   - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: diagnostic }
++
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:15:22
+     13|     for (const name of ["test-routing-advisor", "backend-testing", "fr…
+     14|     expect(manifest).not.toContain("testing-system-blueprint");
+     15|     expect(manifest).toContain("wh-review");
+       |                      ^
+     16|     expect(skill).toMatch(/tasks\.md/);
+     17|     expect(skill).toMatch(/predesigned[\s\S]*route/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > requires per-phase execution facts and a final task strategy summary
+AssertionError: expected '---\nname: build-code\ndescription: I…' to match /dedicated final Task\/Phase…/Phase card
+
+- Expected: 
+/dedicated final Task\/Phase card/
+
++ Received: 
+"---
+name: build-code
+description: Implement the current cohort's Phase contract in the verified task worktree.
+version: 2.2.0
+---
+
+# Build Code
+
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在
+pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
+### 计划缺口的集中退回
+
+发现在做的工作本身是计划缺口（Phase 的 allowed files/symbols 不对、覆盖的 AC 无法验证、
+Phase 之间的边界重叠、依赖顺序不成立、计划里的测试路由跑不起来），执行者必须**停下来成组退回**，
+而不是现场边做边改计划：
+
+1. **先列全，再退回**：把本 Phase 已发现的缺口一次性列全，每条写四样——缺口一句话、影响的 Phase/AC、
+   不修会怎样、需要 owner 回答什么。不要在只发现第一条时就退回，也不要发现第三条时再退一次。
+2. **只退回一次**：post 回 `build-plan` 的 `spec-clarify`，pre 回 `build-spec`/`build-plan`；方向性缺口回
+   `make-decision`。一次把全部缺口交出去，并在退回时说明\"在等答复之前我不打算动哪些部分\"。
+3. **退回期间停手范围**：只做不受该缺口影响的安全修复；受影响的部分在 task facts 里标
+   `blocked_by_plan_gap` 并写明是哪一条缺口，**不再猜着实现、不再自行改材料**。
+4. **第二次缺口并入第一份清单**：本 Phase 后续再发现缺口时，追加进同一份清单再退回一次，
+   不得就地自行决定。
+5. 确实需要\"先按自己的理解做一点\"时，先在 handoff 里写明理由和代价，再动。
+
+本条是执行纪律，不是新的 stage、gate 或质量结论；它不新增状态、不阻断同 task 的安全修复。
+
+## Goal
+
+Implement the current task with the smallest correct change, real tests,
+per-AC evidence, OCR review, and explicit finding disposition.
+
+## 阶段末遗漏披露
+
+阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
+
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。
+
+JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
+
+消费实际返回的 `quality/stage-reflection/<stage>/<semantic-key>.json` 与原始 bytes 的 `sha256`；key 与 bytes hash 含义不同。同来源同判断重试复用首次 ref、时间和 bytes，来源或判断变化产生新原件；旧 `<stage>.json` 只作显式历史读取。复盘异常、lesson 合并失败和原 stage 错误分别保留，不覆盖原件，也不改变原 stage 失败。
+
+`validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。
+
+The current WorkflowHub session owns delivery. It performs the smallest real
+verification needed for the current task and publishes the current facts through
+the existing public `run` behavior. No external Stage Agent, bridge,
+`WORKFLOWHUB_STAGE_OUTCOME_PATH`, transcript, or session/outcome packet is
+needed. Any step not actually performed is recorded as `incomplete` with its
+real reason; quality facts remain separate from the permission to continue.
+
+## Authority and entry
+
+Current materials are cohort-specific. For pre/history, read `decision-log.md`,
+`spec.md`, `plan.md`, and `tasks.md`. For post, read `decision-log.md`, the
+product/global-design `spec.md`, `phases/index.md`, and every physical
+`phases/P<n>.md` referenced by the index. On resume, read the current
+`phase_progress` returned by `status --action=begin`; if its material revision
+matches, continue at that Phase/Task. If absent or stale, derive the next
+incomplete task from the physical Phase files and current task facts. The index
+is navigation only; never use a copied index body or absent post
+`plan.md`/`tasks.md`. Old reviews, execution records, provider state, audit
+history, and other auxiliary objects are facts, not work permits. Missing,
+stale, failed, or unavailable auxiliary facts never require a new task and
+never freeze implementation or same-task repair.
+
+`make-decision` exclusively owns Talk, Grill, and `decision-log.md`.
+The owning spec-authoring stage owns specification research and
+`spec-clarify` (`build-spec` for pre/history; `build-plan` for post). Build-code does not replay them or ask the user to reconstruct
+the decision process. If implementation exposes a direction-changing gap, keep
+the same task and return that decision to `make-decision`. Build-code does not
+author or rewrite current authoring materials: a post `spec.md` or Phase
+correction belongs to `build-plan`; a pre `spec.md` correction belongs to
+`build-spec` and pre plan/tasks authoring to `build-plan`. For pre/history,
+the existing task card's `执行状态填写区` remains the same-task exception for
+actual executor facts. For post, execution status, commands, AC and review
+facts go to existing task facts/quality evidence; `phases/index.md` remains
+pure pointers and Phase design remains unchanged. Record the concrete material
+gap and continue safe code, task-fact, or quality-fact repair in the same task;
+do not silently change the material owner or invent a new task.
+
+## Portable dependencies
+
+Use the dependency packages declared in `skill-deps.yaml` directly: open each
+selected dependency's declared `SKILL.md` and follow it in the current agent
+context. Do not route dependency use through a dispatcher, invocation protocol,
+or auxiliary progress gate.
+
+- Use `test-routing-advisor` once for every behavior Phase against the actual
+  changed-file boundary. If the actual boundary matches the planned route,
+  record the same route; if it differs, record the reroute and reason. The
+  advisor is stateless and never executes tests or grants permission.
+- Use exactly one applicable concrete testing skill directly:
+  `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
+- Use the existing OCR delegation adapter through public `review --action=record`
+  once for each Phase. The adapter selects the packet; the host
+  returns findings. Verify-code owns the one final worktree review.
+
+If a dependency is unavailable, preserve that fact and use any safe repository
+test commands already specified in the owning pre task card or post Phase file. The missing dependency limits the
+quality or completion claim; it does not prohibit code or material repair.
+
+## Affected business cases
+
+When a Phase calls for P8/P9 business-case selection, authenticate the current
+Task start, source snapshot, catalog revision, and independent runnable-test
+inventory before using them. Start the Phase's fixed trusted capture command
+once; its inner selection must derive cases and related regressions from the
+actual changed paths, then run validated test targets with argv and `shell:false`.
+The agent supplies the fixed command, not a hand-picked list of case paths.
+`selectAffectedCases`, `runTargetedCases`, and `reconcileCases` are importable
+seams, not a fixed launcher or independent authentication authority. If the
+fixed consumer, exact inventory identity, or canonical binding is absent,
+record the attempted route and `unknown`/`unavailable` for affected ACs.
+
+For each selected case, retain the rule and catalog revision, AC, test file and
+full runnable identity, argv, child exit, raw report/ref/hash, source snapshot,
+observable business inputs and before/after effect refs. Check the supplied
+effect against a project-owned oracle and its source revision; a passing TAP
+name, exit 0, or a matching fixture field cannot establish a business pass.
+Record structural and risk gaps with their owners. On same-task repair, retain
+the old failure ref, take a new snapshot, recompute the affected set, rerun
+adjacent regressions, and link the new receipt to the old fact without
+overwriting either. Complete the AC claim only after current authenticated
+case evidence and the independent review facts have been recorded.
+
+## Conditional UI implementation handoff
+
+When the current phase has `ui_applicability=ui`, consume the existing
+`frontend-component-quality` Component Quality Map before editing. For every
+entry, check the real consumer, state owner, typed ViewModel, CSS/token owner,
+and any `story_or_test_update` against the actual diff. Preserve `unknown`, `unavailable`, and `N/A +
+reason` when a planned consumer, design source, browser, fixture, viewport, or
+screenshot fact is missing; these facts are not a gate and do not authorize a
+new stage or public command.
+
+Build-code is the owner that executes `frontend-testing` for the changed UI
+behavior. The implementation order remains static composition, state and
+interaction, then DTO-to-typed-ViewModel wiring; the test route must observe
+the real consumer and recovery behavior rather than a component snapshot.
+Non-UI phases keep the existing backend or fullstack route and record the UI
+skill as not applicable.
+
+For an applicable UI phase, the official `build-code` handler is the only
+execution seam for controlled browser QA. It may invoke the existing
+`isolated-browser-qa` adapter once for the current attempt, with the current
+task, material revision, snapshot, AC, Design.md/Experience.md identities, and
+service/API/DTO identities. A retry is a new invocation and keeps the previous
+failure. Success requires the adapter's real evidence, cancellation state, and
+cleanup result to validate against `browser-qa-evidence.v1`; a fixture-only
+return, identity mismatch, browser failure, cancellation, or cleanup failure
+is retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.
+No public Runner, QA command, or persistent QA control object is created.
+This remains inside build-code: it creates no new stage, and UI quality evidence
+is no gate for continuing same-task repair.
+
+For a declared browser acceptance scenario, build-code passes the four-field
+`acceptance_scenario` to the private controlled-QA adapter. The adapter must
+first persist direct `browser-qa-evidence.v1` bytes, then return the matching
+canonical `{ref,sha256}` and payload. Missing or mismatched source, sample,
+scenario, tier, task, attempt, material, snapshot, or invocation remains
+`unavailable`; a normal QA run remains compatible without this optional field.
+
+## Real acceptance and review inputs
+
+For a Task with `acceptance_role=acceptance`, consume its declared `acceptance_data`:
+command scenarios supply `execution.command`, `args`, and `timeout_ms`; service
+scenarios supply worktree-relative `module_ref`, `export_name`, `input`, and
+`timeout_ms`. The official build-code handler invokes the private runner for
+these scenarios. The runtime records actual assertions, exit/signal, timeout,
+cancellation, cleanup, raw stdout/stderr refs, per-AC evidence, and the aggregate
+bound to the authenticated executor outcome. The aggregate subject is
+`acceptance_execution`; retain its actual
+`quality/evidence/stage-quality/build-code/acceptance_execution-<rawsha>.json`
+ref and raw bytes `sha256`. Obtain `quality_fact_ref` from the returned
+`quality_fact_refs`: read the `kind=acceptance_criterion`,
+`subject=acceptance_execution` fact and its evidence wrapper, whose explicit
+aggregate ref/hash must match. The `quality/facts/<digest>.json` path uses the
+quality fact's semantic digest; it is neither the aggregate ref nor its raw hash.
+Hand these exact values to ordinary verify-code review as
+`input.request.reviewed_execution={ref,sha256,quality_fact_ref}`. This selector
+is for the ordinary verify-code request, not the build-code Phase review.
+Compare each actual result with
+its oracle; exit 0 or a hand-written `executed` field does not prove acceptance.
+Missing, failed, skipped, and unavailable items remain visible. Non-UI does not
+make command/service acceptance not applicable.
+
+For each ordinary `build-code/phase` review, submit `review --action=record`
+with `input.request` binding `review_scope=\"phase\"`, `subject_kind=\"phase\"`,
+and `phase_id=\"P<n>\"`. No candidate flag or comparative go/no-go is required.
+The OCR adapter selects the authenticated packet and files; the host executor
+returns the real findings. Consume the returned canonical
+`result_ref` or unavailable `attempt_ref` through `run` `receipts.review`.
+The Phase result is `phase_review`; the final worktree review belongs to
+verify-code. Historical integration attempts remain readable facts, not a
+current build-code step or completion condition.
+Malformed code-surface requests fail before dispatch. An unavailable host
+remains an unavailable review fact and permits same-task repair.
+
+Direct OCR providers have the same fixed 600,000 ms host deadline as verify-code;
+health/output sampling is diagnostic only. A timed-out provider remains a failed
+provider attempt, while another successful route can still be retained.
+
+### AC-REVIEW-011：OCR 工具不可用时的替代审查
+
+当前 WorkflowHub 主会话读取本 Phase 的 OCR canonical attempt：仅当工具
+`unavailable` 且零成功审查路时，在同一 Phase 内调用一次
+`skills/architect-code-review/SKILL.md`。把当前 diff、完整 AC、OCR packet
+可读部分及原始失败原因交给能够调用的执行者审查；
+此条件调用由主会话显式读取技能，不增加每 Phase 的常规依赖或固定轮次。
+只核对输入范围、执行能力和真实输出。reviewer 与实现者是否同源、是否使用同一
+宿主或模型都不构成阻塞。无法启动时，该一次替代机会记为 unavailable。已有成功路的 findings
+照常入账；局部覆盖缺口单独披露。明确的人为取消按取消事实处理，不自动重派。
+
+一次替代调用完成后，保存原始输入范围、task/Phase、材料版本与代码快照、OCR
+`attempt_ref`、执行者身份、调用命令或 host invocation、
+开始/结束时间、exit/transport、原始输出、findings、覆盖缺口和各原件 hash。
+可用时逐条处理替代 finding；替代也不可用时
+明确记 `unverified`、两路原因和缺失维度，不重派、不写 `findings: []`。
+旧 wh-review/broker 仅供历史读取，不是本分支的执行者。
+
+使用现有证据发布能力保存这份调用记录，保留其返回的原件 ref/hash；
+`capture-evidence` 如可用，只把工作区文件收为 `quality/evidence`，并不生成
+canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
+`result_ref` 或 unavailable `attempt_ref`；在正式 review consumer 无法认证
+替代结果前，Phase review 质量保持 `incomplete/unverified`，不得把证据
+附件冒充 `quality/reviews/results`。单独判断 AC-REVIEW-011：若同一 Phase
+的 OCR unavailable attempt、恰好一次真实替代调用及其身份/原始
+输出/exit、来源缺口和最终披露均可核对，则本 AC 可记 achieved；替代也
+不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
+这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
+
+## Work loop
+
+1. Read current cohort materials and the physical Phase authority, then select
+   the next incomplete Phase task from its task facts. Write a small
+   Phase Card in the task's working area: goal, exact allowed files and symbols,
+   covered ACs, non-goals, compatibility boundary, predesigned test route, stop
+   conditions, and expected stage-end summary. Completion: the change boundary
+   and its ACs are explicit before editing. 续跑的第一步是**先对现实**：跑 `git status --short`，再跑本 Phase **自己写的** `gate_cmd` 看它当前的输出。材料与代码不一致时**以代码为准**，并把不一致如实记进本 Phase 的 task facts。
+
+   Phase Card 里再写两行**版本锚**（给人看的绑定，不是 machine gate）：
+   - `规则锚`：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。
+     不要写整份文件的哈希——材料里与本 Phase 无关的段落变化，不构成本 Phase 事实作废的理由。
+   - `材料变更影响`：本次实施预计会改动材料（`phases/P<n>.md`、`spec.md`）的哪些段落；
+     不会改动的段落**不在本 Phase 的审查与实现范围内**。
+   当材料发生变化时，先对照这两行判断\"变的是不是我盯的那一段\"：不是，就照常继续并只在 handoff 记一句；
+   是，才把本 Phase 的实施/测试/审查事实读为 stale。
+
+2. Apply the Task's predesigned route. When behavior can be tested, write the
+   focused behavior test and capture real RED before implementation. Make the
+   smallest production change, then inspect the actual changed files. A pure
+   documentation or material Task may mark testing not applicable with a plain
+   reason. Completion: every changed file belongs to the Phase Card or is
+   explained as a same-task scope correction.
+   重试前自述一行并写进本 Phase 的 task facts：**「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」**。
+   写不出这行＝卡住成立：停下这一次重试，按 `AGENTS.md` 的 `### 卡住与升级` 段用大白话把
+   「卡在哪、为什么不能继续、有几条路、每条路的代价」报告给人，由人决定继续／换路／缩小范围／取消。
+   本判据不设次数或时长阈值，也不是机器阻断。
+3. Compare the actual changed files with the predesigned route. Use
+   `test-routing-advisor` directly for this Phase even when the route is
+   unchanged; record the old route, selected route, and whether a reroute was
+   needed. Then use the selected concrete testing skill directly against the
+   actual range. Completion: the selected route contains a focused command,
+   oracle, expected evidence, and known coverage limits.
+4. Run the focused GREEN oracle. Scan the complete diff against every affected
+   FR and AC, including behavior, state/data, error/cancel/recovery, shared
+   interfaces, concurrency/atomicity, and real browser behavior when relevant.
+   Record actual commands, outcomes, and limits. Completion: every affected AC
+   has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
+   reason and evidence where available.
+   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
+   三词只是同一份真实结果的大白话读法：上面那组机器取值与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值——验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+   既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。
+   本词表只约束人读措辞；`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**。未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
+5. Use the review dependency declared in `skill-deps.yaml` directly for one
+   review of the completed Phase. Preserve the actual findings,
+   transport status, and provenance;
+   OCR 工具 unavailable 且零成功路时执行上面的 AC-REVIEW-011 分支恰好一次；
+   `unavailable` remains an unavailable fact. Do not re-review an unchanged change
+   merely to chase an empty findings list. Completion: the review or its real
+   unavailability is recorded with provenance; an unavailable attempt keeps the
+   stage quality claim incomplete.
+
+   发起前先回答三个问题，并把答案写进本 Phase 的 task facts：
+   - **审什么**：列出本次审查范围 = `phase_id` + 本 Phase Card 的 allowed files/symbols + covered AC 列表，
+     作为 `review --action=record` 的 `subject` 原样提交。`subject` 不许留空；留空等于声明\"范围未限定\"。
+     同时必须显式写全 `review_scope=\"phase\"`、`subject_kind=\"phase\"`、`phase_id=\"P<n>\"` 三者——
+     三者缺一时不要靠默认值，先补齐再提交。
+   - **审过了吗**：读当前 task 的 `quality/reviews/attempts/` 与 `quality/reviews/results/`，
+     列出同一 `phase_id` 下**已存在的成功回执**及其 `subject`。
+   - **要不要再派**：只有当本次范围**超出**已有回执范围（新增文件/新增 AC），或已有回执是 `unavailable`，
+     才发起一次新审查；必须写明\"超出的是哪一条\"。**修 finding 造成的材料字节变化不是重派理由。**
+   若本 Phase 仍然出现了第二次派发，必须在 Phase handoff 里写清两次 `subject` 的差异和第二次的必要性。
+   本条是执行纪律，不是新的 stage、gate 或质量结论。
+
+6. Inspect every finding and record `fixed`, `rejected_invalid`,
+   `accepted_risk`, or `needs_human`. Repair valid findings in this same task and
+   rerun affected checks. Reject invalid findings with evidence. Keep serious
+   unresolved risk visible and obtain the user's exact acceptance before calling
+   the affected work complete. Completion: no finding is unexplained.
+
+   修复前先写下**受影响的测试集合**（文件/用例名），只跑这一集合；把每条的 exit code 与结果直接写在
+   对应 finding 的处置里（哪个 finding → 跑了哪条命令 → 结果如何）。没有受影响的测试时写
+   `not_applicable` 和原因，**不要用全量回归代替定向复测**；确实需要一条例外命令时，
+   写清是谁要求的、范围是什么（照 `AGENTS.md` 的测试硬规则）。
+
+7. End the Phase with a plain-language handoff: delivered behavior, actual test
+   layer and result, AC limits, review fact, finding disposition, unresolved
+   risk, deferred work, and the next Task. For pre/history, update the existing
+   task card's `执行状态填写区`; for post, record the same actual facts in existing
+   task facts/quality evidence without writing to the Phase authority or
+   pointer index. After recording each completed Task, update the one in-place
+   resume cursor through the existing public `run --action=execute` input, for example
+   `{\"phase_progress\":{\"phase_id\":\"P5\",\"task_id\":\"T011\"}}`; point it at
+   the next incomplete Task, or the last Task when the Phase is complete. The
+   cursor is navigation only: it does not certify completion or unlock work.
+   It is bound to the current material revision, not the changing code snapshot.
+   A Task is
+   `completed` only when those facts cover its actual changes, commands/exits,
+   affected AC results, evidence, review outcome, and handoff. Then continue
+   with the next `pending` or `in_progress` Task; do not replay earlier Phases
+   or reconstruct historical process indexes.
+
+   收尾时回答一句：当前推进中的 Phase 只有一个吗？如果有第二个已经开始，写清它是什么、为什么提前开始。
+
+   handoff 里再加一行**本 Phase 成本**，用大白话写数字；写不出就写 `unavailable` 和原因：
+   「改了几次实现、跑了几次 focused 测试（分别是什么）、发起过几次正式审查（含 unavailable 的尝试）、
+   等 provider 一共多久、改过几次材料、从开始到 handoff 一共多久」。
+   这一行只用于诊断，不设预算上限，也不作为推进条件；它不阻断任何后续动作。
+
+Every completed Phase executes its recorded route, checks the real changed-file
+range, uses the applicable concrete testing skill, and records test, AC, review,
+finding-disposition, and plain-language stage facts.
+
+Phase 收尾把这条已有要求做完整，只使用既有字段，不新增字段、命令或 schema：
+① 执行本 Phase 记录的那条 route 与其 `gate_cmd`，命令按字面跑，不换成别的命令，也不用全量回归代替；
+② 把这次运行的**原始输出**写入本 Phase 契约头自己声明的 `evidence_path`（原件，不写摘要、不写结论）；
+③ 本 Phase 的交付锚是**一次 `git commit`**：只在既有 commit 授权到位时执行（见下方授权段）；
+   缺授权时如实记 `delivery pending`——它不是进入、继续、测试、修复或交接的前置。
+这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。**进展 = 交付锚**（新提交或新证据），不是动作次数；拿不出外部锚时，按本文件 `:272-275` 的既有判据自述一行，写不出即报告给人。本条不设次数或时长阈值。
+
+Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
+step. It compares the original requirement and current cohort materials with
+the actual implementation, tests, AC trace, review facts, and real user-result
+evidence. It checks actual semantics and evidence, not only IDs, paths, hashes,
+or files. Repair valid gaps in build-code when they belong to implementation or
+task facts; keep product/spec/Phase ownership with its owning stage. Emit the
+shared six-part plain-language summary: current stage work, requirement
+coverage, upstream alignment, repairs made here, remaining risks, and the next
+stage boundary. `remaining risks` 段必须对本期**失败信号**给一句成句解读；唯一允许的空态写法是「这一轮没有失败信号」，不许留空、不许只写 `none` 或 `N/A`。
+
+After the phase facts are recorded, a phase may be committed only when the
+user has separately authorized the irreversible operation. The public form is
+`node tools/cli/stage-runtime.mjs authorize --action=commit`; the normal
+`task-close close` action is the user-facing alternative and internally writes
+the per-operation authorizations required by the frozen close plan. A phase
+commit is a Git delivery fact and a useful review anchor; it is never required
+to start, continue, test, repair, or hand off the same task. Missing delivery
+authorization means `delivery pending`, not a build-code entry, continuation,
+testing, repair, or handoff blocker.
+
+整树丢弃类动作（`git restore/reset/checkout -- :/`）与 delete+add 整体替换权威材料属于**销毁性动作**，
+适用既有 F7 不可逆授权边界（`CONSTITUTION.md` 的不可逆授权条款、本任务 `decision-log.md` 的不可逆授权需求条目、
+本任务 `design.md` 的 F7 段）：强推、删分支、删任务目录同样落在这一边界内；这类动作不得由阶段确认顺带授权，
+也不得作为绕过既有授权的捷径。不新增公共动作、不新增确认点、不新增 schema；真的发生时在既有 task facts
+如实登记。本条是既有边界的复述与范围举例，不是新的 stage、gate 或质量结论。
+
+A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
+Never require a provider pass.
+
+`unavailable` is never `pass` and never a work blocker.
+When status reports `work_status=ready` with `quality_status=in_progress|incomplete|unavailable`, continue the next safe implementation or focused verification action; do not wait for a provider or rerun a completed review. Later implementation changes do not send the workflow back to that review step.
+
+## Preflight self-check
+
+Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=build-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
+
+## Final aggregate
+
+After all implementation Tasks, use the dedicated final task in the pre
+`tasks.md` or post physical Phase file. Recheck its route against the full actual change, run the recorded
+final aggregate strategy once, and record its command, oracle, result, limits,
+and per-AC impact. Reconcile the Phase review findings and repairs with the
+final test and AC facts, then continue to `stage-end-spec-analyze`. Verify-code
+performs one final worktree OCR review and replays the risky paths
+and complete user flow. Historical integration review outcomes stay visible but
+do not require a new dispatch.
+
+The final full test is a build-code handoff fact; it is not a provider pass or
+a new quality gate.
+
+Build-code does not run the aggregate regression command after each Task.
+Focused tests belong to each Phase; the recorded final command belongs to the
+final aggregate.
+
+## Completion and fail-loud writes
+
+Rule: publish no completion unless the requested behavior is implemented, relevant
+real tests ran, every applicable AC has a result, a current OCR review
+result is recorded, every finding has a disposition, and the stage-end
+plain-language summary exists. Keep adverse, unavailable, failed, and unknown
+review facts visible; an unavailable attempt remains quality-incomplete and does
+not block same-task repair.
+
+A fact write with a wrong task, workspace, runtime, hash, schema, or declared
+write boundary fails loudly for that write. Preserve the error and never invent
+success. That failure does not freeze code edits, material correction, tests, or
+finding repair in the same task; it only prevents the affected fact or completion
+claim until repaired.
+
+## Reporting
+
+After each Phase, report only delivered behavior, actual focused test results,
+AC limits, review findings/transport facts, finding disposition, unresolved risk,
+and next Task.
+At the end, explain in plain language what changed, which evidence is current,
+what remains unknown, and what `verify-code` will check. Verify-code reads this
+summary and current cohort materials; it does not repeat Talk, Grill, or require a
+process index.
+
+Do not expose internal execution machinery or duplicate completion views to the
+user. Commit, push, merge, archive, and cleanup require separate authorization.
+"
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:31:19
+     29|     expect(skill).toMatch(/Every completed Phase executes/);
+     30|     expect(skill).toMatch(/final aggregate strategy/);
+     31|     expect(skill).toMatch(/dedicated final Task\/Phase card/);
+       |                   ^
+     32|     expect(skill).toMatch(/test-routing-advisor/);
+     33|     expect(skill).toMatch(/final full test is a build-code handoff fac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > records task strategy and execution facts in the canonical step manifest
+AssertionError: expected [ 'test_strategy' ] to deeply equal [ 'test_strategy', 'stage_outcome' ]
+
+- Expected
++ Received
+
+  Array [
+    "test_strategy",
+-   "stage_outcome",
+  ]
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:57:67
+     55|     expect(route.observable_result).toMatch(/actual changed files/i);
+     56|     const concrete = steps.steps.find((step) => step.step_slug === "in…
+     57|     expect(concrete.completion_evidence.map((item) => item.kind)).toEq…
+       |                                                                   ^
+     58|     expect(concrete.observable_result).toMatch(/backend\/frontend\/ful…
+     59|     const runTests = steps.steps.find((step) => step.step_slug === "ru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  23:01:50
+   Duration  139ms (transform 9ms, setup 0ms, collect 9ms, tests 7ms, environment 0ms, prepare 30ms)
+

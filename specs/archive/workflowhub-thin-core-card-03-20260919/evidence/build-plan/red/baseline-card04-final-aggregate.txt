@@ -1,0 +1,92 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/card04-final-aggregate.test.mjs (3 tests | 3 failed) 17ms
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 12ms
+     → expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 4ms
+     → expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts 1ms
+     → source missing: specs/workflowhub-thin-core-card-04-20260919/phases/P12.md: expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities
+AssertionError: expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+    "canonical_receipt": false,
+-   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919",
++   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "exit_code": 0,
+    "phase_id": "P6",
+    "scope": "node_guard_only",
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "timing": "executed_after_original_final_report_publication",
+  }
+
+ ❯ assertP6Guard tests/contract/card04-final-aggregate.test.mjs:319:18
+
+ ❯ mergeP6Guard tests/contract/card04-final-aggregate.test.mjs:354:3
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:469:10
+ ❯ tests/contract/card04-final-aggregate.test.mjs:502:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative
+AssertionError: expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+    "canonical_receipt": false,
+-   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919",
++   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "exit_code": 0,
+    "phase_id": "P6",
+    "scope": "node_guard_only",
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "timing": "executed_after_original_final_report_publication",
+  }
+
+ ❯ assertP6Guard tests/contract/card04-final-aggregate.test.mjs:319:18
+
+ ❯ mergeP6Guard tests/contract/card04-final-aggregate.test.mjs:354:3
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:469:10
+ ❯ tests/contract/card04-final-aggregate.test.mjs:506:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts
+AssertionError: source missing: specs/workflowhub-thin-core-card-04-20260919/phases/P12.md: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ source tests/contract/card04-final-aggregate.test.mjs:87:55
+     85|   const allowed = isAbsolute(path) && within(root, full) ? root : isAb…
+     86|   expect(within(allowed, full), `source outside authenticated ${allowe…
+     87|   expect(existsSync(full), `source missing: ${path}`).toBe(true);
+       |                                                       ^
+     88|   expect(within(realpathSync(allowed), realpathSync(full)), `source sy…
+     89|   return readFileSync(full);
+ ❯ tests/contract/card04-final-aggregate.test.mjs:531:68
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  23:27:38
+   Duration  543ms (transform 167ms, setup 0ms, collect 391ms, tests 17ms, environment 0ms, prepare 42ms)
+

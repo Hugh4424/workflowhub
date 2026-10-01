@@ -99,9 +99,21 @@ describe("review budget deletion contract", () => {
     expect(adr).not.toMatch(/`validateReviewBudget`/);
   });
 
+  it("ORACLE-RT-002 stage-runtime run no longer accepts a review_budget input field", () => {
+    const cli = readFileSync(fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url)), "utf8");
+    const allowed = cli.match(/const allowedRunFields = new Set\(\[([\s\S]*?)\]\);/);
+    expect(allowed, "allowedRunFields literal must stay the run input whitelist").not.toBeNull();
+    expect(allowed[1]).toMatch(/"receipts"/);
+    expect(allowed[1]).not.toMatch(/"review_budget"/);
+    expect(cli).toMatch(/run input has unknown fields: /);
+    const handler = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url)), "utf8");
+    const fields = handler.slice(handler.indexOf("function stageRunInputFields"), handler.indexOf("export function", handler.indexOf("function stageRunInputFields")));
+    expect(fields).not.toMatch(/"review_budget"/);
+  });
+
   it("does not redispatch identical material, redispatches changed material, and keeps a judged retry idempotent", async () => {
     const state = fixture();
-    const baseRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    const baseRequest = { stage: "build-code", host_provider: "codex/luna", materials: { approved_spec: "before" } };
     let dispatches = 0;
     const runRound = async (input) => {
       dispatches += 1;
@@ -117,7 +129,7 @@ describe("review budget deletion contract", () => {
     const materialChanged = await recordSimpleReviewRequest({
       task: state.task,
       kernel: state.kernel,
-      request: { ...baseRequest, materials: { implementation: "after" } },
+      request: { ...baseRequest, materials: { approved_spec: "after" } },
       resolveRouteIdentity: route,
       runRound,
     });
@@ -201,7 +213,7 @@ describe("review budget deletion contract", () => {
 
   it("runs direct OCR without host identity or retry controls", async () => {
     const state = fixture();
-    const baseRequest = { stage: "verify-code", materials: { implementation: "verify-before" } };
+    const baseRequest = { stage: "verify-code", materials: { implementation_assessment: "verify-before" } };
     let dispatches = 0;
     const runRound = async (input) => {
       dispatches += 1;
@@ -246,10 +258,10 @@ describe("review budget deletion contract", () => {
 
   it("does not re-admit a retry after the current lineage head already consumed it", async () => {
     const state = fixture();
-    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "A" } };
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { approved_spec: "A" } };
     const retryRequest = {
       ...firstRequest,
-      materials: { implementation: "B" },
+      materials: { approved_spec: "B" },
       retry: { requested: true, basis: "material_changed", reason: "implementation changed" },
     };
     let dispatches = 0;

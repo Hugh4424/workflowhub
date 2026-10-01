@@ -1,0 +1,36 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ✓ tests/build-code-diff-only.test.mjs (33 tests) 1594ms
+ ✓ tests/skill-provenance-strict.test.mjs (7 tests) 370ms
+   ✓ strict skill provenance > fails closure for invalid baselines, stale entries, and invalid entries 333ms
+ ❯ tests/p0-foundation-contracts.test.mjs (3 tests | 1 failed) 6ms
+   × P0 foundation contracts > keeps the inventory and five manifests in exact two-way coverage 4ms
+     → expected 69 to be 68 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/p0-foundation-contracts.test.mjs > P0 foundation contracts > keeps the inventory and five manifests in exact two-way coverage
+AssertionError: expected 69 to be 68 // Object.is equality
+
+- Expected
++ Received
+
+- 68
++ 69
+
+ ❯ tests/p0-foundation-contracts.test.mjs:55:29
+     53|     }
+     54| 
+     55|     expect(documented.size).toBe(actual.size);
+       |                             ^
+     56|     expect([...documented].sort()).toEqual([...actual].sort());
+     57|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 42 passed (43)
+   Start at  23:03:35
+   Duration  2.16s (transform 35ms, setup 0ms, collect 69ms, tests 1.97s, environment 0ms, prepare 28ms)
+

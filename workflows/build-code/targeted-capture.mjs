@@ -9,11 +9,12 @@ import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { capturePreExecutionTaskChangeScope } from "./change-scope.mjs";
 import { readCurrentTestAssetRegistry } from "./test-asset-inventory.mjs";
 import { selectAffectedCases } from "./case-selection.mjs";
+import { businessCaseAnchorErrors } from "./case-reconciliation.mjs";
 import { runTargetedCases } from "./targeted-runner.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const CATALOG_REF = "docs/quality/business-case-catalog.json";
-const SHA_REVISION = /^sha256:[a-f0-9]{64}$/;
+
 const TEST_TARGET = /^tests\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.test\.mjs$/;
 
 function failedStreamEvidence(kernel, raw) {
@@ -53,15 +54,11 @@ function readSourceBoundCatalog(root, task) {
   for (const entry of catalog.cases) {
     if (typeof entry?.id !== "string" || !entry.id.trim() || ids.has(entry.id)
         || !Array.isArray(entry.phase_ids) || entry.phase_ids.length !== 1
-        || !/^P[1-9][0-9]*$/.test(entry.phase_ids[0])
-        || !SHA_REVISION.test(entry.source?.revision ?? "")
-        || !SHA_REVISION.test(entry.rule?.revision ?? "")) {
+        || !/^P[1-9][0-9]*$/.test(entry.phase_ids[0])) {
       throw new Error("business case source or rule binding is incomplete");
     }
     ids.add(entry.id);
-    const rulePath = entry.rule.path ?? `specs/${task.identity.taskId}/phases/${entry.phase_ids[0]}.md`;
-    if (entry.source.revision !== `sha256:${sha256(readWorktreeFile(root, entry.source.path))}`
-        || entry.rule.revision !== `sha256:${sha256(readWorktreeFile(root, rulePath))}`) {
+    if (businessCaseAnchorErrors(entry, (path) => readWorktreeFile(root, path)).length) {
       throw new Error(`business case source or rule revision is stale: ${entry.id}`);
     }
   }

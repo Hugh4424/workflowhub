@@ -1,0 +1,45 @@
+WebSocket server error: Port is already in use
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > ships one spec-prd writer with exactly two calls and map-before-detail ordering
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > models exactly two content calls and a post-detail final confirmation seam
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > binds both calls to the same decision/source revision and closes each card semantically
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > keeps UI conditional and non-UI paths truthful, including design and experience responsibility
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > preserves draft status and concrete gaps for missing, rejected, cancelled, unanswered, conflicting, or stale inputs
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > supports standalone calls without inventing platform, write, confirmation, or delivery facts
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > defines maintenance classification and protects archived and in-flight facts
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > uses a navigable PRD template with shared definitions and complete task-card handoff fields
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > keeps the F7 planning design and final confirmation conditional without creating a new gate
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > ORACLE-P2-SPEC-PRD > declares the portable bundle closure and verifies hashes for both skill files
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > planning-hardening PRD handoff contracts > planning-hardening AC-PRD-001 keeps a complete journey and per-requirement ownership
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > planning-hardening PRD handoff contracts > planning-hardening AC-CHILD-001/002 keeps child work read-only and records boundary drift
+ ✓ tests/contract/spec-prd-skill-contract.test.mjs > planning-hardening PRD handoff contracts > planning-hardening AC-CONTRACT-001 preserves all 16 existing task-card fields
+ ✓ scripts/__tests__/smoke-local-skill-dispatch.test.mjs > resolves direct skill packages for all five stages
+ ✓ scripts/__tests__/smoke-local-skill-dispatch.test.mjs > resolves copied portable bytes with isolated host paths and no host config dependency or sink mutation
+ ✓ scripts/__tests__/smoke-local-skill-dispatch.test.mjs > rejects missing-bundle before a package can be dispatched
+ × scripts/__tests__/smoke-local-skill-dispatch.test.mjs > rejects tampered-template before a package can be dispatched
+   → expected +0 not to be +0 // Object.is equality
+ × scripts/__tests__/smoke-local-skill-dispatch.test.mjs > rejects escaped-template before a package can be dispatched
+   → expected +0 not to be +0 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  scripts/__tests__/smoke-local-skill-dispatch.test.mjs > rejects tampered-template before a package can be dispatched
+ FAIL  scripts/__tests__/smoke-local-skill-dispatch.test.mjs > rejects escaped-template before a package can be dispatched
+AssertionError: expected +0 not to be +0 // Object.is equality
+ ❯ scripts/__tests__/smoke-local-skill-dispatch.test.mjs:81:29
+     79|   }
+     80|   const result = smokeChild(fixture);
+     81|   expect(result.status).not.toBe(0);
+       |                             ^
+     82|   expect(result.stderr).toMatch(/bundle|sha256|symlink|regular file|ou…
+     83|   expect(result.stdout).toBe("");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 16 passed (18)
+   Start at  01:22:39
+   Duration  608ms (transform 19ms, setup 0ms, collect 24ms, tests 486ms, environment 0ms, prepare 26ms)
+

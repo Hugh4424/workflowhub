@@ -1,0 +1,33 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/stage-routing-and-concrete-testing.test.mjs (14 tests | 1 failed) 22ms
+   × D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion 4ms
+     → expected '通过 review --action=record 派发严格一次 OCR …' to match /一次 OCR 独立代码审查/
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/stage-routing-and-concrete-testing.test.mjs > D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion
+AssertionError: expected '通过 review --action=record 派发严格一次 OCR …' to match /一次 OCR 独立代码审查/
+
+- Expected: 
+/一次 OCR 独立代码审查/
+
++ Received: 
+"通过 review --action=record 派发严格一次 OCR 代码审查，绑定当前 diff、完整 AC、材料和快照；保留真实 provider findings 或 unavailable attempt。可选 reviewed_execution 仅作执行对照 provenance，reviewer 与实现者是否同源不影响派发、绑定或完成。"
+
+ ❯ tests/contract/stage-routing-and-concrete-testing.test.mjs:188:43
+    186|     const verifySteps = steps("verify-code");
+    187|     const finalReview = verifySteps.find((step) => step.step_slug === …
+    188|     expect(finalReview.observable_result).toMatch(/一次 OCR 独立代码审…
+       |                                           ^
+    189|     expect(verifySteps.find((step) => step.step_slug === "publish-code…
+    190|       .toMatch(/code_review 质量事实/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 passed (14)
+   Start at  23:01:22
+   Duration  164ms (transform 17ms, setup 0ms, collect 13ms, tests 22ms, environment 0ms, prepare 40ms)
+

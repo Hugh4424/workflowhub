@@ -1,0 +1,54 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/step-manifest.test.mjs (16 tests | 2 failed) 8ms
+   × canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers 3ms
+     → expected '当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；…' to match /plain-language handoff|大白话交接|验收通知/i
+   × canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate 1ms
+     → expected [ { step_id: 1, …(6) }, …(12) ] to have a length of 14 but got 13
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/step-manifest.test.mjs > canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers
+AssertionError: expected '当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；…' to match /plain-language handoff|大白话交接|验收通知/i
+
+- Expected: 
+/plain-language handoff|大白话交接|验收通知/i
+
++ Received: 
+"当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；评论是通知，不是第二套状态机或推进门。"
+
+ ❯ tests/step-manifest.test.mjs:165:46
+    163|       ]));
+    164|       const handoffStep = item.steps.findLast((stepItem) => stepItem.s…
+    165|       expect(handoffStep?.observable_result).toMatch(/plain-language h…
+       |                                              ^
+    166| 
+    167|       for (const stepItem of item.steps) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/step-manifest.test.mjs > canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate
+AssertionError: expected [ { step_id: 1, …(6) }, …(12) ] to have a length of 14 but got 13
+
+- Expected
++ Received
+
+- 14
++ 13
+
+ ❯ tests/step-manifest.test.mjs:203:28
+    201|     const manifest = loadStageManifest("make-decision", repoRoot);
+    202|     const steps = manifest.steps.filter((item) => item.step_slug !== "…
+    203|     expect(manifest.steps).toHaveLength(14);
+       |                            ^
+    204|     expect(steps[0].observable_result).toMatch(/initial|current|唯一.*…
+    205|     expect(steps[1].observable_result).toMatch(/OI|大纲/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 14 passed (16)
+   Start at  23:27:57
+   Duration  137ms (transform 14ms, setup 0ms, collect 12ms, tests 8ms, environment 0ms, prepare 27ms)
+

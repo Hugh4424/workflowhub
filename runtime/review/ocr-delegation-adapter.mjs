@@ -1207,13 +1207,16 @@ const provider = spawn(executable, args, {
 let stopping = false;
 let killTimer;
 let spawnError = false;
+const diagnostic = (code, message) => {
+  if (process.connected) process.send({ ocr_provider_diagnostic: { code, message } }, () => {});
+};
 const signalGroup = (kind) => {
   if (Number.isInteger(provider.pid)) {
     try { process.kill(-provider.pid, kind); return; }
-    catch (error) { if (error.code !== "ESRCH") process.stderr.write("OCR group signal failed: " + error.code + "\n"); }
+    catch (error) { if (error.code !== "ESRCH") diagnostic(error.code, "OCR group signal failed"); }
   }
   try { provider.kill(kind); } catch (error) {
-    if (error.code !== "ESRCH") process.stderr.write("OCR provider signal failed: " + error.code + "\n");
+    if (error.code !== "ESRCH") diagnostic(error.code, "OCR provider signal failed");
   }
 };
 const stop = () => {
@@ -1229,12 +1232,13 @@ process.on("SIGTERM", stop);
 provider.once("error", (error) => {
   spawnError = true;
   process.send?.({ ocr_provider_spawn_error: error.code ?? "unknown" });
-  process.stderr.write("OCR provider spawn failed: " + error.code + "\n");
+  diagnostic(error.code, "OCR provider spawn failed");
 });
 provider.once("spawn", () => {
   process.send?.({ ocr_provider_pid: provider.pid });
 });
 provider.once("close", (code, signal) => {
+  if (process.connected) process.send({ ocr_provider_exit: { code, signal } }, () => {});
   if (killTimer) clearTimeout(killTimer);
   // A provider can exit while a descendant still holds the group's pipes.
   // Reap that group before allowing the owner to observe a terminal result.
@@ -1275,8 +1279,9 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
         timing: { started_at_ms: startedAt, completed_at_ms: Date.now(), duration_ms: Date.now() - startedAt }, usage: null });
       return;
     }
-    let stdout = "";
-    let stderr = "";
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let capturedBytes = 0;
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let progressEvents = 0;
@@ -1288,6 +1293,8 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     let killTimer = null;
     let healthTimer = null;
     let providerPid = null;
+    let providerExit = null;
+    const supervisorDiagnostics = [];
     let healthObserverError = null;
     const observe = (status, publish = true) => {
       let liveness = status === "running" ? null : false;
@@ -1334,19 +1341,28 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       else stderrBytes += bytes.length;
       progressEvents += 1;
       lastOutputAtMs = Date.now();
+      // Keep original bytes until terminal publication. Decode only for parsing;
+      // decoding per chunk would corrupt both binary and split UTF-8 output.
+      const remaining = Math.max(0, 16 * 1024 * 1024 - capturedBytes);
+      if (remaining > 0) {
+        const captured = Buffer.from(bytes.subarray(0, remaining));
+        (stream === "stdout" ? stdoutChunks : stderrChunks).push(captured);
+        capturedBytes += captured.length;
+      }
       // This bounds captured provider output only; OCR packet input is file based.
       if (!overflow && stdoutBytes + stderrBytes > 16 * 1024 * 1024) {
         overflow = true;
         terminate("SIGTERM");
         if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
-      } else if (!overflow && stream === "stdout") stdout += bytes;
-      else if (!overflow) stderr += bytes;
+      }
       observe("running");
     };
     child.stdout?.on("data", (bytes) => capture("stdout", bytes));
     child.stderr?.on("data", (bytes) => capture("stderr", bytes));
     child.on("message", (message) => {
       if (message?.ocr_provider_spawn_error) spawnError = { code: message.ocr_provider_spawn_error };
+      if (message?.ocr_provider_exit) providerExit = message.ocr_provider_exit;
+      if (message?.ocr_provider_diagnostic) supervisorDiagnostics.push(message.ocr_provider_diagnostic);
       if (Number.isSafeInteger(message?.ocr_provider_pid) && message.ocr_provider_pid > 0) {
         providerPid = message.ocr_provider_pid;
       }
@@ -1364,7 +1380,10 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       if (healthTimer) clearInterval(healthTimer);
       signal?.removeEventListener("abort", onAbort);
       const completedAt = Date.now();
-      const printTimeout = plan.adapter === "antigravity" && /\bprint timeout\b/i.test(stderr);
+      const stdout = Buffer.concat(stdoutChunks);
+      const stderr = Buffer.concat(stderrChunks);
+      const stderrText = stderr.toString("utf8");
+      const printTimeout = plan.adapter === "antigravity" && /\bprint timeout\b/i.test(stderrText);
       const status = signal?.aborted ? "cancelled"
         : exitCode === 0 && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
       const code = signal?.aborted ? "OCR_PROVIDER_CANCELLED"
@@ -1374,9 +1393,18 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
         : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO";
       const health = observe(status, false);
       resolveRun({
-        status, output: status === "completed" ? stdout : null,
+        status, output: status === "completed" ? stdout.toString("utf8") : null,
+        raw_output: { stdout, stderr,
+          exit_code: providerExit ? providerExit.code : exitCode,
+          exit_signal: providerExit ? providerExit.signal : exitSignal,
+          cancelled: signal?.aborted === true, captured_output_limited: overflow,
+          stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes },
+        process_diagnostics: supervisorDiagnostics,
+        process_outcome: spawnError ? "launch_failure" : printTimeout ? "timeout"
+          : providerExit?.signal || exitSignal ? null
+            : (providerExit ? providerExit.code : exitCode) === 0 ? "ok" : "exit_nonzero",
         error: status === "completed" ? null : { code, message: safeText(
-          healthObserverError || spawnError?.code || stderr.trim() || exitSignal || code) },
+          healthObserverError || spawnError?.code || stderrText.trim() || exitSignal || code) },
         timing: { started_at_ms: startedAt, completed_at_ms: completedAt, duration_ms: completedAt - startedAt },
         usage: null,
         retry: { count: 0, progress_events: progressEvents },
@@ -1401,6 +1429,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   providerExecutor = runOcrProviderProcess,
   onProviderHealth = null,
   onProviderResult = null,
+  rawOutputSink = null,
   healthPollMs = 5_000,
 } = {}) {
   if (onProviderHealth !== null && typeof onProviderHealth !== "function") {
@@ -1408,6 +1437,12 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   }
   if (onProviderResult !== null && typeof onProviderResult !== "function") {
     throw new TypeError("OCR onProviderResult must be a function");
+  }
+  if (rawOutputSink !== null && typeof rawOutputSink !== "function") {
+    throw new TypeError("OCR rawOutputSink must be a function");
+  }
+  if (rawOutputSink && !["build-code", "verify-code"].includes(request.stage)) {
+    throw new TypeError("OCR raw output stage must be build-code or verify-code");
   }
   if (!Number.isSafeInteger(healthPollMs) || healthPollMs < 1) {
     throw new TypeError("OCR healthPollMs must be a positive safe integer");
@@ -1521,7 +1556,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
     // later findings arrive through the same callback for incremental
     // disposition. The final return still contains the complete round.
     const providerResults = new Array(providers.length);
-    const projectProviderResult = (provider, index, member) => {
+    const projectProviderResult = async (provider, index, member) => {
       const profile = config.providers?.[provider] ?? {};
       const selectedIdentity = selection.provider_identities?.[provider] ?? {};
       const identity = {
@@ -1533,16 +1568,61 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       let status = member?.status;
       let error = member?.error ?? null;
       let parsed = null;
+      let parseOutcome = null;
+      let rawOutputRef = null;
+      let diagnosticCode = null;
+      const diagnostics = [];
+      const raw = member?.raw_output;
+      if (member?.error) diagnostics.push(`process_error=${safeText(member.error.code)}: ${safeText(member.error.message, 1024)}`);
+      if (member?.process_diagnostics?.length) {
+        diagnostics.push(`supervisor_diagnostics=${member.process_diagnostics.map((item) => `${item.code}: ${item.message}`).join("; ")}`);
+      }
+      if (Buffer.isBuffer(raw?.stdout) && Buffer.isBuffer(raw?.stderr)) {
+        diagnostics.push(`exit_code=${raw.exit_code ?? "unknown"}; exit_signal=${raw.exit_signal ?? "none"}; cancelled=${raw.cancelled === true}; captured_output_limited=${raw.captured_output_limited === true}; stdout_bytes=${raw.stdout_bytes ?? raw.stdout.length}; stderr_bytes=${raw.stderr_bytes ?? raw.stderr.length}; captured_stdout_bytes=${raw.stdout.length}; captured_stderr_bytes=${raw.stderr.length}`);
+        if (rawOutputSink) {
+          const hashes = { stdout_sha256: sha256(raw.stdout), stderr_sha256: sha256(raw.stderr) };
+          const saved = new Set();
+          const saveErrors = [];
+          for (const stream of ["stdout", "stderr"]) {
+            const digest = hashes[`${stream}_sha256`];
+            if (saved.has(digest)) continue;
+            const ref = `quality/evidence/stage-quality/${stage}/ocr-provider-output-${digest}.bin`;
+            try { await rawOutputSink(ref, raw[stream]); saved.add(digest); }
+            catch (saveError) {
+              saveErrors.push(`${stream}: ${safeText(saveError?.message ?? saveError, 1024)}`);
+            }
+          }
+          if (saveErrors.length) {
+            status = "failed";
+            diagnosticCode = "OCR_PROVIDER_OUTPUT_SAVE_FAILED";
+            error = { code: diagnosticCode, message: "original provider output could not be saved" };
+            diagnostics.unshift(`raw_output_save_error=${saveErrors.join("; ")}`);
+          } else rawOutputRef = { version: "broker-output-ref.v1", runtime_id: runtimeId, provider, ...hashes };
+        } else {
+          diagnosticCode = "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE";
+          diagnostics.unshift("original provider bytes unavailable: raw output sink is absent; output was not persisted");
+        }
+      } else {
+        diagnosticCode = "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE";
+        diagnostics.push("original provider bytes unavailable: executor did not return stdout/stderr Buffers; text was not reconstructed as original bytes");
+      }
       let usage = member?.usage ?? null;
-      if (status === "completed") {
+      // Persistence and parsing are independent facts. A failed sink must not
+      // erase the parse result of a process that actually completed.
+      if (member?.status === "completed") {
         try {
           const output = ocrDirectProviderOutput(identity.adapter, member.output);
           usage ??= output.usage;
           parsed = parseReviewerOutput(output.text, { requireEvidence: true });
+          parseOutcome = "ok";
         } catch (parseError) {
           status = "failed";
-          error = { code: parseError?.code ?? "OCR_PROVIDER_OUTPUT_INVALID",
+          const parseFailure = { code: parseError?.code ?? "OCR_PROVIDER_OUTPUT_INVALID",
             message: safeText(parseError?.message ?? parseError) };
+          error ??= parseFailure;
+          parseOutcome = typeof member.output === "string" && !member.output.trim() ? "empty_output" : "invalid";
+          diagnosticCode ??= parseFailure.code;
+          diagnostics.unshift(`parse_error_code=${safeText(parseFailure.code)}; parse_error=${safeText(parseError?.parse_error ?? parseError?.message ?? parseError, 1024)}`);
         }
       } else if (status !== "failed" && status !== "cancelled") {
         status = "failed";
@@ -1559,6 +1639,13 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       return {
         provider, status, identity, error: status === "completed" ? null : error,
         timing, usage, findings,
+        raw_output_ref: rawOutputRef,
+        process_outcome: member?.process_outcome ?? (member?.status === "completed" ? "ok" : null),
+        parse_outcome: parseOutcome,
+        ...(diagnostics.length && (status !== "completed" || diagnosticCode || member?.process_diagnostics?.length) ? { unavailable_diagnostics: {
+          code: diagnosticCode ?? error?.code ?? "OCR_PROVIDER_PROCESS_DIAGNOSTICS",
+          message: safeText(diagnostics.join("; "), 4096),
+        } } : {}),
         ...(parsed?.discarded_facts?.length ? { discarded_facts: parsed.discarded_facts } : {}),
         evidence_anchor_valid: rawFindings.map((finding, findingIndex) => {
           const mapped = mappedAnchors[findingIndex];
@@ -1573,7 +1660,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       };
     };
     runs = runs.map((run, index) => Promise.resolve(run).then(async (member) => {
-      const providerResult = projectProviderResult(providers[index], index, member);
+      const providerResult = await projectProviderResult(providers[index], index, member);
       providerResults[index] = providerResult;
       if (onProviderResult) {
         await onProviderResult({

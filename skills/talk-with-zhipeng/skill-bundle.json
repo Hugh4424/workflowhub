@@ -2,9 +2,6 @@
   "schema_version": 1,
   "skill": "talk-with-zhipeng",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "bdc681d971bdf5b4d22e9a59b63fa93a3cb8fd78c013b05a03ed1b5d532fe56a"
-    }
+    "SKILL.md"
   ]
 }

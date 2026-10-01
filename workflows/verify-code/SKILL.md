@@ -165,6 +165,11 @@ AC-REVIEW-011 另按该终末 scope 的原始 OCR unavailable attempt、恰好�
 即可单独记 achieved；替代也不可用时须有一次真实失败调用和 `unverified`
 披露。缺项记 incomplete。这不增加推进 gate，也不把替代输出写成 OCR result。
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。真实入口与消费者调研、定向测试和独立审查/红队派子代理；实施修复回原实施子代理。主会话处置发现、呈现验证结论与取得用户确认；无实现变化时不派实施任务，纯材料任务不虚构运行时测试。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
+
 ## 固定流程：最多四个动作
 
 1. **OCR 代码审查一次**：以当前 diff、完整 AC 文本和真实入口发起 `review --action=record`；其 result 或 unavailable attempt 绑定当前代码快照与材料。若调用方另有已认证的 `reviewed_execution`，它只是可选的执行对照 provenance，不是 OCR 派发前置条件或 reviewer 资格条件。工具 unavailable 且零成功路时，按上述 AC-REVIEW-011 分支在当前会话调用一次替代。

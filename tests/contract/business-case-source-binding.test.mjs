@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { businessCaseAnchorErrors } from "../../workflows/build-code/case-reconciliation.mjs";
 import { describe, expect, it } from "vitest";
 import { selectAffectedCases } from "../../workflows/build-code/case-selection.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const catalogPath = resolve(root, "docs/quality/business-case-catalog.json");
-const phaseRoot = "specs/workflowhub-thin-core-card-04-20260919";
+const phaseRoot = "specs/archive/workflowhub-thin-core-card-04-20260919";
 const expected = Object.freeze({
   "CARD04-DECISION-LOG-CENSUS": {
     acId: "AC-26",
@@ -81,7 +82,14 @@ const expected = Object.freeze({
 });
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const sourceRevision = (path) => `sha256:${sha256(readFileSync(resolve(root, path)))}`;
+// CARD-03 P3/T006：revision 是人读得懂的稳定锚点（章节标题），只在该条目自身所在章节被删改名时失效；
+// 锚点 = 标题级别 + 条目编号（如 `anchor:### T009`），匹配以它开头的唯一标题行；
+// 不再绑整份文件 sha256，也不换成另一种哈希门（card-04 B-06）。
+const ANCHOR = /^anchor:(#{2,3} \S.*)$/;
+const anchorHolds = (revision, text) => {
+  const heading = ANCHOR.exec(revision ?? "")?.[1];
+  return heading !== undefined && text.split(/\r?\n/).filter((line) => line === heading || line.startsWith(`${heading} `)).length === 1;
+};
 
 function bindingErrors(entry, authority) {
   const errors = [];
@@ -92,7 +100,7 @@ function bindingErrors(entry, authority) {
   if (!existsSync(resolve(root, authority.source))) errors.push("missing authoritative source");
   else {
     const sourceText = readFileSync(resolve(root, authority.source), "utf8");
-    if (entry?.source?.revision !== sourceRevision(authority.source)) errors.push("stale source.revision");
+    if (!anchorHolds(entry?.source?.revision, sourceText)) errors.push("stale source.revision");
     for (const marker of authority.sourceMarkers) {
       if (!sourceText.includes(marker)) errors.push(`missing source rule marker: ${marker}`);
     }
@@ -100,7 +108,7 @@ function bindingErrors(entry, authority) {
   if (!existsSync(resolve(root, authority.rule))) errors.push("missing authoritative rule");
   else {
     const ruleText = readFileSync(resolve(root, authority.rule), "utf8");
-    if (entry?.rule?.revision !== sourceRevision(authority.rule)) errors.push("stale rule.revision");
+    if (!anchorHolds(entry?.rule?.revision, ruleText)) errors.push("stale rule.revision");
     for (const marker of authority.ruleMarkers) {
       if (!ruleText.includes(marker)) errors.push(`missing rule marker: ${marker}`);
     }
@@ -196,7 +204,7 @@ describe("CARD-04 P8 case source binding", () => {
   const cases = new Map(catalog.cases.map((entry) => [entry.id, entry]));
 
   for (const [id, authority] of Object.entries(expected)) {
-    it(`${id} binds its source and rule revision to current material bytes`, () => {
+    it(`${id} binds its source and rule revision to a stable anchor in the current material`, () => {
       expect(cases.has(id)).toBe(true);
       expect(bindingErrors(cases.get(id), authority)).toEqual([]);
     });
@@ -212,6 +220,8 @@ describe("CARD-04 P8 case source binding", () => {
     expect(bindingErrors({ ...entry, source: { ...entry.source, path: `${phaseRoot}/phases/absent.md` } }, authority))
       .toContain("missing declared source");
     expect(bindingErrors({ ...entry, rule: { ...entry.rule, revision: `sha256:${"0".repeat(64)}` } }, authority))
+      .toContain("stale rule.revision");
+    expect(bindingErrors({ ...entry, rule: { ...entry.rule, revision: "anchor:### T999" } }, authority))
       .toContain("stale rule.revision");
   });
 
@@ -301,5 +311,21 @@ describe("CARD-04 P8 case source binding", () => {
         ...entry.effect_observation, observation_status: "observed",
       } }, authority)).toContain("unproven effect was claimed observed");
     }
+  });
+});
+
+
+describe("CARD-03 catalog read failures retain their original cause", () => {
+  const entry = { source: { path: "source.md", revision: "anchor:## Source" },
+    rule: { path: "rule.md", revision: "anchor:## Rule" },
+    effect_observation: { rule_revision: "anchor:## Rule" } };
+  it.each(["EACCES", "UNSAFE_PATH"])("ORACLE-RT-001 propagates %s instead of relabeling it as a stale revision", (code) => {
+    const failure = Object.assign(new Error(`real source read failed: ${code}`), { code });
+    expect(() => businessCaseAnchorErrors(entry, () => { throw failure; })).toThrow(failure);
+  });
+  it("ORACLE-RT-001 keeps genuinely absent source bytes stale", () => {
+    expect(businessCaseAnchorErrors(entry, () => undefined)).toEqual(["stale source.revision", "stale rule.revision"]);
+    expect(businessCaseAnchorErrors(entry, () => { throw Object.assign(new Error("file missing"), { code: "ENOENT" }); }))
+      .toEqual(["stale source.revision", "stale rule.revision"]);
   });
 });

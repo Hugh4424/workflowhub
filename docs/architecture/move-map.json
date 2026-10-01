@@ -1930,24 +1930,6 @@
       "content_change": "declared same-session step/skill boundaries and transcript usage windows"
     },
     {
-      "source": "skills/spec-plan/templates/plan-template.md",
-      "destination": "skills/spec-plan/templates/plan-template.md",
-      "status": "modify",
-      "owner": "spec-plan UI delivery template",
-      "consumer": "build-plan UI phases and downstream build-code tasks",
-      "delete_condition": "remove UI fields only when an approved replacement plan format is the sole consumer",
-      "content_change": "component, state, fixture, viewport, browser, screenshot, and design-gap handoff fields"
-    },
-    {
-      "source": "skills/spec-tasks/templates/tasks-template.md",
-      "destination": "skills/spec-tasks/templates/tasks-template.md",
-      "status": "modify",
-      "owner": "spec-tasks UI task template",
-      "consumer": "build-code UI task execution and verify-code evidence",
-      "delete_condition": "remove UI task fields only when an approved replacement tasks format is the sole consumer",
-      "content_change": "executable UI phase/task and design-gap handoff fields"
-    },
-    {
       "source": "skills/frontend-testing/SKILL.md",
       "destination": "skills/frontend-testing/SKILL.md",
       "status": "modify",
@@ -3575,6 +3557,33 @@
       "consumer": "targeted Vitest and P4 independent review of authenticated U/V source IDs in acceptance-chain rows",
       "delete_condition": "remove only after an independently reviewed equivalent real-material source-index negative control replaces it and the original RED/GREEN evidence is retained",
       "content_change": "reads current decision-log and spec, asserts indexed AC-29 source IDs, and checks no-index AC disclosure"
+    },
+    {
+      "source": "tests/contract/card03-conditional-acceptance-contract.test.mjs",
+      "destination": "tests/contract/card03-conditional-acceptance-contract.test.mjs",
+      "status": "add",
+      "owner": "CARD-03 P3 same-task root-cause repair",
+      "consumer": "targeted Vitest exercising existing strict spec-analyze acceptance-chain consumer",
+      "delete_condition": "remove when this consumer is retired or equivalent independently reviewed conditional-gate and anchor controls replace it",
+      "content_change": "post optional gate versus present partial gate, pre strict gate, real exit binding and valid anchor collision controls"
+    },
+    {
+      "source": "tests/contract/card03-completion-separation.test.mjs",
+      "destination": "tests/contract/card03-completion-separation.test.mjs",
+      "status": "add",
+      "owner": "CARD-03 existing runtime completion and handler owners",
+      "consumer": "targeted Vitest regression of stage completion and build-code handler",
+      "delete_condition": "remove after equivalent completion separation and authenticated reuse controls migrate into an existing contract suite",
+      "content_change": "separate implementation unknown from quality partial, retain evaluated failed acceptance and unavailable review, and test exact canonical acceptance reuse"
+    },
+    {
+      "source": "tests/contract/card03-projection-root-causes.test.mjs",
+      "destination": "tests/contract/card03-projection-root-causes.test.mjs",
+      "status": "add",
+      "owner": "CARD-03 P3 existing stage-end acceptance projection owner",
+      "consumer": "targeted Vitest exercising current post build-code spec-analyze source projection",
+      "delete_condition": "remove after equivalent independent valid-edge and duplicate-source controls replace this suite in the existing census contract tests",
+      "content_change": "preserve authenticated local U/V edges when another census edge is invalid and reject ambiguous duplicate R entries"
     }
   ]
 }

@@ -127,7 +127,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a3d0a7a86870c947acb72748ece47c3eaa8951c35feec3996f056b866154bbfd
+    local_bundle_hash: 5e0a116b3a637ff6705ba1277591fd6a12887ca9b16253181da33cce4600f493
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -215,7 +215,7 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c36970ae6d0639d5d0cc33fb1858c63534fb40bb2bcb548b65de0b3fd20dc413
+    local_bundle_hash: 599d8807813218fbe7b1f1fbd49d36f2c05a274cee16d85b81d5f734a303bffa
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -250,7 +250,7 @@ skills:
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 6efe67875f567b2746c79737151322b6b0d2b2b995ce1f4418ab45dbaa057891
+    local_bundle_hash: b8dc6399917d54a24429144c5e160d268ba77493debaa5e9c74f94c966eff23c
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -283,7 +283,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: bc09a6a95caf77a76618c3f659f02441998cc35c70a19da33d61797f53c8f25a
+    local_bundle_hash: 8ec7d43d206ef1d83a74aede159b5e6f8840a966491a3f32f7314db23f983a4b
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -332,7 +332,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: bb470db067aaed87d6a04829882f79af5a49a414dd07f8c456046c1311fbd2f4
+    local_bundle_hash: ca59a5413c5d73aca1f1d323ae5a0474972263ec5137006acbca769897684eda
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -364,7 +364,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 72f1e186546c6454a13d49f5807e01f9f33ca54d91e2ff9298643921d99b626b
+    local_bundle_hash: 50f9030d6acaa4b189a698b289b7da0ddcd43034f243ed3401130df1ef4f6a22
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -415,7 +415,7 @@ skills:
   - name: architect-code-review
     path: skills/architect-code-review/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: e9ec3f924e5aaa83bd8420a4ed7a78349fabe1bc8754f276f6974e052d8be17d
+    local_bundle_hash: 942579475a93b9dc211ef873810faf190bd4fb2824151109110937422302b381
     last_reviewed_at: '2026-09-25'
     status: adapted
     metrics_enabled: true
@@ -464,7 +464,7 @@ skills:
         review_outcome: accepted
         path: .agents/skills/dsh-trim-cot-leakage/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage
-    local_changes: 保留合并代码审查、简化、文档、prose 和过程叙述的可选独立 skill；当前 stage-owned consumer 为零；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；各自通过既有 review/run receipt 消费；Architect 输出不充当正式 review receipt，也不新增 dispatch/provider/控制面
+    local_changes: 保留合并代码审查、简化、文档、prose 和过程叙述的独立 skill；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；verify-code AC-REVIEW-011 在本次终末 OCR unavailable 且零成功路时调用一次 Architect 替代，当前会话经既有 recordDshCodeReviewResult 发布、receipts.quality_review 消费符合当前身份与 fallback 条件的 canonical result，provider 保持 dsh-code-review，原 OCR attempt 保留；显式诊断输出仅作诊断事实，不新增 dispatch/provider/控制面
     dependency_closure:
       - skills/architect-code-review
     update_policy: 上游代码审查规则变更时人工复核，不恢复材料门禁
@@ -548,7 +548,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: 32aa4e6d7f2727faa73e532b0a18d3384005c66794cfb8b3577b478c8658054e
+    local_bundle_hash: ed71254d9bf55bf9e316173f4be9b311c97f9d2442f1be08bb5319160dae5a28
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -566,7 +566,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 8bb9c5fa5f3752dc25a936b1a7e797a027e06b31e0c491471c23b4a47ea66522
+    local_bundle_hash: f4d8b285cfa5072338f2290b260d019fa69e335199a4b1d8df8fc27f1d915886
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
@@ -631,7 +631,7 @@ skills:
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c6f2106125692adf36a17ce6845b5615b6d060728efe9dd68fb6f2d2147319e4
+    local_bundle_hash: ca120f215b0e8111926344898dba50816369c15e1431e67a7c22645cbc3bf44c
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true

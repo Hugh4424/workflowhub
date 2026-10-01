@@ -4,9 +4,9 @@ import { createRequire } from "node:module";
 import { isRuntimeOnlyPath } from "../../runtime/evidence/canonical-utils.mjs";
 import { CLOSE_EXECUTION_SIDECAR_PREFIXES } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
+import { currentPhaseWriteSetSnapshot as phaseSnapshot, validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "../../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateVerifyLeaves } from "../../runtime/evidence/quality-store.mjs";
 import { authenticateP10RunConsumption, authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
@@ -185,7 +185,29 @@ function parseVitestLeaves(raw, target, workspaceRoot) {
   return ids;
 }
 
-function currentCatalog(task, workspaceRoot) {
+/** Stable, unique heading anchors replace whole-file revision hashes. */
+export function businessCaseAnchorErrors(entry, read) {
+  const errors = [];
+  for (const role of ["source", "rule"]) {
+    const binding = entry?.[role];
+    const heading = typeof binding?.revision === "string" && binding.revision.startsWith("anchor:")
+      ? binding.revision.slice("anchor:".length) : null;
+    let text;
+    try { text = read(binding?.path); } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const lines = text === undefined || text === null ? [] : String(text).split(/\r?\n/);
+    if (!heading || !/^#{2,3} \S/.test(heading)
+        || lines.filter((line) => line === heading || line.startsWith(`${heading} `) || line.startsWith(`${heading} —`)).length !== 1) {
+      errors.push(`stale ${role}.revision`);
+    }
+  }
+  if (entry?.effect_observation?.rule_revision !== entry?.rule?.revision) errors.push("rule_revision mismatch");
+  return errors;
+}
+
+
+export function currentCatalog(task, workspaceRoot) {
   const raw = worktreeBytes(workspaceRoot, "docs/quality/business-case-catalog.json");
   const catalog = JSON.parse(raw);
   if (catalog.schema !== "workflowhub-business-case-catalog.v1"
@@ -195,11 +217,8 @@ function currentCatalog(task, workspaceRoot) {
   }
   for (const entry of catalog.cases) {
     const phase = entry.phase_ids?.[0];
-    const rulePath = entry.rule?.path ?? `specs/${task.identity.taskId}/phases/${phase}.md`;
     if (!nonempty(entry.id) || !/^P[1-9][0-9]*$/.test(phase ?? "")
-        || entry.source?.revision !== `sha256:${digest(worktreeBytes(workspaceRoot, entry.source.path))}`
-        || entry.rule?.revision !== `sha256:${digest(worktreeBytes(workspaceRoot, rulePath))}`
-        || entry.effect_observation?.rule_revision !== entry.rule.revision) {
+        || businessCaseAnchorErrors(entry, (path) => worktreeBytes(workspaceRoot, path)).length) {
       throw new Error("current business source/rule revision is invalid");
     }
   }
@@ -688,7 +707,7 @@ export function reconcileCurrentTaskCases({ task, workspace, capture, oracleEvid
     const receiptRaw = safeTask.readRecord(capture.receipt_ref);
     if (digest(receiptRaw) !== capture.receipt_hash) throw new Error("outer receipt hash mismatch");
     receipt = validateCanonicalTestReceipt(JSON.parse(receiptRaw), { taskId, stage: "build-code",
-      snapshotTree: current.snapshot_tree, expectedProducerComponent: "build-code-test-capture",
+      snapshotTree: current.snapshot_tree, currentSnapshot: phaseSnapshot(root, taskId, current.snapshot_tree, selection.cases[0]?.phase_ids?.[0]), expectedProducerComponent: "build-code-test-capture",
       expectedCommand: FIXED_TARGETED_CAPTURE_COMMAND, requirePassed: true });
     if (receipt.output_ref !== capture.output_ref || receipt.output_hash !== capture.output_hash
         || receipt.source_digest !== current.source_digest || receipt.snapshot_commit !== current.snapshot_commit
@@ -847,7 +866,7 @@ export function reconcileCurrentTaskCases({ task, workspace, capture, oracleEvid
     reason: "current_execution_unverified", execution_freshness: "unknown",
     business_effect_status: "unknown", business_effect_reason: reason,
     task_id: taskId, receipt_ref: capture.receipt_ref, manifest_ref: pointer.manifest_ref,
-    entries: Object.freeze(entries) });
+    run_consumption_status: "verified", entries: diagnostics() });
   if (chainCount === entries.length) reason = consumption === null
     ? "missing_official_stage_binding" : "independent_business_effect_unverified";
   return Object.freeze({ status: "unavailable",

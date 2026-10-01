@@ -24,6 +24,7 @@ describe("governance review dispatch boundary", () => {
 
   it("keeps standard workflow without a unified budget gate", () => {
     expect(workflow).toMatch(/不可得就写 `unavailable`，不设统一预算 gate/);
-    expect(workflow).toMatch(/健康的 provider 由 3rd-review 自己监管/);
+    expect(workflow).toMatch(/不改变 provider status 的运行时所有权/);
+    expect(workflow).not.toMatch(/3rd-review 自己监管/);
   });
 });

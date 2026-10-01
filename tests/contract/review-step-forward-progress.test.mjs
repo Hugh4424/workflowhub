@@ -22,13 +22,13 @@ const stageReviewSteps = {
     skillRule: /advances to finding disposition and final analysis[\s\S]{0,120}do not dispatch that completed review step again/i,
   },
   "build-code": {
-    reviews: ["review-change", "final-integration-review"],
-    successors: ["analyze-review-findings", "stage-end-spec-analyze"],
-    skillRule: /integration review step is then complete[\s\S]{0,200}rather than dispatching integration[\s\S]{0,20}review again/i,
+    reviews: ["review-change"],
+    successors: ["analyze-review-findings"],
+    skillRule: /Later implementation changes do not send the workflow back to that review step/i,
   },
   "verify-code": {
-    reviews: ["architect-code-review", "run-one-independent-code-review"],
-    successors: ["main-agent-repair-batch-1", "main-agent-repair-batch-2"],
+    reviews: ["ocr-code-review"],
+    successors: ["publish-code-review-fact"],
     skillRule: /review step[\s\S]{0,120}manifest 前移[\s\S]{0,160}不自动回跳/i,
   },
 };
