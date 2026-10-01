@@ -635,7 +635,6 @@
     "core/artifact-dir.mjs",
     "core/load-config.mjs",
     "docs/architecture/complexity-baseline.json",
-    "docs/architecture/control-plane-inventory.json",
     "docs/architecture/deletion-plan.json",
     "docs/architecture/deletions-proof.json",
     "docs/architecture/final-complexity-report.json",

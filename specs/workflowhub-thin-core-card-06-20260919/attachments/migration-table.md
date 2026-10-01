@@ -18,13 +18,13 @@
 | 处置 | 行数 |
 | --- | --- |
 | ARCHIVE | 35 |
-| DELETE | 405 |
+| DELETE | 396 |
 | MOVE | 2 |
 | NARROW | 231 |
 | NEW | 18 |
-| PENDING | 4 |
-| SURVIVOR | 168 |
-| **合计** | **863** |
+| PENDING | 3 |
+| SURVIVOR | 166 |
+| **合计** | **851** |
 
 **批次计数**
 
@@ -36,8 +36,8 @@
 | B3/P4 | 60 | 34 |
 | B4/P5 | 280 | 256 |
 | B5/P6 | 181 | 181 |
-| B6/P7 | 75 | 38 |
-| B7/P8 | 46 | 68 |
+| B6/P7 | 65 | 37 |
+| B7/P8 | 44 | 68 |
 | — （SURVIVOR/PENDING，无批次） | 62 | — |
 ## 1. 逐文件处置（主表）
 
@@ -324,7 +324,7 @@
 | MT-3-153 | workflows/verify-code/design-alignment.mjs | verify-code/SKILL.md | 同左（UI 组） | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 去 `stage-content-contracts` kernel 依赖；UI 设计对齐方法保留（跨面候选） |
 | MT-3-154 | workflows/verify-code/isolated-browser-qa.md | verify-code/SKILL.md | 同左 | SURVIVOR | B3/P4 | `—（未改动）` | — | 否 | 方法文档；QA 网关仍可搬运 |
 
-### 1.5 ⑤ manifest / schema（53 行）
+### 1.5 ⑤ manifest / schema（42 行）
 
 | id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -367,20 +367,9 @@
 | MT-5-037 | runtime/schemas/task-fact.v1.json | 无生产加载者（唯一引用是 runner-release 发布清单）；串 repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | 哈希化事实行（material_digest/source_digest/content_hash）孤儿；Card-08 新记录形态不得依赖它（ADR-016 普通文件名 + 内存消解 fact graph） |
 | MT-5-038 | runtime/schemas/task-index.v1.json | 无生产加载者（runner-release 清单）；串 repo-inventory | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | index（ref+sha256+content_hash）孤儿，同 MT-5-037 |
 | MT-5-039 | runtime/schemas/workflow-evolution.v1.json | 生产：runtime/evidence/workflow-evolution.mjs（PENDING，`schema_identity.sha256`）、tools/cli/build-reflection-page.mjs（PENDING）；测试 2；串 runner-release 清单 | — | DELETE | B5/P6 | git revert <B5 提交> | — | 否 | **条件性行**：M16 演进/反思链在调研 01 判 PENDING；若链保留 → 转 NARROW（必须去掉 `schema_identity.sha256`，ADR-016 禁内容寻址）；与 MT-5-033/034 同批裁定 |
-| MT-5-040 | docs/architecture/complexity-baseline.json | tools/architecture/complexity-report.mjs（DELETE：硬门度量）、tools/architecture/inventory.mjs（PENDING）；docs/architecture/{deletions-proof.json,real-entry-inventory.md,repository-inventory.tsv}；测试 repository-inventory.test.mjs | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务复杂度基线（硬门形态，不符「不卡推进」）；消费者全在删除/PENDING 面；与调研 06 §1.3 的 ARCHIVE 口径差异见页首第 6 条 |
-| MT-5-041 | docs/architecture/control-plane-inventory.json | tools/architecture/phase0-deletion-disposition.mjs（DELETE）；测试 control-plane-governance / current-close-projection-readback / review-budget-deletion / tier-c-deletion-boundary；docs/adr/0029 | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 12 条控制面登记（stage-handoff、review-packet-identity、review-input-bounds…）多数随 B4/B5 删除；旧清单是一次性调查产物，删除后真实控制面由 AGENTS 「新增控制面登记」条承载 |
-| MT-5-042 | docs/architecture/deletion-plan.json | tools/architecture/phase0-deletion-disposition.mjs（DELETE）、docs/architecture/repository-inventory.tsv（DELETE）；测试 tier-c-deletion-boundary、governance-diagnostics-non-gate | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务 Phase-0 删除计划（DEL-01~12 + c6_amendment，policy「缺证明一律 KEEP」）；本卡迁移表另起，不复用其结论 |
-| MT-5-043 | docs/architecture/deletions-proof.json | tools/architecture/inventory.mjs（PENDING）；测试 tests/contract/repository-inventory.test.mjs；docs/architecture/{final-complexity-report.json,legacy-import-proof.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 前任务删除证明（aggregate sha256）一次性产物，消费者全在删除/未定面 |
-| MT-5-044 | docs/architecture/final-complexity-report.json | tools/architecture/complexity-report.mjs（DELETE）、tools/architecture/inventory.mjs（PENDING）；docs/architecture/final-coverage-audit.md、repository-inventory.tsv；测试 repository-inventory.test.mjs | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 含 `snapshot_tracked_tree_sha256` 的终态复杂度报告（硬门 + 快照树认证），随 ADR-016 退役 |
-| MT-5-045 | docs/architecture/history-inventory.json | tools/architecture/history-inventory.mjs、retention-audit.mjs、phase0-deletion-disposition.mjs（均删除/PENDING 面）；测试 history-read-only.test.mjs、governance-diagnostics-non-gate.test.mjs；docs/architecture/{legacy-task-inventory.json,repository-inventory.tsv,retention-manifest.json} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 465 文件字节 oracle（历史区快照树认证）；**注意**：Card-08「历史只读」若仍需清单须由 Card-08 另立（AGENTS 禁 history runtime branch），不得靠保留本件；与调研 06 §1.3 ARCHIVE 口径差异见页首第 6 条 |
-| MT-5-046 | docs/architecture/legacy-import-proof.json | tools/architecture/inventory.mjs（PENDING）；测试 legacy-zero.test.mjs、repository-inventory.test.mjs；docs/architecture/{deletions-proof.json,history-inventory.json,retention-manifest.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 旧任务历史导入的 aggregate sha256 证明；本卡明令禁止 historical import / 历史回写 runtime |
-| MT-5-047 | docs/architecture/legacy-task-inventory.json | tools/architecture/inventory.mjs（PENDING）；测试 legacy-zero.test.mjs、history-read-only.test.mjs；docs/architecture/{history-inventory.json,retention-manifest.json,repository-inventory.tsv} | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 106 任务（legacy 66 / unsupported 40）、`user_confirmation: pending` 的历史口径，与现行外置任务目录数字不一致；**Card-08 依赖同 MT-5-045** |
 | MT-5-048 | docs/architecture/move-map.json | AGENTS.md、CLAUDE.md、README.md、docs/operations/deferred-tasks-m17.md；runtime/evidence/workflow-evolution.mjs（PENDING）、tools/cli/build-reflection-page.mjs（PENDING）、tools/architecture/phase0-deletion-disposition.mjs（DELETE）；治理测试 4；tests/fixtures/workflow-evolution/run-browser-qa.sh | 删除后目录迁移唯一事实（AGENTS「未列入 move-map 的文件保持原位」继续生效）：登记 runtime 各区、tools/、skills/、docs/architecture 的真实存活清单 | NARROW | B6/P7 | git checkout backup/card-06-b6 -- docs/architecture/move-map.json | — | 否 | 重写为删除后的真实状态；去掉 `sha256_before`/`sha256_after` 等 402 条目中的内容哈希（ADR-016 禁内容寻址），保留 path/职责/consumer/删除条件登记；ADR-003 要求批次 6「以 move-map 登记澄清 runtime 名称」，故不能整件退役 |
-| MT-5-049 | docs/architecture/repository-inventory.tsv | tools/architecture/inventory.mjs（PENDING）、phase0-deletion-disposition.mjs（DELETE）；治理测试 3 | — | DELETE | B6/P7 | git revert <B6 提交> | — | 否 | 一次性交付面清单（125 行）；若 build-plan 要复用 inventory.mjs 做 AC-27「无换名残留」扫描，应在新位置重建最小清单，而非保留本件 |
-| MT-5-050 | docs/architecture/retention-manifest.json | tools/architecture/retention-audit.mjs、reference-audit.mjs、phase0-deletion-disposition.mjs（均在删除/PENDING 面）；测试 governance-diagnostics-non-gate.test.mjs；docs/architecture/repository-inventory.tsv | 删除后真实保留面（只列确认幸存者，不再整目录 retain） | NARROW | B6/P7 | git checkout backup/card-06-b6 -- docs/architecture/retention-manifest.json | — | 否 | **必须先重写或退役**：其 `retain` 现整目录保留 `runtime/evidence/`、`runtime/review/`、`tests/`、`evidence/`、`reviews/`，并把将删的 `tools/host/workflowhub-stage-agent-bridge.mjs`、`runtime/review/stage-review-disposition.mjs` 标 KEEP，与本卡删除面正面冲突；其消费者 retention-audit.mjs / reference-audit.mjs 若不改，审计脚本会把本卡删除报成违规 —— 重写须与 tools/architecture 面（PENDING）同批完成 |
+| MT-5-050 | docs/architecture/retention-manifest.json | tools/architecture/retention-audit.mjs、reference-audit.mjs、phase0-deletion-disposition.mjs（均在删除/PENDING 面）；测试 governance-diagnostics-non-gate.test.mjs；docs/architecture/repository-inventory.tsv | 删除后真实保留面（只列确认幸存者，不再整目录 retain） | NARROW | B6/P7 | git checkout backup/card-06-b6 -- docs/architecture/retention-manifest.json | — | 否 | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 6 登记 PENDING；其消费者 retention-audit/reference-audit 会把删除记为违规，故保留 NARROW 改写）；如独立审查认为无历史价值，可在同批改为 DELETE。 **必须先重写或退役**：其 `retain` 现整目录保留 `runtime/evidence/`、`runtime/review/`、`tests/`、`evidence/`、`reviews/`，并把将删的 `tools/host/workflowhub-stage-agent-bridge.mjs`、`runtime/review/stage-review-disposition.mjs` 标 KEEP，与本卡删除面正面冲突；其消费者 retention-audit.mjs / reference-audit.mjs 若不改，审计脚本会把本卡删除报成违规 —— 重写须与 tools/architecture 面（PENDING）同批完成 |
 | MT-5-051 | docs/architecture/final-coverage-audit.md | tools/architecture/inventory.mjs（PENDING）；docs/architecture/repository-inventory.tsv（DELETE）；测试 repository-inventory.test.mjs | — | ARCHIVE→docs/archive/ | B7/P8 | git revert <B7 提交> | — | 否 | 前任务 AC 覆盖终审说明，描述的是已删机制（coverage/hash 口径），属过时说明 → 按调研 06 §1.3 转 `docs/archive/` 只读；如 build-plan 认为无历史价值可在同批改为 DELETE |
-| MT-5-052 | docs/architecture/real-entry-inventory.md | docs/architecture/test-asset-governance-rules.md（文本引用）；无代码消费者 | 保留（SD-05 真实入口实跑依据） | SURVIVOR | B7/P8 | — | — | 否 | 调研 06 §1.3 判「保留」；其罗列的入口若随本卡删除变化，批次 7 就地刷新条目（刷新不是重写机制） |
-| MT-5-053 | docs/architecture/test-asset-governance-rules.md | vitest.config.mjs L26（注释引用）；无代码消费者 | 保留（真实测试/验收资产规则） | SURVIVOR | B7/P8 | — | — | 否 | 调研 06 §1.3 判「保留」；本卡不改内容，批次 7 仅复核规则与删除后测试面是否一致 |
 | MT-5-054 | docs/architecture/test-asset-inventory.md | 无消费者 | — | ARCHIVE→docs/archive/ | B7/P8 | git revert <B7 提交> | — | 否 | CARD-04 P9 测试资产盘点（一次性调查、无消费者）→ `docs/archive/` 只读；如 build-plan 认为无历史价值可在同批改为 DELETE |
 
 ### 1.6 ⑥ 测试与夹具（433 行）
@@ -822,7 +811,7 @@
 | MT-6-440 | tests/contract/card03-conditional-acceptance-contract.test.mjs | runtime/stage/stage-content-contracts.mjs（validateStageSpecAnalyzeProfile） | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是 | card-03 新增（合并后补登）：validateStageSpecAnalyzeProfile 是带 material_revision/snapshot_tree 绑定的验收链机器校验，随 stage-content-contracts.mjs NARROW（MT-1-063）删除；调用点 stage-runtime.mjs L1316/L1399 由 T017 去、stage-runner/stage-agent-outcome-adapter 随文件删 |
 | MT-6-441 | tests/contract/card03-projection-root-causes.test.mjs | runtime/stage/stage-runner.mjs（buildPostAcceptanceChainRows） | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 是 | card-03 新增（合并后补登）：被测对象 stage-runner.mjs（MT-1-070）DELETE B4/P5，本测试随之删除 |
 
-### 1.7 ⑦ 治理文档（112 行）
+### 1.7 ⑦ 治理文档（111 行）
 
 | id | path | 现有消费者 | 目标消费者 | 处置 | 批次 | 回滚方式 | G-3 | card03 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -888,18 +877,17 @@
 | MT-7-059 | docs/adr/0031-review-check-downgrade-and-identity-boundary.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 不动；审查「非身份类严格判定」降级与身份边界属身份面，加取代注 |
 | MT-7-060 | docs/adr/0032-review-chain-delegation-and-layer-contract.md | 无 | 无 | SURVIVOR | — | 不适用 | — | card03-touch | 不动；Card-05 新审查链（ADR-014/019 必留边界）；Card-03 分支改过本文件，合并后按 Card-03 文本为准 |
 | MT-7-061 | docs/adr/0033-acceptance-truth-presentation-and-cohort-parity.md | 无 | 无 | SURVIVOR | — | 不适用 | — | — | 原文不动；标题含 cohort parity，cohort 消失后由 B7/P8 新增 Card-06 ADR 取代注覆盖，不改原文（ADR append-only） |
-| MT-7-063 | docs/architecture/deletion-plan.json | `tests/contract/tier-c-deletion-boundary.test.mjs`、`tests/integration/governance-diagnostics-non-gate.test.mjs`、`tools/architecture/phase0-deletion-disposition.mjs` | 0（历史只读可查） | ARCHIVE→docs/archive/ | B6/P7 | `git revert <B6 提交>`；`git checkout backup/card-06-b6 -- <path>`；`git mv` 反向 | — | — | 前任务 Phase 0 删除计划（DEL-01~12 + `c6_amendment`）；policy「缺证明或用户确认一律 KEEP」冻结为历史，本卡迁移表另起不复用 |
-| MT-7-064 | docs/architecture/retention-manifest.json | `tests/integration/governance-diagnostics-non-gate.test.mjs`、`tools/architecture/phase0-deletion-disposition.mjs`、`tools/architecture/reference-audit.mjs`、`tools/architecture/retention-audit.mjs` | 批次 6 削删后的留存量表 | PENDING | B6/P7 | 同上 | — | — | `retain` 整目录保留 `runtime/evidence/`、`runtime/review/`、`tests/` 与本卡删除面正面冲突，且把 bridge/stage-review-disposition 标 KEEP；必须改写 retain 或整体退役，否则 `retention-audit.mjs`/`reference-audit.mjs` 把删除报成违例 |
-| MT-7-065 | docs/architecture/control-plane-inventory.json | `docs/adr/0029-…`、`tests/contract/control-plane-governance.test.mjs`、`tests/contract/current-close-projection-readback.test.mjs`、`tests/contract/review-budget-deletion.test.mjs`、`tests/contract/tier-c-deletion-boundary.test.mjs` | 删后逐条 disposition 改写的登记表 | PENDING | B6/P7 | 同上 | — | — | 12 controls 逐条改 disposition；`current-close-projection` 与 Card-08 幸存一致（第 5 节） |
-| MT-7-066 | docs/architecture/complexity-baseline.json | `tools/architecture/{inventory,complexity-report,retention-audit,phase0-deletion-disposition}.mjs` | 0（只读冻结） | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 前任务复杂度基线，不再作为任何门的输入 |
-| MT-7-067 | docs/architecture/final-complexity-report.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 含 `snapshot_tracked_tree_sha256` 的快照树认证产物，只读冻结 |
-| MT-7-068 | docs/architecture/deletions-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 前任务删除证明（aggregate sha256），只读冻结 |
-| MT-7-069 | docs/architecture/legacy-import-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 多 aggregate sha256 的 import 证明，只读冻结 |
-| MT-7-070 | docs/architecture/history-inventory.json | `tools/architecture/history-inventory.mjs`、`tools/architecture/retention-audit.mjs`、`tests/integration/history-read-only.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 465 文件字节 oracle，历史快照只读 |
-| MT-7-071 | docs/architecture/repository-inventory.tsv | `tools/architecture/inventory.mjs`、`tests/contract/repository-inventory.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 仓库盘点 TSV，只读冻结 |
-| MT-7-073 | docs/architecture/legacy-task-inventory.json | `tests/contract/legacy-zero.test.mjs`、`tests/integration/history-read-only.test.mjs`、`tools/architecture/inventory.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 历史口径 106 任务（legacy 66 / unsupported 40）、`active_count` 91、`user_confirmation: pending`，与第 2 节 124 项口径不同；保留只读并在 `README-ARCHIVED.md` 说明 |
-| MT-7-075 | docs/architecture/real-entry-inventory.md | 无代码消费者 | 同左（人工阅读） | SURVIVOR | — | 不适用 | — | — | 不动；SD-05「真实入口实跑」依据，保留 |
-| MT-7-076 | docs/architecture/test-asset-governance-rules.md | `vitest.config.mjs` L26（注释） | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；真实测试/验收规则，保留（与 `docs/quality/*` 的 PENDING 不同，本文件是规则不是机器消费清单） |
+| MT-7-063 | docs/architecture/deletion-plan.json | `tests/contract/tier-c-deletion-boundary.test.mjs`、`tests/integration/governance-diagnostics-non-gate.test.mjs`、`tools/architecture/phase0-deletion-disposition.mjs` | 0（历史只读可查） | ARCHIVE→docs/archive/ | B6/P7 | `git revert <B6 提交>`；`git checkout backup/card-06-b6 -- <path>`；`git mv` 反向 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 前任务 Phase 0 删除计划（DEL-01~12 + `c6_amendment`）；policy「缺证明或用户确认一律 KEEP」冻结为历史，本卡迁移表另起不复用 |
+| MT-7-065 | docs/architecture/control-plane-inventory.json | `docs/adr/0029-…`、`tests/contract/control-plane-governance.test.mjs`、`tests/contract/current-close-projection-readback.test.mjs`、`tests/contract/review-budget-deletion.test.mjs`、`tests/contract/tier-c-deletion-boundary.test.mjs` | 删后逐条 disposition 改写的登记表 | PENDING | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，本行 PENDING 保留（去留随独立审查））；如独立审查认为无历史价值，可在同批改为 DELETE。 12 controls 逐条改 disposition；`current-close-projection` 与 Card-08 幸存一致（第 5 节） |
+| MT-7-066 | docs/architecture/complexity-baseline.json | `tools/architecture/{inventory,complexity-report,retention-audit,phase0-deletion-disposition}.mjs` | 0（只读冻结） | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 前任务复杂度基线，不再作为任何门的输入 |
+| MT-7-067 | docs/architecture/final-complexity-report.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 含 `snapshot_tracked_tree_sha256` 的快照树认证产物，只读冻结 |
+| MT-7-068 | docs/architecture/deletions-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 前任务删除证明（aggregate sha256），只读冻结 |
+| MT-7-069 | docs/architecture/legacy-import-proof.json | 同上 | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 多 aggregate sha256 的 import 证明，只读冻结 |
+| MT-7-070 | docs/architecture/history-inventory.json | `tools/architecture/history-inventory.mjs`、`tools/architecture/retention-audit.mjs`、`tests/integration/history-read-only.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 465 文件字节 oracle，历史快照只读 |
+| MT-7-071 | docs/architecture/repository-inventory.tsv | `tools/architecture/inventory.mjs`、`tests/contract/repository-inventory.test.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 仓库盘点 TSV，只读冻结 |
+| MT-7-073 | docs/architecture/legacy-task-inventory.json | `tests/contract/legacy-zero.test.mjs`、`tests/integration/history-read-only.test.mjs`、`tools/architecture/inventory.mjs` | 0 | ARCHIVE→docs/archive/ | B6/P7 | 同上 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 DELETE，按本裁定归 ARCHIVE）；如独立审查认为无历史价值，可在同批改为 DELETE。 历史口径 106 任务（legacy 66 / unsupported 40）、`active_count` 91、`user_confirmation: pending`，与第 2 节 124 项口径不同；保留只读并在 `README-ARCHIVED.md` 说明 |
+| MT-7-075 | docs/architecture/real-entry-inventory.md | 无代码消费者 | 同左（人工阅读） | SURVIVOR | — | 不适用 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 SURVIVOR@B7/P8，归 SURVIVOR 无批次）；如独立审查认为无历史价值，可在同批改为 DELETE。 不动；SD-05「真实入口实跑」依据，保留 |
+| MT-7-076 | docs/architecture/test-asset-governance-rules.md | `vitest.config.mjs` L26（注释） | 同左 | SURVIVOR | — | 不适用 | — | — | 聚合裁定 A-17：docs/architecture 跨面重复登记二选一（片段 4 登记 SURVIVOR@B7/P8，归 SURVIVOR 无批次）；如独立审查认为无历史价值，可在同批改为 DELETE。 不动；真实测试/验收规则，保留（与 `docs/quality/*` 的 PENDING 不同，本文件是规则不是机器消费清单） |
 | MT-7-077 | docs/contracts/C2-scope-bounds.md | `workflows/build-code/diff-scanner.mjs`（文档引用） | 同左 | SURVIVOR | — | 不适用 | — | — | 不动；diff-scanner 有界改动合同 = 窄工具①范围核对依据（G3-21 必留） |
 | MT-7-078 | docs/contracts/card-01-stage-material-interface.md | `tests/integration/card-01-dual-journey.test.mjs` | 0（测试随 B1/P2 删/改） | NARROW | B7/P8 | `git revert <B7 提交>`；`git checkout backup/card-06-b7 -- docs/contracts/card-01-stage-material-interface.md` | — | — | 删 cohort 材料接口（pre 四材料 / post 三件），改为单一材料形态描述 |
 | MT-7-079 | docs/contracts/task-context.md | `tests/per-invocation-doc-contract.test.mjs` | 同左 | NARROW | B7/P8 | 同上 | — | — | 去 kernel 措辞与 L25「每次调用认证与遗留迁移」整段，保留 `storageRoot`/`taskPath` 路径解析（= 窄工具①） |
@@ -1017,6 +1005,7 @@
 | A-14 | `skills/deep-research/SKILL.md` 在片段 3 落 SURVIVOR，但备注列了 L47-53 文本清理 | 改 **NARROW B3/P4** | 有文本改动即非 SURVIVOR；批次不变 |
 | A-15 | 开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建、P8 收口删除，跨两个 Phase | 只登记在 P1 写集（MT-7-114，owner=P1）；P8/T027 执行其声明的收口删除，不重复登记 | 校验器要求一个路径一个 Phase owner；本卡唯一此类路径，已在 `spec.md#全局文件边界与依赖` 登记 |
 | A-16 | Card-03 进 main（dd27a79a）后合入本分支（741e1768）：3 个 card-03 新测试无行；`validateStageSpecAnalyzeProfile` 无处置；ADR-0034 无行 | 补登 MT-6-439/440/441 = DELETE B4/P5（随被测对象）；ADR-0034 = SURVIVOR；`validateStageSpecAnalyzeProfile` 随 stage-content-contracts.mjs NARROW 删除，stage-runtime.mjs 两处调用由 T017 移除 | 该函数是带 material 绑定的验收链机器校验，属 Card-06 删除面；补登不改变任何既有行的处置与批次 |
+| A-17 | 12 个 `docs/architecture/*` 路径在片段 4（schema/manifest 面）与片段 6（治理文档面）重复登记，8 对为 DELETE vs ARCHIVE 实质冲突 | 8 个一次性证明/清单产物按 A-3 先例归 **ARCHIVE B6/P7**（片段 4 的 DELETE 行丢弃）；`control-plane-inventory.json` 归 PENDING（B6/P7，随独立审查）；`retention-manifest.json` 归 **NARROW B6/P7**（消费者会把删除记为违规）；两个 SURVIVOR 文档归无批次 | 台账测试「path 全局唯一」断言在 build-plan 捕获此重复（RED 证据之一），消解后该断言 GREEN |
 
 ## 4. G-3 汇总（25 项，规范编号）
 
